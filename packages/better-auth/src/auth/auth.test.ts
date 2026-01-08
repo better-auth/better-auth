@@ -126,3 +126,162 @@ describe("auth with trusted proxy headers", () => {
 		expect(baseURL).toBe("http://localhost:3000/api/auth");
 	});
 });
+
+describe("auth with dynamic baseURL (allowedHosts)", () => {
+	test("should throw error for empty allowedHosts array", async () => {
+		await expect(
+			getTestInstance({
+				baseURL: {
+					allowedHosts: [],
+				},
+			}),
+		).rejects.toThrow("baseURL.allowedHosts cannot be empty");
+	});
+
+	test("should resolve baseURL from allowed host", async () => {
+		let baseURL: string | undefined;
+		let optionsBaseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+					optionsBaseURL = ctx.context.options.baseURL as string;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "preview-123.vercel.app",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://preview-123.vercel.app/api/auth");
+		expect(optionsBaseURL).toBe("https://preview-123.vercel.app");
+	});
+
+	test("should reject disallowed host and throw error", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com"],
+			},
+		});
+
+		await expect(
+			auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers: {
+						"x-forwarded-host": "evil.com",
+						"x-forwarded-proto": "https",
+					},
+				}),
+			),
+		).rejects.toThrow('Host "evil.com" is not in the allowed hosts list');
+	});
+
+	test("should use fallback for disallowed host", async () => {
+		let baseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com"],
+				fallback: "https://myapp.com",
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "evil.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://myapp.com/api/auth");
+	});
+
+	test("should respect protocol config", async () => {
+		let baseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com"],
+				protocol: "https",
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "myapp.com",
+				"x-forwarded-proto": "http",
+			},
+		});
+		expect(baseURL).toBe("https://myapp.com/api/auth");
+	});
+
+	test("should work with wildcard patterns for Vercel deployments", async () => {
+		let baseURL: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: [
+					"myapp.com",
+					"www.myapp.com",
+					"*.vercel.app",
+					"preview-*.myapp.com",
+				],
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "my-app-abc123-team.vercel.app",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://my-app-abc123-team.vercel.app/api/auth");
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "preview-feature-branch.myapp.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://preview-feature-branch.myapp.com/api/auth");
+	});
+});

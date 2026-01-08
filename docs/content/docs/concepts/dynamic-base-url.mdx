@@ -1,0 +1,204 @@
+---
+title: Dynamic Base URL
+description: Configure Better Auth to work with multiple domains and preview deployments.
+---
+
+When deploying to platforms like Vercel, your application can run on multiple URLs simultaneously:
+- Custom domains (e.g., `myapp.com`, `www.myapp.com`)
+- Preview deployments (e.g., `my-app-abc123.vercel.app`)
+- Branch previews (e.g., `feature-branch.myapp.com`)
+
+Better Auth supports dynamic base URL resolution using an **allowlist-based approach** that determines the correct URL from each incoming request.
+
+## Basic Usage
+
+Configure `baseURL` as an object with an `allowedHosts` array:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "myapp.com",
+            "www.myapp.com",
+            "*.vercel.app",
+        ],
+    },
+})
+```
+
+When a request comes in, Better Auth extracts the host from the `x-forwarded-host` or `host` header and validates it against your allowlist. If the host matches, that URL is used as the base URL for the request.
+
+## Wildcard Patterns
+
+The `allowedHosts` array supports wildcard patterns:
+
+| Pattern | Matches |
+|---------|---------|
+| `myapp.com` | Exact match only |
+| `*.vercel.app` | Any subdomain of vercel.app |
+| `preview-*.myapp.com` | Subdomains starting with `preview-` |
+| `localhost:*` | localhost on any port |
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "myapp.com",           // Production
+            "*.vercel.app",        // All Vercel previews
+            "preview-*.myapp.com", // Custom preview subdomains
+            "localhost:3000",      // Local development
+        ],
+    },
+})
+```
+
+## Fallback URL
+
+By default, if the incoming host doesn't match any pattern in `allowedHosts`, Better Auth throws an error. You can provide a fallback URL instead:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: ["myapp.com", "*.vercel.app"],
+        fallback: "https://myapp.com",
+    },
+})
+```
+
+With a fallback configured:
+- Matching hosts use the derived URL
+- Non-matching hosts use the fallback URL (no error thrown)
+
+<Callout type="warn">
+Use fallbacks carefully. Silent fallbacks can mask misconfigurations. Consider whether throwing an error (the default) is more appropriate for your use case.
+</Callout>
+
+## Protocol Configuration
+
+Control the protocol used when constructing URLs:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: ["myapp.com", "localhost:3000"],
+        protocol: "https", // Always use HTTPS
+    },
+})
+```
+
+| Value | Behavior |
+|-------|----------|
+| `"https"` | Always use HTTPS |
+| `"http"` | Always use HTTP |
+| `"auto"` | Derive from `x-forwarded-proto` header or request URL |
+| Not set | Derive from headers, default to HTTPS |
+
+For mixed environments (local dev + production), you can use environment variables:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: ["myapp.com", "localhost:3000"],
+        protocol: process.env.NODE_ENV === "development" ? "http" : "https",
+    },
+})
+```
+
+## Trusted Origins Integration
+
+When you configure `allowedHosts`, Better Auth automatically adds them to `trustedOrigins`. This means:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: ["myapp.com", "*.vercel.app"],
+    },
+})
+
+// Automatically adds to trustedOrigins:
+// - "https://myapp.com"
+// - "https://*.vercel.app"
+```
+
+You don't need to duplicate your allowed hosts in both configurations.
+
+## Static Base URL (Backwards Compatible)
+
+The traditional static string configuration still works:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: "https://myapp.com",
+})
+```
+
+This is recommended when your application runs on a single, known URL.
+
+## Common Patterns
+
+### Vercel Deployment
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "myapp.com",        // Production custom domain
+            "www.myapp.com",    // WWW variant
+            "*.vercel.app",     // All preview deployments
+        ],
+    },
+})
+```
+
+### Development + Production
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "localhost:3000",
+            "localhost:5173",
+            "myapp.com",
+            "*.vercel.app",
+        ],
+        protocol: process.env.NODE_ENV === "development" ? "http" : "https",
+    },
+})
+```
+
+### Multiple Production Domains
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "myapp.com",
+            "myapp.co.uk",
+            "myapp.eu",
+        ],
+    },
+})
+```
+
+## Security Considerations
+
+<Callout type="info">
+Dynamic base URL uses an **allowlist-based approach** for security. Only hosts explicitly listed in `allowedHosts` are accepted.
+</Callout>
+
+1. **Allowlist is mandatory** - You cannot accept arbitrary hosts
+2. **Headers are validated** - The `x-forwarded-host` and `host` headers are sanitized before use
+3. **Explicit patterns only** - No automatic platform detection; you must add each pattern
+4. **Clear errors** - Unknown hosts throw descriptive errors (unless fallback is set)
+
+This differs from some other auth libraries that auto-trust platforms or accept any header value. Better Auth prioritizes security over convenience.
+
+## Configuration Reference
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `allowedHosts` | `string[]` | Required | List of allowed host patterns |
+| `fallback` | `string` | - | URL to use when host doesn't match |
+| `protocol` | `"http" \| "https" \| "auto"` | Derived | Protocol to use |

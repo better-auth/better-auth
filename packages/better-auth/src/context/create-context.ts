@@ -19,7 +19,7 @@ import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
@@ -103,9 +103,27 @@ export async function createAuthContext(
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	if (!baseURL) {
+	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
+
+	if (isDynamicConfig) {
+		const { allowedHosts } = options.baseURL;
+		if (!allowedHosts || allowedHosts.length === 0) {
+			throw new BetterAuthError(
+				"baseURL.allowedHosts cannot be empty. Provide at least one allowed host pattern " +
+					'(e.g., ["myapp.com", "*.vercel.app"]).',
+			);
+		}
+	}
+
+	const baseURL = isDynamicConfig
+		? undefined
+		: getBaseURL(
+				typeof options.baseURL === "string" ? options.baseURL : undefined,
+				options.basePath,
+			);
+
+	if (!baseURL && !isDynamicConfig) {
 		logger.warn(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
@@ -122,7 +140,11 @@ export async function createAuthContext(
 	options = {
 		...options,
 		secret,
-		baseURL: baseURL ? new URL(baseURL).origin : "",
+		baseURL: isDynamicConfig
+			? (options.baseURL as any)
+			: baseURL
+				? new URL(baseURL).origin
+				: "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};

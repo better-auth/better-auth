@@ -10,9 +10,11 @@ export type {
 export type { BetterAuthCookies } from "./cookie";
 export type * from "./helper";
 export type {
+	BaseURLConfig,
 	BetterAuthAdvancedOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	DynamicBaseURLConfig,
 	GenerateIdFn,
 } from "./init-options";
 export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";

@@ -24,24 +24,35 @@ import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
+	const baseURLString =
+		typeof options.baseURL === "string" ? options.baseURL : undefined;
+	const dynamicProtocol =
+		typeof options.baseURL === "object" && options.baseURL !== null
+			? options.baseURL.protocol
+			: undefined;
+
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
-				? options.baseURL.startsWith("https://")
-					? true
-					: false
-				: isProduction;
+			: dynamicProtocol === "https"
+				? true
+				: dynamicProtocol === "http"
+					? false
+					: baseURLString !== undefined
+						? baseURLString.startsWith("https://")
+						: isProduction;
+
 	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			(baseURLString ? new URL(baseURLString).hostname : undefined)
 		: undefined;
 	if (crossSubdomainEnabled && !domain) {
 		throw new BetterAuthError(
-			"baseURL is required when crossSubdomainCookies are enabled",
+			"baseURL is required when crossSubdomainCookies are enabled. " +
+				"For dynamic baseURL config, please also set advanced.crossSubDomainCookies.domain explicitly.",
 		);
 	}
 	function createCookie(

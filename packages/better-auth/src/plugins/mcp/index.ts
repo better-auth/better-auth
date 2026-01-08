@@ -18,7 +18,7 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
-import { getBaseURL } from "../../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../../utils/url";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -978,8 +978,20 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
-		if (!baseURL && !isProduction) {
+		// Handle dynamic baseURL config - for MCP, we use the request's context baseURL
+		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? undefined // Will be resolved from context at runtime
+			: getBaseURL(
+					typeof auth.options.baseURL === "string"
+						? auth.options.baseURL
+						: undefined,
+					auth.options.basePath,
+				);
+		if (
+			!baseURL &&
+			!isProduction &&
+			!isDynamicBaseURLConfig(auth.options.baseURL)
+		) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
 		const session = await auth.api.getMcpSession({

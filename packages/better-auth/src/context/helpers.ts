@@ -7,7 +7,7 @@ import { env } from "@better-auth/core/env";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { isPromise } from "../utils/is-promise";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 export async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
@@ -64,10 +64,36 @@ export async function getTrustedOrigins(
 	options: BetterAuthOptions,
 	request?: Request,
 ): Promise<string[]> {
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
-	const trustedOrigins: (string | undefined | null)[] = baseURL
-		? [new URL(baseURL).origin]
-		: [];
+	const trustedOrigins: (string | undefined | null)[] = [];
+
+	if (isDynamicBaseURLConfig(options.baseURL)) {
+		const allowedHosts = options.baseURL.allowedHosts;
+		for (const host of allowedHosts) {
+			if (!host.includes("://")) {
+				trustedOrigins.push(`https://${host}`);
+				if (host.includes("localhost") || host.includes("127.0.0.1")) {
+					trustedOrigins.push(`http://${host}`);
+				}
+			} else {
+				trustedOrigins.push(host);
+			}
+		}
+
+		if (options.baseURL.fallback) {
+			try {
+				trustedOrigins.push(new URL(options.baseURL.fallback).origin);
+			} catch {}
+		}
+	} else {
+		const baseURL = getBaseURL(
+			typeof options.baseURL === "string" ? options.baseURL : undefined,
+			options.basePath,
+		);
+		if (baseURL) {
+			trustedOrigins.push(new URL(baseURL).origin);
+		}
+	}
+
 	if (options.trustedOrigins) {
 		if (Array.isArray(options.trustedOrigins)) {
 			trustedOrigins.push(...options.trustedOrigins);
