@@ -501,6 +501,12 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				 */
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
+			if (ctx.context.options.emailVerification?.beforeEmailVerification) {
+				await ctx.context.options.emailVerification.beforeEmailVerification(
+					user.user,
+					ctx.request,
+				);
+			}
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
 				user.user.id,
 				{
@@ -508,7 +514,14 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					emailVerified: true,
 				},
 			);
-			await ctx.context.options.emailVerification?.onEmailVerification?.(
+			if (ctx.context.options.emailVerification?.onEmailVerification) {
+				await ctx.context.options.emailVerification.onEmailVerification(
+					updatedUser,
+					ctx.request,
+				);
+			}
+
+			await ctx.context.options.emailVerification?.afterEmailVerification?.(
 				updatedUser,
 				ctx.request,
 			);

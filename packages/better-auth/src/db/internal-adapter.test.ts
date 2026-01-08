@@ -636,7 +636,7 @@ describe("internal adapter test", async () => {
 		expect(accounts.length).toBe(0);
 	});
 
-	it("should store session with id in secondary storage when storeSessionInDatabase is true", async () => {
+	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
@@ -665,9 +665,6 @@ describe("internal adapter test", async () => {
 					testExpirationMap.delete(key);
 				},
 			},
-			session: {
-				storeSessionInDatabase: true, // key config for this case
-			},
 		} satisfies BetterAuthOptions;
 
 		// Run migrations for the new database
@@ -678,19 +675,14 @@ describe("internal adapter test", async () => {
 
 		// Create a user first
 		const user = await testInternalAdapter.createUser({
-			name: "test-user-with-id",
-			email: "test-with-id@email.com",
+			name: "test-user-update",
+			email: "test-update@email.com",
 		});
 
 		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
 
-		// The session returned from createSession should have an id
-		expect(session.id).toBeDefined();
-		expect(typeof session.id).toBe("string");
-		expect(session.id.length).toBeGreaterThan(0);
-
-		// Get the session from secondary storage
+		// Verify session is in secondary storage
 		const storedSessionStr = testMap.get(session.token);
 		expect(storedSessionStr).toBeDefined();
 
@@ -699,21 +691,62 @@ describe("internal adapter test", async () => {
 			user: User;
 		}>(storedSessionStr!);
 
-		expect(storedSession).toBeDefined();
-		expect(storedSession?.session).toBeDefined();
+		expect(storedSession?.session.ipAddress).toBe("");
 
-		// The session in secondary storage MUST have an id
-		// This is the actual bug: previously id was undefined
-		expect(storedSession?.session.id).toBeDefined();
-		expect(storedSession?.session.id).toBe(session.id);
+		// Get initial active-sessions list
+		const initialListStr = testMap.get(`active-sessions-${user.id}`);
+		expect(initialListStr).toBeDefined();
+		const initialList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			initialListStr!,
+		);
+		expect(initialList).toBeDefined();
+		expect(initialList!.length).toBe(1);
+		const initialExpiresAt = initialList![0]!.expiresAt;
 
-		// Verify the session can be found by its id in the database
-		const dbSession = await testCtx.adapter.findOne<Session>({
-			model: "session",
-			where: [{ field: "id", value: session.id }],
+		// Update the session with new ipAddress and expiresAt
+		const updatedIpAddress = "192.168.1.1";
+		const newExpiresAt = new Date(initialExpiresAt + 60 * 60 * 1000);
+		await testInternalAdapter.updateSession(session.token, {
+			ipAddress: updatedIpAddress,
+			expiresAt: newExpiresAt,
 		});
-		expect(dbSession).toBeDefined();
-		expect(dbSession?.id).toBe(session.id);
+
+		// Get the session from secondary storage again
+		const updatedStoredSessionStr = testMap.get(session.token);
+		expect(updatedStoredSessionStr).toBeDefined();
+
+		const updatedStoredSession = safeJSONParse<{
+			session: Session;
+			user: User;
+		}>(updatedStoredSessionStr!);
+
+		// The session in secondary storage MUST have the updated data
+		expect(updatedStoredSession?.session.ipAddress).toBe(updatedIpAddress);
+
+		// User should still be intact
+		expect(updatedStoredSession?.user.id).toBe(user.id);
+
+		// Get updated active-sessions list
+		const updatedListStr = testMap.get(`active-sessions-${user.id}`);
+		expect(updatedListStr).toBeDefined();
+		const updatedList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			updatedListStr!,
+		);
+		expect(updatedList).toBeDefined();
+
+		// The expiresAt in active-sessions list should be updated
+		expect(updatedList!.length).toBe(1);
+		expect(updatedList![0]!.token).toBe(session.token);
+		expect(updatedList![0]!.expiresAt).toBe(newExpiresAt.getTime());
+
+		// TTL should also be updated
+		const updatedTTL = testExpirationMap.get(`active-sessions-${user.id}`);
+		const expectedTTL = Math.floor(
+			(newExpiresAt.getTime() - Date.now()) / 1000,
+		);
+		expect(updatedTTL).toBeDefined();
+		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
+		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
 
 		// Clean up DB
 		testDb.close();
