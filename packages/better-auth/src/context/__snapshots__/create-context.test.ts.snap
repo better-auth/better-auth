@@ -80,6 +80,7 @@ exports[`base context creation > should match config 1`] = `
   "createAuthCookie": [Function],
   "generateId": [Function],
   "getPlugin": [Function],
+  "hasPlugin": [Function],
   "internalAdapter": {
     "countTotalUsers": [Function],
     "createAccount": [Function],
