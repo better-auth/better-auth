@@ -106,7 +106,9 @@ async function validateOrigin(
 	}
 
 	if (!originHeader || originHeader === "null") {
-		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		throw new APIError("FORBIDDEN", {
+			message: BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN,
+		});
 	}
 
 	const trustedOrigins: string[] = Array.isArray(
@@ -115,7 +117,9 @@ async function validateOrigin(
 		? ctx.context.trustedOrigins
 		: [
 				...ctx.context.trustedOrigins,
-				...((await ctx.context.options.trustedOrigins?.(ctx.request)) || []),
+				...((await ctx.context.options.trustedOrigins?.(ctx.request))?.filter(
+					(v): v is string => Boolean(v),
+				) || []),
 			];
 
 	const isTrustedOrigin = trustedOrigins.some((origin) =>
