@@ -22,7 +22,7 @@ export async function POST(req: Request) {
 				inputSchema: ProvideLinksToolSchema,
 			},
 		},
-		messages: convertToModelMessages(reqJson.messages, {
+		messages: await convertToModelMessages(reqJson.messages, {
 			ignoreIncompleteToolCalls: true,
 		}),
 		toolChoice: "auto",

@@ -478,8 +478,18 @@ export type BetterAuthOptions = {
 				 * A function that is called when a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
+				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
 				 */
 				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+				/**
+				 * A function that is called before a user verifies their email
+				 * @param user the user that verified their email
+				 * @param request the request object
+				 */
+				beforeEmailVerification?: (
+					user: User,
+					request?: Request,
+				) => Promise<void>;
 				/**
 				 * A function that is called when a user's email is updated to verified
 				 * @param user the user that verified their email
@@ -1002,9 +1012,26 @@ export type BetterAuthOptions = {
 	 *
 	 * Trusted origins will be dynamically
 	 * calculated based on the request.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: async (request) => {
+	 *   return [
+	 *    "https://better-auth.com",
+	 *    "https://*.better-auth.com",
+	 *    request.headers.get("x-custom-origin")
+	 *   ];
+	 * }
+	 * ```
+	 * @returns An array of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request?: Request | undefined) => Awaitable<string[]>))
+		| (
+				| string[]
+				| ((
+						request?: Request | undefined,
+				  ) => Awaitable<(string | undefined | null)[]>)
+		  )
 		| undefined;
 	/**
 	 * Rate limiting configuration

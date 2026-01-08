@@ -1,3 +1,4 @@
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
@@ -158,8 +159,216 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 		).rejects.toThrowError(
 			expect.objectContaining({
-				status: 400,
+				statusCode: 400,
 			}),
 		);
+	});
+});
+
+describe("sign-up CSRF protection", async (it) => {
+	const { auth } = await getTestInstance(
+		{
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should block cross-site navigation sign-up attempts (no cookies)", async () => {
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "victim@example.com",
+					password: "password123",
+					name: "Victim",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
+		);
+	});
+
+	it("should allow same-origin navigation sign-up attempts", async () => {
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "newuser@example.com",
+					password: "password123",
+					name: "New User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should allow fetch/XHR sign-up requests (cors mode)", async () => {
+		const fetchRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Dest": "empty",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "fetchuser@example.com",
+					password: "password123",
+					name: "Fetch User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(fetchRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should use origin validation when cookies exist", async () => {
+		const requestWithCookies = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: "some_cookie=value",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "cookieuser@example.com",
+					password: "password123",
+					name: "Cookie User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(requestWithCookies);
+		// Should not be blocked by CSRF check since cookies exist - uses origin validation instead
+		expect(response.status).not.toBe(403);
+	});
+});
+
+describe("sign-up with form data", async (it) => {
+	const { auth } = await getTestInstance(
+		{
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should accept form-urlencoded content type", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "formuser@example.com",
+					password: "password123",
+					name: "Form User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("formuser@example.com");
+	});
+
+	it("should block cross-site form submissions", async () => {
+		const maliciousFormRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: new URLSearchParams({
+					email: "victim@example.com",
+					password: "password123",
+					name: "Victim",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousFormRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
+		);
+	});
+
+	it("should allow same-site form submissions from trusted origins", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "samesiteuser@example.com",
+					password: "password123",
+					name: "Same Site User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
 	});
 });

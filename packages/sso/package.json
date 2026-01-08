@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/sso",
   "author": "Bereket Engida",
-  "version": "1.5.0-beta.1",
+  "version": "1.5.0-beta.2",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -61,6 +61,7 @@
     }
   },
   "dependencies": {
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "fast-xml-parser": "^5.2.5",
     "jose": "^6.1.0",
@@ -68,7 +69,7 @@
     "zod": "^4.1.12"
   },
   "devDependencies": {
-    "@better-auth/utils": "catalog:",
+    "@better-auth/core": "workspace:*",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.5",
     "better-auth": "workspace:*",
@@ -79,6 +80,8 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
     "better-auth": "workspace:*"
   }
 }

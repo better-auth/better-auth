@@ -20,7 +20,7 @@ exports[`base context creation > should match config 1`] = `
         "disableTransformInput": false,
         "disableTransformJoin": false,
         "disableTransformOutput": false,
-        "supportsArrays": false,
+        "supportsArrays": true,
         "supportsBooleans": true,
         "supportsDates": true,
         "supportsJSON": false,
@@ -79,6 +79,8 @@ exports[`base context creation > should match config 1`] = `
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
   "generateId": [Function],
+  "getPlugin": [Function],
+  "hasPlugin": [Function],
   "internalAdapter": {
     "countTotalUsers": [Function],
     "createAccount": [Function],

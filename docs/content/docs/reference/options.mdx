@@ -420,7 +420,7 @@ Store account data after OAuth flow in a cookie. This is useful for database-les
 
 Configuration for account linking.
 
-- `enabled`: Enable account linking (default: `false`)
+- `enabled`: Enable account linking (default: `true`)
 - `trustedProviders`: List of trusted providers
 - `allowDifferentEmails`: Allow users to link accounts with different email addresses
 - `allowUnlinkingAll`: Allow users to unlink all accounts
@@ -491,6 +491,7 @@ export const auth = betterAuth({
 		},
 		useSecureCookies: true,
 		disableCSRFCheck: false,
+		disableOriginCheck: false,
 		crossSubDomainCookies: {
 			enabled: true,
 			additionalCookies: ["custom_cookie"],
@@ -532,6 +533,7 @@ export const auth = betterAuth({
 - `ipAddress`: IP address configuration for rate limiting and session tracking
 - `useSecureCookies`: Use secure cookies (default: `false`)
 - `disableCSRFCheck`: Disable trusted origins check (⚠️ security risk)
+- `disableOriginCheck`: Disable origin check (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies

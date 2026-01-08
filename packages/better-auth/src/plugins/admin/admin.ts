@@ -29,15 +29,27 @@ import type {
 	UserWithRole,
 } from "./types";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		admin: {
+			creator: typeof admin;
+		};
+	}
+}
+
 export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
+		...(options || {}),
 		defaultRole: options?.defaultRole ?? "user",
 		adminRoles: options?.adminRoles ?? ["admin"],
 		bannedUserMessage:
 			options?.bannedUserMessage ??
 			"You have been banned from this application. Please contact support if you believe this is an error.",
-		...options,
-	};
+	} as O &
+		Required<
+			Pick<AdminOptions, "defaultRole" | "adminRoles" | "bannedUserMessage">
+		>;
 
 	if (options?.adminRoles) {
 		const adminRoles = Array.isArray(options.adminRoles)

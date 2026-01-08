@@ -5,12 +5,29 @@ import {
 } from "@better-auth/core/api";
 import { generateId } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
+import {
+	APIError,
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+} from "../../api";
+import {
+	deleteSessionCookie,
+	parseSetCookieHeader,
+	setSessionCookie,
+} from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
-import type { AnonymousOptions } from "./types";
+import type { AnonymousOptions, AnonymousSession } from "./types";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		anonymous: {
+			creator: typeof anonymous;
+		};
+	}
+}
 
 async function getAnonUserEmail(
 	options: AnonymousOptions | undefined,
@@ -75,7 +92,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					// prevents an anonymous user from signing in anonymously again while they
 					// are already authenticated.
 					const existingSession = await getSessionFromCtx<{
-						isAnonymous: boolean;
+						isAnonymous: boolean | null;
 					}>(ctx, { disableRefresh: true });
 					if (existingSession?.user.isAnonymous) {
 						throw APIError.from(
@@ -128,6 +145,96 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 				},
 			),
+			deleteAnonymousUser: createAuthEndpoint(
+				"/delete-anonymous-user",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Delete an anonymous user",
+							responses: {
+								200: {
+									description: "Anonymous user deleted",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Anonymous user deletion is disabled",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+											required: ["message"],
+										},
+									},
+								},
+								"500": {
+									description: "Internal server error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+												required: ["message"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = ctx.context.session as AnonymousSession;
+
+					if (options?.disableDeleteAnonymousUser) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
+						);
+					}
+
+					if (!session.user.isAnonymous) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ANONYMOUS_ERROR_CODES.USER_IS_NOT_ANONYMOUS,
+						);
+					}
+
+					try {
+						await ctx.context.internalAdapter.deleteUser(session.user.id);
+					} catch (error) {
+						ctx.context.logger.error("Failed to delete anonymous user", error);
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER,
+						);
+					}
+					deleteSessionCookie(ctx);
+					return ctx.json({ success: true });
+				},
+			),
 		},
 		hooks: {
 			after: [
@@ -167,12 +274,11 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						/**
 						 * Make sure the user had an anonymous session.
 						 */
-						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
-							ctx,
-							{
-								disableRefresh: true,
-							},
-						);
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, {
+							disableRefresh: true,
+						});
 
 						if (!session || !session.user.isAnonymous) {
 							return;
@@ -188,13 +294,22 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						if (!newSession) {
 							return;
 						}
+
+						const user = {
+							...session.user,
+							// Type hack to ensure `isAnonymous` is correctly inferred as true.
+							// Without this, `isAnonymous` is inferred as `boolean | null` despite
+							// the conditional checks above suggesting otherwise.
+							isAnonymous: session.user.isAnonymous,
+						};
+
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the
 						// integrator can perform any additional logic such as transferring data
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
 							await options?.onLinkAccount?.({
-								anonymousUser: session,
+								anonymousUser: { session: session.session, user },
 								newUser: newSession,
 								ctx,
 							});
