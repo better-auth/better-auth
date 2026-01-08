@@ -917,7 +917,7 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		"/organization/list",
 		{
 			method: "GET",
-			use: [orgMiddleware, orgSessionMiddleware],
+			use: [orgMiddleware],
 			requireHeaders: true,
 			metadata: {
 				openapi: {
@@ -941,10 +941,12 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 			},
 		},
 		async (ctx) => {
+			const session = await getSessionFromCtx(ctx);
+			if (!session) {
+				return ctx.json([]);
+			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const organizations = await adapter.listOrganizations(
-				ctx.context.session.user.id,
-			);
+			const organizations = await adapter.listOrganizations(session.user.id);
 			return ctx.json(organizations);
 		},
 	);
