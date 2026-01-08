@@ -10,6 +10,8 @@ import {
 	it,
 	vi,
 } from "vitest";
+import * as apiModule from "../../api";
+import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -58,6 +60,7 @@ beforeAll(async () => {
 afterEach(() => {
 	server.resetHandlers();
 	server.use(...handlers);
+	vi.restoreAllMocks();
 });
 
 afterAll(() => server.close());
@@ -370,5 +373,112 @@ describe("anonymous", async () => {
 		expect(secondAttempt.error?.message).toBe(
 			"Anonymous users cannot sign in again anonymously",
 		);
+	});
+
+	describe("anonymous cleanup safeguards", () => {
+		function createMiddlewareContext({
+			newSessionUser,
+			deleteUser,
+		}: {
+			newSessionUser: Record<string, any>;
+			deleteUser: ReturnType<typeof vi.fn>;
+		}) {
+			return {
+				path: "/sign-in/anonymous",
+				context: {
+					responseHeaders: new Headers({
+						"set-cookie":
+							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
+					}),
+					authCookies: {
+						sessionToken: {
+							name: "better-auth.session_token",
+							options: {},
+						},
+						sessionData: {
+							name: "better-auth.session_data",
+							options: {},
+						},
+						dontRememberToken: {
+							name: "better-auth.dont_remember",
+							options: {},
+						},
+					},
+					newSession: {
+						user: newSessionUser,
+						session: {
+							token: "new-token",
+						},
+					},
+					internalAdapter: {
+						deleteUser,
+					},
+					options: {},
+					secret: "secret",
+					setNewSession: vi.fn(),
+				},
+				headers: new Headers(),
+				query: {},
+				error: vi.fn(),
+				json: vi.fn(),
+				getSignedCookie: vi.fn(),
+				setCookie: vi.fn(),
+				setSignedCookie: vi.fn(),
+			} as any;
+		}
+
+		it("does not delete when the new session is still anonymous", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const deleteUser = vi.fn();
+			const ctx = createMiddlewareContext({
+				newSessionUser: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				deleteUser,
+			});
+
+			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
+				user: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				session: {
+					token: "old-token",
+				},
+			} as any);
+
+			await handler?.(ctx);
+
+			expect(deleteUser).not.toHaveBeenCalled();
+		});
+
+		it("deletes the previous anonymous user when linking a new account", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const deleteUser = vi.fn();
+			const ctx = createMiddlewareContext({
+				newSessionUser: {
+					id: "linked-user",
+					isAnonymous: false,
+				},
+				deleteUser,
+			});
+
+			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
+				user: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				session: {
+					token: "old-token",
+				},
+			} as any);
+
+			await handler?.(ctx);
+
+			expect(deleteUser).toHaveBeenCalledWith("anon-user");
+		});
 	});
 });
