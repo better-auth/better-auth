@@ -262,6 +262,118 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
+	describe("verification token storage", () => {
+		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
+			const hashedOpts = {
+				database: {
+					dialect: new SqliteDialect({ database: new Database(":memory:") }),
+					type: "sqlite",
+				},
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(hashedOpts)).runMigrations();
+			const hashedCtx = await init(hashedOpts);
+			const hashedAdapter = hashedCtx.internalAdapter;
+
+			const verification = await hashedAdapter.createVerificationValue({
+				identifier: "reset-password:my-token-123",
+				value: "user-id-123",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Stored identifier should be hashed (not equal to original)
+			expect(verification.identifier).not.toBe("reset-password:my-token-123");
+
+			// Should be able to find by original identifier
+			const found = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("user-id-123");
+
+			// Should be able to delete by original identifier
+			await hashedAdapter.deleteVerificationByIdentifier(
+				"reset-password:my-token-123",
+			);
+			const deleted = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(deleted).toBeUndefined();
+		});
+
+		it("should use overrides for specific prefixes", async () => {
+			const overrideOpts = {
+				database: {
+					dialect: new SqliteDialect({ database: new Database(":memory:") }),
+					type: "sqlite",
+				},
+				verification: {
+					storeIdentifier: "plain" as const,
+					overrides: {
+						"reset-password": "hashed" as const,
+					},
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(overrideOpts)).runMigrations();
+			const overrideCtx = await init(overrideOpts);
+			const overrideAdapter = overrideCtx.internalAdapter;
+
+			// reset-password should be hashed
+			const hashedVerification =
+				await overrideAdapter.createVerificationValue({
+					identifier: "reset-password:token-abc",
+					value: "user-1",
+					expiresAt: new Date(Date.now() + 60000),
+				});
+			expect(hashedVerification.identifier).not.toBe("reset-password:token-abc");
+
+			// other identifiers should be plain
+			const plainVerification = await overrideAdapter.createVerificationValue({
+				identifier: "magic-link:token-xyz",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
+		});
+
+		it("should fallback to plain lookup for old tokens", async () => {
+			const db = new Database(":memory:");
+			const dialect = new SqliteDialect({ database: db });
+
+			// First create with plain storage
+			const plainOpts = {
+				database: { dialect, type: "sqlite" },
+				verification: { storeIdentifier: "plain" as const },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(plainOpts)).runMigrations();
+			const plainCtx = await init(plainOpts);
+			await plainCtx.internalAdapter.createVerificationValue({
+				identifier: "old-token:abc123",
+				value: "old-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Now switch to hashed storage (simulating config change)
+			const hashedOpts = {
+				database: { dialect, type: "sqlite" },
+				verification: { storeIdentifier: "hashed" as const },
+			} satisfies BetterAuthOptions;
+
+			const hashedCtx = await init(hashedOpts);
+
+			// Should still find old plain token via fallback
+			const found =
+				await hashedCtx.internalAdapter.findVerificationValue("old-token:abc123");
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("old-value");
+		});
+	});
+
 	it("runs the after hook after adding user to db", async () => {
 		const sampleUser = {
 			name: "sample",
