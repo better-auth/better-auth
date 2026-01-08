@@ -6,7 +6,7 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { createEmailVerificationToken } from "../../api";
+import { createEmailVerificationToken, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -200,6 +200,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 				{
 					method: "POST",
 					body: signInUsernameBodySchema,
+					use: [originCheck((ctx) => ctx.body.callbackURL)],
 					metadata: {
 						openapi: {
 							summary: "Sign in with username",
@@ -410,6 +411,9 @@ export const username = (options?: UsernameOptions | undefined) => {
 						{ session, user },
 						ctx.body.rememberMe === false,
 					);
+					if (ctx.body.callbackURL) {
+						throw ctx.redirect(ctx.body.callbackURL);
+					}
 					return ctx.json({
 						token: session.token,
 						user: {
