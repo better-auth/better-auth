@@ -165,7 +165,7 @@ async function validateOrigin(
 	}
 
 	if (!originHeader || originHeader === "null") {
-		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
 	const trustedOrigins: string[] = Array.isArray(
