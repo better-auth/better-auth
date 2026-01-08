@@ -1010,6 +1010,16 @@ export type BetterAuthOptions = {
 				 * fetched
 				 */
 				disableCleanup?: boolean;
+				/**
+				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 * @default "plain"
+				 */
+				storeIdentifier?: StoreIdentifierOption;
+				/**
+				 * Per-prefix overrides for identifier storage.
+				 * Keys are identifier prefixes (e.g. "reset-password", "email-otp")
+				 */
+				overrides?: Record<string, StoreIdentifierOption>;
 		  }
 		| undefined;
 	/**
