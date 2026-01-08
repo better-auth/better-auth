@@ -230,7 +230,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 														description: "The URL to redirect to",
 													},
 												},
-												required: ["token", "user", "redirect", "url"],
+												required: ["token", "user", "redirect"],
 											},
 										},
 									},
