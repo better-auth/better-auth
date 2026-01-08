@@ -100,12 +100,16 @@ Disables **URL validation** against `trustedOrigins`, including:
   Disabling origin checks allows any URL to be used in redirects and callbacks. This opens your application to open redirect vulnerabilities.
 </Callout>
 
+<Callout type="info">
+  For backward compatibility, `disableOriginCheck: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible - both checks are disabled together when using this option.
+</Callout>
+
 #### Summary
 
 | Option | What it disables |
 |--------|-----------------|
-| `disableCSRFCheck` | CSRF protection (origin header validation, Fetch Metadata checks) |
-| `disableOriginCheck` | URL validation (`callbackURL`, `redirectTo`, etc.) |
+| `disableCSRFCheck` | CSRF protection only (origin header validation, Fetch Metadata checks) |
+| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility) |
 
 ## OAuth State and PKCE
 

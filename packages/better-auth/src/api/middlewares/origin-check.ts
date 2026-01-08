@@ -19,7 +19,6 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 	}
 	await validateOrigin(ctx);
 
-	// disableOriginCheck disables URL validation (callbackURL, redirectTo, etc.)
 	if (ctx.context.skipOriginCheck) {
 		return;
 	}
@@ -92,7 +91,6 @@ export const originCheck = (
 		if (!ctx.request) {
 			return;
 		}
-		// disableOriginCheck disables URL validation (callbackURL, redirectTo, etc.)
 		if (ctx.context.skipOriginCheck) {
 			return;
 		}
@@ -165,8 +163,24 @@ async function validateOrigin(
 	const originHeader = headers.get("origin") || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
-	// disableCSRFCheck controls CSRF protection (origin header validation when cookies present)
 	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	// Backward compat: if skipOriginCheck is true but disableCSRFCheck wasn't explicitly set,
+	// also skip CSRF (old coupled behavior) with deprecation warning in non-test environments
+	if (
+		ctx.context.skipOriginCheck &&
+		ctx.context.options.advanced?.disableCSRFCheck === undefined
+	) {
+		// Only log warning if user explicitly set disableOriginCheck (not test environment default)
+		if (ctx.context.options.advanced?.disableOriginCheck === true) {
+			ctx.context.logger?.warn(
+				"[Deprecation] disableOriginCheck: true currently also disables CSRF checks. " +
+					"This behavior will be removed in a future version. " +
+					"Please set disableCSRFCheck: true explicitly if you want to disable CSRF protection.",
+			);
+		}
 		return;
 	}
 
@@ -227,8 +241,16 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 		return;
 	}
 
-	// disableCSRFCheck disables all CSRF protection including Fetch Metadata checks
 	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	// Backward compat: if skipOriginCheck is true but disableCSRFCheck wasn't explicitly set,
+	// also skip CSRF (old coupled behavior) - warning already logged in validateOrigin
+	if (
+		ctx.context.skipOriginCheck &&
+		ctx.context.options.advanced?.disableCSRFCheck === undefined
+	) {
 		return;
 	}
 

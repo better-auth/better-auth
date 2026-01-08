@@ -834,7 +834,7 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 		expect(res.data?.user).toBeDefined();
 	});
 
-	it("disableOriginCheck should still validate origin header (CSRF check still active)", async () => {
+	it("disableOriginCheck also disables CSRF for backward compatibility", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
 			trustedOrigins: ["http://localhost:3000"],
 			emailAndPassword: {
@@ -857,15 +857,15 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 			},
 		});
 
-		// callbackURL validation is disabled, but origin header should still fail
+		// disableOriginCheck: true also disables CSRF for backward compatibility
+		// so this should succeed even with an untrusted origin
 		const res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			callbackURL: "http://any-site.com/redirect",
 		});
 
-		expect(res.error?.status).toBe(403);
-		expect(res.error?.message).toBe("Invalid origin");
+		expect(res.data?.user).toBeDefined();
 	});
 
 	it("disableCSRFCheck should bypass Fetch Metadata CSRF protection", async () => {
