@@ -246,20 +246,6 @@ export function verifyApiKey({
 		async (ctx) => {
 			const { key } = ctx.body;
 
-			if (key.length < opts.defaultKeyLength) {
-				// if the key is shorter than the default key length, than we know the key is invalid.
-				// we can't check if the key is exactly equal to the default key length, because
-				// a prefix may be added to the key.
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
-				});
-			}
-
 			if (opts.customAPIKeyValidator) {
 				const isValid = await opts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
