@@ -11,17 +11,33 @@ import { getJwtPlugin, getOAuthProviderPlugin } from "./utils";
 export const oauthProviderResourceClient = <T extends Auth | undefined>(
 	auth?: T,
 ) => {
-	const oauthProviderPlugin = auth ? getOAuthProviderPlugin(auth) : undefined;
-	const oauthProviderOptions = oauthProviderPlugin?.options;
-	const jwtPlugin =
-		auth && !oauthProviderOptions?.disableJwtPlugin
-			? getJwtPlugin(auth)
-			: undefined;
-	const jwtPluginOptions = jwtPlugin?.options;
+	let oauthProviderPlugin:
+		| ReturnType<typeof getOAuthProviderPlugin>
+		| undefined;
+	const getOauthProviderPlugin = async () => {
+		if (!oauthProviderPlugin) {
+			oauthProviderPlugin = auth
+				? getOAuthProviderPlugin(await auth.$context)
+				: undefined;
+		}
+		return oauthProviderPlugin;
+	};
+	let jwtPlugin: ReturnType<typeof getJwtPlugin> | undefined;
+	const getJwtPluginOptions = async () => {
+		if (!jwtPlugin) {
+			jwtPlugin =
+				auth && !(await getOauthProviderPlugin())?.options?.disableJwtPlugin
+					? getJwtPlugin(await auth.$context)
+					: undefined;
+		}
+		return jwtPlugin?.options;
+	};
+	const getAuthorizationServer = async () => {
+		const jwtPluginOptions = await getJwtPluginOptions();
+		return jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
+	};
 	const authServerBaseUrl = auth?.options.baseURL;
 	const authServerBasePath = auth?.options.basePath;
-	const authorizationServer =
-		jwtPluginOptions?.jwt?.issuer ?? authServerBaseUrl;
 
 	return {
 		id: "oauth-provider-resource-client",
@@ -47,6 +63,7 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						resourceMetadataMappings?: Record<string, string>;
 					},
 				): Promise<JWTPayload> => {
+					const jwtPluginOptions = await getJwtPluginOptions();
 					const audience = opts?.verifyOptions?.audience ?? authServerBaseUrl;
 					const issuer =
 						opts?.verifyOptions?.issuer ??
@@ -120,6 +137,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 						| undefined,
 				): Promise<ResourceServerMetadata> => {
 					const resource = overrides?.resource ?? authServerBaseUrl;
+					const oauthProviderOptions = (await getOauthProviderPlugin())
+						?.options;
 					if (!resource) {
 						throw Error("missing required resource");
 					}
@@ -158,6 +177,8 @@ export const oauthProviderResourceClient = <T extends Auth | undefined>(
 							}
 						}
 					}
+
+					const authorizationServer = await getAuthorizationServer();
 
 					return {
 						resource,
