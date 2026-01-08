@@ -32,6 +32,16 @@ type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
 
+export type StoreIdentifierOption =
+	| "plain"
+	| "hashed"
+	| "encrypted"
+	| { hash: (identifier: string) => Promise<string> }
+	| {
+			encrypt: (identifier: string) => Promise<string>;
+			decrypt: (identifier: string) => Promise<string>;
+	  };
+
 export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
