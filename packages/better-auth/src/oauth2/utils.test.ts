@@ -85,7 +85,7 @@ describe("migration scenario - issue #6018", () => {
 		// 2. Access token stored as plain text: "ya29.a0ARW5m7..."
 		// 3. User enables encryptOAuthTokens: true
 		// 4. Access token expires, system tries to decrypt the plain text token
-		// 5. Previously: "hex string expected, got unpadded hex of length 253"
+		// 5. Previously: "hex string expected, got unpadded hex of length 253" /* cspell:disable-line */
 		// 6. Now: should return the token as-is
 
 		const ctx = createMockContext(true); // encryption now enabled
@@ -94,7 +94,7 @@ describe("migration scenario - issue #6018", () => {
 		const googleAccessToken =
 			"ya29.a0ARW5m7hQ_test-token_with.dots-and_underscores";
 
-		// This should NOT throw "hex string expected, got unpadded hex of length X"
+		// This should NOT throw "hex string expected, got unpadded hex of length X" /* cspell:disable-line */
 		const result = await decryptOAuthToken(googleAccessToken, ctx);
 		expect(result).toBe(googleAccessToken);
 	});
@@ -104,7 +104,7 @@ describe("migration scenario - issue #6018", () => {
 
 		// Google refresh tokens have this format
 		const googleRefreshToken =
-			"1//0gxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+			"1//0gxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"; // cspell:disable-line
 
 		const result = await decryptOAuthToken(googleRefreshToken, ctx);
 		expect(result).toBe(googleRefreshToken);
