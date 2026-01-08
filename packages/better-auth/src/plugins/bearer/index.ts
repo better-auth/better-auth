@@ -127,11 +127,12 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const location = ctx.context.responseHeaders?.get("location");
 						if (location) {
 							try {
-								const headers = (ctx.request?.headers ||
-									ctx.headers) as Headers;
-								const protocol = headers.get("x-forwarded-proto") || "http";
-								const host = headers.get("host") || "localhost";
 								const requestOrigin = ctx.request?.url
+									? new URL(ctx.request.url).origin
+									: null;
+								const locationURL = requestOrigin
+									? new URL(location, requestOrigin)
+									: new URL(location);
 									? new URL(ctx.request.url).origin
 									: `${protocol}://${host}`;
 								const locationURL = new URL(location, requestOrigin);
