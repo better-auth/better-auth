@@ -18,7 +18,11 @@ import {
 import { mergeSchema } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
-import type { AnonymousOptions, AnonymousSession } from "./types";
+import type {
+	AnonymousOptions,
+	AnonymousSession,
+	UserWithAnonymous,
+} from "./types";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
