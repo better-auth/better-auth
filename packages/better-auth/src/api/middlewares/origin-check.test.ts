@@ -841,7 +841,6 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 				enabled: true,
 			},
 			advanced: {
-				disableCSRFCheck: false,
 				disableOriginCheck: true,
 			},
 		});
