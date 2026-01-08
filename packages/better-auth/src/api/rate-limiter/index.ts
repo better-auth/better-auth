@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils";
 import type { RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
-import { safeJSONParse } from "../../utils/json";
 import { wildcardMatch } from "../../utils/wildcard";
 
 function shouldRateLimit(
@@ -85,8 +85,13 @@ function createDBStorage(ctx: AuthContext) {
 	};
 }
 
-const memory = new Map<string, RateLimit>();
-export function getRateLimitStorage(
+interface MemoryRateLimitEntry {
+	data: RateLimit;
+	expiresAt: number;
+}
+
+const memory = new Map<string, MemoryRateLimitEntry>();
+function getRateLimitStorage(
 	ctx: AuthContext,
 	rateLimitSettings?:
 		| {
@@ -121,10 +126,25 @@ export function getRateLimitStorage(
 	} else if (storage === "memory") {
 		return {
 			async get(key: string) {
-				return memory.get(key);
+				const entry = memory.get(key);
+				if (!entry) {
+					return undefined;
+				}
+				// Check if entry has expired
+				if (Date.now() >= entry.expiresAt) {
+					memory.delete(key);
+					return undefined;
+				}
+				return entry.data;
 			},
 			async set(key: string, value: RateLimit, _update?: boolean | undefined) {
-				memory.set(key, value);
+				const ttl =
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
+				const expiresAt = Date.now() + ttl * 1000;
+				memory.set(key, {
+					data: value,
+					expiresAt,
+				});
 			},
 		};
 	}
@@ -135,10 +155,9 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
-	const path = new URL(req.url).pathname.replace(
-		ctx.options.basePath || "/api/auth",
-		"",
-	);
+	const path = new URL(req.url).pathname
+		.replace(ctx.options.basePath || "/api/auth", "")
+		.replace(/\/+$/, "");
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);

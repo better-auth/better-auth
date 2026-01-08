@@ -8,8 +8,9 @@
   "dependencies": {
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
+    "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^18.5.0"
+    "stripe": "^20.0.0"
   }
 }

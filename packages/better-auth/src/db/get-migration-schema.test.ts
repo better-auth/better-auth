@@ -4,11 +4,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { betterAuth } from "../auth";
 import { getMigrations } from "./get-migration";
 
+const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";
 // Check if PostgreSQL is available
 let isPostgresAvailable = false;
 try {
 	const testPool = new Pool({
-		connectionString: "postgres://user:password@localhost:5433/better_auth",
+		connectionString: CONNECTION_STRING,
 		connectionTimeoutMillis: 2000,
 	});
 	await testPool.query("SELECT 1");
@@ -26,21 +27,22 @@ describe.runIf(isPostgresAvailable)(
 
 		// Create two separate connection pools
 		const publicPool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 
 		const customSchemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${customSchema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${customSchema}`,
 		});
 
 		beforeAll(async () => {
 			// Setup: Create custom schema and a table in public schema
 			await publicPool.query(`DROP SCHEMA IF EXISTS ${customSchema} CASCADE`);
 			await publicPool.query(`CREATE SCHEMA ${customSchema}`);
-
+			await publicPool.query(
+				`DROP TABLE IF EXISTS public.user CASCADE; DROP TABLE IF EXISTS public.session CASCADE; DROP TABLE IF EXISTS public.account CASCADE; DROP TABLE IF EXISTS public.verification CASCADE;`,
+			);
 			// Create a conflicting table in the public schema
 			await publicPool.query(`
-			DROP TABLE IF EXISTS public.user CASCADE;
 			CREATE TABLE public.user (
 				id SERIAL PRIMARY KEY,
 				email VARCHAR(255) NOT NULL,
@@ -182,12 +184,12 @@ describe.runIf(isPostgresAvailable)(
 	"PostgreSQL Schema Detection in Migrations",
 	() => {
 		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 		const schema = "uuid_test";
 
 		const schemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
 		});
 
 		beforeAll(async () => {
@@ -215,7 +217,7 @@ describe.runIf(isPostgresAvailable)(
 			};
 			const { runMigrations, compileMigrations } = await getMigrations(config);
 			await runMigrations();
-			const migrations = await compileMigrations();
+			await compileMigrations();
 			const auth = betterAuth(config);
 
 			const user = await auth.api.signUpEmail({
@@ -242,12 +244,12 @@ describe.runIf(isPostgresAvailable)(
 	"PostgreSQL Identity Column Generation",
 	() => {
 		const pool = new Pool({
-			connectionString: "postgres://user:password@localhost:5433/better_auth",
+			connectionString: CONNECTION_STRING,
 		});
 		const schema = "identity_test";
 
 		const schemaPool = new Pool({
-			connectionString: `postgres://user:password@localhost:5433/better_auth?options=-c search_path=${schema}`,
+			connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
 		});
 
 		beforeAll(async () => {
@@ -291,3 +293,80 @@ describe.runIf(isPostgresAvailable)(
 		});
 	},
 );
+
+describe.runIf(isPostgresAvailable)("PostgreSQL Column Additions", () => {
+	const pool = new Pool({
+		connectionString: CONNECTION_STRING,
+	});
+	const schema = "column_test";
+
+	const schemaPool = new Pool({
+		connectionString: `${CONNECTION_STRING}?options=-c search_path=${schema}`,
+	});
+
+	afterAll(async () => {
+		await schemaPool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+		await pool.end();
+		await schemaPool.end();
+	});
+	beforeAll(async () => {
+		await pool.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+		await schemaPool.query(`CREATE SCHEMA ${schema}`);
+	});
+
+	it("should update default tables with plugin schema fields", async () => {
+		const config: BetterAuthOptions = {
+			database: schemaPool,
+			emailAndPassword: {
+				enabled: true,
+			},
+		};
+
+		// Run the initial migration
+		const migration = await getMigrations(config);
+		await migration.runMigrations();
+
+		// Change the config to add a plugin schema
+		config.plugins = [
+			{
+				id: "test",
+				schema: {
+					user: {
+						fields: {
+							role: {
+								type: "string",
+							},
+						},
+					},
+					session: {
+						fields: {
+							impersonatedBy: {
+								type: "string",
+							},
+						},
+					},
+				},
+			},
+		];
+		const { toBeAdded, toBeCreated } = await getMigrations(config);
+		console.log(toBeAdded);
+		expect(toBeCreated.length).toBe(0);
+		expect(toBeAdded.length).toBe(2);
+		expect(toBeAdded).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					table: "user",
+					fields: expect.objectContaining({
+						role: expect.objectContaining({ type: "string" }),
+					}),
+				}),
+				expect.objectContaining({
+					table: "session",
+					fields: expect.objectContaining({
+						impersonatedBy: expect.objectContaining({ type: "string" }),
+					}),
+				}),
+			]),
+		);
+	});
+});

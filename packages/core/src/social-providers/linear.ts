@@ -102,14 +102,15 @@ export const linear = (options: LinearOptions) => {
 
 			const userData = profile.data.viewer;
 			const userMap = await options.mapProfileToUser?.(userData);
-
+			// Linear does not provide email_verified claim.
+			// We default to false for security consistency.
 			return {
 				user: {
 					id: profile.data.viewer.id,
 					name: profile.data.viewer.name,
 					email: profile.data.viewer.email,
 					image: profile.data.viewer.avatarUrl,
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: userData,

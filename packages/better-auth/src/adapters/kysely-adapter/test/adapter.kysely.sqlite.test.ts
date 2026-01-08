@@ -1,11 +1,12 @@
+import fs from "node:fs/promises";
+import path from "node:path";
 import Database from "better-sqlite3";
-import fs from "fs/promises";
 import { Kysely, SqliteDialect } from "kysely";
-import path from "path";
 import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
@@ -33,7 +34,7 @@ const { execute } = await testAdapter({
 		try {
 			await fs.unlink(dbPath);
 		} catch {
-			console.log("db doesnt exist");
+			console.log("db doesn't exist");
 		}
 		database = new Database(dbPath);
 		kyselyDB = new Kysely({ dialect: new SqliteDialect({ database }) });
@@ -42,11 +43,12 @@ const { execute } = await testAdapter({
 		await runMigrations();
 	},
 	tests: [
-		normalTestSuite({}),
-		transactionsTestSuite({ disableTests: { ALL: true } }),
+		normalTestSuite(),
+		transactionsTestSuite(),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		uuidTestSuite({}),
+		joinsTestSuite(),
+		uuidTestSuite(),
 	],
 	async onFinish() {
 		database.close();

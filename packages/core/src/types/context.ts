@@ -2,21 +2,43 @@ import type { CookieOptions, EndpointContext } from "better-call";
 import type {
 	Account,
 	BetterAuthDBSchema,
-	DBPreservedModels,
+	ModelNames,
 	SecondaryStorage,
 	Session,
 	User,
 	Verification,
 } from "../db";
 import type { DBAdapter, Where } from "../db/adapter";
-import { createLogger } from "../env";
+import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
-import type { LiteralUnion } from "./helper";
+import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { BetterAuthPlugin } from "./plugin";
+
+/**
+ * Mutators are defined in each plugin
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *  interface BetterAuthPluginRegistry<Auth, Context> {
+ *    'jwt': {
+ *      creator: typeof jwt
+ *    }
+ *  }
+ * }
+ * ```
+ */
+// biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
+export interface BetterAuthPluginRegistry<Auth, Context> {}
+export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
+	unknown,
+	unknown
+>;
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -25,7 +47,7 @@ export type GenericEndpointContext<
 };
 
 export interface InternalAdapter<
-	Options extends BetterAuthOptions = BetterAuthOptions,
+	_Options extends BetterAuthOptions = BetterAuthOptions,
 > {
 	createOAuthUser(
 		user: Omit<User, "id" | "createdAt" | "updatedAt">,
@@ -104,16 +126,16 @@ export interface InternalAdapter<
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,
 	): Promise<Account>;
 
-	// fixme: any type
-	updateUser(
+	// Record<string, any> is to take into account additional fields or plugin-added fields
+	updateUser<T extends Record<string, any>>(
 		userId: string,
 		data: Partial<User> & Record<string, any>,
-	): Promise<any>;
+	): Promise<User & T>;
 
-	updateUserByEmail(
+	updateUserByEmail<T extends Record<string, any>>(
 		email: string,
 		data: Partial<User & Record<string, any>>,
-	): Promise<User>;
+	): Promise<User & T>;
 
 	updatePassword(userId: string, password: string): Promise<void>;
 
@@ -160,12 +182,48 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
+export type PluginContext = {
+	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) =>
+		| (ID extends BetterAuthPluginRegistryIdentifier
+				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				: BetterAuthPlugin)
+		| null;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) => boolean;
+};
+
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	{
+	PluginContext & {
 		options: Options;
 		appName: string;
 		baseURL: string;
 		trustedOrigins: string[];
+		/**
+		 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
+		 * @param url The url to verify against the "trustedOrigins" configuration
+		 * @param settings Specify supported pattern matching settings
+		 * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
+		 */
+		isTrustedOrigin: (
+			url: string,
+			settings?: { allowRelativePaths: boolean },
+		) => boolean;
 		oauthConfig: {
 			/**
 			 * This is dangerous and should only be used in dev or staging environments.
@@ -226,7 +284,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 				  };
 		};
 		generateId: (options: {
-			model: LiteralUnion<DBPreservedModels, string>;
+			model: ModelNames;
 			size?: number | undefined;
 		}) => string | false;
 		secondaryStorage: SecondaryStorage | undefined;
@@ -267,4 +325,22 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		 * @default false
 		 */
 		skipCSRFCheck: boolean;
+		/**
+		 * Background task handler for deferred operations.
+		 *
+		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
+		 * Defaults to a no-op that just runs the promise.
+		 */
+		runInBackground: (promise: Promise<void>) => void;
+		/**
+		 * Runs a task in the background if `runInBackground` is configured,
+		 * otherwise awaits the task directly.
+		 *
+		 * This is useful for operations like sending emails where we want
+		 * to avoid blocking the response when possible (for timing attack
+		 * mitigation), but still ensure the operation completes.
+		 */
+		runInBackgroundOrAwait: (
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) => Promise<unknown>;
 	};

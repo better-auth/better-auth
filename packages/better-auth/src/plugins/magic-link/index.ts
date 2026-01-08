@@ -1,17 +1,25 @@
 import type {
+	Awaitable,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
 
-interface MagicLinkopts {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"magic-link": {
+			creator: typeof magicLink;
+		};
+	}
+}
+
+export interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
 	 * @default (60 * 5) // 5 minutes
@@ -27,7 +35,7 @@ interface MagicLinkopts {
 			token: string;
 		},
 		ctx?: GenericEndpointContext | undefined,
-	) => Promise<void> | void;
+	) => Awaitable<void>;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -51,7 +59,7 @@ interface MagicLinkopts {
 	/**
 	 * Custom function to generate a token
 	 */
-	generateToken?: ((email: string) => Promise<string> | string) | undefined;
+	generateToken?: ((email: string) => Awaitable<string>) | undefined;
 
 	/**
 	 * This option allows you to configure how the token is stored in your database.
@@ -68,11 +76,67 @@ interface MagicLinkopts {
 		| undefined;
 }
 
-export const magicLink = (options: MagicLinkopts) => {
+const signInMagicLinkBodySchema = z.object({
+	email: z.email().meta({
+		description: "Email address to send the magic link",
+	}),
+	name: z
+		.string()
+		.meta({
+			description:
+				'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
+		})
+		.optional(),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after magic link verification",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+		})
+		.optional(),
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after error.",
+		})
+		.optional(),
+});
+const magicLinkVerifyQuerySchema = z.object({
+	token: z.string().meta({
+		description: "Verification token",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description:
+				'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
+		})
+		.optional(),
+	errorCallbackURL: z
+		.string()
+		.meta({
+			description: "URL to redirect after error.",
+		})
+		.optional(),
+	newUserCallbackURL: z
+		.string()
+		.meta({
+			description:
+				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
+		})
+		.optional(),
+});
+export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
 		storeToken: "plain",
 		...options,
-	} satisfies MagicLinkopts;
+	} satisfies MagicLinkOptions;
 
 	async function storeToken(ctx: GenericEndpointContext, token: string) {
 		if (opts.storeToken === "hashed") {
@@ -111,42 +175,10 @@ export const magicLink = (options: MagicLinkopts) => {
 				{
 					method: "POST",
 					requireHeaders: true,
-					body: z.object({
-						email: z
-							.string()
-							.meta({
-								description: "Email address to send the magic link",
-							})
-							.email(),
-						name: z
-							.string()
-							.meta({
-								description:
-									'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
-							})
-							.optional(),
-						callbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after magic link verification",
-							})
-							.optional(),
-						newUserCallbackURL: z
-							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
-							.optional(),
-						errorCallbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
-							.optional(),
-					}),
+					body: signInMagicLinkBodySchema,
 					metadata: {
 						openapi: {
+							operationId: "signInWithMagicLink",
 							description: "Sign in with magic link",
 							responses: {
 								200: {
@@ -170,17 +202,6 @@ export const magicLink = (options: MagicLinkopts) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-
-					if (opts.disableSignUp) {
-						const user =
-							await ctx.context.internalAdapter.findUserByEmail(email);
-
-						if (!user) {
-							throw new APIError("BAD_REQUEST", {
-								message: BASE_ERROR_CODES.USER_NOT_FOUND,
-							});
-						}
-					}
 
 					const verificationToken = opts?.generateToken
 						? await opts.generateToken(email)
@@ -242,31 +263,7 @@ export const magicLink = (options: MagicLinkopts) => {
 				"/magic-link/verify",
 				{
 					method: "GET",
-					query: z.object({
-						token: z.string().meta({
-							description: "Verification token",
-						}),
-						callbackURL: z
-							.string()
-							.meta({
-								description:
-									'URL to redirect after magic link verification, if not provided the user will be redirected to the root URL. Eg: "/dashboard"',
-							})
-							.optional(),
-						errorCallbackURL: z
-							.string()
-							.meta({
-								description: "URL to redirect after error.",
-							})
-							.optional(),
-						newUserCallbackURL: z
-							.string()
-							.meta({
-								description:
-									"URL to redirect after new user signup. Only used if the user is registering for the first time.",
-							})
-							.optional(),
-					}),
+					query: magicLinkVerifyQuerySchema,
 					use: [
 						originCheck((ctx) => {
 							return ctx.query.callbackURL
@@ -287,6 +284,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					requireHeaders: true,
 					metadata: {
 						openapi: {
+							operationId: "verifyMagicLink",
 							description: "Verify magic link",
 							responses: {
 								200: {
@@ -327,31 +325,32 @@ export const magicLink = (options: MagicLinkopts) => {
 							? decodeURIComponent(ctx.query.errorCallbackURL)
 							: callbackURL,
 						ctx.context.baseURL,
-					).toString();
+					);
+
+					function redirectWithError(error: string): never {
+						errorCallbackURL.searchParams.set("error", error);
+						throw ctx.redirect(errorCallbackURL.toString());
+					}
+
 					const newUserCallbackURL = new URL(
 						ctx.query.newUserCallbackURL
 							? decodeURIComponent(ctx.query.newUserCallbackURL)
 							: callbackURL,
 						ctx.context.baseURL,
 					).toString();
-					const toRedirectTo = callbackURL?.startsWith("http")
-						? callbackURL
-						: callbackURL
-							? `${ctx.context.options.baseURL}${callbackURL}`
-							: ctx.context.options.baseURL;
 					const storedToken = await storeToken(ctx, token);
 					const tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							storedToken,
 						);
 					if (!tokenValue) {
-						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+						redirectWithError("INVALID_TOKEN");
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						throw ctx.redirect(`${errorCallbackURL}?error=EXPIRED_TOKEN`);
+						redirectWithError("EXPIRED_TOKEN");
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -375,19 +374,15 @@ export const magicLink = (options: MagicLinkopts) => {
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
-								throw ctx.redirect(
-									`${errorCallbackURL}?error=failed_to_create_user`,
-								);
+								redirectWithError("failed_to_create_user");
 							}
 						} else {
-							throw ctx.redirect(
-								`${errorCallbackURL}?error=new_user_signup_disabled`,
-							);
+							redirectWithError("new_user_signup_disabled");
 						}
 					}
 
 					if (!user.emailVerified) {
-						await ctx.context.internalAdapter.updateUser(user.id, {
+						user = await ctx.context.internalAdapter.updateUser(user.id, {
 							emailVerified: true,
 						});
 					}
@@ -397,9 +392,7 @@ export const magicLink = (options: MagicLinkopts) => {
 					);
 
 					if (!session) {
-						throw ctx.redirect(
-							`${errorCallbackURL}?error=failed_to_create_session`,
-						);
+						redirectWithError("failed_to_create_session");
 					}
 
 					await setSessionCookie(ctx, {
@@ -439,5 +432,6 @@ export const magicLink = (options: MagicLinkopts) => {
 				max: opts.rateLimit?.max || 5,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };

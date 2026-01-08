@@ -5,12 +5,18 @@ import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
+	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
+import {
+	DEFAULT_SCHEMA_REFERENCE,
+	schemaRefJoinTestSuite,
+	schemaRefTestSuite,
+} from "./schema-reference-test-suite";
 
 const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",
@@ -22,6 +28,9 @@ let kyselyDB = new Kysely({
 
 const cleanupDatabase = async () => {
 	await pgDB.query(`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`);
+	await pgDB.query(
+		`DROP SCHEMA IF EXISTS "${DEFAULT_SCHEMA_REFERENCE}" CASCADE; CREATE SCHEMA "${DEFAULT_SCHEMA_REFERENCE}";`,
+	);
 };
 
 const { execute } = await testAdapter({
@@ -36,8 +45,7 @@ const { execute } = await testAdapter({
 		const opts = Object.assign(betterAuthOptions, {
 			database: pgDB,
 		} satisfies BetterAuthOptions);
-		const { runMigrations, compileMigrations } = await getMigrations(opts);
-		// console.log(await compileMigrations());
+		const { runMigrations } = await getMigrations(opts);
 		await runMigrations();
 	},
 	tests: [
@@ -45,7 +53,10 @@ const { execute } = await testAdapter({
 		transactionsTestSuite({ disableTests: { ALL: true } }),
 		authFlowTestSuite(),
 		numberIdTestSuite(),
-		uuidTestSuite({}),
+		joinsTestSuite(),
+		uuidTestSuite(),
+		schemaRefTestSuite(),
+		schemaRefJoinTestSuite(),
 	],
 	async onFinish() {
 		await pgDB.end();

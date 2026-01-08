@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
@@ -29,6 +29,7 @@ import { spotify } from "./spotify";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
+import { vercel } from "./vercel";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 
@@ -65,6 +66,7 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	vercel,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -118,6 +120,7 @@ export * from "./spotify";
 export * from "./tiktok";
 export * from "./twitch";
 export * from "./twitter";
+export * from "./vercel";
 export * from "./vk";
 export * from "./zoom";
 

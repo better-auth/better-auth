@@ -1,7 +1,9 @@
+import { APIError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
-import { type Passkey, passkey } from ".";
+import type { Passkey } from ".";
+import { passkey } from ".";
 import { passkeyClient } from "./client";
 
 describe("passkey", async () => {
@@ -110,14 +112,43 @@ describe("passkey", async () => {
 		expect(updateResult.passkey.name).toBe("newName");
 	});
 
-	it("should delete a passkey", async () => {
+	it("should not delete a passkey that doesn't exist", async () => {
 		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.deletePasskey({
+				headers: headers,
+				body: {
+					id: "mockPasskeyId",
+				},
+			}),
+		).rejects.toThrowError(APIError);
+	});
+
+	it("should delete a passkey", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
 		const deleteResult = await auth.api.deletePasskey({
 			headers: headers,
 			body: {
-				id: "mockPasskeyId",
+				id: passkey.id,
 			},
 		});
-		expect(deleteResult).toBe(null);
+		expect(deleteResult.status).toBe(true);
 	});
 });

@@ -34,22 +34,22 @@ Use the Better Auth CLI to easily add the MCP server to your preferred client:
 <Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
     <Tab value="Cursor">
       ```bash title="terminal"
-      pnpm @better-auth/cli mcp --cursor
+      npx @better-auth/cli mcp --cursor
       ```
     </Tab>
     <Tab value="Claude Code">
       ```bash title="terminal"
-      pnpm @better-auth/cli mcp --claude-code
+      npx @better-auth/cli mcp --claude-code
       ```
     </Tab>
     <Tab value="Open Code">
       ```bash title="terminal"
-      pnpm @better-auth/cli mcp --open-code
+      npx @better-auth/cli mcp --open-code
       ```
     </Tab>
     <Tab value="Manual">
       ```bash title="terminal"
-      pnpm @better-auth/cli mcp --manual
+      npx @better-auth/cli mcp --manual
       ```
     </Tab>
 </Tabs>
@@ -69,7 +69,7 @@ Alternatively, you can manually configure the MCP server for each client:
         {
             "$schema": "https://opencode.ai/config.json",
             "mcp": {
-                "Better Auth": {
+                "better-auth": {
                     "type": "remote",
                     "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp",
                     "enabled": true,
@@ -81,7 +81,7 @@ Alternatively, you can manually configure the MCP server for each client:
     <Tab value="Manual">
      ```json title="mcp.json"
     {
-        "Better Auth": {
+        "better-auth": {
             "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp"
         }
     }

@@ -1,8 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	type OAuthProvider,
-	type ProviderOptions,
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
@@ -111,8 +110,7 @@ export const vk = (options: VkOption) => {
 					last_name: profile.user.last_name,
 					email: profile.user.email,
 					image: profile.user.avatar,
-					/** @note VK does not provide emailVerified*/
-					emailVerified: !!profile.user.email,
+					emailVerified: false,
 					birthday: profile.user.birthday,
 					sex: profile.user.sex,
 					name: `${profile.user.first_name} ${profile.user.last_name}`,

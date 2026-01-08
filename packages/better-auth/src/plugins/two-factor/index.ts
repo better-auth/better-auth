@@ -3,22 +3,18 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
-import { APIError } from "better-call";
-import { z } from "zod";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
 import { validatePassword } from "../../utils/password";
-import {
-	type BackupCodeOptions,
-	backupCode2fa,
-	generateBackupCodes,
-} from "./backup-codes";
+import type { BackupCodeOptions } from "./backup-codes";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
@@ -32,7 +28,34 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
 
-export const twoFactor = (options?: TwoFactorOptions | undefined) => {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"two-factor": {
+			creator: typeof twoFactor;
+		};
+	}
+}
+
+const enableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+	issuer: z
+		.string()
+		.meta({
+			description: "Custom issuer for the TOTP URI",
+		})
+		.optional(),
+});
+
+const disableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+});
+
+export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
@@ -69,17 +92,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-						issuer: z
-							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
-							.optional(),
-					}),
+					body: enableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -122,9 +135,10 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
@@ -205,11 +219,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-					}),
+					body: disableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -244,9 +254,10 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
@@ -283,7 +294,7 @@ export const twoFactor = (options?: TwoFactorOptions | undefined) => {
 				},
 			),
 		},
-		options: options,
+		options: options as NoInfer<O>,
 		hooks: {
 			after: [
 				{

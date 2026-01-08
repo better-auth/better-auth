@@ -113,6 +113,14 @@ export interface DBAdapterFactoryConfig<
 	 */
 	supportsBooleans?: boolean | undefined;
 	/**
+	 * If the database doesn't support arrays, set this to `false`.
+	 *
+	 * We will handle the translation between using `array`s, and saving `string`s to the database.
+	 *
+	 * @default false
+	 */
+	supportsArrays?: boolean | undefined;
+	/**
 	 * Execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions, set this to `false` and operations will be executed sequentially.
@@ -195,7 +203,15 @@ export interface DBAdapterFactoryConfig<
 				/**
 				 * The action which was called from the adapter.
 				 */
-				action: "create" | "update";
+				action:
+					| "create"
+					| "update"
+					| "findOne"
+					| "findMany"
+					| "updateMany"
+					| "delete"
+					| "deleteMany"
+					| "count";
 				/**
 				 * The model name.
 				 */
@@ -277,6 +293,12 @@ export interface DBAdapterFactoryConfig<
 	 * @default false
 	 */
 	disableTransformInput?: boolean | undefined;
+	/**
+	 * Whether to disable the transform join.
+	 * Do not use this option unless you know what you are doing.
+	 * @default false
+	 */
+	disableTransformJoin?: boolean | undefined;
 }
 
 export type Where = {
@@ -306,6 +328,56 @@ export type Where = {
 	connector?: ("AND" | "OR") | undefined;
 };
 
+/**
+ * JoinOption configuration for relational queries.
+ *
+ * Allows you to join related tables/models in a single query operation.
+ * Each key represents the name of the joined table/model, and the value
+ * configures how the join should be performed.
+ */
+export type JoinOption = {
+	[model: string]: boolean | { limit?: number };
+};
+
+/**
+ * Once `JoinOption` has gone through the adapter factory, it will be transformed into a `JoinConfig`.
+ */
+export type JoinConfig = {
+	[model: string]: {
+		/**
+		 * The joining column names.
+		 */
+		on: {
+			/**
+			 * Column name from the main table
+			 */
+			from: string;
+			/**
+			 * Column name from the joined table
+			 */
+			to: string;
+		};
+		/**
+		 * Limit the number of rows to return.
+		 *
+		 * If the relation has `unique` constraint, then this option will be ignored and limit will be set to 1.
+		 *
+		 * @default 100
+		 */
+		limit?: number;
+		/**
+		 * The relation type. Determines the output joined model data.
+		 *
+		 * `one-to-one` would have a single object in the output.
+		 * `one-to-many` would have an array of objects in the output.
+		 * `many-to-many` would have an array of objects in the output.
+		 *
+		 * @default "one-to-many"
+		 */
+		relation?: "one-to-one" | "one-to-many" | "many-to-many";
+	};
+};
+
 export type DBTransactionAdapter<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = Omit<DBAdapter<Options>, "transaction">;
@@ -327,6 +399,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where: Where[];
 		select?: string[] | undefined;
+		join?: JoinOption | undefined;
 	}) => Promise<T | null>;
 	findMany: <T>(data: {
 		model: string;
@@ -339,6 +412,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 			  }
 			| undefined;
 		offset?: number | undefined;
+		join?: JoinOption | undefined;
 	}) => Promise<T[]>;
 	count: (data: {
 		model: string;
@@ -358,7 +432,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		where: Where[];
 		update: Record<string, any>;
 	}) => Promise<number>;
-	delete: <T>(data: { model: string; where: Where[] }) => Promise<void>;
+	delete: <_T>(data: { model: string; where: Where[] }) => Promise<void>;
 	deleteMany: (data: { model: string; where: Where[] }) => Promise<number>;
 	/**
 	 * Execute multiple operations in a transaction.
@@ -408,10 +482,12 @@ export interface CustomAdapter {
 		model,
 		where,
 		select,
+		join,
 	}: {
 		model: string;
 		where: CleanedWhere[];
 		select?: string[] | undefined;
+		join?: JoinConfig | undefined;
 	}) => Promise<T | null>;
 	findMany: <T>({
 		model,
@@ -419,12 +495,14 @@ export interface CustomAdapter {
 		limit,
 		sortBy,
 		offset,
+		join,
 	}: {
 		model: string;
 		where?: CleanedWhere[] | undefined;
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
+		join?: JoinConfig | undefined;
 	}) => Promise<T[]>;
 	delete: ({
 		model,
@@ -470,3 +548,7 @@ export interface DBAdapterInstance<
 > {
 	(options: BetterAuthOptions): DBAdapter<Options>;
 }
+
+export * from "./factory";
+export * from "./types";
+export * from "./utils";

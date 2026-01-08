@@ -15,6 +15,10 @@ export const schema = {
 				type: "date",
 				required: true,
 			},
+			expiresAt: {
+				type: "date",
+				required: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;

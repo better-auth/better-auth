@@ -177,6 +177,21 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="info">
+**Notes**
+
+When `cookieCache` is enabled, revoked sessions may remain active on other devices until the cookie cache expires (`maxAge`). This is because:
+
+- Cookie cache stores session data in the client's browser
+- The server cannot directly delete cookies from other devices
+- Sessions are only revalidated when the cache expires or `disableCookieCache: true` is used
+
+**If immediate session revocation is critical:**
+- Disable `cookieCache` entirely, or
+- Set a shorter `maxAge` (e.g. 60 seconds), or
+- Use `disableCookieCache: true` for sensitive operations
+</Callout>
+
 #### Cookie Cache Strategies
 
 Better Auth supports three different encoding strategies for cookie cache:
@@ -232,6 +247,53 @@ await auth.api.getSession({
 });
 ```
 
+## Sessions in Secondary Storage
+
+By default, if you provide a [secondary storage](/docs/concepts/database#secondary-storage) in your auth configuration, the session will be stored in the secondary storage.
+
+```ts
+betterAuth({
+  // ... other options
+  secondaryStorage: {
+    // Your implementation here
+  },
+});
+```
+
+### Storing Sessions in the Database
+
+By default, Better Auth already stores sessions in the database, however if you provide a secondary storage,
+Better Auth will store sessions in the secondary storage instead of the database.
+
+You can choose to store sessions in the database instead of secondary storage by passing
+`storeSessionInDatabase: true` in the session configuration.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    secondaryStorage: { /** your secondary storage implementation here */ },
+    session: { // [!code highlight]
+        storeSessionInDatabase: true, // [!code highlight]
+    } // [!code highlight]
+});
+```
+
+### Preserving Sessions
+
+When a session is revoked, it will be removed from the secondary storage, however if you enable `preserveSessionInDatabase`,
+the session will be preserved in the database and not be deleted.
+
+This is useful if you want to keep track of the sessions that have been revoked.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    secondaryStorage: { /** your secondary storage implementation here */ },
+    session: { // [!code highlight]
+        preserveSessionInDatabase: true, // [!code highlight]
+    } // [!code highlight]
+});
+```
+
+
 ## Stateless Session Management
 
 Better Auth supports stateless session management without any database. This means that the session data is stored in a signed/encrypted cookie and the server never queries a database to validate sessions - it simply verifies the cookie signature and checks expiration.
@@ -254,7 +316,7 @@ export const auth = betterAuth({
 });
 ```
 
-To manually enable stateless mode, you need to configure `cookieCache` and `oauthConfig` with the following options:
+To manually enable stateless mode, you need to configure `cookieCache` and `account` with the following options:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -268,11 +330,10 @@ export const auth = betterAuth({
             refreshCache: true, // Enable stateless refresh
         },
     },
-    advanced: {
-        oauthConfig: {
-            storeStateStrategy: "cookie",
-        },
-    },
+    account: {
+        storeStateStrategy: "cookie",
+        storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+    }
 });
 ```
 

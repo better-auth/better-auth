@@ -7,10 +7,19 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { z } from "zod";
+import * as z from "zod";
 import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -136,5 +145,6 @@ export const customSession = <
 		$Infer: {
 			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
+		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };
