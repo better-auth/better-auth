@@ -244,6 +244,71 @@ export interface OIDCMetadata extends AuthServerMetadata {
 }
 
 /**
+ * A JSON Web Key (JWK) as defined in RFC 7517
+ * @see https://datatracker.ietf.org/doc/html/rfc7517
+ */
+export interface JSONWebKey {
+	/**
+	 * The "kty" (key type) parameter identifies the cryptographic algorithm
+	 * family used with the key, such as "RSA" or "EC".
+	 */
+	kty: string;
+	/**
+	 * The "use" (public key use) parameter identifies the intended use of
+	 * the public key. The "use" parameter is employed to indicate whether
+	 * a public key is used for encrypting data or verifying the signature
+	 * on data.
+	 */
+	use?: string;
+	/**
+	 * The "key_ops" (key operations) parameter identifies the operation(s)
+	 * for which the key is intended to be used.
+	 */
+	key_ops?: string[];
+	/**
+	 * The "alg" (algorithm) parameter identifies the algorithm intended for
+	 * use with the key.
+	 */
+	alg?: string;
+	/**
+	 * The "kid" (key ID) parameter is used to match a specific key.
+	 */
+	kid?: string;
+	/**
+	 * The "x5u" (X.509 URL) parameter is a URI [RFC3986] that refers to a
+	 * resource for an X.509 public key certificate or certificate chain
+	 * [RFC5280].
+	 */
+	x5u?: string;
+	/**
+	 * The "x5c" (X.509 certificate chain) parameter contains a chain of one
+	 * or more PKIX certificates [RFC5280].
+	 */
+	x5c?: string[];
+	/**
+	 * The "x5t" (X.509 certificate SHA-1 thumbprint) parameter is a
+	 * base64url-encoded SHA-1 thumbprint (a.k.a. digest) of the DER
+	 * encoding of an X.509 certificate [RFC5280].
+	 */
+	x5t?: string;
+	/**
+	 * The "x5t#S256" (X.509 certificate SHA-256 thumbprint) parameter is a
+	 * base64url-encoded SHA-256 thumbprint (a.k.a. digest) of the DER
+	 * encoding of an X.509 certificate [RFC5280].
+	 */
+	"x5t#S256"?: string;
+	[key: string]: unknown;
+}
+
+/**
+ * A JSON Web Key Set (JWKS) is a JSON object that represents a set of JWKs.
+ * @see https://datatracker.ietf.org/doc/html/rfc7517#section-5
+ */
+export interface JSONWebKeySet {
+	keys: JSONWebKey[];
+}
+
+/**
  * OAuth 2.0 Dynamic Client Registration Schema
  *
  * Current spec is based on OAuth 2.0, but shall use
@@ -267,7 +332,7 @@ export interface OAuthClient {
 	tos_uri?: string;
 	policy_uri?: string;
 	//---- Jwks (only one can be used) ----//
-	jwks?: string[];
+	jwks?: JSONWebKeySet;
 	jwks_uri?: string;
 	//---- User Software Identifiers ----//
 	software_id?: string;

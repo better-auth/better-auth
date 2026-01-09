@@ -354,11 +354,13 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		? Math.round(createdAt.getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = metadata
+		? typeof metadata === "string"
+			? JSON.parse(metadata)
+			: metadata
+		: undefined;
 
 	return {
-		// All other metadata
-		..._metadata,
 		// Important Fields
 		client_id: clientId,
 		client_secret: clientSecret ?? undefined,
@@ -382,7 +384,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? undefined,
+		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
@@ -395,5 +397,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		reference_id: referenceId ?? undefined,
+		// Metadata
+		metadata: _metadata ?? undefined,
 	};
 }

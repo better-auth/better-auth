@@ -43,6 +43,7 @@ describe("oauthClient", async () => {
 		contacts: ["test@example.com"],
 		tos_uri: "https://example.com/terms",
 		policy_uri: "https://example.com/policy",
+		redirect_uris: [],
 	};
 	let oauthClient: OAuthClient;
 	let oauthPublicClient: OAuthClient;
