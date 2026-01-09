@@ -109,7 +109,7 @@ await authClient.oneTap({
 
 - `clientId`: The client ID for your Google One Tap API.
 - `autoSelect`: Automatically select the account if the user is already signed in. Default is false.
-- `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. To use this option, disable `fedCM`. Default is true.
+- `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. To use this option, disable `promptOptions.fedCM`. Default is true.
 - `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
 - `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
 - `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
