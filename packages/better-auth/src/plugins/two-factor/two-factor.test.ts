@@ -833,7 +833,7 @@ describe("view backup codes", async () => {
 		backupCodes.slice(1).forEach((code) => {
 			expect(updatedCodes.backupCodes).toContain(code);
 		});
-  });
+	});
 
 	it("should not expose viewBackupCodes to client", async () => {
 		const response = await customFetchImpl(
