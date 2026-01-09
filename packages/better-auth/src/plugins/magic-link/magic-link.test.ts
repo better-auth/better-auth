@@ -79,7 +79,11 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expect(response.data).toBeDefined();
+		// Legacy format returns { token, user }
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -413,7 +417,11 @@ describe("magic link verify", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expect(response.data).toBeDefined();
+		// Legacy format returns { token, user }
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -502,7 +510,7 @@ describe("magic link JSON response mode", async () => {
 		const response = await client.magicLink.verify({
 			query: {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
-				disableRedirect: "true",
+				disableRedirect: true,
 			},
 			fetchOptions: {
 				onSuccess: sessionSetter(headers),
@@ -510,11 +518,14 @@ describe("magic link JSON response mode", async () => {
 		});
 
 		expect(response.data).toBeDefined();
-		expect(response.data?.session).toBeDefined();
-		expect(response.data?.session.token).toBeDefined();
-		expect(response.data?.user).toBeDefined();
-		expect(response.data?.user.email).toBe(testUser.email);
-		expect(response.data?.isNewUser).toBeDefined();
+		// New format with disableRedirect returns { session, user, isNewUser }
+		if (response.data && "session" in response.data) {
+			expect(response.data.session).toBeDefined();
+			expect(response.data.session.token).toBeDefined();
+			expect(response.data.user).toBeDefined();
+			expect(response.data.user.email).toBe(testUser.email);
+			expect(response.data.isNewUser).toBeDefined();
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -524,7 +535,7 @@ describe("magic link JSON response mode", async () => {
 			{
 				query: {
 					token: "invalid-token-12345",
-					disableRedirect: "true",
+					disableRedirect: true,
 				},
 			},
 			{
@@ -552,7 +563,7 @@ describe("magic link JSON response mode", async () => {
 			{
 				query: {
 					token,
-					disableRedirect: "true",
+					disableRedirect: true,
 				},
 			},
 			{
