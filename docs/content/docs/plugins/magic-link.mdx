@@ -166,29 +166,6 @@ const handleVerifyCode = async (code: string) => {
 };
 ```
 
-**Response Format:**
-
-When `disableRedirect` is `true`, successful verification returns:
-
-```ts
-{
-  session: {
-    token: string;
-    expiresAt: Date;
-  };
-  user: {
-    id: string;
-    email: string;
-    emailVerified: boolean;
-    name: string;
-    image: string;
-    createdAt: Date;
-    updatedAt: Date;
-  };
-  isNewUser: boolean;
-}
-```
-
 ## Configuration Options
 
 **sendMagicLink**: The `sendMagicLink` function is called when a user requests a magic link. It takes an object with the following properties:
