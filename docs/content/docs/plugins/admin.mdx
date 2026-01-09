@@ -34,12 +34,12 @@ The Admin plugin provides a set of administrative functions for user management 
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -978,3 +978,13 @@ userRemove: async (adminSession, removedUser) => {
   **Note:** All event callbacks are `async` functions and should return a `Promise<void>`.
   If an event callback throws an error, it will not prevent the admin operation from completing.
 </Callout>
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
+});
+```

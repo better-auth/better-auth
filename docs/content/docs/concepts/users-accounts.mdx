@@ -35,13 +35,18 @@ export const auth = betterAuth({
     emailVerification: {
         // Required to send the verification email
         sendVerificationEmail: async ({ user, url, token }) => {
-            await sendEmail({
+            void sendEmail({
                 to: user.email,
             })
         }
     }
 })
 ```
+
+<Callout type="warn">
+  Avoid awaiting the email sending to prevent 
+  timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+</Callout>
 
 By default, when a user requests to change their email, a verification email is sent to the **new** email address.
 The email is only updated after the user verifies the new email.
@@ -57,8 +62,8 @@ export const auth = betterAuth({
     user: {
         changeEmail: {
             enabled: true,
-            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => {
-                await sendEmail({
+            sendChangeEmailConfirmation: async ({ user, newEmail, url, token }, request) => { 
+                void sendEmail({
                     to: user.email, // Sent to the CURRENT email
                     subject: 'Approve email change',
                     text: `Click the link to approve the change to ${newEmail}: ${url}`
@@ -129,10 +134,27 @@ If a user was registered using OAuth or other providers, they won't have a passw
 
 ```ts
 await auth.api.setPassword({
-    body: { newPassword: "password" },
-    headers: // headers containing the user's session token
+    body: {
+        newPassword: "new-password",
+    },
+    headers: await headers() // headers containing the user's session token
 });
 ```
+### Verify Password
+
+The `verifyPassword` function allows you to verify a user's current password. This is useful for confirming user identity before performing sensitive operations like updating security settings. This function can only be called from the server.
+
+```ts
+await auth.api.verifyPassword({
+    body: {
+        password: "user-password" // required
+    },
+    headers: await headers() // headers containing the user's session token
+});
+```
+<Callout type="info">
+For OAuth users who don't have passwords, consider using email verification or fresh session checks for sensitive operations instead.
+</Callout>
 
 ## Delete User
 
@@ -446,8 +468,10 @@ Users already signed in can manually link their account to additional social pro
 
   ```ts
   await auth.api.setPassword({
-      headers: /* headers containing the user's session token */,
-      password: /* new password */
+    body: {
+        newPassword: "new-password", // required
+    },
+    headers: await headers() // headers containing the user's session token
   });
   ```
 

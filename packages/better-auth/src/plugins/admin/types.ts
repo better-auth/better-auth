@@ -152,6 +152,12 @@ export interface AdminOptions {
 			removedUser: UserWithRole,
 		) => Promise<void>;
 	};
+  /*
+	 * Whether to allow impersonating other admins
+	 *
+	 * @default false
+	 */
+	allowImpersonatingAdmins?: boolean | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

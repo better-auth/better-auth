@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import type { OAuthApplication } from "../oidc-provider/schema";
@@ -203,7 +203,7 @@ export async function authorizeMCPOAuth(
 			identifier: code,
 			expiresAt,
 		});
-	} catch (e) {
+	} catch {
 		throw ctx.redirect(
 			redirectErrorURL(
 				query.redirect_uri,
@@ -217,7 +217,9 @@ export async function authorizeMCPOAuth(
 	if (query.prompt !== "consent") {
 		const redirectURIWithCode = new URL(redirectURI);
 		redirectURIWithCode.searchParams.set("code", code);
-		redirectURIWithCode.searchParams.set("state", ctx.query.state);
+		if (ctx.query.state) {
+			redirectURIWithCode.searchParams.set("state", ctx.query.state);
+		}
 		throw ctx.redirect(redirectURIWithCode.toString());
 	}
 
@@ -243,6 +245,8 @@ export async function authorizeMCPOAuth(
 	// No consent page configured - fall back to direct redirect with code
 	const redirectURIWithCode = new URL(redirectURI);
 	redirectURIWithCode.searchParams.set("code", code);
-	redirectURIWithCode.searchParams.set("state", ctx.query.state);
+	if (ctx.query.state) {
+		redirectURIWithCode.searchParams.set("state", ctx.query.state);
+	}
 	throw ctx.redirect(redirectURIWithCode.toString());
 }
