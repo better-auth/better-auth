@@ -105,6 +105,15 @@ function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
 }
 
+/**
+ * Reasons that should NOT trigger a retry.
+ * @see https://developers.google.com/identity/gsi/web/reference/js-reference
+ */
+const noRetryReasons = {
+	dismissed: ["credential_returned", "cancel_called"],
+	skipped: ["user_cancel", "tap_outside"],
+} as const;
+
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
 		id: "one-tap",
@@ -236,15 +245,6 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 									window.google?.accounts.id.prompt((notification: any) => {
 										if (isResolved) return;
-
-										/**
-										 * Reasons that should NOT trigger a retry.
-										 * @see https://developers.google.com/identity/gsi/web/reference/js-reference
-										 */
-										const noRetryReasons = {
-											dismissed: ["credential_returned", "cancel_called"],
-											skipped: ["user_cancel", "tap_outside"],
-										};
 
 										if (
 											notification.isDismissedMoment &&
