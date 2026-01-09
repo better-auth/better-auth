@@ -30,6 +30,8 @@ export interface GoogleOneTapOptions {
 	autoSelect?: boolean | undefined;
 	/**
 	 * Cancel the flow when the user taps outside the prompt
+	 *
+	 * Note: To use this option, disable `promptOptions.fedCM`
 	 */
 	cancelOnTapOutside?: boolean | undefined;
 	/**
