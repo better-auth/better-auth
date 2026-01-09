@@ -112,7 +112,7 @@ export async function handleOAuthUserInfo(
 
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, {
-					...account,
+					...hasBeenLinked,
 					...freshTokens,
 				});
 			}
