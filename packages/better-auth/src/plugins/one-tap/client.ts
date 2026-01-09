@@ -105,6 +105,15 @@ function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
 }
 
+/**
+ * Reasons that should NOT trigger a retry.
+ * @see https://developers.google.com/identity/gsi/web/reference/js-reference
+ */
+const noRetryReasons = {
+	dismissed: ["credential_returned", "cancel_called"],
+	skipped: ["user_cancel", "tap_outside"],
+} as const;
+
 export const oneTapClient = (options: GoogleOneTapOptions) => {
 	return {
 		id: "one-tap",
@@ -241,6 +250,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											notification.isDismissedMoment &&
 											notification.isDismissedMoment()
 										) {
+											const reason = notification.getDismissedReason?.();
+											if (noRetryReasons.dismissed.includes(reason)) {
+												opts?.onPromptNotification?.(notification);
+												return;
+											}
 											if (attempt < maxAttempts) {
 												const delay = Math.pow(2, attempt) * baseDelay;
 												setTimeout(() => handlePrompt(attempt + 1), delay);
@@ -251,6 +265,11 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											notification.isSkippedMoment &&
 											notification.isSkippedMoment()
 										) {
+											const reason = notification.getSkippedReason?.();
+											if (noRetryReasons.skipped.includes(reason)) {
+												opts?.onPromptNotification?.(notification);
+												return;
+											}
 											if (attempt < maxAttempts) {
 												const delay = Math.pow(2, attempt) * baseDelay;
 												setTimeout(() => handlePrompt(attempt + 1), delay);
