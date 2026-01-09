@@ -187,14 +187,14 @@ export const sendVerificationEmail = createAuthEndpoint(
 				status: true,
 			});
 		}
+		if (session?.user.email !== email) {
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
+		}
 		if (session?.user.emailVerified) {
 			throw APIError.from(
 				"BAD_REQUEST",
 				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
 			);
-		}
-		if (session?.user.email !== email) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
