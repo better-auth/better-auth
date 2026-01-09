@@ -4,12 +4,12 @@ description: Integrate Better Auth with MongoDB.
 ---
 
 MongoDB is a popular NoSQL database that is widely used for building scalable and flexible applications. It provides a flexible schema that allows for easy data modeling and querying.
-Read more here: [MongoDB](https://www.mongodb.com/).
+
+Before getting started, make sure you have MongoDB installed and configured. For more information, see [MongoDB Documentation](https://www.mongodb.com/docs/)
 
 ## Example Usage
 
-Make sure you have MongoDB installed and configured.
-Then, you can use the mongodb adapter.
+You can use the MongoDB adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -46,3 +46,6 @@ export const auth = betterAuth({
   experimental: { joins: true }
 });
 ```
+## Additional Information
+
+- If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

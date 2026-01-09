@@ -1,18 +1,22 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.4.1-beta.1",
+  "version": "1.5.0-beta.2",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
   "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/expo"
   },
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
+    "coverage": "vitest run --coverage",
+    "lint:types": "attw --profile esm-only --pack .",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
@@ -27,6 +31,11 @@
       "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
+    },
+    "./plugins": {
+      "dev-source": "./src/plugins/index.ts",
+      "types": "./dist/plugins/index.d.mts",
+      "default": "./dist/plugins/index.mjs"
     }
   },
   "typesVersions": {
@@ -36,6 +45,9 @@
       ],
       "client": [
         "./dist/client.d.mts"
+      ],
+      "plugins": [
+        "./dist/plugins/index.d.mts"
       ]
     }
   },
@@ -53,9 +65,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
-    "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
     "expo-constants": "~17.1.7",
     "expo-network": "^8.0.7",
     "expo-linking": "~7.1.7",
@@ -64,6 +74,7 @@
     "tsdown": "catalog:"
   },
   "peerDependencies": {
+    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",
@@ -75,9 +86,6 @@
       "optional": true
     },
     "expo-linking": {
-      "optional": true
-    },
-    "expo-network": {
       "optional": true
     },
     "expo-web-browser": {

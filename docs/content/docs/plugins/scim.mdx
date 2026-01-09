@@ -62,12 +62,12 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -78,10 +78,65 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
 
 ## Usage
 
-Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server.
-The following subset of the specification is currently supported:
+Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server. Generally, this server is meant to be consumed by a third-party (your identity provider), and will require a:
+
+- **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
+- **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
+
+### Generating a SCIM token
+
+Before your identity provider can start syncing information to your SCIM server,
+you need to generate a SCIM token that your identity provider will use to authenticate against it.
+
+A SCIM token is a simple bearer token that you can generate:
+
+<APIMethod path="/scim/generate-token" method="POST" requireSession>
+```ts
+type generateSCIMToken = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+  /**
+   * Optional organization id. When specified, the organizations plugin must also be enabled
+  */
+  organizationId?: string = "the-org"
+}
+```
+</APIMethod>
+
+A `SCIM` token is always restricted to a provider, thus you are required to specify a `providerId`. This can be any provider your instance supports (e.g one of the built-in providers such as `credentials` or an external provider registered through an external plugin such as `@better-auth/sso`).
+Additionally, when the `organization` plugin is registered, you can optionally restrict the token to an organization via the `organizationId`.
+
+<Callout>
+**Important:** By default, any authenticated user with access to your better-auth instance will be able to generate a SCIM token. This can be an important security risk to your application, especially in multi-tenant scenarios.
+It is highly recommended that you implement [hooks](#hooks) to restrict this access to certain roles or users:
+</Callout>
+
+```ts
+const userRoles = new Set(["admin"]);
+const userAdminIds = new Set(["some-admin-user-id"]);
+
+scim({
+    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+        // IMPORTANT: Use this hook to restrict access to certain roles or users
+        // At the very least access must be restricted to admin users (see example below)
+
+        const userHasAdmin = member?.role && userRoles.has(member.role);
+        const userIsAdmin = userAdminIds.size > 0 && userAdminIds.has(user.id);
+
+        if (!userHasAdmin && !userIsAdmin) {
+            throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
+        }
+    },
+})
+```
+
+See the [hooks](#hooks) documentation for more details about supported hooks.
 
 ### SCIM endpoints
+
+The following subset of the specification is currently supported:
 
 #### List users
 
@@ -267,33 +322,6 @@ Get the details of a supported SCIM resource type.
 <APIMethod path="/scim/v2/ResourceTypes/:resourceTypeId" method="GET" isExternalOnly note="Standard SCIM metadata endpoint used by identity providers to get a server supported type. See https://datatracker.ietf.org/doc/html/rfc7644#section-4">
 ```ts
 type getSCIMResourceType = {
-}
-```
-</APIMethod>
-
-Generally, this server is meant to be consumed by a third-party (your identity provider), which will require:
-
-- SCIM base url: This should be the fully qualified URL to be SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
-- SCIM bearer token: See [generating a SCIM token](#generating-a-scim-token)
-
-### Generating a SCIM token
-
-Before your identity provider can start syncing information to your SCIM server,
-you need to generate a SCIM token that your identity provider will use to authenticate against it.
-
-A SCIM token is a simple bearer token that you can generate:
-
-<APIMethod path="/scim/generate-token" method="POST" requireSession>
-```ts
-type generateSCIMToken = {
-  /**
-  * The provider id
-  */
-  providerId: string = "acme-corp"
-  /**
-   * Optional organization id. When specified, the organizations plugin must also be enabled
-  */
-  organizationId?: string = "the-org"
 }
 ```
 </APIMethod>

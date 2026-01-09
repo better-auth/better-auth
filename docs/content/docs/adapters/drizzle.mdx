@@ -4,12 +4,12 @@ description: Integrate Better Auth with Drizzle ORM.
 ---
 
 Drizzle ORM is a powerful and flexible ORM for Node.js and TypeScript. It provides a simple and intuitive API for working with databases, and supports a wide range of databases including MySQL, PostgreSQL, SQLite, and more.
-Read more here: [Drizzle ORM](https://orm.drizzle.team/).
+
+Before getting started, make sure you have Drizzle installed and configured. For more information, see [Drizzle Documentation](https://orm.drizzle.team/docs/overview/)
 
 ## Example Usage
 
-Make sure you have Drizzle installed and configured.
-Then, you can use the Drizzle adapter to connect to your database.
+You can use the Drizzle adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
@@ -17,8 +17,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    // [!code highlight]
+  database: drizzleAdapter(db, { // [!code highlight]
     provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
@@ -32,13 +31,13 @@ your database schema based on your Better Auth configuration and plugins.
 
 To generate the schema required by Better Auth, run the following command:
 
-```bash title="Schema Generation"
+```package-install title="Schema Generation"
 npx @better-auth/cli@latest generate
 ```
 
 To generate and apply the migration, run the following commands:
 
-```bash title="Schema Migration"
+```package-install title="Schema Migration"
 npx drizzle-kit generate # generate the migration file
 npx drizzle-kit migrate # apply the migration
 ```
@@ -61,7 +60,7 @@ export const auth = betterAuth({
 <Callout type="warn">
   Please make sure that your Drizzle schema has the necessary relations defined.
   If you do not see any relations in your Drizzle schema, you can manually add them using the [`relation`](https://orm.drizzle.team/docs/relations) drizzle-orm function
-  or run our latest CLI version `npx auth@latest generate` to generate a new Drizzle schema with the relations.
+  or run our latest CLI version `npx @better-auth/cli@latest generate` to generate a new Drizzle schema with the relations.
 
   Additionally, you're required to pass each [relation](https://orm.drizzle.team/docs/relations) through the drizzle adapter schema object.
 </Callout>
@@ -79,10 +78,10 @@ import { schema } from "./schema";
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite", // or "pg" or "mysql"
-    schema: {
-      ...schema,
-      user: schema.users,
-    },
+    schema: { // [!code highlight]
+      ...schema, // [!code highlight]
+      user: schema.users, // [!code highlight]
+    }, // [!code highlight]
   }),
 });
 ```
@@ -150,6 +149,6 @@ export const auth = betterAuth({
 });
 ```
 
-## Performance Tips
+## Additional Information
 
-If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
+- If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.

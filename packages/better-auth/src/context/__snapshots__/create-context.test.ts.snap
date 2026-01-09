@@ -20,6 +20,7 @@ exports[`base context creation > should match config 1`] = `
         "disableTransformInput": false,
         "disableTransformJoin": false,
         "disableTransformOutput": false,
+        "supportsArrays": true,
         "supportsBooleans": true,
         "supportsDates": true,
         "supportsJSON": false,
@@ -78,6 +79,8 @@ exports[`base context creation > should match config 1`] = `
   "baseURL": "http://localhost:3000/api/auth",
   "createAuthCookie": [Function],
   "generateId": [Function],
+  "getPlugin": [Function],
+  "hasPlugin": [Function],
   "internalAdapter": {
     "countTotalUsers": [Function],
     "createAccount": [Function],
@@ -112,6 +115,7 @@ exports[`base context creation > should match config 1`] = `
     "updateUserByEmail": [Function],
     "updateVerificationValue": [Function],
   },
+  "isTrustedOrigin": [Function],
   "logger": {
     "debug": [Function],
     "error": [Function],
@@ -133,7 +137,7 @@ exports[`base context creation > should match config 1`] = `
     "basePath": "/api/auth",
     "baseURL": "http://localhost:3000",
     "plugins": [],
-    "secret": "better-auth-secret-123456789",
+    "secret": "better-auth-secret-12345678901234567890",
     "session": {
       "cookieCache": {
         "enabled": true,
@@ -158,9 +162,11 @@ exports[`base context creation > should match config 1`] = `
     "storage": "memory",
     "window": 10,
   },
+  "runInBackground": [Function],
+  "runInBackgroundOrAwait": [Function],
   "runMigrations": [Function],
   "secondaryStorage": undefined,
-  "secret": "better-auth-secret-123456789",
+  "secret": "better-auth-secret-12345678901234567890",
   "session": null,
   "sessionConfig": {
     "cookieRefreshCache": {

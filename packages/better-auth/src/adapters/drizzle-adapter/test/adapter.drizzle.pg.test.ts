@@ -1,4 +1,4 @@
-import { execSync } from "child_process";
+import { execSync } from "node:child_process";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 import { testAdapter } from "../../test-adapter";
