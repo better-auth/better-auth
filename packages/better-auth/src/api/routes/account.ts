@@ -538,7 +538,7 @@ export const getAccessToken = createAuthEndpoint(
 				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 			account = accounts.find((acc) =>
 				accountId
-					? acc.id === accountId && acc.providerId === providerId
+					? acc.accountId === accountId && acc.providerId === providerId
 					: acc.providerId === providerId,
 			);
 		}
@@ -716,7 +716,7 @@ export const refreshToken = createAuthEndpoint(
 				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 			account = accounts.find((acc) =>
 				accountId
-					? acc.id === accountId && acc.providerId === providerId
+					? acc.accountId === accountId && acc.providerId === providerId
 					: acc.providerId === providerId,
 			);
 		}
