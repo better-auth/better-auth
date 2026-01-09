@@ -263,7 +263,9 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const scopes = _scope?.split(" ");
 	const metadataObj = {
 		...(rest && Object.keys(rest).length ? rest : {}),
-		...(inputMetadata && typeof inputMetadata === "object" ? inputMetadata : {}),
+		...(inputMetadata && typeof inputMetadata === "object"
+			? inputMetadata
+			: {}),
 	};
 	const metadata = Object.keys(metadataObj).length
 		? JSON.stringify(metadataObj)
