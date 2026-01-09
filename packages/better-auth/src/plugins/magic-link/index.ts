@@ -133,7 +133,7 @@ const magicLinkVerifyQuerySchema = z.object({
 				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
 		})
 		.optional(),
-	disableRedirect: z.boolean().meta({
+	disableRedirect: z.coerce.boolean().optional().meta({
 		description:
 			"If set to true, the endpoint will return JSON response instead of redirecting.",
 	}),
