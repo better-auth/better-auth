@@ -1,6 +1,6 @@
 import { betterAuth } from "better-auth";
-import Database from "better-sqlite3";
 import { getMigrations } from "better-auth/db";
+import Database from "better-sqlite3";
 
 const database = new Database(":memory:");
 const baseURL = process.env.BASE_URL || "http://localhost:3000";
@@ -11,6 +11,9 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
+	trustedOrigins: [
+		"http://test.com:3000", // Playwright host mapping if used
+	],
 });
 
 const { runMigrations } = await getMigrations(auth.options);

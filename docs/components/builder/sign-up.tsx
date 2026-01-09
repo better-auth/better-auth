@@ -1,5 +1,10 @@
 "use client";
 
+import { useAtom } from "jotai";
+import { Loader2, X } from "lucide-react";
+import Image from "next/image";
+import { useState } from "react";
+import { optionsAtom } from "@/components/builder/store";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
@@ -11,10 +16,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useState } from "react";
-import Image from "next/image";
-import { Loader2, X } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 export function SignUp() {
 	const [firstName, setFirstName] = useState("");
@@ -22,9 +23,9 @@ export function SignUp() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [passwordConfirmation, setPasswordConfirmation] = useState("");
-	const [image, setImage] = useState<File | null>(null);
+	const [_image, setImage] = useState<File | null>(null);
 	const [imagePreview, setImagePreview] = useState<string | null>(null);
-	const router = useRouter();
+	const [options] = useAtom(optionsAtom);
 
 	const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0];
@@ -37,7 +38,7 @@ export function SignUp() {
 			reader.readAsDataURL(file);
 		}
 	};
-	const [loading, setLoading] = useState(false);
+	const [loading] = useState(false);
 
 	return (
 		<Card className="z-50 rounded-md rounded-t-none max-w-md">
@@ -157,27 +158,20 @@ export function SignUp() {
 					</Button>
 				</div>
 			</CardContent>
-			<CardFooter>
-				<div className="flex justify-center w-full border-t py-4">
-					<p className="text-center text-xs text-neutral-500">
-						Secured by <span className="text-orange-400">better-auth.</span>
-					</p>
-				</div>
-			</CardFooter>
+			{options.label && (
+				<CardFooter>
+					<div className="flex justify-center w-full border-t py-4">
+						<p className="text-center text-xs text-neutral-500">
+							Secured by <span className="text-orange-400">better-auth.</span>
+						</p>
+					</div>
+				</CardFooter>
+			)}
 		</Card>
 	);
 }
 
-async function convertImageToBase64(file: File): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onloadend = () => resolve(reader.result as string);
-		reader.onerror = reject;
-		reader.readAsDataURL(file);
-	});
-}
-
-export const signUpString = `"use client";
+export const signUpString = (options: any) => `"use client";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -360,13 +354,17 @@ export default function SignUp() {
 					</Button>
 				</div>
 			</CardContent>
-			<CardFooter>
+          ${
+						options.label
+							? `<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
 					<p className="text-center text-xs text-neutral-500">
 						Secured by <span className="text-orange-400">better-auth.</span>
 					</p>
 				</div>
-			</CardFooter>
+			</CardFooter>`
+							: ""
+					}
 		</Card>
 	);
 }

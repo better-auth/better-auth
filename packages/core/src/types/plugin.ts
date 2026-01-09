@@ -1,17 +1,16 @@
-import type { Migration } from "kysely";
-import type { AuthContext } from "./context";
 import type {
 	Endpoint,
 	EndpointContext,
 	InputContext,
 	Middleware,
 } from "better-call";
-import type { BetterAuthPluginDBSchema } from "../db";
-import type { LiteralString } from "./helper";
-import type { BetterAuthOptions } from "./init-options";
+import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
+import type { BetterAuthPluginDBSchema } from "../db";
+import type { AuthContext } from "./context";
+import type { Awaitable, LiteralString } from "./helper";
+import type { BetterAuthOptions } from "./init-options";
 
-type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function
 	? T
 	: T extends object
@@ -21,10 +20,10 @@ type DeepPartial<T> = T extends Function
 export type HookEndpointContext = Partial<
 	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
 > & {
-	path: string;
+	path?: string;
 	context: AuthContext & {
-		returned?: unknown;
-		responseHeaders?: Headers;
+		returned?: unknown | undefined;
+		responseHeaders?: Headers | undefined;
 	};
 	headers?: Headers | undefined;
 };
@@ -35,48 +34,60 @@ export type BetterAuthPlugin = {
 	 * The init function is called when the plugin is initialized.
 	 * You can return a new context or modify the existing context.
 	 */
-	init?: (ctx: AuthContext) =>
-		| Awaitable<{
-				context?: DeepPartial<Omit<AuthContext, "options">>;
-				options?: Partial<BetterAuthOptions>;
-		  }>
-		| void
-		| Promise<void>;
-	endpoints?: {
-		[key: string]: Endpoint;
-	};
-	middlewares?: {
-		path: string;
-		middleware: Middleware;
-	}[];
-	onRequest?: (
-		request: Request,
-		ctx: AuthContext,
-	) => Promise<
+	init?:
+		| ((ctx: AuthContext) =>
+				| Awaitable<{
+						context?: DeepPartial<Omit<AuthContext, "options">>;
+						options?: Partial<BetterAuthOptions>;
+				  }>
+				| void
+				| Promise<void>)
+		| undefined;
+	endpoints?:
 		| {
+				[key: string]: Endpoint;
+		  }
+		| undefined;
+	middlewares?:
+		| {
+				path: string;
+				middleware: Middleware;
+		  }[]
+		| undefined;
+	onRequest?:
+		| ((
+				request: Request,
+				ctx: AuthContext,
+		  ) => Promise<
+				| {
+						response: Response;
+				  }
+				| {
+						request: Request;
+				  }
+				| void
+		  >)
+		| undefined;
+	onResponse?:
+		| ((
+				response: Response,
+				ctx: AuthContext,
+		  ) => Promise<{
 				response: Response;
-		  }
+		  } | void>)
+		| undefined;
+	hooks?:
 		| {
-				request: Request;
+				before?: {
+					matcher: (context: HookEndpointContext) => boolean;
+					handler: AuthMiddleware;
+				}[];
+				after?: {
+					matcher: (context: HookEndpointContext) => boolean;
+					handler: AuthMiddleware;
+				}[];
 		  }
-		| void
-	>;
-	onResponse?: (
-		response: Response,
-		ctx: AuthContext,
-	) => Promise<{
-		response: Response;
-	} | void>;
-	hooks?: {
-		before?: {
-			matcher: (context: HookEndpointContext) => boolean;
-			handler: AuthMiddleware;
-		}[];
-		after?: {
-			matcher: (context: HookEndpointContext) => boolean;
-			handler: AuthMiddleware;
-		}[];
-	};
+		| undefined;
 	/**
 	 * Schema the plugin needs
 	 *
@@ -104,7 +115,7 @@ export type BetterAuthPlugin = {
 	 * } as AuthPluginSchema
 	 * ```
 	 */
-	schema?: BetterAuthPluginDBSchema;
+	schema?: BetterAuthPluginDBSchema | undefined;
 	/**
 	 * The migrations of the plugin. If you define schema that will automatically create
 	 * migrations for you.
@@ -112,7 +123,7 @@ export type BetterAuthPlugin = {
 	 * ⚠️ Only uses this if you dont't want to use the schema option and you disabled migrations for
 	 * the tables.
 	 */
-	migrations?: Record<string, Migration>;
+	migrations?: Record<string, Migration> | undefined;
 	/**
 	 * The options of the plugin
 	 */
@@ -120,17 +131,27 @@ export type BetterAuthPlugin = {
 	/**
 	 * types to be inferred
 	 */
-	$Infer?: Record<string, any>;
+	$Infer?: Record<string, any> | undefined;
 	/**
 	 * The rate limit rules to apply to specific paths.
 	 */
-	rateLimit?: {
-		window: number;
-		max: number;
-		pathMatcher: (path: string) => boolean;
-	}[];
+	rateLimit?:
+		| {
+				window: number;
+				max: number;
+				pathMatcher: (path: string) => boolean;
+		  }[]
+		| undefined;
 	/**
 	 * The error codes returned by the plugin
 	 */
-	$ERROR_CODES?: Record<string, string>;
+	$ERROR_CODES?: Record<string, { code: string; message: string }> | undefined;
+	/**
+	 * All database operations that are performed by the plugin
+	 *
+	 * This will override the default database operations
+	 */
+	adapter?: {
+		[key: string]: (...args: any[]) => Awaitable<any>;
+	};
 };

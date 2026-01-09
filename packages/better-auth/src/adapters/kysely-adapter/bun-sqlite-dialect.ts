@@ -1,29 +1,32 @@
 /**
  * @see {@link https://github.com/dylanblokhuis/kysely-bun-sqlite} - Fork of the original kysely-bun-sqlite package by @dylanblokhuis
  */
-import {
+
+import type { Database } from "bun:sqlite";
+import type {
+	DatabaseConnection,
+	DatabaseIntrospector,
+	DatabaseMetadata,
+	DatabaseMetadataOptions,
+	Dialect,
+	DialectAdapter,
+	DialectAdapterBase,
+	Driver,
 	Kysely,
+	QueryCompiler,
+	QueryResult,
+	SchemaMetadata,
+	TableMetadata,
+} from "kysely";
+import {
 	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
+	DefaultQueryCompiler,
 	sql,
-	type DatabaseConnection,
-	type QueryResult,
-	type DatabaseIntrospector,
-	type SchemaMetadata,
-	type DatabaseMetadataOptions,
-	type TableMetadata,
-	type DatabaseMetadata,
-	type Driver,
-	type Dialect,
-	type QueryCompiler,
-	type DialectAdapter,
 } from "kysely";
-import { DefaultQueryCompiler } from "kysely";
-import { DialectAdapterBase } from "kysely";
-import type { Database } from "bun:sqlite";
 
-export class BunSqliteAdapter implements DialectAdapterBase {
+class BunSqliteAdapter implements DialectAdapterBase {
 	get supportsCreateIfNotExists(): boolean {
 		return true;
 	}
@@ -64,10 +67,12 @@ export interface BunSqliteDialectConfig {
 	/**
 	 * Called once when the first query is executed.
 	 */
-	onCreateConnection?: (connection: DatabaseConnection) => Promise<void>;
+	onCreateConnection?:
+		| ((connection: DatabaseConnection) => Promise<void>)
+		| undefined;
 }
 
-export class BunSqliteDriver implements Driver {
+class BunSqliteDriver implements Driver {
 	readonly #config: BunSqliteDialectConfig;
 	readonly #connectionMutex = new ConnectionMutex();
 
@@ -161,7 +166,7 @@ class ConnectionMutex {
 	}
 }
 
-export class BunSqliteIntrospector implements DatabaseIntrospector {
+class BunSqliteIntrospector implements DatabaseIntrospector {
 	readonly #db: Kysely<unknown>;
 
 	constructor(db: Kysely<unknown>) {
@@ -199,7 +204,7 @@ export class BunSqliteIntrospector implements DatabaseIntrospector {
 	}
 
 	async getMetadata(
-		options?: DatabaseMetadataOptions,
+		options?: DatabaseMetadataOptions | undefined,
 	): Promise<DatabaseMetadata> {
 		return {
 			tables: await this.getTables(options),
@@ -252,7 +257,7 @@ export class BunSqliteIntrospector implements DatabaseIntrospector {
 	}
 }
 
-export class BunSqliteQueryCompiler extends DefaultQueryCompiler {
+class BunSqliteQueryCompiler extends DefaultQueryCompiler {
 	protected override getCurrentParameterPlaceholder() {
 		return "?";
 	}

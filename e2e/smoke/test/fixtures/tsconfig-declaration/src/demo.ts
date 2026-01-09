@@ -1,21 +1,21 @@
+import { passkey } from "@better-auth/passkey";
+import { sso } from "@better-auth/sso";
+import { stripe } from "@better-auth/stripe";
 import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import {
-	bearer,
 	admin,
-	multiSession,
-	organization,
-	twoFactor,
-	oneTap,
-	oAuthProxy,
-	openAPI,
+	bearer,
 	customSession,
 	deviceAuthorization,
 	lastLoginMethod,
+	multiSession,
+	oAuthProxy,
+	oneTap,
+	openAPI,
+	organization,
+	twoFactor,
 } from "better-auth/plugins";
-import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";
 
 export const auth = betterAuth({
@@ -26,6 +26,7 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
+		/* cspell:disable-next-line */
 		admin({ adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"] }),
 		multiSession(),
 		oAuthProxy(),

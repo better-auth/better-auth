@@ -1,11 +1,15 @@
 "use client";
-import type { TOCItemType } from "fumadocs-core/server";
+import type {
+	PopoverContentProps,
+	PopoverTriggerProps,
+} from "@radix-ui/react-popover";
+import type { TOCItemType } from "fumadocs-core/toc";
 import * as Primitive from "fumadocs-core/toc";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
+import { ChevronRight, Text } from "lucide-react";
+import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
-	type ComponentProps,
 	createContext,
-	type HTMLAttributes,
-	type ReactNode,
 	use,
 	useEffect,
 	useMemo,
@@ -13,20 +17,13 @@ import {
 	useState,
 } from "react";
 import { cn } from "@/lib/utils";
-import { useI18n } from "fumadocs-ui/provider";
-import { TocThumb } from "./toc-thumb";
-import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
-import type {
-	PopoverContentProps,
-	PopoverTriggerProps,
-} from "@radix-ui/react-popover";
-import { ChevronRight, Text } from "lucide-react";
-import { usePageStyles } from "fumadocs-ui/provider";
 import {
 	Collapsible,
 	CollapsibleContent,
 	CollapsibleTrigger,
 } from "../ui/collapsible";
+import { ScrollArea, ScrollViewport } from "../ui/scroll-area";
+import { TocThumb } from "./toc-thumb";
 
 export interface TOCProps {
 	/**
@@ -43,22 +40,19 @@ export interface TOCProps {
 }
 
 export function Toc(props: HTMLAttributes<HTMLDivElement>) {
-	const { toc } = usePageStyles();
-
 	return (
 		<div
 			id="nd-toc"
 			{...props}
 			className={cn(
-				"sticky top-[calc(var(--fd-banner-height)+var(--fd-nav-height))] h-(--fd-toc-height) pb-2 pt-12",
-				toc,
+				"sticky top-[calc(var(--fd-banner-height)+var(--fd-nav-height))] h-(--fd-toc-height) pb-2 pt-12 max-xl:hidden",
 				props.className,
 			)}
 			style={
 				{
 					...props.style,
 					"--fd-toc-height":
-						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height))",
+						"calc(100dvh - var(--fd-banner-height) - var(--fd-nav-height) - 4rem)",
 				} as object
 			}
 		>
@@ -84,6 +78,54 @@ export function TOCScrollArea({
 	...props
 }: ComponentProps<typeof ScrollArea> & { isMenu?: boolean }) {
 	const viewRef = useRef<HTMLDivElement>(null);
+	const [scrollState, setScrollState] = useState<{
+		isAtTop: boolean;
+		isAtBottom: boolean;
+	}>({ isAtTop: true, isAtBottom: true });
+
+	useEffect(() => {
+		const viewport = viewRef.current;
+		if (!viewport) return;
+
+		const checkScroll = () => {
+			const { scrollTop, scrollHeight, clientHeight } = viewport;
+			const newState = {
+				isAtTop: scrollTop <= 1,
+				isAtBottom: scrollTop + clientHeight >= scrollHeight - 1,
+			};
+
+			setScrollState((prev) => {
+				if (
+					prev.isAtTop === newState.isAtTop &&
+					prev.isAtBottom === newState.isAtBottom
+				) {
+					return prev;
+				}
+				return newState;
+			});
+		};
+
+		checkScroll();
+		viewport.addEventListener("scroll", checkScroll, { passive: true });
+
+		const observer = new ResizeObserver(checkScroll);
+		observer.observe(viewport);
+
+		return () => {
+			viewport.removeEventListener("scroll", checkScroll);
+			observer.disconnect();
+		};
+	}, []);
+
+	const maskImage = useMemo(() => {
+		const { isAtTop, isAtBottom } = scrollState;
+		if (isAtTop && isAtBottom) return "none";
+		if (isAtTop)
+			return "linear-gradient(to bottom, black calc(100% - 40px), transparent)";
+		if (isAtBottom)
+			return "linear-gradient(to top, black calc(100% - 40px), transparent)";
+		return "linear-gradient(to bottom, transparent, black 40px, black calc(100% - 40px), transparent)";
+	}, [scrollState]);
 
 	return (
 		<ScrollArea
@@ -97,6 +139,11 @@ export function TOCScrollArea({
 						isMenu && "mt-2 mb-4 mx-4 md:mx-6",
 					)}
 					ref={viewRef}
+					style={{
+						...props.style,
+						maskImage: maskImage,
+						WebkitMaskImage: maskImage,
+					}}
 				>
 					{props.children}
 				</ScrollViewport>
@@ -181,6 +228,7 @@ export function TOCItems({ items }: { items: TOCItemType[] }) {
 					<TocThumb
 						containerRef={containerRef}
 						className="mt-(--fd-top) h-(--fd-height) bg-fd-primary transition-all"
+						style={{ willChange: "height, marginTop" }}
 					/>
 				</div>
 			) : null}

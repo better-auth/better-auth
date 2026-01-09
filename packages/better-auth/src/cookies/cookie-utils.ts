@@ -1,13 +1,29 @@
 interface CookieAttributes {
 	value: string;
-	"max-age"?: number;
-	expires?: Date;
-	domain?: string;
-	path?: string;
-	secure?: boolean;
-	httponly?: boolean;
-	samesite?: "strict" | "lax" | "none";
+	"max-age"?: number | undefined;
+	expires?: Date | undefined;
+	domain?: string | undefined;
+	path?: string | undefined;
+	secure?: boolean | undefined;
+	httponly?: boolean | undefined;
+	samesite?: ("strict" | "lax" | "none") | undefined;
 	[key: string]: any;
+}
+
+export const SECURE_COOKIE_PREFIX = "__Secure-";
+export const HOST_COOKIE_PREFIX = "__Host-";
+
+/**
+ * Remove __Secure- or __Host- prefix from cookie name.
+ */
+export function stripSecureCookiePrefix(cookieName: string): string {
+	if (cookieName.startsWith(SECURE_COOKIE_PREFIX)) {
+		return cookieName.slice(SECURE_COOKIE_PREFIX.length);
+	}
+	if (cookieName.startsWith(HOST_COOKIE_PREFIX)) {
+		return cookieName.slice(HOST_COOKIE_PREFIX.length);
+	}
+	return cookieName;
 }
 
 export function parseSetCookieHeader(

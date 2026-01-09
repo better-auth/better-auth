@@ -1,17 +1,17 @@
-import { createFetch } from "@better-fetch/fetch";
-import { getBaseURL } from "../utils/url";
-import { type WritableAtom } from "nanostores";
 import type {
 	BetterAuthClientOptions,
 	ClientAtomListener,
 } from "@better-auth/core";
+import { createFetch } from "@better-fetch/fetch";
+import type { WritableAtom } from "nanostores";
+import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
-import { getSessionAtom } from "./session-atom";
 import { parseJSON } from "./parser";
+import { getSessionAtom } from "./session-atom";
 
 export const getClientConfig = (
-	options?: BetterAuthClientOptions,
-	loadEnv?: boolean,
+	options?: BetterAuthClientOptions | undefined,
+	loadEnv?: boolean | undefined,
 ) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
@@ -32,8 +32,13 @@ export const getClientConfig = (
 			onResponse: options?.fetchOptions?.onResponse,
 		},
 	};
-	const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
-		options?.fetchOptions || {};
+	const {
+		onSuccess: _onSuccess,
+		onError: _onError,
+		onRequest: _onRequest,
+		onResponse: _onResponse,
+		...restOfFetchOptions
+	} = options?.fetchOptions || {};
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
@@ -55,7 +60,7 @@ export const getClientConfig = (
 			...pluginsFetchPlugins,
 		],
 	});
-	const { $sessionSignal, session } = getSessionAtom($fetch);
+	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	let pluginsAtoms = {
@@ -72,14 +77,18 @@ export const getClientConfig = (
 		{
 			signal: "$sessionSignal",
 			matcher(path) {
-				return (
+				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
-					path.startsWith("/sign-in") ||
-					path.startsWith("/sign-up") ||
+					path === "/sign-up/email" ||
+					path === "/sign-in/email" ||
 					path === "/delete-user" ||
-					path === "/verify-email"
-				);
+					path === "/verify-email" ||
+					path === "/revoke-sessions" ||
+					path === "/revoke-session" ||
+					path === "/change-email";
+
+				return matchesCommonPaths;
 			},
 		},
 	];
@@ -97,7 +106,9 @@ export const getClientConfig = (
 	}
 
 	const $store = {
-		notify: (signal?: Omit<string, "$sessionSignal"> | "$sessionSignal") => {
+		notify: (
+			signal?: (Omit<string, "$sessionSignal"> | "$sessionSignal") | undefined,
+		) => {
 			pluginsAtoms[signal as keyof typeof pluginsAtoms]!.set(
 				!pluginsAtoms[signal as keyof typeof pluginsAtoms]!.get(),
 			);

@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { parseSetCookieHeader } from "../cookies";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { parseSetCookieHeader } from "../cookies";
 
 export function toNextJsHandler(
 	auth:
@@ -15,6 +15,9 @@ export function toNextJsHandler(
 	return {
 		GET: handler,
 		POST: handler,
+		PATCH: handler,
+		PUT: handler,
+		DELETE: handler,
 	};
 }
 
@@ -68,7 +71,7 @@ export const nextCookies = () => {
 								} as const;
 								try {
 									cookieHelper.set(key, decodeURIComponent(value.value), opts);
-								} catch (e) {
+								} catch {
 									// this will fail if the cookie is being set on server component
 								}
 							});

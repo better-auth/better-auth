@@ -1,18 +1,22 @@
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { setupServer } from "msw/node";
-import { http, HttpResponse } from "msw";
-import { getTestInstance } from "./test-utils/test-instance";
-import { DEFAULT_SECRET } from "./utils/constants";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
-import { parseSetCookieHeader } from "./cookies";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
-import { signJWT } from "./crypto";
-import { OAuth2Server } from "oauth2-mock-server";
+import type {
+	GoogleProfile,
+	VercelProfile,
+} from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { createAuthMiddleware, getOAuthState } from "./api";
+import { parseSetCookieHeader } from "./cookies";
+import { signJWT } from "./crypto";
 import { getMigrations } from "./db";
-import { runWithEndpointContext } from "@better-auth/core/context";
-import type { GenericEndpointContext } from "@better-auth/core";
+import { getTestInstance } from "./test-utils/test-instance";
+import { DEFAULT_SECRET } from "./utils/constants";
 
 let server = new OAuth2Server();
 let port = 8005;
@@ -151,7 +155,7 @@ describe("Social Providers", async (c) => {
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
-	server.service.on("beforeRsponse", (tokenResponse, req) => {
+	server.service.on("beforeResponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
 			refreshToken: "refresher-token",
@@ -180,7 +184,7 @@ describe("Social Providers", async (c) => {
 	async function simulateOAuthFlowRefresh(
 		authUrl: string,
 		headers: Headers,
-		fetchImpl?: (...args: any) => any,
+		fetchImpl?: ((...args: any) => any) | undefined,
 	) {
 		let location: string | null = null;
 		await betterFetch(authUrl, {
@@ -378,7 +382,7 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		const accounts = await client.listAccounts({
+		await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {
@@ -717,6 +721,146 @@ describe("signin", async () => {
 			name: "Updated User",
 		});
 	});
+
+	it("should allow additional data in oauth state", async () => {
+		let additionalData: Record<string, any> | null = null;
+		const headers = new Headers();
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: true,
+					},
+				},
+				hooks: {
+					after: createAuthMiddleware(async (ctx) => {
+						if (ctx.path === "/callback/:id") {
+							additionalData = await getOAuthState();
+						}
+					}),
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalData: {
+				invitedBy: "user-123",
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(additionalData).toEqual({
+			callbackURL: "/callback",
+			codeVerifier: expect.any(String),
+			expiresAt: expect.any(Number),
+			invitedBy: "user-123",
+			errorURL: "http://localhost:3000/api/auth/error",
+			state: expect.any(String),
+		});
+	});
+
+	it("should not allow overriding oauth code verifier, expiresAt, callbackURL, errorURL, newUserURL, link, requestSignUp", async () => {
+		let additionalData: Record<string, any> | null = null;
+		const headers = new Headers();
+		let state = "";
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				database,
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+						enabled: true,
+						overrideUserInfoOnSignIn: true,
+					},
+				},
+				hooks: {
+					after: createAuthMiddleware(async (ctx) => {
+						if (ctx.path === "/callback/:id") {
+							additionalData = await getOAuthState();
+						}
+					}),
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const expiresAt = Date.now();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			additionalData: {
+				codeVerifier: "test-code-verifier",
+				callbackURL: "test-callback-url",
+				errorURL: "test-error-url",
+				newUserURL: "test-new-user-url",
+				link: {
+					email: "test-email",
+					userId: "test-user-id",
+				},
+				requestSignUp: true,
+				expiresAt: expiresAt,
+			},
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+		state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError: (c) => {
+				cookieSetter(headers)(c as any);
+			},
+		});
+		expect(additionalData!.codeVerifier).not.toBe("test-code-verifier");
+		expect(additionalData!.callbackURL).not.toBe("test-callback-url");
+		expect(additionalData!.errorURL).not.toBe("test-error-url");
+		expect(additionalData!.newUserURL).not.toBe("test-new-user-url");
+		expect(additionalData!.link).not.toBe({
+			email: "test-email",
+			userId: "test-user-id",
+		});
+		expect(additionalData!.requestSignUp).not.toBe(true);
+		expect(additionalData!.expiresAt).not.toBe(expiresAt);
+	});
 });
 
 describe("updateAccountOnSignIn", async () => {
@@ -805,5 +949,382 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+	});
+});
+
+describe("Vercel Provider", async () => {
+	beforeAll(async () => {
+		mswServer.use(
+			http.post(
+				"https://api.vercel.com/login/oauth/token",
+				async ({ request }) => {
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+
+					// Verify PKCE is present
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
+					const profile: VercelProfile = {
+						sub: "vercel_user_123",
+						email: "vercel@test.com",
+						email_verified: true,
+						name: "Vercel User",
+						preferred_username: "verceluser",
+						picture: "https://vercel.com/avatar.png",
+					};
+
+					const idToken = await signJWT(profile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "vercel_access_token",
+						refresh_token: "vercel_refresh_token",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://api.vercel.com/login/oauth/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "vercel_user_123",
+					email: "vercel@test.com",
+					email_verified: true,
+					name: "Vercel User",
+					preferred_username: "verceluser",
+					picture: "https://vercel.com/avatar.png",
+				});
+			}),
+		);
+	});
+
+	it("should configure Vercel provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const vercelProvider = ctx.socialProviders.find((p) => p.id === "vercel");
+
+		expect(vercelProvider).toBeDefined();
+		expect(vercelProvider?.id).toBe("vercel");
+		expect(vercelProvider?.name).toBe("Vercel");
+	});
+
+	it("should initiate Vercel OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("vercel.com/oauth/authorize");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		// Verify PKCE parameters are present
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should complete Vercel OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: {
+				state,
+				code: "vercel_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.email).toBe("vercel@test.com");
+		expect(session.data?.user.name).toBe("Vercel User");
+		expect(session.data?.user.image).toBe("https://vercel.com/avatar.png");
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Verify account was created
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("vercel");
+		expect(accounts[0]?.accountId).toBe("vercel_user_123");
+	});
+
+	it("should use preferred_username as fallback for name", async () => {
+		mswServer.use(
+			http.post("https://api.vercel.com/login/oauth/token", async () => {
+				const profile: VercelProfile = {
+					sub: "vercel_user_456",
+					email: "noname@vercel.com",
+					email_verified: true,
+					preferred_username: "cooldev",
+					// No name field
+					picture: "https://vercel.com/avatar2.png",
+				};
+
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "vercel_access_token_2",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get("https://api.vercel.com/login/oauth/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "vercel_user_456",
+					email: "noname@vercel.com",
+					email_verified: true,
+					preferred_username: "cooldev",
+					picture: "https://vercel.com/avatar2.png",
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state, code: "vercel_test_code_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.name).toBe("cooldev");
+	});
+
+	it("should allow additional scopes", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+					scope: ["openid", "email", "profile", "offline_access"],
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data?.url).toBeDefined();
+		const authUrl = new URL(signInRes.data!.url!);
+		const scopes = authUrl.searchParams.get("scope");
+
+		expect(scopes).toContain("openid");
+		expect(scopes).toContain("email");
+		expect(scopes).toContain("profile");
+		expect(scopes).toContain("offline_access");
+	});
+
+	it("should support mapProfileToUser", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						vercelUserId: {
+							type: "string",
+						},
+					},
+				},
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+						mapProfileToUser(profile: VercelProfile) {
+							return {
+								vercelUserId: profile.sub,
+							};
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state, code: "vercel_test_code_3" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user).toHaveProperty("vercelUserId");
+		// The test uses the mocked userinfo which returns vercel_user_123 at this point
+		expect((session.data?.user as any).vercelUserId).toBeDefined();
+	});
+
+	it("should redirect existing Vercel users to callback URL", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// First sign-in (new user)
+		const signInRes1 = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state1 =
+			new URL(signInRes1.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state: state1, code: "vercel_test_code_existing" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.headers.get("location")).toContain("/welcome");
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		// Second sign-in (existing user)
+		const signInRes2 = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state2 =
+			new URL(signInRes2.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state: state2, code: "vercel_test_code_existing_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toContain("/dashboard");
+				expect(location).not.toContain("/welcome");
+			},
+		});
 	});
 });

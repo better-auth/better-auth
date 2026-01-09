@@ -1,3 +1,9 @@
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	DBFieldAttribute,
+	DBFieldAttributeConfig,
+	DBFieldType,
+} from "@better-auth/core/db";
 import type {
 	Endpoint,
 	EndpointOptions,
@@ -7,95 +13,100 @@ import type {
 import * as z from "zod";
 import { getEndpoints } from "../../api";
 import { getAuthTables } from "../../db";
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	DBFieldAttribute,
-	DBFieldAttributeConfig,
-	DBFieldType,
-} from "@better-auth/core/db";
-import type { AuthContext } from "@better-auth/core";
 
 export interface Path {
-	get?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		responses?: {
-			[key in string]: {
+	get?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
 						};
 					};
 				};
-			};
-		};
-	};
-	post?: {
-		tags?: string[];
-		operationId?: string;
-		description?: string;
-		security?: [{ bearerAuth: string[] }];
-		parameters?: OpenAPIParameter[];
-		requestBody?: {
-			content: {
-				"application/json": {
-					schema: {
-						type?: OpenAPISchemaType;
-						properties?: Record<string, any>;
-						required?: string[];
-						$ref?: string;
-					};
-				};
-			};
-		};
-		responses?: {
-			[key in string]: {
+		  }
+		| undefined;
+	post?:
+		| {
+				tags?: string[];
+				operationId?: string;
 				description?: string;
-				content: {
-					"application/json": {
-						schema: {
-							type?: OpenAPISchemaType;
-							properties?: Record<string, any>;
-							required?: string[];
-							$ref?: string;
+				security?: [{ bearerAuth: string[] }];
+				parameters?: OpenAPIParameter[];
+				requestBody?: {
+					content: {
+						"application/json": {
+							schema: {
+								type?: OpenAPISchemaType;
+								properties?: Record<string, any>;
+								required?: string[];
+								$ref?: string;
+							};
 						};
 					};
 				};
-			};
-		};
-	};
+				responses?: {
+					[key in string]: {
+						description?: string;
+						content: {
+							"application/json": {
+								schema: {
+									type?: OpenAPISchemaType;
+									properties?: Record<string, any>;
+									required?: string[];
+									$ref?: string;
+								};
+							};
+						};
+					};
+				};
+		  }
+		| undefined;
 }
 
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
 const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: z.ZodType<any>) {
+	// unwrap ZodDefault to get the inner type
+	if (zodType instanceof z.ZodDefault) {
+		return getTypeFromZodType(zodType.unwrap() as any);
+	}
 	const type = zodType.type;
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
 
 export type FieldSchema = {
 	type: DBFieldType;
-	default?: DBFieldAttributeConfig["defaultValue"] | "Generated at runtime";
-	readOnly?: boolean;
+	default?:
+		| (DBFieldAttributeConfig["defaultValue"] | "Generated at runtime")
+		| undefined;
+	readOnly?: boolean | undefined;
+	format?: string;
 };
 
 export type OpenAPIModelSchema = {
 	type: "object";
 	properties: Record<string, FieldSchema>;
-	required?: string[];
+	required?: string[] | undefined;
 };
 
 function getFieldSchema(field: DBFieldAttribute) {
 	const schema: FieldSchema = {
 		type: field.type === "date" ? "string" : field.type,
+		...(field.type === "date" && { format: "date-time" }),
 	};
 
 	if (field.defaultValue !== undefined) {
@@ -185,11 +196,33 @@ function getRequestBody(options: EndpointOptions): any {
 function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
-		const innerType = (zodType as any)._def.innerType;
+		const innerType = zodType.unwrap() as any;
 		const innerSchema = processZodType(innerType);
+		if (innerSchema.type) {
+			const type = Array.isArray(innerSchema.type)
+				? innerSchema.type
+				: [innerSchema.type];
+			return {
+				...innerSchema,
+				type: Array.from(new Set([...type, "null"])),
+			};
+		}
+		return {
+			anyOf: [innerSchema, { type: "null" }],
+		};
+	}
+	// default unwrapping
+	if (zodType instanceof z.ZodDefault) {
+		const innerType = zodType.unwrap() as any;
+		const innerSchema = processZodType(innerType);
+		const defaultValueDef = (zodType as any)._def.defaultValue;
+		const defaultValue =
+			typeof defaultValueDef === "function"
+				? defaultValueDef()
+				: defaultValueDef;
 		return {
 			...innerSchema,
-			nullable: true,
+			default: defaultValue,
 		};
 	}
 	// object unwrapping
@@ -224,7 +257,7 @@ function processZodType(zodType: z.ZodType<any>): any {
 	return baseSchema;
 }
 
-function getResponse(responses?: Record<string, any>) {
+function getResponse(responses?: Record<string, any> | undefined) {
 	return {
 		"400": {
 			content: {
@@ -341,7 +374,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		plugins: [],
 	});
 
-	const tables = getAuthTables(options);
+	const tables = getAuthTables({
+		...options,
+		session: {
+			...options.session,
+			storeSessionInDatabase: true, // Forcing this to true to return the session table schema
+		},
+	});
 	const models = Object.entries(tables).reduce<
 		Record<string, OpenAPIModelSchema>
 	>((acc, [key, value]) => {
@@ -359,10 +398,16 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			}
 		});
 
+		Object.entries(properties).forEach(([key, prop]) => {
+			const field = value.fields[key];
+			if (field && field.type === "date" && prop.type === "string") {
+				prop.format = "date-time";
+			}
+		});
 		acc[modelName] = {
 			type: "object",
 			properties,
-			...(required.length > 0 ? { required } : {}),
+			required,
 		};
 		return acc;
 	}, {});
@@ -376,13 +421,14 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 	const paths: Record<string, Path> = {};
 
 	Object.entries(baseEndpoints.api).forEach(([_, value]) => {
-		if (ctx.options.disabledPaths?.includes(value.path)) return;
+		if (!value.path || ctx.options.disabledPaths?.includes(value.path)) return;
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
-		if (options.method === "GET") {
+		if (options.method === "GET" || options.method === "DELETE") {
 			paths[path] = {
-				get: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -397,10 +443,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			};
 		}
 
-		if (options.method === "POST") {
+		if (
+			options.method === "POST" ||
+			options.method === "PATCH" ||
+			options.method === "PUT"
+		) {
 			const body = getRequestBody(options);
 			paths[path] = {
-				post: {
+				...paths[path],
+				[options.method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -450,13 +501,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			})
 			.filter((x) => x !== null) as Endpoint[];
 		Object.entries(api).forEach(([key, value]) => {
-			if (ctx.options.disabledPaths?.includes(value.path)) return;
+			if (!value.path || ctx.options.disabledPaths?.includes(value.path))
+				return;
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
-			if (options.method === "GET") {
+			if (options.method === "GET" || options.method === "DELETE") {
 				paths[path] = {
-					get: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
@@ -472,9 +525,14 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					},
 				};
 			}
-			if (options.method === "POST") {
+			if (
+				options.method === "POST" ||
+				options.method === "PATCH" ||
+				options.method === "PUT"
+			) {
 				paths[path] = {
-					post: {
+					...paths[path],
+					[options.method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],

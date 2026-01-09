@@ -1,20 +1,20 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { customSession } from ".";
-import { admin } from "../admin";
 import { createAuthClient } from "../../client";
-import { customSessionClient } from "./client";
+import { parseSetCookieHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
+import { admin } from "../admin";
 import { adminClient } from "../admin/client";
 import { multiSession } from "../multi-session";
 import { multiSessionClient } from "../multi-session/client";
-import { parseSetCookieHeader } from "../../cookies";
+import { customSession } from ".";
+import { customSessionClient } from "./client";
 
 describe("Custom Session Plugin Tests", async () => {
 	const options = {
 		plugins: [admin(), multiSession()],
 	} satisfies BetterAuthOptions;
-	const { auth, signInWithTestUser, testUser, customFetchImpl, cookieSetter } =
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
 			session: {
 				maxAge: 10,
@@ -66,7 +66,7 @@ describe("Custom Session Plugin Tests", async () => {
 
 	it("should return set cookie headers", async () => {
 		const { headers } = await signInWithTestUser();
-		const s = await client.getSession({
+		await client.getSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {

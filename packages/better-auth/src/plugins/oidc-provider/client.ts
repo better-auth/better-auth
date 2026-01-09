@@ -1,5 +1,5 @@
-import type { oidcProvider } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { oidcProvider } from ".";
 
 export const oidcClient = () => {
 	return {
@@ -7,3 +7,7 @@ export const oidcClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof oidcProvider>,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type OidcClientPlugin = ReturnType<typeof oidcClient>;
+
+export type * from "./types";

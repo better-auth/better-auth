@@ -1,5 +1,5 @@
-import { betterFetch } from "@better-fetch/fetch";
 import { base64Url } from "@better-auth/utils/base64";
+import { betterFetch } from "@better-fetch/fetch";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export function createClientCredentialsTokenRequest({
@@ -9,9 +9,9 @@ export function createClientCredentialsTokenRequest({
 	resource,
 }: {
 	options: ProviderOptions & { clientSecret: string };
-	scope?: string;
-	authentication?: "basic" | "post";
-	resource?: string | string[];
+	scope?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	resource?: (string | string[]) | undefined;
 }) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
@@ -62,8 +62,8 @@ export async function clientCredentialsToken({
 	options: ProviderOptions & { clientSecret: string };
 	tokenEndpoint: string;
 	scope: string;
-	authentication?: "basic" | "post";
-	resource?: string | string[];
+	authentication?: ("basic" | "post") | undefined;
+	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
 	const { body, headers } = createClientCredentialsTokenRequest({
 		options,
@@ -74,9 +74,9 @@ export async function clientCredentialsToken({
 
 	const { data, error } = await betterFetch<{
 		access_token: string;
-		expires_in?: number;
-		token_type?: string;
-		scope?: string;
+		expires_in?: number | undefined;
+		token_type?: string | undefined;
+		scope?: string | undefined;
 	}>(tokenEndpoint, {
 		method: "POST",
 		body,

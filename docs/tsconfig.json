@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
     "target": "ESNext",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
@@ -16,7 +15,7 @@
     "jsx": "react-jsx",
     "incremental": true,
     "paths": {
-      "@/.source": ["./.source/index.ts"],
+      "fumadocs-mdx:collections/*": ["./.source/*"],
       "@/*": ["./*"]
     },
     "plugins": [

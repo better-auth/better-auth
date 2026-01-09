@@ -1,8 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
-import { createRemoteJWKSet, jwtVerify, decodeJwt } from "jose";
-import { refreshAccessToken } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 export interface FacebookProfile {
 	id: string;
 	name: string;
@@ -25,12 +28,12 @@ export interface FacebookOptions extends ProviderOptions<FacebookProfile> {
 	 *
 	 * @default ["id", "name", "email", "picture"]
 	 */
-	fields?: string[];
+	fields?: string[] | undefined;
 
 	/**
 	 * The config id to use when undergoing oauth
 	 */
-	configId?: string;
+	configId?: string | undefined;
 }
 
 export const facebook = (options: FacebookOptions) => {
@@ -41,8 +44,8 @@ export const facebook = (options: FacebookOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "public_profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
@@ -99,7 +102,7 @@ export const facebook = (options: FacebookOptions) => {
 					}
 
 					return !!jwtClaims;
-				} catch (error) {
+				} catch {
 					return false;
 				}
 			}
@@ -149,15 +152,17 @@ export const facebook = (options: FacebookOptions) => {
 				};
 
 				// https://developers.facebook.com/docs/facebook-login/limited-login/permissions
+				// Facebook ID token does not include email_verified claim.
+				// We default to false for security consistency.
 				const userMap = await options.mapProfileToUser?.({
 					...user,
-					email_verified: true,
+					email_verified: false,
 				});
 
 				return {
 					user: {
 						...user,
-						emailVerified: true,
+						emailVerified: false,
 						...userMap,
 					},
 					data: profile,

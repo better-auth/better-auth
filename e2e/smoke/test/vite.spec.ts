@@ -1,14 +1,14 @@
-import { describe, it } from "node:test";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
+import * as assert from "node:assert";
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import * as assert from "node:assert";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
 describe("(vite) client build", () => {
-	it("builds client without better-call imports", async () => {
+	it("builds client without unexpected imports", async () => {
 		const viteDir = join(fixturesDir, "vite");
 
 		// Run vite build
@@ -16,6 +16,8 @@ describe("(vite) client build", () => {
 			cwd: viteDir,
 			stdio: "pipe",
 		});
+
+		const unexpectedStrings = ["async_hooks"] as const;
 
 		// Wait for build to complete
 		await new Promise<void>((resolve, reject) => {
@@ -33,10 +35,24 @@ describe("(vite) client build", () => {
 
 			// Log build output for debugging
 			buildProcess.stdout.on("data", (data) => {
+				if (unexpectedStrings.some((str) => data.toString().includes(str))) {
+					reject(
+						new Error(
+							`Vite build output contains unexpected string: ${data.toString()}`,
+						),
+					);
+				}
 				console.log(data.toString());
 			});
 
 			buildProcess.stderr.on("data", (data) => {
+				if (unexpectedStrings.some((str) => data.toString().includes(str))) {
+					reject(
+						new Error(
+							`Vite build error output contains unexpected string: ${data.toString()}`,
+						),
+					);
+				}
 				console.error(data.toString());
 			});
 		});

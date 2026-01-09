@@ -1,50 +1,50 @@
-import {
-	APIError,
-	type Middleware,
-	createRouter,
-	type Endpoint,
-} from "better-call";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import type { InternalLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import type { Endpoint, Middleware } from "better-call";
+import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
+import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
+import { onRequestRateLimit } from "./rate-limiter";
 import {
+	accountInfo,
 	callbackOAuth,
-	forgetPassword,
-	forgetPasswordCallback,
+	changeEmail,
+	changePassword,
+	deleteUser,
+	deleteUserCallback,
+	error,
+	getAccessToken,
 	getSession,
+	linkSocialAccount,
 	listSessions,
+	listUserAccounts,
+	ok,
+	refreshToken,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 	resetPassword,
+	revokeOtherSessions,
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
-	changeEmail,
+	setPassword,
 	signInEmail,
 	signInSocial,
 	signOut,
-	verifyEmail,
-	linkSocialAccount,
-	revokeOtherSessions,
-	listUserAccounts,
-	changePassword,
-	deleteUser,
-	setPassword,
-	updateUser,
-	deleteUserCallback,
+	signUpEmail,
 	unlinkAccount,
-	refreshToken,
-	getAccessToken,
-	accountInfo,
-	requestPasswordReset,
-	requestPasswordResetCallback,
+	updateUser,
+	verifyEmail,
+	verifyPassword,
 } from "./routes";
-import { ok } from "./routes";
-import { signUpEmail } from "./routes";
-import { error } from "./routes";
-import { type InternalLogger, logger } from "@better-auth/core/env";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
-import type { AuthContext } from "@better-auth/core";
 
 export function checkEndpointConflicts(
 	options: BetterAuthOptions,
@@ -58,7 +58,11 @@ export function checkEndpointConflicts(
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
 			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
-				if (endpoint && "path" in endpoint) {
+				if (
+					endpoint &&
+					"path" in endpoint &&
+					typeof endpoint.path === "string"
+				) {
 					const path = endpoint.path;
 					let methods: string[] = [];
 					if (endpoint.options && "method" in endpoint.options) {
@@ -158,7 +162,7 @@ To resolve this, you can:
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
-	ctx: Promise<AuthContext> | AuthContext,
+	ctx: Awaitable<AuthContext>,
 	options: Option,
 ) {
 	const pluginEndpoints =
@@ -206,14 +210,14 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
-		forgetPassword,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
+		verifyPassword,
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
@@ -221,7 +225,6 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		setPassword,
 		updateUser: updateUser<Option>(),
 		deleteUser,
-		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
@@ -268,22 +271,41 @@ export const router = <Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		allowedMediaTypes: ["application/json"],
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const path = new URL(req.url).pathname.replace(basePath, "");
-			if (disabledPaths.includes(path)) {
+			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
+
+			const normalizedPath =
+				basePath === "/"
+					? pathname
+					: pathname.startsWith(basePath)
+						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
+						: pathname;
+			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
+
+			let currentRequest = req;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(req, ctx);
+					const response = await plugin.onRequest(currentRequest, ctx);
 					if (response && "response" in response) {
 						return response.response;
 					}
+					if (response && "request" in response) {
+						currentRequest = response.request;
+					}
 				}
 			}
-			return onRequestRateLimit(req, ctx);
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
+			return currentRequest;
 		},
 		async onResponse(res) {
 			for (const plugin of ctx.options.plugins || []) {
@@ -297,7 +319,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "FOUND") {
+			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
@@ -334,7 +356,7 @@ export const router = <Option extends BetterAuthOptions>(
 					}
 				}
 
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
 						ctx.logger.error(e.status, e);
 					}
@@ -350,13 +372,15 @@ export const router = <Option extends BetterAuthOptions>(
 	});
 };
 
-export * from "./routes";
-export * from "./middlewares";
-export { APIError } from "better-call";
 export {
+	type AuthEndpoint,
+	type AuthMiddleware,
 	createAuthEndpoint,
 	createAuthMiddleware,
 	optionsMiddleware,
-	type AuthEndpoint,
-	type AuthMiddleware,
 } from "@better-auth/core/api";
+export { APIError } from "@better-auth/core/error";
+export { getIp } from "../utils/get-request-ip";
+export { isAPIError } from "../utils/is-api-error";
+export * from "./middlewares";
+export * from "./routes";

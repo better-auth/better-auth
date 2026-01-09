@@ -2,12 +2,13 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
 	dts: { build: true, incremental: true },
-	format: ["esm", "cjs"],
+	format: ["esm"],
 	entry: [
 		"./src/index.ts",
 		"./src/db/index.ts",
 		"./src/db/adapter/index.ts",
 		"./src/async_hooks/index.ts",
+		"./src/async_hooks/pure.index.ts",
 		"./src/context/index.ts",
 		"./src/env/index.ts",
 		"./src/oauth2/index.ts",
@@ -16,5 +17,6 @@ export default defineConfig({
 		"./src/utils/index.ts",
 		"./src/error/index.ts",
 	],
+	external: ["@better-auth/core/async_hooks"],
 	clean: true,
 });

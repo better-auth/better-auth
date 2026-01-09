@@ -2,8 +2,8 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
-	validateAuthorizationCode,
 	refreshAccessToken,
+	validateAuthorizationCode,
 } from "../oauth2";
 
 export interface GitlabProfile extends Record<string, any> {
@@ -16,7 +16,7 @@ export interface GitlabProfile extends Record<string, any> {
 	web_url: string;
 	created_at: string;
 	bio: string;
-	location?: string;
+	location?: string | undefined;
 	public_email: string;
 	skype: string;
 	linkedin: string;
@@ -26,7 +26,7 @@ export interface GitlabProfile extends Record<string, any> {
 	job_title: string;
 	pronouns: string;
 	bot: boolean;
-	work_information?: string;
+	work_information?: string | undefined;
 	followers: number;
 	following: number;
 	local_time: string;
@@ -49,11 +49,12 @@ export interface GitlabProfile extends Record<string, any> {
 	commit_email: string;
 	shared_runners_minutes_limit: number;
 	extra_shared_runners_minutes_limit: number;
+	email_verified?: boolean | undefined;
 }
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
 	clientId: string;
-	issuer?: string;
+	issuer?: string | undefined;
 }
 
 const cleanDoubleSlashes = (input: string = "") => {
@@ -63,7 +64,7 @@ const cleanDoubleSlashes = (input: string = "") => {
 		.join("://");
 };
 
-const issuerToEndpoints = (issuer?: string) => {
+const issuerToEndpoints = (issuer?: string | undefined) => {
 	let baseUrl = issuer || "https://gitlab.com";
 	return {
 		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),
@@ -88,8 +89,8 @@ export const gitlab = (options: GitlabOptions) => {
 			redirectURI,
 		}) => {
 			const _scopes = options.disableDefaultScope ? [] : ["read_user"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return await createAuthorizationURL({
 				id: issuerId,
 				options,
@@ -135,13 +136,15 @@ export const gitlab = (options: GitlabOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
+			// GitLab may provide email_verified claim, but it's not guaranteed.
+			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name ?? profile.username,
 					email: profile.email,
 					image: profile.avatar_url,
-					emailVerified: true,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

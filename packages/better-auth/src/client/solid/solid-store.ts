@@ -1,7 +1,7 @@
 import type { Store, StoreValue } from "nanostores";
-import { createStore, reconcile } from "solid-js/store";
 import type { Accessor } from "solid-js";
 import { onCleanup } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 
 /**
  * Subscribes to store changes and gets store’s value.

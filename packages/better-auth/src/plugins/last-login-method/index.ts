@@ -1,7 +1,17 @@
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import type { GenericEndpointContext } from "@better-auth/core";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"last-login-method": {
+			creator: typeof lastLoginMethod;
+		};
+	}
+}
 /**
  * Configuration for tracking different authentication methods
  */
@@ -10,51 +20,59 @@ export interface LastLoginMethodOptions {
 	 * Name of the cookie to store the last login method
 	 * @default "better-auth.last_used_login_method"
 	 */
-	cookieName?: string;
+	cookieName?: string | undefined;
 	/**
 	 * Cookie expiration time in seconds
 	 * @default 2592000 (30 days)
 	 */
-	maxAge?: number;
+	maxAge?: number | undefined;
 	/**
 	 * Custom method to resolve the last login method
 	 * @param ctx - The context from the hook
 	 * @returns The last login method
 	 */
-	customResolveMethod?: (ctx: GenericEndpointContext) => string | null;
+	customResolveMethod?:
+		| ((ctx: GenericEndpointContext) => string | null)
+		| undefined;
 	/**
 	 * Store the last login method in the database. This will create a new field in the user table.
 	 * @default false
 	 */
-	storeInDatabase?: boolean;
+	storeInDatabase?: boolean | undefined;
 	/**
 	 * Custom schema for the plugin
 	 * @default undefined
 	 */
-	schema?: {
-		user?: {
-			lastLoginMethod?: string;
-		};
-	};
+	schema?:
+		| {
+				user?: {
+					lastLoginMethod?: string;
+				};
+		  }
+		| undefined;
 }
 
 /**
  * Plugin to track the last used login method
  */
 export const lastLoginMethod = <O extends LastLoginMethodOptions>(
-	userConfig?: O,
+	userConfig?: O | undefined,
 ) => {
 	const paths = [
 		"/callback/:id",
-		"/oauth2/callback/:id",
+		"/oauth2/callback/:providerId",
 		"/sign-in/email",
 		"/sign-up/email",
 	];
 
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
 		if (paths.includes(ctx.path)) {
-			return ctx.params?.id ? ctx.params.id : ctx.path.split("/").pop();
+			return (
+				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
+			);
 		}
+		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
 		return null;
 	};
 
@@ -178,5 +196,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };

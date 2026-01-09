@@ -1,10 +1,19 @@
-import { serializeSignedCookie } from "better-call";
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { parseSetCookieHeader } from "../../cookies";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeSignedCookie } from "better-call";
+import { parseSetCookieHeader } from "../../cookies";
 
-interface BearerOptions {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		bearer: {
+			creator: typeof bearer;
+		};
+	}
+}
+
+export interface BearerOptions {
 	/**
 	 * If true, only signed tokens
 	 * will be converted to session
@@ -12,13 +21,13 @@ interface BearerOptions {
 	 *
 	 * @default false
 	 */
-	requireSignature?: boolean;
+	requireSignature?: boolean | undefined;
 }
 
 /**
  * Converts bearer token to session cookie
  */
-export const bearer = (options?: BearerOptions) => {
+export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
 		hooks: {
@@ -62,7 +71,7 @@ export const bearer = (options?: BearerOptions) => {
 							if (!isValid) {
 								return;
 							}
-						} catch (e) {
+						} catch {
 							return;
 						}
 						const existingHeaders = (c.request?.headers ||
@@ -123,5 +132,6 @@ export const bearer = (options?: BearerOptions) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

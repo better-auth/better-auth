@@ -1,5 +1,8 @@
-import type { multiSession } from ".";
 import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { multiSession } from ".";
+import { MULTI_SESSION_ERROR_CODES } from "./error-codes";
+
+export * from "./error-codes";
 
 export const multiSessionClient = () => {
 	return {
@@ -13,5 +16,8 @@ export const multiSessionClient = () => {
 				signal: "$sessionSignal",
 			},
 		],
+		$ERROR_CODES: MULTI_SESSION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type { MultiSessionConfig } from "./index";

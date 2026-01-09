@@ -1,14 +1,98 @@
-import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils";
+import * as z from "zod";
+import { getSessionFromCtx } from "../../../api";
+import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
-import { apiKeySchema } from "../schema";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
+import { defaultKeyHasher } from "../";
+import { setApiKey } from "../adapter";
+import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { defaultKeyHasher } from "../";
-import type { AuthContext } from "@better-auth/core";
+
+const createApiKeyBodySchema = z.object({
+	name: z.string().meta({ description: "Name of the Api Key" }).optional(),
+	expiresIn: z
+		.number()
+		.meta({
+			description: "Expiration time of the Api Key in seconds",
+		})
+		.min(1)
+		.optional()
+		.nullable()
+		.default(null),
+
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
+	prefix: z
+		.string()
+		.meta({ description: "Prefix of the Api Key" })
+		.regex(/^[a-zA-Z0-9_-]+$/, {
+			message:
+				"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
+		})
+		.optional(),
+	remaining: z
+		.number()
+		.meta({
+			description: "Remaining number of requests. Server side only",
+		})
+		.min(0)
+		.optional()
+		.nullable()
+		.default(null),
+	metadata: z.any().optional(),
+	refillAmount: z
+		.number()
+		.meta({
+			description:
+				"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
+		})
+		.min(1)
+		.optional(),
+	refillInterval: z
+		.number()
+		.meta({
+			description:
+				"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
+		})
+		.optional(),
+	rateLimitTimeWindow: z
+		.number()
+		.meta({
+			description:
+				"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
+		})
+		.optional(),
+	rateLimitMax: z
+		.number()
+		.meta({
+			description:
+				"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
+		})
+		.optional(),
+	rateLimitEnabled: z
+		.boolean()
+		.meta({
+			description:
+				"Whether the key has rate limiting enabled. server-only. Eg: true",
+		})
+		.optional(),
+	permissions: z
+		.record(z.string(), z.array(z.string()))
+		.meta({
+			description: "Permissions of the Api Key.",
+		})
+		.optional(),
+});
 
 export function createApiKey({
 	keyGenerator,
@@ -19,101 +103,19 @@ export function createApiKey({
 	keyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
-	}) => Promise<string> | string;
+	}) => Awaitable<string>;
 	opts: PredefinedApiKeyOptions;
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: z.object({
-				name: z
-					.string()
-					.meta({ description: "Name of the Api Key" })
-					.optional(),
-				expiresIn: z
-					.number()
-					.meta({
-						description: "Expiration time of the Api Key in seconds",
-					})
-					.min(1)
-					.optional()
-					.nullable()
-					.default(null),
-
-				userId: z.coerce
-					.string()
-					.meta({
-						description:
-							'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-					})
-					.optional(),
-				prefix: z
-					.string()
-					.meta({ description: "Prefix of the Api Key" })
-					.regex(/^[a-zA-Z0-9_-]+$/, {
-						message:
-							"Invalid prefix format, must be alphanumeric and contain only underscores and hyphens.",
-					})
-					.optional(),
-				remaining: z
-					.number()
-					.meta({
-						description: "Remaining number of requests. Server side only",
-					})
-					.min(0)
-					.optional()
-					.nullable()
-					.default(null),
-				metadata: z.any().optional(),
-				refillAmount: z
-					.number()
-					.meta({
-						description:
-							"Amount to refill the remaining count of the Api Key. server-only. Eg: 100",
-					})
-					.min(1)
-					.optional(),
-				refillInterval: z
-					.number()
-					.meta({
-						description:
-							"Interval to refill the Api Key in milliseconds. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitTimeWindow: z
-					.number()
-					.meta({
-						description:
-							"The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 1000",
-					})
-					.optional(),
-				rateLimitMax: z
-					.number()
-					.meta({
-						description:
-							"Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only. Eg: 100",
-					})
-					.optional(),
-				rateLimitEnabled: z
-					.boolean()
-					.meta({
-						description:
-							"Whether the key has rate limiting enabled. server-only. Eg: true",
-					})
-					.optional(),
-				permissions: z
-					.record(z.string(), z.array(z.string()))
-					.meta({
-						description: "Permissions of the Api Key.",
-					})
-					.optional(),
-			}),
+			body: createApiKeyBodySchema,
 			metadata: {
 				openapi: {
 					description: "Create a new API key for a user",
@@ -276,15 +278,11 @@ export function createApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -299,86 +297,75 @@ export function createApiKey({
 					permissions !== undefined ||
 					remaining !== null
 				) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
 				}
 			}
 
 			// if metadata is defined, than check that it's an object.
 			if (metadata) {
 				if (opts.enableMetadata === false) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.METADATA_DISABLED,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.METADATA_DISABLED);
 				}
 				if (typeof metadata !== "object") {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_METADATA_TYPE,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
 			}
 
 			// make sure that if they pass a refill amount, they also pass a refill interval
 			if (refillAmount && !refillInterval) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+				);
 			}
 			// make sure that if they pass a refill interval, they also pass a refill amount
 			if (refillInterval && !refillAmount) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+				);
 			}
 
 			if (expiresIn) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+					);
 				}
 
 				const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+					);
 				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+					);
 				}
 			}
 			if (prefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
 				}
 				if (prefix.length > opts.maximumPrefixLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_PREFIX_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
 				}
 			}
 
 			if (name) {
 				if (name.length < opts.minimumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				}
 				if (name.length > opts.maximumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				}
 			} else if (opts.requireName) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.NAME_REQUIRED,
-				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.NAME_REQUIRED);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
@@ -448,13 +435,30 @@ export function createApiKey({
 				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
 			}
 
-			const apiKey = await ctx.context.adapter.create<
-				Omit<ApiKey, "id">,
-				ApiKey
-			>({
-				model: API_KEY_TABLE_NAME,
-				data: data,
-			});
+			let apiKey: ApiKey;
+
+			if (opts.storage === "secondary-storage" && opts.fallbackToDatabase) {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+				await setApiKey(ctx, apiKey, opts);
+			} else if (opts.storage === "secondary-storage") {
+				const id =
+					ctx.context.generateId({
+						model: API_KEY_TABLE_NAME,
+					}) ?? generateId();
+				apiKey = {
+					...data,
+					id,
+				} as ApiKey;
+				await setApiKey(ctx, apiKey, opts);
+			} else {
+				apiKey = await ctx.context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
+					model: API_KEY_TABLE_NAME,
+					data: data,
+				});
+			}
 
 			return ctx.json({
 				...(apiKey as ApiKey),

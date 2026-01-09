@@ -1,33 +1,61 @@
-import { generateRandomString } from "../../crypto/random";
-import * as z from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createHMAC } from "@better-auth/utils/hmac";
+import { createOTP } from "@better-auth/utils/otp";
+import * as z from "zod";
 import { sessionMiddleware } from "../../api";
+import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { generateRandomString } from "../../crypto/random";
+import { mergeSchema } from "../../db/schema";
+import { validatePassword } from "../../utils/password";
+import type { BackupCodeOptions } from "./backup-codes";
+import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
-	backupCode2fa,
-	generateBackupCodes,
-	type BackupCodeOptions,
-} from "./backup-codes";
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_COOKIE_NAME,
+} from "./constant";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import { otp2fa } from "./otp";
+import { schema } from "./schema";
 import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
-import { mergeSchema } from "../../db/schema";
-import { TWO_FACTOR_COOKIE_NAME, TRUST_DEVICE_COOKIE_NAME } from "./constant";
-import { validatePassword } from "../../utils/password";
-import { APIError } from "better-call";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
-import { schema } from "./schema";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { createOTP } from "@better-auth/utils/otp";
-import { createHMAC } from "@better-auth/utils/hmac";
-import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+
 export * from "./error-code";
 
-export const twoFactor = (options?: TwoFactorOptions) => {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"two-factor": {
+			creator: typeof twoFactor;
+		};
+	}
+}
+
+const enableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+	issuer: z
+		.string()
+		.meta({
+			description: "Custom issuer for the TOTP URI",
+		})
+		.optional(),
+});
+
+const disableTwoFactorBodySchema = z.object({
+	password: z.string().meta({
+		description: "User password",
+	}),
+});
+
+export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
@@ -64,17 +92,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/enable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-						issuer: z
-							.string()
-							.meta({
-								description: "Custom issuer for the TOTP URI",
-							})
-							.optional(),
-					}),
+					body: enableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -117,9 +135,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
@@ -200,11 +219,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				"/two-factor/disable",
 				{
 					method: "POST",
-					body: z.object({
-						password: z.string().meta({
-							description: "User password",
-						}),
-					}),
+					body: disableTwoFactorBodySchema,
 					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
@@ -239,9 +254,10 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Invalid password",
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,
@@ -278,7 +294,7 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 				},
 			),
 		},
-		options: options,
+		options: options as NoInfer<O>,
 		hooks: {
 			after: [
 				{
@@ -298,14 +314,19 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 						if (!data?.user.twoFactorEnabled) {
 							return;
 						}
-						// Check for trust device cookie
-						const trustDeviceCookieName = ctx.context.createAuthCookie(
+
+						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
+							{
+								maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							},
 						);
+						// Check for trust device cookie
 						const trustDeviceCookie = await ctx.getSignedCookie(
-							trustDeviceCookieName.name,
+							trustDeviceCookieAttrs.name,
 							ctx.context.secret,
 						);
+
 						if (trustDeviceCookie) {
 							const [token, sessionToken] = trustDeviceCookie.split("!");
 							const expectedToken = await createHMAC(
@@ -313,17 +334,27 @@ export const twoFactor = (options?: TwoFactorOptions) => {
 								"base64urlnopad",
 							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
 
+							// Checks if the token is signed correctly, not that its the current session token
 							if (token === expectedToken) {
 								// Trust device cookie is valid, refresh it and skip 2FA
+								const newTrustDeviceCookie = ctx.context.createAuthCookie(
+									TRUST_DEVICE_COOKIE_NAME,
+									{
+										maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+									},
+								);
 								const newToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
-								).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
+								).sign(
+									ctx.context.secret,
+									`${data.user.id}!${data.session.token}`,
+								);
 								await ctx.setSignedCookie(
-									trustDeviceCookieName.name,
+									newTrustDeviceCookie.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
-									trustDeviceCookieName.attributes,
+									trustDeviceCookieAttrs.attributes,
 								);
 								return;
 							}

@@ -1,13 +1,25 @@
-import * as z from "zod";
+import type {
+	BetterAuthOptions,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import * as z from "zod";
 import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { getEndpointResponse } from "../../utils/plugin-helper";
-import type { GenericEndpointContext } from "@better-auth/core";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -37,7 +49,7 @@ export type CustomSessionPluginOptions = {
 	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
 	 * @default false
 	 */
-	shouldMutateListDeviceSessionsEndpoint?: boolean;
+	shouldMutateListDeviceSessionsEndpoint?: boolean | undefined;
 };
 
 export const customSession = <
@@ -51,8 +63,8 @@ export const customSession = <
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
-	options?: O,
-	pluginOptions?: CustomSessionPluginOptions,
+	options?: O | undefined,
+	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
 	return {
 		id: "custom-session",
@@ -133,5 +145,6 @@ export const customSession = <
 		$Infer: {
 			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
+		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };

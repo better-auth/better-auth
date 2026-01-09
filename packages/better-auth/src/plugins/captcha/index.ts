@@ -1,9 +1,22 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { CaptchaOptions } from "./types";
+import { getIp } from "../../utils/get-request-ip";
+import { middlewareResponse } from "../../utils/middleware-response";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
-import { middlewareResponse } from "../../utils/middleware-response";
+import type { CaptchaOptions } from "./types";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		captcha: {
+			creator: typeof captcha;
+		};
+	}
+}
+
 import * as verifyHandlers from "./verify-handlers";
+
+export type * from "./types";
 
 export const captcha = (options: CaptchaOptions) =>
 	({
@@ -18,16 +31,15 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 
 				if (!options.secretKey) {
-					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY);
+					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
-				const remoteUserIP =
-					request.headers.get("x-captcha-user-remote-ip") ?? undefined;
+				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
-						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE,
+						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
 						status: 400,
 					});
 				}
@@ -76,9 +88,10 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 
 				return middlewareResponse({
-					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR,
+					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
 					status: 500,
 				});
 			}
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

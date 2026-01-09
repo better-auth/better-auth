@@ -1,12 +1,12 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { setTokenUtil } from "../../oauth2/utils";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
+import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import { safeJSONParse } from "../../utils/json";
-import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -21,14 +21,40 @@ export const callbackOAuth = createAuthEndpoint(
 	"/callback/:id",
 	{
 		method: ["GET", "POST"],
+		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+		},
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
 		const defaultErrorURL =
 			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
+
+		// Handle POST requests by redirecting to GET to ensure cookies are sent
+		if (c.method === "POST") {
+			const postData = c.body ? schema.parse(c.body) : {};
+			const queryData = c.query ? schema.parse(c.query) : {};
+
+			const mergedData = schema.parse({ ...postData, ...queryData });
+			const params = new URLSearchParams();
+
+			for (const [key, value] of Object.entries(mergedData)) {
+				if (value !== undefined && value !== null) {
+					params.set(key, String(value));
+				}
+			}
+
+			const redirectURL = `${c.context.baseURL}/callback/${c.params.id}?${params.toString()}`;
+			throw c.redirect(redirectURL);
+		}
+
 		try {
 			if (c.method === "GET") {
 				queryOrBody = schema.parse(c.query);
@@ -60,7 +86,7 @@ export const callbackOAuth = createAuthEndpoint(
 			requestSignUp,
 		} = await parseState(c);
 
-		function redirectOnError(error: string, description?: string) {
+		function redirectOnError(error: string, description?: string | undefined) {
 			const baseURL = errorURL ?? defaultErrorURL;
 
 			const params = new URLSearchParams({ error });
@@ -195,7 +221,12 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -203,12 +234,7 @@ export const callbackOAuth = createAuthEndpoint(
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: String(userInfo.id),
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -224,6 +250,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

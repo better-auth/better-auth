@@ -1,12 +1,12 @@
 import { MongoClient, ObjectId } from "mongodb";
 import { testAdapter } from "../test-adapter";
-import { mongodbAdapter } from "./mongodb-adapter";
 import {
-	normalTestSuite,
-	performanceTestSuite,
 	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
 	transactionsTestSuite,
 } from "../tests";
+import { mongodbAdapter } from "./mongodb-adapter";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);
@@ -15,24 +15,24 @@ const dbClient = async (connectionString: string, dbName: string) => {
 	return { db, client };
 };
 
-const { db, client } = await dbClient(
-	"mongodb://127.0.0.1:27017",
-	"better-auth",
-);
+const { db } = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
 
 const { execute } = await testAdapter({
 	adapter: (options) => {
-		return mongodbAdapter(db, { transaction: false });
+		return mongodbAdapter(db, {
+			transaction: false,
+		});
 	},
 	runMigrations: async (betterAuthOptions) => {},
 	tests: [
 		normalTestSuite(),
 		authFlowTestSuite(),
 		transactionsTestSuite(),
-		// numberIdTestSuite(), // Mongo doesn't support number ids
-		performanceTestSuite(),
+		joinsTestSuite(),
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
 	],
-	customIdGenerator: () => new ObjectId().toString(),
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
 execute();

@@ -25,13 +25,13 @@ const ISO_DATE_REGEX =
 
 type ParseOptions = {
 	/** Throw errors instead of returning the original value */
-	strict?: boolean;
+	strict?: boolean | undefined;
 	/** Log warnings when suspicious patterns are detected */
-	warnings?: boolean;
+	warnings?: boolean | undefined;
 	/** Custom reviver function */
-	reviver?: (key: string, value: any) => any;
+	reviver?: ((key: string, value: any) => any) | undefined;
 	/** Automatically convert ISO date strings to Date objects */
-	parseDates?: boolean;
+	parseDates?: boolean | undefined;
 };
 
 function isValidDate(date: Date): boolean {
@@ -176,5 +176,3 @@ export function parseJSON<T = unknown>(
 ): T {
 	return betterJSONParse<T>(value, options);
 }
-
-export default parseJSON;

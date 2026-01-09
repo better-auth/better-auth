@@ -1,8 +1,9 @@
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { organization } from "./organization";
 import { createAuthClient } from "../../client";
+import { setCookieToHeader } from "../../cookies";
+import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
+import { organization } from "./organization";
 
 describe("team", async (it) => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
@@ -347,8 +348,8 @@ describe("team", async (it) => {
 	});
 });
 
-describe("mulit team support", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+describe("multi team support", async (it) => {
+	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				organization({
@@ -636,5 +637,228 @@ describe("mulit team support", async (it) => {
 		expect(invitation.id).toBeDefined();
 		expect((invitation as any).teamId).toBeNull();
 		expect((invitation as any).teamId).not.toBe("");
+	});
+
+	it("should remove a member from the organization and all their teams when calling removeMember", async () => {
+		// Create a new user to invite
+		const userHeaders = new Headers();
+		const response = await auth.api.signUpEmail({
+			body: {
+				email: "removeteamorguser@email.com",
+				name: "Remove Team Org User",
+				password: "password",
+			},
+			asResponse: true,
+		});
+
+		setCookieToHeader(userHeaders)({ response });
+		const newUser = await response.json();
+
+		// Add the user as a member to the organization
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				organizationId: organizationId!,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		// Add the user to team1
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team1Id!,
+				userId: newUser.user.id,
+			},
+		});
+
+		// add admin to the team1
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team1Id!,
+				userId: admin.user.id,
+			},
+		});
+
+		// Confirm user is a member of the org
+		const membersBefore = await auth.api.listMembers({
+			headers: admin.headers,
+			query: { organizationId: organizationId! },
+		});
+		const foundMember = membersBefore.members.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(foundMember).toBeDefined();
+		if (!foundMember) throw Error("can not run test");
+
+		// Confirm user is a member of the team
+		const teamMembersBefore = await auth.api.listTeamMembers({
+			headers: userHeaders,
+			query: { teamId: team1Id! },
+		});
+		const foundTeamMember = teamMembersBefore.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(foundTeamMember).toBeDefined();
+
+		// Remove the member from the organization
+		const removed = await auth.api.removeMember({
+			headers: admin.headers,
+			body: {
+				memberIdOrEmail: foundMember.id,
+				organizationId: organizationId!,
+			},
+		});
+		expect(removed?.member?.id).toBe(foundMember.id);
+
+		// Confirm user is no longer a member of the org
+		const membersAfter = await auth.api.listMembers({
+			headers: admin.headers,
+			query: { organizationId: organizationId! },
+		});
+		const stillMember = membersAfter.members.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(stillMember).toBeUndefined();
+
+		// Confirm user is no longer a member of the team
+		const teamMembersAfter = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: { teamId: team1Id! },
+		});
+		const stillTeamMember = teamMembersAfter.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(stillTeamMember).toBeUndefined();
+	});
+
+	it("should remove a member from the organization and all their teams when calling leaveOrganization", async () => {
+		const testUserEmail = `leaveorguser${Date.now()}@email.com`;
+
+		const userHeaders = new Headers();
+		const response = await auth.api.signUpEmail({
+			body: {
+				email: testUserEmail,
+				name: "Leave Org User",
+				password: "password",
+			},
+			asResponse: true,
+		});
+
+		setCookieToHeader(userHeaders)({ response });
+		const newUser = await response.json();
+
+		// Add the user as a member to the organization
+		await auth.api.addMember({
+			headers: admin.headers,
+			body: {
+				organizationId: organizationId!,
+				userId: newUser.user.id,
+				role: "member",
+			},
+		});
+
+		// Verify the user is now a member of the organization
+		const membersBefore = await auth.api.listMembers({
+			headers: admin.headers,
+			query: { organizationId: organizationId! },
+		});
+		const foundMember = membersBefore.members.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(foundMember).toBeDefined();
+		if (!foundMember) throw Error("User was not added as organization member");
+
+		// Add the user to team1
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team1Id!,
+				userId: newUser.user.id,
+			},
+		});
+
+		// Add admin to team1 as well so they can list team members
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team1Id!,
+				userId: admin.user.id,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team2Id!,
+				userId: newUser.user.id,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: admin.headers,
+			body: {
+				teamId: team2Id!,
+				userId: admin.user.id,
+			},
+		});
+
+		const team1MembersBefore = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: { teamId: team1Id! },
+		});
+		const foundTeam1Member = team1MembersBefore.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(foundTeam1Member).toBeDefined();
+
+		const team2MembersBefore = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: { teamId: team2Id! },
+		});
+		const foundTeam2Member = team2MembersBefore.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(foundTeam2Member).toBeDefined();
+
+		// User leaves the organization
+		const left = await auth.api.leaveOrganization({
+			headers: userHeaders,
+			body: {
+				organizationId: organizationId!,
+			},
+		});
+		expect(left?.id).toBe(foundMember.id);
+
+		const membersAfter = await auth.api.listMembers({
+			headers: admin.headers,
+			query: { organizationId: organizationId! },
+		});
+		const stillMember = membersAfter.members.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(stillMember).toBeUndefined();
+
+		// Confirm user is no longer a member of team1
+		const team1MembersAfter = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: { teamId: team1Id! },
+		});
+		const stillTeam1Member = team1MembersAfter.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(stillTeam1Member).toBeUndefined();
+
+		// Confirm user is no longer a member of team2
+		const team2MembersAfter = await auth.api.listTeamMembers({
+			headers: admin.headers,
+			query: { teamId: team2Id! },
+		});
+		const stillTeam2Member = team2MembersAfter.find(
+			(m: any) => m.userId === newUser.user.id,
+		);
+		expect(stillTeam2Member).toBeUndefined();
 	});
 });

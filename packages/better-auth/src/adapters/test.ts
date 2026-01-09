@@ -1,13 +1,13 @@
-import { expect, test, describe, beforeAll } from "vitest";
-import type { User } from "../types";
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { beforeAll, describe, expect, test } from "vitest";
+import type { User } from "../types";
 import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<DBAdapter<BetterAuthOptions>> | DBAdapter<BetterAuthOptions>;
+	) => Awaitable<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -1069,7 +1069,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		await opts.getAdapter({
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 		});
@@ -1151,7 +1151,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				predefinedOptions: {
 					advanced: {
 						database: {
-							useNumberId: true,
+							generateId: "serial",
 						},
 					},
 				},

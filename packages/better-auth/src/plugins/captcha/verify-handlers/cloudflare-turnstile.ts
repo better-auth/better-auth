@@ -6,20 +6,22 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
-	remoteIP?: string;
+	remoteIP?: string | undefined;
 };
 
 type SiteVerifyResponse = {
 	success: boolean;
-	"error-codes"?: string[];
-	challenge_ts?: string;
-	hostname?: string;
-	action?: string;
-	cdata?: string;
-	metadata?: {
-		interactive: boolean;
-	};
-	messages?: string[];
+	"error-codes"?: string[] | undefined;
+	challenge_ts?: string | undefined;
+	hostname?: string | undefined;
+	action?: string | undefined;
+	cdata?: string | undefined;
+	metadata?:
+		| {
+				interactive: boolean;
+		  }
+		| undefined;
+	messages?: string[] | undefined;
 };
 
 export const cloudflareTurnstile = async ({
@@ -39,12 +41,12 @@ export const cloudflareTurnstile = async ({
 	});
 
 	if (!response.data || response.error) {
-		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE);
+		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
 	if (!response.data.success) {
 		return middlewareResponse({
-			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
+			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
 			status: 403,
 		});
 	}

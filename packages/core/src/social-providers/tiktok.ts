@@ -23,19 +23,19 @@ export interface TiktokProfile extends Record<string, any> {
 			 *
 			 * To return this field, add `fields=union_id` in the user profile request's query parameter.
 			 */
-			union_id?: string;
+			union_id?: string | undefined;
 			/**
 			 * User's profile image.
 			 *
 			 * To return this field, add `fields=avatar_url` in the user profile request's query parameter.
 			 */
-			avatar_url?: string;
+			avatar_url?: string | undefined;
 			/**
 			 * User`s profile image in 100x100 size.
 			 *
 			 * To return this field, add `fields=avatar_url_100` in the user profile request's query parameter.
 			 */
-			avatar_url_100?: string;
+			avatar_url_100?: string | undefined;
 			/**
 			 * User's profile image with higher resolution
 			 *
@@ -55,71 +55,73 @@ export interface TiktokProfile extends Record<string, any> {
 			 */
 			username: string;
 			/** @note Email is currently unsupported by TikTok  */
-			email?: string;
+			email?: string | undefined;
 			/**
 			 * User's bio description if there is a valid one.
 			 *
 			 * To return this field, add `fields=bio_description` in the user profile request's query parameter.
 			 */
-			bio_description?: string;
+			bio_description?: string | undefined;
 			/**
 			 * The link to user's TikTok profile page.
 			 *
 			 * To return this field, add `fields=profile_deep_link` in the user profile request's query parameter.
 			 */
-			profile_deep_link?: string;
+			profile_deep_link?: string | undefined;
 			/**
 			 * Whether TikTok has provided a verified badge to the account after confirming
 			 * that it belongs to the user it represents.
 			 *
 			 * To return this field, add `fields=is_verified` in the user profile request's query parameter.
 			 */
-			is_verified?: boolean;
+			is_verified?: boolean | undefined;
 			/**
 			 * User's followers count.
 			 *
 			 * To return this field, add `fields=follower_count` in the user profile request's query parameter.
 			 */
-			follower_count?: number;
+			follower_count?: number | undefined;
 			/**
 			 * The number of accounts that the user is following.
 			 *
 			 * To return this field, add `fields=following_count` in the user profile request's query parameter.
 			 */
-			following_count?: number;
+			following_count?: number | undefined;
 			/**
 			 * The total number of likes received by the user across all of their videos.
 			 *
 			 * To return this field, add `fields=likes_count` in the user profile request's query parameter.
 			 */
-			likes_count?: number;
+			likes_count?: number | undefined;
 			/**
 			 * The total number of publicly posted videos by the user.
 			 *
 			 * To return this field, add `fields=video_count` in the user profile request's query parameter.
 			 */
-			video_count?: number;
+			video_count?: number | undefined;
 		};
 	};
-	error?: {
-		/**
-		 * The error category in string.
-		 */
-		code?: string;
-		/**
-		 * The error message in string.
-		 */
-		message?: string;
-		/**
-		 * The error message in string.
-		 */
-		log_id?: string;
-	};
+	error?:
+		| {
+				/**
+				 * The error category in string.
+				 */
+				code?: string;
+				/**
+				 * The error message in string.
+				 */
+				message?: string;
+				/**
+				 * The error message in string.
+				 */
+				log_id?: string;
+		  }
+		| undefined;
 }
 
 export interface TiktokOptions extends ProviderOptions {
 	// Client ID is not used in TikTok, we delete it from the options
-	clientId?: never;
+	clientId?: never | undefined;
 	clientSecret: string;
 	clientKey: string;
 }
@@ -130,8 +132,8 @@ export const tiktok = (options: TiktokOptions) => {
 		name: "TikTok",
 		createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scopes = options.disableDefaultScope ? [] : ["user.info.profile"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return new URL(
 				`https://www.tiktok.com/v2/auth/authorize?scope=${_scopes.join(
 					",",
@@ -197,8 +199,7 @@ export const tiktok = (options: TiktokOptions) => {
 					id: profile.data.user.open_id,
 					name: profile.data.user.display_name || profile.data.user.username,
 					image: profile.data.user.avatar_large_url,
-					/** @note Tiktok does not provide emailVerified or even email*/
-					emailVerified: profile.data.user.email ? true : false,
+					emailVerified: false,
 				},
 				data: profile,
 			};

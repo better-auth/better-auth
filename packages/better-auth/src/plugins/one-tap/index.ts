@@ -1,28 +1,44 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
-import { createAuthEndpoint } from "@better-auth/core/api";
 import { setSessionCookie } from "../../cookies";
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { jwtVerify, createRemoteJWKSet } from "jose";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
 	 * @default false
 	 */
-	disableSignup?: boolean;
+	disableSignup?: boolean | undefined;
 	/**
 	 * Google Client ID
 	 *
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
 	 */
-	clientId?: string;
+	clientId?: string | undefined;
 }
 
-export const oneTap = (options?: OneTapOptions) =>
+const oneTapCallbackBodySchema = z.object({
+	idToken: z.string().meta({
+		description:
+			"Google ID token, which the client obtains from the One Tap API",
+	}),
+});
+
+export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
 		endpoints: {
@@ -30,12 +46,7 @@ export const oneTap = (options?: OneTapOptions) =>
 				"/one-tap/callback",
 				{
 					method: "POST",
-					body: z.object({
-						idToken: z.string().meta({
-							description:
-								"Google ID token, which the client obtains from the One Tap API",
-						}),
-					}),
+					body: oneTapCallbackBodySchema,
 					metadata: {
 						openapi: {
 							summary: "One tap callback",
@@ -85,7 +96,7 @@ export const oneTap = (options?: OneTapOptions) =>
 							},
 						);
 						payload = verifiedPayload;
-					} catch (error) {
+					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -146,8 +157,8 @@ export const oneTap = (options?: OneTapOptions) =>
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
-							accountLinking?.enabled &&
-							(accountLinking.trustedProviders?.includes("google") ||
+							accountLinking?.enabled !== false &&
+							(accountLinking?.trustedProviders?.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
@@ -186,4 +197,5 @@ export const oneTap = (options?: OneTapOptions) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

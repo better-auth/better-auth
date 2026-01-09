@@ -1,10 +1,11 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
+
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { APIError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
-	refreshAccessToken,
 	createAuthorizationURL,
+	refreshAccessToken,
 	validateAuthorizationCode,
 } from "../oauth2";
 export interface AppleProfile {
@@ -52,7 +53,7 @@ export interface AppleProfile {
 	 * The URL to the user's profile picture.
 	 */
 	picture: string;
-	user?: AppleNonConformUser;
+	user?: AppleNonConformUser | undefined;
 }
 
 /**
@@ -70,8 +71,8 @@ export interface AppleNonConformUser {
 
 export interface AppleOptions extends ProviderOptions<AppleProfile> {
 	clientId: string;
-	appBundleIdentifier?: string;
-	audience?: string | string[];
+	appBundleIdentifier?: string | undefined;
+	audience?: (string | string[]) | undefined;
 }
 
 export const apple = (options: AppleOptions) => {
@@ -81,8 +82,8 @@ export const apple = (options: AppleOptions) => {
 		name: "Apple",
 		async createAuthorizationURL({ state, scopes, redirectURI }) {
 			const _scope = options.disableDefaultScope ? [] : ["email", "name"];
-			options.scope && _scope.push(...options.scope);
-			scopes && _scope.push(...scopes);
+			if (options.scope) _scope.push(...options.scope);
+			if (scopes) _scope.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "apple",
 				options,

@@ -1,4 +1,5 @@
-import { type AsyncLocalStorage, getAsyncLocalStorage } from "../async_hooks";
+import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
+import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { EndpointContext, InputContext } from "better-call";
 import type { AuthContext } from "../types";
 
@@ -33,7 +34,7 @@ export async function getCurrentAuthContext(): Promise<AuthEndpointContext> {
 	const context = als.getStore();
 	if (!context) {
 		throw new Error(
-			"No auth context found. Please make sure you are calling this function within a `getCurrentAuthContext` callback.",
+			"No auth context found. Please make sure you are calling this function within a `runWithEndpointContext` callback.",
 		);
 	}
 	return context;

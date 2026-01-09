@@ -3,7 +3,7 @@ title: Options
 description: Better Auth configuration options reference.
 ---
 
-List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/types/options.ts#L13).
+List of all the available options for configuring Better Auth. See [Better Auth Options](https://github.com/better-auth/better-auth/blob/main/packages/core/src/types/init-options.ts).
 
 ## `appName`
 
@@ -27,7 +27,11 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`
+If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
+
+<Callout type="warn">
+Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
+</Callout>
 
 ## `basePath`
 
@@ -63,12 +67,20 @@ You can provide a function that returns origins dynamically:
 
 ```ts
 export const auth = betterAuth({
-	trustedOrigins: async (request: Request) => {
-		// Return an array of trusted origins based on the request
+	trustedOrigins: async (request) => {
+		// request is undefined during initialization and auth.api calls
+		if (!request) {
+			return ["https://my-frontend.com"];
+		}
+		// Dynamic logic based on the request
 		return ["https://dynamic-origin.com"];
 	}
 })
 ```
+
+<Callout type="info">
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+</Callout>
 
 ### Wildcard Support
 
@@ -77,12 +89,38 @@ You can use wildcard patterns in trusted origins:
 ```ts
 export const auth = betterAuth({
 	trustedOrigins: [
-		"*.example.com",             // Trust all subdomains of example.com
-		"https://*.example.com",     // Trust only HTTPS subdomains
-		"http://*.dev.example.com"   // Trust HTTP subdomains of dev.example.com
+		"https://*.example.com", // trust all HTTPS subdomains of example.com
+		"http://*.dev.example.com" // trust all HTTP subdomains of dev.example.com
 	]
 })
 ```
+
+#### Pattern Syntax
+
+| Pattern | Description |
+|---------|-------------|
+| `?` | Matches exactly one character (except `/`) |
+| `*` | Matches zero or more characters that don't cross `/` |
+| `**` | Matches zero or more characters including `/` |
+
+#### Pattern Examples
+
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `http://*.example.com` | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com` | `http://api.example.com` |
+| `https://example.com` | `https://example.com`<br/>`https://example.com/path` | `https://api.example.com`<br/>`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback` | `exp://10.0.0.29:8081/path` |
+| `myapp://` | All URLs starting with `myapp://` | - |
+
+
+<Callout type="info">
+**Notes**
+
+- For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
+- For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+- The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
+</Callout>
 
 ## `secret`
 
@@ -270,9 +308,10 @@ export const auth = betterAuth({
 		},
 		changeEmail: {
 			enabled: true,
-			sendChangeEmailVerification: async ({ user, newEmail, url, token }) => {
-				// Send change email verification
-			}
+			sendChangeEmailConfirmation: async ({ user, newEmail, url, token }) => {
+				// Send change email confirmation to the old email
+			},
+			updateEmailWithoutVerification: false // Update email without verification if user is not verified
 		},
 		deleteUser: {
 			enabled: true,
@@ -348,6 +387,7 @@ export const auth = betterAuth({
 			userId: "user_id"
 		},
 		encryptOAuthTokens: true, // Encrypt OAuth tokens before storing them in the database
+		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
 			trustedProviders: ["google", "github", "email-password"],
@@ -369,11 +409,18 @@ Encrypt OAuth tokens before storing them in the database. Default: `false`.
 If enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 will be updated on sign in with the latest data from the provider.
 
+### `storeAccountCookie`
+
+Store account data after OAuth flow in a cookie. This is useful for database-less flows where you want to store account information (access tokens, refresh tokens, etc.) in a cookie instead of the database.
+
+- Default: `false`
+- Automatically set to `true` if no database is provided
+
 ### `accountLinking`
 
 Configuration for account linking.
 
-- `enabled`: Enable account linking (default: `false`)
+- `enabled`: Enable account linking (default: `true`)
 - `trustedProviders`: List of trusted providers
 - `allowDifferentEmails`: Allow users to link accounts with different email addresses
 - `allowUnlinkingAll`: Allow users to unlink all accounts
@@ -444,6 +491,7 @@ export const auth = betterAuth({
 		},
 		useSecureCookies: true,
 		disableCSRFCheck: false,
+		disableOriginCheck: false,
 		crossSubDomainCookies: {
 			enabled: true,
 			additionalCookies: ["custom_cookie"],
@@ -462,18 +510,21 @@ export const auth = betterAuth({
 			httpOnly: true,
 			secure: true
 		},
+		// OAuth state configuration has been moved to account option
+		// Use account.storeStateStrategy and account.skipStateCookieCheck instead
 		cookiePrefix: "myapp",
 		database: {
-			// If your DB is using auto-incrementing IDs, set this to true.
-			useNumberId: false,
-			// Use your own custom ID generator, or disable generating IDs as a whole.
+			// Use your own custom ID generator,
+			// disable generating IDS so your database will generate them,
+			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
 			}) => {
 				return "my-super-unique-id";
-			})) | false,
+			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
+			experimentalJoins: false,
 		}
 	},
 })
@@ -482,11 +533,13 @@ export const auth = betterAuth({
 - `ipAddress`: IP address configuration for rate limiting and session tracking
 - `useSecureCookies`: Use secure cookies (default: `false`)
 - `disableCSRFCheck`: Disable trusted origins check (⚠️ security risk)
+- `disableOriginCheck`: Disable origin check (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
-- `generateId`: Function to generate a unique ID for a model
+- `database`: Database configuration options
+- OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`
 
@@ -595,7 +648,39 @@ export const auth = betterAuth({
 			// Custom error handling
 			console.error("Auth error:", error);
 		},
-		errorURL: "/auth/error"
+		errorURL: "/auth/error",
+		customizeDefaultErrorPage: {
+			colors: {
+				background: "#ffffff",
+				foreground: "#000000",
+				primary: "#0070f3",
+				primaryForeground: "#ffffff",
+				mutedForeground: "#666666",
+				border: "#e0e0e0",
+				destructive: "#ef4444",
+				titleBorder: "#0070f3",
+				titleColor: "#000000",
+				gridColor: "#f0f0f0",
+				cardBackground: "#ffffff",
+				cornerBorder: "#0070f3"
+			},
+			size: {
+				radiusSm: "0.25rem",
+				radiusMd: "0.5rem",
+				radiusLg: "1rem",
+				textSm: "0.875rem",
+				text2xl: "1.5rem",
+				text4xl: "2.25rem",
+				text6xl: "3.75rem"
+			},
+			font: {
+				defaultFamily: "system-ui, sans-serif",
+				monoFamily: "monospace"
+			},
+			disableTitleBorder: false,
+			disableCornerDecorations: false,
+			disableBackgroundGrid: false
+		}
 	},
 })
 ```
@@ -603,6 +688,34 @@ export const auth = betterAuth({
 - `throw`: Throw an error on API error (default: `false`)
 - `onError`: Custom error handler
 - `errorURL`: URL to redirect to on error (default: `/api/auth/error`)
+- `customizeDefaultErrorPage`: Configure the default error page provided by Better Auth. Start your dev server and go to `/api/auth/error` to see the error page.
+  - `colors`: Customize color scheme for the error page
+    - `background`: Background color
+    - `foreground`: Foreground/text color
+    - `primary`: Primary accent color
+    - `primaryForeground`: Text color on primary background
+    - `mutedForeground`: Muted text color
+    - `border`: Border color
+    - `destructive`: Error/destructive color
+    - `titleBorder`: Border color for the title
+    - `titleColor`: Title text color
+    - `gridColor`: Background grid color
+    - `cardBackground`: Card background color
+    - `cornerBorder`: Corner decoration border color
+  - `size`: Customize sizing and spacing
+    - `radiusSm`: Small border radius
+    - `radiusMd`: Medium border radius
+    - `radiusLg`: Large border radius
+    - `textSm`: Small text size
+    - `text2xl`: 2xl text size
+    - `text4xl`: 4xl text size
+    - `text6xl`: 6xl text size
+  - `font`: Customize font families
+    - `defaultFamily`: Default font family
+    - `monoFamily`: Monospace font family
+  - `disableTitleBorder`: Disable the border around the title (default: `false`)
+  - `disableCornerDecorations`: Disable corner decorations (default: `false`)
+  - `disableBackgroundGrid`: Disable the background grid pattern (default: `false`)
 
 ## `hooks`
 

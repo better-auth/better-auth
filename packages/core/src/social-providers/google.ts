@@ -1,10 +1,13 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
-import { BetterAuthError } from "../error";
-import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
-import { refreshAccessToken } from "../oauth2";
+import { APIError, BetterAuthError } from "../error";
+import type { OAuthProvider, ProviderOptions } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface GoogleProfile {
 	aud: string;
@@ -22,13 +25,13 @@ export interface GoogleProfile {
 	 * Western languages.
 	 */
 	given_name: string;
-	hd?: string;
+	hd?: string | undefined;
 	iat: number;
 	iss: string;
-	jti?: string;
-	locale?: string;
+	jti?: string | undefined;
+	locale?: string | undefined;
 	name: string;
-	nbf?: number;
+	nbf?: number | undefined;
 	picture: string;
 	sub: string;
 }
@@ -38,15 +41,15 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 	/**
 	 * The access type to use for the authorization code request
 	 */
-	accessType?: "offline" | "online";
+	accessType?: ("offline" | "online") | undefined;
 	/**
 	 * The display mode to use for the authorization code request
 	 */
-	display?: "page" | "popup" | "touch" | "wap";
+	display?: ("page" | "popup" | "touch" | "wap") | undefined;
 	/**
 	 * The hosted domain of the user
 	 */
-	hd?: string;
+	hd?: string | undefined;
 }
 
 export const google = (options: GoogleOptions) => {
@@ -73,8 +76,8 @@ export const google = (options: GoogleOptions) => {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
@@ -123,24 +126,26 @@ export const google = (options: GoogleOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
-			const googlePublicKeyUrl = `https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${token}`;
-			const { data: tokenInfo } = await betterFetch<{
-				aud: string;
-				iss: string;
-				email: string;
-				email_verified: boolean;
-				name: string;
-				picture: string;
-				sub: string;
-			}>(googlePublicKeyUrl);
-			if (!tokenInfo) {
+
+			// Verify JWT integrity
+			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
+
+			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+			if (!kid || !jwtAlg) return false;
+
+			const publicKey = await getGooglePublicKey(kid);
+			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+				algorithms: [jwtAlg],
+				issuer: ["https://accounts.google.com", "accounts.google.com"],
+				audience: options.clientId,
+				maxTokenAge: "1h",
+			});
+
+			if (nonce && jwtClaims.nonce !== nonce) {
 				return false;
 			}
-			const isValid =
-				tokenInfo.aud === options.clientId &&
-				(tokenInfo.iss === "https://accounts.google.com" ||
-					tokenInfo.iss === "accounts.google.com");
-			return isValid;
+
+			return true;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
@@ -165,4 +170,30 @@ export const google = (options: GoogleOptions) => {
 		},
 		options,
 	} satisfies OAuthProvider<GoogleProfile>;
+};
+
+export const getGooglePublicKey = async (kid: string) => {
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+		}>;
+	}>("https://www.googleapis.com/oauth2/v3/certs");
+
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+
+	return await importJWK(jwk, jwk.alg);
 };

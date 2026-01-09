@@ -1,8 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
-import { getEndpoints } from "./index";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import type { AuthContext } from "@better-auth/core";
+import { describe, expect, it, vi } from "vitest";
+import { getTestInstance } from "../test-utils/test-instance";
+import { getEndpoints } from "./index";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
@@ -50,5 +54,132 @@ describe("getEndpoints", () => {
 			options: {},
 			customProp: "value",
 		});
+	});
+});
+
+describe("onRequest chain", () => {
+	it("should execute all plugins onRequest handlers in chain", async () => {
+		const onRequestOrder: string[] = [];
+
+		const pluginA: BetterAuthPlugin = {
+			id: "plugin-a",
+			async onRequest(request, _ctx) {
+				onRequestOrder.push("plugin-a");
+				// Return a modified request - this should NOT stop the chain
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("x-plugin-a", "true");
+				return {
+					request: new Request(request, { headers: newHeaders }),
+				};
+			},
+		};
+
+		const pluginB: BetterAuthPlugin = {
+			id: "plugin-b",
+			async onRequest(request, _ctx) {
+				onRequestOrder.push("plugin-b");
+				// This should also execute and see the modified request from plugin-a
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("x-plugin-b", "true");
+				return {
+					request: new Request(request, { headers: newHeaders }),
+				};
+			},
+		};
+
+		const pluginC: BetterAuthPlugin = {
+			id: "plugin-c",
+			async onRequest(_request, _ctx) {
+				onRequestOrder.push("plugin-c");
+				// Just observe, don't modify
+				return;
+			},
+		};
+
+		const { client, testUser } = await getTestInstance({
+			plugins: [pluginA, pluginB, pluginC],
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		// All three plugins should have their onRequest called
+		expect(onRequestOrder).toEqual(["plugin-a", "plugin-b", "plugin-c"]);
+	});
+
+	it("should pass modified request from previous plugin to next plugin", async () => {
+		let pluginBReceivedHeader: string | null = null;
+
+		const pluginA: BetterAuthPlugin = {
+			id: "plugin-a",
+			async onRequest(request, _ctx) {
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("x-from-plugin-a", "hello");
+				return {
+					request: new Request(request, { headers: newHeaders }),
+				};
+			},
+		};
+
+		const pluginB: BetterAuthPlugin = {
+			id: "plugin-b",
+			async onRequest(request, _ctx) {
+				// Should receive the header set by plugin-a
+				pluginBReceivedHeader = request.headers.get("x-from-plugin-a");
+				return;
+			},
+		};
+
+		const { client, testUser } = await getTestInstance({
+			plugins: [pluginA, pluginB],
+		});
+
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		expect(pluginBReceivedHeader).toBe("hello");
+	});
+
+	it("should stop chain when response is returned", async () => {
+		const onRequestOrder: string[] = [];
+
+		const pluginA: BetterAuthPlugin = {
+			id: "plugin-a",
+			async onRequest(_request, _ctx) {
+				onRequestOrder.push("plugin-a");
+				// Return a response - this SHOULD stop the chain
+				return {
+					response: new Response("Blocked by plugin-a", { status: 403 }),
+				};
+			},
+		};
+
+		const pluginB: BetterAuthPlugin = {
+			id: "plugin-b",
+			async onRequest(_request, _ctx) {
+				onRequestOrder.push("plugin-b");
+				return {
+					response: new Response("ok", { status: 200 }),
+				};
+			},
+		};
+
+		const { client, testUser } = await getTestInstance({
+			plugins: [pluginA, pluginB],
+		});
+
+		const result = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		// Only plugin-a should execute, plugin-b should NOT execute
+		expect(onRequestOrder).toEqual(["plugin-a"]);
+		// Response should be from plugin-a
+		expect(result.error?.status).toBe(403);
 	});
 });

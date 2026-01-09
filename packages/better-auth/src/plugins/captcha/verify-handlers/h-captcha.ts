@@ -7,8 +7,8 @@ type Params = {
 	siteVerifyURL: string;
 	secretKey: string;
 	captchaResponse: string;
-	siteKey?: string;
-	remoteIP?: string;
+	siteKey?: string | undefined;
+	remoteIP?: string | undefined;
 };
 
 type SiteVerifyResponse = {
@@ -54,12 +54,12 @@ export const hCaptcha = async ({
 	});
 
 	if (!response.data || response.error) {
-		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE);
+		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
 	}
 
 	if (!response.data.success) {
 		return middlewareResponse({
-			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED,
+			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
 			status: 403,
 		});
 	}

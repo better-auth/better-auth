@@ -1,10 +1,10 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getTestInstanceMemory as getTestInstance } from "better-auth/test";
-import { sso } from ".";
-import { OAuth2Server } from "oauth2-mock-server";
 import { betterFetch } from "@better-fetch/fetch";
-import { organization } from "better-auth/plugins";
 import { createAuthClient } from "better-auth/client";
+import { organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
+import { OAuth2Server } from "oauth2-mock-server";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { sso } from ".";
 import { ssoClient } from "./client";
 
 let server = new OAuth2Server();
@@ -12,6 +12,7 @@ let server = new OAuth2Server();
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 
@@ -257,6 +258,7 @@ describe("SSO", async () => {
 describe("SSO disable implicit sign in", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso({ disableImplicitSignUp: true }), organization()],
 		});
 
@@ -419,6 +421,7 @@ describe("SSO disable implicit sign in", async () => {
 describe("provisioning", async (ctx) => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
 			plugins: [sso(), organization()],
 		});
 

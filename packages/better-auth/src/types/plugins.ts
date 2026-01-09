@@ -1,16 +1,18 @@
-import type { UnionToIntersection } from "./helper";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { UnionToIntersection } from "./helper";
 
 export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 	S extends Record<string, { fields: infer Fields }>
 		? {
 				[K in keyof S]?: {
-					modelName?: string;
-					fields?: {
-						[P in keyof Fields]?: string;
-					};
+					modelName?: string | undefined;
+					fields?:
+						| {
+								[P in keyof Fields]?: string;
+						  }
+						| undefined;
 				};
 			}
 		: never;

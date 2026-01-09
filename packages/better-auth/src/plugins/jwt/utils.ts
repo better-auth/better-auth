@@ -1,11 +1,10 @@
-import { getWebcryptoSubtle } from "@better-auth/utils";
-import { base64 } from "@better-auth/utils/base64";
-import { joseSecs } from "../../utils/time";
-import type { JwtOptions, Jwk } from "./types";
-import { generateKeyPair, exportJWK } from "jose";
-import { symmetricEncrypt } from "../../crypto";
-import { getJwksAdapter } from "./adapter";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { exportJWK, generateKeyPair } from "jose";
+import { symmetricEncrypt } from "../../crypto";
+import type { TimeString } from "../../utils/time";
+import { sec } from "../../utils/time";
+import { getJwksAdapter } from "./adapter";
+import type { Jwk, JwtOptions } from "./types";
 
 /**
  * Converts an expirationTime to ISO seconds expiration time (the format of JWT exp)
@@ -25,90 +24,13 @@ export function toExpJWT(
 	} else if (expirationTime instanceof Date) {
 		return Math.floor(expirationTime.getTime() / 1000);
 	} else {
-		return iat + joseSecs(expirationTime);
+		return iat + sec(expirationTime as TimeString);
 	}
 }
 
-async function deriveKey(secretKey: string): Promise<CryptoKey> {
-	const enc = new TextEncoder();
-	const subtle = getWebcryptoSubtle();
-	const keyMaterial = await subtle.importKey(
-		"raw",
-		enc.encode(secretKey),
-		{ name: "PBKDF2" },
-		false,
-		["deriveKey"],
-	);
-
-	return subtle.deriveKey(
-		{
-			name: "PBKDF2",
-			salt: enc.encode("encryption_salt"),
-			iterations: 100000,
-			hash: "SHA-256",
-		},
-		keyMaterial,
-		{ name: "AES-GCM", length: 256 },
-		false,
-		["encrypt", "decrypt"],
-	);
-}
-
-export async function encryptPrivateKey(
-	privateKey: string,
-	secretKey: string,
-): Promise<{ encryptedPrivateKey: string; iv: string; authTag: string }> {
-	const key = await deriveKey(secretKey); // Derive a 32-byte key from the provided secret
-	const iv = crypto.getRandomValues(new Uint8Array(12)); // 12-byte IV for AES-GCM
-
-	const enc = new TextEncoder();
-	const ciphertext = await getWebcryptoSubtle().encrypt(
-		{
-			name: "AES-GCM",
-			iv: iv,
-		},
-		key,
-		enc.encode(privateKey),
-	);
-
-	const encryptedPrivateKey = base64.encode(ciphertext);
-	const ivBase64 = base64.encode(iv);
-
-	return {
-		encryptedPrivateKey,
-		iv: ivBase64,
-		authTag: encryptedPrivateKey.slice(-16),
-	};
-}
-
-export async function decryptPrivateKey(
-	encryptedPrivate: {
-		encryptedPrivateKey: string;
-		iv: string;
-		authTag: string;
-	},
-	secretKey: string,
-): Promise<string> {
-	const key = await deriveKey(secretKey);
-	const { encryptedPrivateKey, iv } = encryptedPrivate;
-
-	const ivBuffer = base64.decode(iv);
-	const ciphertext = base64.decode(encryptedPrivateKey);
-
-	const decrypted = await getWebcryptoSubtle().decrypt(
-		{
-			name: "AES-GCM",
-			iv: ivBuffer as BufferSource,
-		},
-		key,
-		ciphertext as BufferSource,
-	);
-
-	const dec = new TextDecoder();
-	return dec.decode(decrypted);
-}
-
-export async function generateExportedKeyPair(options?: JwtOptions) {
+export async function generateExportedKeyPair(
+	options?: JwtOptions | undefined,
+) {
 	const { alg, ...cfg } = options?.jwks?.keyPairConfig ?? {
 		alg: "EdDSA",
 		crv: "Ed25519",
@@ -133,7 +55,7 @@ export async function generateExportedKeyPair(options?: JwtOptions) {
  */
 export async function createJwk(
 	ctx: GenericEndpointContext,
-	options?: JwtOptions,
+	options?: JwtOptions | undefined,
 ) {
 	const { publicWebKey, privateWebKey, alg, cfg } =
 		await generateExportedKeyPair(options);
@@ -158,10 +80,17 @@ export async function createJwk(
 				)
 			: stringifiedPrivateWebKey,
 		createdAt: new Date(),
+		...(options?.jwks?.rotationInterval
+			? {
+					expiresAt: new Date(
+						Date.now() + options.jwks.rotationInterval * 1000,
+					),
+				}
+			: {}),
 	};
 
-	const adapter = getJwksAdapter(ctx.context.adapter);
-	const key = await adapter.createJwk(jwk as Jwk);
+	const adapter = getJwksAdapter(ctx.context.adapter, options);
+	const key = await adapter.createJwk(ctx, jwk as Jwk);
 
 	return key;
 }

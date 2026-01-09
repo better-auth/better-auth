@@ -40,21 +40,35 @@ export const auth = betterAuth({
 
 Enable the email and password in your auth config and implement your own logic for sending verification emails, reset password emails, etc.
 
+<Callout type="info">
+**Important for Clerk Migrations**: Clerk uses bcrypt to hash passwords, while Better Auth uses `scrypt` by default. To ensure migrated users can sign in with their existing passwords, you'll need to configure Better Auth to use bcrypt for password verification.
+</Callout>
+
+First, install bcrypt:
+
+```package-install
+pnpm add bcrypt
+pnpm add -D @types/bcrypt
+```
+
+Then configure Better Auth to use bcrypt:
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import bcrypt from "bcrypt";
 
 export const auth = betterAuth({
-    database: new Pool({ 
-        connectionString: process.env.DATABASE_URL 
-    }),
-    emailAndPassword: { // [!code highlight]
-        enabled: true, // [!code highlight]
+    emailAndPassword: { 
+        enabled: true,
+        password: { // [!code highlight]
+            hash: async (password) => { // [!code highlight]
+                return await bcrypt.hash(password, 10); // [!code highlight]
+            }, // [!code highlight]
+            verify: async ({ hash, password }) => { // [!code highlight]
+                return await bcrypt.compare(password, hash); // [!code highlight]
+            }, // [!code highlight]
+        }, // [!code highlight]
     }, // [!code highlight]
-    emailVerification: {
-      sendVerificationEmail: async({ user, url })=>{
-        // implement your logic here to send email verification
-      }
-	},
 })
 ```
 
@@ -101,6 +115,7 @@ You can add the following plugins to your auth config based on your needs.
 import { Pool } from "pg";
 import { betterAuth } from "better-auth";
 import { admin, twoFactor, phoneNumber, username } from "better-auth/plugins";
+import bcrypt from "bcrypt";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -108,6 +123,14 @@ export const auth = betterAuth({
     }),
     emailAndPassword: { 
         enabled: true,
+        password: {
+            hash: async (password) => {
+                return await bcrypt.hash(password, 10);
+            },
+            verify: async ({ hash, password }) => {
+                return await bcrypt.compare(password, hash);
+            },
+        },
     },
     socialProviders: {
         github: {
@@ -244,8 +267,7 @@ export async function generateBackupCodes(
 function safeDateConversion(timestamp?: number): Date {
     if (!timestamp) return new Date();
 
-    // Convert seconds to milliseconds
-    const date = new Date(timestamp * 1000);
+    const date = new Date(timestamp);
 
     // Check if the date is valid
     if (isNaN(date.getTime())) {
@@ -295,7 +317,9 @@ async function migrateFromClerk() {
                 // # Admin (if you enabled admin plugin)
                 ...(isAdminEnabled ? {
                     banned: clerkUser?.banned,
-                    banExpiresAt: clerkUser?.lockout_expires_in_seconds,
+                    banExpires: clerkUser?.lockout_expires_in_seconds
+                       ? new Date(Date.now() + clerkUser.lockout_expires_in_seconds * 1000)
+                       : undefined,
                     role: "user"
                 } : {}),
                 // # Username (if you enabled username plugin)

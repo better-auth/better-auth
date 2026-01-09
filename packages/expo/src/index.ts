@@ -1,19 +1,25 @@
-import type { BetterAuthPlugin } from "better-auth";
-import {
-	APIError,
-	createAuthEndpoint,
-	createAuthMiddleware,
-} from "better-auth/api";
-import { z } from "zod";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
+import { expoAuthorizationProxy } from "./routes";
 
 export interface ExpoOptions {
 	/**
-	 * Override origin header for expo API routes
+	 * Disable origin override for expo API routes
+	 * When set to true, the origin header will not be overridden for expo API routes
 	 */
-	overrideOrigin?: boolean;
+	disableOriginOverride?: boolean | undefined;
 }
 
-export const expo = (options?: ExpoOptions) => {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		expo: {
+			creator: typeof expo;
+		};
+	}
+}
+
+export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
 		init: (ctx) => {
@@ -27,11 +33,12 @@ export const expo = (options?: ExpoOptions) => {
 			};
 		},
 		async onRequest(request, ctx) {
-			if (!options?.overrideOrigin || request.headers.get("origin")) {
+			if (options?.disableOriginOverride || request.headers.get("origin")) {
 				return;
 			}
 			/**
-			 * To bypass origin check from expo, we need to set the origin header to the expo-origin header
+			 * To bypass origin check from expo, we need to set the origin
+			 * header to the expo-origin header
 			 */
 			const expoOrigin = request.headers.get("expo-origin");
 			if (!expoOrigin) {
@@ -49,7 +56,9 @@ export const expo = (options?: ExpoOptions) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/callback") ||
-							context.path?.startsWith("/oauth2/callback")
+							context.path?.startsWith("/oauth2/callback") ||
+							context.path?.startsWith("/magic-link/verify") ||
+							context.path?.startsWith("/verify-email")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -83,38 +92,8 @@ export const expo = (options?: ExpoOptions) => {
 			],
 		},
 		endpoints: {
-			expoAuthorizationProxy: createAuthEndpoint(
-				"/expo-authorization-proxy",
-				{
-					method: "GET",
-					query: z.object({
-						authorizationURL: z.string(),
-					}),
-					metadata: {
-						isAction: false,
-					},
-				},
-				async (ctx) => {
-					const { authorizationURL } = ctx.query;
-					const url = new URL(authorizationURL);
-					const state = url.searchParams.get("state");
-					if (!state) {
-						throw new APIError("BAD_REQUEST", {
-							message: "Unexpected error",
-						});
-					}
-					const stateCookie = ctx.context.createAuthCookie("state", {
-						maxAge: 5 * 60 * 1000, // 5 minutes
-					});
-					await ctx.setSignedCookie(
-						stateCookie.name,
-						state,
-						ctx.context.secret,
-						stateCookie.attributes,
-					);
-					return ctx.redirect(ctx.query.authorizationURL);
-				},
-			),
+			expoAuthorizationProxy,
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

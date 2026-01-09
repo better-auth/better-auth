@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { betterFetch } from "@better-fetch/fetch";
+import { atom } from "jotai";
+import { AlertCircle, Bot, Send, User } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { Send, Bot, User, AlertCircle } from "lucide-react";
 import { MarkdownRenderer } from "./markdown-renderer";
-import { betterFetch } from "@better-fetch/fetch";
-import { atom } from "jotai";
 
 interface Message {
 	id: string;

@@ -10,11 +10,13 @@ export interface NotionProfile {
 	object: "user";
 	id: string;
 	type: "person" | "bot";
-	name?: string;
-	avatar_url?: string;
-	person?: {
-		email?: string;
-	};
+	name?: string | undefined;
+	avatar_url?: string | undefined;
+	person?:
+		| {
+				email?: string;
+		  }
+		| undefined;
 }
 
 export interface NotionOptions extends ProviderOptions<NotionProfile> {
@@ -28,8 +30,8 @@ export const notion = (options: NotionOptions) => {
 		name: "Notion",
 		createAuthorizationURL({ state, scopes, loginHint, redirectURI }) {
 			const _scopes: string[] = options.disableDefaultScope ? [] : [];
-			options.scope && _scopes.push(...options.scope);
-			scopes && _scopes.push(...scopes);
+			if (options.scope) _scopes.push(...options.scope);
+			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
 				id: "notion",
 				options,
@@ -95,7 +97,7 @@ export const notion = (options: NotionOptions) => {
 					name: userProfile.name || "Notion User",
 					email: userProfile.person?.email || null,
 					image: userProfile.avatar_url,
-					emailVerified: !!userProfile.person?.email,
+					emailVerified: false,
 					...userMap,
 				},
 				data: userProfile,
