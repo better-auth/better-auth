@@ -218,7 +218,11 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
-				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: client?.metadata
+					? typeof client.metadata === "string"
+						? JSON.parse(client.metadata)
+						: client.metadata
+					: undefined,
 			})
 		: {};
 

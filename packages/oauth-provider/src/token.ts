@@ -85,7 +85,11 @@ async function createJwtAccessToken(
 				scopes,
 				resource: ctx.body.resource,
 				referenceId,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: client.metadata
+					? typeof client.metadata === "string"
+						? JSON.parse(client.metadata)
+						: client.metadata
+					: undefined,
 			})
 		: {};
 
@@ -142,7 +146,11 @@ async function createIdToken(
 		? await opts.customIdTokenClaims({
 				user,
 				scopes,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: client.metadata
+					? typeof client.metadata === "string"
+						? JSON.parse(client.metadata)
+						: client.metadata
+					: undefined,
 			})
 		: {};
 
@@ -817,7 +825,11 @@ async function handleClientCredentialsGrant(
 		? await opts.customAccessTokenClaims({
 				scopes: requestedScopes,
 				resource: ctx.body.resource,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: client.metadata
+					? typeof client.metadata === "string"
+						? JSON.parse(client.metadata)
+						: client.metadata
+					: undefined,
 			})
 		: {};
 
