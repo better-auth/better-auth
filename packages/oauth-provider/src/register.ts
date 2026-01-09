@@ -4,7 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { storeClientSecret } from "./utils";
+import { parseClientMetadata, storeClientSecret } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
@@ -362,11 +362,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		? Math.round(createdAt.getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata
-		? typeof metadata === "string"
-			? JSON.parse(metadata)
-			: metadata
-		: undefined;
+	const _metadata = parseClientMetadata(metadata);
 
 	return {
 		// All other metadata
