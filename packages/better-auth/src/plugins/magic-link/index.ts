@@ -4,6 +4,7 @@ import type {
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -132,6 +133,10 @@ const magicLinkVerifyQuerySchema = z.object({
 				"URL to redirect after new user signup. Only used if the user is registering for the first time.",
 		})
 		.optional(),
+	disableRedirect: z.boolean().meta({
+		description:
+			"If set to true, the endpoint will return JSON response instead of redirecting.",
+	}),
 });
 export const magicLink = (options: MagicLinkOptions) => {
 	const opts = {
@@ -312,6 +317,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const token = ctx.query.token;
+					const disableRedirect = ctx.query.disableRedirect === true;
+
 					// If the first argument provides the origin, it will ignore the second argument of `new URL`.
 					// new URL("http://localhost:3001/hello", "http://localhost:3000").toString()
 					// Returns http://localhost:3001/hello
@@ -328,7 +335,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					);
 
-					function redirectWithError(error: string): never {
+					function handleError(error: string, message?: string): never {
+						if (disableRedirect) {
+							throw new APIError("BAD_REQUEST", {
+								message: message || error,
+							});
+						}
 						errorCallbackURL.searchParams.set("error", error);
 						throw ctx.redirect(errorCallbackURL.toString());
 					}
@@ -345,13 +357,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 							storedToken,
 						);
 					if (!tokenValue) {
-						redirectWithError("INVALID_TOKEN");
+						handleError("INVALID_TOKEN", "Invalid or expired token");
 					}
 					if (tokenValue.expiresAt < new Date()) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-						redirectWithError("EXPIRED_TOKEN");
+						handleError("EXPIRED_TOKEN", "Token has expired");
 					}
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						tokenValue.id,
@@ -375,10 +387,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 							isNewUser = true;
 							user = newUser;
 							if (!user) {
-								redirectWithError("failed_to_create_user");
+								handleError("failed_to_create_user", "Failed to create user");
 							}
 						} else {
-							redirectWithError("new_user_signup_disabled");
+							handleError(
+								"new_user_signup_disabled",
+								"New user signup is disabled",
+							);
 						}
 					}
 
@@ -393,19 +408,40 @@ export const magicLink = (options: MagicLinkOptions) => {
 					);
 
 					if (!session) {
-						redirectWithError("failed_to_create_session");
+						handleError("failed_to_create_session", "Failed to create session");
 					}
 
 					await setSessionCookie(ctx, {
 						session,
 						user,
 					});
+
+					if (disableRedirect) {
+						return ctx.json({
+							session: {
+								token: session.token,
+								expiresAt: session.expiresAt,
+							},
+							user: {
+								id: user.id,
+								email: user.email,
+								emailVerified: user.emailVerified,
+								name: user.name,
+								image: user.image,
+								createdAt: user.createdAt,
+								updatedAt: user.updatedAt,
+							},
+							isNewUser,
+						});
+					}
+
 					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
 							user: parseUserOutput(ctx.context.options, user),
 						});
 					}
+
 					if (isNewUser) {
 						throw ctx.redirect(newUserCallbackURL);
 					}
