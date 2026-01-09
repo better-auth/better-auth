@@ -364,6 +364,118 @@ type deleteOAuthConsent = {
 </APIMethod>
 
 
+### Database Hooks
+
+The `databaseHooks` configuration option lets you tap into the lifecycle of OAuth-related database operations.
+Hooks can be used to validate input, enrich data, enforce security rules, or trigger side effects such as logging or notifications.
+
+#### OAuth Client Hooks
+
+Lifecycle hooks for the [OAuthClient](#oauth-client-1) table.
+
+Common use cases include:
+- Enforcing business rules (e.g. protecting system clients)
+- Automatically update the `metadata` or admin fields
+- Auditing client creation, updates, and deletions
+
+```ts title="auth.ts"
+oauthProvider({
+  databaseHooks: {
+    // Runs before a client is persisted
+    beforeCreateClient: async ({ schema }) => {
+      return {
+        data: {
+          ...schema,
+          metadata: {
+            ...schema.metadata,
+            createdBy: "system",
+          },
+        },
+      }
+    },
+
+    // Runs after a client has been created
+    afterCreateClient: async ({ schema }) => {
+      console.log("OAuth client created:", schema.clientId)
+    },
+
+    // Runs before an existing client is updated
+    beforeUpdateClient: async ({ schema }) => {
+      if (schema.isSystemClient) {
+        throw new Error("System clients cannot be modified")
+      }
+    },
+
+    // Runs after a client update completes
+    afterUpdateClient: async ({ schema }) => {
+      console.log("OAuth client updated:", schema.clientId)
+    },
+
+    // Runs before a client is deleted
+    beforeDeleteClient: async ({ schema }) => {
+      if (schema.isProtected) {
+        throw new Error("Protected clients cannot be deleted")
+      }
+    },
+
+    // Runs after a client has been deleted
+    afterDeleteClient: async ({ schema }) => {
+      console.log("OAuth client deleted:", schema.clientId)
+    },
+  },
+})
+```
+
+#### OAuth Consent Hooks
+
+Lifecycle hooks for the [OAuthConsent](#oauth-consent-1) table.
+
+These hooks are useful for:
+- Validating requested scopes
+- Limiting permissions
+- Tracking when users connect or disconnect third-party applications
+
+```ts title="auth.ts"
+oauthProvider({
+  databaseHooks: {
+    // Before a new consent record is created
+    beforeCreateConsent: async ({ consent }) => {
+      if (!consent.scopes.includes("profile")) {
+        throw new Error("The `profile` scope is required")
+      }
+    },
+
+    // After consent has been granted
+    afterCreateConsent: async ({ consent }) => {
+      console.log("Consent granted:", consent.id)
+    },
+
+    // Before an existing consent is updated
+    beforeUpdateConsent: async ({ consent }) => {
+      if (consent.scopes.length > 5) {
+        throw new Error("Too many scopes requested")
+      }
+    },
+
+    // After consent has been updated
+    afterUpdateConsent: async ({ consent }) => {
+      console.log("Consent updated:", consent.id)
+    },
+
+    // Before consent is revoked
+    beforeDeleteConsent: async ({ consent }) => {
+      console.log("Revoking consent:", consent.id)
+    },
+
+    // After consent has been revoked
+    afterDeleteConsent: async ({ consent }) => {
+      console.log("Consent revoked:", consent.id)
+    },
+  },
+})
+```
+
+
 ### Dynamic Registration Endpoint
 
 <Callout type="info">

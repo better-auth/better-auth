@@ -116,42 +116,105 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
-	 * Database hooks
+	 * Database lifecycle hooks for the OAuth provider.
+	 *
+	 * These hooks allow you to run custom logic before or after
+	 * OAuth-related entities are created, updated, or deleted.
+	 *
+	 * All hooks are optional. If provided, they are executed in sequence
+	 * with the core database operation.
 	 */
 	databaseHooks?: {
+		/**
+		 * Runs before an OAuth client is created.
+		 *
+		 * Use this hook to:
+		 * - Notify a user/org that a client was created
+		 * - Add other metadata to the client
+		 *
+		 * Returning `{ data }` will replace the schema used for creation.
+		 */
 		beforeCreateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void | { data: SchemaClient }>;
+		/**
+		 * Runs after an OAuth client has been created successfully
+		 * such as for auditing/logging.
+		 */
 		afterCreateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs before an OAuth client is updated.
+		 *
+		 * Use this hook to:
+		 * - Notify a user/org that a client was created
+		 * - Add other metadata to the client
+		 *
+		 * Returning `{ data }` will replace the schema used for the update.
+		 */
 		beforeUpdateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void | { data: SchemaClient }>;
+		/**
+		 * Runs after an OAuth client has been updated
+		 * such as for auditing/logging.
+		 */
 		afterUpdateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs before an OAuth client is deleted
+		 * such as for auditing/logging.
+		 */
 		beforeDeleteClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs after an OAuth client has been deleted
+		 * such as for auditing/logging.
+		 */
 		afterDeleteClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs before a consent record is created.
+		 *
+		 * Use this hook to validate scopes or user permissions.
+		 */
 		beforeCreateConsent?: (data?: {
 			consent: Omit<OAuthConsent<Scope[]>, "id">;
 		}) => Promise<void>;
+		/**
+		 * Runs after a consent record has been created.
+		 */
 		afterCreateConsent?: (data?: {
 			consent: OAuthConsent<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs before a consent record is updated.
+		 *
+		 * Use this hook to restrict changes to scopes
+		 * or enforce re-authorization rules.
+		 */
 		beforeUpdateConsent?: (data?: {
 			consent: OAuthConsent<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs after a consent record has been updated.
+		 */
 		afterUpdateConsent?: (data?: {
 			consent: OAuthConsent<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs before a consent record is deleted.
+		 */
 		beforeDeleteConsent?: (data?: {
 			consent: OAuthConsent<Scope[]>;
 		}) => Promise<void>;
+		/**
+		 * Runs after a consent record has been deleted.
+		 */
 		afterDeleteConsent?: (data?: {
 			consent: OAuthConsent<Scope[]>;
 		}) => Promise<void>;
