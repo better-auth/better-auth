@@ -1566,13 +1566,7 @@ describe("edge cases: userId validation", async () => {
 });
 
 describe("Admin plugin - Events", async () => {
-	const {
-		auth,
-		signInWithTestUser,
-		signInWithUser,
-		cookieSetter,
-		customFetchImpl,
-	} = await getTestInstance(
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
 		{
 			plugins: [
 				admin({
@@ -1619,7 +1613,7 @@ describe("Admin plugin - Events", async () => {
 		baseURL: "http://localhost:3000",
 	});
 
-	const { headers: adminHeaders } = await signInWithTestUser();
+	await signInWithTestUser();
 	const testUser = {
 		id: "123",
 		email: "eventtest@test.com",
@@ -1641,40 +1635,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -1764,40 +1755,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: mockUserRemove,
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -1857,40 +1845,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -1950,40 +1935,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -2030,7 +2012,7 @@ describe("Admin plugin - Events", async () => {
 	});
 
 	describe("unban event", () => {
-		it("should call unban event when admin unbans a user", async () => {
+		it("should call unban event when admin unban's a user", async () => {
 			const mockUnban = vi.fn();
 			const mockEvents = {
 				impersonateStart: vi.fn(),
@@ -2041,40 +2023,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -2141,40 +2120,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -2238,40 +2214,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -2326,40 +2299,37 @@ describe("Admin plugin - Events", async () => {
 				userRemove: vi.fn(),
 			};
 
-			const {
-				auth: authWithMocks,
-				customFetchImpl: fetchImpl,
-				signInWithTestUser: signInTest,
-			} = await getTestInstance(
-				{
-					plugins: [
-						admin({
-							events: mockEvents,
-						}),
-					],
-					databaseHooks: {
-						user: {
-							create: {
-								before: async (user) => {
-									if (user.name === "Admin") {
-										return {
-											data: {
-												...user,
-												role: "admin",
-											},
-										};
-									}
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
 								},
 							},
 						},
 					},
-				},
-				{
-					testUser: {
-						name: "Admin",
+					{
+						testUser: {
+							name: "Admin",
+						},
 					},
-				},
-			);
+				);
 
 			const clientWithMocks = createAuthClient({
 				fetchOptions: {
@@ -2418,7 +2388,6 @@ describe("Admin plugin - Events", async () => {
 			};
 
 			const {
-				auth: authWithMocks,
 				customFetchImpl: fetchImpl,
 				signInWithTestUser: signInTest,
 				cookieSetter: testCookieSetter,
@@ -2518,7 +2487,6 @@ describe("Admin plugin - Events", async () => {
 			};
 
 			const {
-				auth: authWithMocks,
 				customFetchImpl: fetchImpl,
 				signInWithTestUser: signInTest,
 				cookieSetter: testCookieSetter,
