@@ -184,6 +184,7 @@ export async function deleteClientEndpoint(
 		throw new APIError("UNAUTHORIZED");
 	}
 
+	await opts.databaseHooks?.beforeDeleteClient?.({ schema: client });
 	await ctx.context.adapter.delete({
 		model: "oauthClient",
 		where: [
@@ -193,6 +194,7 @@ export async function deleteClientEndpoint(
 			},
 		],
 	});
+	await opts.databaseHooks?.afterDeleteClient?.({ schema: client });
 }
 
 export async function updateClientEndpoint(
@@ -260,6 +262,10 @@ export async function updateClientEndpoint(
 		},
 		opts,
 	);
+	const schema = oauthToSchema(updates);
+	const additionalData = await opts.databaseHooks?.beforeUpdateClient?.({
+		schema,
+	});
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
 			model: "oauthClient",
@@ -269,7 +275,12 @@ export async function updateClientEndpoint(
 					value: clientId,
 				},
 			],
-			update: oauthToSchema(updates),
+			update: {
+				...(typeof additionalData === "object" && "data" in additionalData
+					? additionalData.data
+					: {}),
+				...schema,
+			},
 		},
 	);
 	if (!updatedClient) {
@@ -278,6 +289,7 @@ export async function updateClientEndpoint(
 			error: "invalid_client",
 		});
 	}
+	await opts.databaseHooks?.afterUpdateClient?.({ schema: updatedClient });
 	// Never return @internal client_secret
 	const res = schemaToOAuth(updatedClient);
 	res.client_secret = undefined;
@@ -341,6 +353,9 @@ export async function rotateClientSecretEndpoint(
 	const storedClientSecret = clientSecret
 		? await storeClientSecret(ctx, opts, clientSecret)
 		: undefined;
+	const additionalData = await opts.databaseHooks?.beforeUpdateClient?.({
+		schema: client,
+	});
 	const updatedClient = await ctx.context.adapter.update<SchemaClient<Scope[]>>(
 		{
 			model: "oauthClient",
@@ -351,18 +366,19 @@ export async function rotateClientSecretEndpoint(
 				},
 			],
 			update: {
-				...schemaToOAuth(client),
+				...additionalData,
+				...client,
 				clientSecret: storedClientSecret,
 			},
 		},
 	);
-
 	if (!updatedClient) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error_description: "unable to update client",
 			error: "invalid_client",
 		});
 	}
+	await opts.databaseHooks?.afterUpdateClient?.({ schema: updatedClient });
 
 	return schemaToOAuth({
 		...updatedClient,

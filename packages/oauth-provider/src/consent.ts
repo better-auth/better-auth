@@ -91,27 +91,45 @@ export async function consentEndpoint(
 		updatedAt: new Date(iat * 1000),
 		referenceId,
 	};
-	foundConsent?.id
-		? await ctx.context.adapter.update({
-				model: "oauthConsent",
-				where: [
-					{
-						field: "id",
-						value: foundConsent.id,
-					},
-				],
-				update: {
-					scopes: consent.scopes,
-					updatedAt: new Date(iat * 1000),
+	if (foundConsent?.id) {
+		await opts.databaseHooks?.beforeUpdateConsent?.({
+			consent: {
+				...foundConsent,
+				scopes: consent.scopes,
+				updatedAt: new Date(iat * 1000),
+			},
+		});
+		const updated = await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			where: [
+				{
+					field: "id",
+					value: foundConsent.id,
 				},
-			})
-		: await ctx.context.adapter.create({
-				model: "oauthConsent",
-				data: {
-					...consent,
-					scopes: consent.scopes,
-				},
-			});
+			],
+			update: {
+				scopes: consent.scopes,
+				updatedAt: new Date(iat * 1000),
+			},
+		});
+		if (updated)
+			await opts.databaseHooks?.afterUpdateConsent?.({ consent: updated });
+	} else {
+		await opts.databaseHooks?.beforeCreateConsent?.({
+			consent: {
+				...consent,
+				scopes: consent.scopes,
+			},
+		});
+		const created = await ctx.context.adapter.create<OAuthConsent<Scope[]>>({
+			model: "oauthConsent",
+			data: {
+				...consent,
+				scopes: consent.scopes,
+			},
+		});
+		await opts.databaseHooks?.afterCreateConsent?.({ consent: created });
+	}
 
 	// Return authorization code
 	ctx?.headers?.set("accept", "application/json");

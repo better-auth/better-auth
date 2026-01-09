@@ -116,6 +116,47 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
+	 * Database hooks
+	 */
+	databaseHooks?: {
+		beforeCreateClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void | { data: SchemaClient }>;
+		afterCreateClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void>;
+		beforeUpdateClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void | { data: SchemaClient }>;
+		afterUpdateClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void>;
+		beforeDeleteClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void>;
+		afterDeleteClient?: (data?: {
+			schema: SchemaClient<Scope[]>;
+		}) => Promise<void>;
+		beforeCreateConsent?: (data?: {
+			consent: Omit<OAuthConsent<Scope[]>, "id">;
+		}) => Promise<void>;
+		afterCreateConsent?: (data?: {
+			consent: OAuthConsent<Scope[]>;
+		}) => Promise<void>;
+		beforeUpdateConsent?: (data?: {
+			consent: OAuthConsent<Scope[]>;
+		}) => Promise<void>;
+		afterUpdateConsent?: (data?: {
+			consent: OAuthConsent<Scope[]>;
+		}) => Promise<void>;
+		beforeDeleteConsent?: (data?: {
+			consent: OAuthConsent<Scope[]>;
+		}) => Promise<void>;
+		afterDeleteConsent?: (data?: {
+			consent: OAuthConsent<Scope[]>;
+		}) => Promise<void>;
+	};
+	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
 	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**

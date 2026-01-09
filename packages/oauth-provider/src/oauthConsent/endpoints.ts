@@ -89,6 +89,7 @@ export async function deleteConsentEndpoint(
 	}
 	if (consent.userId !== session.user.id) throw new APIError("UNAUTHORIZED");
 
+	await opts.databaseHooks?.beforeDeleteConsent?.({ consent });
 	await ctx.context.adapter.delete({
 		model: "oauthConsent",
 		where: [
@@ -98,6 +99,7 @@ export async function deleteConsentEndpoint(
 			},
 		],
 	});
+	await opts.databaseHooks?.afterDeleteConsent?.({ consent });
 }
 
 export async function updateConsentEndpoint(
@@ -146,7 +148,8 @@ export async function updateConsentEndpoint(
 	}
 
 	const iat = Math.floor(Date.now() / 1000);
-	return await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
+	await opts.databaseHooks?.beforeUpdateConsent?.({ consent });
+	const update = await ctx.context.adapter.update<OAuthConsent<Scope[]>>({
 		model: "oauthConsent",
 		where: [
 			{
@@ -159,4 +162,6 @@ export async function updateConsentEndpoint(
 			updatedAt: new Date(iat * 1000),
 		},
 	});
+	await opts.databaseHooks?.afterUpdateConsent?.({ consent });
+	return update;
 }

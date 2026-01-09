@@ -186,10 +186,21 @@ export async function createOAuthClientEndpoint(
 		user_id: referenceId ? undefined : session?.session.userId,
 		reference_id: referenceId,
 	});
+	const additionalData = await opts.databaseHooks?.beforeCreateClient?.({
+		schema,
+	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...(typeof additionalData === "object" && "data" in additionalData
+				? additionalData.data
+				: {}),
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
+	await opts.databaseHooks?.afterCreateClient?.({ schema: client });
 	// Format the response according to RFC7591
 	return ctx.json(
 		schemaToOAuth({
