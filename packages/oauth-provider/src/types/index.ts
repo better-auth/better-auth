@@ -132,11 +132,15 @@ export interface OAuthOptions<
 		 * - Notify a user/org that a client was created
 		 * - Add other metadata to the client
 		 *
-		 * Returning `{ data }` will replace the schema used for creation.
+		 * Returning `{ data }` will safely add to the schema used for creation.
+		 * Returning `{ overrides }` will replace the schema values used for creation.
 		 */
 		beforeCreateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
-		}) => Promise<void | { data: SchemaClient }>;
+		}) => Promise<void | {
+			data?: Partial<SchemaClient>;
+			overrides?: Partial<SchemaClient>;
+		}>;
 		/**
 		 * Runs after an OAuth client has been created successfully
 		 * such as for auditing/logging.
@@ -151,11 +155,15 @@ export interface OAuthOptions<
 		 * - Notify a user/org that a client was updated
 		 * - Add other metadata to the client
 		 *
-		 * Returning `{ data }` will replace the schema used for the update.
+		 * Returning `{ data }` will safely add to the schema used for the update.
+		 * Returning `{ overrides }` will replace the schema values used for the update.
 		 */
 		beforeUpdateClient?: (data?: {
 			schema: SchemaClient<Scope[]>;
-		}) => Promise<void | { data: SchemaClient }>;
+		}) => Promise<void | {
+			data?: Partial<SchemaClient>;
+			overrides?: Partial<SchemaClient>;
+		}>;
 		/**
 		 * Runs after an OAuth client has been updated
 		 * such as for auditing/logging.

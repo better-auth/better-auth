@@ -193,9 +193,12 @@ export async function createOAuthClientEndpoint(
 		model: "oauthClient",
 		data: {
 			...(typeof additionalData === "object" && "data" in additionalData
-				? additionalData.data
+				? (additionalData.data ?? {})
 				: {}),
 			...schema,
+			...(typeof additionalData === "object" && "overrides" in additionalData
+				? (additionalData.overrides ?? {})
+				: {}),
 			createdAt: new Date(iat * 1000),
 			updatedAt: new Date(iat * 1000),
 		},
