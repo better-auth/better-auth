@@ -3003,7 +3003,7 @@ export const getNormalTestSuiteTests = (
 					expect(result.email).toBe(`${i}@email.com`);
 					expect(result.id).toBeDefined();
 				}
-      },
+			},
 		"update - should support multiple where conditions under AND connector with unique field":
 			async () => {
 				// This test is specific to Prisma where unique fields must be at root level,
