@@ -100,6 +100,7 @@ export async function onCheckoutSessionCompleted(
 							? new Date(subscription.ended_at * 1000)
 							: null,
 						seats: seats,
+						billingInterval: subscriptionItem.price.recurring?.interval,
 						...trial,
 					},
 					where: [
@@ -233,6 +234,7 @@ export async function onSubscriptionCreated(
 				periodStart,
 				periodEnd,
 				seats,
+				billingInterval: subscriptionItem.price.recurring?.interval,
 				...(plan.limits ? { limits: plan.limits } : {}),
 				...trial,
 			},
@@ -329,6 +331,7 @@ export async function onSubscriptionUpdated(
 					: null,
 				seats: subscriptionItem.quantity,
 				stripeSubscriptionId: subscriptionUpdated.id,
+				billingInterval: subscriptionItem.price.recurring?.interval,
 			},
 			where: [
 				{

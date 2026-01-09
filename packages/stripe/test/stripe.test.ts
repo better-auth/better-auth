@@ -890,7 +890,12 @@ describe("stripe", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+									recurring: {
+										interval: "year",
+									},
+								},
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -935,6 +940,141 @@ describe("stripe", () => {
 		expect(subscription?.status).toBe("active");
 		expect(subscription?.plan).toBe("starter");
 		expect(subscription?.seats).toBe(1);
+		expect(subscription?.billingInterval).toBe("year");
+	});
+
+	it("should store billingInterval as year for annual subscriptions", async () => {
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create a user with stripeCustomerId
+		const userWithCustomerId = await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "annual-user@test.com",
+				name: "Annual User",
+				emailVerified: true,
+				stripeCustomerId: "cus_annual_test",
+			},
+		});
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_annual_created",
+					customer: "cus_annual_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+									recurring: { interval: "year" },
+								},
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify subscription was created with annual billing interval
+		const subscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_annual_created" }],
+		});
+
+		expect(subscription).toBeDefined();
+		expect(subscription?.referenceId).toBe(userWithCustomerId.id);
+		expect(subscription?.billingInterval).toBe("year");
+	});
+
+	it("should return billingInterval in subscription.list() response", async () => {
+		const {
+			client,
+			auth: testAuth,
+			sessionSetter,
+		} = await getTestInstance(
+			{ database: memory, plugins: [stripe(stripeOptions)] },
+			{
+				disableTestUser: true,
+				clientOptions: { plugins: [stripeClient({ subscription: true })] },
+			},
+		);
+
+		const testCtx = await testAuth.$context;
+
+		const headers = new Headers();
+		const userRes = await client.signUp.email(
+			{
+				email: "billing-interval-test@example.com",
+				password: "password",
+				name: "Test",
+			},
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+		await testCtx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_1",
+				stripeSubscriptionId: "sub_1",
+				status: "active",
+				plan: "starter",
+				billingInterval: "year",
+			},
+		});
+
+		const result = await client.subscription.list({
+			fetchOptions: { headers, throw: true },
+		});
+
+		expect(result[0]?.billingInterval).toBe("year");
 	});
 
 	it("should not create duplicate subscription if already exists", async () => {
