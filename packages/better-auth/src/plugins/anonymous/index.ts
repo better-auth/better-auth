@@ -18,7 +18,11 @@ import {
 import { mergeSchema } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
-import type { AnonymousOptions, AnonymousSession } from "./types";
+import type {
+	AnonymousOptions,
+	AnonymousSession,
+	UserWithAnonymous,
+} from "./types";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
@@ -314,9 +318,19 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 								ctx,
 							});
 						}
-						if (!options?.disableDeleteAnonymousUser) {
-							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						const newSessionUser = newSession.user as
+							| (UserWithAnonymous & Record<string, any>)
+							| undefined;
+						const isSameUser = newSessionUser?.id === session.user.id;
+						const newSessionIsAnonymous = Boolean(newSessionUser?.isAnonymous);
+						if (
+							options?.disableDeleteAnonymousUser ||
+							isSameUser ||
+							newSessionIsAnonymous
+						) {
+							return;
 						}
+						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					}),
 				},
 			],
