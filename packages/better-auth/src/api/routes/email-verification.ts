@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { APIError } from "better-call";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
@@ -185,15 +186,14 @@ export const sendVerificationEmail = createAuthEndpoint(
 				status: true,
 			});
 		}
-		if (session?.user.emailVerified) {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					"You can only send a verification email to an unverified email",
-			});
-		}
 		if (session?.user.email !== email) {
 			throw new APIError("BAD_REQUEST", {
-				message: "You can only send a verification email to your own email",
+				message: BASE_ERROR_CODES.EMAIL_MISMATCH,
+			});
+		}
+		if (session?.user.emailVerified) {
+			throw new APIError("BAD_REQUEST", {
+				message: BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
 			});
 		}
 		await sendVerificationEmailFn(ctx, session.user);
