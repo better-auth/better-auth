@@ -170,6 +170,27 @@ describe("account", async () => {
 		});
 	});
 
+	it("should get access token using accountId from listAccounts", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			const googleAccount = accounts.data?.find(
+				(a) => a.providerId === "google",
+			);
+			expect(googleAccount).toBeDefined();
+			expect(googleAccount?.accountId).toBeDefined();
+
+			// Use accountId from listAccounts to get access token
+			const accessToken = await client.getAccessToken({
+				providerId: "google",
+				accountId: googleAccount!.accountId,
+			});
+
+			expect(accessToken.error).toBeNull();
+			expect(accessToken.data?.accessToken).toBe("test");
+		});
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
