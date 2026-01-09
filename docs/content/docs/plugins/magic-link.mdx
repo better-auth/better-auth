@@ -111,16 +111,83 @@ If you want to handle the verification manually, (e.g, if you send the user a di
 ```ts
 type magicLinkVerify = {
     /**
-     * Verification token. 
+     * Verification token.
      */
     token: string = "123456"
     /**
-     * URL to redirect after magic link verification, if not provided will return the session. 
+     * URL to redirect after magic link verification, if not provided will return the session.
      */
     callbackURL?: string = "/dashboard"
+    /**
+     * If set to true, returns JSON response instead of redirecting. Useful for programmatic verification.
+     */
+    disableRedirect?: boolean = false
 }
 ```
 </APIMethod>
+
+#### Programmatic Verification with JSON Response
+
+By default, the verification endpoint redirects the user to the specified callback URLs. However, you can use JSON-based responses for programmatic verification by setting `disableRedirect` to `true`:
+
+```tsx title="components/verify-code.tsx"
+const handleVerifyCode = async (code: string) => {
+  await authClient.magicLink.verify(
+    {
+      query: {
+        token: code,
+        disableRedirect: true  // Enable JSON response mode
+      },
+    },
+    {
+      onSuccess: async (context) => {
+        console.log("Code verified successfully");
+
+        // Access session data
+        const { session, user, isNewUser } = context.data;
+        console.log("Session token:", session.token);
+        console.log("User email:", user.email);
+
+        if (isNewUser) {
+          // Handle new user flow
+          router.push("/welcome");
+        } else {
+          // Handle existing user flow
+          router.push("/dashboard");
+        }
+      },
+      onError: (context) => {
+        // Handle errors with proper messages
+        console.error("Verification failed:", context.error);
+        toast.error(context.error.message);
+      },
+    },
+  );
+};
+```
+
+**Response Format:**
+
+When `disableRedirect` is `true`, successful verification returns:
+
+```ts
+{
+  session: {
+    token: string;
+    expiresAt: Date;
+  };
+  user: {
+    id: string;
+    email: string;
+    emailVerified: boolean;
+    name: string;
+    image: string;
+    createdAt: Date;
+    updatedAt: Date;
+  };
+  isNewUser: boolean;
+}
+```
 
 ## Configuration Options
 
