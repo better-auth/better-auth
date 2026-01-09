@@ -58,9 +58,10 @@ describe("magic link", async () => {
 			},
 		});
 		expect(response.data).toBeDefined();
-		// Legacy format returns { token, user }
 		if (response.data && "token" in response.data) {
 			expect(response.data.token).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
 		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
@@ -325,9 +326,10 @@ describe("magic link verify", async () => {
 			},
 		});
 		expect(response.data).toBeDefined();
-		// Legacy format returns { token, user }
 		if (response.data && "token" in response.data) {
 			expect(response.data.token).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
 		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
@@ -425,13 +427,14 @@ describe("magic link JSON response mode", async () => {
 		});
 
 		expect(response.data).toBeDefined();
-		// New format with disableRedirect returns { session, user, isNewUser }
 		if (response.data && "session" in response.data) {
 			expect(response.data.session).toBeDefined();
 			expect(response.data.session.token).toBeDefined();
 			expect(response.data.user).toBeDefined();
 			expect(response.data.user.email).toBe(testUser.email);
 			expect(response.data.isNewUser).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
 		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
