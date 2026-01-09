@@ -366,7 +366,9 @@ export async function rotateClientSecretEndpoint(
 				},
 			],
 			update: {
-				...additionalData,
+				...(typeof additionalData === "object" && "data" in additionalData
+					? additionalData.data
+					: {}),
 				...client,
 				clientSecret: storedClientSecret,
 			},

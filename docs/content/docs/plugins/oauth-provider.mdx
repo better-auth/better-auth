@@ -452,7 +452,7 @@ oauthProvider({
 
     // Before an existing consent is updated
     beforeUpdateConsent: async ({ consent }) => {
-      if (consent.scopes.length > 5) {
+      if (consent.scopes.split(' ').length > 5) {
         throw new Error("Too many scopes requested")
       }
     },

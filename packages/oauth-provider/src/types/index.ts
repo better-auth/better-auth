@@ -148,7 +148,7 @@ export interface OAuthOptions<
 		 * Runs before an OAuth client is updated.
 		 *
 		 * Use this hook to:
-		 * - Notify a user/org that a client was created
+		 * - Notify a user/org that a client was updated
 		 * - Add other metadata to the client
 		 *
 		 * Returning `{ data }` will replace the schema used for the update.

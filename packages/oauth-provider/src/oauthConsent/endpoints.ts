@@ -162,6 +162,7 @@ export async function updateConsentEndpoint(
 			updatedAt: new Date(iat * 1000),
 		},
 	});
-	await opts.databaseHooks?.afterUpdateConsent?.({ consent });
+	if (update)
+		await opts.databaseHooks?.afterUpdateConsent?.({ consent: update });
 	return update;
 }
