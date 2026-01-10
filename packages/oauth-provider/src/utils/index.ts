@@ -375,6 +375,19 @@ export async function validateClientCredentials(
 }
 
 /**
+ * Parse client metadata that may be stored as JSON string or already parsed object.
+ * Handles database adapters that auto-parse JSON columns.
+ *
+ * @internal
+ */
+export function parseClientMetadata(
+	metadata: string | object | undefined,
+): object | undefined {
+	if (!metadata) return undefined;
+	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+}
+
+/**
  * Parse space-separated prompt string into a set of prompts
  *
  * @param prompt

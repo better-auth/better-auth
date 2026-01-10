@@ -17,6 +17,7 @@ import {
 	getClient,
 	getJwtPlugin,
 	getStoredToken,
+	parseClientMetadata,
 	validateClientCredentials,
 } from "./utils";
 
@@ -218,7 +219,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
-				metadata: client?.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
 
