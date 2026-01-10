@@ -168,6 +168,13 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							ctx.context.runInBackground(cleanupTask);
 						}
 
+						if (!apiKey.userId) {
+							throw APIError.from(
+								"UNAUTHORIZED",
+								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							);
+						}
+
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,
 						);

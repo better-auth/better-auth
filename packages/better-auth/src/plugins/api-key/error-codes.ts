@@ -32,4 +32,7 @@ export const API_KEY_ERROR_CODES = defineErrorCodes({
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 	NAME_REQUIRED: "API Key name is required.",
+	REFERENCE_ID_REQUIRED: "Reference ID is required",
+	UNAUTHORIZED_REFERENCE:
+		"You are not authorized to create a key for this referenceId",
 });
