@@ -39,6 +39,13 @@ type EndpointHandler<
 	R,
 > = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
 
+type Handler = (ctx: any) => Promise<any>;
+export const withEndpointContext = (handler: Handler) => {
+	return async (ctx: any) => {
+		return runWithEndpointContext(ctx as any, () => handler(ctx));
+	};
+};
+
 export function createAuthEndpoint<
 	Path extends string,
 	Options extends EndpointOptions,
@@ -83,8 +90,7 @@ export function createAuthEndpoint<
 				...options,
 				use: [...(options?.use || []), ...use],
 			},
-			// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-			async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+			withEndpointContext(handler),
 		);
 	}
 
@@ -93,8 +99,7 @@ export function createAuthEndpoint<
 			...options,
 			use: [...(options?.use || []), ...use],
 		},
-		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		withEndpointContext(handler),
 	);
 }
 
