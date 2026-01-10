@@ -845,6 +845,8 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 			},
 		});
 
+		const warnFn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
 		const client = createAuthClient({
 			baseURL: "http://localhost:3000",
 			fetchOptions: {
@@ -863,6 +865,10 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 			password: testUser.password,
 			callbackURL: "http://any-site.com/redirect",
 		});
+
+		expect(warnFn).toHaveBeenCalledWith(
+			expect.stringMatching(/^\[Deprecation]/),
+		);
 
 		expect(res.data?.user).toBeDefined();
 	});
