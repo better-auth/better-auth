@@ -6,6 +6,7 @@ import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
+import { anonymous } from "../anonymous";
 import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
@@ -1136,5 +1137,131 @@ describe("OTP storage modes", async () => {
 			});
 			expect(verifyRes.status).toBe(200);
 		});
+	});
+});
+
+describe("two factor passwordless", async () => {
+	const { auth, db } = await getTestInstance(
+		{
+			secret: DEFAULT_SECRET,
+			plugins: [anonymous(), twoFactor({ allowPasswordless: true })],
+		},
+		{ disableTestUser: true },
+	);
+
+	const applySetCookie = (headers: Headers, responseHeaders: Headers) => {
+		const setCookieHeader = responseHeaders.get("set-cookie");
+		if (!setCookieHeader) {
+			return headers;
+		}
+		const existing = headers.get("cookie");
+		const cookieMap = new Map<string, string>();
+		if (existing) {
+			existing.split("; ").forEach((pair) => {
+				const [name, ...rest] = pair.split("=");
+				cookieMap.set(name, rest.join("="));
+			});
+		}
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		cookies.forEach((cookie, name) => {
+			cookieMap.set(name, cookie.value);
+		});
+		headers.set(
+			"cookie",
+			Array.from(cookieMap.entries())
+				.map(([name, value]) => `${name}=${value}`)
+				.join("; "),
+		);
+		return headers;
+	};
+
+	const signInRes = await auth.api.signInAnonymous({ asResponse: true });
+	let headers = applySetCookie(new Headers(), signInRes.headers);
+	const session = await auth.api.getSession({ headers });
+	const userId = session?.user.id as string;
+
+	it("allows enabling without password for users without credentials", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: {},
+			headers,
+			asResponse: true,
+		});
+		headers = applySetCookie(headers, res.headers);
+
+		const json = (await res.json()) as {
+			backupCodes: string[];
+			totpURI: string;
+		};
+		expect(json.backupCodes.length).toBe(10);
+		expect(json.totpURI).toBeDefined();
+
+		const twoFactor = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		});
+		if (!twoFactor) {
+			throw new Error("No two factor");
+		}
+		const decrypted = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactor.secret,
+		});
+		const code = await createOTP(decrypted).totp();
+		const verifyRes = await auth.api.verifyTOTP({
+			body: {
+				code,
+			},
+			headers,
+			asResponse: true,
+		});
+		headers = applySetCookie(headers, verifyRes.headers);
+	});
+
+	it("allows getting totp uri without password", async () => {
+		const res = await auth.api.getTOTPURI({
+			headers,
+			body: {},
+		});
+		expect(res.totpURI).toBeDefined();
+	});
+
+	it("allows generating backup codes without password", async () => {
+		const res = await auth.api.generateBackupCodes({
+			body: {},
+			headers,
+		});
+		expect(res.backupCodes.length).toBe(10);
+	});
+
+	it("allows disabling without password", async () => {
+		const res = await auth.api.disableTwoFactor({
+			body: {},
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(200);
+	});
+});
+
+describe("two factor password still required for credential accounts", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [twoFactor({ allowPasswordless: true })],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("rejects enabling without password for credential users", async () => {
+		const res = await auth.api.enableTwoFactor({
+			body: {},
+			headers,
+			asResponse: true,
+		});
+		expect(res.status).toBe(400);
 	});
 });
