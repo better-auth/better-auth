@@ -27,10 +27,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
+			: options.baseURL
 				? options.baseURL.startsWith("https://")
-					? true
-					: false
 				: isProduction;
 	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =

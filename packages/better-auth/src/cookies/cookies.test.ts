@@ -162,6 +162,52 @@ describe("cookie configuration", () => {
 		expect(cookies.sessionData.options.sameSite).toBe("lax");
 		expect(cookies.sessionData.options.domain).toBe("example.com");
 	});
+
+	it("should use secure cookies for https baseURL", () => {
+		const cookies = getCookies({
+			baseURL: "https://example.com",
+		});
+		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionToken.name).toContain("__Secure-");
+	});
+
+	it("should not use secure cookies for http baseURL", () => {
+		const cookies = getCookies({
+			baseURL: "http://localhost:3000",
+		});
+		expect(cookies.sessionToken.options.secure).toBe(false);
+		expect(cookies.sessionToken.name).not.toContain("__Secure-");
+	});
+
+	it("should fallback to isProduction when baseURL is empty string", () => {
+		// When baseURL is empty string, it should fallback to isProduction (false in test env)
+		const cookies = getCookies({
+			baseURL: "",
+		});
+		// In test environment, isProduction is false, so secure should be false
+		expect(cookies.sessionToken.options.secure).toBe(false);
+		expect(cookies.sessionToken.name).not.toContain("__Secure-");
+	});
+
+	it("should fallback to isProduction when baseURL is undefined", () => {
+		// When baseURL is undefined, it should fallback to isProduction (false in test env)
+		const cookies = getCookies({
+			baseURL: undefined,
+		});
+		// In test environment, isProduction is false, so secure should be false
+		expect(cookies.sessionToken.options.secure).toBe(false);
+		expect(cookies.sessionToken.name).not.toContain("__Secure-");
+	});
+
+	it("should treat empty string baseURL the same as undefined baseURL", () => {
+		// Both empty string and undefined should fallback to isProduction
+		const cookiesWithEmpty = getCookies({ baseURL: "" });
+		const cookiesWithUndefined = getCookies({ baseURL: undefined });
+
+		expect(cookiesWithEmpty.sessionToken.options.secure).toBe(
+			cookiesWithUndefined.sessionToken.options.secure,
+		);
+	});
 });
 
 describe("cookie-utils parseSetCookieHeader", () => {
