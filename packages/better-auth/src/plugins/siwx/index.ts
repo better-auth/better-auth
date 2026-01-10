@@ -568,7 +568,7 @@ export const siwx = (options: SIWXPluginOptions) => {
 
             await setSessionCookie(ctx, { session, user });
 
-            throw ctx.redirect(`${successRedirect}&provider=${provider}`);
+          throw ctx.redirect(`${successRedirect}${successRedirect.includes('?') ? '&' : '?'}provider=${provider}`);
           } catch (error: unknown) {
             if (error instanceof APIError) throw error;
             if (
