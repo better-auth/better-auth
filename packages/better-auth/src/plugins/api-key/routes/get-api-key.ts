@@ -1,10 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
+import { APIError } from "better-call";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
+import { sessionMiddleware } from "../../../api";
 import { ERROR_CODES } from "..";
-import { getApiKeyById } from "../adapter";
+import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -192,15 +193,18 @@ export function getApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// convert metadata string back to object
-			apiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				apiKey.metadata as never as string,
+			// Migrate legacy double-stringified metadata if needed
+			const metadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				apiKey,
+				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];

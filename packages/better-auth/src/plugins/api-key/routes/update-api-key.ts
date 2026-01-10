@@ -1,11 +1,16 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
+import { APIError } from "better-call";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
-import { getApiKeyById, setApiKey } from "../adapter";
+import {
+	getApiKeyById,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -307,9 +312,7 @@ export function updateApiKey({
 			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw new APIError("NOT_FOUND", { message: ERROR_CODES.KEY_NOT_FOUND });
 			}
 
 			let newValues: Partial<ApiKey> = {};
@@ -360,9 +363,8 @@ export function updateApiKey({
 						message: ERROR_CODES.INVALID_METADATA_TYPE,
 					});
 				}
-				//@ts-expect-error - we need this to be a string to save into DB.
-				newValues.metadata =
-					schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
 				newValues.remaining = remaining;
@@ -448,15 +450,18 @@ export function updateApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// transform metadata from string back to object
-			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				newApiKey.metadata as never as string,
+			// Migrate legacy double-stringified metadata if needed
+			const migratedMetadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				newApiKey,
+				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata: migratedMetadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];

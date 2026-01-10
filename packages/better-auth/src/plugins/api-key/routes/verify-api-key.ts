@@ -6,7 +6,12 @@ import { APIError } from "../../../api";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
-import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
+import {
+	deleteApiKey,
+	getApiKey,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -328,11 +333,15 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
-			if ("metadata" in returningApiKey) {
-				returningApiKey.metadata =
-					schema.apikey.fields.metadata.transform.output(
-						returningApiKey.metadata as never as string,
-					);
+
+			// Migrate legacy double-stringified metadata if needed
+			let migratedMetadata: Record<string, any> | null = null;
+			if (apiKey) {
+				migratedMetadata = await migrateDoubleStringifiedMetadata(
+					ctx,
+					apiKey,
+					opts,
+				);
 			}
 
 			returningApiKey.permissions = returningApiKey.permissions
@@ -344,7 +353,13 @@ export function verifyApiKey({
 			return ctx.json({
 				valid: true,
 				error: null,
-				key: apiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
+				key:
+					apiKey === null
+						? null
+						: ({
+								...returningApiKey,
+								metadata: migratedMetadata,
+							} as Omit<ApiKey, "key">),
 			});
 		},
 	);
