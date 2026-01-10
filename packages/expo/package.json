@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.5.0-beta.2",
+  "version": "1.5.0-beta.3",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
@@ -86,9 +86,6 @@
       "optional": true
     },
     "expo-linking": {
-      "optional": true
-    },
-    "expo-network": {
       "optional": true
     },
     "expo-web-browser": {
