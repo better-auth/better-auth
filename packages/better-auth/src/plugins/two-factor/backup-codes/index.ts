@@ -457,9 +457,10 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					});
 
 					if (!twoFactor) {
-						throw new APIError("BAD_REQUEST", {
-							message: TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+						);
 					}
 
 					const backupCodes = await generateBackupCodes(
