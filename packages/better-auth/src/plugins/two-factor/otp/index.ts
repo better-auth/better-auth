@@ -19,7 +19,7 @@ export interface OTPOptions {
 	 * How long the opt will be valid for in
 	 * minutes
 	 *
-	 * @default "3 mins"
+	 * @default 3 - in minutes
 	 */
 	period?: number | undefined;
 	/**
@@ -31,24 +31,22 @@ export interface OTPOptions {
 	/**
 	 * Send the otp to the user
 	 *
-	 * @param user - The user to send the otp to
-	 * @param otp - The otp to send
-	 * @param request - The request object
+	 * @param data - Object containing user and otp information
+	 * @param ctx - The request context object (includes query parameters like otpDeliveryMethod)
 	 * @returns void | Promise<void>
 	 */
 	sendOTP?:
 		| ((
 				/**
-				 * The user to send the otp to
-				 * @type UserWithTwoFactor
-				 * @default UserWithTwoFactors
+				 * Data object containing user and otp
 				 */
 				data: {
 					user: UserWithTwoFactor;
 					otp: string;
 				},
 				/**
-				 * The request object
+				 * The request context object. 
+				 * Access ctx.query.otpDeliveryMethod to get delivery method (e.g., "sms", "email")
 				 */
 				ctx?: GenericEndpointContext,
 		  ) => Awaitable<void>)
@@ -59,6 +57,12 @@ export interface OTPOptions {
 	 * @default 5
 	 */
 	allowedAttempts?: number | undefined;
+	/**
+	 * Store the OTP in your database in a secure way
+	 * Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database
+	 *
+	 * @default "plain"
+	 */
 	storeOTP?:
 		| (
 				| "plain"
@@ -105,7 +109,10 @@ const send2FaOTPBodySchema = z
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (options?: OTPOptions | undefined) => {
+export const otp2fa = (
+	options?: OTPOptions | undefined,
+	verifyTwoFactorFn?: (ctx: GenericEndpointContext) => ReturnType<typeof verifyTwoFactor>
+) => {
 	const opts = {
 		storeOTP: "plain",
 		digits: 6,
@@ -193,7 +200,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					code: "OTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, key } = await verifyTwoFactor(ctx);
+			const { session, key } = await (verifyTwoFactorFn || verifyTwoFactor)(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
@@ -293,7 +300,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			},
 		},
 		async (ctx) => {
-			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
+			const { session, key, valid, invalid } = await (verifyTwoFactorFn || verifyTwoFactor)(ctx);
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,

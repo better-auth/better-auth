@@ -166,7 +166,10 @@ const generateBackupCodesBodySchema = z.object({
 	}),
 });
 
-export const backupCode2fa = (opts: BackupCodeOptions) => {
+export const backupCode2fa = (
+	opts: BackupCodeOptions,
+	verifyTwoFactorFn?: (ctx: any) => ReturnType<typeof verifyTwoFactor>,
+) => {
 	const twoFactorTable = "twoFactor";
 
 	return {
@@ -305,7 +308,9 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(ctx);
+					const { session, valid } = await (
+						verifyTwoFactorFn || verifyTwoFactor
+					)(ctx);
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,
