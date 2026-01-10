@@ -160,6 +160,8 @@ export type BetterAuthAdvancedOptions = {
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
+	 *
+	 * @default false
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
@@ -173,6 +175,8 @@ export type BetterAuthAdvancedOptions = {
 	 *
 	 * ⚠︎ This may allow open redirects and could lead to security
 	 * vulnerabilities.
+	 *
+	 * @default false
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**
