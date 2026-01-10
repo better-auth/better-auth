@@ -12,7 +12,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
-import { validatePassword } from "../../utils/password";
+import { shouldRequirePassword, validatePassword } from "../../utils/password";
 import type { BackupCodeOptions } from "./backup-codes";
 import { backupCode2fa, generateBackupCodes } from "./backup-codes";
 import {
@@ -36,36 +36,55 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-
-const enableTwoFactorBodySchema = z.object({
-	password: z.string().meta({
-		description: "User password",
-	}),
-	issuer: z
-		.string()
-		.meta({
-			description: "Custom issuer for the TOTP URI",
-		})
-		.optional(),
-});
-
-const disableTwoFactorBodySchema = z.object({
-	password: z.string().meta({
-		description: "User password",
-	}),
-});
-
 export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
+	const allowPasswordless = options?.allowPasswordless;
 	const backupCodeOptions = {
 		storeBackupCodes: "encrypted",
 		...options?.backupCodeOptions,
 	} satisfies BackupCodeOptions;
-	const totp = totp2fa(options?.totpOptions);
-	const backupCode = backupCode2fa(backupCodeOptions);
+	const totp = totp2fa({
+		...options?.totpOptions,
+		allowPasswordless:
+			options?.totpOptions?.allowPasswordless ?? allowPasswordless,
+	});
+	const backupCode = backupCode2fa({
+		...backupCodeOptions,
+		allowPasswordless:
+			options?.backupCodeOptions?.allowPasswordless ?? allowPasswordless,
+	});
 	const otp = otp2fa(options?.otpOptions);
+	const passwordSchema = z.string().meta({
+		description: "User password",
+	});
+	const enableTwoFactorBodySchema = allowPasswordless
+		? z.object({
+				password: passwordSchema.optional(),
+				issuer: z
+					.string()
+					.meta({
+						description: "Custom issuer for the TOTP URI",
+					})
+					.optional(),
+			})
+		: z.object({
+				password: passwordSchema,
+				issuer: z
+					.string()
+					.meta({
+						description: "Custom issuer for the TOTP URI",
+					})
+					.optional(),
+			});
+	const disableTwoFactorBodySchema = allowPasswordless
+		? z.object({
+				password: passwordSchema.optional(),
+			})
+		: z.object({
+				password: passwordSchema,
+			});
 
 	return {
 		id: "two-factor",
@@ -130,15 +149,28 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const { password, issuer } = ctx.body;
-					const isPasswordValid = await validatePassword(ctx, {
-						password,
-						userId: user.id,
-					});
-					if (!isPasswordValid) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.INVALID_PASSWORD,
-						);
+					const requirePassword = await shouldRequirePassword(
+						ctx,
+						user.id,
+						allowPasswordless,
+					);
+					if (requirePassword) {
+						if (!password) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
+						const isPasswordValid = await validatePassword(ctx, {
+							password,
+							userId: user.id,
+						});
+						if (!isPasswordValid) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
@@ -249,15 +281,28 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				async (ctx) => {
 					const user = ctx.context.session.user as UserWithTwoFactor;
 					const { password } = ctx.body;
-					const isPasswordValid = await validatePassword(ctx, {
-						password,
-						userId: user.id,
-					});
-					if (!isPasswordValid) {
-						throw APIError.from(
-							"BAD_REQUEST",
-							BASE_ERROR_CODES.INVALID_PASSWORD,
-						);
+					const requirePassword = await shouldRequirePassword(
+						ctx,
+						user.id,
+						allowPasswordless,
+					);
+					if (requirePassword) {
+						if (!password) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
+						const isPasswordValid = await validatePassword(ctx, {
+							password,
+							userId: user.id,
+						});
+						if (!isPasswordValid) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								BASE_ERROR_CODES.INVALID_PASSWORD,
+							);
+						}
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,

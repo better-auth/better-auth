@@ -80,7 +80,7 @@ This plugin offers two main methods to do a second factor verification:
 
 ### Enabling 2FA
 
-To enable two-factor authentication, call `twoFactor.enable` with the user's password and issuer (optional):
+To enable two-factor authentication, call `twoFactor.enable` with the user's password (required for credential accounts) and issuer (optional). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/enable"
@@ -90,9 +90,9 @@ To enable two-factor authentication, call `twoFactor.enable` with the user's pas
 ```ts
 type enableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string = "secure-password"
+    password?: string = "secure-password"
     /**
      * An optional custom issuer for the TOTP URI. Defaults to app-name defined in your auth config.
      */
@@ -108,7 +108,7 @@ When 2FA is enabled:
 Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
-Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
+By default, Two Factor requires a credential (password) account. To allow passwordless users (passkeys, magic links, email OTP, OAuth/social, or anonymous), set `allowPasswordless: true`.
 </Callout>
 
 ### Sign In with 2FA
@@ -173,7 +173,7 @@ if ("twoFactorRedirect" in response) {
 
 ### Disabling 2FA
 
-To disable two-factor authentication, call `twoFactor.disable` with the user's password:
+To disable two-factor authentication, call `twoFactor.disable` with the user's password (required for credential accounts). If you enable `allowPasswordless`, the password can be omitted for users without a credential account.
 
 <APIMethod
   path="/two-factor/disable"
@@ -183,9 +183,9 @@ To disable two-factor authentication, call `twoFactor.disable` with the user's p
 ```ts
 type disableTwoFactor = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -208,9 +208,9 @@ After enabling 2FA, you can get the TOTP URI to display to the user. This URI is
 ```ts
 type getTOTPURI = {
     /**
-     * The user's password
+     * The user's password (required for credential accounts)
      */
-    password: string
+    password?: string
 }
 ```
 </APIMethod>
@@ -338,9 +338,9 @@ Generate backup codes for account recovery:
 ```ts
 type generateBackupCodes = {
     /**
-     * The users password. 
+     * The users password (required for credential accounts). 
      */
-    password: string
+    password?: string
 }
 
 if (data) {
@@ -463,6 +463,8 @@ Table: `twoFactor`
 **twoFactorTable**: The name of the table that stores the two factor authentication data. Default: `twoFactor`.
 
 **skipVerificationOnEnable**: Skip the verification process before enabling two factor for a user.
+
+**allowPasswordless**: Allow enabling and managing 2FA without a password for users that do not have a credential account. Password is still required if a credential account exists.
 
 **Issuer**: The issuer is the name of your application. It's used to generate TOTP codes. It'll be displayed in the authenticator apps.
 
