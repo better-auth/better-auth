@@ -1,0 +1,453 @@
+---
+title: Sign In With X (SIWX)
+description: Multi-chain wallet authentication plugin for Better Auth
+---
+
+The Sign In With X (SIWX) plugin enables wallet-based authentication across multiple blockchain ecosystems. It supports both EVM chains (Ethereum, Polygon, etc.) and Solana, following the [CAIP-122](https://github.com/ChainAgnostic/CAIPs/blob/main/CAIPs/caip-122.md) standard for chain-agnostic sign-in.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the Server Plugin
+
+        Add the SIWX plugin to your auth configuration:
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { siwx } from "better-auth/plugins";
+
+        export const auth = betterAuth({
+            plugins: [
+                siwx({
+                    domain: "example.com",
+                    emailDomainName: "example.com", // optional
+                    anonymous: true, // optional, default is true
+                    supportedChains: ["evm", "solana"], // optional, defaults to both
+                    getNonce: async () => {
+                        // Implement your nonce generation logic here
+                        return "your-secure-random-nonce";
+                    },
+                    verifyMessage: async (args) => {
+                        // Implement chain-specific message verification
+                        // args includes: message, signature, address, chainType, chainId, signatureType, cacao
+                        return true; // return true if signature is valid
+                    },
+                    nameLookup: async (args) => {
+                        // Optional: Implement name service lookup (ENS, SNS, etc.)
+                        return {
+                            name: "user.eth",
+                            avatar: "https://example.com/avatar.png"
+                        };
+                    },
+                }),
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```package-install
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```package-install
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+
+    <Step>
+        ### Add the Client Plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { siwxClient } from "better-auth/client/plugins";
+
+        export const authClient = createAuthClient({
+            plugins: [siwxClient()],
+        });
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Generate a Nonce
+
+Before signing a message, generate a nonce for the wallet address:
+
+```ts title="generate-nonce.ts"
+// For EVM chains (Ethereum, Polygon, etc.)
+const { data, error } = await authClient.siwx.nonce({
+  address: "0x1234567890abcdef1234567890abcdef12345678",
+  chainType: "evm",
+  chainId: "1", // optional, defaults to "1" for Ethereum mainnet
+});
+
+// For Solana
+const { data, error } = await authClient.siwx.nonce({
+  address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
+  chainType: "solana",
+  chainId: "mainnet-beta", // optional, defaults to "mainnet-beta"
+});
+
+if (data) {
+  console.log("Nonce:", data.nonce);
+  console.log("Statement:", data.statement);
+  console.log("Expires:", data.expiresAt);
+}
+```
+
+### Verify and Sign In
+
+After generating a nonce and signing the message with the user's wallet, verify the signature:
+
+```ts title="verify-siwx.ts"
+// For EVM chains
+const { data, error } = await authClient.siwx.verify({
+  message: "Your signed message string",
+  signature: "0x...", // The signature from the user's wallet
+  address: "0x1234567890abcdef1234567890abcdef12345678",
+  chainType: "evm",
+  chainId: "1", // optional, defaults to "1"
+  email: "user@example.com", // optional, required if anonymous is false
+});
+
+// For Solana
+const { data, error } = await authClient.siwx.verify({
+  message: "Your signed message string",
+  signature: "base58EncodedSignature",
+  address: "DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK",
+  chainType: "solana",
+  chainId: "mainnet-beta", // optional
+});
+
+if (data) {
+  console.log("Authentication successful:", data.user);
+}
+```
+
+### Chain-Specific Examples
+
+#### Ethereum (EVM)
+
+```ts title="ethereum.ts"
+import { verifyMessage } from "viem";
+
+// Server configuration
+siwx({
+  domain: "myapp.com",
+  supportedChains: ["evm"],
+  getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
+  verifyMessage: async ({ message, signature, address }) => {
+    return verifyMessage({
+      address: address as `0x${string}`,
+      message,
+      signature: signature as `0x${string}`,
+    });
+  },
+});
+
+// Client usage
+const { data } = await authClient.siwx.nonce({
+  address: walletAddress,
+  chainType: "evm",
+});
+
+const signature = await walletClient.signMessage({ message: data.nonce });
+
+await authClient.siwx.verify({
+  message: data.nonce,
+  signature,
+  address: walletAddress,
+  chainType: "evm",
+});
+```
+
+#### Solana
+
+```ts title="solana.ts"
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+// Server configuration
+siwx({
+  domain: "myapp.com",
+  supportedChains: ["solana"],
+  getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
+  verifyMessage: async ({ message, signature, address }) => {
+    const msgBytes = new TextEncoder().encode(message);
+    const sigBytes = bs58.decode(signature);
+    const pubKeyBytes = bs58.decode(address);
+    return nacl.sign.detached.verify(msgBytes, sigBytes, pubKeyBytes);
+  },
+});
+
+// Client usage
+const { data } = await authClient.siwx.nonce({
+  address: publicKey.toBase58(),
+  chainType: "solana",
+});
+
+const encoded = new TextEncoder().encode(data.nonce);
+const signedBytes = await signMessage(encoded);
+const signature = bs58.encode(signedBytes);
+
+await authClient.siwx.verify({
+  message: data.nonce,
+  signature,
+  address: publicKey.toBase58(),
+  chainType: "solana",
+});
+```
+
+#### Multi-Chain Support
+
+```ts title="multi-chain.ts"
+import { verifyMessage } from "viem";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+siwx({
+  domain: "myapp.com",
+  supportedChains: ["evm", "solana"],
+  getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
+  verifyMessage: async ({ message, signature, address, chainType }) => {
+    if (chainType === "evm") {
+      return verifyMessage({
+        address: address as `0x${string}`,
+        message,
+        signature: signature as `0x${string}`,
+      });
+    }
+    if (chainType === "solana") {
+      const msgBytes = new TextEncoder().encode(message);
+      const sigBytes = bs58.decode(signature);
+      const pubKeyBytes = bs58.decode(address);
+      return nacl.sign.detached.verify(msgBytes, sigBytes, pubKeyBytes);
+    }
+    return false;
+  },
+  nameLookup: async ({ address, chainType }) => {
+    if (chainType === "evm") {
+      // ENS lookup
+      const ensName = await getEnsName(address);
+      return { name: ensName || address };
+    }
+    if (chainType === "solana") {
+      // SNS lookup (optional)
+      return { name: address };
+    }
+    return { name: address };
+  },
+});
+```
+
+<Callout type="warning">
+  The `chainId` and `chainType` must match the values used when generating the nonce. Verification will fail if there's a mismatch between the nonce request parameters and the verify request parameters.
+</Callout>
+
+## Native Wallet Callbacks
+
+For mobile apps using native wallet integrations (Phantom, Solflare, Backpack), SIWX supports encrypted callback flows:
+
+```ts title="auth.ts"
+siwx({
+  domain: "myapp.com",
+  supportedChains: ["solana"],
+  getNonce: async () => generateRandomString(32, "a-z", "A-Z", "0-9"),
+  verifyMessage: async ({ message, signature, address }) => {
+    // Verification logic
+    return true;
+  },
+  callback: {
+    appPublicKeyBase58: process.env.SIWX_APP_PUBLIC_KEY,
+    appPrivateKeyBase58: process.env.SIWX_APP_PRIVATE_KEY,
+    providers: ["phantom", "solflare", "backpack"], // optional, defaults to all
+    successRedirect: "/?success=true", // optional
+    errorRedirect: "/login?success=false", // optional
+  },
+});
+```
+
+The callback endpoint is available at `/api/auth/siwx/callback/:provider` where `:provider` is one of `phantom`, `solflare`, or `backpack`.
+
+### Generating Keypairs
+
+To use native callbacks, generate a keypair for encrypting wallet responses:
+
+```ts title="generate-keypair.ts"
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+const keypair = nacl.box.keyPair();
+console.log("Public Key:", bs58.encode(keypair.publicKey));
+console.log("Private Key:", bs58.encode(keypair.secretKey));
+```
+
+## Configuration Options
+
+### Server Options
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `domain` | `string` | Required | The domain name of your application |
+| `emailDomainName` | `string` | Base URL domain | Email domain for user accounts |
+| `anonymous` | `boolean` | `true` | Allow sign-ins without email |
+| `statement` | `string` | `"Sign in with your wallet"` | Message statement shown to users |
+| `supportedChains` | `ChainType[]` | `["evm", "solana"]` | Supported blockchain types |
+| `getNonce` | `() => Promise<string>` | Required | Nonce generation function |
+| `verifyMessage` | `(args) => Promise<boolean>` | Required | Signature verification function |
+| `nameLookup` | `(args) => Promise<NameLookupResult>` | - | Optional name service lookup |
+| `callback` | `NativeCallbackOptions` | - | Native wallet callback configuration |
+
+### Client Options
+
+The SIWX client plugin doesn't require any configuration options, but you can pass them if needed for future extensibility:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import { siwxClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [
+    siwxClient({
+      // Optional client configuration can go here
+    }),
+  ],
+});
+```
+
+### Verify Message Args
+
+The `verifyMessage` function receives:
+
+```ts
+interface SIWXVerifyMessageArgs {
+  message: string;
+  signature: string;
+  address: string;
+  chainType: "evm" | "solana";
+  chainId: string;
+  signatureType: string;
+  cacao: Cacao; // CAIP-122 compliant object
+}
+```
+
+### Name Lookup Args
+
+The `nameLookup` function receives:
+
+```ts
+interface NameLookupArgs {
+  address: string;
+  chainType: "evm" | "solana";
+  chainId: string;
+}
+
+interface NameLookupResult {
+  name?: string;
+  avatar?: string;
+}
+```
+
+## Schema
+
+The SIWX plugin uses the standard `account` table with the following format for `accountId`:
+
+```
+{chainType}:{chainId}:{normalizedAddress}
+```
+
+Examples:
+- EVM: `evm:1:0x1234567890AbCdEf1234567890aBcDeF12345678`
+- Solana: `solana:mainnet-beta:DYw8jCTfwHNRJhhmFcbXvVDTqWMEVFBX6ZKUmG5CNSKK`
+
+The `providerId` is always `"siwx"`.
+
+## Example Implementation
+
+Here's a complete example with both EVM and Solana support:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { siwx } from "better-auth/plugins";
+import { generateRandomString } from "better-auth/crypto";
+import { verifyMessage, createPublicClient, http } from "viem";
+import { mainnet } from "viem/chains";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+export const auth = betterAuth({
+  database: {
+    // your database configuration
+  },
+  plugins: [
+    siwx({
+      domain: "myapp.com",
+      emailDomainName: "myapp.com",
+      anonymous: true,
+      supportedChains: ["evm", "solana"],
+      getNonce: async () => {
+        return generateRandomString(32, "a-z", "A-Z", "0-9");
+      },
+      verifyMessage: async ({ message, signature, address, chainType }) => {
+        try {
+          if (chainType === "evm") {
+            return await verifyMessage({
+              address: address as `0x${string}`,
+              message,
+              signature: signature as `0x${string}`,
+            });
+          }
+          if (chainType === "solana") {
+            const msgBytes = new TextEncoder().encode(message);
+            const sigBytes = bs58.decode(signature);
+            const pubKeyBytes = bs58.decode(address);
+            return nacl.sign.detached.verify(msgBytes, sigBytes, pubKeyBytes);
+          }
+          return false;
+        } catch (error) {
+          console.error("SIWX verification failed:", error);
+          return false;
+        }
+      },
+      nameLookup: async ({ address, chainType }) => {
+        if (chainType === "evm") {
+          try {
+            const client = createPublicClient({
+              chain: mainnet,
+              transport: http(),
+            });
+            const ensName = await client.getEnsName({
+              address: address as `0x${string}`,
+            });
+            const ensAvatar = ensName
+              ? await client.getEnsAvatar({ name: ensName })
+              : null;
+            return {
+              name: ensName || undefined,
+              avatar: ensAvatar || undefined,
+            };
+          } catch {
+            return {};
+          }
+        }
+        // TODO: Add SNS lookup for Solana
+        return {};
+      },
+    }),
+  ],
+});
+```
