@@ -580,7 +580,7 @@ export const siwx = (options: SIWXPluginOptions) => {
               throw error;
             }
             throw ctx.redirect(
-              `${errorRedirect}&provider=${provider}&errorMessage=${encodeURIComponent(error instanceof Error ? error.message : "Unknown error")}`,
+            `${errorRedirect}${errorRedirect.includes('?') ? '&' : '?'}provider=${provider}&errorMessage=${encodeURIComponent(error instanceof Error ? error.message : "Unknown error")}`,
             );
           }
         },
