@@ -21,27 +21,6 @@ export const buildEndpointSchema = <
 	baseSchema: BaseSchema;
 	shouldBePartial?: AllPartial;
 }) => {
-	return {
-		build: buildEndpointSchema,
-		...build(opts),
-	};
-};
-
-function build<
-	SchemaName extends string,
-	S extends {
-		[key in SchemaName]?: {
-			additionalFields?: Record<string, DBFieldAttribute>;
-		};
-	},
-	BaseSchema extends z.ZodObject<any>,
-	AllPartial extends boolean = false,
->(opts: {
-	name: SchemaName;
-	schema: S | undefined;
-	baseSchema: BaseSchema;
-	shouldBePartial?: AllPartial;
-}) {
 	const {
 		schema: schema1,
 		baseSchema,
@@ -86,4 +65,4 @@ function build<
 		getBody: (ctx: GenericEndpointContext) =>
 			ctx.body as AdditionalFields & z.infer<BaseSchema>,
 	};
-}
+};
