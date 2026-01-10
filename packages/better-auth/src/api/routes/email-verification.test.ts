@@ -248,6 +248,72 @@ describe("Email Verification", async () => {
 		);
 	});
 
+	it("should NOT allow email change verification without an active session", async () => {
+		let confirmationToken = "";
+		let verificationToken = "";
+
+		const { client, auth, signInWithTestUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ token: _token }) {
+					verificationToken = _token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					async sendChangeEmailVerification(data) {
+						confirmationToken = data.token;
+					},
+				},
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+
+		// User requests email change (logged in)
+		await runWithUser(async (headers) => {
+			await auth.api.changeEmail({
+				body: {
+					newEmail: "typo-email@example.com",
+				},
+				headers,
+			});
+		});
+
+		// User confirms from old email (logged in)
+		await runWithUser(async (headers) => {
+			await client.verifyEmail({
+				query: {
+					token: confirmationToken,
+				},
+				fetchOptions: {
+					headers,
+				},
+			});
+		});
+
+		// Verify that verificationToken was captured
+		expect(verificationToken).not.toBe("");
+
+		// Third party tries to verify the new email WITHOUT a session
+		const noSessionHeaders = new Headers();
+		const result = await client.verifyEmail({
+			query: {
+				token: verificationToken,
+			},
+			fetchOptions: {
+				headers: noSessionHeaders,
+			},
+		});
+
+		// The verification should fail because no valid session is present
+		expect(result.error).toBeDefined();
+		expect(result.error?.code).toBe("UNAUTHORIZED");
+	});
+
 	it("should preserve encoded characters in callback URL", async () => {
 		const testEmail = "test+user@example.com";
 		const encodedEmail = encodeURIComponent(testEmail);
