@@ -49,6 +49,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
 	VALIDATION_ERROR: "Validation Error",
 	MISSING_FIELD: "Field is required",
+	UNAUTHORIZED: "Authentication required",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;
