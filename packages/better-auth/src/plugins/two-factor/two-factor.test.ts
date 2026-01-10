@@ -1159,6 +1159,9 @@ describe("two factor passwordless", async () => {
 		if (existing) {
 			existing.split("; ").forEach((pair) => {
 				const [name, ...rest] = pair.split("=");
+				if (!name) {
+					return;
+				}
 				cookieMap.set(name, rest.join("="));
 			});
 		}
