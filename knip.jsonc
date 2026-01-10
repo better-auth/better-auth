@@ -42,7 +42,11 @@
 				"react-dom",
 				"solid-js",
 				"svelte",
-				"vue"
+				"vue",
+
+				// SIWX plugin optional dependencies (native wallet callbacks)
+				"bs58",
+				"tweetnacl"
 			]
 		},
 		"packages/core": {
