@@ -3203,7 +3203,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	describe("legacy double-stringified metadata migration", async () => {
-		const { client, auth, signInWithTestUser, db } = await getTestInstance(
+		const { auth, signInWithTestUser, db } = await getTestInstance(
 			{
 				plugins: [
 					apiKey({
@@ -3219,7 +3219,7 @@ describe("api-key", async () => {
 		);
 
 		it("should migrate double-stringified metadata on getApiKey", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create a key first
 			const createdKey = await auth.api.createApiKey({
@@ -3267,7 +3267,7 @@ describe("api-key", async () => {
 		});
 
 		it("should migrate double-stringified metadata on listApiKeys", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create first key with double-stringified metadata
 			const createdKey1 = await auth.api.createApiKey({
@@ -3332,7 +3332,7 @@ describe("api-key", async () => {
 		});
 
 		it("should migrate double-stringified metadata on updateApiKey", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create a key first
 			const createdKey = await auth.api.createApiKey({
@@ -3375,7 +3375,7 @@ describe("api-key", async () => {
 		});
 
 		it("should migrate double-stringified metadata on verifyApiKey", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create a key first
 			const createdKey = await auth.api.createApiKey({
@@ -3412,7 +3412,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle already properly formatted metadata (no migration needed)", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			const metadata = { alreadyCorrect: true, value: 123 };
 
@@ -3433,7 +3433,7 @@ describe("api-key", async () => {
 		});
 
 		it("should handle null metadata gracefully", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create a key without metadata
 			const createdKey = await auth.api.createApiKey({

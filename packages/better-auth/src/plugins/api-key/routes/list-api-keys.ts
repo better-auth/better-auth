@@ -8,7 +8,6 @@ import {
 	parseDoubleStringifiedMetadata,
 } from "../adapter";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({
 	opts,
