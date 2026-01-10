@@ -20,6 +20,7 @@ import {
 	decryptStoredClientSecret,
 	getJwtPlugin,
 	getStoredToken,
+	parseClientMetadata,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
@@ -85,7 +86,7 @@ async function createJwtAccessToken(
 				scopes,
 				resource: ctx.body.resource,
 				referenceId,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client.metadata),
 			})
 		: {};
 
@@ -142,7 +143,7 @@ async function createIdToken(
 		? await opts.customIdTokenClaims({
 				user,
 				scopes,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client.metadata),
 			})
 		: {};
 
@@ -817,7 +818,7 @@ async function handleClientCredentialsGrant(
 		? await opts.customAccessTokenClaims({
 				scopes: requestedScopes,
 				resource: ctx.body.resource,
-				metadata: client.metadata ? JSON.parse(client.metadata) : undefined,
+				metadata: parseClientMetadata(client.metadata),
 			})
 		: {};
 
