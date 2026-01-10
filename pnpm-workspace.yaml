@@ -24,7 +24,7 @@ catalogs:
     tailwindcss: ^4.1.18
     tailwindcss-animate: ^1.0.7
   vitest:
-    '@vitest/coverage-v8': ^4.0.15
+    '@vitest/coverage-istanbul': ^4.0.15
     vitest: ^4.0.15
 
 neverBuiltDependencies: []
