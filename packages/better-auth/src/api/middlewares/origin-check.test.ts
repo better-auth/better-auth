@@ -858,6 +858,7 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 			},
 		});
 
+		expect(warnFn).toHaveBeenCalledTimes(0);
 		// disableOriginCheck: true also disables CSRF for backward compatibility
 		// so this should succeed even with an untrusted origin
 		const res = await client.signIn.email({
@@ -865,12 +866,21 @@ describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
 			password: testUser.password,
 			callbackURL: "http://any-site.com/redirect",
 		});
+		expect(warnFn).toHaveBeenCalledTimes(1);
 
 		expect(warnFn).toHaveBeenCalledWith(
 			expect.stringMatching(/^\[Deprecation]/),
 		);
 
 		expect(res.data?.user).toBeDefined();
+		{
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://any-site.com/redirect",
+			});
+			expect(warnFn).toHaveBeenCalledTimes(1);
+		}
 	});
 
 	it("disableCSRFCheck should bypass Fetch Metadata CSRF protection", async () => {
