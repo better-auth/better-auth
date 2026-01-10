@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { deprecate } from "@better-auth/core/utils";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
@@ -19,15 +20,12 @@ function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
  * Logs deprecation warning for users relying on coupled behavior.
  * Only logs if user explicitly set disableOriginCheck (not test environment default).
  */
-function logBackwardCompatWarning(ctx: GenericEndpointContext): void {
-	if (ctx.context.options.advanced?.disableOriginCheck === true) {
-		ctx.context.logger?.warn(
-			"[Deprecation] disableOriginCheck: true currently also disables CSRF checks. " +
-				"In a future version, disableOriginCheck will ONLY disable URL validation. " +
-				"To keep CSRF disabled, add disableCSRFCheck: true to your config.",
-		);
-	}
-}
+const logBackwardCompatWarning = deprecate(
+	function logBackwardCompatWarning() {},
+	"disableOriginCheck: true currently also disables CSRF checks. " +
+		"In a future version, disableOriginCheck will ONLY disable URL validation. " +
+		"To keep CSRF disabled, add disableCSRFCheck: true to your config.",
+);
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
@@ -194,7 +192,8 @@ async function validateOrigin(
 	}
 
 	if (shouldSkipCSRFForBackwardCompat(ctx)) {
-		logBackwardCompatWarning(ctx);
+		ctx.context.options.advanced?.disableOriginCheck === true &&
+			logBackwardCompatWarning();
 		return;
 	}
 
