@@ -377,8 +377,9 @@ export const siwx = (options: SIWXPluginOptions) => {
 					if ("errorCode" in ctx.query) {
 						const errorCode = ctx.query.errorCode;
 						const errorMessage = ctx.query.errorMessage ?? "Unknown error";
+						const separator = errorRedirect.includes("?") ? "&" : "?";
 						throw ctx.redirect(
-							`${errorRedirect}&provider=${provider}&errorCode=${encodeURIComponent(errorCode)}&errorMessage=${encodeURIComponent(errorMessage)}`,
+							`${errorRedirect}${separator}provider=${provider}&errorCode=${encodeURIComponent(errorCode)}&errorMessage=${encodeURIComponent(errorMessage)}`,
 						);
 					}
 
