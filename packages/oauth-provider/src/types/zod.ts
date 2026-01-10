@@ -26,3 +26,23 @@ export const SafeUrlSchema = z
 		},
 		{ message: "URL cannot use javascript:, data:, or vbscript: scheme" },
 	);
+
+export const HttpsOnlyUrlSchema = z
+	.url()
+	.superRefine((val, ctx) => {
+		if (!URL.canParse(val)) {
+			ctx.addIssue({
+				code: "custom",
+				message: "URL must be parseable",
+				fatal: true,
+			});
+			return z.NEVER;
+		}
+	})
+	.refine(
+		(url) => {
+			const u = new URL(url);
+			return u.protocol === "https:";
+		},
+		{ message: "URL must use https scheme" },
+	);
