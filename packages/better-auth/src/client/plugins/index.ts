@@ -20,6 +20,7 @@ export * from "../../plugins/one-time-token/client";
 export * from "../../plugins/organization/client";
 export * from "../../plugins/phone-number/client";
 export * from "../../plugins/siwe/client";
+export * from "../../plugins/siwx/client";
 export * from "../../plugins/two-factor/client";
 export * from "../../plugins/username/client";
 export * from "./infer-plugin";
