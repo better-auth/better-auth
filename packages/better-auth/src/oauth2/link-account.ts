@@ -92,30 +92,35 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		} else {
-			if (c.context.options.account?.updateAccountOnSignIn !== false) {
-				const updateData = Object.fromEntries(
-					Object.entries({
-						idToken: account.idToken,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					}).filter(([_, value]) => value !== undefined),
-				);
-				if (c.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(c, {
-						...account,
-						...updateData,
-					});
-				}
+			const freshTokens =
+				c.context.options.account?.updateAccountOnSignIn !== false
+					? Object.fromEntries(
+							Object.entries({
+								idToken: account.idToken,
+								accessToken: await setTokenUtil(account.accessToken, c.context),
+								refreshToken: await setTokenUtil(
+									account.refreshToken,
+									c.context,
+								),
+								accessTokenExpiresAt: account.accessTokenExpiresAt,
+								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+								scope: account.scope,
+							}).filter(([_, value]) => value !== undefined),
+						)
+					: {};
 
-				if (Object.keys(updateData).length > 0) {
-					await c.context.internalAdapter.updateAccount(
-						hasBeenLinked.id,
-						updateData,
-					);
-				}
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, {
+					...hasBeenLinked,
+					...freshTokens,
+				});
+			}
+
+			if (Object.keys(freshTokens).length > 0) {
+				await c.context.internalAdapter.updateAccount(
+					hasBeenLinked.id,
+					freshTokens,
+				);
 			}
 
 			if (
