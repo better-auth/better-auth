@@ -70,7 +70,9 @@ export const getPasskeyActions = (
 			$store.notify("$sessionSignal");
 
 			return verified;
-		} catch {
+		} catch (err) {
+			// Error logs ran on the front-end
+			console.error(`[Better Auth] Error verifying passkey`, err);
 			return {
 				data: null,
 				error: {
