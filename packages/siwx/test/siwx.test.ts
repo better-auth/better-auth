@@ -1,9 +1,9 @@
+import { getTestInstance } from "better-auth/test";
 import bs58 from "bs58";
 import nacl from "tweetnacl";
 import { describe, expect } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { siwxClient } from "./client";
-import { siwx } from "./index";
+import { siwxClient } from "../src/client";
+import { siwx } from "../src/index";
 
 describe("siwx", async (it) => {
 	const evmAddress = "0x000000000000000000000000000000000000dEaD";

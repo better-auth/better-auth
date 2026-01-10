@@ -1,11 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
+import type { User } from "better-auth/types";
 import * as z from "zod";
-import { APIError } from "../../api";
-import { setSessionCookie } from "../../cookies";
-import type { User } from "../../types";
-import { toChecksumAddress } from "../../utils/hashing";
-import { getOrigin } from "../../utils/url";
 import type {
 	Cacao,
 	ChainType,
@@ -16,6 +14,7 @@ import type {
 	SIWXVerifyMessageArgs,
 	SignatureType,
 } from "./types";
+import { getOrigin, toChecksumAddress } from "./utils";
 
 export interface SIWXPluginOptions {
 	domain: string;

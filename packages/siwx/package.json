@@ -1,0 +1,77 @@
+{
+  "name": "@better-auth/siwx",
+  "version": "1.5.0-beta.2",
+  "description": "Sign In With X (SIWX) plugin for Better Auth - multi-chain wallet authentication",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://better-auth.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/siwx"
+  },
+  "keywords": [
+    "auth",
+    "wallet",
+    "ethereum",
+    "solana",
+    "siwe",
+    "siwx",
+    "web3"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ]
+    }
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:*",
+    "@noble/hashes": "^2.0.0",
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bs58": "^5.0.0",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "bs58": "^6.0.0",
+    "tsdown": "catalog:",
+    "tweetnacl": "^1.0.3",
+    "typescript": "catalog:",
+    "vitest": "catalog:vitest"
+  }
+}
