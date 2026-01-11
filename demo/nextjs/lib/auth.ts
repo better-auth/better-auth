@@ -336,7 +336,7 @@ export const auth = betterAuth({
 					session,
 				};
 			},
-			{},
+			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
 	],
