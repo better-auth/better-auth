@@ -8,6 +8,11 @@ export interface UserWithPhoneNumber extends User {
 	phoneNumberVerified: boolean;
 }
 
+export type PhoneNumberOTPType =
+	| "phone-number-verification"
+	| "sign-in"
+	| "forget-password";
+
 export interface PhoneNumberOptions {
 	/**
 	 * Length of the OTP code
@@ -19,10 +24,15 @@ export interface PhoneNumberOptions {
 	 *
 	 * @param phoneNumber
 	 * @param code
+	 * @param type - Type of OTP (phone-number-verification, sign-in, forget-password)
 	 * @returns
 	 */
 	sendOTP: (
-		data: { phoneNumber: string; code: string },
+		data: {
+			phoneNumber: string;
+			code: string;
+			type?: PhoneNumberOTPType | undefined;
+		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Awaitable<void>;
 	/**
@@ -53,7 +63,7 @@ export interface PhoneNumberOptions {
 	 */
 	sendPasswordResetOTP?:
 		| ((
-				data: { phoneNumber: string; code: string },
+				data: { phoneNumber: string; code: string; type?: "forget-password" },
 				ctx?: GenericEndpointContext,
 		  ) => Awaitable<void>)
 		| undefined;
@@ -127,4 +137,11 @@ export interface PhoneNumberOptions {
 	 * @default 3
 	 */
 	allowedAttempts?: number | undefined;
+	/**
+	 * A boolean value that determines whether to prevent
+	 * automatic sign-up when the user is not registered.
+	 *
+	 * @default false
+	 */
+	disableSignUp?: boolean | undefined;
 }
