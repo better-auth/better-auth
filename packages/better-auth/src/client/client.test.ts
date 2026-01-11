@@ -407,6 +407,157 @@ describe("type", () => {
 		}>();
 	});
 
+	it("should support refetch with query parameters - solid", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<ReturnType<typeof client.useSession>>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
+	it("should support refetch with query parameters - svelte", () => {
+		const client = createSvelteClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionAtom = ReturnType<typeof client.useSession>;
+		type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
+	it("should support refetch with query parameters - vue", () => {
+		const client = createVueClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionRef = ReturnType<typeof client.useSession>;
+		type UseSessionReturn = UseSessionRef["value"];
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
+	it("should support refetch with query parameters - vanilla", () => {
+		const client = createVanillaClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionAtom = typeof client.useSession;
+		type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
 	it("should infer $ERROR_CODES with multiple plugins", () => {
 		const client = createReactClient({
 			plugins: [
