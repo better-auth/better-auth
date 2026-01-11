@@ -22,3 +22,4 @@ xata
 chonkie
 dsari
 paypalv
+sequenzy
