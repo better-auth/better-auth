@@ -60,9 +60,14 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
+	 * You can also pass a function that returns the limit number
+	 *
 	 * @default 100
 	 */
-	membershipLimit?: number | undefined;
+	membershipLimit?:
+		| number
+		| ((user: User, organization: Organization) => Promise<number> | number)
+		| undefined;
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.

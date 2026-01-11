@@ -142,7 +142,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 								]
 							: []),
 					],
-					limit: data.limit || options?.membershipLimit || 100,
+					limit:
+						data.limit ||
+						(typeof options?.membershipLimit === "number"
+							? options.membershipLimit
+							: 100) ||
+						100,
 					offset: data.offset || 0,
 					sortBy: data.sortBy
 						? { field: data.sortBy, direction: data.sortOrder || "asc" }
@@ -507,7 +512,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					? await adapter.findMany<User>({
 							model: "user",
 							where: [{ field: "id", value: userIds, operator: "in" }],
-							limit: options?.membershipLimit || 100,
+							limit:
+								(typeof options?.membershipLimit === "number"
+									? options.membershipLimit
+									: 100) || 100,
 						})
 					: [];
 
