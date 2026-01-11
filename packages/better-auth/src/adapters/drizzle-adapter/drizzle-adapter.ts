@@ -326,11 +326,19 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}),
 				);
 
-				const clause: SQL<unknown>[] = [];
+				let clause: SQL<unknown>[] = [];
+				if (andGroup.length && orGroup.length) {
+					if(andClause && orClause){
+						return [and(andClause, orClause)];
+					}
+				}
 
-				if (andGroup.length) clause.push(andClause!);
-				if (orGroup.length) clause.push(orClause!);
-				return clause;
+				if (andGroup.length) return [andClause!];
+				if (orGroup.length) return [orClause!];
+
+				// if (andGroup.length) clause.push(andClause!);
+				// if (orGroup.length) clause.push(orClause!);
+				return [];
 			}
 			function checkMissingFields(
 				schema: Record<string, any>,

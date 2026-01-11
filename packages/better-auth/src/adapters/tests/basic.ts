@@ -1519,6 +1519,83 @@ export const getNormalTestSuiteTests = (
 				expect(result3[0]!.email).toBe("john@example.com");
 				expect(result3[0]!.name).toBe("john doe");
 			},
+		"findMany - should support mixed AND/OR conditions": async () => {
+			const { id: _ignored, ...template } = await generate("user");
+			const user1 = await adapter.create<User>({
+				model: "user",
+				data: {
+					...template,
+					email: "admin@company.com",
+					name: "Admin User",
+				},
+			});
+			const user2 = await adapter.create<User>({
+				model: "user",
+				data: {
+					...template,
+					email: "john@company.com",
+					name: "John Doe",
+				},
+			});
+			const user3 = await adapter.create<User>({
+				model: "user",
+				data: {
+					...template,
+					email: "admin@external.com",
+					name: "External Admin",
+				},
+			});
+
+			const user4 = await adapter.create<User>({
+				model: "user",
+				data: {
+					...template,
+					email: "jane@other.com",
+					name: "Jane Smith",
+				},
+			});
+			const user5 = await adapter.create<User>({
+				model: "user",
+				data: {
+					...template,
+					email: "other@company.com",
+					name: "Other Person",
+				},
+			});
+			// Find users where:
+			// (email contains "company.com") AND (name contains "Admin" OR name contains "John")
+			// Should match user1 (admin@company.com + Admin User) and user2 (john@company.com + John Doe)
+			// Should NOT match user3 (different domain), user4 (different domain), or user5 (domain matches but name doesn't)
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: "company.com",
+						operator: "contains",
+					},
+					{
+						field: "name",
+						value: "Admin",
+						operator: "contains",
+						connector: "OR",
+					},
+					{
+						field: "name",
+						value: "John",
+						operator: "contains",
+						connector: "OR",
+					},
+				],
+			});
+			expect(result.length).toBe(2);
+			const sortIds = (ids: string[]) =>
+				ids.toSorted((a, b) => a.localeCompare(b));
+			expect(sortIds(result.map((u) => u.id))).toEqual(
+				sortIds([user1.id, user2.id]),
+			);
+		},
+
 		"findMany - should find many models with contains operator (using symbol)":
 			async () => {
 				const users = (await insertRandom("user", 3)).map((x) => x[0]);
