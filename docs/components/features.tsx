@@ -95,7 +95,7 @@ export default function Features({ stars }: { stars: string | null }) {
 							<div className="mt-2">
 								<div className="max-w-full">
 									<div className="flex gap-3 ">
-										<p
+										<h3
 											className="max-w-lg text-xl font-normal tracking-tighter md:text-2xl"
 											dangerouslySetInnerHTML={{
 												__html: feature.title,
@@ -105,7 +105,13 @@ export default function Features({ stars }: { stars: string | null }) {
 								</div>
 								<p className="mt-2 text-sm text-left text-muted-foreground">
 									{feature.description}
-									<a className="ml-2 underline" href="/docs" target="_blank">
+									<a
+										className="ml-2 underline"
+										href="/docs"
+										target="_blank"
+										rel="noopener noreferrer"
+										aria-label={`Learn more about ${feature.label}`}
+									>
 										Learn more
 									</a>
 								</p>
@@ -125,9 +131,9 @@ export default function Features({ stars }: { stars: string | null }) {
 									Own your auth
 								</p>
 							</div>
-							<p className="max-w-md mx-auto mt-4 text-4xl font-normal tracking-tighter text-center md:text-4xl">
-								<strong>Roll your own auth with confidence in minutes!</strong>
-							</p>
+							<h2 className="max-w-md mx-auto mt-4 text-4xl font-bold tracking-tighter text-center md:text-4xl">
+								Roll your own auth with confidence in minutes!
+							</h2>
 							<div className="flex mt-[10px] z-20 justify-center items-start">
 								<TechStackDisplay
 									skills={[

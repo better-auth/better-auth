@@ -67,6 +67,7 @@ const LightThemeIcon = () => {
 			height="1em"
 			viewBox="0 0 24 24"
 			className="size-5"
+			aria-hidden="true"
 		>
 			<g
 				fill="none"
@@ -197,6 +198,7 @@ const DarkThemeIcon = () => {
 			height="1em"
 			viewBox="0 0 24 24"
 			className="size-5"
+			aria-hidden="true"
 		>
 			<path
 				fill="currentColor"

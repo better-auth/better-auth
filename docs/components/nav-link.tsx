@@ -9,9 +9,16 @@ type Props = {
 	children: React.ReactNode;
 	className?: string;
 	external?: boolean;
+	"aria-label"?: string;
 };
 
-export const NavLink = ({ href, children, className, external }: Props) => {
+export const NavLink = ({
+	href,
+	children,
+	className,
+	external,
+	"aria-label": ariaLabel,
+}: Props) => {
 	const segment = useSelectedLayoutSegment();
 	const isActive =
 		segment === href.slice(1) || (segment === null && href === "/");
@@ -26,6 +33,8 @@ export const NavLink = ({ href, children, className, external }: Props) => {
 					isActive ? "text-foreground" : "text-muted-foreground",
 				)}
 				target={external ? "_blank" : undefined}
+				rel={external ? "noopener noreferrer" : undefined}
+				aria-label={ariaLabel}
 			>
 				{children}
 			</Link>
