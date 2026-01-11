@@ -308,6 +308,7 @@ export function verifyApiKey({
 					);
 				}
 			} catch (error) {
+				ctx.context.logger.error("Failed to validate API key:", error);
 				if (error instanceof APIError) {
 					return ctx.json({
 						valid: false,
