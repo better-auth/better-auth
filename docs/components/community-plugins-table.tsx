@@ -258,7 +258,7 @@ export const communityPlugins: CommunityPlugin[] = [
 			"Automatically add users to Sequenzy mailing lists on signup for seamless email marketing integration.",
 		author: {
 			name: "Sequenzy",
-			github: "Sequenzy",
+			github: "sequenzy",
 			avatar: "https://sequenzy.com/logo.png",
 		},
 	},
