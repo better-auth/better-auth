@@ -493,31 +493,34 @@ describe("type", () => {
 			},
 		});
 
-		type UseSessionRef = ReturnType<typeof client.useSession>;
-		type UseSessionReturn = UseSessionRef["value"];
-		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
-			data: {
-				user: {
-					id: string;
-					email: string;
-					emailVerified: boolean;
-					name: string;
-					createdAt: Date;
-					updatedAt: Date;
-					image?: string | undefined | null;
-					testField4: string;
-					testField?: string | undefined | null;
-					testField2?: number | undefined | null;
-				};
-				session: Session;
-			} | null;
-			isPending: boolean;
-			isRefetching: boolean;
-			error: BetterFetchError | null;
-			refetch: (
-				queryParams?: { query?: SessionQueryParams } | undefined,
-			) => Promise<void>;
-		}>();
+		// Test the function signature directly to avoid overload resolution issues
+		expectTypeOf(client.useSession).toMatchTypeOf<
+			() => Readonly<
+				Ref<{
+					data: {
+						user: {
+							id: string;
+							email: string;
+							emailVerified: boolean;
+							name: string;
+							createdAt: Date;
+							updatedAt: Date;
+							image?: string | undefined | null;
+							testField4: string;
+							testField?: string | undefined | null;
+							testField2?: number | undefined | null;
+						};
+						session: Session;
+					} | null;
+					isPending: boolean;
+					isRefetching: boolean;
+					error: BetterFetchError | null;
+					refetch: (
+						queryParams?: { query?: SessionQueryParams } | undefined,
+					) => Promise<void>;
+				}>
+			>
+		>();
 	});
 
 	it("should support refetch with query parameters - vanilla", () => {
