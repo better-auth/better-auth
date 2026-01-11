@@ -326,7 +326,6 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}),
 				);
 
-				let _clause: SQL<unknown>[] = [];
 				if (andGroup.length && orGroup.length) {
 					if (andClause && orClause) {
 						return [and(andClause, orClause)];
