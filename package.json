@@ -25,7 +25,7 @@
     "release:canary": "turbo build --filter=./packages/* && bumpp && pnpm -r publish --access public --tag canary --no-git-checks",
     "bump": "bumpp",
     "test": "turbo test --continue --filter=./packages/* --filter=./test",
-    "coverage": "turbo coverage --filter=./packages/* --filter=./test -- --coverage.reporter=json --coverage.provider=istanbul",
+    "coverage": "turbo coverage --filter=./packages/* --filter=./test",
     "postcoverage": "pnpm coverage:collect && pnpm coverage:merge && pnpm coverage:report",
     "coverage:merge": "nyc merge coverage/raw coverage/merged/merged-coverage.json",
     "coverage:collect": "rm -rf coverage && mkdir -p coverage/raw && for f in $(find packages test -name coverage-final.json); do pkg=$(basename \"$(dirname \"$(dirname \"$f\")\")\"); cp \"$f\" \"./coverage/raw/$pkg-coverage-final.json\"; done",
