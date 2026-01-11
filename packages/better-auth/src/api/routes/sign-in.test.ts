@@ -112,7 +112,11 @@ describe("sign-in", async (it) => {
 
 describe("url checks", async (it) => {
 	it("should reject untrusted origins", async () => {
-		const { client } = await getTestInstance();
+		const { client } = await getTestInstance({
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
 		const res = await client.signIn.social({
 			provider: "google",
 			callbackURL: "http://malicious.com",
@@ -143,6 +147,9 @@ describe("sign-in CSRF protection", async (it) => {
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
 		},
 	});
 
@@ -249,6 +256,9 @@ describe("sign-in with form data", async (it) => {
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
 		},
 	});
 
