@@ -358,7 +358,7 @@ export const auth = betterAuth({
 		storeSessionInDatabase: true, // Store session in database when secondary storage is provided (default: `false`)
 		preserveSessionInDatabase: false, // Preserve session records in database when deleted from secondary storage (default: `false`)
 		cookieCache: {
-			enabled: true, // Enable caching session in cookie (default: `false`)	
+			enabled: true, // Enable caching session in cookie (default: `false`)
 			maxAge: 300 // 5 minutes
 		}
 	},
@@ -516,13 +516,15 @@ export const auth = betterAuth({
 		database: {
 			// Use your own custom ID generator,
 			// disable generating IDS so your database will generate them,
-			// or use "serial" to use your database's auto-incrementing ID, or "uuid" to use a random UUID.
+			// or use "serial" to use your database's auto-incrementing ID,
+			// or "uuid" to use a random UUID.
+			// or "uuidv7" to use a time-ordered UUID (requires PostgreSQL 18+ for database generation).
 			generateId: (((options: {
 				model: LiteralUnion<Models, string>;
 				size?: number;
 			}) => {
 				return "my-super-unique-id";
-			})) | false | "serial" | "uuid",
+			})) | false | "serial" | "uuid" | "uuidv7",
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
 		}

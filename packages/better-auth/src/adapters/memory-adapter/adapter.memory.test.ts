@@ -7,6 +7,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
+	uuidv7TestSuite,
 } from "../tests";
 import { memoryAdapter } from "./memory-adapter";
 
@@ -32,6 +33,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		uuidv7TestSuite(),
 	],
 	async onFinish() {},
 });

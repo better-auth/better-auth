@@ -10,6 +10,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
+	uuidv7TestSuite,
 } from "../../tests";
 import { kyselyAdapter } from "../kysely-adapter";
 import {
@@ -55,6 +56,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite(),
+		uuidv7TestSuite(),
 		schemaRefTestSuite(),
 		schemaRefJoinTestSuite(),
 	],
