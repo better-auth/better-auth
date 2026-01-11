@@ -171,7 +171,8 @@ const authOptions = {
 		}),
 		multiSession(),
 		oAuthProxy({
-			productionURL: process.env.BETTER_AUTH_URL,
+			productionURL:
+				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 		}),
 		nextCookies(),
 		oneTap(),

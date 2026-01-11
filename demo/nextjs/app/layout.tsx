@@ -33,7 +33,7 @@ export default function RootLayout({
 						<Header />
 
 						{/* Background Ripple Effect */}
-						<div className="absolute inset-0 z-0 pointer-events-none">
+						<div className="absolute inset-0 z-0">
 							<BackgroundRippleEffect />
 						</div>
 

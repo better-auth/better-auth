@@ -16,18 +16,18 @@ export const BackgroundRippleEffect = ({
     col: number;
   } | null>(null);
   const [rippleKey, setRippleKey] = useState(0);
-  const ref = useRef<any>(null);
+  const ref = useRef<HTMLDivElement | null>(null);
 
   return (
     <div
       ref={ref}
       className={cn(
-        "absolute inset-0 h-full w-full",
+        "absolute inset-0 h-full w-full pointer-events-none",
         "[--cell-border-color:hsl(0_0%_85%)] [--cell-fill-color:hsl(0_0%_97%)] [--cell-shadow-color:hsl(0_0%_80%)]",
         "dark:[--cell-border-color:hsl(20_14.3%_15%)] dark:[--cell-fill-color:hsl(20_14.3%_7%)] dark:[--cell-shadow-color:hsl(20_14.3%_12%)]",
       )}
     >
-      <div className="relative h-auto w-auto overflow-hidden">
+      <div className="relative h-auto w-auto overflow-hidden pointer-events-auto">
         <div className="pointer-events-none absolute inset-0 z-[2] h-full w-full overflow-hidden" />
         <DivGrid
           key={`base-${rippleKey}`}

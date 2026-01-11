@@ -19,7 +19,7 @@ export function ThemeToggle() {
         width="1em"
         height="1em"
         viewBox="0 0 24 24"
-        className="hidden dark:hidden [html.light_&]:block"
+        className="dark:hidden"
         suppressHydrationWarning
       >
         <g
@@ -51,7 +51,7 @@ export function ThemeToggle() {
       </svg>
       {/* Moon icon - visible in dark mode */}
       <svg
-        className="hidden [html.dark_&]:block h-6 w-5"
+        className="hidden dark:block h-6 w-5"
         viewBox="0 0 32 32"
         fill="none"
         xmlns="http://www.w3.org/2000/svg"

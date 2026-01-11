@@ -55,6 +55,7 @@ export default function SignIn() {
 									callbackURL: "/dashboard",
 								});
 							}}
+							aria-label="Sign in with Google"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -93,6 +94,7 @@ export default function SignIn() {
 									callbackURL: "/dashboard",
 								});
 							}}
+							aria-label="Sign in with GitHub"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -119,6 +121,7 @@ export default function SignIn() {
 									callbackURL: "/dashboard",
 								});
 							}}
+							aria-label="Sign in with Microsoft"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
@@ -145,6 +148,7 @@ export default function SignIn() {
 									callbackURL: "/dashboard",
 								});
 							}}
+							aria-label="Sign in with Vercel"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"

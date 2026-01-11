@@ -244,7 +244,7 @@ function ChangePlanDialog(props: {
 
 					<div className="space-y-3">
 						<p className="text-xs text-zinc-600 dark:text-zinc-500 text-center">
-							note: all upgrades takes effect immediately and you'll be charged
+							note: all upgrades take effect immediately and you'll be charged
 							the new amount on your next billing cycle.
 						</p>
 					</div>
