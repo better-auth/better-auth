@@ -118,7 +118,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "devDependencies": {
     "@better-auth/utils": "catalog:",

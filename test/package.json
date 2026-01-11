@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack ."
   },
