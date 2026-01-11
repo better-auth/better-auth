@@ -119,3 +119,61 @@ fastify.register(fastifyCors, {
 ```
 
 <Callout type="warning"> Always restrict CORS origins in production environments. Use environment variables for dynamic configuration. </Callout>
+
+### Getting the User Session
+
+To retrieve the user's session in your Fastify routes, use the `auth.api.getSession` method. You need to convert Fastify's request headers to the standard `Headers` object format:
+
+```ts title="server.ts"
+import { auth } from "./auth"; // Your Better Auth instance
+
+fastify.get("/api/me", async (request, reply) => {
+  // Convert Fastify headers to standard Headers object
+  const headers = new Headers();
+  Object.entries(request.headers).forEach(([key, value]) => {
+    if (value) headers.append(key, value.toString());
+  });
+
+  const session = await auth.api.getSession({
+    headers,
+  });
+
+  if (!session) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+
+  return reply.send(session);
+});
+```
+
+You can also create a reusable helper function to simplify header conversion:
+
+```ts title="utils.ts"
+import type { IncomingHttpHeaders } from "http";
+
+export function toHeaders(headers: IncomingHttpHeaders): Headers {
+  const result = new Headers();
+  Object.entries(headers).forEach(([key, value]) => {
+    if (value) result.append(key, value.toString());
+  });
+  return result;
+}
+```
+
+Then use it in your routes:
+
+```ts title="server.ts"
+import { toHeaders } from "./utils";
+
+fastify.get("/api/me", async (request, reply) => {
+  const session = await auth.api.getSession({
+    headers: toHeaders(request.headers),
+  });
+
+  if (!session) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+
+  return reply.send(session);
+});
+```
