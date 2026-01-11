@@ -95,6 +95,7 @@ export default function AccountSwitcher({
 												queryKey: userKeys.all(),
 											});
 											setOpen(false);
+											router.refresh();
 										}}
 										className="text-sm"
 									>
