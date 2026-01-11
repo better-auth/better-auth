@@ -2,6 +2,7 @@ import "./globals.css";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
 import type { Metadata } from "next";
+import { BackgroundRippleEffect } from "@/components/background-ripple-effect";
 import Header from "@/components/header";
 import Providers from "@/components/providers";
 import { createMetadata } from "@/lib/metadata";
@@ -31,8 +32,10 @@ export default function RootLayout({
 						{/* Site Header */}
 						<Header />
 
-						{/* Background Grid */}
-						<div className="absolute inset-0 z-0 bg-grid-small text-black/2 dark:text-white/4 pointer-events-none" />
+						{/* Background Ripple Effect */}
+						<div className="absolute inset-0 z-0">
+							<BackgroundRippleEffect />
+						</div>
 
 						{/* Content */}
 						<div className="relative z-10 max-w-4xl w-full p-6 mx-auto">

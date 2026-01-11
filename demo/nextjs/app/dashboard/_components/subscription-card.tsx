@@ -47,15 +47,20 @@ const SubscriptionCard = () => {
 	}
 
 	return (
-		<Card>
-			<CardHeader>
-				<CardTitle>Subscription</CardTitle>
+		<Card className="border-zinc-200 dark:border-zinc-800">
+			<CardHeader className="pb-3">
+				<CardTitle className="text-base font-medium text-zinc-900 dark:text-zinc-50">
+					Subscription
+				</CardTitle>
 			</CardHeader>
 			<CardContent className="flex flex-col gap-4">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-2">
 						{!!currentSubscription && (
-							<Badge className="w-min p-px rounded-full" variant="outline">
+							<Badge
+								className="w-min p-px rounded-full bg-zinc-100 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-700 dark:text-zinc-400"
+								variant="outline"
+							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="1.2em"
@@ -81,25 +86,25 @@ const SubscriptionCard = () => {
 				</div>
 
 				{currentSubscription && (
-					<div className="space-y-2 text-sm">
-						<div className="flex justify-between">
-							<span className="text-muted-foreground">Status:</span>
-							<span className="font-medium capitalize">
+					<div className="space-y-2 text-sm bg-zinc-50 dark:bg-zinc-950/50 rounded-lg p-3 border border-zinc-200 dark:border-zinc-800">
+						<div className="flex justify-between items-center">
+							<span className="text-zinc-600 dark:text-zinc-500">Status:</span>
+							<span className="font-medium text-zinc-900 dark:text-zinc-100 capitalize">
 								{currentSubscription.cancelAtPeriodEnd
 									? "Canceling"
 									: currentSubscription.status}
 							</span>
 						</div>
 						{currentSubscription.periodEnd && (
-							<div className="flex justify-between">
-								<span className="text-muted-foreground">
+							<div className="flex justify-between items-center">
+								<span className="text-zinc-600 dark:text-zinc-500">
 									{currentSubscription.cancelAtPeriodEnd
 										? "Cancels on:"
 										: currentSubscription.status === "trialing"
 											? "Trial ends:"
 											: "Renews:"}
 								</span>
-								<span className="font-medium">
+								<span className="font-medium text-zinc-900 dark:text-zinc-100">
 									{new Date(currentSubscription.periodEnd).toLocaleDateString()}
 								</span>
 							</div>
@@ -127,7 +132,11 @@ function ChangePlanDialog(props: {
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
-				<Button variant={"default"} size="sm" className="gap-2">
+				<Button
+					variant={"outline"}
+					size="sm"
+					className="gap-2 bg-zinc-100 dark:bg-zinc-900 border-zinc-300 dark:border-zinc-800 text-zinc-900 dark:text-zinc-100 hover:bg-zinc-200 dark:hover:bg-zinc-950"
+				>
 					{props.currentPlan ? (
 						<RefreshCcw size={14} strokeWidth={2} />
 					) : (
@@ -139,7 +148,7 @@ function ChangePlanDialog(props: {
 			<DialogContent>
 				<div className="mb-2 flex flex-col gap-2">
 					<div
-						className="flex size-11 shrink-0 items-center justify-center rounded-full border border-border"
+						className="flex size-11 shrink-0 items-center justify-center rounded-full border border-zinc-300 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-900 text-zinc-700 dark:text-zinc-400"
 						aria-hidden="true"
 					>
 						{props.currentPlan ? (
@@ -165,7 +174,7 @@ function ChangePlanDialog(props: {
 						value={selectedPlan}
 						onValueChange={(value) => setSelectedPlan(value)}
 					>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-4 py-3 has-data-[state=checked]:border-zinc-500 dark:has-data-[state=checked]:border-zinc-600 has-data-[state=checked]:bg-zinc-100 dark:has-data-[state=checked]:bg-zinc-900">
 							<RadioGroupItem
 								value="plus"
 								id={`${id}-1`}
@@ -173,16 +182,21 @@ function ChangePlanDialog(props: {
 								className="order-1 after:absolute after:inset-0"
 							/>
 							<div className="grid grow gap-1">
-								<Label htmlFor={`${id}-1`}>Plus</Label>
+								<Label
+									htmlFor={`${id}-1`}
+									className="text-zinc-900 dark:text-zinc-100"
+								>
+									Plus
+								</Label>
 								<p
 									id={`${id}-1-description`}
-									className="text-xs text-muted-foreground"
+									className="text-xs text-zinc-600 dark:text-zinc-500"
 								>
 									$20/month
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-4 py-3 has-data-[state=checked]:border-zinc-500 dark:has-data-[state=checked]:border-zinc-600 has-data-[state=checked]:bg-zinc-100 dark:has-data-[state=checked]:bg-zinc-900">
 							<RadioGroupItem
 								value="pro"
 								id={`${id}-2`}
@@ -190,16 +204,21 @@ function ChangePlanDialog(props: {
 								className="order-1 after:absolute after:inset-0"
 							/>
 							<div className="grid grow gap-1">
-								<Label htmlFor={`${id}-2`}>Pro</Label>
+								<Label
+									htmlFor={`${id}-2`}
+									className="text-zinc-900 dark:text-zinc-100"
+								>
+									Pro
+								</Label>
 								<p
 									id={`${id}-2-description`}
-									className="text-xs text-muted-foreground"
+									className="text-xs text-zinc-600 dark:text-zinc-500"
 								>
 									$200/month
 								</p>
 							</div>
 						</div>
-						<div className="relative flex w-full items-center gap-2 rounded-lg border border-input px-4 py-3 shadow-sm shadow-black/5 has-data-[state=checked]:border-ring has-data-[state=checked]:bg-accent">
+						<div className="relative flex w-full items-center gap-2 rounded-lg border border-zinc-300 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50 px-4 py-3 has-data-[state=checked]:border-zinc-500 dark:has-data-[state=checked]:border-zinc-600 has-data-[state=checked]:bg-zinc-100 dark:has-data-[state=checked]:bg-zinc-900">
 							<RadioGroupItem
 								value="enterprise"
 								id={`${id}-3`}
@@ -207,10 +226,15 @@ function ChangePlanDialog(props: {
 								className="order-1 after:absolute after:inset-0"
 							/>
 							<div className="grid grow gap-1">
-								<Label htmlFor={`${id}-3`}>Enterprise</Label>
+								<Label
+									htmlFor={`${id}-3`}
+									className="text-zinc-900 dark:text-zinc-100"
+								>
+									Enterprise
+								</Label>
 								<p
 									id={`${id}-3-description`}
-									className="text-xs text-muted-foreground"
+									className="text-xs text-zinc-600 dark:text-zinc-500"
 								>
 									Contact our sales team
 								</p>
@@ -219,8 +243,8 @@ function ChangePlanDialog(props: {
 					</RadioGroup>
 
 					<div className="space-y-3">
-						<p className="text-xs text-white/70 text-center">
-							note: all upgrades takes effect immediately and you'll be charged
+						<p className="text-xs text-zinc-600 dark:text-zinc-500 text-center">
+							note: all upgrades take effect immediately and you'll be charged
 							the new amount on your next billing cycle.
 						</p>
 					</div>
@@ -238,6 +262,10 @@ function ChangePlanDialog(props: {
 							}
 							onClick={() => {
 								if (selectedPlan === "enterprise") {
+									window.open(
+										"https://www.better-auth.com/enterprise",
+										"_blank",
+									);
 									return;
 								}
 								// Resume if canceling and selecting same plan
