@@ -341,7 +341,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						const currentCount =
 							multiSessionKeys.length -
 							tokensToDelete.length +
-							(cookieString.includes("session_token") ? 1 : 0);
+							(cookieString.includes(sessionCookieConfig.name) ? 1 : 0);
 
 						if (currentCount > opts.maximumSessions) return;
 
