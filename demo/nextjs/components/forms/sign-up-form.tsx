@@ -154,7 +154,9 @@ export function SignUpForm({
 									aria-invalid={fieldState.invalid}
 									autoComplete="new-password"
 								/>
-								{fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+								{fieldState.invalid && (
+									<FieldError errors={[fieldState.error]} />
+								)}
 							</Field>
 						)}
 					/>
@@ -174,7 +176,9 @@ export function SignUpForm({
 									aria-invalid={fieldState.invalid}
 									autoComplete="new-password"
 								/>
-								{fieldState.invalid && <FieldError errors={[fieldState.error]} />}
+								{fieldState.invalid && (
+									<FieldError errors={[fieldState.error]} />
+								)}
 							</Field>
 						)}
 					/>

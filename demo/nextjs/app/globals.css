@@ -148,7 +148,8 @@
 		}
 	}
 
-	--animate-cell-ripple: cell-ripple var(--duration, 400ms) ease-out var(--delay, 0ms) 1;
+	--animate-cell-ripple: cell-ripple var(--duration, 400ms) ease-out
+		var(--delay, 0ms) 1;
 }
 
 @layer base {

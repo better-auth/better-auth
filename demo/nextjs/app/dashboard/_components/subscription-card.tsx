@@ -262,7 +262,10 @@ function ChangePlanDialog(props: {
 							}
 							onClick={() => {
 								if (selectedPlan === "enterprise") {
-									window.open("https://www.better-auth.com/enterprise", "_blank");
+									window.open(
+										"https://www.better-auth.com/enterprise",
+										"_blank",
+									);
 									return;
 								}
 								// Resume if canceling and selecting same plan
