@@ -37,15 +37,25 @@ describe("cookies", async () => {
 	});
 
 	it("should set multiple cookies", async () => {
-		await client.signIn.social(
+		const { client, testUser } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		await client.signIn.email(
 			{
-				provider: "github",
-				callbackURL: "https://example.com",
+				email: testUser.email,
+				password: testUser.password,
 			},
 			{
 				onSuccess(context) {
 					const cookies = context.response.headers.get("Set-Cookie");
-					expect(cookies?.split(",").length).toBeGreaterThan(1);
+					expect(cookies).toBeDefined();
+					const parsed = parseSetCookieHeader(cookies!);
+					// With cookie cache enabled, we should have session_token and session_data cookies
+					expect(parsed.size).toBeGreaterThan(1);
 				},
 			},
 		);

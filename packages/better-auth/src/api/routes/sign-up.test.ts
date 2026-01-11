@@ -172,6 +172,9 @@ describe("sign-up CSRF protection", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 			},
+			advanced: {
+				disableCSRFCheck: false,
+			},
 		},
 		{
 			disableTestUser: true,
@@ -286,6 +289,9 @@ describe("sign-up with form data", async (it) => {
 			trustedOrigins: ["http://localhost:3000"],
 			emailAndPassword: {
 				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
 			},
 		},
 		{
