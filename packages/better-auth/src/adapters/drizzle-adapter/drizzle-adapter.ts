@@ -327,16 +327,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				);
 
 				if (andGroup.length && orGroup.length) {
-					if (andClause && orClause) {
-						return [and(andClause, orClause)];
-					}
+					return [and(andClause, orClause)];
 				}
 
 				if (andGroup.length) return [andClause!];
 				if (orGroup.length) return [orClause!];
 
-				// if (andGroup.length) clause.push(andClause!);
-				// if (orGroup.length) clause.push(orClause!);
 				return [];
 			}
 			function checkMissingFields(
