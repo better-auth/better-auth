@@ -88,13 +88,18 @@ export default function AccountSwitcher({
 									<CommandItem
 										key={i}
 										onSelect={async () => {
-											await authClient.multiSession.setActive({
-												sessionToken: u.session.token,
-											});
-											queryClient.invalidateQueries({
-												queryKey: userKeys.all(),
-											});
-											setOpen(false);
+											try {
+												await authClient.multiSession.setActive({
+													sessionToken: u.session.token,
+												});
+												await queryClient.invalidateQueries({
+													queryKey: userKeys.all(),
+												});
+												setOpen(false);
+												router.refresh();
+											} catch (error) {
+												console.error("Failed to switch account:", error);
+											}
 										}}
 										className="text-sm"
 									>

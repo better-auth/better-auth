@@ -251,6 +251,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/neiii.png",
 		},
 	},
+	{
+		name: "better-auth-sequenzy",
+		url: "https://www.npmjs.com/package/better-auth-sequenzy",
+		description:
+			"Automatically add users to Sequenzy mailing lists on signup for seamless email marketing integration.",
+		author: {
+			name: "Sequenzy",
+			github: "sequenzy",
+			avatar: "https://sequenzy.com/logo.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
