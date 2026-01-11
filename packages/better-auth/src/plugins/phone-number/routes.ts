@@ -32,9 +32,7 @@ async function verifyOTPValue(
 ): Promise<{
 	valid: boolean;
 	verificationValue: Awaited<
-		ReturnType<
-			typeof ctx.context.internalAdapter.findVerificationValue
-		>
+		ReturnType<typeof ctx.context.internalAdapter.findVerificationValue>
 	>;
 	error?: APIError;
 }> {
@@ -45,7 +43,10 @@ async function verifyOTPValue(
 		return {
 			valid: false,
 			verificationValue: null,
-			error: APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND),
+			error: APIError.from(
+				"BAD_REQUEST",
+				PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
+			),
 		};
 	}
 
@@ -70,7 +71,10 @@ async function verifyOTPValue(
 		return {
 			valid: false,
 			verificationValue,
-			error: APIError.from("FORBIDDEN", PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS),
+			error: APIError.from(
+				"FORBIDDEN",
+				PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
+			),
 		};
 	}
 
@@ -88,7 +92,6 @@ async function verifyOTPValue(
 			ctx,
 		);
 
-		
 		if (!isValid) {
 			await ctx.context.internalAdapter.updateVerificationValue(
 				verificationValue.id,
@@ -230,7 +233,6 @@ export const sendPhoneNumberVerificationOTP = (
 					});
 				});
 
-
 			if (ctx.body.type === "sign-in" && opts.disableSignUp) {
 				const user = await ctx.context.adapter.findOne<UserWithPhoneNumber>({
 					model: "user",
@@ -251,10 +253,7 @@ export const sendPhoneNumberVerificationOTP = (
 				}
 			}
 
-			if (
-				ctx.body.type === "forget-password" &&
-				opts.sendPasswordResetOTP
-			) {
+			if (ctx.body.type === "forget-password" && opts.sendPasswordResetOTP) {
 				await ctx.context.runInBackgroundOrAwait(
 					opts.sendPasswordResetOTP(
 						{
@@ -353,7 +352,10 @@ export const checkPhoneNumberVerificationOTP = (
 				if (result.error) {
 					throw result.error;
 				}
-				throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+				);
 			}
 
 			return ctx.json({
@@ -431,10 +433,12 @@ export const signInPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				if (result.error) {
 					throw result.error;
 				}
-				throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+				);
 			}
 
-			
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				result.verificationValue!.id,
 			);
@@ -567,7 +571,8 @@ export const verifyPhoneNumberNew = (opts: RequiredPhoneNumberOptions) =>
 			metadata: {
 				openapi: {
 					summary: "Verify phone number",
-					description: "Use this endpoint to verify phone number (does not create session by default)",
+					description:
+						"Use this endpoint to verify phone number (does not create session by default)",
 					responses: {
 						"200": {
 							description: "Phone number verified successfully",
@@ -669,7 +674,10 @@ export const verifyPhoneNumberNew = (opts: RequiredPhoneNumberOptions) =>
 				if (result.error) {
 					throw result.error;
 				}
-				throw APIError.from("BAD_REQUEST", PHONE_NUMBER_ERROR_CODES.INVALID_OTP);
+				throw APIError.from(
+					"BAD_REQUEST",
+					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+				);
 			}
 
 			await ctx.context.internalAdapter.deleteVerificationValue(
@@ -1047,7 +1055,8 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			metadata: {
 				openapi: {
 					summary: "Send OTP to phone number",
-					description: "Use this endpoint to send OTP to phone number (deprecated: use sendVerificationOTP instead)",
+					description:
+						"Use this endpoint to send OTP to phone number (deprecated: use sendVerificationOTP instead)",
 					deprecated: true,
 					responses: {
 						200: {
@@ -1121,39 +1130,45 @@ const verifyPhoneNumberBodySchema = z
 		/**
 		 * OTP code (deprecated: use `otp` instead)
 		 */
-		code: z.string().meta({
-			description: 'OTP code. Eg: "123456"',
-		}).optional(),
+		code: z
+			.string()
+			.meta({
+				description: 'OTP code. Eg: "123456"',
+			})
+			.optional(),
 		/**
 		 * OTP code
 		 */
-		otp: z.string().meta({
-			description: 'OTP code. Eg: "123456"',
-		}).optional(),
-	/**
-	 * Set to false to create a session after verification.
-	 * By default, no session is created (matches documentation).
-	 * @default undefined (no session)
-	 */
-	disableSession: z
-		.boolean()
-		.meta({
-			description:
-				"Set to false to create a session after verification. By default, no session is created. Eg: false",
-		})
-		.optional(),
-	/**
-	 * This checks if there is a session already
-	 * and updates the phone number with the provided
-	 * phone number
-	 */
-	updatePhoneNumber: z
-		.boolean()
-		.meta({
-			description:
-				"Check if there is a session and update the phone number. Eg: true",
-		})
-		.optional(),
+		otp: z
+			.string()
+			.meta({
+				description: 'OTP code. Eg: "123456"',
+			})
+			.optional(),
+		/**
+		 * Set to false to create a session after verification.
+		 * By default, no session is created (matches documentation).
+		 * @default undefined (no session)
+		 */
+		disableSession: z
+			.boolean()
+			.meta({
+				description:
+					"Set to false to create a session after verification. By default, no session is created. Eg: false",
+			})
+			.optional(),
+		/**
+		 * This checks if there is a session already
+		 * and updates the phone number with the provided
+		 * phone number
+		 */
+		updatePhoneNumber: z
+			.boolean()
+			.meta({
+				description:
+					"Check if there is a session and update the phone number. Eg: true",
+			})
+			.optional(),
 	})
 	.refine((data) => data.code || data.otp, {
 		message: "Either 'code' or 'otp' must be provided",
@@ -1185,7 +1200,8 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			metadata: {
 				openapi: {
 					summary: "Verify phone number",
-					description: "Use this endpoint to verify phone number (deprecated: use verifyPhoneNumberNew or signInPhoneNumberOTP instead)",
+					description:
+						"Use this endpoint to verify phone number (deprecated: use verifyPhoneNumberNew or signInPhoneNumberOTP instead)",
 					deprecated: true,
 					responses: {
 						"200": {
@@ -1627,12 +1643,18 @@ const resetPasswordPhoneNumberBodySchema = z
 			description:
 				'The phone number to the account which intends to reset the password for. Eg: "+1234567890"',
 		}),
-		password: z.string().meta({
-			description: `The new password. Eg: "new-and-secure-password"`,
-		}).optional(),
-		newPassword: z.string().meta({
-			description: `The new password (deprecated: use 'password' instead). Eg: "new-and-secure-password"`,
-		}).optional(),
+		password: z
+			.string()
+			.meta({
+				description: `The new password. Eg: "new-and-secure-password"`,
+			})
+			.optional(),
+		newPassword: z
+			.string()
+			.meta({
+				description: `The new password (deprecated: use 'password' instead). Eg: "new-and-secure-password"`,
+			})
+			.optional(),
 	})
 	.refine((data) => data.password || data.newPassword, {
 		message: "Either 'password' or 'newPassword' must be provided",
