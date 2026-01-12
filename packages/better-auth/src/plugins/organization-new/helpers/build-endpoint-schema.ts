@@ -141,7 +141,9 @@ export const buildEndpointSchema = <
 	// Process additional fields from Better Auth schema
 	const { model: schemaName, schema: schemaConfig } =
 		additionalFieldsOptions || {};
-	let additionalFields = schemaConfig?.[schemaName]?.additionalFields || {};
+	let additionalFields = {
+		...(schemaConfig?.[schemaName]?.additionalFields || {}),
+	};
 
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
