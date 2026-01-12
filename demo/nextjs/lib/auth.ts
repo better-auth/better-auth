@@ -1,4 +1,4 @@
-import { dash } from "@better-auth/dash";
+import { dash, sendEmail } from "@better-auth/dash";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
@@ -62,13 +62,19 @@ const authOptions = {
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			const res = await resend.emails.send({
-				from,
-				to: to || user.email,
+			await sendEmail({
+				to: user.email,
 				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
+				template: "verify-email",
+				variables: {
+					verificationUrl: url,
+					userEmail: user.email,
+					userName: user.name,
+					appName: "Better Auth Demo",
+					expirationMinutes: "10",
+					verificationCode: "",
+				},
 			});
-			console.log(res, user.email);
 		},
 	},
 	account: {
@@ -79,14 +85,15 @@ const authOptions = {
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword({ user, url }) {
-			await resend.emails.send({
-				from,
+			await sendEmail({
 				to: user.email,
 				subject: "Reset your password",
-				react: reactResetPasswordEmail({
-					username: user.email,
+				template: "reset-password",
+				variables: {
+					userEmail: user.email,
 					resetLink: url,
-				}),
+					userName: user.name,
+				},
 			});
 		},
 	},
@@ -131,34 +138,36 @@ const authOptions = {
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				await resend.emails.send({
-					from,
+				sendEmail({
 					to: data.email,
 					subject: "You've been invited to join an organization",
-					react: reactInvitationEmail({
-						username: data.email,
-						invitedByUsername: data.inviter.user.name,
-						invitedByEmail: data.inviter.user.email,
-						teamName: data.organization.name,
+					template: "invitation",
+					variables: {
+						inviterEmail: data.inviter.user.email,
+						inviterName: data.inviter.user.name,
+						organizationName: data.organization.name,
+						role: data.role,
 						inviteLink:
 							process.env.NODE_ENV === "development"
 								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `${
-										process.env.BETTER_AUTH_URL ||
-										"https://demo.better-auth.com"
-									}/accept-invitation/${data.id}`,
-					}),
+								: `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/accept-invitation/${data.id}`,
+					},
 				});
 			},
 		}),
 		twoFactor({
 			otpOptions: {
 				async sendOTP({ user, otp }) {
-					await resend.emails.send({
-						from,
+					await sendEmail({
 						to: user.email,
-						subject: "Your OTP",
-						html: `Your OTP is ${otp}`,
+						subject: "Your two-factor authentication code",
+						template: "two-factor",
+						variables: {
+							otpCode: otp,
+							userEmail: user.email,
+							userName: user.name,
+							appName: "Better Auth Demo",
+						},
 					});
 				},
 			},
