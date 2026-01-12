@@ -36,6 +36,27 @@ async function mcpAction(options: MCPOptions) {
 	}
 }
 
+export async function installMcpServers(
+	client: "cursor" | "claude-code" | "open-code" | "manual" | string,
+	installLocal: boolean = true,
+	installRemote: boolean = true
+) {
+	switch (client) {
+		case "cursor":
+			await handleCursorAction(installLocal, installRemote);
+			break;
+		case "claude-code":
+			handleClaudeCodeAction(installLocal, installRemote);
+			break;
+		case "open-code":
+			handleOpenCodeAction(installLocal, installRemote);
+			break;
+		case "manual":
+			handleManualAction(installLocal, installRemote);
+			break;
+	}
+}
+
 async function handleCursorAction(installLocal: boolean, installRemote: boolean) {
 	console.log(chalk.bold.blue("🚀 Adding Better Auth MCP to Cursor..."));
 
