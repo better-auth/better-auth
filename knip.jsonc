@@ -49,7 +49,10 @@
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!"
+				"nanostores!",
+
+				// implicit test dependencies
+				"vitest"
 			]
 		},
 		"packages/cli": {
