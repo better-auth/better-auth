@@ -1,7 +1,8 @@
-import { APIError } from "better-call";
+import type { APIError } from "@better-auth/core/error";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { apiKey, ERROR_CODES } from ".";
+import { isAPIError } from "../../utils/is-api-error";
+import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 
@@ -38,7 +39,9 @@ describe("api-key", async () => {
 		expect(apiKeyFail.error).toBeDefined();
 		expect(apiKeyFail.error?.status).toEqual(401);
 		expect(apiKeyFail.error?.statusText).toEqual("UNAUTHORIZED");
-		expect(apiKeyFail.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(apiKeyFail.error?.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	let firstApiKey: ApiKey;
@@ -95,7 +98,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should fail to create api keys from the client if user id is provided", async () => {
@@ -198,7 +203,7 @@ describe("api-key", async () => {
 			err = error;
 		}
 		expect(err).toBeDefined();
-		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED.message);
 	});
 
 	it("should respect rateLimit configuration from plugin options", async () => {
@@ -266,7 +271,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with a name that's longer than the allowed maximum", async () => {
@@ -288,7 +295,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with the given prefix", async () => {
@@ -325,7 +334,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -349,7 +358,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -465,7 +474,7 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -490,7 +499,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -515,7 +524,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -530,7 +539,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -542,7 +553,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
@@ -566,7 +579,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -591,7 +604,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -710,7 +723,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -796,7 +809,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.METADATA_DISABLED.message,
+		);
 	});
 
 	it("should have the first 6 characters of the key as the start property", async () => {
@@ -879,7 +894,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -891,7 +908,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should successfully apply custom rate-limit options on the newly created API key", async () => {
@@ -929,7 +948,7 @@ describe("api-key", async () => {
 			},
 		});
 		expect(apiKey.valid).toBe(false);
-		expect(apiKey.error?.code).toBe("KEY_NOT_FOUND");
+		expect(apiKey.error?.code).toBe("INVALID_API_KEY");
 	});
 
 	let rateLimitedApiKey: ApiKey;
@@ -1098,7 +1117,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should update API key name with headers", async () => {
@@ -1126,10 +1147,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1146,10 +1169,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1165,10 +1190,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.NO_VALUES_TO_UPDATE.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1232,7 +1259,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -1279,7 +1306,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -1326,7 +1353,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -1365,7 +1392,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -1390,7 +1417,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -1446,7 +1473,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -1850,7 +1877,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.KEY_NOT_FOUND.message,
+		);
 	});
 
 	it("should create an API key with permissions", async () => {
@@ -3166,6 +3195,259 @@ describe("api-key", async () => {
 			expect(deleteResult?.success).toBe(true);
 			expect(customDeleteCalled).toBe(true);
 			expect(customStore.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+		});
+	});
+
+	// =========================================================================
+	// LEGACY DOUBLE-STRINGIFIED METADATA MIGRATION
+	// =========================================================================
+
+	describe("legacy double-stringified metadata migration", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("should migrate double-stringified metadata on getApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					metadata: { organizationId: "test-org" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter's transform.input will stringify it again,
+			// resulting in double-stringified data in the database (simulating legacy bug)
+			const legacyMetadata = JSON.stringify({ organizationId: "legacy-org" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Verify it's double-stringified in DB (adapter added extra layer of stringification)
+			const rawKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: string } | null;
+			expect(typeof rawKey?.metadata).toBe("string");
+
+			// Read via API - should return properly parsed object
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result).not.toBeNull();
+			expect(result.metadata).toEqual({ organizationId: "legacy-org" });
+			expect(typeof result.metadata).toBe("object");
+
+			// Verify the database was migrated (no longer double-stringified)
+			// After migration, the adapter's transform.output returns the parsed object
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+
+			// After migration, metadata should be a properly formatted object
+			expect(migratedKey?.metadata).toEqual({ organizationId: "legacy-org" });
+		});
+
+		it("should migrate double-stringified metadata on listApiKeys", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create first key with double-stringified metadata
+			const createdKey1 = await auth.api.createApiKey({
+				body: {
+					name: "key-1",
+					metadata: { plan: "pro" },
+				},
+				headers,
+			});
+
+			// Create second key with double-stringified metadata
+			const createdKey2 = await auth.api.createApiKey({
+				body: {
+					name: "key-2",
+					metadata: { plan: "enterprise" },
+				},
+				headers,
+			});
+
+			// Pass single-stringified values - the adapter will double-stringify them
+			const legacyMetadata1 = JSON.stringify({ plan: "legacy-1" });
+			const legacyMetadata2 = JSON.stringify({ plan: "legacy-2" });
+
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey1.id }],
+				update: { metadata: legacyMetadata1 },
+			});
+
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey2.id }],
+				update: { metadata: legacyMetadata2 },
+			});
+
+			// List via API - both keys should have properly parsed metadata objects
+			const results = await auth.api.listApiKeys({ headers });
+
+			const foundKey1 = results.find((k: any) => k.id === createdKey1.id);
+			const foundKey2 = results.find((k: any) => k.id === createdKey2.id);
+
+			expect(foundKey1).toBeDefined();
+			expect(foundKey1?.metadata).toEqual({ plan: "legacy-1" });
+			expect(typeof foundKey1?.metadata).toBe("object");
+
+			expect(foundKey2).toBeDefined();
+			expect(foundKey2?.metadata).toEqual({ plan: "legacy-2" });
+			expect(typeof foundKey2?.metadata).toBe("object");
+
+			// Verify the database was migrated for both keys
+			const migratedKey1 = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey1.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey1?.metadata).toEqual({ plan: "legacy-1" });
+
+			const migratedKey2 = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey2.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey2?.metadata).toEqual({ plan: "legacy-2" });
+		});
+
+		it("should migrate double-stringified metadata on updateApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					name: "test-key",
+					metadata: { tier: "free" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter will double-stringify it
+			const legacyMetadata = JSON.stringify({ tier: "legacy-tier" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Update via API (changing a different field, not metadata)
+			const result = await auth.api.updateApiKey({
+				body: {
+					keyId: createdKey.id,
+					name: "updated-name",
+				},
+				headers,
+			});
+
+			expect(result).not.toBeNull();
+			expect(result.name).toBe("updated-name");
+			// Metadata should be migrated and returned as object
+			expect(result.metadata).toEqual({ tier: "legacy-tier" });
+			expect(typeof result.metadata).toBe("object");
+
+			// Verify the database was migrated
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey?.metadata).toEqual({ tier: "legacy-tier" });
+		});
+
+		it("should migrate double-stringified metadata on verifyApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					metadata: { scope: "read" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter will double-stringify it
+			const legacyMetadata = JSON.stringify({ scope: "legacy-scope" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Verify via API - should return properly parsed object
+			const result = await auth.api.verifyApiKey({
+				body: { key: createdKey.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key).not.toBeNull();
+			expect(result.key?.metadata).toEqual({ scope: "legacy-scope" });
+			expect(typeof result.key?.metadata).toBe("object");
+
+			// Verify the database was migrated
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey?.metadata).toEqual({ scope: "legacy-scope" });
+		});
+
+		it("should handle already properly formatted metadata (no migration needed)", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const metadata = { alreadyCorrect: true, value: 123 };
+
+			// Create a key with proper metadata
+			const createdKey = await auth.api.createApiKey({
+				body: { metadata },
+				headers,
+			});
+
+			// Read via API - should return the same object
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result.metadata).toEqual(metadata);
+			expect(typeof result.metadata).toBe("object");
+		});
+
+		it("should handle null metadata gracefully", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key without metadata
+			const createdKey = await auth.api.createApiKey({
+				body: {},
+				headers,
+			});
+
+			// Read via API - should return null
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result.metadata).toBeNull();
 		});
 	});
 });

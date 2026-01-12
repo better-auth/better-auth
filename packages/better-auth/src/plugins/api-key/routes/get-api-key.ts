@@ -1,10 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, sessionMiddleware } from "../../../api";
-import { ERROR_CODES } from "..";
-import { getApiKeyById } from "../adapter";
+import { sessionMiddleware } from "../../../api";
+import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
+import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -185,22 +186,23 @@ export function getApiKey({
 			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// convert metadata string back to object
-			apiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				apiKey.metadata as never as string,
+			// Migrate legacy double-stringified metadata if needed
+			const metadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				apiKey,
+				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = apiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];

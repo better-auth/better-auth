@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.4.8-beta.6",
+  "version": "1.5.0-beta.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
@@ -447,7 +447,7 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "@noble/ciphers": "^2.0.0",
     "@noble/hashes": "^2.0.0",
@@ -475,7 +475,7 @@
     "mongodb": "^6.18.0",
     "msw": "^2.12.4",
     "mysql2": "^3.14.4",
-    "next": "^16.0.10",
+    "next": "^16.1.1",
     "oauth2-mock-server": "^7.2.1",
     "pg": "^8.16.3",
     "prisma": "^5.22.0",

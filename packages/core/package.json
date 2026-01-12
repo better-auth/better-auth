@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.8-beta.6",
+  "version": "1.5.0-beta.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -118,10 +118,10 @@
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "devDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
@@ -134,7 +134,7 @@
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@better-auth/utils": "0.3.0",
+    "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
