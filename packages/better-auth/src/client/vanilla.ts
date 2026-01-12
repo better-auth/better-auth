@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "./types";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -84,6 +85,10 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				data: Session;
 				error: BetterFetchError | null;
 				isPending: boolean;
+				isRefetching: boolean;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;
