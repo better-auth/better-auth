@@ -158,23 +158,28 @@ export const createInternalAdapter = (
 					safeJSONParse(currentList) || [];
 				const now = Date.now();
 
-				const validSessions = list.filter((s) => s.expiresAt > now);
-				const sessions = [];
+				const seenTokens = new Set<string>();
+				const sessions: Session[] = [];
 
-				for (const session of validSessions) {
-					const sessionStringified = await secondaryStorage.get(session.token);
-					if (sessionStringified) {
-						const s = safeJSONParse<{
-							session: Session;
-							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const parsedSession = parseSessionOutput(ctx.options, {
-							...s.session,
-							expiresAt: new Date(s.session.expiresAt),
-						});
-						sessions.push(parsedSession);
-					}
+				for (const { token, expiresAt } of list) {
+					if (expiresAt <= now || seenTokens.has(token)) continue;
+					seenTokens.add(token);
+
+					const data = await secondaryStorage.get(token);
+					if (!data) continue;
+
+					const parsed = safeJSONParse<{
+						session: Session;
+						user: User;
+					}>(data);
+					if (!parsed) continue;
+
+					sessions.push(
+						parseSessionOutput(ctx.options, {
+							...parsed.session,
+							expiresAt: new Date(parsed.session.expiresAt),
+						}),
+					);
 				}
 				return sessions;
 			}
@@ -313,25 +318,18 @@ export const createInternalAdapter = (
 
 								if (currentList) {
 									list = safeJSONParse(currentList) || [];
-									list = list.filter((session) => session.expiresAt > now);
+									list = list.filter(
+										(session) =>
+											session.expiresAt > now && session.token !== data.token,
+									);
 								}
 
-								const filtered = list.filter((s) => s.token !== data.token);
-								const sorted = filtered.sort(
-									(a, b) => a.expiresAt - b.expiresAt,
-								);
-								let furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-								sorted.push({
-									token: data.token,
-									expiresAt: data.expiresAt.getTime(),
-								});
-								if (
-									!furthestSessionExp ||
-									furthestSessionExp < data.expiresAt.getTime()
-								) {
-									furthestSessionExp = data.expiresAt.getTime();
-								}
+								const sorted = [
+									...list,
+									{ token: data.token, expiresAt: data.expiresAt.getTime() },
+								].sort((a, b) => a.expiresAt - b.expiresAt);
+								const furthestSessionExp =
+									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
 								const furthestSessionTTL = Math.max(
 									Math.floor((furthestSessionExp - now) / 1000),
 									0,
