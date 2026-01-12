@@ -3,12 +3,13 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../api";
 import { buildEndpointSchema } from "../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
+import { getHook } from "../helpers/get-hook";
 import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { getUserFromSessionOrBody } from "../helpers/get-user-from-session-or-body";
 import { orgMiddleware } from "../middleware/org-middleware";
-import type { ResolvedOrganizationOptions } from "../types";
+import type { InferOrganization, ResolvedOrganizationOptions } from "../types";
 
-let baseOrganizationSchema = z.object({
+const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
 		description: "The name of the organization",
 	}),
@@ -43,7 +44,10 @@ let baseOrganizationSchema = z.object({
 export const createOrganization = <O extends ResolvedOrganizationOptions>(
 	options: O,
 ) => {
-	const { $Infer, schema } = buildEndpointSchema({
+	type EnableSlugs = O["disableSlugs"] extends true ? false : true;
+	const enableSlugs = !options.disableSlugs as EnableSlugs;
+
+	const { $Infer, schema, getBody } = buildEndpointSchema({
 		baseSchema: baseOrganizationSchema,
 		additionalFields: {
 			schema: options?.schema,
@@ -51,7 +55,7 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 		},
 		optionalSchema: [
 			{
-				condition: !options.disableSlugs,
+				condition: enableSlugs,
 				schema: z.object({
 					slug: z.string().min(1).meta({
 						description: "The slug of the organization",
@@ -89,14 +93,13 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 			},
 		},
 		async (ctx) => {
-			const body = ctx.body;
+			const body = getBody(ctx);
 			const adapter = getOrgAdapter(ctx.context, options);
 			const session = await getSessionFromCtx(ctx);
 			const isClient = ctx.request || ctx.headers;
 
 			// Server-side doesn't require a session, but client-side does.
 			if (!session && isClient) throw APIError.fromStatus("UNAUTHORIZED");
-
 			const user = await getUserFromSessionOrBody(ctx);
 
 			// Check if the user is allowed to create an organization
@@ -116,7 +119,7 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 			}
 
 			// Check if the slug is already taken
-			if (!options.disableSlugs) {
+			if (enableSlugs) {
 				if (!body.slug) {
 					const msg = ORGANIZATION_ERROR_CODES.SLUG_IS_REQUIRED;
 					throw APIError.from("BAD_REQUEST", msg);
@@ -127,6 +130,71 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 					throw APIError.from("BAD_REQUEST", msg);
 				}
 			}
+
+			const createOrgHook = getHook("CreateOrganization", options);
+
+			// Prepare organization data
+			const organizationData = await (async () => {
+				const { keepCurrentActiveOrganization: _, userId: __, ...rest } = body;
+				const organization = { ...rest, createdAt: new Date() };
+				const modify = await createOrgHook.before({ organization, user });
+				return { ...organization, ...modify };
+			})();
+
+			// Create the organization
+			let organization: InferOrganization<O, false>;
+			try {
+				organization = await adapter.createOrganization(organizationData);
+			} catch (error) {
+				ctx.context.logger.error("Failed to create organization:", error);
+				const msg = ORGANIZATION_ERROR_CODES.FAILED_TO_CREATE_ORGANIZATION;
+				throw APIError.from("INTERNAL_SERVER_ERROR", msg);
+			}
+
+			const addMemberHook = getHook("AddMember", options);
+
+			// Prepare member data
+			const memberData = await (async () => {
+				const member = {
+					userId: user.id,
+					organizationId: organization.id,
+					role: options.creatorRole || "owner",
+				};
+				const { before } = addMemberHook;
+				const modify = await before({ member, organization, user });
+				return { ...member, ...modify };
+			})();
+
+			// Create the member
+			const member = await adapter.createMember(memberData);
+
+			await addMemberHook.after({ member, organization, user });
+			await createOrgHook.after({ organization, user, member });
+
+			// Set the active organization
+			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
+				const token = ctx.context.session.session.token;
+				const organizationId = organization.id;
+				await adapter.setActiveOrganization(token, organizationId);
+			}
+
+			const metadata: Record<string, any> | undefined = (() => {
+				const metadata = organization.metadata;
+				if (metadata && typeof metadata === "string") {
+					try {
+						return JSON.parse(metadata);
+					} catch {
+						return undefined;
+					}
+				}
+				return metadata;
+			})();
+
+			return ctx.json({
+				...organization,
+				metadata,
+				members: [member],
+			});
 		},
 	);
 };

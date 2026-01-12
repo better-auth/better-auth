@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import type * as z from "zod";
 import type {
 	DBFieldAttribute,
@@ -7,6 +8,29 @@ import { toZodSchema } from "../../../db";
 import type { PrettifyDeep, UnionToIntersection } from "../../../types/helper";
 
 type InferOptionalSchemaType<
+	Fields extends readonly {
+		condition: boolean;
+		schema: z.ZodObject<any>;
+	}[],
+> = [Fields[number]] extends [never]
+	? {}
+	: Fields extends readonly (infer Item)[]
+		? UnionToIntersection<
+				Item extends { condition: infer C; schema: infer S }
+					? C extends false
+						? never
+						: S extends z.ZodObject<any>
+							? z.infer<S>
+							: never
+					: never
+			> extends infer Result
+			? [Result] extends [never]
+				? {}
+				: Result
+			: {}
+		: {};
+
+type InferOptionalSchemaTypeForGetBody<
 	Fields extends readonly {
 		condition: boolean;
 		schema: z.ZodObject<any>;
@@ -66,7 +90,7 @@ type InferOptionalSchemaType<
  *
  *
  * @param opts - The options for the buildEndpointSchema function.
- * @returns The schema, $Infer, and $ReturnAdditionalFields types.
+ * @returns The schema, $Infer, $ReturnAdditionalFields, and getBody function.
  */
 export const buildEndpointSchema = <
 	SchemaName extends string,
@@ -156,9 +180,20 @@ export const buildEndpointSchema = <
 		>,
 	};
 
+	type BodyType = PrettifyDeep<
+		AdditionalFields &
+			z.infer<BaseSchema> &
+			InferOptionalSchemaTypeForGetBody<OptionalSchema>
+	>;
+
+	const getBody = (ctx: GenericEndpointContext): BodyType => {
+		return ctx.body as BodyType;
+	};
+
 	return {
 		schema,
 		$Infer,
 		$ReturnAdditionalFields: {} as ReturnAdditionalFields,
+		getBody,
 	};
 };
