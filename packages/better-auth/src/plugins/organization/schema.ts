@@ -282,7 +282,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 
 export const roleSchema = z.string();
 export const invitationStatus = z
-	.enum(["pending", "accepted", "rejected", "canceled"])
+	.enum(["pending", "accepted", "rejected", "canceled", "dismissed"])
 	.default("pending");
 
 export const organizationSchema = z.object({
@@ -375,7 +375,12 @@ export type InferOrganizationRolesFromOption<
 		: "admin" | "member" | "owner"
 	: "admin" | "member" | "owner";
 
-export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
+export type InvitationStatus =
+	| "pending"
+	| "accepted"
+	| "rejected"
+	| "canceled"
+	| "dismissed";
 
 export type InferMember<
 	O extends OrganizationOptions,

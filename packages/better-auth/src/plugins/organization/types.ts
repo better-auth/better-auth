@@ -716,6 +716,24 @@ export interface OrganizationOptions {
 				}) => Promise<void>;
 
 				/**
+				 * A callback that runs before an expired invitation is dismissed
+				 */
+				beforeDismissInvitation?: (data: {
+					invitation: Invitation & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs after an expired invitation is dismissed
+				 */
+				afterDismissInvitation?: (data: {
+					invitation: Invitation & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
 				 * Team hooks (when teams are enabled)
 				 */
 

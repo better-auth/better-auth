@@ -999,7 +999,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
-			status: "accepted" | "canceled" | "rejected";
+			status: "accepted" | "canceled" | "rejected" | "dismissed";
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const invitation = await adapter.update<InferInvitation<O, false>>({
