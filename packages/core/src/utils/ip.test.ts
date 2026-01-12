@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createRateLimitKey, isValidIP, normalizeIP } from "./normalize-ip";
+import { createRateLimitKey, isValidIP, normalizeIP } from "./ip";
 
 describe("IP Normalization", () => {
 	describe("isValidIP", () => {

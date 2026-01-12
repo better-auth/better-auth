@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isDevelopment, isTest } from "@better-auth/core/env";
-import { isValidIP, normalizeIP } from "./normalize-ip";
+import { isValidIP, normalizeIP } from "@better-auth/core/utils/ip";
 
 // Localhost IP used for test and development environments
 const LOCALHOST_IP = "127.0.0.1";

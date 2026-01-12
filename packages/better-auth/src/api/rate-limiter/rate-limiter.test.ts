@@ -1,7 +1,7 @@
+import { normalizeIP } from "@better-auth/core/utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";
-import { normalizeIP } from "../../utils/normalize-ip";
 
 describe(
 	"rate-limiter",
