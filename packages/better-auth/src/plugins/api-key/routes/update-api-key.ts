@@ -6,7 +6,11 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
-import { getApiKeyById, setApiKey } from "../adapter";
+import {
+	getApiKeyById,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -350,9 +354,8 @@ export function updateApiKey({
 				if (typeof metadata !== "object") {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
-				//@ts-expect-error - we need this to be a string to save into DB.
-				newValues.metadata =
-					schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
 				newValues.remaining = remaining;
@@ -438,15 +441,18 @@ export function updateApiKey({
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// transform metadata from string back to object
-			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				newApiKey.metadata as never as string,
+			// Migrate legacy double-stringified metadata if needed
+			const migratedMetadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				newApiKey,
+				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata: migratedMetadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];
