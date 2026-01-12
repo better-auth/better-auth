@@ -1,9 +1,6 @@
----
-title: FAQ
-description: Frequently asked questions about Better Auth.
----
-
-This page contains frequently asked questions, common issues, and other helpful information about Better Auth.
+import {
+  Accordions
+} from 'fumadocs-ui/components/accordion'This page contains frequently asked questions, common issues, and other helpful information about Better Auth.
 
 <Accordions>
   <Accordion title="Auth client not working">
@@ -105,8 +102,14 @@ At this time, you can't remove the `name`, `image`, or `email` fields from the u
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
 
-<Accordion title="runWithRequestState Error / Dual Module Hazard Issue">
+<Accordion title="Better Auth was already imported / `runWithRequestState` Error / Dual Module Hazard Issue">
 If you're encountering errors like:
+
+```
+Better Auth was already imported. This breaks async local storage instance and will lead to issues!
+```
+
+Or like:
 
 ```
 No request state found. Please make sure you are calling this function within a `runWithRequestState` callback.
@@ -172,6 +175,16 @@ You should see only one version listed for each package.
 
 <Callout type="info">
   Related issue: [#6613](https://github.com/better-auth/better-auth/issues/6613)
+</Callout>
+
+<Callout type="tip">
+For Next.js users, you might need to add `better-auth` to the `serverExternalPackages` in your config
+
+```ts
+const config = {
+  serverExternalPackages: ['better-auth']
+};
+```
 </Callout>
 </Accordion>
 </Accordions>
