@@ -431,8 +431,8 @@ export function createApiKey({
 			};
 
 			if (metadata) {
-				//@ts-expect-error - we intentionally save the metadata as string on DB.
-				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				data.metadata = metadata;
 			}
 
 			let apiKey: ApiKey;
