@@ -316,7 +316,10 @@ export const createInternalAdapter = (
 									list = list.filter((session) => session.expiresAt > now);
 								}
 
-								const sorted = list.sort((a, b) => a.expiresAt - b.expiresAt);
+								const filtered = list.filter((s) => s.token !== data.token);
+								const sorted = filtered.sort(
+									(a, b) => a.expiresAt - b.expiresAt,
+								);
 								let furthestSessionExp = sorted.at(-1)?.expiresAt;
 
 								sorted.push({
