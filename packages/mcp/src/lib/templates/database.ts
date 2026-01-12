@@ -79,6 +79,12 @@ export function generateDatabaseConfig(
 	database: Database,
 	orm: ORM,
 ): { imports: string; config: string; prismaInstance?: string } {
+	if (orm === "drizzle" && database === "mongodb") {
+		throw new Error(
+			"Drizzle ORM does not support MongoDB. Please select Prisma or use the built-in MongoDB adapter instead.",
+		);
+	}
+
 	const dbConfig = DATABASE_CONFIGS[database];
 	const ormConfig = ORM_CONFIGS[orm];
 

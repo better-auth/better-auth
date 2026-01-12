@@ -161,9 +161,11 @@ function handleClaudeCodeAction(installLocal: boolean, installRemote: boolean) {
 		commands.push(`claude mcp add better-auth -- ${LOCAL_MCP_COMMAND}`);
 	}
 
+	let anySucceeded = false;
 	for (const command of commands) {
 		try {
 			execSync(command, { stdio: "inherit" });
+			anySucceeded = true;
 		} catch {
 			console.log(
 				chalk.yellow(
@@ -174,7 +176,9 @@ function handleClaudeCodeAction(installLocal: boolean, installRemote: boolean) {
 		}
 	}
 
-	console.log(chalk.green("\n✓ Claude Code MCP configured!"));
+	if (anySucceeded) {
+		console.log(chalk.green("\n✓ Claude Code MCP configured!"));
+	}
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
 		chalk.gray(

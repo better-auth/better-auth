@@ -143,7 +143,7 @@ export function generateSetup(
 			});
 		}
 	} else {
-		if (socialProviders.length > 0 || plugins.length > 0) {
+		if (socialProviders.length > 0 || plugins.length > 0 || hasEmailPassword) {
 			const changes = generateUpdateChanges({
 				socialProviders,
 				plugins,
@@ -309,7 +309,7 @@ function generateUpdateChanges(options: {
 	serverChanges: { type: string; content: string; description: string }[];
 	clientChanges: { type: string; content: string; description: string }[];
 } {
-	const { socialProviders, plugins } = options;
+	const { socialProviders, plugins, hasEmailPassword } = options;
 
 	const serverChanges: {
 		type: string;
@@ -321,6 +321,16 @@ function generateUpdateChanges(options: {
 		content: string;
 		description: string;
 	}[] = [];
+
+	if (hasEmailPassword) {
+		serverChanges.push({
+			type: "add_to_config",
+			content: `emailAndPassword: {
+    enabled: true,
+  }`,
+			description: "Enable email and password authentication",
+		});
+	}
 
 	const { serverImports, clientImports } = generatePluginImports(plugins);
 

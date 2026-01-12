@@ -94,9 +94,8 @@ One tool call = complete auth setup ready to copy-paste.`,
 			srcDir: z
 				.boolean()
 				.optional()
-				.default(false)
 				.describe(
-					"Whether project uses src/ directory structure. Check if src/ folder exists. Default: false",
+					"Whether project uses src/ directory structure. Check if src/ folder exists. If not provided, uses framework's default (e.g., SvelteKit defaults to src/).",
 				),
 			authPath: z
 				.string()

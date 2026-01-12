@@ -258,13 +258,7 @@ export function getDefaultAuthPath(
 	const config = FRAMEWORK_CONFIGS[framework];
 	const basePath = config.defaultAuthPath;
 
-	if (srcDir && !config.defaultSrcDir) {
-		return `src/${basePath}`;
-	}
-	if (!srcDir && config.defaultSrcDir) {
-		return basePath;
-	}
-	return config.defaultSrcDir ? `src/${basePath}` : basePath;
+	return srcDir ? `src/${basePath}` : basePath;
 }
 
 export function getDefaultApiPath(
@@ -276,8 +270,5 @@ export function getDefaultApiPath(
 
 	if (!basePath) return "";
 
-	if (srcDir && !config.defaultSrcDir) {
-		return `src/${basePath}`;
-	}
-	return config.defaultSrcDir ? `src/${basePath}` : basePath;
+	return srcDir ? `src/${basePath}` : basePath;
 }
