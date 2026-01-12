@@ -1,12 +1,10 @@
-export { generateId } from "@better-auth/core/utils";
 export * from "../oauth2/state";
-export * from "./hide-metadata";
-
 export * from "./boolean";
 export * from "./constants";
 export * from "./date";
 export * from "./get-request-ip";
 export * from "./hashing";
+export * from "./hide-metadata";
 export * from "./is-api-error";
 export * from "./is-atom";
 export * from "./is-promise";
@@ -17,3 +15,4 @@ export * from "./shim";
 export * from "./time";
 export * from "./url";
 export * from "./wildcard";
+export { generateId } from "@better-auth/core/utils";
