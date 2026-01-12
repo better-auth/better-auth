@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "../utils";
+import { defineErrorCodes } from "../utils/error-codes";
 
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",

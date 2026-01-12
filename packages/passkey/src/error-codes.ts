@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const PASSKEY_ERROR_CODES = defineErrorCodes({
 	CHALLENGE_NOT_FOUND: "Challenge not found",

@@ -8,7 +8,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";

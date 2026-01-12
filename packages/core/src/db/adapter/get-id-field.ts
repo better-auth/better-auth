@@ -1,6 +1,6 @@
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
-import { generateId as defaultGenerateId } from "../../utils";
+import { generateId as defaultGenerateId } from "../../utils/id";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 

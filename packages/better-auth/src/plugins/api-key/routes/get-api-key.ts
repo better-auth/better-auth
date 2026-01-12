@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";

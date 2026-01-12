@@ -7,7 +7,7 @@ import {
 	initGetDefaultModelName,
 } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
-import { generateId } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import { test } from "vitest";
 import { betterAuth } from "../auth";
 import type { Account, Session, User, Verification } from "../types";

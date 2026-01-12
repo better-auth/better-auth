@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { generateId } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
 	APIError,

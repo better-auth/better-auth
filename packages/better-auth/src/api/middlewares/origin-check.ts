@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { deprecate } from "@better-auth/core/utils";
+import { deprecate } from "@better-auth/core/utils/deprecate";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
