@@ -1,8 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { ORGANIZATION_ERROR_CODES as $ERROR_CODES } from "./lib/error-codes";
-import { getEndpoints } from "./lib/get-endpoints";
-import { getSchema } from "./lib/get-schema";
-import { resolveOrgOptions } from "./lib/resolve-org-options";
+import { ORGANIZATION_ERROR_CODES as $ERROR_CODES } from "./helpers/error-codes";
+import { getEndpoints } from "./helpers/get-endpoints";
+import { getSchema } from "./helpers/get-schema";
+import { resolveOrgOptions } from "./helpers/resolve-org-options";
 import type { OrganizationOptions } from "./types";
 
 export const organization = <O extends OrganizationOptions>(

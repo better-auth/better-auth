@@ -1,10 +1,10 @@
 import { defineErrorCodes } from "@better-auth/core/utils";
 
 export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
-	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION:
+	SLUG_IS_REQUIRED: "Slug is required",
+	NOT_ALLOWED_TO_CREATE_NEW_ORG:
 		"You are not allowed to create a new organization",
-	YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS:
-		"You have reached the maximum number of organizations",
+	REACHED_ORG_LIMIT: "You have reached the maximum number of organizations",
 	ORGANIZATION_ALREADY_EXISTS: "Organization already exists",
 	ORGANIZATION_SLUG_ALREADY_TAKEN: "Organization slug already taken",
 	ORGANIZATION_NOT_FOUND: "Organization not found",
