@@ -20,7 +20,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		countOrganizations: async (userId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const count = await adapter.count({
-				model: "organization",
+				model: "member",
 				where: [{ field: "userId", value: userId }],
 			});
 			return count;
