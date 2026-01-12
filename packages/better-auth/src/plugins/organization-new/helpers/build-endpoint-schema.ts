@@ -67,6 +67,10 @@ type InferOptionalSchemaTypeForGetBody<
  * There is also an `optionalSchema` option that allows you to pass a condition to allow a Zod schema to be
  * added to the base zod schema & type interface.
  *
+ *
+ * For a good idea of the purpose of this helper, see both the example below, as well as
+ * implementation in the create-organization endpoint code.
+ *
  * @example
  * ```ts
  *	const { $Infer, schema } = buildEndpointSchema({
