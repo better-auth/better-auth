@@ -3,15 +3,21 @@ import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 
 export type RequestStateWeakMap = WeakMap<object, any>;
 
+const symbol = Symbol.for("better-auth:request-state-async-storage");
+
 let requestStateAsyncStorage: AsyncLocalStorage<RequestStateWeakMap> | null =
 	null;
 
 const ensureAsyncStorage = async () => {
-	if (!requestStateAsyncStorage) {
+	if (!requestStateAsyncStorage || (globalThis as any)[symbol] === undefined) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
 		requestStateAsyncStorage = new AsyncLocalStorage();
+		(globalThis as any)[symbol] = requestStateAsyncStorage;
 	}
-	return requestStateAsyncStorage;
+	return (
+		requestStateAsyncStorage ||
+		((globalThis as any)[symbol] as AsyncLocalStorage<RequestStateWeakMap>)
+	);
 };
 
 export async function getRequestStateAsyncLocalStorage() {
