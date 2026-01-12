@@ -1,8 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { isDevelopment, logger } from "@better-auth/core/env";
-import { APIError, createEmailVerificationToken } from "../api";
+import { createEmailVerificationToken } from "../api";
 import { setAccountCookie } from "../cookies/session-store";
 import type { Account, User } from "../types";
+import { isAPIError } from "../utils/is-api-error";
 import { setTokenUtil } from "./utils";
 
 export async function handleOAuthUserInfo(
@@ -92,30 +93,35 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		} else {
-			if (c.context.options.account?.updateAccountOnSignIn !== false) {
-				const updateData = Object.fromEntries(
-					Object.entries({
-						idToken: account.idToken,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					}).filter(([_, value]) => value !== undefined),
-				);
-				if (c.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(c, {
-						...account,
-						...updateData,
-					});
-				}
+			const freshTokens =
+				c.context.options.account?.updateAccountOnSignIn !== false
+					? Object.fromEntries(
+							Object.entries({
+								idToken: account.idToken,
+								accessToken: await setTokenUtil(account.accessToken, c.context),
+								refreshToken: await setTokenUtil(
+									account.refreshToken,
+									c.context,
+								),
+								accessTokenExpiresAt: account.accessTokenExpiresAt,
+								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+								scope: account.scope,
+							}).filter(([_, value]) => value !== undefined),
+						)
+					: {};
 
-				if (Object.keys(updateData).length > 0) {
-					await c.context.internalAdapter.updateAccount(
-						hasBeenLinked.id,
-						updateData,
-					);
-				}
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, {
+					...hasBeenLinked,
+					...freshTokens,
+				});
+			}
+
+			if (Object.keys(freshTokens).length > 0) {
+				await c.context.internalAdapter.updateAccount(
+					hasBeenLinked.id,
+					freshTokens,
+				);
 			}
 
 			if (
@@ -175,7 +181,8 @@ export async function handleOAuthUserInfo(
 			if (
 				!userInfo.emailVerified &&
 				user &&
-				c.context.options.emailVerification?.sendOnSignUp
+				c.context.options.emailVerification?.sendOnSignUp &&
+				c.context.options.emailVerification?.sendVerificationEmail
 			) {
 				const token = await createEmailVerificationToken(
 					c.context.secret,
@@ -184,18 +191,20 @@ export async function handleOAuthUserInfo(
 					c.context.options.emailVerification?.expiresIn,
 				);
 				const url = `${c.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-				await c.context.options.emailVerification?.sendVerificationEmail?.(
-					{
-						user,
-						url,
-						token,
-					},
-					c.request,
+				await c.context.runInBackgroundOrAwait(
+					c.context.options.emailVerification.sendVerificationEmail(
+						{
+							user,
+							url,
+							token,
+						},
+						c.request,
+					),
 				);
 			}
 		} catch (e: any) {
 			logger.error(e);
-			if (e instanceof APIError) {
+			if (isAPIError(e)) {
 				return {
 					error: e.message,
 					data: null,

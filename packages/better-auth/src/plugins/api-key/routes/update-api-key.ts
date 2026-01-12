@@ -1,11 +1,16 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
+import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
-import { getApiKeyById, setApiKey } from "../adapter";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
+import {
+	getApiKeyById,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -268,15 +273,11 @@ export function updateApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw new APIError("UNAUTHORIZED", {
-					message: ERROR_CODES.UNAUTHORIZED_SESSION,
-				});
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -291,9 +292,7 @@ export function updateApiKey({
 					remaining !== undefined ||
 					permissions !== undefined
 				) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.SERVER_ONLY_PROPERTY,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
 				}
 			}
 
@@ -307,22 +306,16 @@ export function updateApiKey({
 			}
 
 			if (!apiKey) {
-				throw new APIError("NOT_FOUND", {
-					message: ERROR_CODES.KEY_NOT_FOUND,
-				});
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			let newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				} else if (name.length > opts.maximumNameLength) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_NAME_LENGTH,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
 				}
 				newValues.name = name;
 			}
@@ -332,9 +325,10 @@ export function updateApiKey({
 			}
 			if (expiresIn !== undefined) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.KEY_DISABLED_EXPIRATION,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+					);
 				}
 				if (expiresIn !== null) {
 					// if expires is not null, check if it's under the valid range
@@ -342,13 +336,15 @@ export function updateApiKey({
 					const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						);
 					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
-						throw new APIError("BAD_REQUEST", {
-							message: ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						);
 					}
 				}
 				newValues.expiresAt = expiresIn ? getDate(expiresIn, "sec") : null;
@@ -356,26 +352,25 @@ export function updateApiKey({
 
 			if (metadata !== undefined && opts.enableMetadata === true) {
 				if (typeof metadata !== "object") {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.INVALID_METADATA_TYPE,
-					});
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
 				}
-				//@ts-expect-error - we need this to be a string to save into DB.
-				newValues.metadata =
-					schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				newValues.metadata = metadata;
 			}
 			if (remaining !== undefined) {
 				newValues.remaining = remaining;
 			}
 			if (refillAmount !== undefined || refillInterval !== undefined) {
 				if (refillAmount !== undefined && refillInterval === undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					);
 				} else if (refillInterval !== undefined && refillAmount === undefined) {
-					throw new APIError("BAD_REQUEST", {
-						message: ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					);
 				}
 				newValues.refillAmount = refillAmount;
 				newValues.refillInterval = refillInterval;
@@ -397,9 +392,7 @@ export function updateApiKey({
 			}
 
 			if (Object.keys(newValues).length === 0) {
-				throw new APIError("BAD_REQUEST", {
-					message: ERROR_CODES.NO_VALUES_TO_UPDATE,
-				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
 			}
 
 			let newApiKey: ApiKey = apiKey;
@@ -441,22 +434,25 @@ export function updateApiKey({
 					newApiKey = updated;
 				}
 			} catch (error: any) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
+				throw APIError.fromStatus("INTERNAL_SERVER_ERROR", {
 					message: error?.message,
 				});
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 
-			// transform metadata from string back to object
-			newApiKey.metadata = schema.apikey.fields.metadata.transform.output(
-				newApiKey.metadata as never as string,
+			// Migrate legacy double-stringified metadata if needed
+			const migratedMetadata = await migrateDoubleStringifiedMetadata(
+				ctx,
+				newApiKey,
+				opts,
 			);
 
 			const { key: _key, ...returningApiKey } = newApiKey;
 
 			return ctx.json({
 				...returningApiKey,
+				metadata: migratedMetadata,
 				permissions: returningApiKey.permissions
 					? safeJSONParse<{
 							[key: string]: string[];

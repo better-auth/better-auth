@@ -6,6 +6,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { deprecate } from "@better-auth/core/utils";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -64,8 +65,8 @@ function validateSecret(
 	}
 
 	if (secret.length < 32) {
-		throw new BetterAuthError(
-			`Invalid BETTER_AUTH_SECRET: must be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+		logger.warn(
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
 		);
 	}
 
@@ -171,7 +172,14 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	let ctx: AuthContext = {
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
+
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -189,7 +197,7 @@ export async function createAuthContext(
 				allowRelativePaths: boolean;
 			},
 		) {
-			return ctx.trustedOrigins.some((origin) =>
+			return this.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
@@ -288,6 +296,32 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
@@ -296,6 +330,16 @@ export async function createAuthContext(
 		({ context } = await initOrPromise);
 	} else {
 		({ context } = initOrPromise);
+	}
+
+	if (
+		typeof context.options.emailVerification?.onEmailVerification === "function"
+	) {
+		context.options.emailVerification.onEmailVerification = deprecate(
+			context.options.emailVerification.onEmailVerification,
+			"Use `afterEmailVerification` instead. This will be removed in 1.5",
+			context.logger,
+		);
 	}
 
 	return context;

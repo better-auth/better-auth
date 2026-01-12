@@ -35,10 +35,20 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
-	 * You can also pass a function that returns a boolean
+	 * You can also pass a function that returns a boolean. The function should return `true` if the user has reached their organization limit, and `false` otherwise.
+	 *
+	 * @default unlimited
+	 * @example
+	 * ```ts
+	 * organizationLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   // Return true if the user has reached their organization limit, false otherwise
+	 *   return plan.name === "pro";
+	 * }
+	 * ```
 	 */
 	organizationLimit?:
-		| (number | ((user: User) => Awaitable<boolean>))
+		| (number | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The role that is assigned to the creator of the
@@ -50,9 +60,14 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
+	 * You can also pass a function that returns the limit number
+	 *
 	 * @default 100
 	 */
-	membershipLimit?: number | undefined;
+	membershipLimit?:
+		| number
+		| ((user: User, organization: Organization) => Promise<number> | number)
+		| undefined;
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.

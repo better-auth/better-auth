@@ -15,9 +15,19 @@ import type { JwtOptions } from "./types";
 import { createJwk } from "./utils";
 import { verifyJWT as verifyJWTHelper } from "./verify";
 
+export { signJWT } from "./sign";
 export type * from "./types";
-export { createJwk, generateExportedKeyPair } from "./utils";
+export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		jwt: {
+			creator: typeof jwt;
+		};
+	}
+}
 
 const signJWTBodySchema = z.object({
 	payload: z.record(z.string(), z.any()),
