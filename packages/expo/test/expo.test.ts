@@ -595,11 +595,35 @@ describe("expo with cookieCache", async () => {
 });
 
 describe("expo with cookie storeStateStrategy", async () => {
-	const { client } = await getTestInstance({
-		account: {
-			storeStateStrategy: "cookie",
+	const storage = new Map<string, string>();
+
+	const { client } = await getTestInstance(
+		{
+			account: {
+				storeStateStrategy: "cookie",
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+				},
+			},
+			plugins: [expo(), oAuthProxy()],
+			trustedOrigins: ["better-auth://"],
 		},
-	});
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+				],
+			},
+		},
+	);
 
 	beforeAll(async () => {
 		vi.useFakeTimers();
