@@ -4,8 +4,32 @@ import type {
 	Session,
 	User,
 } from "better-auth";
+import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { subscriptions, user } from "./schema";
+import type { organization, subscriptions, user } from "./schema";
+
+export type AuthorizeReferenceAction =
+	| "upgrade-subscription"
+	| "list-subscription"
+	| "cancel-subscription"
+	| "restore-subscription"
+	| "billing-portal";
+
+export type CustomerType = "user" | "organization";
+
+export type WithStripeCustomerId = {
+	stripeCustomerId?: string;
+};
+
+// TODO: Types extended by a plugin should be moved into that plugin.
+export type WithActiveOrganizationId = {
+	activeOrganizationId?: string;
+};
+
+export type StripeCtxSession = {
+	session: Session & WithActiveOrganizationId;
+	user: User & WithStripeCustomerId;
+};
 
 export type StripePlan = {
 	/**
@@ -253,12 +277,7 @@ export type SubscriptionOptions = {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
 					referenceId: string;
-					action:
-						| "upgrade-subscription"
-						| "list-subscription"
-						| "cancel-subscription"
-						| "restore-subscription"
-						| "billing-portal";
+					action: AuthorizeReferenceAction;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<boolean>)
@@ -272,6 +291,18 @@ export type SubscriptionOptions = {
 				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
+		  }) => Promise<void>)
+		| undefined;
+	/**
+	 * A callback to run when a subscription is created
+	 * @returns
+	 */
+	onSubscriptionCreated?:
+		| ((data: {
+				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
+				plan: StripePlan;
 		  }) => Promise<void>)
 		| undefined;
 	/**
@@ -301,14 +332,6 @@ export type SubscriptionOptions = {
 						options?: Stripe.RequestOptions;
 				  })
 		| undefined;
-	/**
-	 * Enable organization subscription
-	 */
-	organization?:
-		| {
-				enabled: boolean;
-		  }
-		| undefined;
 };
 
 export interface StripeOptions {
@@ -336,7 +359,7 @@ export interface StripeOptions {
 		| ((
 				data: {
 					stripeCustomer: Stripe.Customer;
-					user: User & { stripeCustomerId: string };
+					user: User & WithStripeCustomerId;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<void>)
@@ -367,6 +390,49 @@ export interface StripeOptions {
 		  )
 		| undefined;
 	/**
+	 * Organization Stripe integration
+	 *
+	 * Enable organizations to have their own Stripe customer ID
+	 */
+	organization?:
+		| {
+				/**
+				 * Enable organization Stripe customer
+				 */
+				enabled: true;
+				/**
+				 * A custom function to get the customer create params
+				 * for organization customers.
+				 *
+				 * @param organization - the organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				getCustomerCreateParams?:
+					| ((
+							organization: Organization,
+							ctx: GenericEndpointContext,
+					  ) => Promise<Partial<Stripe.CustomerCreateParams>>)
+					| undefined;
+				/**
+				 * A callback to run after an organization customer has been created
+				 *
+				 * @param data - data containing stripeCustomer and organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				onCustomerCreate?:
+					| ((
+							data: {
+								stripeCustomer: Stripe.Customer;
+								organization: Organization & WithStripeCustomerId;
+							},
+							ctx: GenericEndpointContext,
+					  ) => Promise<void>)
+					| undefined;
+		  }
+		| undefined;
+	/**
 	 * A callback to run after a stripe event is received
 	 * @param event - Stripe Event
 	 * @returns
@@ -375,7 +441,9 @@ export interface StripeOptions {
 	/**
 	 * Schema for the stripe plugin
 	 */
-	schema?: InferOptionSchema<typeof subscriptions & typeof user> | undefined;
+	schema?:
+		| InferOptionSchema<
+				typeof subscriptions & typeof user & typeof organization
+		  >
+		| undefined;
 }
-
-export interface InputSubscription extends Omit<Subscription, "id"> {}

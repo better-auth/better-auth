@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.5.0-beta.1",
+  "version": "1.5.0-beta.4",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -18,7 +18,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {
@@ -34,7 +34,20 @@
     "typescript",
     "better-auth"
   ],
-  "exports": "./dist/index.mjs",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./api": {
+      "types": "./dist/api.d.mts",
+      "default": "./dist/api.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "api": [
+        "./dist/api.d.mts"
+      ]
+    }
+  },
   "bin": {
     "better-auth": "./dist/index.mjs"
   },
@@ -66,7 +79,7 @@
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
     "dotenv": "^17.2.2",
-    "drizzle-orm": "^0.33.0",
+    "drizzle-orm": "^0.41.0",
     "open": "^10.2.0",
     "pg": "^8.16.3",
     "prettier": "^3.6.2",

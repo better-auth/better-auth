@@ -3,9 +3,9 @@ import type {
 	PopoverContentProps,
 	PopoverTriggerProps,
 } from "@radix-ui/react-popover";
-import type { TOCItemType } from "fumadocs-core/server";
+import type { TOCItemType } from "fumadocs-core/toc";
 import * as Primitive from "fumadocs-core/toc";
-import { useI18n, usePageStyles } from "fumadocs-ui/provider";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
 import { ChevronRight, Text } from "lucide-react";
 import type { ComponentProps, HTMLAttributes, ReactNode } from "react";
 import {
@@ -40,15 +40,12 @@ export interface TOCProps {
 }
 
 export function Toc(props: HTMLAttributes<HTMLDivElement>) {
-	const { toc } = usePageStyles();
-
 	return (
 		<div
 			id="nd-toc"
 			{...props}
 			className={cn(
-				"sticky top-[calc(var(--fd-banner-height)+var(--fd-nav-height))] h-(--fd-toc-height) pb-2 pt-12",
-				toc,
+				"sticky top-[calc(var(--fd-banner-height)+var(--fd-nav-height))] h-(--fd-toc-height) pb-2 pt-12 max-xl:hidden",
 				props.className,
 			)}
 			style={

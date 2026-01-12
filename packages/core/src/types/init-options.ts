@@ -151,17 +151,32 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
-	 * Disable trusted origins check
+	 * Disable all CSRF protection.
+	 *
+	 * When enabled, this disables:
+	 * - Origin header validation when cookies are present
+	 * - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+	 * - Cross-site navigation blocking for first-login scenarios
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
+	 *
+	 * @default false
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
-	 * Disable origin check
+	 * Disable URL validation against trustedOrigins.
 	 *
-	 * ⚠︎ This may allow requests from any origin to be processed by
-	 * Better Auth. And could lead to security vulnerabilities.
+	 * When enabled, this disables validation of:
+	 * - callbackURL
+	 * - redirectTo
+	 * - errorCallbackURL
+	 * - newUserCallbackURL
+	 *
+	 * ⚠︎ This may allow open redirects and could lead to security
+	 * vulnerabilities.
+	 *
+	 * @default false
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**
@@ -478,8 +493,18 @@ export type BetterAuthOptions = {
 				 * A function that is called when a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
+				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
 				 */
 				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+				/**
+				 * A function that is called before a user verifies their email
+				 * @param user the user that verified their email
+				 * @param request the request object
+				 */
+				beforeEmailVerification?: (
+					user: User,
+					request?: Request,
+				) => Promise<void>;
 				/**
 				 * A function that is called when a user's email is updated to verified
 				 * @param user the user that verified their email
@@ -1002,9 +1027,26 @@ export type BetterAuthOptions = {
 	 *
 	 * Trusted origins will be dynamically
 	 * calculated based on the request.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: async (request) => {
+	 *   return [
+	 *    "https://better-auth.com",
+	 *    "https://*.better-auth.com",
+	 *    request.headers.get("x-custom-origin")
+	 *   ];
+	 * }
+	 * ```
+	 * @returns An array of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request?: Request | undefined) => Awaitable<string[]>))
+		| (
+				| string[]
+				| ((
+						request?: Request | undefined,
+				  ) => Awaitable<(string | undefined | null)[]>)
+		  )
 		| undefined;
 	/**
 	 * Rate limiting configuration
