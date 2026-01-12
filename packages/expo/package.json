@@ -94,7 +94,6 @@
   },
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:",
     "zod": "^4.1.12"
   },
   "files": [
