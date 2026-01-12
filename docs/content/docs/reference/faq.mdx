@@ -104,4 +104,74 @@ At this time, you can't remove the `name`, `image`, or `email` fields from the u
 
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
+
+<Accordion title="runWithRequestState Error / Dual Module Hazard Issue">
+If you're encountering errors like:
+
+```
+No request state found. Please make sure you are calling this function within a `runWithRequestState` callback.
+```
+
+This is typically caused by a **dual module hazard** - when multiple versions of `better-auth` or `@better-auth/core` exist in your dependency tree. This commonly occurs after upgrading to v1.4+, especially in Cloudflare Workers, Nuxt, or when using plugins like `oauthProvider`.
+
+### How to Diagnose
+
+Check if you have duplicate versions of Better Auth packages:
+
+```bash
+# For pnpm users
+pnpm why @better-auth/core
+pnpm why better-auth
+
+# For npm users
+npm ls @better-auth/core
+npm ls better-auth
+
+# For yarn users
+yarn why @better-auth/core
+yarn why better-auth
+```
+
+If you see multiple versions listed, you have a dual module hazard.
+
+### How to Fix
+
+1. **Delete and reinstall dependencies:**
+
+```bash
+# Remove node_modules and lockfile
+rm -rf node_modules
+rm pnpm-lock.yaml # or package-lock.json or yarn.lock
+
+# Reinstall dependencies
+pnpm install # or npm install or yarn install
+```
+
+2. **Ensure all Better Auth packages use the same version:**
+
+Check your `package.json` and make sure all Better Auth related packages (`better-auth`, `@better-auth/core`, `@better-auth/oauth-provider`, etc.) are using compatible versions.
+
+3. **For Cloudflare Workers users:**
+
+Make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`:
+
+```toml
+compatibility_flags = ["nodejs_compat"]
+```
+
+4. **Verify the fix:**
+
+Run the diagnostic commands again to confirm only one version of each package exists:
+
+```bash
+pnpm why @better-auth/core
+pnpm why better-auth
+```
+
+You should see only one version listed for each package.
+
+<Callout type="info">
+  Related issue: [#6613](https://github.com/better-auth/better-auth/issues/6613)
+</Callout>
+</Accordion>
 </Accordions>
