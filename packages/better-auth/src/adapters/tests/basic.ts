@@ -1537,7 +1537,7 @@ export const getNormalTestSuiteTests = (
 					name: "John Doe",
 				},
 			});
-			await adapter.create<User>({
+			const _user3 = await adapter.create<User>({
 				model: "user",
 				data: {
 					...template,

@@ -153,15 +153,43 @@ export const memoryAdapter = (
 							return true;
 						}
 
-						let result = evalClause(record, where[0]!);
-						for (const clause of where) {
+						// Handle first clause - if it has OR connector, start with OR group
+						let result: boolean;
+						let orGroup: boolean | null = null;
+						
+						if (where[0]!.connector === "OR") {
+							// First clause is part of an OR group
+							orGroup = evalClause(record, where[0]!);
+							result = true; // Will be ANDed later if needed
+						} else {
+							// First clause is a base AND condition
+							result = evalClause(record, where[0]!);
+						}
+
+						for (let i = 1; i < where.length; i++) {
+							const clause = where[i]!;
 							const clauseResult = evalClause(record, clause);
 
 							if (clause.connector === "OR") {
-								result = result || clauseResult;
+								// Accumulate OR results
+								if (orGroup === null) {
+									orGroup = clauseResult;
+								} else {
+									orGroup = orGroup || clauseResult;
+								}
 							} else {
+								// AND connector - finalize any pending OR group and AND with result
+								if (orGroup !== null) {
+									result = result && orGroup;
+									orGroup = null;
+								}
 								result = result && clauseResult;
 							}
+						}
+
+						// Handle remaining OR group
+						if (orGroup !== null) {
+							result = result && orGroup;
 						}
 
 						return result;
