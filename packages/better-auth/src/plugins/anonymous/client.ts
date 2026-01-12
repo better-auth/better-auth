@@ -8,6 +8,7 @@ export const anonymousClient = () => {
 		$InferServerPlugin: {} as ReturnType<typeof anonymous>,
 		pathMethods: {
 			"/sign-in/anonymous": "POST",
+			"/delete-anonymous-user": "POST",
 		},
 		atomListeners: [
 			{
