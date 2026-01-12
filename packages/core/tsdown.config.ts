@@ -15,6 +15,7 @@ export default defineConfig({
 		"./src/api/index.ts",
 		"./src/social-providers/index.ts",
 		"./src/utils/*.ts",
+		"!./src/utils/*.test.ts",
 		"./src/error/index.ts",
 	],
 	external: ["@better-auth/core/async_hooks"],
