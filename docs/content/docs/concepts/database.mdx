@@ -112,7 +112,7 @@ app.post("/migrate", async (c) => {
       added: toBeAdded.map(t => t.table)
     });
   } catch (error) {
-    return c.json({ error: error.message }, 500);
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
   }
 });
 
