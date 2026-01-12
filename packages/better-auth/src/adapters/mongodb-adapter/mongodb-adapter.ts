@@ -41,9 +41,11 @@ export interface MongoDBAdapterConfig {
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * ⚠️ Important:
+	 * - Defaults to `true` when a MongoDB client is provided.
+	 * - If your MongoDB instance does not support transactions
+	 *   (e.g. standalone server without a replica set),
+	 *   you must explicitly set `transaction: false`.
 	 */
 	transaction?: boolean | undefined;
 }
