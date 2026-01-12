@@ -48,11 +48,6 @@
       "types": "./dist/error/index.d.mts",
       "default": "./dist/error/index.mjs"
     },
-    "./utils": {
-      "dev-source": "./src/utils/index.ts",
-      "types": "./dist/utils/index.d.mts",
-      "default": "./dist/utils/index.mjs"
-    },
     "./utils/*": {
       "dev-source": "./src/utils/*.ts",
       "types": "./dist/utils/*.d.mts",
