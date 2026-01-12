@@ -76,14 +76,24 @@ describe("general types", async (it) => {
 							},
 							async () => "ok",
 						),
+						testNonAction: createAuthEndpoint(
+							"/test-non-action",
+							{
+								method: "GET",
+								metadata: {
+									isAction: false,
+								},
+							},
+							async () => "ok",
+						),
 					},
 				},
 			],
 		});
-
 		expectTypeOf<typeof auth.api>().toHaveProperty("testServerScoped");
 		expectTypeOf<typeof auth.api>().toHaveProperty("testVirtual");
-		expectTypeOf<typeof auth.api>().not.toHaveProperty("testHttpScoped");
+		expectTypeOf<typeof auth.api>().not.toHaveProperty("testHTTPScoped");
+		expectTypeOf<typeof auth.api>().not.toHaveProperty("testNonAction");
 	});
 
 	it("should infer additional fields from plugins", async () => {
