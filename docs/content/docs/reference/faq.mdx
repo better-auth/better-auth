@@ -142,18 +142,6 @@ If you see multiple versions listed, you have a dual module hazard.
 
 ### How to Fix
 
-#### For Next.js Users (Most Common)
-
-<Callout type="info">
-Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
-
-```ts title="next.config.js"
-const config = {
-  serverExternalPackages: ['better-auth']
-};
-```
-</Callout>
-
 #### Basic Steps
 
 Start by ensuring your dependencies are clean and all Better Auth packages use compatible versions.
@@ -210,6 +198,18 @@ Note: Yarn v3 and pnpm v10 don't typically have this issue.
 #### Bundler Resolution Issues
 
 This is a bundler-level issue where the same module gets resolved to different instances. The goal is to make your bundler resolve the module to the same instance.
+
+<Callout type="info">
+**For Next.js users:**
+
+Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
+
+```ts title="next.config.js"
+const config = {
+  serverExternalPackages: ['better-auth']
+};
+```
+</Callout>
 
 <Callout type="info">
 **For Cloudflare Workers users:**
