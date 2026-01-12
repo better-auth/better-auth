@@ -101,56 +101,6 @@ function detectFeatures(
 	return features;
 }
 
-export function clientHasPlugin(clientConfig: string, plugin: string): boolean {
-	const pluginPatterns: Record<string, RegExp> = {
-		"2fa": /twoFactorClient\(/,
-		organization: /organizationClient\(/,
-		admin: /adminClient\(/,
-		username: /usernameClient\(/,
-		"multi-session": /multiSessionClient\(/,
-		"api-key": /apiKeyClient\(/,
-		"magic-link": /magicLinkClient\(/,
-		"phone-number": /phoneNumberClient\(/,
-		passkey: /passkeyClient\(/,
-		anonymous: /anonymousClient\(/,
-	};
-
-	const pattern = pluginPatterns[plugin];
-	return pattern ? pattern.test(clientConfig) : false;
-}
-
-export function getMissingClientPlugins(
-	serverConfig: string,
-	clientConfig: string,
-): Feature[] {
-	const serverFeatures = detectFeatures(serverConfig);
-	const missingPlugins: Feature[] = [];
-
-	const pluginsRequiringClient: Feature[] = [
-		"2fa",
-		"organization",
-		"admin",
-		"username",
-		"multi-session",
-		"api-key",
-		"magic-link",
-		"phone-number",
-		"passkey",
-		"anonymous",
-	];
-
-	for (const feature of serverFeatures) {
-		if (
-			pluginsRequiringClient.includes(feature) &&
-			!clientHasPlugin(clientConfig, feature)
-		) {
-			missingPlugins.push(feature);
-		}
-	}
-
-	return missingPlugins;
-}
-
 export function computeFeatureDiff(
 	existing: Feature[],
 	requested: Feature[],
@@ -158,14 +108,4 @@ export function computeFeatureDiff(
 	const toAdd = requested.filter((f) => !existing.includes(f));
 	const existingFeatures = requested.filter((f) => existing.includes(f));
 	return { toAdd, existing: existingFeatures };
-}
-
-export function checkExistingEnvVars(
-	envVarNames: string[],
-	existingEnvVars: string[],
-): { name: string; exists: boolean }[] {
-	return envVarNames.map((name) => ({
-		name,
-		exists: existingEnvVars.includes(name),
-	}));
 }

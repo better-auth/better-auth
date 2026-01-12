@@ -251,10 +251,6 @@ export const Route = createAPIFileRoute("/api/auth/$")({
 	},
 };
 
-export function getFrameworkConfig(framework: Framework): FrameworkConfig {
-	return FRAMEWORK_CONFIGS[framework];
-}
-
 export function getDefaultAuthPath(
 	framework: Framework,
 	srcDir: boolean,
@@ -284,18 +280,4 @@ export function getDefaultApiPath(
 		return `src/${basePath}`;
 	}
 	return config.defaultSrcDir ? `src/${basePath}` : basePath;
-}
-
-export function isFullStackFramework(framework: Framework): boolean {
-	return !["express", "fastify", "hono", "elysia"].includes(framework);
-}
-
-export function isReactFramework(framework: Framework): boolean {
-	return [
-		"next-app-router",
-		"next-pages-router",
-		"remix",
-		"tanstack-start",
-		"expo",
-	].includes(framework);
 }

@@ -28,7 +28,7 @@ export function getSocialProviderEnvVars(provider: string): EnvVar[] {
 	];
 }
 
-export const KNOWN_SOCIAL_PROVIDERS = [
+const KNOWN_SOCIAL_PROVIDERS = [
 	"google",
 	"github",
 	"apple",
@@ -46,7 +46,7 @@ export const KNOWN_SOCIAL_PROVIDERS = [
 	"tiktok",
 ] as const;
 
-export const PLUGIN_CONFIGS: Record<string, PluginConfig> = {
+const PLUGIN_CONFIGS: Record<string, PluginConfig> = {
 	"2fa": {
 		serverImport: 'import { twoFactor } from "better-auth/plugins";',
 		clientImport:
@@ -148,10 +148,6 @@ export const PLUGIN_CONFIGS: Record<string, PluginConfig> = {
 	},
 };
 
-export function getPluginConfig(plugin: string): PluginConfig | undefined {
-	return PLUGIN_CONFIGS[plugin];
-}
-
 export function generatePluginImports(plugins: string[]): {
 	serverImports: string[];
 	clientImports: string[];
@@ -203,18 +199,6 @@ export function getPluginEnvVars(plugins: string[]): EnvVar[] {
 	}
 
 	return envVars;
-}
-
-export function isSocialProvider(feature: string): boolean {
-	return (
-		KNOWN_SOCIAL_PROVIDERS.includes(
-			feature as (typeof KNOWN_SOCIAL_PROVIDERS)[number],
-		) || !isKnownPlugin(feature)
-	);
-}
-
-export function isKnownPlugin(feature: string): boolean {
-	return feature in PLUGIN_CONFIGS || feature === "email-password";
 }
 
 export function categorizeFeatures(features: Feature[]): {

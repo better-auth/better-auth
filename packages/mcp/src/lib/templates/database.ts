@@ -6,7 +6,7 @@ import type {
 	ORMConfig,
 } from "../types.js";
 
-export const DATABASE_CONFIGS: Record<Database, DatabaseConfig> = {
+const DATABASE_CONFIGS: Record<Database, DatabaseConfig> = {
 	postgres: {
 		provider: "postgresql",
 		envVarName: "DATABASE_URL",
@@ -29,7 +29,7 @@ export const DATABASE_CONFIGS: Record<Database, DatabaseConfig> = {
 	},
 };
 
-export const ORM_CONFIGS: Record<ORM, ORMConfig> = {
+const ORM_CONFIGS: Record<ORM, ORMConfig> = {
 	prisma: {
 		adapterImport: `import { prismaAdapter } from "better-auth/adapters/prisma";
 import { PrismaClient } from "@prisma/client";`,
@@ -130,10 +130,4 @@ export function getDatabaseCommands(
 	});
 
 	return commands;
-}
-
-export function generateDatabaseEnvExample(database: Database): string {
-	const config = DATABASE_CONFIGS[database];
-	return `# Database
-${config.envVarName}="${config.connectionStringExample}"`;
 }
