@@ -888,7 +888,7 @@ describe("organization", async (it) => {
 		});
 		expect(orgAfterDelete.error?.status).toBe(400);
 		expect(orgAfterDelete.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
 		);
 	});
 
@@ -2965,7 +2965,7 @@ describe("global organization access", async (it) => {
 
 		expect(updateResult.error).toBeDefined();
 		expect(updateResult.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
 		);
 	});
 });
