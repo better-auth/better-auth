@@ -6,6 +6,7 @@ import type {
 	ORMConfig,
 } from "../types.js";
 
+// cspell:ignore mydb
 const DATABASE_CONFIGS: Record<Database, DatabaseConfig> = {
 	postgres: {
 		provider: "postgresql",
