@@ -1,3 +1,4 @@
+import { dash } from "@better-auth/dash";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { stripe } from "@better-auth/stripe";
@@ -340,6 +341,7 @@ export const auth = betterAuth({
 			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
+		dash(),
 	],
 });
 
