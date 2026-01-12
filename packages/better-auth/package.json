@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.5.0-beta.3",
+  "version": "1.5.0-beta.4",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsdown",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
@@ -463,7 +463,7 @@
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/bun": "^1.3.3",
+    "@types/bun": "^1.3.5",
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
     "better-sqlite3": "^12.4.1",

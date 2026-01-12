@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.5.0-beta.3",
+  "version": "1.5.0-beta.4",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -22,7 +22,7 @@
   "description": "SCIM plugin for Better Auth",
   "scripts": {
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
