@@ -8,7 +8,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "d1-db-id",
+      "database_id": "c46e9b0e-724b-4b3e-a90a-3700693ef707",
       "database_name": "db",
       "migrations_dir": "./drizzle"
     }
