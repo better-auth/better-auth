@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.5.0-beta.3",
+  "version": "1.5.0-beta.4",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -18,7 +18,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {

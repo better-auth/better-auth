@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.5.0-beta.3",
+  "version": "1.5.0-beta.4",
   "type": "module",
   "description": "Better Auth integration for Expo and React Native applications.",
   "main": "dist/index.mjs",
@@ -14,7 +14,7 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:types": "attw --profile esm-only --pack .",
     "lint:package": "publint run --strict",
     "build": "tsdown",

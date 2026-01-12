@@ -2,9 +2,12 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils";
 import { sessionMiddleware } from "../../../api";
-import { listApiKeys as listApiKeysFromStorage } from "../adapter";
+import {
+	batchMigrateLegacyMetadata,
+	listApiKeys as listApiKeysFromStorage,
+	parseDoubleStringifiedMetadata,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 export function listApiKeys({
 	opts,
@@ -165,33 +168,30 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys: ApiKey[];
-
-			apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
+			const apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
-			apiKeys = apiKeys.map((apiKey) => {
-				return {
-					...apiKey,
-					metadata: schema.apikey.fields.metadata.transform.output(
-						apiKey.metadata as never as string,
-					),
-				};
-			});
 
-			let returningApiKey = apiKeys.map((x) => {
-				const { key: _key, ...returningApiKey } = x;
+			// Build response with parsed metadata (synchronous, no DB calls)
+			const returningApiKeys = apiKeys.map((apiKey) => {
+				const { key: _key, ...rest } = apiKey;
 				return {
-					...returningApiKey,
-					permissions: returningApiKey.permissions
+					...rest,
+					metadata: parseDoubleStringifiedMetadata(apiKey.metadata),
+					permissions: rest.permissions
 						? safeJSONParse<{
 								[key: string]: string[];
-							}>(returningApiKey.permissions)
+							}>(rest.permissions)
 						: null,
 				};
 			});
 
-			return ctx.json(returningApiKey);
+			// Batch migrate legacy metadata (parallel DB updates)
+			await ctx.context.runInBackgroundOrAwait(
+				batchMigrateLegacyMetadata(ctx, apiKeys, opts),
+			);
+
+			return ctx.json(returningApiKeys);
 		},
 	);
 }
