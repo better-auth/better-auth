@@ -156,7 +156,7 @@ export const memoryAdapter = (
 						// Handle first clause - if it has OR connector, start with OR group
 						let result: boolean;
 						let orGroup: boolean | null = null;
-						
+
 						if (where[0]!.connector === "OR") {
 							// First clause is part of an OR group
 							orGroup = evalClause(record, where[0]!);
