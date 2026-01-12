@@ -6,7 +6,7 @@ description: Frequently asked questions about Better Auth.
 This page contains frequently asked questions, common issues, and other helpful information about Better Auth.
 
 <Accordions>
-  <Accordion id="auth-client-not-working" title="Auth client not working">
+  <Accordion title="Auth client not working">
   When encountering `createAuthClient` related errors, make sure to have the correct import path as it varies based on environment.
 
 If you're using the auth client on react front-end, you'll need to import it from `/react`:
@@ -23,7 +23,7 @@ import { createAuthClient } from "better-auth/client";
 
 </Accordion>
 
-<Accordion id="getsession-not-working" title="getSession not working">
+<Accordion title="getSession not working">
 If you try to call `authClient.getSession` on a server environment (e.g, a Next.js server component), it doesn't work since it can't access the cookies. You can use the `auth.api.getSession` instead and pass the request headers to it. 
 
 ```tsx title="server.tsx"
@@ -49,13 +49,13 @@ const session = await authClient.getSession({
 ```
 </Accordion>
 
-<Accordion id="adding-custom-fields-to-the-users-table" title="Adding custom fields to the users table">
+<Accordion title="Adding custom fields to the users table">
 
 Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
 
 </Accordion>
 
-<Accordion id="difference-between-getsession-and-usesession" title="Difference between getSession and useSession">
+<Accordion title="Difference between getSession and useSession">
 Both `useSession` and `getSession` instances are used fundamentally different based on the situation.
 
 `useSession` is a hook, meaning it can trigger re-renders whenever session data changes.
@@ -78,7 +78,7 @@ For all other situations where you shouldn't use `useSession`, is when you shoul
 </Callout>
 </Accordion>
 
-<Accordion id="common-typescript-errors" title="Common TypeScript Errors">
+<Accordion title="Common TypeScript Errors">
 If you're facing typescript errors, make sure your tsconfig has `strict` set to `true`:
 ```json title="tsconfig.json"
 {
@@ -99,13 +99,13 @@ if you can't set strict to true, you can enable strictNullChecks:
 
 You can learn more in our <Link href="/docs/concepts/typescript#typescript-config">TypeScript docs</Link>.
 </Accordion>
-<Accordion id="can-i-remove-name-image-or-email-fields-from-the-user-table" title="Can I remove `name`, `image`, or `email` fields from the user table?">
+<Accordion title="Can I remove `name`, `image`, or `email` fields from the user table?">
 At this time, you can't remove the `name`, `image`, or `email` fields from the user table.
 
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
 
-<Accordion id="dual-module-hazard-issue" title="Better Auth was already imported / `runWithRequestState` Error / Dual Module Hazard Issue">
+<Accordion title="Better Auth was already imported / `runWithRequestState` Error / Dual Module Hazard Issue">
 If you're encountering errors like:
 
 ```
@@ -141,18 +141,6 @@ yarn why better-auth
 If you see multiple versions listed, you have a dual module hazard.
 
 ### How to Fix
-
-#### For Next.js Users (Most Common)
-
-<Callout type="info">
-Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
-
-```ts title="next.config.js"
-const config = {
-  serverExternalPackages: ['better-auth']
-};
-```
-</Callout>
 
 #### Basic Steps
 
@@ -210,6 +198,18 @@ Note: Yarn v3 and pnpm v10 don't typically have this issue.
 #### Bundler Resolution Issues
 
 This is a bundler-level issue where the same module gets resolved to different instances. The goal is to make your bundler resolve the module to the same instance.
+
+<Callout type="info">
+**For Next.js users:**
+
+Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
+
+```ts title="next.config.js"
+const config = {
+  serverExternalPackages: ['better-auth']
+};
+```
+</Callout>
 
 <Callout type="info">
 **For Cloudflare Workers users:**
