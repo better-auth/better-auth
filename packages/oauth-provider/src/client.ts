@@ -1,4 +1,4 @@
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { BetterAuthClientPlugin } from "better-auth/types";
 import type { oauthProvider } from "./oauth";
 
