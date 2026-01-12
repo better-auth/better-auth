@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";

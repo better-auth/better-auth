@@ -53,6 +53,11 @@
       "types": "./dist/utils/index.d.mts",
       "default": "./dist/utils/index.mjs"
     },
+    "./utils/*": {
+      "dev-source": "./src/utils/*.ts",
+      "types": "./dist/utils/*.d.mts",
+      "default": "./dist/utils/*.mjs"
+    },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
       "types": "./dist/social-providers/index.d.mts",
@@ -96,6 +101,9 @@
       ],
       "utils": [
         "dist/utils/index.d.mts"
+      ],
+      "utils/*": [
+        "dist/utils/*.d.mts"
       ],
       "social-providers": [
         "dist/social-providers/index.d.mts"
