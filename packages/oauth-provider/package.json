@@ -49,6 +49,7 @@
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
+    "better-call": "catalog:",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
   },

@@ -53,16 +53,17 @@
   },
   "dependencies": {
     "@better-auth/utils": "catalog:",
-    "better-call": "catalog:",
     "zod": "^4.1.5"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/sso": "workspace:*",
+    "better-call": "catalog:",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*"
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
   }
 }

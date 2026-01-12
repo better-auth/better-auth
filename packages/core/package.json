@@ -126,6 +126,7 @@
   "devDependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1",
@@ -133,12 +134,12 @@
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
-    "better-call": "catalog:",
     "zod": "^4.1.12"
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
+    "better-call": "catalog:",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",
     "nanostores": "^1.0.1"
