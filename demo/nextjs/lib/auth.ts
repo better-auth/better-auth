@@ -24,12 +24,9 @@ import {
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
-import { reactInvitationEmail } from "./email/invitation";
-import { resend } from "./email/resend";
-import { reactResetPasswordEmail } from "./email/reset-password";
 
-const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
-const to = process.env.TEST_EMAIL || "";
+const _from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
+const _to = process.env.TEST_EMAIL || "";
 
 const dialect = (() => {
 	if (process.env.USE_MYSQL) {
