@@ -97,12 +97,10 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 			const adapter = getOrgAdapter(ctx.context, options);
 			const session = await getSessionFromCtx(ctx);
 			const isClient = ctx.request || ctx.headers;
-			
 
 			// Server-side doesn't require a session, but client-side does.
 			if (!session && isClient) throw APIError.fromStatus("UNAUTHORIZED");
 			const user = await getUserFromSessionOrBody(ctx);
-
 
 			// Check if the user is allowed to create an organization
 			const canCreateOrg = await options.allowUserToCreateOrganization(user);
@@ -112,7 +110,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-
 			// Check if the user has reached the organization limit
 			const limit = await options.organizationLimit(user);
 			const count = await adapter.countOrganizations(user.id);
@@ -120,7 +117,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				const msg = ORGANIZATION_ERROR_CODES.REACHED_ORG_LIMIT;
 				throw APIError.from("FORBIDDEN", msg);
 			}
-
 
 			// Check if the slug is already taken
 			if (enableSlugs) {
@@ -135,11 +131,9 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				}
 			}
 
-
 			// Prepare hooks
 			const createOrgHook = getHook("CreateOrganization", options);
 			const addMemberHook = getHook("AddMember", options);
-
 
 			// Prepare organization data
 			const organizationData = await (async () => {
@@ -148,7 +142,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				const modify = await createOrgHook.before({ organization, user });
 				return { ...organization, ...modify };
 			})();
-
 
 			// Create the organization
 			let organization: InferOrganization<O, false>;
@@ -159,7 +152,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				const msg = ORGANIZATION_ERROR_CODES.FAILED_TO_CREATE_ORGANIZATION;
 				throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 			}
-
 
 			// Prepare member data
 			const memberData = await (async () => {
@@ -173,15 +165,12 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				return { ...member, ...modify };
 			})();
 
-
 			// Create the member
 			const member = await adapter.createMember(memberData);
-
 
 			// Execute after hooks
 			await addMemberHook.after({ member, organization, user });
 			await createOrgHook.after({ organization, user, member });
-
 
 			// Set the active organization
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
@@ -189,7 +178,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				const organizationId = organization.id;
 				await adapter.setActiveOrganization(token, organizationId);
 			}
-
 
 			// Parse the metadata
 			const metadata: Record<string, any> | undefined = (() => {
@@ -203,7 +191,6 @@ export const createOrganization = <O extends ResolvedOrganizationOptions>(
 				}
 				return metadata;
 			})();
-
 
 			return ctx.json({
 				...organization,
