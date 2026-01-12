@@ -105,8 +105,14 @@ At this time, you can't remove the `name`, `image`, or `email` fields from the u
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
 
-<Accordion title="runWithRequestState Error / Dual Module Hazard Issue">
+<Accordion title="Better Auth was already imported / `runWithRequestState` Error / Dual Module Hazard Issue">
 If you're encountering errors like:
+
+```
+Better Auth was already imported. This breaks async local storage instance and will lead to issues!
+```
+
+Or like:
 
 ```
 No request state found. Please make sure you are calling this function within a `runWithRequestState` callback.
@@ -136,7 +142,12 @@ If you see multiple versions listed, you have a dual module hazard.
 
 ### How to Fix
 
-1. **Delete and reinstall dependencies:**
+#### Basic Steps
+
+Start by ensuring your dependencies are clean and all Better Auth packages use compatible versions.
+
+<Callout type="tip">
+**Clean reinstall:**
 
 ```bash
 # Remove node_modules and lockfile
@@ -147,31 +158,83 @@ rm pnpm-lock.yaml # or package-lock.json or yarn.lock
 pnpm install # or npm install or yarn install
 ```
 
-2. **Ensure all Better Auth packages use the same version:**
-
 Check your `package.json` and make sure all Better Auth related packages (`better-auth`, `@better-auth/core`, `@better-auth/oauth-provider`, etc.) are using compatible versions.
+</Callout>
 
-3. **For Cloudflare Workers users:**
+#### Package Manager Resolution Issues
+
+If you're using Yarn v1 (Classic) or potentially other package managers like pnpm v9, you may need to force `better-call` to resolve to a single instance.
+
+<Callout type="warn">
+**For Yarn v1 / pnpm v9 users:**
+
+Manually install `better-call` and add it to both `dependencies` and `resolutions` to force it to be hoisted to the top level:
+
+```json title="package.json"
+{
+  "dependencies": {
+    "better-call": "^1.1.8",
+    // ... other dependencies
+  },
+  "resolutions": {
+    "better-call": "^1.1.8"
+  }
+}
+```
+
+Then reinstall your dependencies:
+
+```bash
+yarn install # or pnpm install
+```
+
+Note: Yarn v3 and pnpm v10 don't typically have this issue.
+</Callout>
+
+<Callout type="error">
+**Important:** Make sure to install `better-auth` and related packages in `dependencies`, not `devDependencies`.
+</Callout>
+
+#### Bundler Resolution Issues
+
+This is a bundler-level issue where the same module gets resolved to different instances. The goal is to make your bundler resolve the module to the same instance.
+
+<Callout type="info">
+**For Next.js users:**
+
+Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
+
+```ts title="next.config.js"
+const config = {
+  serverExternalPackages: ['better-auth']
+};
+```
+</Callout>
+
+<Callout type="info">
+**For Cloudflare Workers users:**
 
 Make sure you have the `nodejs_compat` compatibility flag enabled in your `wrangler.toml`:
 
-```toml
+```toml title="wrangler.toml"
 compatibility_flags = ["nodejs_compat"]
 ```
+</Callout>
 
-4. **Verify the fix:**
+#### Verify the Fix
 
 Run the diagnostic commands again to confirm only one version of each package exists:
 
 ```bash
 pnpm why @better-auth/core
 pnpm why better-auth
+pnpm why better-call
 ```
 
 You should see only one version listed for each package.
 
 <Callout type="info">
-  Related issue: [#6613](https://github.com/better-auth/better-auth/issues/6613)
+  Related issues: [#6613](https://github.com/better-auth/better-auth/issues/6613), [yjs#438](https://github.com/yjs/yjs/issues/438)
 </Callout>
 </Accordion>
 </Accordions>
