@@ -13,38 +13,30 @@ const DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION = true;
 export const resolveOrgOptions = <O extends OrganizationOptions>(
 	opts?: O | undefined,
 ) => {
+	const roles = opts?.roles ?? {};
 	const options = {
 		...opts,
 		use: opts?.use ?? [],
-		allowUserToCreateOrganization: async (user) => {
-			if (typeof opts?.allowUserToCreateOrganization === "function") {
-				return (
-					(await opts.allowUserToCreateOrganization(user)) ??
-					DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION
-				);
-			}
-			return (
-				opts?.allowUserToCreateOrganization ??
-				DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION
-			);
-		},
-		organizationLimit: async (user) => {
-			if (typeof opts?.organizationLimit === "function") {
-				return (
-					(await opts.organizationLimit(user)) ?? DEFAULT_ORGANIZATION_LIMIT
-				);
-			}
-			return opts?.organizationLimit ?? DEFAULT_ORGANIZATION_LIMIT;
-		},
 		creatorRole: opts?.creatorRole ?? DEFAULT_CREATOR_ROLE,
 		membershipLimit: opts?.membershipLimit ?? DEFAULT_MEMBERSHIP_LIMIT,
 		disableSlugs: opts?.disableSlugs ?? DEFAULT_DISABLE_SLUGS,
-		ac: opts?.ac,
-		roles: {
-			...defaultRoles,
-			...(opts?.roles ?? {}),
+		roles: { ...defaultRoles, ...roles },
+		allowUserToCreateOrganization: async (...args) => {
+			const allowCreateOrg = opts?.allowUserToCreateOrganization;
+			if (typeof allowCreateOrg === "function") {
+				const result = await allowCreateOrg(...args);
+				return result ?? DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION;
+			}
+			return allowCreateOrg ?? DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION;
 		},
-		schema: opts?.schema,
+		organizationLimit: async (...args) => {
+			const orgLimit = opts?.organizationLimit;
+			if (typeof orgLimit === "function") {
+				const result = await orgLimit(...args);
+				return result ?? DEFAULT_ORGANIZATION_LIMIT;
+			}
+			return orgLimit ?? DEFAULT_ORGANIZATION_LIMIT;
+		},
 	} satisfies ResolvedOrganizationOptions;
 	return options;
 };
