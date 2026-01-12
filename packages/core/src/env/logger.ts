@@ -112,6 +112,13 @@ export const createLogger = (options?: Logger | undefined): InternalLogger => {
 
 		const formattedMessage = formatMessage(level, message, colorsEnabled);
 
+		// FIXME: workaround for APIError
+		args.forEach((arg) => {
+			if (typeof arg === "object" && arg !== null && "errorStack" in arg) {
+				arg.stack = arg.errorStack;
+			}
+		});
+
 		if (!options || typeof options.log !== "function") {
 			if (level === "error") {
 				console.error(formattedMessage, ...args);
