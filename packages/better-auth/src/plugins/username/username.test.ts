@@ -78,13 +78,14 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_ALREADY_TAKEN");
 	});
 
 	it("should fail on duplicate username in update-user if user is different", async () => {
 		const newHeaders = new Headers();
 		await client.signUp.email({
 			email: "new-email-2@gamil.com",
-			username: "duplicate-username",
+			username: "duplicate_username",
 			password: "new_password",
 			name: "new-name",
 			fetchOptions: {
@@ -94,12 +95,13 @@ describe("username", async (it) => {
 
 		const { headers: testUserHeaders } = await signInWithTestUser();
 		const res = await client.updateUser({
-			username: "duplicate-username",
+			username: "duplicate_username",
 			fetchOptions: {
 				headers: testUserHeaders,
 			},
 		});
-		expect(res.error?.status).toBe(400);
+		expect(res.error?.status).toBe(422);
+		expect(res.error?.code).toBe("USERNAME_IS_ALREADY_TAKEN");
 	});
 
 	it("should succeed on duplicate username in update-user if user is the same", async () => {
@@ -149,7 +151,7 @@ describe("username", async (it) => {
 			name: "new-name",
 		});
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe("INVALID_USERNAME");
 	});
 
 	it("should fail on too short username", async () => {
@@ -199,7 +201,7 @@ describe("username", async (it) => {
 			username: "invalid username!",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe("INVALID_USERNAME");
 	});
 
 	it("should reject too short username in isUsernameAvailable", async () => {
@@ -216,7 +218,7 @@ describe("username", async (it) => {
 			username: longUsername,
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_TOO_LONG");
+		expect(res.error?.code).toBe("USERNAME_TOO_LONG");
 	});
 
 	it("should not normalize displayUsername", async () => {
@@ -397,7 +399,7 @@ describe("username with displayUsername validation", async (it) => {
 			name: "test-name",
 		});
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe("INVALID_DISPLAY_USERNAME");
 	});
 
 	it("should update displayUsername with valid value", async () => {
@@ -463,7 +465,7 @@ describe("username with displayUsername validation", async (it) => {
 		});
 
 		expect(res.error?.status).toBe(400);
-		expect(res.error?.code).toBe("DISPLAY_USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe("INVALID_DISPLAY_USERNAME");
 	});
 });
 
@@ -497,7 +499,7 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 			username: "invalid_user",
 		});
 		expect(res.error?.status).toBe(422);
-		expect(res.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(res.error?.code).toBe("INVALID_USERNAME");
 	});
 
 	it("should reject username that doesn't match custom validator during sign-up/sign-in", async () => {
@@ -509,7 +511,7 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 		});
 
 		expect(signUpRes.error).toBeDefined();
-		expect(signUpRes.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(signUpRes.error?.code).toBe("INVALID_USERNAME");
 
 		const signInRes = await client.signIn.username({
 			username: "invalid_user",
@@ -517,7 +519,7 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 		});
 
 		expect(signInRes.error).toBeDefined();
-		expect(signInRes.error?.code).toBe("USERNAME_IS_INVALID");
+		expect(signInRes.error?.code).toBe("INVALID_USERNAME");
 	});
 });
 

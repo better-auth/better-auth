@@ -241,6 +241,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!ctx.body.username || !ctx.body.password) {
 						ctx.context.logger.error("Username or password not found");
 						throw new APIError("UNAUTHORIZED", {
+							code: "INVALID_USERNAME_OR_PASSWORD",
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
@@ -268,6 +269,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_LONG",
 							message: ERROR_CODES.USERNAME_TOO_LONG,
 						});
 					}
@@ -278,6 +280,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const valid = await validator(username);
 					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "INVALID_USERNAME",
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
@@ -301,6 +304,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNAUTHORIZED", {
+							code: "INVALID_USERNAME_OR_PASSWORD",
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
@@ -320,6 +324,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					});
 					if (!account) {
 						throw new APIError("UNAUTHORIZED", {
+							code: "INVALID_USERNAME_OR_PASSWORD",
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
@@ -329,6 +334,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							username,
 						});
 						throw new APIError("UNAUTHORIZED", {
+							code: "INVALID_USERNAME_OR_PASSWORD",
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
@@ -339,6 +345,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!validPassword) {
 						ctx.context.logger.error("Invalid password");
 						throw new APIError("UNAUTHORIZED", {
+							code: "INVALID_USERNAME_OR_PASSWORD",
 							message: ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
 						});
 					}
@@ -351,6 +358,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							!ctx.context.options?.emailVerification?.sendVerificationEmail
 						) {
 							throw new APIError("FORBIDDEN", {
+								code: "EMAIL_NOT_VERIFIED",
 								message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 							});
 						}
@@ -378,6 +386,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						}
 
 						throw new APIError("FORBIDDEN", {
+							code: "EMAIL_NOT_VERIFIED",
 							message: ERROR_CODES.EMAIL_NOT_VERIFIED,
 						});
 					}
@@ -425,6 +434,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const username = ctx.body.username;
 					if (!username) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "INVALID_USERNAME",
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
@@ -441,6 +451,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 					if (username.length > maxUsernameLength) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "USERNAME_TOO_LONG",
 							message: ERROR_CODES.USERNAME_TOO_LONG,
 						});
 					}
@@ -451,6 +462,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					const valid = await validator(username);
 					if (!valid) {
 						throw new APIError("UNPROCESSABLE_ENTITY", {
+							code: "INVALID_USERNAME",
 							message: ERROR_CODES.INVALID_USERNAME,
 						});
 					}
@@ -509,6 +521,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 
 							if (username.length > maxUsernameLength) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_TOO_LONG",
 									message: ERROR_CODES.USERNAME_TOO_LONG,
 								});
 							}
@@ -519,6 +532,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							const valid = await validator(username);
 							if (!valid) {
 								throw new APIError("BAD_REQUEST", {
+									code: "INVALID_USERNAME",
 									message: ERROR_CODES.INVALID_USERNAME,
 								});
 							}
@@ -540,6 +554,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 								user.id !== ctx.context.session.session.userId;
 							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw new APIError("BAD_REQUEST", {
+									code: "USERNAME_IS_ALREADY_TAKEN",
 									message: ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
 								});
 							}
@@ -560,6 +575,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 									await options.displayUsernameValidator(displayUsername);
 								if (!valid) {
 									throw new APIError("BAD_REQUEST", {
+										code: "INVALID_DISPLAY_USERNAME",
 										message: ERROR_CODES.INVALID_DISPLAY_USERNAME,
 									});
 								}
