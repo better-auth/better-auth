@@ -188,7 +188,11 @@ Then reinstall your dependencies:
 yarn install # or pnpm install
 ```
 
-Note: Yarn v3 and pnpm v12 don't typically have this issue.
+Note: Yarn v3 and pnpm v10 don't typically have this issue.
+</Callout>
+
+<Callout type="error">
+**Important:** Make sure to install `better-auth` and related packages in `dependencies`, not `devDependencies`.
 </Callout>
 
 #### Bundler Resolution Issues
@@ -203,38 +207,6 @@ Add `better-auth` to `serverExternalPackages` in your `next.config.js`:
 ```ts title="next.config.js"
 const config = {
   serverExternalPackages: ['better-auth']
-};
-```
-</Callout>
-
-<Callout type="info">
-**For Vite users:**
-
-Use `resolve.dedupe` in your `vite.config.ts`:
-
-```ts title="vite.config.ts"
-export default {
-  resolve: {
-    dedupe: ['better-auth', '@better-auth/core', 'better-call']
-  }
-};
-```
-</Callout>
-
-<Callout type="info">
-**For Webpack users:**
-
-Use `resolve.alias` in your webpack config:
-
-```js title="webpack.config.js"
-module.exports = {
-  resolve: {
-    alias: {
-      'better-auth': require.resolve('better-auth'),
-      '@better-auth/core': require.resolve('@better-auth/core'),
-      'better-call': require.resolve('better-call')
-    }
-  }
 };
 ```
 </Callout>
