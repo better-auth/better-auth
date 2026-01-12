@@ -55,7 +55,6 @@
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
     "nanostores": "^1.0.1"
   },
   "files": [
