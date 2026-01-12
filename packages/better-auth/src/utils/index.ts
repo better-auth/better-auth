@@ -1,3 +1,4 @@
+export { generateId } from "@better-auth/core/utils";
 export * from "../oauth2/state";
 export * from "./boolean";
 export * from "./constants";
@@ -15,4 +16,3 @@ export * from "./shim";
 export * from "./time";
 export * from "./url";
 export * from "./wildcard";
-export { generateId } from "@better-auth/core/utils";
