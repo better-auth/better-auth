@@ -1,4 +1,18 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
+
+type SendVerificationOTPData =
+	| {
+			email: string;
+			otp: string;
+			type: "email-verification" | "forget-password";
+			user: User & Record<string, any>;
+	  }
+	| {
+			email: string;
+			otp: string;
+			type: "sign-in";
+	  };
 
 export interface EmailOTPOptions {
 	/**
@@ -8,11 +22,7 @@ export interface EmailOTPOptions {
 	 * On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
 	 */
 	sendVerificationOTP: (
-		data: {
-			email: string;
-			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
-		},
+		data: SendVerificationOTPData,
 		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void>;
 	/**
