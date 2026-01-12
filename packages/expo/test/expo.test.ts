@@ -597,7 +597,7 @@ describe("expo with cookieCache", async () => {
 describe("expo with cookie storeStateStrategy", async () => {
 	const storage = new Map<string, string>();
 
-	const { client } = await getTestInstance(
+	const { client, auth } = await getTestInstance(
 		{
 			account: {
 				storeStateStrategy: "cookie",
@@ -647,6 +647,53 @@ describe("expo with cookie storeStateStrategy", async () => {
 		expect(String(url)).toContain("/expo-authorization-proxy");
 		expect(String(url)).toContain("authorizationURL=");
 		expect(String(url)).toContain("oauthState=");
+	});
+
+	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {
+		fn.mockClear();
+
+		const expoWebBrowser = await import("expo-web-browser");
+		const { parseSetCookieHeader } = await import("../src/client");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockImplementationOnce(
+			async (proxyURL, to, webBrowserOptions) => {
+				const proxyUrlStr = String(proxyURL);
+
+				const oauthStateParam = new URL(proxyUrlStr).searchParams.get(
+					"oauthState",
+				);
+				expect(oauthStateParam).toBeTruthy();
+
+				const res = await auth.handler(
+					new Request(proxyUrlStr, { method: "GET" }),
+				);
+
+				expect(res.status).toBe(302);
+
+				const setCookie = res.headers.get("set-cookie");
+				expect(setCookie).toBeTruthy();
+
+				const cookieMap = parseSetCookieHeader(setCookie!);
+				const oauthStateCookie = [...cookieMap.entries()].find(([name]) =>
+					name.includes("oauth_state"),
+				);
+
+				expect(oauthStateCookie).toBeTruthy();
+				expect(oauthStateCookie![1].value).toBe(oauthStateParam);
+
+				fn(proxyURL, to, webBrowserOptions);
+				return {
+					type: "success",
+					url: "better-auth://?cookie=better-auth.session_token=dummy",
+				};
+			},
+		);
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+		expect(fn).toHaveBeenCalled();
 	});
 });
 
