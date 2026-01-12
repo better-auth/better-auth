@@ -1,4 +1,10 @@
-import type { Database, ORM, DatabaseConfig, ORMConfig, EnvVar } from "../types.js";
+import type {
+	Database,
+	DatabaseConfig,
+	EnvVar,
+	ORM,
+	ORMConfig,
+} from "../types.js";
 
 export const DATABASE_CONFIGS: Record<Database, DatabaseConfig> = {
 	postgres: {
@@ -70,7 +76,7 @@ function getShortProvider(provider: string): string {
 
 export function generateDatabaseConfig(
 	database: Database,
-	orm: ORM
+	orm: ORM,
 ): { imports: string; config: string; prismaInstance?: string } {
 	const dbConfig = DATABASE_CONFIGS[database];
 	const ormConfig = ORM_CONFIGS[orm];
@@ -101,7 +107,7 @@ export function getDatabaseEnvVar(database: Database): EnvVar {
 }
 
 export function getDatabaseCommands(
-	orm: ORM
+	orm: ORM,
 ): { command: string; description: string; when?: string }[] {
 	const ormConfig = ORM_CONFIGS[orm];
 	const commands: { command: string; description: string; when?: string }[] =

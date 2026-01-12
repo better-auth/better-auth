@@ -1,14 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import * as z from "zod";
 import { generateSetup, isSetupError } from "../lib/generator.js";
-import type { Framework, Database, ORM, Feature } from "../lib/types.js";
 import {
-	FrameworkEnum,
 	DatabaseEnum,
-	ORMEnum,
-	FeatureEnum,
 	ExistingSetupSchema,
+	FeatureEnum,
+	FrameworkEnum,
+	ORMEnum,
 } from "../lib/schemas.js";
+import type { Database, Feature, Framework, ORM } from "../lib/types.js";
 
 export function registerSetupAuth(server: McpServer) {
 	server.tool(
@@ -42,7 +42,7 @@ Returns all files, environment variables, and commands needed. One tool call = c
 				.optional()
 				.default(["email-password"])
 				.describe(
-					"Auth features to enable (e.g., 'email-password', 'google', '2fa')"
+					"Auth features to enable (e.g., 'email-password', 'google', '2fa')",
 				),
 			typescript: z
 				.boolean()
@@ -63,7 +63,7 @@ Returns all files, environment variables, and commands needed. One tool call = c
 				.optional()
 				.describe("API route path (auto-detected based on framework)"),
 			existingSetup: ExistingSetupSchema.optional().describe(
-				"Existing auth configuration for incremental updates. Pass current auth.ts and auth-client.ts contents to add new features without overwriting."
+				"Existing auth configuration for incremental updates. Pass current auth.ts and auth-client.ts contents to add new features without overwriting.",
 			),
 		},
 		async (input) => {
@@ -115,13 +115,13 @@ Returns all files, environment variables, and commands needed. One tool call = c
 									},
 								},
 								null,
-								2
+								2,
 							),
 						},
 					],
 					isError: true,
 				};
 			}
-		}
+		},
 	);
 }

@@ -1,39 +1,38 @@
-import type {
-	SetupAuthInput,
-	SetupAuthOutput,
-	SetupAuthError,
-	OutputFile,
-	EnvVar,
-	Command,
-	DocLink,
-	Feature,
-	Framework,
-	Database,
-	ORM,
-} from "./types.js";
-import {
-	FRAMEWORK_CONFIGS,
-	getDefaultAuthPath,
-	getDefaultApiPath,
-	isReactFramework,
-} from "./templates/frameworks.js";
+import { computeFeatureDiff, parseExistingSetup } from "./parser.js";
 import {
 	generateDatabaseConfig,
-	getDatabaseEnvVar,
 	getDatabaseCommands,
+	getDatabaseEnvVar,
 } from "./templates/database.js";
 import {
-	generateSocialProviderConfig,
-	getSocialProviderEnvVars,
 	categorizeFeatures,
 	generatePluginImports,
 	generatePluginSetup,
+	generateSocialProviderConfig,
 	getPluginEnvVars,
+	getSocialProviderEnvVars,
 } from "./templates/features.js";
-import { parseExistingSetup, computeFeatureDiff } from "./parser.js";
+import {
+	FRAMEWORK_CONFIGS,
+	getDefaultApiPath,
+	getDefaultAuthPath,
+} from "./templates/frameworks.js";
+import type {
+	Command,
+	Database,
+	DocLink,
+	EnvVar,
+	Feature,
+	Framework,
+	ORM,
+	OutputFile,
+	SetupAuthError,
+	SetupAuthInput,
+	SetupAuthOutput,
+} from "./types.js";
 
 export function generateSetup(
-	input: SetupAuthInput
+	input: SetupAuthInput,
 ): SetupAuthOutput | SetupAuthError {
 	const framework = input.framework;
 	const database = input.database;
@@ -47,7 +46,7 @@ export function generateSetup(
 
 	let mode: "create" | "update" = "create";
 	let featuresToGenerate = features;
-	let detected;
+	let detected: ReturnType<typeof parseExistingSetup> | undefined;
 
 	if (input.existingSetup?.authConfig) {
 		mode = "update";
@@ -201,18 +200,15 @@ function generateAuthFile(options: {
 	hasEmailPassword: boolean;
 	typescript: boolean;
 }): string {
-	const {
-		database,
-		orm,
-		socialProviders,
-		plugins,
-		hasEmailPassword,
-	} = options;
+	const { database, orm, socialProviders, plugins, hasEmailPassword } = options;
 
 	const imports: string[] = ['import { betterAuth } from "better-auth";'];
 
-	const { imports: dbImports, config: dbConfig, prismaInstance } =
-		generateDatabaseConfig(database, orm);
+	const {
+		imports: dbImports,
+		config: dbConfig,
+		prismaInstance,
+	} = generateDatabaseConfig(database, orm);
 
 	if (dbImports) {
 		imports.push(dbImports);
@@ -293,7 +289,7 @@ export const authClient = createAuthClient(${configBody});
 
 function generateApiRouteFile(
 	framework: Framework,
-	authPath: string
+	authPath: string,
 ): string | null {
 	const frameworkConfig = FRAMEWORK_CONFIGS[framework];
 
@@ -315,10 +311,16 @@ function generateUpdateChanges(options: {
 } {
 	const { socialProviders, plugins } = options;
 
-	const serverChanges: { type: string; content: string; description: string }[] =
-		[];
-	const clientChanges: { type: string; content: string; description: string }[] =
-		[];
+	const serverChanges: {
+		type: string;
+		content: string;
+		description: string;
+	}[] = [];
+	const clientChanges: {
+		type: string;
+		content: string;
+		description: string;
+	}[] = [];
 
 	const { serverImports, clientImports } = generatePluginImports(plugins);
 
@@ -370,7 +372,7 @@ function generateUpdateChanges(options: {
 function generateNextSteps(
 	mode: "create" | "update",
 	socialProviders: string[],
-	plugins: string[]
+	plugins: string[],
 ): string[] {
 	const steps: string[] = [];
 
@@ -380,9 +382,7 @@ function generateNextSteps(
 	}
 
 	if (socialProviders.length > 0) {
-		steps.push(
-			`Configure OAuth apps for: ${socialProviders.join(", ")}`
-		);
+		steps.push(`Configure OAuth apps for: ${socialProviders.join(", ")}`);
 		steps.push("Add callback URLs to OAuth provider dashboards");
 	}
 
@@ -395,7 +395,9 @@ function generateNextSteps(
 	}
 
 	if (plugins.includes("captcha")) {
-		steps.push("Set up captcha provider (Cloudflare Turnstile, reCAPTCHA, or hCaptcha)");
+		steps.push(
+			"Set up captcha provider (Cloudflare Turnstile, reCAPTCHA, or hCaptcha)",
+		);
 	}
 
 	steps.push("Start your development server and test auth flow");
@@ -415,7 +417,9 @@ function generateDocLinks(features: Feature[]): DocLink[] {
 		},
 	];
 
-	if (features.some((f) => ["google", "github", "apple", "discord"].includes(f))) {
+	if (
+		features.some((f) => ["google", "github", "apple", "discord"].includes(f))
+	) {
 		docs.push({
 			title: "Social Sign-On",
 			url: "https://www.better-auth.com/docs/authentication/social-sign-on",
@@ -447,7 +451,7 @@ function generateDocLinks(features: Feature[]): DocLink[] {
 }
 
 export function isSetupError(
-	result: SetupAuthOutput | SetupAuthError
+	result: SetupAuthOutput | SetupAuthError,
 ): result is SetupAuthError {
 	return "error" in result;
 }

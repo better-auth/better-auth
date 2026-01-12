@@ -1,6 +1,8 @@
-import type { DetectedConfig, Feature, ExistingSetup } from "./types.js";
+import type { DetectedConfig, ExistingSetup, Feature } from "./types.js";
 
-export function parseExistingSetup(existingSetup: ExistingSetup): DetectedConfig {
+export function parseExistingSetup(
+	existingSetup: ExistingSetup,
+): DetectedConfig {
 	const detected: DetectedConfig = {
 		features: [],
 	};
@@ -49,7 +51,7 @@ function detectORM(config: string): string | undefined {
 
 function detectFeatures(
 	serverConfig: string,
-	clientConfig?: string
+	clientConfig?: string,
 ): Feature[] {
 	const features: Feature[] = [];
 
@@ -119,7 +121,7 @@ export function clientHasPlugin(clientConfig: string, plugin: string): boolean {
 
 export function getMissingClientPlugins(
 	serverConfig: string,
-	clientConfig: string
+	clientConfig: string,
 ): Feature[] {
 	const serverFeatures = detectFeatures(serverConfig);
 	const missingPlugins: Feature[] = [];
@@ -151,7 +153,7 @@ export function getMissingClientPlugins(
 
 export function computeFeatureDiff(
 	existing: Feature[],
-	requested: Feature[]
+	requested: Feature[],
 ): { toAdd: Feature[]; existing: Feature[] } {
 	const toAdd = requested.filter((f) => !existing.includes(f));
 	const existingFeatures = requested.filter((f) => existing.includes(f));
@@ -160,7 +162,7 @@ export function computeFeatureDiff(
 
 export function checkExistingEnvVars(
 	envVarNames: string[],
-	existingEnvVars: string[]
+	existingEnvVars: string[],
 ): { name: string; exists: boolean }[] {
 	return envVarNames.map((name) => ({
 		name,

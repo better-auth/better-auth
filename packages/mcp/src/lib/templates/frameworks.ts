@@ -9,7 +9,9 @@ export const FRAMEWORK_CONFIGS: Record<Framework, FrameworkConfig> = {
 		clientImport: 'import { createAuthClient } from "better-auth/react";',
 		handlerImport: 'import { toNextJsHandler } from "better-auth/next-js";',
 		handlerFunction: "toNextJsHandler",
-		apiRouteTemplate: (authPath: string) => `import { auth } from "@/${authPath}";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { auth } from "@/${authPath}";
 import { toNextJsHandler } from "better-auth/next-js";
 
 export const { GET, POST } = toNextJsHandler(auth);`,
@@ -23,7 +25,9 @@ export const { GET, POST } = toNextJsHandler(auth);`,
 		clientImport: 'import { createAuthClient } from "better-auth/react";',
 		handlerImport: 'import { toNodeHandler } from "better-auth/node";',
 		handlerFunction: "toNodeHandler",
-		apiRouteTemplate: (authPath: string) => `import { toNodeHandler } from "better-auth/node";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { toNodeHandler } from "better-auth/node";
 import { auth } from "@/${authPath}";
 
 export const config = { api: { bodyParser: false } };
@@ -56,7 +60,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		clientImport: 'import { createAuthClient } from "better-auth/client";',
 		handlerImport: "",
 		handlerFunction: "",
-		apiRouteTemplate: (authPath: string) => `import type { APIRoute } from "astro";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import type { APIRoute } from "astro";
 import { auth } from "@/${authPath}";
 
 export const GET: APIRoute = async (ctx) => {
@@ -76,7 +82,9 @@ export const POST: APIRoute = async (ctx) => {
 		clientImport: 'import { createAuthClient } from "better-auth/react";',
 		handlerImport: "",
 		handlerFunction: "",
-		apiRouteTemplate: (authPath: string) => `import { auth } from "~/${authPath}";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { auth } from "~/${authPath}";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -96,7 +104,9 @@ export async function action({ request }: ActionFunctionArgs) {
 		clientImport: 'import { createAuthClient } from "better-auth/vue";',
 		handlerImport: "",
 		handlerFunction: "",
-		apiRouteTemplate: (authPath: string) => `import { auth } from "~/${authPath}";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { auth } from "~/${authPath}";
 
 export default defineEventHandler((event) => {
   return auth.handler(toWebRequest(event));
@@ -111,7 +121,9 @@ export default defineEventHandler((event) => {
 		clientImport: 'import { createAuthClient } from "better-auth/solid";',
 		handlerImport: "",
 		handlerFunction: "",
-		apiRouteTemplate: (authPath: string) => `import { auth } from "~/${authPath}";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { auth } from "~/${authPath}";
 import type { APIEvent } from "@solidjs/start/server";
 
 export async function GET(event: APIEvent) {
@@ -215,7 +227,9 @@ console.log("Server running on port 3000");`,
 		clientImport: 'import { createAuthClient } from "better-auth/react";',
 		handlerImport: "",
 		handlerFunction: "",
-		apiRouteTemplate: (authPath: string) => `import { auth } from "~/${authPath}";
+		apiRouteTemplate: (
+			authPath: string,
+		) => `import { auth } from "~/${authPath}";
 import { createAPIFileRoute } from "@tanstack/start/api";
 
 export const Route = createAPIFileRoute("/api/auth/$")({
@@ -243,7 +257,7 @@ export function getFrameworkConfig(framework: Framework): FrameworkConfig {
 
 export function getDefaultAuthPath(
 	framework: Framework,
-	srcDir: boolean
+	srcDir: boolean,
 ): string {
 	const config = FRAMEWORK_CONFIGS[framework];
 	const basePath = config.defaultAuthPath;
@@ -259,7 +273,7 @@ export function getDefaultAuthPath(
 
 export function getDefaultApiPath(
 	framework: Framework,
-	srcDir: boolean
+	srcDir: boolean,
 ): string {
 	const config = FRAMEWORK_CONFIGS[framework];
 	const basePath = config.defaultApiPath;

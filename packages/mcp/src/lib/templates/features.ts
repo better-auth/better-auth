@@ -1,4 +1,4 @@
-import type { EnvVar, PluginConfig, Feature } from "../types.js";
+import type { EnvVar, Feature, PluginConfig } from "../types.js";
 
 export function generateSocialProviderConfig(provider: string): string {
 	const upperName = provider.toUpperCase();
@@ -49,7 +49,8 @@ export const KNOWN_SOCIAL_PROVIDERS = [
 export const PLUGIN_CONFIGS: Record<string, PluginConfig> = {
 	"2fa": {
 		serverImport: 'import { twoFactor } from "better-auth/plugins";',
-		clientImport: 'import { twoFactorClient } from "better-auth/client/plugins";',
+		clientImport:
+			'import { twoFactorClient } from "better-auth/client/plugins";',
 		serverPlugin: () => `twoFactor()`,
 		clientPlugin: () => `twoFactorClient()`,
 	},
@@ -68,7 +69,8 @@ export const PLUGIN_CONFIGS: Record<string, PluginConfig> = {
 	},
 	username: {
 		serverImport: 'import { username } from "better-auth/plugins";',
-		clientImport: 'import { usernameClient } from "better-auth/client/plugins";',
+		clientImport:
+			'import { usernameClient } from "better-auth/client/plugins";',
 		serverPlugin: () => `username()`,
 		clientPlugin: () => `usernameClient()`,
 	},
@@ -206,7 +208,7 @@ export function getPluginEnvVars(plugins: string[]): EnvVar[] {
 export function isSocialProvider(feature: string): boolean {
 	return (
 		KNOWN_SOCIAL_PROVIDERS.includes(
-			feature as (typeof KNOWN_SOCIAL_PROVIDERS)[number]
+			feature as (typeof KNOWN_SOCIAL_PROVIDERS)[number],
 		) || !isKnownPlugin(feature)
 	);
 }
