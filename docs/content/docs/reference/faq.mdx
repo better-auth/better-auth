@@ -104,4 +104,39 @@ At this time, you can't remove the `name`, `image`, or `email` fields from the u
 
 We do plan to have more customizability in the future in this regard, but for now, you can't remove these fields.
 </Accordion>
+
+<Accordion title="Field renaming (fields config) not working as expected">
+
+The `fields` configuration in your auth config **only affects database column names**, not the field names you use in your JavaScript/TypeScript code.
+
+**Example:**
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  user: {
+    fields: {
+      emailVerified: "email_verified",
+      createdAt: "created_at",
+    },
+  },
+});
+```
+
+**In your database:** columns will be named `email_verified` and `created_at`
+
+**In your code:** you must still use `emailVerified` and `createdAt`
+
+```ts title="middleware.ts"
+// ✅ Correct
+console.log(user.emailVerified);
+
+// ❌ Wrong - this property doesn't exist
+console.log(user.email_verified);
+```
+
+This design keeps your TypeScript types consistent and type-safe while allowing you to use any naming convention in your database (useful for migrations or matching existing schemas).
+
+For detailed information and more examples, see the <Link href="/docs/concepts/database#understanding-field-mapping">Understanding Field Mapping</Link> section in the database documentation.
+
+</Accordion>
 </Accordions>
