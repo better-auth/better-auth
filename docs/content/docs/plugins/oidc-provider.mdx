@@ -3,6 +3,10 @@ title: OIDC Provider
 description: Open ID Connect plugin for Better Auth that allows you to have your own OIDC provider.
 ---
 
+<Callout type="warn">
+This plugin will soon be deprecated in favor of the [OAuth Provider Plugin](/docs/plugins/oauth-provider).
+</Callout>
+
 The **OIDC Provider Plugin** enables you to build and manage your own OpenID Connect (OIDC) provider, granting full control over user authentication without relying on third-party services like Okta or Azure AD. It also allows other services to authenticate users through your OIDC provider.
 
 **Key Features**:
@@ -27,7 +31,7 @@ This plugin is in active development and may not be suitable for production use.
     <Step>
         ### Mount the Plugin
 
-        Add the OIDC plugin to your auth config. See [OIDC Configuration](#oidc-configuration) on how to configure the plugin.
+        Add the OIDC plugin to your auth config. See [Configuration Section](#configuration) on how to configure the plugin.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";

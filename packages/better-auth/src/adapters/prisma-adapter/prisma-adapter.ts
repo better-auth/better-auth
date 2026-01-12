@@ -237,6 +237,44 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					};
 				};
 
+				// Special handling for update actions: extract AND conditions with eq operator to root level
+				// Prisma requires unique fields to be at root level, not nested in AND arrays
+				// Only simple equality conditions can be at root level; complex operators must stay in AND array
+				if (action === "update") {
+					const and = where.filter(
+						(w) => w.connector === "AND" || !w.connector,
+					);
+					const or = where.filter((w) => w.connector === "OR");
+
+					// Separate AND conditions into simple eq (can extract) and complex (must stay in AND)
+					const andSimple = and.filter(
+						(w) => w.operator === "eq" || !w.operator,
+					);
+					const andComplex = and.filter(
+						(w) => w.operator !== "eq" && w.operator !== undefined,
+					);
+
+					const andSimpleClause = andSimple.map((w) => buildSingleCondition(w));
+					const andComplexClause = andComplex.map((w) =>
+						buildSingleCondition(w),
+					);
+					const orClause = or.map((w) => buildSingleCondition(w));
+
+					// Extract simple equality AND conditions to root level
+					const result: Record<string, any> = {};
+					for (const clause of andSimpleClause) {
+						Object.assign(result, clause);
+					}
+					// Keep complex AND conditions in AND array
+					if (andComplexClause.length > 0) {
+						result.AND = andComplexClause;
+					}
+					if (orClause.length > 0) {
+						result.OR = orClause;
+					}
+					return result;
+				}
+
 				// Special handling for delete actions: extract id to root level
 				if (action === "delete") {
 					const idCondition = where.find((w) => w.field === "id");
@@ -425,6 +463,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						where,
 						action: "update",
 					});
+
 					return await db[model]!.update({
 						where: whereClause,
 						data: update,
@@ -465,6 +504,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					} catch (e: any) {
 						// If the record doesn't exist, we don't want to throw an error
 						if (e?.meta?.cause === "Record to delete does not exist.") return;
+						if (e?.code === "P2025") return; // Prisma 7+
 						// otherwise if it's an unknown error, we want to just log it for debugging.
 						console.log(e);
 					}
