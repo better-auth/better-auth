@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
@@ -14,12 +15,51 @@ import * as z from "zod/v4";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
 
+function createMockAdapter(adapterId: string): DBAdapter {
+	return {
+		id: adapterId,
+		create: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		findOne: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		findMany: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		count: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		update: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		updateMany: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		delete: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		deleteMany: async () => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		transaction: async (callback) => {
+			throw new Error("Mock adapter methods should not be called");
+		},
+		options: {
+			adapterConfig: {
+				adapterId,
+			},
+		},
+	};
+}
+
 async function generateAction(opts: any) {
 	const options = z
 		.object({
 			cwd: z.string(),
 			config: z.string().optional(),
 			output: z.string().optional(),
+			adapter: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
@@ -41,10 +81,17 @@ async function generateAction(opts: any) {
 		return;
 	}
 
-	const adapter = await getAdapter(config).catch((e) => {
-		console.error(e.message);
-		process.exit(1);
-	});
+	let adapter: DBAdapter;
+	if (options.adapter) {
+		// Use mock adapter when --adapter flag is provided
+		adapter = createMockAdapter(options.adapter);
+	} else {
+		// Get adapter from config (existing behavior)
+		adapter = await getAdapter(config).catch((e) => {
+			console.error(e.message);
+			process.exit(1);
+		});
+	}
 
 	const spinner = yoctoSpinner({ text: "preparing schema..." }).start();
 
@@ -201,6 +248,10 @@ export const generate = new Command("generate")
 		"the path to the configuration file. defaults to the first configuration file found.",
 	)
 	.option("--output <output>", "the file to output to the generated schema")
+	.option(
+		"--adapter <adapter>",
+		"specify the adapter type (e.g., prisma, drizzle, kysely) without requiring a configured adapter",
+	)
 	.option("-y, --yes", "automatically answer yes to all prompts", false)
 	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);
