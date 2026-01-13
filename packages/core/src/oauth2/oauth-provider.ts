@@ -120,6 +120,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 */
 	redirectURI?: string | undefined;
 	/**
+	 * Custom authorization endpoint URL.
+	 * Use this to override the default authorization endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	authorizationEndpoint?: string | undefined;
+	/**
 	 * The client key of your application
 	 * Tiktok Social Provider uses this field instead of clientId
 	 */

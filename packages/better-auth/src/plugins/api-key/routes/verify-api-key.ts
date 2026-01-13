@@ -1,7 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { isAPIError } from "../../../utils/is-api-error";
 import { role } from "../../access";
@@ -289,6 +289,7 @@ export function verifyApiKey({
 					);
 				}
 			} catch (error) {
+				ctx.context.logger.error("Failed to validate API key:", error);
 				if (isAPIError(error)) {
 					return ctx.json({
 						valid: false,
