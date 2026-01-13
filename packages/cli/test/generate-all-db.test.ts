@@ -39,7 +39,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		await expect(schema.code).toMatchSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql.txt",
 		);
 	});
