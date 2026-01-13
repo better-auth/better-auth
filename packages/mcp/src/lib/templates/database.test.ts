@@ -146,6 +146,8 @@ describe("getDatabaseCommands", () => {
 
 		expect(result.length).toBe(2);
 		expect(result.some((c) => c.command.includes("generate"))).toBe(true);
-		expect(result.some((c) => c.command.includes("drizzle-kit push"))).toBe(true);
+		expect(result.some((c) => c.command.includes("drizzle-kit push"))).toBe(
+			true,
+		);
 	});
 });

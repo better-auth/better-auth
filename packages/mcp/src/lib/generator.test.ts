@@ -200,9 +200,9 @@ describe("generateSetup", () => {
 			expect(output.envVars.some((e) => e.name === "GOOGLE_CLIENT_ID")).toBe(
 				true,
 			);
-			expect(output.envVars.some((e) => e.name === "GOOGLE_CLIENT_SECRET")).toBe(
-				true,
-			);
+			expect(
+				output.envVars.some((e) => e.name === "GOOGLE_CLIENT_SECRET"),
+			).toBe(true);
 		});
 	});
 
@@ -318,9 +318,9 @@ describe("generateSetup", () => {
 
 			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
-			expect(output.commands.some((c) => c.command.includes("better-auth"))).toBe(
-				true,
-			);
+			expect(
+				output.commands.some((c) => c.command.includes("better-auth")),
+			).toBe(true);
 		});
 
 		it("should include migration command for no ORM", () => {
@@ -333,7 +333,9 @@ describe("generateSetup", () => {
 			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(
-				output.commands.some((c) => c.command.includes("@better-auth/cli migrate")),
+				output.commands.some((c) =>
+					c.command.includes("@better-auth/cli migrate"),
+				),
 			).toBe(true);
 		});
 
