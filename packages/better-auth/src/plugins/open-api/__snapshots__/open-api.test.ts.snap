@@ -3783,9 +3783,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "type": "string",
                   },
                   "rememberMe": {
-                    "description": undefined,
+                    "default": true,
+                    "description": "If this is false, the session will not be remembered. Default is \`true\`.",
                     "type": [
-                      "string",
+                      "boolean",
                       "null",
                     ],
                   },

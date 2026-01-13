@@ -681,7 +681,7 @@ const getFullOrganizationQuerySchema = z.optional(
 			.or(z.string().transform((val) => parseInt(val)))
 			.meta({
 				description:
-					"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
+					"The limit of members to get. By default, it uses the membershipLimit option.",
 			})
 			.optional(),
 	}),
