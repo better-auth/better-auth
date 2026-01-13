@@ -35,7 +35,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "tsdown": "catalog:",
-    "type-fest": "^5.2.0"
+    "type-fest": "^5.4.0"
   },
   "dependencies": {
     "@better-auth/utils": "catalog:",

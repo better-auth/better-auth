@@ -11,6 +11,6 @@
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^20.0.0"
+    "stripe": "^20.1.2"
   }
 }

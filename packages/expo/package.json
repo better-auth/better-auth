@@ -66,11 +66,11 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~17.1.7",
-    "expo-network": "^8.0.7",
+    "expo-constants": "~17.1.8",
+    "expo-network": "^8.0.8",
     "expo-linking": "~7.1.7",
     "expo-web-browser": "~14.2.0",
-    "react-native": "~0.80.2",
+    "react-native": "~0.83.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
@@ -95,7 +95,7 @@
   "dependencies": {
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "files": [
     "dist"

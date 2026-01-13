@@ -53,8 +53,8 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
-    "jose": "^6.1.0",
-    "zod": "^4.1.12"
+    "jose": "^6.1.3",
+    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
