@@ -30,15 +30,30 @@ You can generate schemas without having a database connection configured by usin
 - Generating schemas for different adapters without modifying your config
 
 ```npm title="Terminal"
-# Generate a Prisma schema for PostgreSQL
 npx @better-auth/cli@latest generate --adapter prisma --dialect postgresql
-
-# Generate a Drizzle schema for MySQL
-npx @better-auth/cli@latest generate --adapter drizzle --dialect mysql
-
-# Generate a Kysely SQL file for SQLite
-npx @better-auth/cli@latest generate --adapter kysely --dialect sqlite
 ```
+
+#### Supported Adapters
+
+<TypeTable
+  type={{
+    adapter: {
+      description: "The adapter type to use for schema generation",
+      type: "'prisma' | 'drizzle' | 'kysely'"
+    }
+  }}
+/>
+
+#### Supported Dialects
+
+<TypeTable
+  type={{
+    dialect: {
+      description: "The database dialect/provider. For Drizzle, 'postgresql' maps to 'pg'",
+      type: "'postgresql' | 'mysql' | 'sqlite'"
+    }
+  }}
+/>
 
 When these flags are provided, the CLI creates a mock adapter instance, eliminating the need for an actual database connection. If the flags are not provided, the CLI falls back to using the adapter configured in your Better Auth config file.
 
