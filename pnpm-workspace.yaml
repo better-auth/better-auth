@@ -9,7 +9,7 @@ catalog:
   '@better-auth/utils': 0.3.0
   '@better-fetch/fetch': 1.1.21
   better-call: 1.1.8
-  tsdown: ^0.17.2
+  tsdown: ^0.19.0
   typescript: ^5.9.3
 
 catalogs:
