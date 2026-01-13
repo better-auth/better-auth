@@ -125,8 +125,23 @@ describe("listMembers", async () => {
 				).toISOString(),
 			},
 		});
-		expect(members.data?.members.length).toBe(0);
-		expect(members.data?.total).toBe(0);
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members verifying the operator functionality", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "ne",
+				filterValue: "owner",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
 	});
 
 	it("should sort the members", async () => {
@@ -221,7 +236,8 @@ describe("listMembers", async () => {
 		});
 		expect(members.error).toBeTruthy();
 		expect(members.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 	});
 });
@@ -341,7 +357,8 @@ describe("updateMemberRole", async () => {
 		);
 		expect(updatedMember.error).toBeTruthy();
 		expect(updatedMember.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER
+				.message,
 		);
 	});
 });
@@ -440,5 +457,78 @@ describe("activeMemberRole", async () => {
 		});
 
 		expect(activeMember.data?.role).toBe("member");
+	});
+});
+
+describe("inviteMember role validation", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance({
+		plugins: [organization()],
+	});
+
+	it("should fail when inviting with a non-existent role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "Test Org Validation",
+			slug: "test-org-validation",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Attempt to invite with a fake role
+		const { error } = await client.organization.inviteMember({
+			email: "fake-role@test.com",
+			// @ts-expect-error - testing invalid role validation
+			role: "super-invalid-role-123",
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(error).toBeTruthy();
+		expect(error?.status).toBe(400);
+		expect(error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
+		);
+	});
+
+	it("should succeed when inviting with a valid default role", async () => {
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const org = await client.organization.create({
+			name: "Test Org Validation 2",
+			slug: "test-org-validation-2",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const { data, error } = await client.organization.inviteMember({
+			email: "valid@test.com",
+			role: "admin", // Valid default role
+			organizationId: org.data?.id as string,
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(error).toBeNull();
+		expect(data).toBeDefined();
 	});
 });

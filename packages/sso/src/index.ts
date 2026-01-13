@@ -1,14 +1,8 @@
 import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
-import type {
-	AuthnRequestRecord,
-	AuthnRequestStore,
-} from "./authn-request-store";
-import {
-	createInMemoryAuthnRequestStore,
-	DEFAULT_AUTHN_REQUEST_TTL_MS,
-} from "./authn-request-store";
+import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
@@ -24,16 +18,37 @@ import {
 
 export {
 	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
+} from "./constants";
+
+export {
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
 } from "./routes/sso";
 
+export {
+	type AlgorithmValidationOptions,
+	DataEncryptionAlgorithm,
+	type DeprecatedAlgorithmBehavior,
+	DigestAlgorithm,
+	KeyEncryptionAlgorithm,
+	SignatureAlgorithm,
+} from "./saml";
+
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
-export type { AuthnRequestStore, AuthnRequestRecord };
-export { createInMemoryAuthnRequestStore, DEFAULT_AUTHN_REQUEST_TTL_MS };
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		sso: {
+			creator: typeof sso;
+		};
+	}
+}
 
 export {
 	computeDiscoveryUrl,
@@ -134,6 +149,34 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 	return {
 		id: "sso",
 		endpoints,
+		hooks: {
+			after: [
+				{
+					matcher(context) {
+						return context.path?.startsWith("/callback/") ?? false;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const newSession = ctx.context.newSession;
+						if (!newSession?.user) {
+							return;
+						}
+
+						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
+							(plugin: { id: string }) => plugin.id === "organization",
+						);
+						if (!isOrgPluginEnabled) {
+							return;
+						}
+
+						await assignOrganizationByDomain(ctx, {
+							user: newSession.user,
+							provisioningOptions: options?.organizationProvisioning,
+							domainVerification: options?.domainVerification,
+						});
+					}),
+				},
+			],
+		},
 		schema: {
 			ssoProvider: {
 				modelName: options?.modelName ?? "ssoProvider",
@@ -183,5 +226,6 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 				},
 			},
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

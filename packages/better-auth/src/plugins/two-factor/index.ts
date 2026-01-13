@@ -3,10 +3,9 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
-import { APIError } from "better-call";
 import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
@@ -28,6 +27,15 @@ import { totp2fa } from "./totp";
 import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"two-factor": {
+			creator: typeof twoFactor;
+		};
+	}
+}
 
 const enableTwoFactorBodySchema = z.object({
 	password: z.string().meta({
@@ -127,9 +135,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
@@ -245,9 +254,10 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						userId: user.id,
 					});
 					if (!isPasswordValid) {
-						throw new APIError("BAD_REQUEST", {
-							message: BASE_ERROR_CODES.INVALID_PASSWORD,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							BASE_ERROR_CODES.INVALID_PASSWORD,
+						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
 						user.id,

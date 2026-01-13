@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "../utils";
+import { defineErrorCodes } from "../utils/error-codes";
 
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",
@@ -9,9 +9,11 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	INVALID_PASSWORD: "Invalid password",
 	INVALID_EMAIL: "Invalid email",
 	INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
+	INVALID_USER: "Invalid user",
 	SOCIAL_ACCOUNT_ALREADY_LINKED: "Social account already linked",
 	PROVIDER_NOT_FOUND: "Provider not found",
 	INVALID_TOKEN: "Invalid token",
+	TOKEN_EXPIRED: "Token expired",
 	ID_TOKEN_NOT_SUPPORTED: "id_token not supported",
 	FAILED_TO_GET_USER_INFO: "Failed to get user info",
 	USER_EMAIL_NOT_FOUND: "User email not found",
@@ -28,4 +30,25 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ACCOUNT_NOT_FOUND: "Account not found",
 	USER_ALREADY_HAS_PASSWORD:
 		"User already has a password. Provide that to delete the account.",
+	CROSS_SITE_NAVIGATION_LOGIN_BLOCKED:
+		"Cross-site navigation login blocked. This request appears to be a CSRF attack.",
+	VERIFICATION_EMAIL_NOT_ENABLED: "Verification email isn't enabled",
+	EMAIL_ALREADY_VERIFIED: "Email is already verified",
+	EMAIL_MISMATCH: "Email mismatch",
+	SESSION_NOT_FRESH: "Session is not fresh",
+	LINKED_ACCOUNT_ALREADY_EXISTS: "Linked account already exists",
+	INVALID_ORIGIN: "Invalid origin",
+	INVALID_CALLBACK_URL: "Invalid callbackURL",
+	INVALID_REDIRECT_URL: "Invalid redirectURL",
+	INVALID_ERROR_CALLBACK_URL: "Invalid errorCallbackURL",
+	INVALID_NEW_USER_CALLBACK_URL: "Invalid newUserCallbackURL",
+	MISSING_OR_NULL_ORIGIN: "Missing or null Origin",
+	CALLBACK_URL_REQUIRED: "callbackURL is required",
+	FAILED_TO_CREATE_VERIFICATION: "Unable to create verification",
+	FIELD_NOT_ALLOWED: "Field not allowed to be set",
+	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
+	VALIDATION_ERROR: "Validation Error",
+	MISSING_FIELD: "Field is required",
 });
+
+export type APIErrorCode = keyof typeof BASE_ERROR_CODES;

@@ -6,7 +6,16 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
@@ -148,8 +157,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
-							accountLinking?.enabled &&
-							(accountLinking.trustedProviders?.includes("google") ||
+							accountLinking?.enabled !== false &&
+							(accountLinking?.trustedProviders?.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
@@ -188,4 +197,5 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

@@ -5,7 +5,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -20,6 +20,7 @@ import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { sec } from "../utils/time";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
@@ -31,7 +32,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? true
 					: false
 				: isProduction;
-	const secureCookiePrefix = secure ? "__Secure-" : "";
+	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
@@ -352,7 +353,7 @@ export function parseCookies(cookieHeader: string) {
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split("=");
+		const [name, value] = cookie.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;
@@ -385,7 +386,7 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
 		config || {};
 	const name = `${cookiePrefix}${cookieName}`;
-	const secureCookieName = `__Secure-${name}`;
+	const secureCookieName = `${SECURE_COOKIE_PREFIX}${name}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken =
 		parsedCookie.get(name) || parsedCookie.get(secureCookieName);
@@ -435,10 +436,10 @@ export const getCookieCache = async <
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`
 			: isProduction
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 

@@ -13,6 +13,15 @@ import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
 import { defaultKeyHasher } from "./utils";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"one-time-token": {
+			creator: typeof oneTimeToken;
+		};
+	}
+}
+
 export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
@@ -236,5 +245,6 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

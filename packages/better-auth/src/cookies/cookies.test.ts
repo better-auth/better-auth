@@ -1,9 +1,19 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
-import { getCookieCache, getCookies, getSessionCookie } from "../cookies";
+import {
+	getCookieCache,
+	getCookies,
+	getSessionCookie,
+	parseCookies,
+} from "../cookies";
 import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
-import { parseSetCookieHeader } from "./cookie-utils";
+import {
+	HOST_COOKIE_PREFIX,
+	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "./cookie-utils";
 
 describe("cookies", async () => {
 	const { client, testUser } = await getTestInstance();
@@ -27,15 +37,25 @@ describe("cookies", async () => {
 	});
 
 	it("should set multiple cookies", async () => {
-		await client.signIn.social(
+		const { client, testUser } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		await client.signIn.email(
 			{
-				provider: "github",
-				callbackURL: "https://example.com",
+				email: testUser.email,
+				password: testUser.password,
 			},
 			{
 				onSuccess(context) {
 					const cookies = context.response.headers.get("Set-Cookie");
-					expect(cookies?.split(",").length).toBeGreaterThan(1);
+					expect(cookies).toBeDefined();
+					const parsed = parseSetCookieHeader(cookies!);
+					// With cookie cache enabled, we should have session_token and session_data cookies
+					expect(parsed.size).toBeGreaterThan(1);
 				},
 			},
 		);
@@ -161,6 +181,58 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		const map = parseSetCookieHeader(header);
 		expect(map.get("a")?.value).toBe("1");
 		expect(map.get("b")?.value).toBe("2");
+	});
+});
+
+describe("cookie-utils stripSecureCookiePrefix", () => {
+	it("should strip __Secure- prefix from cookie name", () => {
+		const cookieName = `${SECURE_COOKIE_PREFIX}session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should strip __Host- prefix from cookie name", () => {
+		const cookieName = `${HOST_COOKIE_PREFIX}session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should return cookie name unchanged if no prefix", () => {
+		const cookieName = "session_token";
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("session_token");
+	});
+
+	it("should handle cookie names with prefix-like strings in the middle", () => {
+		const cookieName = "my__Secure-cookie";
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("my__Secure-cookie");
+	});
+
+	it("should handle empty string", () => {
+		const result = stripSecureCookiePrefix("");
+		expect(result).toBe("");
+	});
+
+	it("should handle cookie names that are exactly the prefix", () => {
+		const secureResult = stripSecureCookiePrefix(SECURE_COOKIE_PREFIX);
+		expect(secureResult).toBe("");
+
+		const hostResult = stripSecureCookiePrefix(HOST_COOKIE_PREFIX);
+		expect(hostResult).toBe("");
+	});
+
+	it("should prioritize __Secure- prefix over __Host- prefix", () => {
+		// Cookie name starting with __Secure- should strip that prefix
+		const secureCookie = `${SECURE_COOKIE_PREFIX}${HOST_COOKIE_PREFIX}test`;
+		const result = stripSecureCookiePrefix(secureCookie);
+		expect(result).toBe(`${HOST_COOKIE_PREFIX}test`);
+	});
+
+	it("should handle cookie names with dots and special characters", () => {
+		const cookieName = `${SECURE_COOKIE_PREFIX}better-auth.session_token`;
+		const result = stripSecureCookiePrefix(cookieName);
+		expect(result).toBe("better-auth.session_token");
 	});
 });
 
@@ -1100,5 +1172,35 @@ describe("Cookie Chunking", () => {
 
 		expect(cache).not.toBeNull();
 		expect(cache?.user?.email).toEqual(testUser.email);
+	});
+});
+
+describe("parse cookies", () => {
+	it("should parse cookies into key-value map", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature; better-auth.session_data=session-data.signature";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature",
+		);
+	});
+
+	it("should securely parse the signed cookies with padding", () => {
+		const cookieHeader =
+			"better-auth.session_token=session-token.signature=; better-auth.session_data=session-data.signature=";
+
+		const parsedCookies = parseCookies(cookieHeader);
+
+		expect(parsedCookies.get("better-auth.session_token")).toBe(
+			"session-token.signature=",
+		);
+		expect(parsedCookies.get("better-auth.session_data")).toBe(
+			"session-data.signature=",
+		);
 	});
 });
