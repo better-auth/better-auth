@@ -14,7 +14,7 @@
     "format": "biome format . --write",
     "format:md": "remark . --output --quiet",
     "format:check": "remark . --quiet --frail",
-    "lint": "biome check .",
+    "lint": "biome check . --error-on-warnings",
     "lint:dependencies": "knip --strict",
     "lint:fix": "biome check . --fix --unsafe",
     "lint:spell": "cspell . --color",
