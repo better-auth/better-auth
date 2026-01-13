@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "defu": "^6.1.4",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
@@ -66,7 +66,7 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^20.0.0",
+    "stripe": "^20.1.2",
     "tsdown": "catalog:"
   }
 }

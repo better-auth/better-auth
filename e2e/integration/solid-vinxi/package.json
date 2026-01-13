@@ -8,12 +8,12 @@
     "start": "vinxi start"
   },
   "dependencies": {
-    "@solidjs/router": "^0.15.3",
-    "@solidjs/start": "^1.1.7",
+    "@solidjs/router": "^0.15.4",
+    "@solidjs/start": "^1.2.1",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "solid-js": "^1.9.7",
-    "vinxi": "^0.5.8"
+    "better-sqlite3": "^12.6.0",
+    "solid-js": "^1.9.10",
+    "vinxi": "^0.5.10"
   },
   "devDependencies": {
     "@better-auth/test-utils": "workspace:*"

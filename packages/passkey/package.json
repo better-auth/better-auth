@@ -46,9 +46,9 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
-    "@simplewebauthn/browser": "^13.1.2",
-    "@simplewebauthn/server": "^13.1.2",
-    "zod": "^4.1.12"
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
+    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
