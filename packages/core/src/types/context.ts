@@ -213,6 +213,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		options: Options;
 		appName: string;
 		baseURL: string;
+		baseCallbackURL: string;
 		trustedOrigins: string[];
 		/**
 		 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration

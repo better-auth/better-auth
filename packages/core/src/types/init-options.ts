@@ -340,6 +340,28 @@ export type BetterAuthOptions = {
 	 */
 	basePath?: string | undefined;
 	/**
+	 * Base URL for callback redirects. This is useful when your
+	 * frontend and backend are hosted on different origins.
+	 *
+	 * For example, if your backend is at `http://localhost:4000`
+	 * and your frontend is at `http://localhost:3000`, you can set
+	 * `baseCallbackURL` to `http://localhost:3000` so that relative
+	 * callback URLs like `/dashboard` resolve to `http://localhost:3000/dashboard`
+	 * instead of the backend URL.
+	 *
+	 * If not explicitly set, the system will check for the environment variable
+	 * `BETTER_AUTH_CALLBACK_URL`. If that's also not set, it will fallback to `baseURL`.
+	 *
+	 * @example
+	 * ```ts
+	 * betterAuth({
+	 *   baseURL: "http://localhost:4000", // Backend URL
+	 *   baseCallbackURL: "http://localhost:3000", // Frontend URL
+	 * })
+	 * ```
+	 */
+	baseCallbackURL?: string | undefined;
+	/**
 	 * The secret to use for encryption,
 	 * signing and hashing.
 	 *

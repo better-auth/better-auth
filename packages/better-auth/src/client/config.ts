@@ -4,7 +4,7 @@ import type {
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
-import { getBaseURL } from "../utils/url";
+import { getBaseCallbackURL, getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
@@ -18,6 +18,11 @@ export const getClientConfig = (
 	const baseURL =
 		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
 		"/api/auth";
+	const baseCallbackURL = getBaseCallbackURL(
+		options?.baseCallbackURL,
+		baseURL,
+		loadEnv,
+	);
 	const pluginsFetchPlugins =
 		options?.plugins
 			?.flatMap((plugin) => plugin.fetchPlugins)
@@ -133,6 +138,9 @@ export const getClientConfig = (
 	return {
 		get baseURL() {
 			return baseURL;
+		},
+		get baseCallbackURL() {
+			return baseCallbackURL;
 		},
 		pluginsActions,
 		pluginsAtoms,

@@ -66,6 +66,17 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
 </Tabs>
 
+### Client Configuration Options
+
+The `createAuthClient` function accepts the following configuration options:
+
+- `baseURL`: The base URL of your auth server. Required if your auth server is on a different domain.
+- `basePath`: The base path of the auth API (default: `/api/auth`).
+- `baseCallbackURL`: The base URL for callback redirects. Useful when your frontend and backend are on different origins.
+- `fetchOptions`: Custom fetch options passed to all requests.
+- `plugins`: Array of client plugins to extend functionality.
+
+
 ## Usage
 
 Once you've created your client instance, you can use the client to interact with the Better Auth server. The client provides a set of functions by default and they can be extended with plugins.

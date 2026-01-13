@@ -780,7 +780,7 @@ describe("signin", async () => {
 			},
 		});
 		expect(additionalData).toEqual({
-			callbackURL: "/callback",
+			callbackURL: "http://localhost:3000/callback",
 			codeVerifier: expect.any(String),
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",

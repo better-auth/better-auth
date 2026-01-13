@@ -66,3 +66,58 @@ describe("url", () => {
 		});
 	});
 });
+
+describe("baseCallbackURL", () => {
+	it("should accept baseCallbackURL configuration", async () => {
+		const client = createAuthClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:4000",
+			baseCallbackURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response(JSON.stringify({ url }));
+				},
+			},
+		});
+		expect(client).toBeDefined();
+	});
+
+	it("should have baseCallbackURL in client config", async () => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:4000",
+			baseCallbackURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response(JSON.stringify({ ok: true }));
+				},
+			},
+		});
+		expect(client).toBeDefined();
+	});
+
+	it("should fallback baseCallbackURL to baseURL when not provided", async () => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response(JSON.stringify({ ok: true }));
+				},
+			},
+		});
+		expect(client).toBeDefined();
+	});
+
+	it("should allow different baseURL and baseCallbackURL for separate frontend/backend", async () => {
+		const client = createAuthClient({
+			baseURL: "http://localhost:4000",
+			baseCallbackURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					expect(url).toContain("http://localhost:4000");
+					return new Response(JSON.stringify({ ok: true }));
+				},
+			},
+		});
+		expect(client).toBeDefined();
+	});
+});

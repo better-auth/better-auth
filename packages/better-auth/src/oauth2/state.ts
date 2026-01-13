@@ -18,7 +18,26 @@ export async function generateState(
 		| undefined,
 	additionalData: Record<string, any> | false | undefined,
 ) {
-	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
+	const baseCallbackURL = c.context.baseCallbackURL;
+	let callbackURL = c.body?.callbackURL;
+
+	// If callbackURL is provided and is relative, resolve it aganst baseCallbackURL
+	if (
+		callbackURL &&
+		!callbackURL.startsWith("http://") &&
+		!callbackURL.startsWith("https://")
+	) {
+		if (baseCallbackURL) {
+			// Resolve relative URL against baseCallbackURL
+			callbackURL = new URL(callbackURL, baseCallbackURL).toString();
+		}
+	}
+
+	// If no callbackURL provided, fallback to baseCallbackURL or baseURL
+	if (!callbackURL) {
+		callbackURL = baseCallbackURL || c.context.options.baseURL;
+	}
+
 	if (!callbackURL) {
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
 	}
@@ -226,3 +245,4 @@ export async function parseState(c: GenericEndpointContext) {
 
 	return parsedData;
 }
+

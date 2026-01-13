@@ -40,6 +40,16 @@ BETTER_AUTH_SECRET=
 BETTER_AUTH_URL=http://localhost:3000 # Base URL of your app
 ```
 
+3. **Set Callback URL (Optional)**
+
+If your frontend and backend are hosted on different origins, you can set a separate callback URL for redirects:
+
+```txt title=".env"
+BETTER_AUTH_CALLBACK_URL=http://localhost:4000 # Frontend URL for callbacks
+```
+
+This ensures that after authentication (e.g., OAuth callbacks), users are redirected to your frontend instead of your backend. If not set, it defaults to `BETTER_AUTH_URL`.
+
 </Step>
 
 <Step>

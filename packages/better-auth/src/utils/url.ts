@@ -155,6 +155,38 @@ export function getBaseURL(
 	return undefined;
 }
 
+export function getBaseCallbackURL(
+	baseCallbackURL?: string,
+	baseURL?: string,
+	loadEnv?: boolean,
+) {
+	if (baseCallbackURL) {
+		return baseCallbackURL;
+	}
+
+	if (loadEnv !== false) {
+		const fromEnv =
+			env.BETTER_AUTH_CALLBACK_URL ||
+			env.NEXT_PUBLIC_BETTER_AUTH_CALLBACK_URL ||
+			env.PUBLIC_BETTER_AUTH_CALLBACK_URL ||
+			env.NUXT_PUBLIC_BETTER_AUTH_CALLBACK_URL;
+
+		if (fromEnv) {
+			return fromEnv;
+		}
+	}
+
+	if (baseURL) {
+		try {
+			return new URL(baseURL).origin;
+		} catch {
+			return baseURL;
+		}
+	}
+
+	return undefined;
+}
+
 export function getOrigin(url: string) {
 	try {
 		const parsedUrl = new URL(url);

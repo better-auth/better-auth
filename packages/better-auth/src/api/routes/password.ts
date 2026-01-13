@@ -13,9 +13,10 @@ function redirectError(
 	callbackURL: string | undefined,
 	query?: Record<string, string> | undefined,
 ): string {
+	const baseForCallback = ctx.baseCallbackURL || ctx.baseURL;
 	const url = callbackURL
-		? new URL(callbackURL, ctx.baseURL)
-		: new URL(`${ctx.baseURL}/error`);
+		? new URL(callbackURL, baseForCallback)
+		: new URL(`${baseForCallback}/error`);
 	if (query)
 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
 	return url.href;
@@ -26,7 +27,8 @@ function redirectCallback(
 	callbackURL: string,
 	query?: Record<string, string> | undefined,
 ): string {
-	const url = new URL(callbackURL, ctx.baseURL);
+	const baseForCallback = ctx.baseCallbackURL || ctx.baseURL;
+	const url = new URL(callbackURL, baseForCallback);
 	if (query)
 		Object.entries(query).forEach(([k, v]) => url.searchParams.set(k, v));
 	return url.href;

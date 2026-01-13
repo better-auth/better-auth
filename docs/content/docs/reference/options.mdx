@@ -46,6 +46,27 @@ export const auth = betterAuth({
 
 Default: `/api/auth`
 
+## `baseCallbackURL`
+
+Base URL for callback redirects. This is useful when your frontend and backend are hosted on different origins.
+
+For example, if your backend is at `http://localhost:4000` and your frontend is at `http://localhost:3000`, you can set `baseCallbackURL` to `http://localhost:3000` so that relative callback URLs like `/dashboard` resolve to `http://localhost:4000/dashboard` instead of the backend URL.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+    baseURL: "http://localhost:3000", // Backend URL
+    baseCallbackURL: "http://localhost:4000", // Frontend URL
+});
+```
+
+If not explicitly set, the system will check for the environment variable `BETTER_AUTH_CALLBACK_URL`. If that's also not set, it will fallback to `baseURL`.
+
+<Callout type="info">
+    The `baseCallbackURL` origin is automatically added to `trustedOrigins`, so
+    you don't need to add it manually.
+</Callout>
+
 ## `trustedOrigins`
 
 List of trusted origins. You can provide a static array of origins, a function that returns origins dynamically, or use wildcard patterns to match multiple domains.

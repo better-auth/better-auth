@@ -1164,6 +1164,92 @@ describe("base context creation", () => {
 		});
 	});
 
+	describe("baseCallbackURL configuration", () => {
+		it("should use baseCallbackURL when explicitly set", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "http://localhost:4000",
+			});
+
+			expect(res.baseCallbackURL).toBe("http://localhost:4000");
+		});
+
+		it("should fallback to baseURL when baseCallbackURL is not set", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+
+			expect(res.baseCallbackURL).toBe("http://localhost:3000");
+		});
+
+		it("should infer baseCallbackURL from env variable", async () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://localhost:5000");
+
+			const opts: BetterAuthOptions = {
+				baseURL: "http://localhost:3000",
+			};
+			const adapter = await getAdapter(opts);
+			const getDatabaseType = () => "memory";
+			const res = await createAuthContext(adapter, opts, getDatabaseType);
+
+			expect(res.baseCallbackURL).toBe("http://localhost:5000");
+			vi.unstubAllEnvs();
+		});
+
+		it("should prefer explicit baseCallbackURL over env variable", async () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://localhost:5000");
+
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "http://localhost:4000",
+			});
+
+			expect(res.baseCallbackURL).toBe("http://localhost:4000");
+			vi.unstubAllEnvs();
+		});
+
+		it("should add baseCallbackURL to trusted origins", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "http://localhost:4000",
+			});
+
+			expect(res.trustedOrigins).toContain("http://localhost:3000");
+			expect(res.trustedOrigins).toContain("http://localhost:4000");
+		});
+
+		it("should not duplicate trusted origins when baseCallbackURL equals baseURL", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "http://localhost:3000",
+			});
+
+			const count = res.trustedOrigins.filter(
+				(o) => o === "http://localhost:3000",
+			).length;
+			expect(count).toBe(1);
+		});
+
+		it("should handle baseCallbackURL with path by extracting origin", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "http://localhost:4000/some/path",
+			});
+
+			expect(res.baseCallbackURL).toBe("http://localhost:4000/some/path");
+			expect(res.trustedOrigins).toContain("http://localhost:4000");
+		});
+
+		it("should handle empty baseCallbackURL by falling back to baseURL", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				baseCallbackURL: "",
+			});
+
+			expect(res.baseCallbackURL).toBe("http://localhost:3000");
+		});
+	});
+
 	describe("cookies and tables configuration", () => {
 		it("should configure auth cookies", async () => {
 			const ctx = await initBase({});
