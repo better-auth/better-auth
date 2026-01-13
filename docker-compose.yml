@@ -21,7 +21,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql
-      - ./docker/pg:/docker-entrypoint-initdb.d
 
   postgres-kysely:
     image: postgres:latest
@@ -72,7 +71,6 @@ services:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
-      - ./docker/mysql:/docker-entrypoint-initdb.d
 
 
   mysql-kysely:
