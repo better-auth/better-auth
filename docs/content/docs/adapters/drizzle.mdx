@@ -196,7 +196,7 @@ import * as schemas from './schema.ts';
 const { relations, ...schema } = schemas;
 
 export const db = drizzle({
-	client: db,
+	client,
 	schema, // [!code highlight]
 	relations, // [!code highlight]
 });
