@@ -391,8 +391,9 @@ export function Builder() {
 												<Label>Social Providers</Label>
 											</div>
 											<Separator />
-											{Object.entries(socialProviders).map(
-												([provider, { Icon }]) => (
+											{Object.entries(socialProviders)
+												.sort(([a], [b]) => a.localeCompare(b))
+												.map(([provider, { Icon }]) => (
 													<div
 														className="flex items-center justify-between"
 														key={provider}
