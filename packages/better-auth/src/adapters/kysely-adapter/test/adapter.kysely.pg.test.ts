@@ -3,6 +3,7 @@ import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
+import { it, expect } from "vitest";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
@@ -33,6 +34,38 @@ const cleanupDatabase = async () => {
 	);
 };
 
+const postgresArrayRegressionTestSuite = () =>
+	async ({
+		adapter,
+	}: {
+		adapter: () => Promise<any>;
+	}) => {
+		it("updates postgres string[] (text[]) without error", async () => {
+			const db = await adapter();
+
+			const user = await db.create({
+				model: "user",
+				data: {
+					id: crypto.randomUUID(),
+					email: "array-test@email.com",
+					name: "Array Test User",
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			});
+
+			await expect(
+				db.update({
+					model: "user",
+					update: {
+						organizationType: ["other", "media", "research"],
+					},
+					where: [{ field: "id", value: user.id }],
+				}),
+			).resolves.not.toThrow();
+		});
+	};
+
 const { execute } = await testAdapter({
 	adapter: () =>
 		kyselyAdapter(kyselyDB, {
@@ -57,6 +90,7 @@ const { execute } = await testAdapter({
 		uuidTestSuite(),
 		schemaRefTestSuite(),
 		schemaRefJoinTestSuite(),
+		postgresArrayRegressionTestSuite(),
 	],
 	async onFinish() {
 		await pgDB.end();

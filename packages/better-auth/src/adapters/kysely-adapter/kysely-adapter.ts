@@ -614,7 +614,7 @@ export const kyselyAdapter = (
 				config?.type === "postgres"
 					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
 					: false,
-			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
+			supportsArrays: config?.type === "postgres",
 			supportsUUIDs: config?.type === "postgres" ? true : false,
 			transaction: config?.transaction
 				? (cb) =>
