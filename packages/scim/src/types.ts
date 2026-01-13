@@ -21,20 +21,7 @@ export type SCIMOptions = {
 	 * Default list of SCIM providers for testing
 	 * These will take precedence over the database when present
 	 */
-	defaultSCIM?: {
-		/**
-		 * The provider id
-		 */
-		providerId: string;
-		/**
-		 * The scim token
-		 */
-		scimToken: string;
-		/**
-		 * Optional organization id
-		 */
-		organizationId?: string;
-	}[];
+	defaultSCIM?: Omit<SCIMProvider, "id">[];
 	/**
 	 * A callback that runs before a new SCIM token is generated.
 	 * @returns

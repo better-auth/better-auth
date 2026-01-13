@@ -33,21 +33,18 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		let scimProvider: SCIMProvider | null = opts.defaultSCIM?.find((p) => {
-			if (p.providerId === providerId && !organizationId) {
-				return true;
-			}
+		let scimProvider: Omit<SCIMProvider, 'id'> | null =
+			opts.defaultSCIM?.find((p) => {
+				if (p.providerId === providerId && !organizationId) {
+					return true;
+				}
 
-			if (
-				p.providerId === providerId &&
-				organizationId &&
-				p.organizationId === organizationId
-			) {
-				return true;
-			}
-
-			return false;
-		}) as SCIMProvider;
+				return !!(
+					p.providerId === providerId &&
+					organizationId &&
+					p.organizationId === organizationId
+				);
+			}) ?? null;
 
 		if (scimProvider) {
 			if (scimProvider.scimToken === scimToken) {

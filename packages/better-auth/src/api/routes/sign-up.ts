@@ -12,7 +12,7 @@ import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
-const signUpEmailBodySchema = z
+const _signUpEmailBodySchema = z
 	.object({
 		name: z.string().nonempty(),
 		email: z.email(),
