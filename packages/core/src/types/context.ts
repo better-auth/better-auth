@@ -267,7 +267,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			window: number;
 			max: number;
 			storage: "memory" | "database" | "secondary-storage";
-		} & BetterAuthRateLimitOptions;
+		} & Omit<
+			BetterAuthRateLimitOptions,
+			"enabled" | "window" | "max" | "storage"
+		>;
 		adapter: DBAdapter<Options>;
 		internalAdapter: InternalAdapter<Options>;
 		createAuthCookie: CreateCookieGetterFn;
