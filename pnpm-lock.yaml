@@ -1361,8 +1361,8 @@ importers:
         specifier: ^12.5.0
         version: 12.5.0
       drizzle-kit:
-        specifier: 1.0.0-beta.10-4a43a22
-        version: 1.0.0-beta.10-4a43a22
+        specifier: 1.0.0-beta.8-734e789
+        version: 1.0.0-beta.8-734e789
       drizzle-orm:
         specifier: 1.0.0-beta.8-734e789
         version: 1.0.0-beta.8-734e789(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/mssql@9.1.8)(@types/pg@8.15.5)(better-sqlite3@12.5.0)(bun-types@1.3.5)(mssql@11.0.1)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0)
@@ -8656,8 +8656,8 @@ packages:
     resolution: {integrity: sha512-tCPWVZWZqWVx2XUsVpJRnH9Mx0ClVOf5YUHerZ5so1OKSlqww4zy1R5ksEdGRcO3tM3zj0PYN6V48TbQCL1RfA==}
     hasBin: true
 
-  drizzle-kit@1.0.0-beta.10-4a43a22:
-    resolution: {integrity: sha512-952w6dX5alTfZQh9zJ077mqMWdCUx6QjAX3EI7UhR+1tb8Vi/A9TSTECYiJ40qPa8FFKzhMHIuck9i51esFb9g==}
+  drizzle-kit@1.0.0-beta.8-734e789:
+    resolution: {integrity: sha512-rwsBKJsdPI38sUA/uOkb7ePpntOL40EWGJk7YmCALl+EJPtzc/kqYbzXSuxGoE9Ff+lo4oEsglSvBB12NvV8Fg==}
     hasBin: true
 
   drizzle-orm@0.41.0:
@@ -20034,9 +20034,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -23216,12 +23214,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-kit@1.0.0-beta.10-4a43a22:
+  drizzle-kit@1.0.0-beta.8-734e789:
     dependencies:
       '@drizzle-team/brocli': 0.11.0
       '@js-temporal/polyfill': 0.5.1
       esbuild: 0.25.12
-      tsx: 4.20.6
+      esbuild-register: 3.6.0(esbuild@0.25.12)
+    transitivePeerDependencies:
+      - supports-color
 
   drizzle-orm@0.41.0(@cloudflare/workers-types@4.20250903.0)(@libsql/client@0.15.14)(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(better-sqlite3@12.4.1)(bun-types@1.3.5)(kysely@0.28.5)(mysql2@3.14.4)(pg@8.16.3)(postgres@3.4.7)(prisma@5.22.0):
     optionalDependencies:
