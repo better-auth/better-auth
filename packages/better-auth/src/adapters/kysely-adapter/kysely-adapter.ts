@@ -45,7 +45,7 @@ interface KyselyAdapterConfig {
 }
 
 function toPostgresArray(value: string[]) {
-	return `{${value.map(v => `"${v}"`).join(",")}}`;
+	return `{${value.map((v) => `"${v}"`).join(",")}}`;
 }
 
 export const kyselyAdapter = (

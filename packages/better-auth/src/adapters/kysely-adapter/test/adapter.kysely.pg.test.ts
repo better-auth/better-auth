@@ -1,9 +1,10 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
+import { expect, it } from "vitest";
+
 import { getMigrations } from "../../../db";
 import { testAdapter } from "../../test-adapter";
-import { it, expect } from "vitest";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
@@ -23,7 +24,7 @@ const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",
 });
 
-let kyselyDB = new Kysely({
+const kyselyDB = new Kysely({
 	dialect: new PostgresDialect({ pool: pgDB }),
 });
 
@@ -34,12 +35,9 @@ const cleanupDatabase = async () => {
 	);
 };
 
-const postgresArrayRegressionTestSuite = () =>
-	async ({
-		adapter,
-	}: {
-		adapter: () => Promise<any>;
-	}) => {
+const postgresArrayRegressionTestSuite =
+	() =>
+	async ({ adapter }: { adapter: () => Promise<any> }) => {
 		it("updates postgres string[] (text[]) without error", async () => {
 			const db = await adapter();
 
@@ -96,4 +94,5 @@ const { execute } = await testAdapter({
 		await pgDB.end();
 	},
 });
+
 execute();
