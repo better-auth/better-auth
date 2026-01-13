@@ -33,7 +33,7 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		let scimProvider: Omit<SCIMProvider, 'id'> | null =
+		let scimProvider: Omit<SCIMProvider, "id"> | null =
 			opts.defaultSCIM?.find((p) => {
 				if (p.providerId === providerId && !organizationId) {
 					return true;
