@@ -92,10 +92,6 @@ const authOptions = {
 		},
 	},
 	socialProviders: {
-		apple: {
-			clientId: process.env.APPLE_CLIENT_ID || "",
-			clientSecret: process.env.APPLE_CLIENT_SECRET || "",
-		},
 		facebook: {
 			clientId: process.env.FACEBOOK_CLIENT_ID || "",
 			clientSecret: process.env.FACEBOOK_CLIENT_SECRET || "",
@@ -177,7 +173,8 @@ const authOptions = {
 		}),
 		multiSession(),
 		oAuthProxy({
-			productionURL: "https://demo.better-auth.com",
+			productionURL:
+				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
 		}),
 		nextCookies(),
 		oneTap(),

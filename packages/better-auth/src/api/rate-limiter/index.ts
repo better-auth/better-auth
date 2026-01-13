@@ -1,8 +1,18 @@
-import type { AuthContext } from "@better-auth/core";
-import { safeJSONParse } from "@better-auth/core/utils";
+import type {
+	AuthContext,
+	BetterAuthRateLimitStorage,
+} from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
+
+interface MemoryRateLimitEntry {
+	data: RateLimit;
+	expiresAt: number;
+}
+
+const memory = new Map<string, MemoryRateLimitEntry>();
 
 function shouldRateLimit(
 	max: number,
@@ -36,7 +46,9 @@ function getRetryAfter(lastRequest: number, window: number) {
 	return Math.ceil((lastRequest + windowInMs - now) / 1000);
 }
 
-function createDBStorage(ctx: AuthContext) {
+function createDatabaseStorageWrapper(
+	ctx: AuthContext,
+): BetterAuthRateLimitStorage {
 	const model = "rateLimit";
 	const db = ctx.adapter;
 	return {
@@ -85,15 +97,12 @@ function createDBStorage(ctx: AuthContext) {
 	};
 }
 
-const memory = new Map<string, RateLimit>();
 function getRateLimitStorage(
 	ctx: AuthContext,
-	rateLimitSettings?:
-		| {
-				window?: number;
-		  }
-		| undefined,
-) {
+	rateLimitSettings: {
+		window: number;
+	},
+): BetterAuthRateLimitStorage {
 	if (ctx.options.rateLimit?.customStorage) {
 		return ctx.options.rateLimit.customStorage;
 	}
@@ -102,7 +111,7 @@ function getRateLimitStorage(
 		return {
 			get: async (key: string) => {
 				const data = await ctx.options.secondaryStorage?.get(key);
-				return data ? safeJSONParse<RateLimit>(data) : undefined;
+				return data ? safeJSONParse<RateLimit>(data) : null;
 			},
 			set: async (
 				key: string,
@@ -121,14 +130,29 @@ function getRateLimitStorage(
 	} else if (storage === "memory") {
 		return {
 			async get(key: string) {
-				return memory.get(key);
+				const entry = memory.get(key);
+				if (!entry) {
+					return null;
+				}
+				// Check if entry has expired
+				if (Date.now() >= entry.expiresAt) {
+					memory.delete(key);
+					return null;
+				}
+				return entry.data;
 			},
 			async set(key: string, value: RateLimit, _update?: boolean | undefined) {
-				memory.set(key, value);
+				const ttl =
+					rateLimitSettings?.window ?? ctx.options.rateLimit?.window ?? 10;
+				const expiresAt = Date.now() + ttl * 1000;
+				memory.set(key, {
+					data: value,
+					expiresAt,
+				});
 			},
 		};
 	}
-	return createDBStorage(ctx);
+	return createDatabaseStorageWrapper(ctx);
 }
 
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
@@ -138,8 +162,8 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	const path = new URL(req.url).pathname
 		.replace(ctx.options.basePath || "/api/auth", "")
 		.replace(/\/+$/, "");
-	let window = ctx.rateLimit.window;
-	let max = ctx.rateLimit.max;
+	let currentWindow = ctx.rateLimit.window;
+	let currentMax = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
 		return;
@@ -149,8 +173,8 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
 	if (specialRule) {
-		window = specialRule.window;
-		max = specialRule.max;
+		currentWindow = specialRule.window;
+		currentMax = specialRule.max;
 	}
 
 	for (const plugin of ctx.options.plugins || []) {
@@ -159,8 +183,8 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 				rule.pathMatcher(path),
 			);
 			if (matchedRule) {
-				window = matchedRule.window;
-				max = matchedRule.max;
+				currentWindow = matchedRule.window;
+				currentMax = matchedRule.max;
 				break;
 			}
 		}
@@ -177,10 +201,15 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		if (_path) {
 			const customRule = ctx.rateLimit.customRules[_path];
 			const resolved =
-				typeof customRule === "function" ? await customRule(req) : customRule;
+				typeof customRule === "function"
+					? await customRule(req, {
+							window: currentWindow,
+							max: currentMax,
+						})
+					: customRule;
 			if (resolved) {
-				window = resolved.window;
-				max = resolved.max;
+				currentWindow = resolved.window;
+				currentMax = resolved.max;
 			}
 
 			if (resolved === false) {
@@ -190,7 +219,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 
 	const storage = getRateLimitStorage(ctx, {
-		window,
+		window: currentWindow,
 	});
 	const data = await storage.get(key);
 	const now = Date.now();
@@ -204,10 +233,10 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	} else {
 		const timeSinceLastRequest = now - data.lastRequest;
 
-		if (shouldRateLimit(max, window, data)) {
-			const retryAfter = getRetryAfter(data.lastRequest, window);
+		if (shouldRateLimit(currentMax, currentWindow, data)) {
+			const retryAfter = getRetryAfter(data.lastRequest, currentWindow);
 			return rateLimitResponse(retryAfter);
-		} else if (timeSinceLastRequest > window * 1000) {
+		} else if (timeSinceLastRequest > currentWindow * 1000) {
 			// Reset the count if the window has passed since the last request
 			await storage.set(
 				key,

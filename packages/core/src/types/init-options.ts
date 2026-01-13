@@ -37,25 +37,37 @@ export type GenerateIdFn = (options: {
 	size?: number | undefined;
 }) => string | false;
 
-export type BetterAuthRateLimitOptions = {
-	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
-	 */
-	enabled?: boolean | undefined;
+export interface BetterAuthRateLimitStorage {
+	get: (key: string) => Promise<RateLimit | null | undefined>;
+	set: (
+		key: string,
+		value: RateLimit,
+		update?: boolean | undefined,
+	) => Promise<void>;
+}
+
+export type BetterAuthRateLimitRule = {
 	/**
 	 * Default window to use for rate limiting. The value
 	 * should be in seconds.
 	 *
 	 * @default 10 seconds
 	 */
-	window?: number | undefined;
+	window: number;
 	/**
 	 * The default maximum number of requests allowed within the window.
 	 *
 	 * @default 100 requests
 	 */
-	max?: number | undefined;
+	max: number;
+};
+
+export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
+	/**
+	 * By default, rate limiting is only
+	 * enabled on production.
+	 */
+	enabled?: boolean | undefined;
 	/**
 	 * Custom rate limit rules to apply to
 	 * specific paths.
@@ -63,27 +75,12 @@ export type BetterAuthRateLimitOptions = {
 	customRules?:
 		| {
 				[key: string]:
-					| {
-							/**
-							 * The window to use for the custom rule.
-							 */
-							window: number;
-							/**
-							 * The maximum number of requests allowed within the window.
-							 */
-							max: number;
-					  }
+					| BetterAuthRateLimitRule
 					| false
-					| ((request: Request) =>
-							| { window: number; max: number }
-							| false
-							| Promise<
-									| {
-											window: number;
-											max: number;
-									  }
-									| false
-							  >);
+					| ((
+							request: Request,
+							currentRule: BetterAuthRateLimitRule,
+					  ) => Awaitable<false | BetterAuthRateLimitRule>);
 		  }
 		| undefined;
 	/**
@@ -113,10 +110,7 @@ export type BetterAuthRateLimitOptions = {
 	 * NOTE: If custom storage is used storage
 	 * is ignored
 	 */
-	customStorage?: {
-		get: (key: string) => Promise<RateLimit | undefined>;
-		set: (key: string, value: RateLimit) => Promise<void>;
-	};
+	customStorage?: BetterAuthRateLimitStorage;
 };
 
 export type BetterAuthAdvancedOptions = {
@@ -151,17 +145,32 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
-	 * Disable trusted origins check
+	 * Disable all CSRF protection.
+	 *
+	 * When enabled, this disables:
+	 * - Origin header validation when cookies are present
+	 * - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+	 * - Cross-site navigation blocking for first-login scenarios
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
+	 *
+	 * @default false
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
-	 * Disable origin check
+	 * Disable URL validation against trustedOrigins.
 	 *
-	 * ⚠︎ This may allow requests from any origin to be processed by
-	 * Better Auth. And could lead to security vulnerabilities.
+	 * When enabled, this disables validation of:
+	 * - callbackURL
+	 * - redirectTo
+	 * - errorCallbackURL
+	 * - newUserCallbackURL
+	 *
+	 * ⚠︎ This may allow open redirects and could lead to security
+	 * vulnerabilities.
+	 *
+	 * @default false
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**
@@ -478,8 +487,18 @@ export type BetterAuthOptions = {
 				 * A function that is called when a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
+				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
 				 */
 				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+				/**
+				 * A function that is called before a user verifies their email
+				 * @param user the user that verified their email
+				 * @param request the request object
+				 */
+				beforeEmailVerification?: (
+					user: User,
+					request?: Request,
+				) => Promise<void>;
 				/**
 				 * A function that is called when a user's email is updated to verified
 				 * @param user the user that verified their email
@@ -1002,9 +1021,26 @@ export type BetterAuthOptions = {
 	 *
 	 * Trusted origins will be dynamically
 	 * calculated based on the request.
+	 *
+	 * @example
+	 * ```ts
+	 * trustedOrigins: async (request) => {
+	 *   return [
+	 *    "https://better-auth.com",
+	 *    "https://*.better-auth.com",
+	 *    request.headers.get("x-custom-origin")
+	 *   ];
+	 * }
+	 * ```
+	 * @returns An array of trusted origins.
 	 */
 	trustedOrigins?:
-		| (string[] | ((request?: Request | undefined) => Awaitable<string[]>))
+		| (
+				| string[]
+				| ((
+						request?: Request | undefined,
+				  ) => Awaitable<(string | undefined | null)[]>)
+		  )
 		| undefined;
 	/**
 	 * Rate limiting configuration

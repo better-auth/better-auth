@@ -6,6 +6,8 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { deprecate } from "@better-auth/core/utils/deprecate";
+import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -14,7 +16,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -171,7 +172,14 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	let ctx: AuthContext = {
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
+
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
 		options,
@@ -189,7 +197,7 @@ export async function createAuthContext(
 				allowRelativePaths: boolean;
 			},
 		) {
-			return ctx.trustedOrigins.some((origin) =>
+			return this.trustedOrigins.some((origin) =>
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
@@ -312,6 +320,8 @@ export async function createAuthContext(
 				logger.error("Failed to run background task:", e);
 			}
 		},
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
@@ -320,6 +330,16 @@ export async function createAuthContext(
 		({ context } = await initOrPromise);
 	} else {
 		({ context } = initOrPromise);
+	}
+
+	if (
+		typeof context.options.emailVerification?.onEmailVerification === "function"
+	) {
+		context.options.emailVerification.onEmailVerification = deprecate(
+			context.options.emailVerification.onEmailVerification,
+			"Use `afterEmailVerification` instead. This will be removed in 1.5",
+			context.logger,
+		);
 	}
 
 	return context;

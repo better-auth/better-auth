@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const API_KEY_ERROR_CODES = defineErrorCodes({
 	INVALID_METADATA_TYPE: "metadata must be an object or undefined",

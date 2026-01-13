@@ -637,7 +637,7 @@ type setActiveOrganization = {
 ```
 </APIMethod>
 
-To set active organization when a session is created you can use [database hooks](/docs/concepts/database#database-hooks).
+To automatically set an active organization when a session is created, you can use [database hooks](/docs/concepts/database#database-hooks). You'll need to implement logic to determine which organization to set as the initial active organization.
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
@@ -645,11 +645,12 @@ export const auth = betterAuth({
     session: {
       create: {
         before: async (session) => {
-          const organization = await getActiveOrganization(session.userId);
+          // Implement your custom logic to set initial active organization
+          const organization = await getInitialOrganization(session.userId);
           return {
             data: {
               ...session,
-              activeOrganizationId: organization.id,
+              activeOrganizationId: organization?.id,
             },
           };
         },
@@ -1541,7 +1542,7 @@ type createOrgRole = {
 ```
 </APIMethod>
 
-Now you can freely call [`updateMemberRole`](#updating-a-member-role) to update the role of a member with your newly created role!
+Now you can freely call [`updateMemberRole`](#update-member-role) to update the role of a member with your newly created role!
 
 ### Deleting a role
 
@@ -2525,7 +2526,7 @@ await client.organization.create({
 
 **creatorRole**: `admin | owner` - The role of the user who creates the organization. By default, it's `owner`. You can set it to `admin`.
 
-**membershipLimit**: `number` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want.
+**membershipLimit**: `number` | `((user: User, organization: Organization) => Promise<number> | number)` - The maximum number of members allowed in an organization. By default, it's `100`. You can set it to any number you want or a function that returns the limit number.
 
 **sendInvitationEmail**: `async (data) => Promise<void>` - A function that sends an invitation email to the user.
 
