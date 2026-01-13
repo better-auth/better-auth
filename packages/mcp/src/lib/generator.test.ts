@@ -16,9 +16,9 @@ describe("generateSetup", () => {
 
 			expect(output.mode).toBe("create");
 			expect(output.files).toHaveLength(3);
-			expect(output.files[0].path).toBe("lib/auth.ts");
-			expect(output.files[1].path).toBe("lib/auth-client.ts");
-			expect(output.files[2].path).toBe("app/api/auth/[...all]/route.ts");
+			expect(output.files[0]?.path).toBe("lib/auth.ts");
+			expect(output.files[1]?.path).toBe("lib/auth-client.ts");
+			expect(output.files[2]?.path).toBe("app/api/auth/[...all]/route.ts");
 		});
 
 		it("should generate SvelteKit setup with srcDir", () => {
@@ -47,7 +47,7 @@ describe("generateSetup", () => {
 			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 
-			expect(output.files[0].path).toBe("lib/auth.ts");
+			expect(output.files[0]?.path).toBe("lib/auth.ts");
 		});
 
 		it("should respect srcDir option when true", () => {
@@ -60,7 +60,7 @@ describe("generateSetup", () => {
 			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 
-			expect(output.files[0].path).toBe("src/lib/auth.ts");
+			expect(output.files[0]?.path).toBe("src/lib/auth.ts");
 		});
 	});
 
@@ -71,6 +71,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain('provider: "pg"');
@@ -82,6 +83,7 @@ describe("generateSetup", () => {
 				database: "mysql",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain('provider: "mysql"');
@@ -93,6 +95,7 @@ describe("generateSetup", () => {
 				database: "sqlite",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain('provider: "sqlite"');
@@ -104,6 +107,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.envVars.some((e) => e.name === "DATABASE_URL")).toBe(true);
 		});
@@ -117,6 +121,7 @@ describe("generateSetup", () => {
 				orm: "prisma",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("prismaAdapter");
@@ -130,6 +135,7 @@ describe("generateSetup", () => {
 				orm: "drizzle",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("drizzleAdapter");
@@ -142,6 +148,7 @@ describe("generateSetup", () => {
 				orm: "none",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("process.env.DATABASE_URL");
@@ -158,6 +165,7 @@ describe("generateSetup", () => {
 				features: ["google"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("socialProviders");
@@ -172,6 +180,7 @@ describe("generateSetup", () => {
 				features: ["google", "github", "discord"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("google:");
@@ -186,6 +195,7 @@ describe("generateSetup", () => {
 				features: ["google"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.envVars.some((e) => e.name === "GOOGLE_CLIENT_ID")).toBe(
 				true,
@@ -204,6 +214,7 @@ describe("generateSetup", () => {
 				features: ["2fa"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			const clientFile = output.files.find((f) =>
@@ -221,6 +232,7 @@ describe("generateSetup", () => {
 				features: ["organization"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("organization()");
@@ -233,6 +245,7 @@ describe("generateSetup", () => {
 				features: ["magic-link"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("magicLink");
@@ -246,6 +259,7 @@ describe("generateSetup", () => {
 				features: ["passkey"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("passkey()");
@@ -259,6 +273,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("emailAndPassword");
@@ -272,6 +287,7 @@ describe("generateSetup", () => {
 				features: ["email-password"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			const authFile = output.files.find((f) => f.path.endsWith("auth.ts"));
 			expect(authFile?.content).toContain("emailAndPassword");
@@ -285,6 +301,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.envVars.some((e) => e.name === "BETTER_AUTH_SECRET")).toBe(
 				true,
@@ -299,6 +316,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.commands.some((c) => c.command.includes("better-auth"))).toBe(
 				true,
@@ -312,6 +330,7 @@ describe("generateSetup", () => {
 				orm: "none",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(
 				output.commands.some((c) => c.command.includes("@better-auth/cli migrate")),
@@ -325,6 +344,7 @@ describe("generateSetup", () => {
 				orm: "prisma",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.commands.some((c) => c.command.includes("prisma"))).toBe(
 				true,
@@ -339,6 +359,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.docs.some((d) => d.url.includes("better-auth.com"))).toBe(
 				true,
@@ -352,6 +373,7 @@ describe("generateSetup", () => {
 				features: ["google"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.docs.some((d) => d.url.includes("social-sign-on"))).toBe(
 				true,
@@ -365,6 +387,7 @@ describe("generateSetup", () => {
 				features: ["2fa"],
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.docs.some((d) => d.url.includes("two-factor"))).toBe(true);
 		});
@@ -377,6 +400,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.files.every((f) => f.path.endsWith(".ts"))).toBe(true);
 		});
@@ -388,6 +412,7 @@ describe("generateSetup", () => {
 				typescript: false,
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.files.every((f) => f.path.endsWith(".js"))).toBe(true);
 		});
@@ -400,6 +425,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(
 				output.files.some((f) => f.path.includes("[...all]/route.ts")),
@@ -412,6 +438,7 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(result)).toBe(false);
 			const output = result as SetupAuthOutput;
 			expect(output.files.some((f) => f.path.includes("hooks.server.ts"))).toBe(
 				true,
@@ -428,6 +455,8 @@ describe("generateSetup", () => {
 				database: "postgres",
 			});
 
+			expect(isSetupError(nextResult)).toBe(false);
+			expect(isSetupError(svelteResult)).toBe(false);
 			const nextOutput = nextResult as SetupAuthOutput;
 			const svelteOutput = svelteResult as SetupAuthOutput;
 
