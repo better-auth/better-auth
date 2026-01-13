@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import { useStore } from "./solid-store";
 
@@ -87,6 +88,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				isPending: boolean;
 				isRefetching: boolean;
 				error: BetterFetchError | null;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$Infer: {
 				Session: NonNullable<Session>;
