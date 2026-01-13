@@ -171,6 +171,52 @@ SHOW search_path;
 This should return your custom schema (e.g., `auth`) as the first value.
 </Callout>
 
+## Reserved Keywords and Table Naming
+
+PostgreSQL has several reserved keywords that can conflict with default Better Auth table names. For example, `user` is a reserved keyword in PostgreSQL and requires quoting when used as a table name.
+
+<Callout type="warn">
+If you're using `usePlural: true` in your database configuration, the table name becomes `users` which is a reserved keyword and will require quotes in raw SQL queries.
+</Callout>
+
+### Solutions
+
+**Option 1: Use custom model names**
+
+You can rename the tables to avoid conflicts with reserved keywords:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: new Pool({
+    connectionString: "postgres://...",
+  }),
+  user: {
+    modelName: "auth_user", // Avoids the 'user' reserved keyword
+  },
+});
+```
+
+**Option 2: Use plural table names**
+
+You can enable plural table names using the `usePlural` option:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: new Pool({
+    connectionString: "postgres://...",
+  }),
+  advanced: {
+    database: {
+      usePlural: true, // Tables will be named 'users', 'sessions', etc.
+    },
+  },
+});
+```
+
+<Callout type="info">
+When using ORMs like Prisma or Drizzle, they typically handle quoting automatically. This is mainly a consideration when writing raw SQL queries or when your database tooling doesn't auto-quote identifiers.
+</Callout>
+
 ## Additional Information
 
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)

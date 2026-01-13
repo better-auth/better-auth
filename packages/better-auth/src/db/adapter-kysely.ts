@@ -21,6 +21,7 @@ export async function getAdapter(
 					? opts.database.debugLogs
 					: false,
 			transaction: transaction,
+			usePlural: opts.advanced?.database?.usePlural,
 		})(opts);
 	});
 }

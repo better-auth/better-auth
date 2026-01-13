@@ -270,6 +270,17 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Use plural table names.
+				 *
+				 * When enabled, table names will have an 's' suffix
+				 * (e.g., 'user' becomes 'users', 'session' becomes 'sessions').
+				 *
+				 * This is useful for PostgreSQL where 'user' is a reserved keyword.
+				 *
+				 * @default false
+				 */
+				usePlural?: boolean;
 		  }
 		| undefined;
 	/**
