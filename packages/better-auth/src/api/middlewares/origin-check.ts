@@ -1,8 +1,33 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { deprecate } from "@better-auth/core/utils/deprecate";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 import { normalizePathname } from "../../utils/url";
+
+/**
+ * Checks if CSRF should be skipped for backward compatibility.
+ * Previously, disableOriginCheck also disabled CSRF checks.
+ * This maintains that behavior when disableCSRFCheck isn't explicitly set.
+ * Only triggers for skipOriginCheck === true, not for path arrays.
+ */
+function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
+	return (
+		ctx.context.skipOriginCheck === true &&
+		ctx.context.options.advanced?.disableCSRFCheck === undefined
+	);
+}
+
+/**
+ * Logs deprecation warning for users relying on coupled behavior.
+ * Only logs if user explicitly set disableOriginCheck (not test environment default).
+ */
+const logBackwardCompatWarning = deprecate(
+	function logBackwardCompatWarning() {},
+	"disableOriginCheck: true currently also disables CSRF checks. " +
+		"In a future version, disableOriginCheck will ONLY disable URL validation. " +
+		"To keep CSRF disabled, add disableCSRFCheck: true to your config.",
+);
 
 /**
  * A middleware to validate callbackURL and origin against trustedOrigins.
@@ -19,6 +44,10 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 		return;
 	}
 	await validateOrigin(ctx);
+
+	if (ctx.context.skipOriginCheck) {
+		return;
+	}
 
 	const { body, query } = ctx;
 	const callbackURL = body?.callbackURL || query?.callbackURL;
@@ -86,6 +115,9 @@ export const originCheck = (
 ) =>
 	createAuthMiddleware(async (ctx) => {
 		if (!ctx.request) {
+			return;
+		}
+		if (ctx.context.skipOriginCheck) {
 			return;
 		}
 		const callbackURL = getValue(ctx);
@@ -157,32 +189,40 @@ async function validateOrigin(
 	const originHeader = headers.get("origin") || headers.get("referer") || "";
 	const useCookies = headers.has("cookie");
 
-	const skipOriginCheck = ctx.context.skipOriginCheck;
-	let shouldSkip = false;
+	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
 
-	if (skipOriginCheck === true) {
-		shouldSkip = true;
-	} else if (Array.isArray(skipOriginCheck)) {
+	if (shouldSkipCSRFForBackwardCompat(ctx)) {
+		ctx.context.options.advanced?.disableOriginCheck === true &&
+			logBackwardCompatWarning();
+		return;
+	}
+
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	if (Array.isArray(skipOriginCheck)) {
 		try {
 			const basePath = new URL(ctx.context.baseURL).pathname;
 			const currentPath = normalizePathname(ctx.request.url, basePath);
-			shouldSkip = skipOriginCheck.some((skipPath) =>
+			const shouldSkipPath = skipOriginCheck.some((skipPath) =>
 				currentPath.startsWith(skipPath),
 			);
+			if (shouldSkipPath) {
+				return;
+			}
 		} catch {
-			shouldSkip = false;
+			// If parsing fails, don't skip - continue with validation
 		}
 	}
 
-	const shouldValidate =
-		forceValidate || (useCookies && !ctx.context.skipCSRFCheck && !shouldSkip);
+	const shouldValidate = forceValidate || useCookies;
 
 	if (!shouldValidate) {
 		return;
 	}
 
 	if (!originHeader || originHeader === "null") {
-		throw new APIError("FORBIDDEN", { message: "Missing or null Origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
 	}
 
 	const trustedOrigins: string[] = Array.isArray(
@@ -229,6 +269,14 @@ export const formCsrfMiddleware = createAuthMiddleware(async (ctx) => {
 async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 	const req = ctx.request;
 	if (!req) {
+		return;
+	}
+
+	if (ctx.context.skipCSRFCheck) {
+		return;
+	}
+
+	if (shouldSkipCSRFForBackwardCompat(ctx)) {
 		return;
 	}
 

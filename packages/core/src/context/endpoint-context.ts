@@ -2,6 +2,7 @@ import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { EndpointContext, InputContext } from "better-call";
 import type { AuthContext } from "../types";
+import { getBetterAuthGlobal } from "./global";
 
 export type AuthEndpointContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -9,15 +10,15 @@ export type AuthEndpointContext = Partial<
 	context: AuthContext;
 };
 
-let currentContextAsyncStorage: AsyncLocalStorage<AuthEndpointContext> | null =
-	null;
-
 const ensureAsyncStorage = async () => {
-	if (!currentContextAsyncStorage) {
+	const betterAuthGlobal = getBetterAuthGlobal();
+	if (!betterAuthGlobal.context.endpointContextAsyncStorage) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
-		currentContextAsyncStorage = new AsyncLocalStorage();
+		betterAuthGlobal.context.endpointContextAsyncStorage =
+			new AsyncLocalStorage<AuthEndpointContext>();
 	}
-	return currentContextAsyncStorage;
+	return betterAuthGlobal.context
+		.endpointContextAsyncStorage as AsyncLocalStorage<AuthEndpointContext>;
 };
 
 /**
