@@ -78,7 +78,7 @@ export function SignInForm({
 	};
 
 	return (
-		<form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+		<form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-2">
 			<FieldGroup>
 				<Controller
 					name="email"

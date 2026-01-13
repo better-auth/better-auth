@@ -140,6 +140,9 @@ describe("Social Providers", async (c) => {
 					clientSecret: "test",
 				},
 			},
+			advanced: {
+				disableOriginCheck: false,
+			},
 		},
 		{
 			disableTestUser: true,
