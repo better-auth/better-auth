@@ -16,6 +16,7 @@ export {
 export {
 	getCurrentAdapter,
 	getCurrentDBAdapterAsyncLocalStorage,
+	queueAfterTransactionHook,
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";
