@@ -147,7 +147,7 @@ class ConnectionMutex {
 	#resolve?: () => void;
 
 	async lock(): Promise<void> {
-		while (this.#promise) {
+		while (this.#promise !== undefined) {
 			await this.#promise;
 		}
 

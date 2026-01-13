@@ -1,8 +1,8 @@
 import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { generateId } from "@better-auth/core/utils/id";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { User } from "../types";
-import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
