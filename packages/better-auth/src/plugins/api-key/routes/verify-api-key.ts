@@ -169,6 +169,7 @@ export async function validateApiKey({
 		updatedAt: new Date(),
 	};
 
+	// Intentionally exclude immutable identifiers from updateData so they are not persisted/updated.
 	const { id: _id, userId: _userId, ...updateData } = updated;
 
 	const performUpdate = async (): Promise<ApiKey | null> => {
