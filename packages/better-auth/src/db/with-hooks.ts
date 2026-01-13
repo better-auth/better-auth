@@ -6,6 +6,8 @@ import {
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 
+export type AfterCommitCallback = () => Promise<void>;
+
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -14,6 +16,8 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
+	const pendingAfterCommitCallbacks: AfterCommitCallback[] = [];
+
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
 		model: BaseModelNames,
@@ -61,6 +65,17 @@ export function getWithHooks(
 			if (toRun) {
 				// @ts-expect-error context type mismatch
 				await toRun(created as any, context);
+			}
+		}
+
+		// Collect afterCommit callbacks to be executed after transaction commits
+		for (const hook of hooks || []) {
+			const afterCommitHook = hook[model]?.create?.afterCommit;
+			if (afterCommitHook) {
+				pendingAfterCommitCallbacks.push(async () => {
+					// @ts-expect-error context type mismatch
+					await afterCommitHook(created as any, context);
+				});
 			}
 		}
 
@@ -300,11 +315,32 @@ export function getWithHooks(
 		return deleted;
 	}
 
+	/**
+	 * Executes all pending afterCommit callbacks.
+	 * Should be called after a transaction is committed.
+	 */
+	async function runAfterCommitCallbacks() {
+		const callbacks = [...pendingAfterCommitCallbacks];
+		pendingAfterCommitCallbacks.length = 0;
+		for (const callback of callbacks) {
+			await callback();
+		}
+	}
+
+	/**
+	 * Clears all pending afterCommit callbacks without executing them.
+	 */
+	function clearAfterCommitCallbacks() {
+		pendingAfterCommitCallbacks.length = 0;
+	}
+
 	return {
 		createWithHooks,
 		updateWithHooks,
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		runAfterCommitCallbacks,
+		clearAfterCommitCallbacks,
 	};
 }

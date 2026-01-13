@@ -1091,6 +1091,15 @@ export type BetterAuthOptions = {
 							user: User & Record<string, unknown>,
 							context: GenericEndpointContext | null,
 						) => Promise<void>;
+						/**
+						 * Hook that is called after the transaction is committed.
+						 * Use this for operations that depend on the user being fully
+						 * persisted (e.g., creating related records with foreign keys).
+						 */
+						afterCommit?: (
+							user: User & Record<string, unknown>,
+							context: GenericEndpointContext | null,
+						) => Promise<void>;
 					};
 					update?: {
 						/**

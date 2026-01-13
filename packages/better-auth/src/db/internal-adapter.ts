@@ -41,6 +41,8 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
+		runAfterCommitCallbacks,
+		clearAfterCommitCallbacks,
 	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -84,7 +86,9 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			return runWithTransaction(adapter, async () => {
+			// Clear any pending callbacks before starting transaction
+			clearAfterCommitCallbacks();
+			const result = await runWithTransaction(adapter, async () => {
 				const createdUser = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
@@ -111,6 +115,9 @@ export const createInternalAdapter = (
 					account: createdAccount,
 				};
 			});
+			// Execute afterCommit callbacks after transaction is committed
+			await runAfterCommitCallbacks();
+			return result;
 		},
 		createUser: async <T>(
 			user: Omit<User, "id" | "createdAt" | "updatedAt" | "emailVerified"> &
@@ -1047,5 +1054,7 @@ export const createInternalAdapter = (
 			);
 			return verification;
 		},
+		runAfterCommitCallbacks,
+		clearAfterCommitCallbacks,
 	};
 };

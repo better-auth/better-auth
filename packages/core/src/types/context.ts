@@ -167,6 +167,17 @@ export interface InternalAdapter<
 		id: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	/**
+	 * Executes all pending afterCommit callbacks.
+	 * Should be called after a transaction is committed.
+	 */
+	runAfterCommitCallbacks(): Promise<void>;
+
+	/**
+	 * Clears all pending afterCommit callbacks without executing them.
+	 */
+	clearAfterCommitCallbacks(): void;
 }
 
 type CreateCookieGetterFn = (

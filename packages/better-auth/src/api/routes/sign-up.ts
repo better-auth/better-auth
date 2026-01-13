@@ -177,7 +177,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			return runWithTransaction(ctx.context.adapter, async () => {
+			ctx.context.internalAdapter.clearAfterCommitCallbacks();
+			const result = await runWithTransaction(ctx.context.adapter, async () => {
 				if (
 					!ctx.context.options.emailAndPassword?.enabled ||
 					ctx.context.options.emailAndPassword?.disableSignUp
@@ -358,5 +359,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					) as InferUser<O>,
 				});
 			});
+			await ctx.context.internalAdapter.runAfterCommitCallbacks();
+			return result;
 		},
 	);
