@@ -20,7 +20,7 @@ import {
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
-import { getWithHooks } from "./with-hooks";
+import { executeAfterCommitCallbacks, getWithHooks } from "./with-hooks";
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
@@ -41,8 +41,6 @@ export const createInternalAdapter = (
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
-		runAfterCommitCallbacks,
-		clearAfterCommitCallbacks,
 	} = getWithHooks(adapter, ctx);
 
 	async function refreshUserSessions(user: User) {
@@ -86,10 +84,10 @@ export const createInternalAdapter = (
 			account: Omit<Account, "userId" | "id" | "createdAt" | "updatedAt"> &
 				Partial<Account>,
 		) => {
-			// Clear any pending callbacks before starting transaction
-			clearAfterCommitCallbacks();
+			// Collect afterCommit callbacks during transaction (request-scoped)
+			const afterCommitCallbacks: (() => Promise<void>)[] = [];
 			const result = await runWithTransaction(adapter, async () => {
-				const createdUser = await createWithHooks(
+				const userResult = await createWithHooks(
 					{
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 						createdAt: new Date(),
@@ -99,10 +97,13 @@ export const createInternalAdapter = (
 					"user",
 					undefined,
 				);
-				const createdAccount = await createWithHooks(
+				if (userResult) {
+					afterCommitCallbacks.push(...userResult.afterCommitCallbacks);
+				}
+				const accountResult = await createWithHooks(
 					{
 						...account,
-						userId: createdUser!.id,
+						userId: userResult?.data!.id,
 						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 						createdAt: new Date(),
 						updatedAt: new Date(),
@@ -110,13 +111,16 @@ export const createInternalAdapter = (
 					"account",
 					undefined,
 				);
+				if (accountResult) {
+					afterCommitCallbacks.push(...accountResult.afterCommitCallbacks);
+				}
 				return {
-					user: createdUser,
-					account: createdAccount,
+					user: userResult?.data,
+					account: accountResult?.data,
 				};
 			});
 			// Execute afterCommit callbacks after transaction is committed
-			await runAfterCommitCallbacks();
+			await executeAfterCommitCallbacks(afterCommitCallbacks);
 			return result;
 		},
 		createUser: async <T>(
@@ -124,7 +128,7 @@ export const createInternalAdapter = (
 				Partial<User> &
 				Record<string, any>,
 		) => {
-			const createdUser = await createWithHooks(
+			const result = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
@@ -135,15 +139,18 @@ export const createInternalAdapter = (
 				"user",
 				undefined,
 			);
-
-			return createdUser as T & User;
+			// Execute afterCommit callbacks immediately (not inside transaction)
+			if (result) {
+				await executeAfterCommitCallbacks(result.afterCommitCallbacks);
+			}
+			return result?.data as T & User;
 		},
 		createAccount: async <T extends Record<string, any>>(
 			account: Omit<Account, "id" | "createdAt" | "updatedAt"> &
 				Partial<Account> &
 				T,
 		) => {
-			const createdAccount = await createWithHooks(
+			const result = await createWithHooks(
 				{
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
@@ -153,7 +160,11 @@ export const createInternalAdapter = (
 				"account",
 				undefined,
 			);
-			return createdAccount as T & Account;
+			// Execute afterCommit callbacks immediately (not inside transaction)
+			if (result) {
+				await executeAfterCommitCallbacks(result.afterCommitCallbacks);
+			}
+			return result?.data as T & Account;
 		},
 		listSessions: async (userId: string) => {
 			if (secondaryStorage) {
@@ -1054,7 +1065,5 @@ export const createInternalAdapter = (
 			);
 			return verification;
 		},
-		runAfterCommitCallbacks,
-		clearAfterCommitCallbacks,
 	};
 };

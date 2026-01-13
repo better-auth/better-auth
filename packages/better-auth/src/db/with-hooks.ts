@@ -8,6 +8,34 @@ import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 
 export type AfterCommitCallback = () => Promise<void>;
 
+/**
+ * Result from createWithHooks that includes afterCommit callbacks
+ */
+export type CreateWithHooksResult<T> = {
+	data: T | null;
+	afterCommitCallbacks: AfterCommitCallback[];
+};
+
+/**
+ * Executes afterCommit callbacks with error handling.
+ * Each callback is executed independently - if one fails, others still run.
+ */
+export async function executeAfterCommitCallbacks(
+	callbacks: AfterCommitCallback[],
+): Promise<void> {
+	for (const callback of callbacks) {
+		try {
+			await callback();
+		} catch (error) {
+			// Log and continue - don't let one callback failure stop others
+			console.error(
+				"[better-auth] Error in afterCommit callback:",
+				error,
+			);
+		}
+	}
+}
+
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
@@ -16,7 +44,6 @@ export function getWithHooks(
 	},
 ) {
 	const hooks = ctx.hooks;
-	const pendingAfterCommitCallbacks: AfterCommitCallback[] = [];
 
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
@@ -69,17 +96,18 @@ export function getWithHooks(
 		}
 
 		// Collect afterCommit callbacks to be executed after transaction commits
+		const afterCommitCallbacks: AfterCommitCallback[] = [];
 		for (const hook of hooks || []) {
 			const afterCommitHook = hook[model]?.create?.afterCommit;
 			if (afterCommitHook) {
-				pendingAfterCommitCallbacks.push(async () => {
+				afterCommitCallbacks.push(async () => {
 					// @ts-expect-error context type mismatch
 					await afterCommitHook(created as any, context);
 				});
 			}
 		}
 
-		return created;
+		return { data: created, afterCommitCallbacks };
 	}
 
 	async function updateWithHooks<T extends Record<string, any>>(
@@ -315,32 +343,11 @@ export function getWithHooks(
 		return deleted;
 	}
 
-	/**
-	 * Executes all pending afterCommit callbacks.
-	 * Should be called after a transaction is committed.
-	 */
-	async function runAfterCommitCallbacks() {
-		const callbacks = [...pendingAfterCommitCallbacks];
-		pendingAfterCommitCallbacks.length = 0;
-		for (const callback of callbacks) {
-			await callback();
-		}
-	}
-
-	/**
-	 * Clears all pending afterCommit callbacks without executing them.
-	 */
-	function clearAfterCommitCallbacks() {
-		pendingAfterCommitCallbacks.length = 0;
-	}
-
 	return {
 		createWithHooks,
 		updateWithHooks,
 		updateManyWithHooks,
 		deleteWithHooks,
 		deleteManyWithHooks,
-		runAfterCommitCallbacks,
-		clearAfterCommitCallbacks,
 	};
 }
