@@ -52,7 +52,7 @@ Rate limiting uses the connecting IP address to track the number of requests mad
 default header checked is `x-forwarded-for`, which is commonly used in production environments. If
 you are using a different header to track the user's IP address, you'll need to specify it.
 
-```ts title="auth.ts" 
+```ts title="auth.ts"
 export const auth = betterAuth({
     //...other options
     advanced: {
@@ -67,6 +67,26 @@ export const auth = betterAuth({
     },
 })
 ```
+
+### Custom Key Generator
+
+By default, rate limiting uses the client's IP address combined with the request path as the identifier. However, this may not be ideal in scenarios where multiple users share the same IP address (e.g., users behind NAT/CGNAT, corporate networks, or VPN users).
+
+You can provide a custom `keyGenerator` function to generate rate limit identifiers based on other criteria.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    rateLimit: {
+        keyGenerator: (request) => request.headers.get("x-fingerprint"),
+    },
+})
+```
+
+<Callout>
+The request path is automatically appended to the returned value. If the function returns an empty value or throws an error, the IP address will be used as fallback.
+</Callout>
 
 ### Rate Limit Window
 
@@ -238,25 +258,25 @@ Table Name: `rateLimit`
 
 <DatabaseTable
     fields={[
-        { 
-        name: "id", 
-        type: "string", 
+        {
+        name: "id",
+        type: "string",
         description: "Database ID",
         isPrimaryKey: true
         },
-        { 
-        name: "key", 
-        type: "string", 
+        {
+        name: "key",
+        type: "string",
         description: "Unique identifier for each rate limit key",
         },
-        { 
-        name: "count", 
-        type: "integer", 
-        description: "Time window in seconds" 
+        {
+        name: "count",
+        type: "integer",
+        description: "Time window in seconds"
         },
-        { 
-        name: "lastRequest", 
-        type: "bigint", 
-        description: "Max requests in the window" 
+        {
+        name: "lastRequest",
+        type: "bigint",
+        description: "Max requests in the window"
         }]}
     />

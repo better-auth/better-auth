@@ -117,6 +117,18 @@ export type BetterAuthRateLimitOptions = {
 		get: (key: string) => Promise<RateLimit | undefined>;
 		set: (key: string, value: RateLimit) => Promise<void>;
 	};
+	/**
+	 * Custom function to generate the rate limit identifier.
+	 * The request path is automatically appended to the returned value.
+	 *
+	 * @example
+	 * ```ts
+	 * keyGenerator: (request) => {
+	 *   return request.headers.get("x-fingerprint")
+	 * }
+	 * ```
+	 */
+	keyGenerator?: (request: Request) => string | Promise<string>;
 };
 
 export type BetterAuthAdvancedOptions = {

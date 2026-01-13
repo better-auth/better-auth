@@ -223,6 +223,94 @@ describe("should work with custom rules", async () => {
 	});
 });
 
+describe("should work with custom keyGenerator", async () => {
+	it("should use custom keyGenerator function", async () => {
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				keyGenerator: async (request) => {
+					const customId = request.headers.get("x-custom-id");
+					return customId || "";
+				},
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					headers: {
+						"x-custom-id": "user-123",
+					},
+				},
+			);
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("user-123/sign-in/email")).toBe(true);
+	});
+
+	it("should fallback to use IP when keyGenerator returns empty", async () => {
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				keyGenerator: async () => {
+					return "";
+				},
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		for (let i = 0; i < 4; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+
+		expect(store.has("127.0.0.1/sign-in/email")).toBe(true);
+	});
+});
+
 describe("should work in development/test environment", () => {
 	const LOCALHOST_IP = "127.0.0.1";
 	const REQUEST_PATH = "/sign-in/email";

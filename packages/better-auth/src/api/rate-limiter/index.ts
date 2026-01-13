@@ -160,11 +160,32 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 		.replace(/\/+$/, "");
 	let window = ctx.rateLimit.window;
 	let max = ctx.rateLimit.max;
-	const ip = getIp(req, ctx.options);
-	if (!ip) {
-		return;
+	let key: string | null = null;
+
+	if (ctx.options.rateLimit?.keyGenerator) {
+		try {
+			const generatedKey = await ctx.options.rateLimit.keyGenerator(req);
+
+			if (generatedKey?.length) {
+				key = generatedKey;
+			}
+		} catch (e) {
+			ctx.logger.error("Error generating rate limit key", e);
+		}
 	}
-	const key = ip + path;
+
+	if (!key) {
+		const ip = getIp(req, ctx.options);
+
+		if (!ip) {
+			return;
+		}
+
+		key = ip;
+	}
+
+	key += path;
+
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
