@@ -158,7 +158,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
-		init(ctx: { skipOriginCheck?: boolean | string[] }) {
+		init(ctx) {
 			const existing = ctx.skipOriginCheck;
 			if (existing === true) {
 				return {};
