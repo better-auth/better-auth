@@ -87,9 +87,6 @@ export const createInternalAdapter = (
 			return runWithTransaction(adapter, async () => {
 				const createdUser = await createWithHooks(
 					{
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
 						...user,
 					},
 					"user",
@@ -99,9 +96,6 @@ export const createInternalAdapter = (
 					{
 						...account,
 						userId: createdUser!.id,
-						// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-						createdAt: new Date(),
-						updatedAt: new Date(),
 					},
 					"account",
 					undefined,
@@ -119,9 +113,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdUser = await createWithHooks(
 				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
 					...user,
 					email: user.email?.toLowerCase(),
 				},
@@ -138,9 +129,6 @@ export const createInternalAdapter = (
 		) => {
 			const createdAccount = await createWithHooks(
 				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
 					...account,
 				},
 				"account",
@@ -277,7 +265,8 @@ export const createInternalAdapter = (
 				ctx?.context.options ?? options,
 				{},
 			);
-			const data: Omit<Session, "id"> = {
+			const data: Omit<Session, "id" | "createdAt" | "updatedAt"> &
+				Partial<Pick<Session, "createdAt" | "updatedAt">> = {
 				ipAddress:
 					ctx?.request || ctx?.headers
 						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
@@ -294,9 +283,6 @@ export const createInternalAdapter = (
 					: getDate(sessionExpiration, "sec"),
 				userId,
 				token: generateId(32),
-				// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-				createdAt: new Date(),
-				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
 			};
@@ -838,9 +824,6 @@ export const createInternalAdapter = (
 		) => {
 			const _account = await createWithHooks(
 				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
 					...account,
 				},
 				"account",
@@ -978,9 +961,6 @@ export const createInternalAdapter = (
 		) => {
 			const verification = await createWithHooks(
 				{
-					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
-					createdAt: new Date(),
-					updatedAt: new Date(),
 					...data,
 				},
 				"verification",
