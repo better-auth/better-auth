@@ -10,7 +10,8 @@ import {
 } from "@better-auth/core/context";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
 import type { InternalLogger } from "@better-auth/core/env";
-import { generateId, safeJSONParse } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
@@ -158,27 +159,31 @@ export const createInternalAdapter = (
 					safeJSONParse(currentList) || [];
 				const now = Date.now();
 
-				const validSessions = list.filter((s) => s.expiresAt > now);
-				const sessions = [];
+				const seenTokens = new Set<string>();
+				const sessions: Session[] = [];
 
-				for (const session of validSessions) {
-					const sessionStringified = await secondaryStorage.get(session.token);
-					if (sessionStringified) {
-						try {
-							const s = safeJSONParse<{
-								session: Session;
-								user: User;
-							}>(sessionStringified);
-							if (!s) continue;
-							const parsedSession = parseSessionOutput(ctx.options, {
-								...s.session,
-								expiresAt: new Date(s.session.expiresAt),
-							});
-							sessions.push(parsedSession);
-						} catch {
-							// Skip invalid/corrupt session data
-							continue;
-						}
+				for (const { token, expiresAt } of list) {
+					if (expiresAt <= now || seenTokens.has(token)) continue;
+					seenTokens.add(token);
+
+					const data = await secondaryStorage.get(token);
+					if (!data) continue;
+
+					try {
+						const parsed = safeJSONParse<{
+							session: Session;
+							user: User;
+						}>(data);
+						if (!parsed) continue;
+
+						sessions.push(
+							parseSessionOutput(ctx.options, {
+								...parsed.session,
+								expiresAt: new Date(parsed.session.expiresAt),
+							}),
+						);
+					} catch {
+						continue;
 					}
 				}
 				return sessions;
@@ -318,22 +323,18 @@ export const createInternalAdapter = (
 
 								if (currentList) {
 									list = safeJSONParse(currentList) || [];
-									list = list.filter((session) => session.expiresAt > now);
+									list = list.filter(
+										(session) =>
+											session.expiresAt > now && session.token !== data.token,
+									);
 								}
 
-								const sorted = list.sort((a, b) => a.expiresAt - b.expiresAt);
-								let furthestSessionExp = sorted.at(-1)?.expiresAt;
-
-								sorted.push({
-									token: data.token,
-									expiresAt: data.expiresAt.getTime(),
-								});
-								if (
-									!furthestSessionExp ||
-									furthestSessionExp < data.expiresAt.getTime()
-								) {
-									furthestSessionExp = data.expiresAt.getTime();
-								}
+								const sorted = [
+									...list,
+									{ token: data.token, expiresAt: data.expiresAt.getTime() },
+								].sort((a, b) => a.expiresAt - b.expiresAt);
+								const furthestSessionExp =
+									sorted.at(-1)?.expiresAt ?? data.expiresAt.getTime();
 								const furthestSessionTTL = Math.max(
 									Math.floor((furthestSessionExp - now) / 1000),
 									0,
