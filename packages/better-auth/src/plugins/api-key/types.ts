@@ -210,6 +210,20 @@ export interface ApiKeyOptions {
 							userId: string,
 							ctx: GenericEndpointContext,
 					  ) => Awaitable<Statements>);
+				/**
+				 * Allow clients to set permissions when creating or updating API keys.
+				 *
+				 * By default, permissions can only be set from the server.
+				 *
+				 * - `true`: Allow clients to set any permissions
+				 * - `Statements`: Allow clients to set only the specified permissions.
+				 *   The client can only set permissions that are a subset of the allowed permissions.
+				 *   For example, if `allowClientToSetPermissions` is `{ posts: ["read", "write"] }`,
+				 *   the client can set `{ posts: ["read"] }` but not `{ posts: ["delete"] }`.
+				 *
+				 * @default undefined (server-only)
+				 */
+				allowClientToSetPermissions?: Statements | true;
 		  }
 		| undefined;
 	/**

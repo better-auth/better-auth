@@ -9,6 +9,7 @@ import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
+import { validateClientPermissions } from "../permissions";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -294,10 +295,25 @@ export function createApiKey({
 					rateLimitMax !== undefined ||
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
-					permissions !== undefined ||
 					remaining !== null
 				) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+				}
+
+				// Check if permissions are being set from the client
+				if (permissions !== undefined) {
+					const allowClientPermissions =
+						opts.permissions?.allowClientToSetPermissions;
+
+					// If client permissions are not allowed, throw error
+					if (!allowClientPermissions) {
+						throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+					}
+
+					// Validate that the requested permissions are within the allowed set
+					if (!validateClientPermissions(permissions, allowClientPermissions)) {
+						throw APIError.from("BAD_REQUEST", ERROR_CODES.PERMISSION_NOT_ALLOWED);
+					}
 				}
 			}
 

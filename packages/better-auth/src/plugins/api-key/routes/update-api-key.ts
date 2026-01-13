@@ -11,6 +11,7 @@ import {
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
+import { validateClientPermissions } from "../permissions";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -289,10 +290,29 @@ export function updateApiKey({
 					rateLimitMax !== undefined ||
 					rateLimitTimeWindow !== undefined ||
 					rateLimitEnabled !== undefined ||
-					remaining !== undefined ||
-					permissions !== undefined
+					remaining !== undefined
 				) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+				}
+
+				// Check if permissions are being set from the client
+				if (permissions !== undefined) {
+					const allowClientPermissions =
+						opts.permissions?.allowClientToSetPermissions;
+
+					// If client permissions are not allowed, throw error
+					if (!allowClientPermissions) {
+						throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+					}
+
+					// Validate that the requested permissions are within the allowed set
+					// Note: null is allowed as it removes permissions
+					if (
+						permissions !== null &&
+						!validateClientPermissions(permissions, allowClientPermissions)
+					) {
+						throw APIError.from("BAD_REQUEST", ERROR_CODES.PERMISSION_NOT_ALLOWED);
+					}
 				}
 			}
 
