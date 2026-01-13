@@ -169,12 +169,14 @@ export async function validateApiKey({
 		updatedAt: new Date(),
 	};
 
+	const { id: _id, userId: _userId, ...updateData } = updated;
+
 	const performUpdate = async (): Promise<ApiKey | null> => {
 		if (opts.storage === "database") {
 			return ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined, userId: undefined },
+				update: updateData,
 			});
 		} else if (
 			opts.storage === "secondary-storage" &&
@@ -183,7 +185,7 @@ export async function validateApiKey({
 			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined, userId: undefined },
+				update: updateData,
 			});
 			if (dbUpdated) {
 				await setApiKey(ctx, dbUpdated, opts);
