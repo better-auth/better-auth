@@ -38,12 +38,14 @@ export async function handleOAuthUserInfo(
 	let isRegister = !user;
 
 	if (dbUser) {
-		const hasBeenLinked = dbUser.accounts.find(
-			(a) =>
-				a.providerId === account.providerId &&
-				a.accountId === account.accountId,
-		);
-		if (!hasBeenLinked) {
+		const linkedAccount =
+			dbUser.linkedAccount ??
+			dbUser.accounts.find(
+				(acc) =>
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
+			);
+		if (!linkedAccount) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
@@ -112,14 +114,14 @@ export async function handleOAuthUserInfo(
 
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, {
-					...hasBeenLinked,
+					...linkedAccount,
 					...freshTokens,
 				});
 			}
 
 			if (Object.keys(freshTokens).length > 0) {
 				await c.context.internalAdapter.updateAccount(
-					hasBeenLinked.id,
+					linkedAccount.id,
 					freshTokens,
 				);
 			}

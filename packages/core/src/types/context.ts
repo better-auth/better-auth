@@ -113,7 +113,11 @@ export interface InternalAdapter<
 		email: string,
 		accountId: string,
 		providerId: string,
-	): Promise<{ user: User; accounts: Account[] } | null>;
+	): Promise<{
+		user: User;
+		linkedAccount?: Account;
+		accounts: Account[];
+	} | null>;
 
 	findUserByEmail(
 		email: string,
