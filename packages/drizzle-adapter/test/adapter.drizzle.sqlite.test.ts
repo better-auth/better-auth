@@ -13,7 +13,6 @@ import {
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
 import { drizzleAdapter } from "../drizzle-adapter";
-import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 import {
 	clearSchemaCache,
 	generateDrizzleSchema,
@@ -51,7 +50,7 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
-		const command = `node ./node_modules/drizzle-kit/bin.cjs push --dialect=sqlite --schema=${path.join(import.meta.dirname, fileName)}.ts --url=./test.db`;
+		const command = `node ./node_modules/drizzle-kit/bin.cjs push --dialect=sqlite --schema=${path.join(import.meta.dirname, fileName)}.ts --url=${dbFilePath}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
