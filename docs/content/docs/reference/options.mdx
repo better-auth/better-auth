@@ -27,7 +27,11 @@ export const auth = betterAuth({
 })
 ```
 
-If not explicitly set, the system will check for the environment variable `process.env.BETTER_AUTH_URL`
+If not explicitly set, the system will check for the environment variable `BETTER_AUTH_URL`. If that's also not set, it will be inferred from the incoming request.
+
+<Callout type="warn">
+Relying on request inference is not recommended. For security and stability, always set `baseURL` explicitly in your config or via the `BETTER_AUTH_URL` environment variable.
+</Callout>
 
 ## `basePath`
 
@@ -63,12 +67,20 @@ You can provide a function that returns origins dynamically:
 
 ```ts
 export const auth = betterAuth({
-	trustedOrigins: async (request: Request) => {
-		// Return an array of trusted origins based on the request
+	trustedOrigins: async (request) => {
+		// request is undefined during initialization and auth.api calls
+		if (!request) {
+			return ["https://my-frontend.com"];
+		}
+		// Dynamic logic based on the request
 		return ["https://dynamic-origin.com"];
 	}
 })
 ```
+
+<Callout type="info">
+  The `request` parameter is `undefined` during initialization and when calling `auth.api` directly. Make sure to handle this case by returning default trusted origins.
+</Callout>
 
 ### Wildcard Support
 
@@ -83,8 +95,31 @@ export const auth = betterAuth({
 })
 ```
 
-<Callout type="warn">
-  Make sure to provide the protocol prefix when using wildcard patterns. For example, `https://*.example.com` instead of `*.example.com`.
+#### Pattern Syntax
+
+| Pattern | Description |
+|---------|-------------|
+| `?` | Matches exactly one character (except `/`) |
+| `*` | Matches zero or more characters that don't cross `/` |
+| `**` | Matches zero or more characters including `/` |
+
+#### Pattern Examples
+
+| Pattern | Matches | Does Not Match |
+|---------|---------|----------------|
+| `http://*.example.com` | `http://api.example.com`<br/>`http://app.example.com`<br/>`http://api.app.example.com` | `https://api.example.com`<br/>`http://example.com` |
+| `https://**.example.com` | `https://api.example.com`<br/>`https://api.app.example.com` | `http://api.example.com` |
+| `https://example.com` | `https://example.com`<br/>`https://example.com/path` | `https://api.example.com`<br/>`http://example.com` |
+| `exp://192.168.*.*:*/**` | `exp://192.168.1.100:8081/path`<br/>`exp://192.168.50.200:19000/auth/callback` | `exp://10.0.0.29:8081/path` |
+| `myapp://` | All URLs starting with `myapp://` | - |
+
+
+<Callout type="info">
+**Notes**
+
+- For `http://` and `https://` URLs, patterns match the full origin. Paths and query strings are ignored.
+- For custom schemes (like `exp://` or `myapp://`), patterns match against the full URL including paths when wildcards are present, or use prefix matching when no wildcards exist.
+- The separator is `/` (forward slash). This means `http://*.example.com` matches both `http://api.example.com` and `http://api.app.example.com`.
 </Callout>
 
 ## `secret`
@@ -233,6 +268,24 @@ export const auth = betterAuth({
 	},
 })
 ```
+
+- `clientId`: OAuth client ID from the provider
+- `clientSecret`: OAuth client secret from the provider
+- `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
+- `redirectURI`: Custom redirect URI for the OAuth callback (optional)
+- `scope`: Additional OAuth scopes to request (optional)
+- `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+- `disableSignUp`: Disable sign up for new users (optional)
+- `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
+- `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+- `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
+- `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
+- `getUserInfo`: Custom function to get user info from the provider (optional)
+- `refreshAccessToken`: Custom function to refresh a token (optional)
+- `verifyIdToken`: Custom function to verify the ID token (optional)
+- `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
+- `disableDefaultScope`: Disable the provider's default scopes (optional)
+- `authorizationEndpoint`: Custom authorization endpoint URL (optional)
 
 ## `plugins`
 
@@ -385,7 +438,7 @@ Store account data after OAuth flow in a cookie. This is useful for database-les
 
 Configuration for account linking.
 
-- `enabled`: Enable account linking (default: `false`)
+- `enabled`: Enable account linking (default: `true`)
 - `trustedProviders`: List of trusted providers
 - `allowDifferentEmails`: Allow users to link accounts with different email addresses
 - `allowUnlinkingAll`: Allow users to unlink all accounts
@@ -456,6 +509,7 @@ export const auth = betterAuth({
 		},
 		useSecureCookies: true,
 		disableCSRFCheck: false,
+		disableOriginCheck: false,
 		crossSubDomainCookies: {
 			enabled: true,
 			additionalCookies: ["custom_cookie"],
@@ -496,7 +550,8 @@ export const auth = betterAuth({
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
 - `useSecureCookies`: Use secure cookies (default: `false`)
-- `disableCSRFCheck`: Disable trusted origins check (⚠️ security risk)
+- `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
+- `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies

@@ -407,6 +407,160 @@ describe("type", () => {
 		}>();
 	});
 
+	it("should support refetch with query parameters - solid", () => {
+		const client = createSolidClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionReturn = ReturnType<ReturnType<typeof client.useSession>>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
+	it("should support refetch with query parameters - svelte", () => {
+		const client = createSvelteClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionAtom = ReturnType<typeof client.useSession>;
+		type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
+	it("should support refetch with query parameters - vue", () => {
+		const client = createVueClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		// Test the function signature directly to avoid overload resolution issues
+		expectTypeOf(client.useSession).toMatchTypeOf<
+			() => Readonly<
+				Ref<{
+					data: {
+						user: {
+							id: string;
+							email: string;
+							emailVerified: boolean;
+							name: string;
+							createdAt: Date;
+							updatedAt: Date;
+							image?: string | undefined | null;
+							testField4: string;
+							testField?: string | undefined | null;
+							testField2?: number | undefined | null;
+						};
+						session: Session;
+					} | null;
+					isPending: boolean;
+					isRefetching: boolean;
+					error: BetterFetchError | null;
+					refetch: (
+						queryParams?: { query?: SessionQueryParams } | undefined,
+					) => Promise<void>;
+				}>
+			>
+		>();
+	});
+
+	it("should support refetch with query parameters - vanilla", () => {
+		const client = createVanillaClient({
+			plugins: [testClientPlugin()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return new Response();
+				},
+			},
+		});
+
+		type UseSessionAtom = typeof client.useSession;
+		type UseSessionReturn = ReturnType<UseSessionAtom["get"]>;
+		expectTypeOf<UseSessionReturn>().toMatchTypeOf<{
+			data: {
+				user: {
+					id: string;
+					email: string;
+					emailVerified: boolean;
+					name: string;
+					createdAt: Date;
+					updatedAt: Date;
+					image?: string | undefined | null;
+					testField4: string;
+					testField?: string | undefined | null;
+					testField2?: number | undefined | null;
+				};
+				session: Session;
+			} | null;
+			isPending: boolean;
+			isRefetching: boolean;
+			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
+		}>();
+	});
+
 	it("should infer $ERROR_CODES with multiple plugins", () => {
 		const client = createReactClient({
 			plugins: [
@@ -425,42 +579,42 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
 		).toEqualTypeOf<"Organization not found">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED,
+			client.$ERROR_CODES.OTP_HAS_EXPIRED.message,
 		).toEqualTypeOf<"OTP has expired">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL,
+			client.$ERROR_CODES.INVALID_EMAIL.message,
 		).toEqualTypeOf<"Invalid email">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.message,
 		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN,
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN.message,
 		).toEqualTypeOf<"Invalid session token">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND,
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND.message,
 		).toEqualTypeOf<"Provider not found">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE,
+			client.$ERROR_CODES.INVALID_DEVICE_CODE.message,
 		).toEqualTypeOf<"Invalid device code">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND,
+			client.$ERROR_CODES.USER_NOT_FOUND.message,
 		).toEqualTypeOf<"User not found">();
 	});
 });

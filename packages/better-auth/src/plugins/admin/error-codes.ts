@@ -1,5 +1,4 @@
-// NOTE: Error code const must be all capital of string (ref https://github.com/better-auth/better-auth/issues/4386)
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ADMIN_ERROR_CODES = defineErrorCodes({
 	FAILED_TO_CREATE_USER: "Failed to create user",

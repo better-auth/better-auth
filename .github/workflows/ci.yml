@@ -24,7 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
@@ -77,6 +77,9 @@ jobs:
           TURBO_CACHE: remote:rw
         run: pnpm lint:spell
 
+      - name: Lint Format
+        run: pnpm format:check
+
       - name: Lint Types
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
@@ -92,7 +95,7 @@ jobs:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
@@ -136,7 +139,7 @@ jobs:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}

@@ -4,7 +4,6 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import { BetterAuthError } from "@better-auth/core/error";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { isPromise } from "../utils/is-promise";
@@ -61,23 +60,26 @@ export function getInternalPlugins(options: BetterAuthOptions) {
 	return plugins;
 }
 
-export function getTrustedOrigins(options: BetterAuthOptions) {
+export async function getTrustedOrigins(
+	options: BetterAuthOptions,
+	request?: Request,
+): Promise<string[]> {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
-	if (!baseURL) {
-		return [];
-	}
-	const trustedOrigins = [new URL(baseURL).origin];
-	if (options.trustedOrigins && Array.isArray(options.trustedOrigins)) {
-		trustedOrigins.push(...options.trustedOrigins);
+	const trustedOrigins: (string | undefined | null)[] = baseURL
+		? [new URL(baseURL).origin]
+		: [];
+	if (options.trustedOrigins) {
+		if (Array.isArray(options.trustedOrigins)) {
+			trustedOrigins.push(...options.trustedOrigins);
+		}
+		if (typeof options.trustedOrigins === "function") {
+			const validOrigins = await options.trustedOrigins(request);
+			trustedOrigins.push(...validOrigins);
+		}
 	}
 	const envTrustedOrigins = env.BETTER_AUTH_TRUSTED_ORIGINS;
 	if (envTrustedOrigins) {
 		trustedOrigins.push(...envTrustedOrigins.split(","));
 	}
-	if (trustedOrigins.filter((x) => !x).length) {
-		throw new BetterAuthError(
-			"A provided trusted origin is invalid, make sure your trusted origins list is properly defined.",
-		);
-	}
-	return trustedOrigins;
+	return trustedOrigins.filter((v): v is string => Boolean(v));
 }

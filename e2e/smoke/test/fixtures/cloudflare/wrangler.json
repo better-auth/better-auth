@@ -4,10 +4,11 @@
   "main": "src/index.ts",
   "name": "cloudflare",
   "upload_source_maps": true,
+  "compatibility_flags": ["nodejs_compat"],
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "d1-db-id",
+      "database_id": "REPLACE_ME",
       "database_name": "db",
       "migrations_dir": "./drizzle"
     }

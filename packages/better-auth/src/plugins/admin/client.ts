@@ -12,6 +12,7 @@ import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { InferUserRole } from "./schema";
 import type { AdminOptions } from "./types";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -23,6 +24,8 @@ export const clientSideUserHasPermission = (input: HasPermissionBaseInput) => {
 
 	return hasPermissionFn(input, acRoles);
 };
+
+export * from "./error-codes";
 
 interface AdminClientOptions {
 	ac?: AccessControl | undefined;
@@ -136,6 +139,7 @@ export const adminClient = <O extends AdminClientOptions>(
 			"/admin/list-users": "GET",
 			"/admin/stop-impersonating": "POST",
 		},
+		$ERROR_CODES: ADMIN_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 

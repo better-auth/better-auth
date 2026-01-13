@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -23,6 +23,10 @@ describe("internal adapter test", async () => {
 	let id = 1;
 	const hookUserCreateBefore = vi.fn();
 	const hookUserCreateAfter = vi.fn();
+	const hookVerificationCreateBefore = vi.fn();
+	const hookVerificationCreateAfter = vi.fn();
+	const hookVerificationDeleteBefore = vi.fn();
+	const hookVerificationDeleteAfter = vi.fn();
 	const pluginHookUserCreateBefore = vi.fn();
 	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
@@ -65,6 +69,28 @@ describe("internal adapter test", async () => {
 					},
 					async after(user, context) {
 						hookUserCreateAfter(user, context);
+						return;
+					},
+				},
+			},
+			verification: {
+				create: {
+					async before(verification, context) {
+						hookVerificationCreateBefore(verification, context);
+						return { data: verification };
+					},
+					async after(verification, context) {
+						hookVerificationCreateAfter(verification, context);
+						return;
+					},
+				},
+				delete: {
+					async before(verification, context) {
+						hookVerificationDeleteBefore(verification, context);
+						return;
+					},
+					async after(verification, context) {
+						hookVerificationDeleteAfter(verification, context);
 						return;
 					},
 				},
@@ -183,10 +209,16 @@ describe("internal adapter test", async () => {
 			value: "test-id-1",
 			expiresAt: new Date(Date.now() - 1000),
 		});
+		expect(hookVerificationCreateBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
+
 		const value = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value).toMatchObject({
 			identifier: "test-id-1",
 		});
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
 		expect(value2).toBe(undefined);
 		await internalAdapter.createVerificationValue({
@@ -202,6 +234,32 @@ describe("internal adapter test", async () => {
 		expect(value4).toMatchObject({
 			identifier: "test-id-1",
 		});
+	});
+
+	it("should delete verification by value with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationValue(verification.id);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	it("should delete verification by identifier with hooks", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: `test-id-1`,
+			value: "test-id-1",
+			expiresAt: new Date(Date.now() + 1000),
+		});
+
+		await internalAdapter.deleteVerificationByIdentifier(
+			verification.identifier,
+		);
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
 	it("runs the after hook after adding user to db", async () => {
@@ -576,5 +634,192 @@ describe("internal adapter test", async () => {
 
 		accounts = await internalAdapter.findAccounts(user.id);
 		expect(accounts.length).toBe(0);
+	});
+
+	it("should update session and active-sessions list in secondary storage", async () => {
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+
+		const testDb = new Database(":memory:");
+		const testSqliteDialect = new SqliteDialect({
+			database: testDb,
+		});
+
+		const testOpts = {
+			database: {
+				dialect: testSqliteDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+					if (ttl !== undefined) {
+						testExpirationMap.set(key, ttl);
+					}
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+					testExpirationMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		// Run migrations for the new database
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		// Create a user first
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-update",
+			email: "test-update@email.com",
+		});
+
+		// Create a session
+		const session = await testInternalAdapter.createSession(user.id);
+
+		// Verify session is in secondary storage
+		const storedSessionStr = testMap.get(session.token);
+		expect(storedSessionStr).toBeDefined();
+
+		const storedSession = safeJSONParse<{
+			session: Session;
+			user: User;
+		}>(storedSessionStr!);
+
+		expect(storedSession?.session.ipAddress).toBe("");
+
+		// Get initial active-sessions list
+		const initialListStr = testMap.get(`active-sessions-${user.id}`);
+		expect(initialListStr).toBeDefined();
+		const initialList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			initialListStr!,
+		);
+		expect(initialList).toBeDefined();
+		expect(initialList!.length).toBe(1);
+		const initialExpiresAt = initialList![0]!.expiresAt;
+
+		// Update the session with new ipAddress and expiresAt
+		const updatedIpAddress = "192.168.1.1";
+		const newExpiresAt = new Date(initialExpiresAt + 60 * 60 * 1000);
+		await testInternalAdapter.updateSession(session.token, {
+			ipAddress: updatedIpAddress,
+			expiresAt: newExpiresAt,
+		});
+
+		// Get the session from secondary storage again
+		const updatedStoredSessionStr = testMap.get(session.token);
+		expect(updatedStoredSessionStr).toBeDefined();
+
+		const updatedStoredSession = safeJSONParse<{
+			session: Session;
+			user: User;
+		}>(updatedStoredSessionStr!);
+
+		// The session in secondary storage MUST have the updated data
+		expect(updatedStoredSession?.session.ipAddress).toBe(updatedIpAddress);
+
+		// User should still be intact
+		expect(updatedStoredSession?.user.id).toBe(user.id);
+
+		// Get updated active-sessions list
+		const updatedListStr = testMap.get(`active-sessions-${user.id}`);
+		expect(updatedListStr).toBeDefined();
+		const updatedList = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			updatedListStr!,
+		);
+		expect(updatedList).toBeDefined();
+
+		// The expiresAt in active-sessions list should be updated
+		expect(updatedList!.length).toBe(1);
+		expect(updatedList![0]!.token).toBe(session.token);
+		expect(updatedList![0]!.expiresAt).toBe(newExpiresAt.getTime());
+
+		// TTL should also be updated
+		const updatedTTL = testExpirationMap.get(`active-sessions-${user.id}`);
+		const expectedTTL = Math.floor(
+			(newExpiresAt.getTime() - Date.now()) / 1000,
+		);
+		expect(updatedTTL).toBeDefined();
+		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
+		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+
+		// Clean up DB
+		testDb.close();
+	});
+
+	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+					if (ttl !== undefined) {
+						testExpirationMap.set(key, ttl);
+					}
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+					testExpirationMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testAuthContext = await init(testOpts);
+		const testInternalAdapter = testAuthContext.internalAdapter;
+
+		// Create a user
+		const user = await testInternalAdapter.createUser({
+			name: "corrupt-sessions-test-user",
+			email: "corrupt-sessions-test@example.com",
+		});
+
+		// Create a session
+		const session = await testInternalAdapter.createSession(user.id);
+
+		// Manually corrupt the active-sessions list by adding duplicate tokens
+		const listStr = testMap.get(`active-sessions-${user.id}`);
+		const list = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			listStr!,
+		);
+
+		// Add duplicates of the same token
+		const corruptedList = [
+			...list!,
+			{ token: session.token, expiresAt: session.expiresAt.getTime() },
+			{ token: session.token, expiresAt: session.expiresAt.getTime() },
+		];
+		testMap.set(`active-sessions-${user.id}`, JSON.stringify(corruptedList));
+
+		// Verify corruption
+		const corruptedListStr = testMap.get(`active-sessions-${user.id}`);
+		const parsed = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			corruptedListStr!,
+		);
+		expect(parsed!.length).toBe(3); // 1 original + 2 duplicates
+
+		// listSessions should deduplicate and return only unique sessions
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(1);
+
+		// Clean up DB
+		testDb.close();
 	});
 });

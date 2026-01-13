@@ -1,4 +1,5 @@
 import type {
+	Awaitable,
 	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
@@ -8,6 +9,15 @@ import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"magic-link": {
+			creator: typeof magicLink;
+		};
+	}
+}
 
 export interface MagicLinkOptions {
 	/**
@@ -25,7 +35,7 @@ export interface MagicLinkOptions {
 			token: string;
 		},
 		ctx?: GenericEndpointContext | undefined,
-	) => Promise<void> | void;
+	) => Awaitable<void>;
 	/**
 	 * Disable sign up if user is not found.
 	 *
@@ -49,7 +59,7 @@ export interface MagicLinkOptions {
 	/**
 	 * Custom function to generate a token
 	 */
-	generateToken?: ((email: string) => Promise<string> | string) | undefined;
+	generateToken?: ((email: string) => Awaitable<string>) | undefined;
 
 	/**
 	 * This option allows you to configure how the token is stored in your database.
@@ -422,5 +432,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 				max: opts.rateLimit?.max || 5,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };

@@ -1,4 +1,4 @@
-import type { LiteralString } from "../types";
+import type { Awaitable, LiteralString } from "../types";
 
 export interface OAuth2Tokens {
 	tokenType?: string | undefined;
@@ -35,7 +35,7 @@ export interface OAuthProvider<
 		redirectURI: string;
 		display?: string | undefined;
 		loginHint?: string | undefined;
-	}) => Promise<URL> | URL;
+	}) => Awaitable<URL>;
 	name: string;
 	validateAuthorizationCode: (data: {
 		code: string;
@@ -119,6 +119,12 @@ export type ProviderOptions<Profile extends Record<string, any> = any> = {
 	 * whitelisted in the provider's dashboard.
 	 */
 	redirectURI?: string | undefined;
+	/**
+	 * Custom authorization endpoint URL.
+	 * Use this to override the default authorization endpoint of the provider.
+	 * Useful for testing with local OAuth servers or using sandbox environments.
+	 */
+	authorizationEndpoint?: string | undefined;
 	/**
 	 * The client key of your application
 	 * Tiktok Social Provider uses this field instead of clientId

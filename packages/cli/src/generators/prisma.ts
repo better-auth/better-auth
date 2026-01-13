@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
-import type { FieldType } from "better-auth/db";
+import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
@@ -114,7 +114,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				isOptional,
 				type,
 			}: {
-				type: FieldType;
+				type: DBFieldType;
 				isOptional: boolean;
 				isBigint: boolean;
 			}) {
