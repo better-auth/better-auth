@@ -376,10 +376,49 @@ type deleteAllExpiredApiKeys = {
 
 ## Sessions from API keys
 
-Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `sessionForAPIKeys` option.
+Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `enableSessionForAPIKeys` option.
+
+<Callout type="error">
+**⚠️ Not Recommended for Most Use Cases**
+
+This feature is **not recommended** unless you have a specific need for it. Please read this section carefully before enabling it.
+</Callout>
+
+### How it works
+
+When `enableSessionForAPIKeys` is enabled, Better Auth creates a **mock session object** on-the-fly when a valid API key is found in the request headers. This is important to understand:
 
 <Callout type="warn">
- This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
+**Mock sessions are not real sessions.** The session object is constructed in-memory from the API key and user data at request time. It is **not** stored in the database and does not go through the normal session creation flow.
+</Callout>
+
+The mock session is constructed with:
+- **Session ID**: Uses the API key's ID (not a real session ID)
+- **Token**: Uses the API key itself (not a session token)
+- **User data**: Fetched directly from the user table in the database
+- **Timestamps**: Generated fresh on each request
+
+### Important limitations
+
+Because mock sessions bypass the normal session flow, they have significant limitations:
+
+1. **No dynamically computed properties**: The mock session only includes data stored directly in the database. Any properties that are normally computed at session creation time (like roles from the admin plugin's `adminUserIds` configuration) will **not** be included.
+
+2. **Admin plugin incompatibility**: If you use the admin plugin with `adminUserIds`, users in that list will **not** have their `role` field automatically set to `admin` in mock sessions. The role returned will be whatever is stored in the database (typically `user`), not the role inferred from `adminUserIds`. To have admin roles work correctly, you must explicitly set the role in the database using `admin.setRole` or direct database updates.
+
+3. **Plugin hooks may not fire**: Plugins that rely on session creation hooks may not work as expected with mock sessions.
+
+4. **Security risk**: A leaked API key can be used to impersonate a user on any endpoint, since the mock session appears to be a valid authenticated session.
+
+<Callout type="warn">
+**When should you use this feature?**
+
+Only enable `enableSessionForAPIKeys` if you specifically need API keys to work with endpoints that require a session object, and you understand the limitations above.
+
+For most API key use cases, we recommend:
+- Use `verifyApiKey` to validate the API key
+- Fetch user data separately if needed
+- Implement your own authorization logic based on the API key's permissions
 </Callout>
 
 <Callout>
@@ -876,7 +915,7 @@ Custom schema for the API key plugin.
 
 `enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
-An API Key can represent a valid session, so we can mock a session for the user if we find a valid API key in the request headers. Default is `false`.
+⚠️ **Not recommended for most use cases.** When enabled, creates a mock session object (not stored in the database) for requests with a valid API key. Mock sessions have limitations: they don't include dynamically computed properties (like admin roles from `adminUserIds`), may not trigger plugin hooks, and pose security risks if the API key is leaked. See [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys) for details. Default is `false`.
 
 `storage` <span className="opacity-70">`"database" | "secondary-storage"`</span>
 

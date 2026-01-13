@@ -190,9 +190,22 @@ export interface ApiKeyOptions {
 	 */
 	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>> | undefined;
 	/**
-	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
+	 * Creates a mock session object for requests with a valid API key.
 	 *
-	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
+	 * ⚠️ **NOT RECOMMENDED FOR MOST USE CASES**
+	 *
+	 * **Important:** Mock sessions are NOT real sessions. They are constructed in-memory
+	 * and have significant limitations:
+	 *
+	 * - **No dynamically computed properties**: Only includes data stored in the database.
+	 *   Properties computed at session creation (like admin roles from `adminUserIds`) won't be included.
+	 * - **Admin plugin incompatibility**: Users in `adminUserIds` will NOT automatically get
+	 *   `role: "admin"` - the role will be whatever is stored in the database.
+	 * - **Plugin hooks may not fire**: Plugins relying on session creation hooks may not work.
+	 * - **Security risk**: A leaked API key can impersonate a user on any endpoint.
+	 *
+	 * For most use cases, prefer using `verifyApiKey` and implementing custom authorization logic.
+	 *
 	 * @default false
 	 */
 	enableSessionForAPIKeys?: boolean | undefined;
