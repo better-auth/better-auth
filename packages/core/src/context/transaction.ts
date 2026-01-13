@@ -3,6 +3,11 @@ import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 import { __getBetterAuthGlobal } from "./global";
 
+type HookContext = {
+	adapter: DBTransactionAdapter;
+	pendingHooks: Array<() => Promise<void>>;
+};
+
 const ensureAsyncStorage = async () => {
 	const betterAuthGlobal = __getBetterAuthGlobal();
 	if (!betterAuthGlobal.context.adapterAsyncStorage) {
@@ -10,7 +15,7 @@ const ensureAsyncStorage = async () => {
 		betterAuthGlobal.context.adapterAsyncStorage = new AsyncLocalStorage();
 	}
 	return betterAuthGlobal.context
-		.adapterAsyncStorage as AsyncLocalStorage<DBTransactionAdapter>;
+		.adapterAsyncStorage as AsyncLocalStorage<HookContext>;
 };
 
 /**
@@ -27,7 +32,8 @@ export const getCurrentAdapter = async (
 ): Promise<DBTransactionAdapter> => {
 	return ensureAsyncStorage()
 		.then((als) => {
-			return als.getStore() || fallback;
+			const store = als.getStore();
+			return store?.adapter || fallback;
 		})
 		.catch(() => {
 			return fallback;
@@ -42,7 +48,7 @@ export const runWithAdapter = async <R>(
 	return ensureAsyncStorage()
 		.then((als) => {
 			called = true;
-			return als.run(adapter, fn);
+			return als.run({ adapter, pendingHooks: [] }, fn);
 		})
 		.catch((err) => {
 			if (!called) {
@@ -58,16 +64,45 @@ export const runWithTransaction = async <R>(
 ): Promise<R> => {
 	let called = true;
 	return ensureAsyncStorage()
-		.then((als) => {
+		.then(async (als) => {
 			called = true;
-			return adapter.transaction(async (trx) => {
-				return als.run(trx, fn);
+			const pendingHooks: Array<() => Promise<void>> = [];
+			const result = await adapter.transaction(async (trx) => {
+				return als.run({ adapter: trx, pendingHooks }, fn);
 			});
+			for (const hook of pendingHooks) {
+				await hook();
+			}
+			return result;
 		})
 		.catch((err) => {
 			if (!called) {
 				return fn();
 			}
 			throw err;
+		});
+};
+
+/**
+ * Queue a hook to be executed after the current transaction commits.
+ * If not in a transaction, the hook will execute immediately.
+ */
+export const queueAfterTransactionHook = async (
+	hook: () => Promise<void>,
+): Promise<void> => {
+	return ensureAsyncStorage()
+		.then((als) => {
+			const store = als.getStore();
+			if (store) {
+				// We're in a transaction context, queue the hook
+				store.pendingHooks.push(hook);
+			} else {
+				// Not in a transaction, execute immediately
+				return hook();
+			}
+		})
+		.catch(() => {
+			// No async storage available, execute immediately
+			return hook();
 		});
 };
