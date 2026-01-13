@@ -16,7 +16,6 @@ import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
-import type { BetterAuthPlugin } from "./plugin";
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -161,11 +160,7 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
-export type PluginContext = {
-	getPlugin: <Plugin extends BetterAuthPlugin>(
-		pluginId: Plugin["id"],
-	) => Plugin | null;
-};
+export type PluginContext = {};
 
 export type InfoContext = {
 	appName: string;
