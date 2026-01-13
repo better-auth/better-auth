@@ -168,11 +168,18 @@ export interface JwtOptions {
 }
 
 /**
- * Asymmetric (JWS) Supported.
+ * JWS Algorithms Supported.
  *
  * @see https://github.com/panva/jose/issues/210
+ *
+ * Asymmetric algorithms (EdDSA, ES256, ES512, PS256, RS256) use public/private key pairs
+ * and support JWKS endpoints for public key distribution.
+ *
+ * Symmetric algorithm (HS256) uses a shared secret key. When using HS256:
+ * - The JWKS endpoint will be disabled (no public key to share)
+ * - The secret is derived from the auth secret
+ * - Suitable for internal service-to-service communication
  */
-// JWE is symmetric (ie sharing a secret) thus a jwks is not applicable since there is no public key to share.
 // All new JWK "alg" and/or "crv" MUST have an associated test in jwt.test.ts
 export type JWKOptions =
 	| {
@@ -194,6 +201,9 @@ export type JWKOptions =
 	| {
 			alg: "RS256"; // RSA with SHA-256
 			modulusLength?: number | undefined; // Default to 2048 or higher
+	  }
+	| {
+			alg: "HS256"; // HMAC with SHA-256 (symmetric)
 	  };
 
 export type JWSAlgorithms = JWKOptions["alg"];

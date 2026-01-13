@@ -167,6 +167,11 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 						throw new APIError("NOT_FOUND");
 					}
 
+					// Disables endpoint for HS256 (symmetric keys should not be exposed)
+					if (options?.jwks?.keyPairConfig?.alg === "HS256") {
+						throw new APIError("NOT_FOUND");
+					}
+
 					const adapter = getJwksAdapter(ctx.context.adapter, options);
 
 					let keySets = await adapter.getAllKeys(ctx);

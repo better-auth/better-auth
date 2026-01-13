@@ -829,3 +829,168 @@ describe("toExpJWT", () => {
 		});
 	});
 });
+
+describe("jwt - HS256 symmetric algorithm", async () => {
+	const jwtOptions: JwtOptions = {
+		jwks: {
+			keyPairConfig: {
+				alg: "HS256",
+			},
+		},
+	};
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		plugins: [jwt(jwtOptions)],
+		logger: {
+			level: "error",
+		},
+	});
+
+	const client = createAuthClient({
+		plugins: [jwtClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	it("should generate a symmetric key", async () => {
+		const { publicWebKey, privateWebKey, alg } =
+			await generateExportedKeyPair(jwtOptions);
+
+		expect(alg).toBe("HS256");
+		// For HS256, publicWebKey is a marker object
+		expect(publicWebKey.kty).toBe("oct");
+		expect((publicWebKey as any).symmetric).toBe(true);
+		// privateWebKey is the actual secret
+		expect(privateWebKey.kty).toBe("oct");
+		expect(privateWebKey.k).toBeDefined();
+	});
+
+	it("should sign a JWT with HS256", async () => {
+		const token = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "123",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					iss: "https://example.com",
+					aud: "https://example.com",
+					custom: "custom",
+				},
+			},
+		});
+		expect(token?.token).toBeDefined();
+
+		// Verify the token has HS256 in the header
+		const parts = token?.token!.split(".");
+		const header = JSON.parse(
+			Buffer.from(parts[0]!, "base64url").toString("utf8"),
+		);
+		expect(header.alg).toBe("HS256");
+	});
+
+	it("should get a token from session with HS256", async () => {
+		let token = "";
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+
+		expect(token.length).toBeGreaterThan(10);
+
+		// Verify the token has HS256 in the header
+		const parts = token.split(".");
+		const header = JSON.parse(
+			Buffer.from(parts[0]!, "base64url").toString("utf8"),
+		);
+		expect(header.alg).toBe("HS256");
+	});
+
+	it("should disable /jwks endpoint for HS256", async () => {
+		const response = await client.$fetch<JSONWebKeySet>("/jwks");
+		expect(response.error?.status).toBe(404);
+	});
+
+	it("should verify a JWT signed with HS256", async () => {
+		const signedToken = await auth.api.signJWT({
+			body: {
+				payload: {
+					sub: "test-user",
+					exp: Math.floor(Date.now() / 1000) + 600,
+					iat: Math.floor(Date.now() / 1000),
+					iss: "http://localhost:3000/api/auth",
+					aud: "http://localhost:3000/api/auth",
+				},
+			},
+		});
+
+		const result = await auth.api.verifyJWT({
+			body: {
+				token: signedToken?.token!,
+			},
+		});
+
+		expect(result.payload).toBeDefined();
+		expect(result.payload?.sub).toBe("test-user");
+	});
+
+	it("should work with private key encryption disabled", async () => {
+		const optionsNoEncryption: JwtOptions = {
+			jwks: {
+				keyPairConfig: {
+					alg: "HS256",
+				},
+				disablePrivateKeyEncryption: true,
+			},
+		};
+
+		const { auth: authNoEnc, signInWithTestUser: signInNoEnc } =
+			await getTestInstance({
+				plugins: [jwt(optionsNoEncryption)],
+				logger: {
+					level: "error",
+				},
+			});
+
+		const { headers: headersNoEnc } = await signInNoEnc();
+
+		const clientNoEnc = createAuthClient({
+			plugins: [jwtClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return authNoEnc.handler(new Request(url, init));
+				},
+			},
+		});
+
+		let token = "";
+		await clientNoEnc.getSession({
+			fetchOptions: {
+				headers: headersNoEnc,
+				onSuccess(context) {
+					token = context.response.headers.get("set-auth-jwt") || "";
+				},
+			},
+		});
+
+		expect(token.length).toBeGreaterThan(10);
+
+		// Verify token and check it works
+		const result = await authNoEnc.api.verifyJWT({
+			body: {
+				token,
+			},
+		});
+		expect(result.payload).toBeDefined();
+	});
+});
