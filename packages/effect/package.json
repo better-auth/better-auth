@@ -1,0 +1,74 @@
+{
+  "name": "@better-auth/effect",
+  "version": "0.0.1",
+  "description": "Effect-native integration for Better Auth with Effect/Platform",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "better-auth",
+    "effect",
+    "effect-ts",
+    "effect-platform",
+    "authentication",
+    "auth",
+    "typescript"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/effect"
+  },
+  "bugs": {
+    "url": "https://github.com/better-auth/better-auth/issues"
+  },
+  "homepage": "https://www.better-auth.com",
+  "dependencies": {},
+  "peerDependencies": {
+    "@effect/platform": ">=0.72.0",
+    "better-auth": "^1.0.0",
+    "effect": ">=3.12.0"
+  },
+  "peerDependenciesMeta": {
+    "@effect/platform": {
+      "optional": false
+    },
+    "effect": {
+      "optional": false
+    }
+  },
+  "devDependencies": {
+    "@effect/platform": "^0.72.0",
+    "@effect/platform-node": "^0.66.0",
+    "better-auth": "workspace:*",
+    "effect": "^3.12.0",
+    "tsdown": "^0.2.0",
+    "typescript": "^5.7.0",
+    "vitest": "^2.0.0"
+  }
+}

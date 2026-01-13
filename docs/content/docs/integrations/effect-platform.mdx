@@ -1,0 +1,505 @@
+---
+title: Effect/Platform Integration
+description: Effect-native integration for Better Auth with Effect/Platform's HttpApi builder.
+---
+
+[Effect](https://effect.website) is a powerful TypeScript library for building type-safe, composable applications. This guide shows how to use Better Auth with Effect/Platform's HttpApi builder in an **Effect-native** way.
+
+## Installation
+
+Install the required packages:
+
+```bash
+npm install @better-auth/effect better-auth effect @effect/platform @effect/platform-node
+```
+
+## Quick Start
+
+### 1. Configure Better Auth
+
+First, set up your Better Auth instance as usual:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import { db } from "./db"
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg" }),
+  emailAndPassword: { enabled: true },
+})
+
+export type Auth = typeof auth
+```
+
+### 2. Create the Effect Layer
+
+Wrap your auth instance in an Effect Layer:
+
+```ts title="auth-effect.ts"
+import { layerFromAuth } from "@better-auth/effect"
+import { auth } from "./auth"
+
+export const BetterAuthLive = layerFromAuth(auth)
+```
+
+### 3. Define Your API
+
+Use Effect/Platform's HttpApi to define type-safe endpoints:
+
+```ts title="api.ts"
+import {
+  HttpApi,
+  HttpApiEndpoint,
+  HttpApiGroup,
+} from "@effect/platform"
+import { Schema } from "effect"
+import { AuthMiddleware } from "@better-auth/effect"
+
+// Define schemas
+class UserProfile extends Schema.Class<UserProfile>("UserProfile")({
+  id: Schema.String,
+  email: Schema.String,
+  name: Schema.String,
+}) {}
+
+// Protected API - requires authentication
+class UsersApi extends HttpApiGroup.make("users")
+  .add(
+    HttpApiEndpoint.get("me", "/me")
+      .addSuccess(UserProfile)
+  )
+  .middleware(AuthMiddleware)
+  .prefix("/users")
+{}
+
+// Public API
+class PublicApi extends HttpApiGroup.make("public")
+  .add(
+    HttpApiEndpoint.get("health", "/health")
+      .addSuccess(Schema.Struct({ status: Schema.String }))
+  )
+{}
+
+// Combine into your API
+export class MyApi extends HttpApi.make("my-api")
+  .add(UsersApi)
+  .add(PublicApi)
+{}
+```
+
+### 4. Implement Handlers
+
+```ts title="handlers.ts"
+import { HttpApiBuilder } from "@effect/platform"
+import { Effect, Layer } from "effect"
+import {
+  AuthMiddlewareLive,
+  CurrentUser,
+} from "@better-auth/effect"
+import { MyApi } from "./api"
+
+export const UsersLive = HttpApiBuilder.group(MyApi, "users", (handlers) =>
+  handlers.handle("me", () =>
+    Effect.gen(function* () {
+      // CurrentUser is automatically available via AuthMiddleware
+      const user = yield* CurrentUser
+      return new UserProfile({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      })
+    })
+  )
+).pipe(Layer.provide(AuthMiddlewareLive))
+
+export const PublicLive = HttpApiBuilder.group(MyApi, "public", (handlers) =>
+  handlers.handle("health", () =>
+    Effect.succeed({ status: "ok" })
+  )
+)
+```
+
+### 5. Start the Server
+
+```ts title="server.ts"
+import {
+  HttpApiBuilder,
+  HttpMiddleware,
+  HttpServer,
+} from "@effect/platform"
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
+import { Effect, Layer } from "effect"
+import { createServer } from "node:http"
+import { betterAuthApp } from "@better-auth/effect"
+import { BetterAuthLive } from "./auth-effect"
+import { MyApi } from "./api"
+import { UsersLive, PublicLive } from "./handlers"
+
+// Build API
+const ApiLive = HttpApiBuilder.api(MyApi).pipe(
+  Layer.provide([UsersLive, PublicLive])
+)
+
+// Mount better-auth handler
+const AuthRouterLive = HttpApiBuilder.Router.use((router) =>
+  Effect.gen(function* () {
+    const authApp = yield* betterAuthApp
+    yield* router.mountApp("/api/auth", authApp)
+  })
+)
+
+// Serve
+HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
+  Layer.provide(AuthRouterLive),
+  Layer.provide(ApiLive),
+  Layer.provide(BetterAuthLive),
+  HttpServer.withLogAddress,
+  Layer.provide(NodeHttpServer.layer(createServer, { port: 3000 })),
+  Layer.launch,
+  NodeRuntime.runMain
+)
+```
+
+## Authentication Middleware
+
+The package provides several middleware options for different use cases:
+
+### `AuthMiddleware` - User Context
+
+Requires authentication and provides `CurrentUser`:
+
+```ts
+import { AuthMiddleware, CurrentUser, AuthMiddlewareLive } from "@better-auth/effect"
+
+class ProtectedApi extends HttpApiGroup.make("protected")
+  .add(HttpApiEndpoint.get("data", "/data").addSuccess(Data))
+  .middleware(AuthMiddleware)
+{}
+
+// In handler
+const handler = Effect.gen(function* () {
+  const user = yield* CurrentUser
+  return { userId: user.id }
+})
+
+// Provide the layer
+Layer.provide(AuthMiddlewareLive)
+```
+
+### `SessionMiddleware` - Session Context
+
+Requires authentication and provides `CurrentSession`:
+
+```ts
+import { SessionMiddleware, CurrentSession, SessionMiddlewareLive } from "@better-auth/effect"
+
+const handler = Effect.gen(function* () {
+  const session = yield* CurrentSession
+  return {
+    token: session.token,
+    expiresAt: session.expiresAt,
+  }
+})
+```
+
+### `FullAuthMiddleware` - Both User and Session
+
+```ts
+import { FullAuthMiddleware, AuthSession, FullAuthMiddlewareLive } from "@better-auth/effect"
+
+const handler = Effect.gen(function* () {
+  const { user, session } = yield* AuthSession
+  return { userId: user.id, sessionId: session.id }
+})
+```
+
+### `OptionalAuthMiddleware` - Optional Authentication
+
+For routes where auth is optional:
+
+```ts
+import { OptionalAuthMiddleware, OptionalUser, OptionalAuthMiddlewareLive } from "@better-auth/effect"
+
+class PublicApi extends HttpApiGroup.make("public")
+  .add(HttpApiEndpoint.get("greeting", "/greeting").addSuccess(Greeting))
+  .middleware(OptionalAuthMiddleware)
+{}
+
+const handler = Effect.gen(function* () {
+  const maybeUser = yield* OptionalUser
+  if (maybeUser) {
+    return { message: `Hello, ${maybeUser.name}!` }
+  }
+  return { message: "Hello, guest!" }
+})
+```
+
+### Combined Middleware Layer
+
+Use `AllAuthMiddlewareLive` to provide all middleware at once:
+
+```ts
+import { AllAuthMiddlewareLive } from "@better-auth/effect"
+
+const ApiLive = HttpApiBuilder.api(MyApi).pipe(
+  Layer.provide(AllAuthMiddlewareLive),
+  Layer.provide(BetterAuthLive)
+)
+```
+
+## Using the BetterAuth Service
+
+You can also use the `BetterAuth` service directly for programmatic auth operations:
+
+```ts
+import { BetterAuth } from "@better-auth/effect"
+import { Effect } from "effect"
+
+const program = Effect.gen(function* () {
+  const auth = yield* BetterAuth
+
+  // Sign up a new user
+  const { user, session } = yield* auth.signUpEmail({
+    email: "newuser@example.com",
+    password: "securepassword",
+    name: "New User",
+  })
+
+  console.log("Created user:", user.id)
+
+  // Sign in
+  const signInResult = yield* auth.signInEmail({
+    email: "user@example.com",
+    password: "password",
+  })
+
+  // List sessions
+  const sessions = yield* auth.listSessions(headers)
+
+  // Revoke a session
+  yield* auth.revokeSession(sessionToken, headers)
+
+  // Sign out
+  yield* auth.signOut(headers)
+})
+
+// Run with the layer
+program.pipe(
+  Effect.provide(BetterAuthLive),
+  Effect.runPromise
+)
+```
+
+## Error Handling
+
+All errors are typed Effect Schema `TaggedError` classes with proper HTTP status codes:
+
+```ts
+import {
+  Unauthorized,       // 401 - No valid session
+  InvalidCredentials, // 401 - Wrong email/password
+  SessionExpired,     // 401 - Session has expired
+  Forbidden,          // 403 - Lacks permission
+  UserNotFound,       // 404 - User doesn't exist
+  EmailAlreadyExists, // 409 - Email taken on signup
+  RateLimited,        // 429 - Too many requests
+} from "@better-auth/effect"
+
+const program = Effect.gen(function* () {
+  const auth = yield* BetterAuth
+  return yield* auth.signInEmail({
+    email: "user@example.com",
+    password: "password",
+  })
+}).pipe(
+  Effect.catchTag("InvalidCredentials", (error) =>
+    Effect.succeed({ error: "Wrong email or password" })
+  ),
+  Effect.catchTag("RateLimited", (error) =>
+    Effect.succeed({ error: `Too many attempts. Try again in ${error.retryAfter}s` })
+  ),
+  Effect.catchTag("UserNotFound", (error) =>
+    Effect.succeed({ error: "No account found with this email" })
+  )
+)
+```
+
+## Typed Session Context
+
+For exact type inference from your auth config:
+
+```ts
+import { makeSessionContext } from "@better-auth/effect"
+import type { auth } from "./auth"
+
+// Create typed context tags
+const { CurrentUser, CurrentSession, AuthSession } = makeSessionContext<typeof auth>()
+
+// Now CurrentUser.Type is exactly your user type with all custom fields
+```
+
+## CORS Configuration
+
+Use Effect/Platform's CORS middleware:
+
+```ts
+import { HttpApiBuilder } from "@effect/platform"
+
+HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
+  Layer.provide(HttpApiBuilder.middlewareCors({
+    allowedOrigins: ["http://localhost:3001"],
+    allowedMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
+  })),
+  // ... rest of layers
+)
+```
+
+## Full Example
+
+Here's a complete example with everything put together:
+
+```ts title="main.ts"
+import {
+  HttpApi,
+  HttpApiBuilder,
+  HttpApiEndpoint,
+  HttpApiGroup,
+  HttpMiddleware,
+  HttpServer,
+} from "@effect/platform"
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
+import { Effect, Layer, Schema } from "effect"
+import { createServer } from "node:http"
+import { betterAuth } from "better-auth"
+import { drizzleAdapter } from "better-auth/adapters/drizzle"
+import {
+  layerFromAuth,
+  AuthMiddleware,
+  AuthMiddlewareLive,
+  SessionMiddleware,
+  SessionMiddlewareLive,
+  OptionalAuthMiddleware,
+  OptionalAuthMiddlewareLive,
+  CurrentUser,
+  CurrentSession,
+  OptionalUser,
+  betterAuthApp,
+} from "@better-auth/effect"
+import { db } from "./db"
+
+// 1. Configure auth
+const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg" }),
+  emailAndPassword: { enabled: true },
+})
+
+const BetterAuthLive = layerFromAuth(auth)
+
+// 2. Define schemas
+class UserProfile extends Schema.Class<UserProfile>("UserProfile")({
+  id: Schema.String,
+  email: Schema.String,
+  name: Schema.String,
+}) {}
+
+class SessionInfo extends Schema.Class<SessionInfo>("SessionInfo")({
+  id: Schema.String,
+  expiresAt: Schema.Date,
+}) {}
+
+class Greeting extends Schema.Class<Greeting>("Greeting")({
+  message: Schema.String,
+}) {}
+
+// 3. Define API
+class UsersApi extends HttpApiGroup.make("users")
+  .add(HttpApiEndpoint.get("me", "/me").addSuccess(UserProfile))
+  .add(HttpApiEndpoint.get("session", "/session").addSuccess(SessionInfo))
+  .middleware(AuthMiddleware)
+  .prefix("/users")
+{}
+
+class PublicApi extends HttpApiGroup.make("public")
+  .add(HttpApiEndpoint.get("greeting", "/greeting").addSuccess(Greeting))
+  .middleware(OptionalAuthMiddleware)
+{}
+
+class MyApi extends HttpApi.make("api")
+  .add(UsersApi)
+  .add(PublicApi)
+{}
+
+// 4. Implement handlers
+const UsersLive = HttpApiBuilder.group(MyApi, "users", (handlers) =>
+  handlers
+    .handle("me", () =>
+      Effect.gen(function* () {
+        const user = yield* CurrentUser
+        return new UserProfile({
+          id: user.id,
+          email: user.email,
+          name: user.name,
+        })
+      })
+    )
+    .handle("session", () =>
+      Effect.gen(function* () {
+        const session = yield* CurrentSession
+        return new SessionInfo({
+          id: session.id,
+          expiresAt: session.expiresAt,
+        })
+      })
+    )
+).pipe(
+  Layer.provide(AuthMiddlewareLive),
+  Layer.provide(SessionMiddlewareLive)
+)
+
+const PublicLive = HttpApiBuilder.group(MyApi, "public", (handlers) =>
+  handlers.handle("greeting", () =>
+    Effect.gen(function* () {
+      const maybeUser = yield* OptionalUser
+      const message = maybeUser
+        ? `Hello, ${maybeUser.name}!`
+        : "Hello, guest!"
+      return new Greeting({ message })
+    })
+  )
+).pipe(Layer.provide(OptionalAuthMiddlewareLive))
+
+// 5. Build and serve
+const ApiLive = HttpApiBuilder.api(MyApi).pipe(
+  Layer.provide([UsersLive, PublicLive])
+)
+
+const AuthRouterLive = HttpApiBuilder.Router.use((router) =>
+  Effect.gen(function* () {
+    const authApp = yield* betterAuthApp
+    yield* router.mountApp("/api/auth", authApp)
+  })
+)
+
+HttpApiBuilder.serve(HttpMiddleware.logger).pipe(
+  Layer.provide(AuthRouterLive),
+  Layer.provide(ApiLive),
+  Layer.provide(BetterAuthLive),
+  Layer.provide(HttpApiBuilder.middlewareCors({
+    allowedOrigins: ["http://localhost:3001"],
+    credentials: true,
+  })),
+  HttpServer.withLogAddress,
+  Layer.provide(NodeHttpServer.layer(createServer, { port: 3000 })),
+  Layer.launch,
+  NodeRuntime.runMain
+)
+```
+
+## Next Steps
+
+- Learn more about [Effect](https://effect.website/docs/introduction)
+- Explore [Effect/Platform HttpApi](https://effect.website/docs/platform/http-api)
+- Check out [Better Auth plugins](/docs/plugins) for additional features
