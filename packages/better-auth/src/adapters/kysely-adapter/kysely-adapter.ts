@@ -44,6 +44,10 @@ interface KyselyAdapterConfig {
 	transaction?: boolean | undefined;
 }
 
+function toPostgresArray(value: string[]) {
+	return `{${value.map(v => `"${v}"`).join(",")}}`;
+}
+
 export const kyselyAdapter = (
 	db: Kysely<any>,
 	config?: KyselyAdapterConfig | undefined,
@@ -370,9 +374,20 @@ export const kyselyAdapter = (
 
 			return {
 				async create({ data, model }) {
-					const builder = db.insertInto(model).values(data);
-					const returned = await withReturning(data, builder, model, []);
-					return returned;
+					const processedData: Record<string, any> = { ...data };
+					for (const [key, value] of Object.entries(processedData)) {
+						const fieldAttr = schema[model]?.fields?.[key];
+
+						if (
+							config?.type === "postgres" &&
+							Array.isArray(value) &&
+							fieldAttr?.type === "string[]"
+						) {
+							processedData[key] = toPostgresArray(value);
+						}
+					}
+					const builder = db.insertInto(model).values(processedData);
+					return await withReturning(processedData, builder, model, []);
 				},
 				async findOne({ model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -517,15 +532,16 @@ export const kyselyAdapter = (
 				},
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
+					const processedValues: Record<string, any> = { ...(values as any) };
 
-					let query = db.updateTable(model).set(values as any);
+					let query = db.updateTable(model).set(processedValues);
 					if (and) {
 						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
 					}
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return await withReturning(values as any, query, model, where);
+					return await withReturning(processedValues, query, model, where);
 				},
 				async updateMany({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -614,7 +630,7 @@ export const kyselyAdapter = (
 				config?.type === "postgres"
 					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
 					: false,
-			supportsArrays: config?.type === "postgres",
+			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
 			transaction: config?.transaction
 				? (cb) =>
