@@ -27,7 +27,7 @@ function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
 				provider = dialect;
 			} else {
 				// For other dialects, try to use as-is or default to pg
-				provider = dialect === "pg" ? "pg" : undefined;
+				provider = dialect;
 			}
 		} else if (adapterId === "prisma") {
 			// Prisma uses: postgresql, mysql, sqlite, mongodb, etc.
