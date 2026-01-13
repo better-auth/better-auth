@@ -278,7 +278,7 @@ importers:
         version: 0.4.1(kysely@0.28.9)
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
-        version: 1.25.2(hono@4.11.3)(zod@4.3.4)
+        version: 1.25.2(hono@4.11.4)(zod@4.3.4)
       '@number-flow/react':
         specifier: ^0.5.10
         version: 0.5.10(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -419,7 +419,7 @@ importers:
         version: 0.542.0(react@19.2.3)
       mcp-handler:
         specifier: ^1.0.4
-        version: 1.0.4(@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@4.3.4))(next@16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))
+        version: 1.0.4(@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@4.3.4))(next@16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))
       mysql2:
         specifier: ^3.14.4
         version: 3.16.0
@@ -986,8 +986,8 @@ importers:
         specifier: ^0.44.5
         version: 0.44.5(@cloudflare/workers-types@4.20260103.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.15.15)(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(magicast@0.5.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.5.0)(bun-types@1.3.5)(kysely@0.28.9)(mysql2@3.16.0)(pg@8.16.3)(postgres@3.4.7)(prisma@7.2.0(@types/react@19.2.7)(better-sqlite3@12.5.0)(magicast@0.5.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(typescript@5.9.3))
       hono:
-        specifier: ^4.9.7
-        version: 4.11.3
+        specifier: ^4.11.4
+        version: 4.11.4
     devDependencies:
       '@cloudflare/vitest-pool-workers':
         specifier: ^0.8.69
@@ -1371,7 +1371,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.8.0
-        version: 1.25.2(hono@4.11.3)(zod@3.25.76)
+        version: 1.25.2(hono@4.11.4)(zod@3.25.76)
       zod:
         specifier: ^3.24.2
         version: 3.25.76
@@ -1406,7 +1406,7 @@ importers:
         version: link:../core
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
-        version: 1.25.2(hono@4.11.3)(zod@4.3.4)
+        version: 1.25.2(hono@4.11.4)(zod@4.3.4)
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -10035,8 +10035,8 @@ packages:
     resolution: {integrity: sha512-BIdolzGpDO9MQ4nu3AUuDwHZZ+KViNm+EZ75Ae55eMXMqLVhDFqEMXxtUe9Qh8hjL+pIna/frs2j6Y2yD5Ua/g==}
     engines: {node: '>=16.9.0'}
 
-  hono@4.11.3:
-    resolution: {integrity: sha512-PmQi306+M/ct/m5s66Hrg+adPnkD5jiO6IjA7WhWw0gSBSo1EcRegwuI1deZ+wd5pzCGynCcn2DprnE4/yEV4w==}
+  hono@4.11.4:
+    resolution: {integrity: sha512-U7tt8JsyrxSRKspfhtLET79pU8K+tInj5QZXs1jSugO1Vq5dFj3kmZsRldo29mTBfcjDRVRXrEZ6LS63Cog9ZA==}
     engines: {node: '>=16.9.0'}
 
   hookable@5.5.3:
@@ -17250,9 +17250,9 @@ snapshots:
       hono: 4.10.6
     optional: true
 
-  '@hono/node-server@1.19.7(hono@4.11.3)':
+  '@hono/node-server@1.19.7(hono@4.11.4)':
     dependencies:
-      hono: 4.11.3
+      hono: 4.11.4
 
   '@hookform/resolvers@5.2.2(react-hook-form@7.68.0(react@19.2.3))':
     dependencies:
@@ -17779,9 +17779,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@3.25.76)':
     dependencies:
-      '@hono/node-server': 1.19.7(hono@4.11.3)
+      '@hono/node-server': 1.19.7(hono@4.11.4)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5
@@ -17801,9 +17801,9 @@ snapshots:
       - hono
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@4.3.4)':
+  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@4.3.4)':
     dependencies:
-      '@hono/node-server': 1.19.7(hono@4.11.3)
+      '@hono/node-server': 1.19.7(hono@4.11.4)
       ajv: 8.17.1
       ajv-formats: 3.0.1(ajv@8.17.1)
       content-type: 1.0.5
@@ -24440,7 +24440,7 @@ snapshots:
   hono@4.10.6:
     optional: true
 
-  hono@4.11.3: {}
+  hono@4.11.4: {}
 
   hookable@5.5.3: {}
 
@@ -25444,9 +25444,9 @@ snapshots:
 
   math-intrinsics@1.1.0: {}
 
-  mcp-handler@1.0.4(@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@4.3.4))(next@16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1)):
+  mcp-handler@1.0.4(@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@4.3.4))(next@16.1.1(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1)):
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.2(hono@4.11.3)(zod@4.3.4)
+      '@modelcontextprotocol/sdk': 1.25.2(hono@4.11.4)(zod@4.3.4)
       chalk: 5.6.2
       commander: 11.1.0
       redis: 4.7.1
