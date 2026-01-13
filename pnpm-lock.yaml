@@ -1376,6 +1376,22 @@ importers:
         specifier: 'catalog:'
         version: 0.19.0(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.2)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
 
+  packages/mcp:
+    dependencies:
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.8.0
+        version: 1.25.2(hono@4.11.3)(zod@3.25.76)
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.19.0(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.2)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/oauth-provider:
     dependencies:
       '@better-auth/utils':
@@ -18481,6 +18497,28 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@3.25.76)':
+    dependencies:
+      '@hono/node-server': 1.19.7(hono@4.11.3)
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      content-type: 1.0.5
+      cors: 2.8.5
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.6
+      express: 5.2.1
+      express-rate-limit: 7.5.1(express@5.2.1)
+      jose: 6.1.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 3.25.76
+      zod-to-json-schema: 3.25.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - hono
+      - supports-color
+
   '@modelcontextprotocol/sdk@1.25.2(hono@4.11.3)(zod@4.3.4)':
     dependencies:
       '@hono/node-server': 1.19.7(hono@4.11.3)
@@ -22770,7 +22808,7 @@ snapshots:
       content-type: 1.0.5
       debug: 4.4.3
       http-errors: 2.0.1
-      iconv-lite: 0.7.1
+      iconv-lite: 0.7.2
       on-finished: 2.4.1
       qs: 6.14.1
       raw-body: 3.0.2
@@ -25581,7 +25619,6 @@ snapshots:
   iconv-lite@0.7.2:
     dependencies:
       safer-buffer: 2.1.2
-    optional: true
 
   ieee754@1.2.1: {}
 
@@ -28721,7 +28758,7 @@ snapshots:
     dependencies:
       bytes: 3.1.2
       http-errors: 2.0.1
-      iconv-lite: 0.7.1
+      iconv-lite: 0.7.2
       unpipe: 1.0.0
 
   rc9@2.1.2:
@@ -32411,6 +32448,10 @@ snapshots:
       archiver-utils: 5.0.2
       compress-commons: 6.0.2
       readable-stream: 4.7.0
+
+  zod-to-json-schema@3.25.1(zod@3.25.76):
+    dependencies:
+      zod: 3.25.76
 
   zod-to-json-schema@3.25.1(zod@4.3.4):
     dependencies:
