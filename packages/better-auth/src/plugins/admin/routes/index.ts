@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
+import { getSessionFromCtx } from "../../../api";
 import { deleteSessionCookie, setSessionCookie } from "../../../cookies";
 import { parseUserOutput } from "../../../db/schema";
 import { getDate } from "../../../utils/date";
@@ -12,7 +13,6 @@ import { adminMiddleware } from "../call";
 import { ADMIN_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { UserRole } from "../schema";
-import { getSessionFromCtx } from "../../../api";
 
 import type {
 	AdminOptions,
@@ -157,8 +157,8 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 						nonExistentRoles: Array.from(nonExistentRoles.values()),
 					});
 					throw APIError.from(
-					  "BAD_REQUEST",
-						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE,
 					);
 				}
 			}
@@ -484,14 +484,17 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 
 			// Role changes must be guarded by `user:set-role` and validated against the role allow-list.
 			if (Object.prototype.hasOwnProperty.call(ctx.body.data, "role")) {
-				const canSetRole = await hasPermission({
-					userId: ctx.context.session.user.id,
-					role: ctx.context.session.user.role,
-					options: opts,
-					permissions: {
-						user: ["set-role"],
+				const canSetRole = await hasPermission(
+					{
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["set-role"],
+						},
 					},
-				}, ctx);
+					ctx,
+				);
 				if (!canSetRole) {
 					throw APIError.from(
 						"FORBIDDEN",

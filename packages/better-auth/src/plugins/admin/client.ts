@@ -8,11 +8,11 @@ import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, userAc } from "./access";
 import type { admin } from "./admin";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { InferUserRole } from "./schema";
 import type { AdminOptions } from "./types";
-import { ADMIN_ERROR_CODES } from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -166,7 +166,7 @@ export const inferAdminAdditionalFields = <
 	// if we don't remove all other properties we may see assignability issues
 
 	type ExtractClientOnlyFields<T> = {
-		[K in keyof T]: T[K] extends { additionalFields: infer AF }
+		[K in keyof T]: T[K] extends { additionalFields: infer _AF }
 			? T[K]
 			: undefined;
 	};
