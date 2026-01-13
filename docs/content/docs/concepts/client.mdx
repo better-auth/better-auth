@@ -137,8 +137,8 @@ In addition to the standard methods, the client provides hooks to easily access 
         <Tab value="Svelte">
             ```svelte title="user.svelte"
             <script lang="ts">
-            import { client } from "$lib/client";
-            const session = client.useSession();
+            import { authClient } from "$lib/auth-client";
+            const session = authClient.useSession();
             </script>
 
             <div
@@ -179,11 +179,11 @@ In addition to the standard methods, the client provides hooks to easily access 
 
         <Tab value="Solid">
             ```tsx title="user.tsx"
-            import { client } from "~/lib/client";
+            import { authClient } from "~/lib/auth-client";
             import { Show } from 'solid-js';
 
             export default function Home() {
-                const session = client.useSession()
+                const session = authClient.useSession()
                 return (
                     <Show
                         when={session()}
