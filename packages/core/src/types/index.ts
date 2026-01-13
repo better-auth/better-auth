@@ -15,6 +15,8 @@ export type {
 	BetterAuthAdvancedOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	BetterAuthRateLimitRule,
+	BetterAuthRateLimitStorage,
 	GenerateIdFn,
 } from "./init-options";
 export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";
