@@ -10,6 +10,16 @@ import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import type { ClientSession, Db, MongoClient } from "mongodb";
 import { ObjectId } from "mongodb";
 
+/**
+ * Check if a value is ObjectId-like using duck-typing.
+ * This avoids instanceof checks which fail across module boundaries
+ * when different instances of the mongodb package are loaded.
+ */
+const isObjectIdLike = (value: unknown): value is ObjectId =>
+	value !== null &&
+	typeof value === "object" &&
+	typeof (value as ObjectId).toHexString === "function";
+
 class MongoAdapterError extends Error {
 	constructor(
 		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
@@ -100,7 +110,7 @@ export const mongodbAdapter = (
 						return value;
 					}
 					if (typeof value !== "string") {
-						if (value instanceof ObjectId) {
+						if (isObjectIdLike(value)) {
 							return value;
 						}
 						if (Array.isArray(value)) {
@@ -115,7 +125,7 @@ export const mongodbAdapter = (
 										return v;
 									}
 								}
-								if (v instanceof ObjectId) {
+								if (isObjectIdLike(v)) {
 									return v;
 								}
 								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
@@ -632,6 +642,9 @@ export const mongodbAdapter = (
 							return v;
 						});
 					}
+					if (isObjectIdLike(data)) {
+						return data;
+					}
 					if (typeof data === "string") {
 						try {
 							const oid = new ObjectId(data);
@@ -654,12 +667,12 @@ export const mongodbAdapter = (
 			},
 			customTransformOutput({ data, field, fieldAttributes }) {
 				if (field === "id" || fieldAttributes.references?.field === "id") {
-					if (data instanceof ObjectId) {
+					if (isObjectIdLike(data)) {
 						return data.toHexString();
 					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
-							if (v instanceof ObjectId) {
+							if (isObjectIdLike(v)) {
 								return v.toHexString();
 							}
 							return v;
