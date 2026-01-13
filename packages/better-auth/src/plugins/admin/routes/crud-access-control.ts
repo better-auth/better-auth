@@ -108,9 +108,7 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 					`[Dynamic Access Control] The admin plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/admin#dynamic-access-control`,
 				);
-				throw new APIError("NOT_IMPLEMENTED", {
-					message: ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
-				});
+				throw APIError.from("EXPECTATION_FAILED", ADMIN_ERROR_CODES.MISSING_AC_INSTANCE);
 			}
 
 			roleName = normalizeRoleName(roleName);
@@ -140,9 +138,7 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
-				});
+				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE);
 			}
 
 			await checkForInvalidResources({ ac, ctx, permission });
@@ -228,9 +224,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
-				});
+				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE);
 			}
 
 			if (ctx.body.roleName) {
@@ -247,9 +241,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 							defaultRoles,
 						},
 					);
-					throw new APIError("BAD_REQUEST", {
-						message: ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
-					});
+					throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE);
 				}
 			}
 
@@ -274,9 +266,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 			const existingRoleInDB = await ctx.context.adapter.findOne<UserRole>({
 				model: "role",
@@ -289,9 +279,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 						? { roleName: ctx.body.roleName }
 						: { roleId: ctx.body.roleId },
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
@@ -356,9 +344,7 @@ export const listRoles = <O extends AdminOptions>(options: O) => {
 							role: user.role,
 						},
 					);
-					throw new APIError("FORBIDDEN", {
-						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
-					});
+					throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE);
 				}
 			}
 
@@ -445,9 +431,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 							role: user.role,
 						},
 					);
-					throw new APIError("FORBIDDEN", {
-						message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
-					});
+					throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE);
 				}
 			}
 
@@ -472,9 +456,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
 			let role = await ctx.context.adapter.findOne<UserRole>({
@@ -488,16 +470,12 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 						? { roleName: ctx.query.roleName }
 						: { roleId: ctx.query.roleId },
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
 			const userRole = (user.role || options.defaultRole || "user").split(",");
 			if (canOnlyReadOwnRoles && !userRole.some((r) => r === role.role)) {
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
-				});
+				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE);
 			}
 
 			role.permission = JSON.parse(role.permission as never as string);
@@ -548,9 +526,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 					`[Dynamic Access Control] The admin plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/admin#dynamic-access-control`,
 				);
-				throw new APIError("NOT_IMPLEMENTED", {
-					message: ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
-				});
+				throw APIError.from("NOT_IMPLEMENTED", ADMIN_ERROR_CODES.MISSING_AC_INSTANCE);
 			}
 
 			const canUpdateRole = await hasPermission(
@@ -572,9 +548,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
-				});
+				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE);
 			}
 
 			let condition: Where;
@@ -598,9 +572,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
 			let role = await ctx.context.adapter.findOne<UserRole>({
@@ -614,9 +586,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 						? { roleName: ctx.body.roleName }
 						: { roleId: ctx.body.roleId },
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ADMIN_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
 			}
 
 			role.permission = role.permission
@@ -719,9 +689,7 @@ async function checkForInvalidResources({
 				validResources,
 			},
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ADMIN_ERROR_CODES.INVALID_RESOURCE,
-		});
+		throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.INVALID_RESOURCE);
 	}
 }
 
@@ -745,9 +713,7 @@ function checkIfRoleNameIsTakenByPreDefinedRole({
 				defaultRoles,
 			},
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-		});
+		throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN);
 	}
 }
 
@@ -772,9 +738,7 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 		ctx.context.logger.error(
 			`[Dynamic Access Control] The role name "${role}" is already taken by a role in the database.`,
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-		});
+		throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN);
 	}
 }
 
@@ -829,29 +793,30 @@ async function checkIfUserHasPermission({
 			missingPermissions,
 		},
 	);
-	let errorMessage: string;
+	let error: { code: string; message: string };
 	switch (action) {
 		case "create":
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
 			break;
 		case "update":
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
 			break;
 		case "delete":
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
 			break;
 		case "read":
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
 			break;
 		case "list":
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
 			break;
 		default:
-			errorMessage = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
+			error = ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
 	}
 
-	throw new APIError("FORBIDDEN", {
-		message: errorMessage,
+	throw APIError.fromStatus("FORBIDDEN", {
+		message: error.message,
+		code: error.code,
 		missingPermissions,
 	});
 }

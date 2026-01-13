@@ -219,8 +219,8 @@ describe("dynamic access control", async () => {
 			{ headers },
 		);
 		expect(testRole.data).toBeNull();
-		expect(testRole.error?.message).toEqual(
-			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+		expect(testRole.error?.code).toEqual(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.code,
 		);
 	});
 
@@ -239,8 +239,8 @@ describe("dynamic access control", async () => {
 		);
 		expect(testRole.data).toBeNull();
 		if (testRole.data) throw new Error("Test role created");
-		expect(testRole.error?.message).toEqual(
-			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+		expect(testRole.error?.code).toEqual(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.code,
 		);
 		expect("missingPermissions" in testRole.error).toBe(true);
 		if (!("missingPermissions" in testRole.error)) return;
@@ -264,8 +264,8 @@ describe("dynamic access control", async () => {
 			{ headers: adminHeaders },
 		);
 		expect(testRole.data).toBeNull();
-		expect(testRole.error?.message).toEqual(
-			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		expect(testRole.error?.code).toEqual(
+			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.code,
 		);
 
 		const testRole2 = await client.admin.createRole(
@@ -281,8 +281,8 @@ describe("dynamic access control", async () => {
 			{ headers: adminHeaders },
 		);
 		expect(testRole2.data).toBeNull();
-		expect(testRole2.error?.message).toEqual(
-			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		expect(testRole2.error?.code).toEqual(
+			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.code,
 		);
 	});
 
@@ -353,7 +353,7 @@ describe("dynamic access control", async () => {
 				body: { roleName: testRole.data.roleData.role },
 				headers,
 			}),
-		).rejects.toThrow(ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE);
+		).rejects.toThrow(ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE.message);
 	});
 
 	it("should not be allowed to delete a role that doesn't exist", async () => {
@@ -365,7 +365,7 @@ describe("dynamic access control", async () => {
 			expect(res).toBeNull();
 		} catch (error: any) {
 			if ("body" in error && "message" in error.body) {
-				expect(error.body.message).toBe(ADMIN_ERROR_CODES.ROLE_NOT_FOUND);
+				expect(error.body.code).toBe(ADMIN_ERROR_CODES.ROLE_NOT_FOUND.code);
 			} else {
 				throw error;
 			}
@@ -404,7 +404,7 @@ describe("dynamic access control", async () => {
 
 	it("should not be allowed to list roles without necessary permissions", async () => {
 		await expect(auth.api.listRoles({ headers })).rejects.toThrow(
-			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE.message,
 		);
 	});
 
