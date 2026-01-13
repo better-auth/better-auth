@@ -28,7 +28,7 @@ export function getSocialProviderEnvVars(provider: string): EnvVar[] {
 	];
 }
 
-const KNOWN_SOCIAL_PROVIDERS = [
+const _KNOWN_SOCIAL_PROVIDERS = [
 	"google",
 	"github",
 	"apple",
