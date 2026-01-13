@@ -28,7 +28,11 @@ const context: Record<string, AsyncLocalStorage<unknown>> = {};
  */
 export function getBetterAuthGlobal(): BetterAuthGlobal {
 	if (!(globalThis as any)[symbol]) {
-		(globalThis as any)[symbol] = {
+        (globalThis as any)[symbol] = {
+            epoch: 1,
+            context,
+        };
+        bind = (globalThis as any)[symbol] as BetterAuthGlobal;
 			epoch: 1,
 			context,
 		};
