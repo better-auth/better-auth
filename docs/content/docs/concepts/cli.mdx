@@ -18,6 +18,29 @@ npx @better-auth/cli@latest generate
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it's an SQL file saved as schema.sql in your project root.
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 - `--yes` - Skip the confirmation prompt and generate the schema directly.
+- `--adapter` - Specify the adapter type (e.g., `prisma`, `drizzle`, `kysely`) without requiring a configured adapter in your project.
+- `--dialect` - Specify the database dialect/provider (e.g., `postgresql`, `mysql`, `sqlite`). For Drizzle, `postgresql` maps to `pg`.
+
+### Generate Without a Database Connection
+
+You can generate schemas without having a database connection configured by using the `--adapter` and `--dialect` flags. This is useful for:
+
+- Bootstrapping new projects before setting up a database
+- CI/CD pipelines where database access isn't available
+- Generating schemas for different adapters without modifying your config
+
+```bash title="Terminal"
+# Generate a Prisma schema for PostgreSQL
+npx @better-auth/cli@latest generate --adapter prisma --dialect postgresql
+
+# Generate a Drizzle schema for MySQL
+npx @better-auth/cli@latest generate --adapter drizzle --dialect mysql
+
+# Generate a Kysely SQL file for SQLite
+npx @better-auth/cli@latest generate --adapter kysely --dialect sqlite
+```
+
+When these flags are provided, the CLI creates a mock adapter instance, eliminating the need for an actual database connection. If the flags are not provided, the CLI falls back to using the adapter configured in your Better Auth config file.
 
 
 ## Migrate
