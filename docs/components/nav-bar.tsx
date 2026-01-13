@@ -113,12 +113,14 @@ export const Navbar = () => {
 							href="https://github.com/better-auth/better-auth"
 							className="bg-muted/20"
 							external
+							aria-label="View Better Auth repository on GitHub"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								width="1.4em"
 								height="1.4em"
 								viewBox="0 0 496 512"
+								aria-hidden="true"
 							>
 								<path
 									fill="currentColor"
