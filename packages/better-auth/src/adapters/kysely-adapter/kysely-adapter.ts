@@ -32,6 +32,9 @@ interface KyselyAdapterConfig {
 	 * Use plural for table names.
 	 *
 	 * @default false
+	 *
+	 * @deprecated Use `advanced.database.usePlural` in the main config instead.
+	 * This option will be removed in a future release.
 	 */
 	usePlural?: boolean | undefined;
 	/**

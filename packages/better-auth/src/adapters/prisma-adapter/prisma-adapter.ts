@@ -33,6 +33,9 @@ export interface PrismaConfig {
 	 * Use plural table names
 	 *
 	 * @default false
+	 *
+	 * @deprecated Use `advanced.database.usePlural` in the main config instead.
+	 * This option will be removed in a future release.
 	 */
 	usePlural?: boolean | undefined;
 
@@ -74,8 +77,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			getFieldAttributes,
 			getDefaultModelName,
 			schema,
+			options,
 		}) => {
 			const db = prisma as PrismaClientInternal;
+			const usePlural =
+				config.usePlural ?? options.advanced?.database?.usePlural ?? false;
 
 			const convertSelect = (
 				select: string[] | undefined,
@@ -148,7 +154,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						const [_foreignKey, foreignKeyAttributes] = foreignKeys[0] as any;
 						// Only check if field is explicitly marked as unique
 						const isUnique = foreignKeyAttributes?.unique === true;
-						return isUnique || config.usePlural === true ? key : `${key}s`;
+						return isUnique || usePlural ? key : `${key}s`;
 					}
 
 					// Check backwards: does the base model have FKs to the joined model?
@@ -529,7 +535,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 		config: {
 			adapterId: "prisma",
 			adapterName: "Prisma Adapter",
-			usePlural: config.usePlural ?? false,
+			usePlural: config.usePlural,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
 			supportsArrays:

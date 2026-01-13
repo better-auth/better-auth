@@ -143,29 +143,31 @@ export const createAdapterFactory =
 
 		const logger = createLogger(options.logger);
 
+		const usePlural = config.usePlural ?? options.advanced?.database?.usePlural;
+
 		const getDefaultModelName = initGetDefaultModelName({
-			usePlural: config.usePlural,
+			usePlural,
 			schema,
 		});
 
 		const getDefaultFieldName = initGetDefaultFieldName({
-			usePlural: config.usePlural,
+			usePlural,
 			schema,
 		});
 
 		const getModelName = initGetModelName({
-			usePlural: config.usePlural,
+			usePlural,
 			schema,
 		});
 		const getFieldName = initGetFieldName({
 			schema,
-			usePlural: config.usePlural,
+			usePlural,
 		});
 
 		const idField = initGetIdField({
 			schema,
 			options,
-			usePlural: config.usePlural,
+			usePlural,
 			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
 			supportsUUIDs: config.supportsUUIDs,
@@ -174,7 +176,7 @@ export const createAdapterFactory =
 		const getFieldAttributes = initGetFieldAttributes({
 			schema,
 			options,
-			usePlural: config.usePlural,
+			usePlural,
 			disableIdGeneration: config.disableIdGeneration,
 			customIdGenerator: config.customIdGenerator,
 		});
