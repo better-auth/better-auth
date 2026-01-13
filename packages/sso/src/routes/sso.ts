@@ -1,5 +1,10 @@
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
-import type { User, Verification } from "better-auth";
+import type {
+	BetterAuthOptions,
+	DBAdapter,
+	User,
+	Verification,
+} from "better-auth";
 import {
 	createAuthorizationURL,
 	generateState,
@@ -158,6 +163,53 @@ function extractAssertionId(samlContent: string): string | null {
 	} catch {
 		return null;
 	}
+}
+
+/**
+ * Validates if email domain matches any SSO provider domain for the given providerId.
+ * Supports multi-domain providers by checking all domains registered for the same providerId.
+ */
+async function validateEmailDomainForProvider(
+	email: string,
+	providerId: string,
+	adapter: DBAdapter<BetterAuthOptions>,
+): Promise<boolean> {
+	const providers = await adapter.findMany<SSOProvider<SSOOptions>>({
+		model: "ssoProvider",
+		where: [{ field: "providerId", value: providerId }],
+	});
+	return providers.some((p) => validateEmailDomain(email, p.domain));
+}
+
+/**
+ * Checks if a provider is trusted for account linking.
+ * Returns true if provider is in trusted list or has verified domain matching user email.
+ */
+async function isProviderTrusted(
+	provider: SSOProvider<SSOOptions>,
+	email: string,
+	accountLinkingOptions: BetterAuthOptions["account"],
+	adapter: DBAdapter<BetterAuthOptions>,
+): Promise<boolean> {
+	// Check if in trusted providers list
+	if (
+		accountLinkingOptions?.accountLinking?.trustedProviders?.includes(
+			provider.providerId,
+		)
+	) {
+		return true;
+	}
+
+	// Check domain verification
+	if ("domainVerified" in provider && provider.domainVerified) {
+		return await validateEmailDomainForProvider(
+			email,
+			provider.providerId,
+			adapter,
+		);
+	}
+
+	return false;
 }
 
 const spMetadataQuerySchema = z.object({
@@ -2062,13 +2114,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				});
 			}
 
-			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
-				("domainVerified" in provider &&
-					!!(provider as { domainVerified?: boolean }).domainVerified &&
-					validateEmailDomain(userInfo.email as string, provider.domain));
+			const isTrustedProvider = await isProviderTrusted(
+				provider,
+				userInfo.email as string,
+				ctx.context.options.account,
+				ctx.context.adapter,
+			);
 
 			const callbackUrl =
 				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
@@ -2519,13 +2570,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				});
 			}
 
-			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
-				("domainVerified" in provider &&
-					!!(provider as { domainVerified?: boolean }).domainVerified &&
-					validateEmailDomain(userInfo.email as string, provider.domain));
+			const isTrustedProvider = await isProviderTrusted(
+				provider,
+				userInfo.email as string,
+				ctx.context.options.account,
+				ctx.context.adapter,
+			);
 
 			const callbackUrl =
 				RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
