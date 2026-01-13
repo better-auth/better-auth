@@ -1,4 +1,5 @@
 import { execSync } from "node:child_process";
+import path from "node:path";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
@@ -12,7 +13,6 @@ import { drizzle } from "drizzle-orm/mysql2";
 import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
 import { drizzleAdapter } from "../drizzle-adapter";
-import { getDrizzleVersion, installBetaDrizzle } from "./drizzle-cli-utils";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const dbName = "better_auth";
@@ -48,26 +48,14 @@ const { execute } = await testAdapter({
 			"mysql",
 		);
 
-		// Even if we defined the same drizzle-orm version in the package.json,
-		// CI wouldn't wouldn't run the same drizzle beta version between drizzle-kit and drizzle-orm which causes the push command
-		// to fail as Drizzle-kit will ask for the same orm version.
-		// This is a workaround to install the beta drizzle-orm live if the version mismatch is detected.
-		const version = await getDrizzleVersion();
-		console.log("version", version);
-		if (!version.kit.includes("beta") || !version.orm.includes("beta")) {
-			await installBetaDrizzle();
-		}
-		const version2 = await getDrizzleVersion();
-		console.log("version2", version2);
-
-		const command = `npx drizzle-kit push --dialect=mysql --schema=${fileName}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
+		const command = `node ./node_modules/drizzle-kit/bin.cjs push --dialect=mysql --schema=${path.join(import.meta.dirname, fileName)}.ts --url=mysql://user:password@localhost:3306/${dbName}`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			// wait for the above console.log to be printed
 			await new Promise((resolve) => setTimeout(resolve, 10));
 			execSync(command, {
-				cwd: import.meta.dirname,
+				cwd: path.join(import.meta.dirname, ".."),
 				stdio: "inherit",
 			});
 		} catch (error) {

@@ -53,7 +53,7 @@
     "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.5.0",
-    "drizzle-kit": "1.0.0-beta.8-734e789",
+    "drizzle-kit": "1.0.0-beta.10-4a43a22",
     "drizzle-orm": "1.0.0-beta.8-734e789",
     "mysql2": "^3.14.4",
     "pg": "^8.16.3",
@@ -64,8 +64,8 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "drizzle-kit": "1.0.0-beta.8-734e789",
-    "drizzle-orm": "1.0.0-beta.8-734e789",
+    "drizzle-kit": "1.0.0-beta.8-* || 1.0.0-beta.9-* || 1.0.0-beta.10-*",
+    "drizzle-orm": "1.0.0-beta.8-* || 1.0.0-beta.9-* || 1.0.0-beta.10-*",
     "prettier": "^3.7.4"
   }
 }
