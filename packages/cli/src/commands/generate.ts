@@ -15,7 +15,26 @@ import * as z from "zod/v4";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
 
-function createMockAdapter(adapterId: string): DBAdapter {
+function createMockAdapter(adapterId: string, dialect?: string): DBAdapter {
+	// Map dialect to provider format for each adapter
+	let provider: string | undefined;
+	if (dialect) {
+		if (adapterId === "drizzle") {
+			// Drizzle uses: pg, mysql, sqlite
+			if (dialect === "postgresql") {
+				provider = "pg";
+			} else if (dialect === "mysql" || dialect === "sqlite") {
+				provider = dialect;
+			} else {
+				// For other dialects, try to use as-is or default to pg
+				provider = dialect === "pg" ? "pg" : undefined;
+			}
+		} else if (adapterId === "prisma") {
+			// Prisma uses: postgresql, mysql, sqlite, mongodb, etc.
+			provider = dialect;
+		}
+	}
+
 	return {
 		id: adapterId,
 		create: async () => {
@@ -49,6 +68,7 @@ function createMockAdapter(adapterId: string): DBAdapter {
 			adapterConfig: {
 				adapterId,
 			},
+			...(provider && { provider }),
 		},
 	};
 }
@@ -60,6 +80,7 @@ async function generateAction(opts: any) {
 			config: z.string().optional(),
 			output: z.string().optional(),
 			adapter: z.string().optional(),
+			dialect: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
 		})
@@ -84,7 +105,7 @@ async function generateAction(opts: any) {
 	let adapter: DBAdapter;
 	if (options.adapter) {
 		// Use mock adapter when --adapter flag is provided
-		adapter = createMockAdapter(options.adapter);
+		adapter = createMockAdapter(options.adapter, options.dialect);
 	} else {
 		// Get adapter from config (existing behavior)
 		adapter = await getAdapter(config).catch((e) => {
@@ -251,6 +272,10 @@ export const generate = new Command("generate")
 	.option(
 		"--adapter <adapter>",
 		"specify the adapter type (e.g., prisma, drizzle, kysely) without requiring a configured adapter",
+	)
+	.option(
+		"--dialect <dialect>",
+		"specify the database dialect/provider (e.g., postgresql, mysql, sqlite). For drizzle, postgresql maps to 'pg'",
 	)
 	.option("-y, --yes", "automatically answer yes to all prompts", false)
 	.option("--y", "(deprecated) same as --yes", false)
