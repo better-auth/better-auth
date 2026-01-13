@@ -100,7 +100,7 @@ const response = await auth.api.signInEmail({
 When you call an API endpoint on the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
 
 ```ts title="server.ts"
-import { APIError } from "better-auth/api";
+import { APIError, isAPIError } from "better-auth/api";
 
 try {
     await auth.api.signInEmail({
@@ -110,7 +110,7 @@ try {
         }
     })
 } catch (error) {
-    if (error instanceof APIError) {
+    if (isAPIError(error)) {
         console.log(error.message, error.status)
     }
 }

@@ -1,8 +1,11 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
 export type {
 	AuthContext,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
 	GenericEndpointContext,
 	InternalAdapter,
+	PluginContext,
 } from "./context";
 export type { BetterAuthCookies } from "./cookie";
 export type * from "./helper";
@@ -10,6 +13,8 @@ export type {
 	BetterAuthAdvancedOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	BetterAuthRateLimitRule,
+	BetterAuthRateLimitStorage,
 	GenerateIdFn,
 } from "./init-options";
 export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";

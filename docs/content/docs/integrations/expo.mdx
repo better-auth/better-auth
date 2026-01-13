@@ -31,19 +31,27 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```package-install
         better-auth @better-auth/expo
         ```
-
+        <Callout type="info">
+            If you're using Expo's API Routes, you can follow the step below instead.
+        </Callout>
     </Step>
 
     <Step>
         ## Install Client Dependencies
 
-        You also need to install both the Better Auth package and Expo plugin into your Expo application.
+        - You also need to install both the Better Auth package and Expo plugin into your Expo application.
 
         ```package-install
-        better-auth @better-auth/expo 
+        better-auth @better-auth/expo
         ```
 
-        If you plan on using our social integrations (Google, Apple etc.) then there are a few more dependencies that are required in your Expo app. In the default Expo template these are already installed so you may be able to skip this step if you have these dependencies already.
+        - And you need to install `expo-network` for network state detection.
+
+        ```package-install
+        expo-network
+        ```
+
+        - <small className='text-xs'>(Optional)</small> If you're using the default Expo template, these dependencies are already included, so you can skip this step. Otherwise, if you plan to use our social providers (e.g. Google, Apple), your Expo app requires a few additional dependencies.
 
         ```package-install
         expo-linking expo-web-browser expo-constants
@@ -160,15 +168,15 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                 
                 // Development mode - Expo's exp:// scheme with local IP ranges
                 ...(process.env.NODE_ENV === "development" ? [
-                    "exp://*/*",                 // Trust all Expo development URLs
-                    "exp://10.0.0.*:*/*",        // Trust 10.0.0.x IP range
-                    "exp://192.168.*.*:*/*",     // Trust 192.168.x.x IP range
-                    "exp://172.*.*.*:*/*",       // Trust 172.x.x.x IP range
-                    "exp://localhost:*/*"        // Trust localhost
+                    "exp://",                      // Trust all Expo URLs (prefix matching)
+                    "exp://**",                    // Trust all Expo URLs (wildcard matching)
+                    "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path
                 ] : [])
             ]
         })
         ```
+
+        For more information about trusted origins, see [here](/docs/reference/options#trustedorigins).
 
         <Callout type="warn">
           The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
@@ -204,9 +212,9 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                         "module-resolver",
                         {
                             alias: {
-                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.cjs",
-                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.cjs",
-                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.cjs",
+                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.mjs",
+                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.mjs",
+                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.mjs",
                             },
                         },
                     ],

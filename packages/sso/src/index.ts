@@ -17,6 +17,12 @@ import {
 } from "./routes/sso";
 
 export {
+	DEFAULT_CLOCK_SKEW_MS,
+	DEFAULT_MAX_SAML_METADATA_SIZE,
+	DEFAULT_MAX_SAML_RESPONSE_SIZE,
+} from "./constants";
+
+export {
 	type SAMLConditions,
 	type TimestampValidationOptions,
 	validateSAMLTimestamp,
@@ -34,6 +40,15 @@ export {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		sso: {
+			creator: typeof sso;
+		};
+	}
+}
 
 export {
 	computeDiscoveryUrl,
@@ -156,6 +171,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
 							provisioningOptions: options?.organizationProvisioning,
+							domainVerification: options?.domainVerification,
 						});
 					}),
 				},
@@ -210,5 +226,6 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 				},
 			},
 		},
+		options: options as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

@@ -10,6 +10,15 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { defaultKeyHasher } from "./utils";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"magic-link": {
+			creator: typeof magicLink;
+		};
+	}
+}
+
 export interface MagicLinkOptions {
 	/**
 	 * Time in seconds until the magic link expires.
@@ -423,5 +432,6 @@ export const magicLink = (options: MagicLinkOptions) => {
 				max: opts.rateLimit?.max || 5,
 			},
 		],
+		options,
 	} satisfies BetterAuthPlugin;
 };

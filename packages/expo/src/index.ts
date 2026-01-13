@@ -10,6 +10,15 @@ export interface ExpoOptions {
 	disableOriginOverride?: boolean | undefined;
 }
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		expo: {
+			creator: typeof expo;
+		};
+	}
+}
+
 export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
@@ -47,7 +56,9 @@ export const expo = (options?: ExpoOptions | undefined) => {
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/callback") ||
-							context.path?.startsWith("/oauth2/callback")
+							context.path?.startsWith("/oauth2/callback") ||
+							context.path?.startsWith("/magic-link/verify") ||
+							context.path?.startsWith("/verify-email")
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -83,5 +94,6 @@ export const expo = (options?: ExpoOptions | undefined) => {
 		endpoints: {
 			expoAuthorizationProxy,
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

@@ -4,7 +4,16 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
-interface BearerOptions {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		bearer: {
+			creator: typeof bearer;
+		};
+	}
+}
+
+export interface BearerOptions {
 	/**
 	 * If true, only signed tokens
 	 * will be converted to session
@@ -123,5 +132,6 @@ export const bearer = (options?: BearerOptions | undefined) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

@@ -3,7 +3,7 @@ import { MobileSearchIcon } from "@/components/mobile-search-icon";
 import { ThemeToggle } from "@/components/theme-toggle";
 import DarkPng from "../public/branding/better-auth-logo-dark.png";
 import WhitePng from "../public/branding/better-auth-logo-light.png";
-import ChristmasLogo from "./christmas/logo";
+import { Logo } from "./logo";
 import LogoContextMenu from "./logo-context-menu";
 import { NavLink } from "./nav-link";
 import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
@@ -90,13 +90,9 @@ export const Navbar = () => {
 					<div className="flex flex-col gap-2 w-full">
 						<LogoContextMenu
 							logo={
-								// <div className="flex items-center gap-2">
-								// 	<Logo />
-								// 	<p className="select-none">BETTER-AUTH.</p>
-								// </div>
-
-								<div className="flex items-center h-6">
-									<ChristmasLogo />
+								<div className="flex items-center gap-2">
+									<Logo />
+									<p className="select-none">BETTER-AUTH.</p>
 								</div>
 							}
 							logoAssets={logoAssets}
@@ -117,12 +113,14 @@ export const Navbar = () => {
 							href="https://github.com/better-auth/better-auth"
 							className="bg-muted/20"
 							external
+							aria-label="View Better Auth repository on GitHub"
 						>
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								width="1.4em"
 								height="1.4em"
 								viewBox="0 0 496 512"
+								aria-hidden="true"
 							>
 								<path
 									fill="currentColor"
