@@ -245,4 +245,3 @@ export async function parseState(c: GenericEndpointContext) {
 
 	return parsedData;
 }
-
