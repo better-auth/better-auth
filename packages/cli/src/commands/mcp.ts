@@ -36,7 +36,7 @@ async function mcpAction(options: MCPOptions) {
 	}
 }
 
-export async function installMcpServers(
+async function installMcpServers(
 	client: "cursor" | "claude-code" | "open-code" | "manual" | string,
 	installLocal: boolean = true,
 	installRemote: boolean = true,
