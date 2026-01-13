@@ -9,15 +9,24 @@ export type AuthEndpointContext = Partial<
 	context: AuthContext;
 };
 
+const symbol = Symbol.for("better-auth:endpoint-context-async-storage");
+
 let currentContextAsyncStorage: AsyncLocalStorage<AuthEndpointContext> | null =
 	null;
 
 const ensureAsyncStorage = async () => {
-	if (!currentContextAsyncStorage) {
+	if (
+		!currentContextAsyncStorage ||
+		(globalThis as any)[symbol] === undefined
+	) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
 		currentContextAsyncStorage = new AsyncLocalStorage();
+		(globalThis as any)[symbol] = currentContextAsyncStorage;
 	}
-	return currentContextAsyncStorage;
+	return (
+		currentContextAsyncStorage ||
+		((globalThis as any)[symbol] as AsyncLocalStorage<AuthEndpointContext>)
+	);
 };
 
 /**

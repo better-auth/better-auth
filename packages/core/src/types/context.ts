@@ -12,10 +12,33 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookies } from "./cookie";
+import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
+import type { BetterAuthPlugin } from "./plugin";
+
+/**
+ * Mutators are defined in each plugin
+ *
+ * @example
+ * ```ts
+ * declare module "@better-auth/core" {
+ *  interface BetterAuthPluginRegistry<Auth, Context> {
+ *    'jwt': {
+ *      creator: typeof jwt
+ *    }
+ *  }
+ * }
+ * ```
+ */
+// biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
+export interface BetterAuthPluginRegistry<Auth, Context> {}
+export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
+	unknown,
+	unknown
+>;
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -159,8 +182,34 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
+export type PluginContext = {
+	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) =>
+		| (ID extends BetterAuthPluginRegistryIdentifier
+				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				: BetterAuthPlugin)
+		| null;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) => boolean;
+};
+
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	{
+	PluginContext & {
 		options: Options;
 		appName: string;
 		baseURL: string;

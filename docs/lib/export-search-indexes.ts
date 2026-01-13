@@ -1,4 +1,4 @@
-import type { OramaDocument } from "fumadocs-core/search/orama-cloud";
+import type { OramaDocument } from "fumadocs-core/search/orama-cloud-legacy";
 import { source } from "@/lib/source";
 
 export async function exportSearchIndexes() {

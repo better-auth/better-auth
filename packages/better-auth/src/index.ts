@@ -6,7 +6,9 @@ export * from "@better-auth/core/db";
 export * from "@better-auth/core/env";
 export * from "@better-auth/core/error";
 export * from "@better-auth/core/oauth2";
-export * from "@better-auth/core/utils";
+export * from "@better-auth/core/utils/error-codes";
+export * from "@better-auth/core/utils/id";
+export * from "@better-auth/core/utils/json";
 //#endregion
 export { betterAuth } from "./auth";
 // @ts-expect-error

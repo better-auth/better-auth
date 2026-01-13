@@ -5,7 +5,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";

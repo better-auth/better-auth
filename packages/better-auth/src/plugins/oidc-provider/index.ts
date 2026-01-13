@@ -21,7 +21,6 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
-import type { jwt } from "../jwt";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -36,11 +35,14 @@ import type {
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
-const getJwtPlugin = (ctx: GenericEndpointContext) => {
-	return ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "jwt",
-	) as ReturnType<typeof jwt>;
-};
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"oidc-provider": {
+			creator: typeof oidcProvider;
+		};
+	}
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -85,7 +87,7 @@ export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const jwtPlugin = getJwtPlugin(ctx);
+	const jwtPlugin = ctx.context.getPlugin("jwt");
 	const issuer =
 		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
 			? jwtPlugin.options.jwt.issuer
@@ -379,7 +381,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	}
 
 	return {
-		id: "oidc",
+		id: "oidc-provider",
 		hooks: {
 			after: [
 				{
@@ -991,7 +993,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
 					if (options.useJWTPlugin) {
-						const jwtPlugin = getJwtPlugin(ctx);
+						const jwtPlugin = ctx.context.getPlugin("jwt");
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
 								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
@@ -1615,7 +1617,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					// Validate id_token_hint if provided
 					if (id_token_hint) {
 						try {
-							const jwtPlugin = getJwtPlugin(ctx);
+							const jwtPlugin = ctx.context.getPlugin("jwt");
 							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
 								// For JWT plugin tokens, verify using JWKS
 								const verified = await verifyJWT(

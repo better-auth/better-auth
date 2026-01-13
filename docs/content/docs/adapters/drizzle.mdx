@@ -17,8 +17,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    // [!code highlight]
+  database: drizzleAdapter(db, { // [!code highlight]
     provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
@@ -79,10 +78,10 @@ import { schema } from "./schema";
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite", // or "pg" or "mysql"
-    schema: {
-      ...schema,
-      user: schema.users,
-    },
+    schema: { // [!code highlight]
+      ...schema, // [!code highlight]
+      user: schema.users, // [!code highlight]
+    }, // [!code highlight]
   }),
 });
 ```

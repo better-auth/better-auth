@@ -13,6 +13,15 @@ import {
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		passkey: {
+			creator: typeof passkey;
+		};
+	}
+}
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,

@@ -226,7 +226,7 @@ const TestimonialItem = ({
 										<img
 											src={testimonial.avatar}
 											className="w-10 h-10 rounded-full"
-											alt="avatar"
+											alt={`${testimonial.name} avatar`}
 										/>
 										<div className="flex flex-col items-start justify-start flex-1 gap-0">
 											<h5 className="text-base font-medium md:text-md">
@@ -239,7 +239,12 @@ const TestimonialItem = ({
 									</div>
 									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
 									<div className="flex items-center justify-center max-w-full mx-auto">
-										<Link href={testimonial.link} target="_blank">
+										<Link
+											href={testimonial.link}
+											target="_blank"
+											rel="noopener noreferrer"
+											aria-label={`View ${testimonial.name}'s testimonial on X`}
+										>
 											{testimonial.social}
 										</Link>
 									</div>

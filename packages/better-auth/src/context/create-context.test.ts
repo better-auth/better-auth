@@ -1627,4 +1627,53 @@ describe("base context creation", () => {
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
 		});
 	});
+
+	describe("hasPlugin", () => {
+		it("should return true when plugin is enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "test-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(true);
+		});
+
+		it("should return false when plugin is not enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "other-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should return false when no plugins are configured", async () => {
+			const ctx = await initBase({});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should work with multiple plugins", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "plugin-1",
+					},
+					{
+						id: "plugin-2",
+					},
+					{
+						id: "plugin-3",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("plugin-1")).toBe(true);
+			expect(ctx.hasPlugin("plugin-2")).toBe(true);
+			expect(ctx.hasPlugin("plugin-3")).toBe(true);
+			expect(ctx.hasPlugin("plugin-4")).toBe(false);
+		});
+	});
 });

@@ -19,7 +19,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.8.1",
     "@libsql/kysely-libsql": "^0.4.1",
-    "@modelcontextprotocol/sdk": "^1.24.2",
+    "@modelcontextprotocol/sdk": "^1.25.2",
     "@number-flow/react": "^0.5.10",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",

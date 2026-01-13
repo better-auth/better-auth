@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
@@ -341,15 +341,15 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						data: JSON.stringify(validate.updated),
 					});
 
-					const updated = await ctx.context.adapter.updateMany({
+					const updated = await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
 							backupCodes: updatedBackupCodes,
 						},
 						where: [
 							{
-								field: "userId",
-								value: user.id,
+								field: "id",
+								value: twoFactor.id,
 							},
 							{
 								field: "backupCodes",
@@ -444,19 +444,40 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 						);
 					}
 					await ctx.context.password.checkPassword(user.id, ctx);
+
+					// First, find the twoFactor record to get its id
+					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
+						model: twoFactorTable,
+						where: [
+							{
+								field: "userId",
+								value: user.id,
+							},
+						],
+					});
+
+					if (!twoFactor) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							TWO_FACTOR_ERROR_CODES.TWO_FACTOR_NOT_ENABLED,
+						);
+					}
+
 					const backupCodes = await generateBackupCodes(
 						ctx.context.secret,
 						opts,
 					);
-					await ctx.context.adapter.updateMany({
+
+					// Use the id to update the record
+					await ctx.context.adapter.update({
 						model: twoFactorTable,
 						update: {
 							backupCodes: backupCodes.encryptedBackupCodes,
 						},
 						where: [
 							{
-								field: "userId",
-								value: ctx.context.session.user.id,
+								field: "id",
+								value: twoFactor.id,
 							},
 						],
 					});

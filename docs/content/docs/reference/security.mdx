@@ -57,7 +57,16 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 5. **No Mutations on GET Requests (with additional safeguards)**
   `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
-You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
+### Disabling Security Checks
+
+Better Auth provides two separate options to disable security checks. These options control different aspects of security:
+
+#### `disableCSRFCheck`
+
+Disables **all CSRF protection**, including:
+- Origin header validation when cookies are present
+- Fetch Metadata checks (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`)
+- Cross-site navigation blocking for first-login scenarios
 
 ```typescript
 {
@@ -67,7 +76,17 @@ You can skip the CSRF check for all requests by setting the `disableCSRFCheck` o
 }
 ```
 
-You can skip the origin check for all requests by setting the `disableOriginCheck` option to `true` in the configuration.
+<Callout type="warning">
+  Disabling CSRF checks allows requests from any origin to use cookies and perform actions on behalf of users. This opens your application to CSRF attacks.
+</Callout>
+
+#### `disableOriginCheck`
+
+Disables **URL validation** against `trustedOrigins`, including:
+- `callbackURL` validation
+- `redirectTo` validation
+- `errorCallbackURL` validation
+- `newUserCallbackURL` validation
 
 ```typescript
 {
@@ -78,8 +97,19 @@ You can skip the origin check for all requests by setting the `disableOriginChec
 ```
 
 <Callout type="warning">
-  Skipping csrf check will open your application to CSRF attacks. And skipping origin check may open up your application to other security vulnerabilities including open redirects.
+  Disabling origin checks allows any URL to be used in redirects and callbacks. This opens your application to open redirect vulnerabilities.
 </Callout>
+
+<Callout type="info">
+  For backward compatibility, `disableOriginCheck: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible - both checks are disabled together when using this option.
+</Callout>
+
+#### Summary
+
+| Option | What it disables |
+|--------|-----------------|
+| `disableCSRFCheck` | CSRF protection only (origin header validation, Fetch Metadata checks) |
+| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility) |
 
 ## OAuth State and PKCE
 

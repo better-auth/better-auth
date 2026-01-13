@@ -1,10 +1,19 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getCurrentAuthContext } from "@better-auth/core/context";
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
 import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"have-i-been-pwned": {
+			creator: typeof haveIBeenPwned;
+		};
+	}
+}
 
 const ERROR_CODES = defineErrorCodes({
 	PASSWORD_COMPROMISED:
@@ -75,7 +84,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 	];
 
 	return {
-		id: "haveIBeenPwned",
+		id: "have-i-been-pwned",
 		init(ctx) {
 			return {
 				context: {

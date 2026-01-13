@@ -39,6 +39,7 @@ export default function Hero() {
 												width="0.8em"
 												height="0.8em"
 												viewBox="0 0 24 24"
+												aria-hidden="true"
 											>
 												<path
 													fill="currentColor"
@@ -52,10 +53,10 @@ export default function Hero() {
 									</div>
 								</div>
 
-								<p className="text-zinc-800 dark:text-zinc-300 tracking-tight text-2xl md:text-3xl text-pretty">
+								<h1 className="text-zinc-800 dark:text-zinc-300 tracking-tight text-2xl md:text-3xl text-pretty">
 									The most comprehensive authentication framework for
 									TypeScript.
-								</p>
+								</h1>
 							</div>
 
 							<div className="relative flex items-center gap-2 w-full sm:w-[90%] border border-white/10">
@@ -80,12 +81,15 @@ export default function Hero() {
 										<Link
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
+											rel="noopener noreferrer"
+											aria-label="View better-auth package on npm"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												width="1em"
 												height="1em"
 												viewBox="0 0 128 128"
+												aria-hidden="true"
 											>
 												<path
 													fill="#cb3837"
@@ -100,12 +104,15 @@ export default function Hero() {
 										<Link
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
+											rel="noopener noreferrer"
+											aria-label="View better-auth repository on GitHub"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												width="1em"
 												height="1em"
 												viewBox="0 0 256 256"
+												aria-hidden="true"
 											>
 												<g fill="none">
 													<rect
@@ -326,13 +333,16 @@ function CodePreview() {
 									<Link
 										href="https://demo.better-auth.com"
 										target="_blank"
+										rel="noopener noreferrer"
 										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+										aria-label="View Better Auth demo"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
 											width="1em"
 											height="1em"
 											viewBox="0 0 24 24"
+											aria-hidden="true"
 										>
 											<path
 												fill="currentColor"

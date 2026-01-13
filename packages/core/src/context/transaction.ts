@@ -2,15 +2,24 @@ import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
 
+const symbol = Symbol.for("better-auth:transaction-adapter-async-storage");
+
 let currentAdapterAsyncStorage: AsyncLocalStorage<DBTransactionAdapter> | null =
 	null;
 
 const ensureAsyncStorage = async () => {
-	if (!currentAdapterAsyncStorage) {
+	if (
+		!currentAdapterAsyncStorage ||
+		(globalThis as any)[symbol] === undefined
+	) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
 		currentAdapterAsyncStorage = new AsyncLocalStorage();
+		(globalThis as any)[symbol] = currentAdapterAsyncStorage;
 	}
-	return currentAdapterAsyncStorage;
+	return (
+		currentAdapterAsyncStorage ||
+		((globalThis as any)[symbol] as AsyncLocalStorage<DBTransactionAdapter>)
+	);
 };
 
 /**

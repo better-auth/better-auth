@@ -33,6 +33,6 @@
     "@vitejs/plugin-react-swc": "^4.0.0",
     "tailwindcss": "catalog:tailwind",
     "typescript": "^5.9.3",
-    "vite": "^7.2.4"
+    "vite": "^7.3.1"
   }
 }

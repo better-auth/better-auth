@@ -7,6 +7,10 @@ import type { EndpointContext } from "better-call";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { schema } from "./schema";
 
+export type AnonymousSession = { session: Session; user: User } & {
+	user: { isAnonymous: boolean | null };
+} & Record<string, any>;
+
 export interface UserWithAnonymous extends User {
 	isAnonymous: boolean;
 }
@@ -36,7 +40,7 @@ export interface AnonymousOptions {
 		  }) => Awaitable<void>)
 		| undefined;
 	/**
-	 * Disable deleting the anonymous user after linking
+	 * Disable deleting the anonymous user
 	 */
 	disableDeleteAnonymousUser?: boolean | undefined;
 	/**
