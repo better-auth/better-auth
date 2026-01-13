@@ -178,7 +178,7 @@ export const APIMethod = ({
 
 	const serverTabContent = (
 		<>
-			{isClientOnly ? null : (
+			{isClientOnly || isServerOnly ? null : (
 				<Endpoint
 					method={method || "GET"}
 					path={path}
