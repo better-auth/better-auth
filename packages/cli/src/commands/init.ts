@@ -361,7 +361,6 @@ const optionsSchema = z.object({
 	database: z.enum(supportedDatabases).optional(),
 	"skip-db": z.boolean().optional(),
 	"skip-plugins": z.boolean().optional(),
-	"skip-mcp": z.boolean().optional(),
 	"package-manager": z.string().optional(),
 	tsconfig: z.string().optional(),
 });
@@ -1031,33 +1030,6 @@ async function initAction(opts: any) {
 		}
 	}
 
-	if (options["skip-mcp"] !== true) {
-		const shouldInstallMcp = await confirm({
-			message: `Would you like to set up ${chalk.bold("MCP")} for AI assistance?`,
-		});
-		if (isCancel(shouldInstallMcp)) {
-			cancel("✋ Operation cancelled.");
-			process.exit(0);
-		}
-		if (shouldInstallMcp) {
-			const mcpClient = await select({
-				message: "Choose your IDE",
-				options: [
-					{ value: "cursor", label: "Cursor", hint: "recommended" },
-					{ value: "claude-code", label: "Claude Code" },
-					{ value: "open-code", label: "Open Code" },
-					{ value: "manual", label: "Manual (mcp.json)" },
-				],
-			});
-			if (isCancel(mcpClient)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
-			}
-			const { installMcpServers } = await import("./mcp.js");
-			await installMcpServers(mcpClient as string, true, true);
-		}
-	}
-
 	outro(outroText);
 	console.log();
 	process.exit(0);
@@ -1074,7 +1046,6 @@ export const init = new Command("init")
 	.option("--tsconfig <tsconfig>", "The path to the tsconfig file.")
 	.option("--skip-db", "Skip the database setup.")
 	.option("--skip-plugins", "Skip the plugins setup.")
-	.option("--skip-mcp", "Skip the MCP installation prompt.")
 	.option(
 		"--package-manager <package-manager>",
 		"The package manager you want to use.",
