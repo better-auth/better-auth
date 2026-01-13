@@ -13,6 +13,8 @@ export type {
 	BetterAuthAdvancedOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
+	BetterAuthRateLimitRule,
+	BetterAuthRateLimitStorage,
 	GenerateIdFn,
 	StoreIdentifierOption,
 } from "./init-options";

@@ -107,20 +107,21 @@ await authClient.oneTap({
 
 ### Client Options
 
-- **clientId**: The client ID for your Google One Tap API.
-- **autoSelect**: Automatically select the account if the user is already signed in. Default is false.
-- **context**: The context in which the One Tap API should be used (e.g., "signin"). Default is "signin".
-- **cancelOnTapOutside**: Cancel the One Tap popup when the user taps outside it. Default is true.
-- additionalOptions: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
-- **promptOptions**: Configuration for the prompt behavior and exponential backoff:
-- **baseDelay**: Base delay in milliseconds for retries. Default is 1000.
-- **maxAttempts**: Maximum number of prompt attempts before invoking the onPromptNotification callback. Default is 5.
-- **fedCM**: Whether to enable [Federated Credential Management](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (FedCM) support. Default is true.
+- `clientId`: The client ID for your Google One Tap API.
+- `autoSelect`: Automatically select the account if the user is already signed in. Default is false.
+- `cancelOnTapOutside`: Cancel the One Tap popup when the user taps outside it. To use this option, disable `promptOptions.fedCM`. Default is true.
+- `uxMode`: The mode to use for the Google One Tap flow. Can be "popup" or "redirect". Default is "popup".
+- `context`: The context in which the One Tap API should be used. Can be "signin", "signup", or "use". Default is "signin".
+- `additionalOptions`: Extra options to pass to Google's initialize method as per the [Google Identity Services docs](https://developers.google.com/identity/gsi/web/reference/js-reference#google.accounts.id.prompt).
+- `promptOptions`: Configuration for the prompt behavior and exponential backoff:
+  - `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
+  - `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.
+  - `fedCM`: Whether to enable [Federated Credential Management](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (FedCM) support. Default is true.
 
 ### Server Options
 
-- **disableSignUp**:  Disable the sign-up option, allowing only existing users to sign in. Default is `false`.
-- **ClientId**: Optionally, pass a client ID here if it is not provided in your social provider configuration.
+- `disableSignUp`: Disable the sign-up option, allowing only existing users to sign in. Default is false.
+- `clientId`: Optionally, pass a client ID here if it is not provided in your social provider configuration.
 
 ### Authorized JavaScript origins
 Ensure you have configured the Authorized JavaScript origins (e.g., http://localhost:3000, https://example.com) for your Client ID in the Google Cloud Console. This is a required step for the Google One Tap API, and it will not function correctly unless your origins are correctly set.
