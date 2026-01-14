@@ -275,7 +275,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			});
 			if (!member) {
 				throw APIError.from(
-					"FORBIDDEN",
+					"UNAUTHORIZED",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
