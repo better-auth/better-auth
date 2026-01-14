@@ -443,7 +443,7 @@ export function organization<
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): DefaultOrganizationPlugin<O>;
-export function organization<O extends OrganizationOptions>(options?: O): any {
+export function organization<O extends OrganizationOptions>(options?: O) {
 	const opts = (options || {}) as O;
 	let endpoints = {
 		/**
