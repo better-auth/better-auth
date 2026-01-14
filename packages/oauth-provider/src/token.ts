@@ -322,7 +322,7 @@ async function checkResource(
 	opts: OAuthOptions<Scope[]>,
 	scopes: string[],
 ) {
-	let resource: string | string[] | undefined = ctx.body.resource;
+	const resource: string | string[] | undefined = ctx.body.resource;
 	const audience =
 		typeof resource === "string"
 			? [resource]

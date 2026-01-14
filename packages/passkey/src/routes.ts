@@ -3,7 +3,6 @@ import { base64 } from "@better-auth/utils/base64";
 import type {
 	AuthenticationResponseJSON,
 	AuthenticatorTransportFuture,
-	PublicKeyCredentialCreationOptionsJSON,
 } from "@simplewebauthn/server";
 import {
 	generateAuthenticationOptions,
@@ -186,8 +185,7 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
-			let options: PublicKeyCredentialCreationOptionsJSON;
-			options = await generateRegistrationOptions({
+			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
 				rpID: getRpID(opts, ctx.context.options.baseURL),
 				userID,

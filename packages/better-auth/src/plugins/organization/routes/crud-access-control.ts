@@ -31,7 +31,7 @@ const getAdditionalFields = <
 	options: O,
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
-	let additionalFields =
+	const additionalFields =
 		options?.schema?.organizationRole?.additionalFields || {};
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
@@ -739,7 +739,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -934,7 +934,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				});
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -970,12 +970,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				...additionalFields
 			} = ctx.body.data;
 
-			let updateData: Partial<OrganizationRole> = {
+			const updateData: Partial<OrganizationRole> = {
 				...additionalFields,
 			};
 
 			if (ctx.body.data.permission) {
-				let newPermission = ctx.body.data.permission;
+				const newPermission = ctx.body.data.permission;
 
 				await checkForInvalidResources({ ac, ctx, permission: newPermission });
 

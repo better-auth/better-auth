@@ -666,7 +666,7 @@ describe("view backup codes", async () => {
 		});
 	let { headers } = await signInWithTestUser();
 
-	let session = await auth.api.getSession({ headers });
+	const session = await auth.api.getSession({ headers });
 	const userId = session?.user.id!;
 
 	const client = createAuthClient({
