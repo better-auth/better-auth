@@ -1,4 +1,4 @@
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { beforeEach, describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 

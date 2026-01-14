@@ -3,6 +3,11 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import {
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "better-auth/cookies";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -180,6 +185,33 @@ export function getCookie(cookie: string) {
 	return toSend;
 }
 
+function getOAuthStateValue(
+	cookieJson: string | null,
+	cookiePrefix: string | string[],
+): string | null {
+	if (!cookieJson) return null;
+
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookieJson);
+	if (!parsed) return null;
+
+	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+
+	for (const prefix of prefixes) {
+		// cookie strategy uses: <prefix>.oauth_state
+		const candidates = [
+			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
+			`${prefix}.oauth_state`,
+		];
+
+		for (const name of candidates) {
+			const value = parsed?.[name]?.value;
+			if (value) return value;
+		}
+	}
+
+	return null;
+}
+
 function getOrigin(scheme: string) {
 	const schemeURI = Linking.createURL("", { scheme });
 	return schemeURI;
@@ -258,9 +290,7 @@ export function hasBetterAuthCookies(
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
 		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		const nameWithoutSecure = stripSecureCookiePrefix(name);
 
 		// Check against all provided prefixes
 		for (const prefix of prefixes) {
@@ -419,7 +449,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const storedCookieJson = await storage.getItem(cookieName);
+							const oauthStateValue = getOAuthStateValue(
+								storedCookieJson,
+								cookiePrefix,
+							);
+							const params = new URLSearchParams({
+								authorizationURL: signInURL,
+							});
+							if (oauthStateValue) {
+								params.append("oauthState", oauthStateValue);
+							}
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
 							const result = await Browser.openAuthSessionAsync(
 								proxyURL,
 								to,

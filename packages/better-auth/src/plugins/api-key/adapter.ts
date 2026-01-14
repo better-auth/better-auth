@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
