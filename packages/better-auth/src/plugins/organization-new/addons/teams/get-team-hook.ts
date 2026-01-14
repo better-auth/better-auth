@@ -1,23 +1,13 @@
-import type { GenericEndpointContext } from "@better-auth/core";
-import type {
-	AddonContext,
-	OrganizationHooks,
-	ResolvedOrganizationOptions,
-} from "../types";
+import type { ResolvedTeamsOptions, TeamHooks } from "./types";
 
 type HookOptions =
-	| "CreateOrganization"
-	| "UpdateOrganization"
-	| "DeleteOrganization"
-	| "AddMember"
-	| "RemoveMember"
-	| "UpdateMemberRole"
-	| "CreateInvitation"
-	| "AcceptInvitation"
-	| "RejectInvitation"
-	| "CancelInvitation";
+	| "CreateTeam"
+	| "UpdateTeam"
+	| "DeleteTeam"
+	| "AddTeamMember"
+	| "RemoveTeamMember";
 
-type Hooks = NonNullable<OrganizationHooks>;
+type Hooks = NonNullable<TeamHooks>;
 
 type AwaitedResponse<T> = T extends Promise<infer R> ? R : T;
 
@@ -35,7 +25,7 @@ type InferHookResponse<T> =
  */
 export const getHook = <H extends HookOptions>(
 	hook: H,
-	options: ResolvedOrganizationOptions,
+	options: ResolvedTeamsOptions,
 ) => {
 	type Before = NonNullable<Hooks[`before${H}`]>;
 	type After = NonNullable<Hooks[`after${H}`]>;
@@ -48,24 +38,21 @@ export const getHook = <H extends HookOptions>(
 	};
 
 	return {
-		before: async (
-			data: Parameters<Before>[0],
-			ctx: GenericEndpointContext,
-		) => {
+		before: async (...data: Parameters<Before>) => {
 			const hookFn = options.hooks?.[`before${hook}`] as Before | undefined;
 			if (!hookFn) return null;
 			//@ts-expect-error - intentional
-			const response = await hookFn(data, ctx);
+			const response = await hookFn(...data);
 			if (response && typeof response === "object" && "data" in response) {
 				return response.data;
 			}
 			return null;
 		},
-		after: async (data: Parameters<After>[0], ctx: GenericEndpointContext) => {
+		after: async (...data: Parameters<After>) => {
 			const hookFn = options.hooks?.[`after${hook}`] as After | undefined;
 			if (!hookFn) return null;
 			//@ts-expect-error - intentional
-			await hookFn(data, ctx);
+			await hookFn(...data);
 		},
 	} as ReturnT;
 };

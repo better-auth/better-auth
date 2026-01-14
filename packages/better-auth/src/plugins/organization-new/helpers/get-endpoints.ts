@@ -1,14 +1,56 @@
-import type { AuthContext } from "@better-auth/core";
+import type { AuthContext, Prettify } from "@better-auth/core";
+import type { Endpoint } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import { shimContext } from "../../../utils/shim";
+import type { CreateOrganization } from "../routes/create-organizations";
 import { createOrganization } from "../routes/create-organizations";
-import type { ResolvedOrganizationOptions } from "../types";
+import type { Addon, ResolvedOrganizationOptions } from "../types";
+
+/** Extract endpoints from a single addon, returns empty object if no endpoints */
+type ExtractAddonEndpoints<A> = A extends {
+	endpoints: infer E extends Record<string, Endpoint>;
+}
+	? E
+	: {};
+
+/** Union to intersection helper */
+type UnionToIntersection<U> = (
+	U extends unknown
+		? (k: U) => void
+		: never
+) extends (k: infer I) => void
+	? I
+	: never;
+
+/** Merge all addon endpoints from the use array into a single intersection */
+type MergedAddonEndpoints<Addons extends readonly Addon[]> =
+	UnionToIntersection<ExtractAddonEndpoints<Addons[number]>>;
+
+/** Base endpoints provided by the organization plugin */
+type BaseEndpoints<O extends ResolvedOrganizationOptions> = {
+	createOrganization: CreateOrganization<O>;
+};
+
+/** Inferred endpoints type from options */
+export type InferOrganizationEndpoints<O extends ResolvedOrganizationOptions> =
+	Prettify<BaseEndpoints<O> & MergedAddonEndpoints<O["use"]>>;
 
 export const getEndpoints = <O extends ResolvedOrganizationOptions>(
 	options: O,
-) => {
+): InferOrganizationEndpoints<O> => {
+	const addonEndpoints = options.use.reduce(
+		(acc, addon) => {
+			return {
+				...acc,
+				...addon.endpoints,
+			};
+		},
+		{} satisfies Record<string, Endpoint>,
+	);
+
 	const endpoints = {
 		createOrganization: createOrganization(options),
+		...addonEndpoints,
 	};
 
 	/**
@@ -21,5 +63,5 @@ export const getEndpoints = <O extends ResolvedOrganizationOptions>(
 		getSession: async (context: AuthContext) => {
 			return await getSessionFromCtx(context as any);
 		},
-	});
+	}) as InferOrganizationEndpoints<O>;
 };
