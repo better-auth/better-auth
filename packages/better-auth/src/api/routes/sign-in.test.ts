@@ -100,7 +100,7 @@ describe("sign-in", async (it) => {
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
 	});
 
-	it("verification email will be sent if sendOnSignIn is undefined but sendVerificationEmail is set (defaults to true)", async () => {
+	it("verification email will not be sent if sendOnSignIn is undefined but sendVerificationEmail is set (defaults to false)", async () => {
 		const sendVerificationEmail = vi.fn();
 		const { auth, testUser } = await getTestInstance({
 			emailVerification: {
@@ -113,8 +113,6 @@ describe("sign-in", async (it) => {
 			},
 		});
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
-
 		await expect(
 			auth.api.signInEmail({
 				body: {
@@ -126,7 +124,7 @@ describe("sign-in", async (it) => {
 			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
 	});
 });
 
