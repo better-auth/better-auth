@@ -3,7 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import { useStore } from "./vue-store";
 
@@ -80,6 +81,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			isPending: boolean;
 			isRefetching: boolean;
 			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
 		}>
 	>;
 	function useSession<F extends (...args: any) => any>(
