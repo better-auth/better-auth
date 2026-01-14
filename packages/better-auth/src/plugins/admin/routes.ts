@@ -1103,7 +1103,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 				adminCookieProp.name,
 				`${ctx.context.session.session.token}:${dontRememberMeCookie || ""}`,
 				ctx.context.secret,
-				authCookies.sessionToken.options,
+				authCookies.sessionToken.attributes,
 			);
 			await setSessionCookie(
 				ctx,

@@ -95,7 +95,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						trustDeviceCookie.name,
 						`${token}!${session.token}`,
 						ctx.context.secret,
-						trustDeviceCookie.options,
+						trustDeviceCookie.attributes,
 					);
 					// delete the dont remember me cookie
 					expireCookie(ctx, ctx.context.authCookies.dontRememberToken);

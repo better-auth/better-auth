@@ -179,7 +179,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					if (!session || session.session.expiresAt < new Date()) {
 						expireCookie(ctx, {
 							name: multiSessionCookieName,
-							options: ctx.context.authCookies.sessionToken.options,
+							attributes: ctx.context.authCookies.sessionToken.attributes,
 						});
 						throw APIError.from(
 							"UNAUTHORIZED",
@@ -254,7 +254,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					await ctx.context.internalAdapter.deleteSession(sessionToken);
 					expireCookie(ctx, {
 						name: multiSessionCookieName,
-						options: ctx.context.authCookies.sessionToken.options,
+						attributes: ctx.context.authCookies.sessionToken.attributes,
 					});
 					const isActive = ctx.context.session?.session.token === sessionToken;
 					if (!isActive) return ctx.json({ status: true });
@@ -332,7 +332,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							cookieName,
 							sessionToken,
 							ctx.context.secret,
-							sessionCookieConfig.options,
+							sessionCookieConfig.attributes,
 						);
 					}),
 				},
@@ -360,7 +360,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 													SECURE_COOKIE_PREFIX.toLowerCase(),
 													SECURE_COOKIE_PREFIX,
 												),
-											options: ctx.context.authCookies.sessionToken.options,
+											attributes: ctx.context.authCookies.sessionToken.attributes,
 										});
 										return verifiedToken;
 									}

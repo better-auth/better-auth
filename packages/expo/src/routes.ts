@@ -21,7 +21,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 			ctx.setCookie(
 				oauthStateCookie.name,
 				oauthState,
-				oauthStateCookie.options,
+				oauthStateCookie.attributes,
 			);
 			return ctx.redirect(ctx.query.authorizationURL);
 		}
@@ -41,7 +41,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 			stateCookie.name,
 			state,
 			ctx.context.secret,
-			stateCookie.options,
+			stateCookie.attributes,
 		);
 		return ctx.redirect(ctx.query.authorizationURL);
 	},

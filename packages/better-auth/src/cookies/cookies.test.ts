@@ -168,10 +168,10 @@ describe("cookie configuration", () => {
 
 		const cookies = getCookies(options);
 
-		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionToken.attributes.secure).toBe(true);
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
-		expect(cookies.sessionData.options.sameSite).toBe("lax");
-		expect(cookies.sessionData.options.domain).toBe("example.com");
+		expect(cookies.sessionData.attributes.sameSite).toBe("lax");
+		expect(cookies.sessionData.attributes.domain).toBe("example.com");
 	});
 });
 
@@ -1207,11 +1207,11 @@ describe("parse cookies", () => {
 });
 
 describe("expireCookie", () => {
-	it("preserves options", () => {
+	it("preserves attributes", () => {
 		const setCookie = vi.fn();
 		expireCookie({ setCookie } as any, {
 			name: "test",
-			options: {
+			attributes: {
 				path: "/custom",
 				httpOnly: true,
 			},

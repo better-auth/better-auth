@@ -59,7 +59,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 		return {
 			name: `${secureCookiePrefix}${name}`,
-			options: {
+			attributes: {
 				secure: !!secureCookiePrefix,
 				sameSite: "lax",
 				path: "/",
@@ -90,7 +90,7 @@ export function getCookies(options: BetterAuthOptions) {
 	return {
 		sessionToken: {
 			name: sessionToken.name,
-			options: sessionToken.options,
+			attributes: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -98,15 +98,15 @@ export function getCookies(options: BetterAuthOptions) {
 		 */
 		sessionData: {
 			name: sessionData.name,
-			options: sessionData.options,
+			attributes: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
-			options: dontRememberToken.options,
+			attributes: dontRememberToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
-			options: accountData.options,
+			attributes: accountData.attributes,
 		},
 	};
 }
@@ -158,10 +158,10 @@ export async function setCookieCache(
 		};
 
 		const options = {
-			...ctx.context.authCookies.sessionData.options,
+			...ctx.context.authCookies.sessionData.attributes,
 			maxAge: dontRememberMe
 				? undefined
-				: ctx.context.authCookies.sessionData.options.maxAge,
+				: ctx.context.authCookies.sessionData.attributes.maxAge,
 		};
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
@@ -250,7 +250,7 @@ export async function setSessionCookie(
 	dontRememberMe =
 		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
 
-	const options = ctx.context.authCookies.sessionToken.options;
+	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
@@ -270,7 +270,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.name,
 			"true",
 			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.options,
+			ctx.context.authCookies.dontRememberToken.attributes,
 		);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
@@ -302,7 +302,7 @@ export function expireCookie(
 	cookie: BetterAuthCookie,
 ) {
 	ctx.setCookie(cookie.name, "", {
-		...cookie.options,
+		...cookie.attributes,
 		maxAge: 0,
 	});
 }
@@ -320,7 +320,7 @@ export function deleteSessionCookie(
 		//clean up the account data chunks
 		const accountStore = createAccountStore(
 			ctx.context.authCookies.accountData.name,
-			ctx.context.authCookies.accountData.options,
+			ctx.context.authCookies.accountData.attributes,
 			ctx,
 		);
 		const cleanCookies = accountStore.clean();
@@ -334,7 +334,7 @@ export function deleteSessionCookie(
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
-		ctx.context.authCookies.sessionData.options,
+		ctx.context.authCookies.sessionData.attributes,
 		ctx,
 	);
 	const cleanCookies = sessionStore.clean();

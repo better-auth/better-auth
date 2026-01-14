@@ -220,7 +220,7 @@ export const generatePasskeyRegistrationOptions = (
 				verificationToken,
 				ctx.context.secret,
 				{
-					...webAuthnCookie.options,
+					...webAuthnCookie.attributes,
 					maxAge: maxAgeInSeconds,
 				},
 			);
@@ -386,7 +386,7 @@ export const generatePasskeyAuthenticationOptions = (
 				verificationToken,
 				ctx.context.secret,
 				{
-					...webAuthnCookie.options,
+					...webAuthnCookie.attributes,
 					maxAge: maxAgeInSeconds,
 				},
 			);
