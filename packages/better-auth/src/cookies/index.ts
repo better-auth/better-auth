@@ -1,4 +1,5 @@
 import type {
+	BetterAuthCookie,
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
@@ -291,6 +292,21 @@ export async function setSessionCookie(
 			),
 		);
 	}
+}
+
+/**
+ * Expires a cookie by setting `maxAge: 0` while preserving its attributes
+ */
+export function expireCookie(
+	ctx: GenericEndpointContext,
+	cookie: BetterAuthCookie,
+) {
+	const cookieOptions =
+		"options" in cookie ? cookie.options : cookie.attributes;
+	ctx.setCookie(cookie.name, "", {
+		...cookieOptions,
+		maxAge: 0,
+	});
 }
 
 export function deleteSessionCookie(
