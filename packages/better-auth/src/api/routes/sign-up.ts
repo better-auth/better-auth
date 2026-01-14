@@ -291,8 +291,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					password: hash,
 				});
 				if (
-					ctx.context.options.emailVerification?.sendOnSignUp ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
+					ctx.context.options.emailVerification?.sendOnSignUp &&
+					ctx.context.options.emailVerification?.sendVerificationEmail
 				) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
@@ -305,18 +305,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
 
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								ctx.request,
-							),
-						);
-					}
+					await ctx.context.runInBackgroundOrAwait(
+						ctx.context.options.emailVerification.sendVerificationEmail(
+							{
+								user: createdUser,
+								url,
+								token,
+							},
+							ctx.request,
+						),
+					);
 				}
 
 				if (
