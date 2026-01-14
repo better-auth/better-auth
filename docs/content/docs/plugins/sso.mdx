@@ -1242,7 +1242,25 @@ type requestDomainVerification = {
 The plugin automatically creates the following SAML endpoints:
 
 - **SP Metadata**: `/api/auth/sso/saml2/sp/metadata?providerId={providerId}`
-- **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}`
+- **SAML Callback**: `/api/auth/sso/saml2/callback/{providerId}` (supports both GET and POST)
+
+### SAML Callback URL Configuration
+
+The SAML callback endpoint (`/api/auth/sso/saml2/callback/{providerId}`) handles both **SP-initiated** and **IdP-initiated** SSO flows:
+
+- **SP-initiated**: User clicks "Sign in with SSO" in your app → redirects to IdP → IdP POSTs SAMLResponse to callback
+- **IdP-initiated**: User clicks app icon in IdP dashboard (Okta, Azure AD, etc.) → IdP POSTs SAMLResponse to callback
+
+**Important**: The `callbackUrl` in your SAML configuration should point to your application's destination URL (e.g., `/dashboard`), **not** the callback route itself. Better Auth automatically handles the callback route and redirects users to your specified `callbackUrl` after successful authentication.
+
+```ts
+samlConfig: {
+  callbackUrl: "/dashboard", // Correct - points to your app destination
+  // callbackUrl: "/api/auth/sso/saml2/callback/my-provider" // Incorrect - don't point to callback route
+}
+```
+
+The callback route supports both GET and POST methods automatically, so you don't need to create any additional route handlers in your framework.
 
 ## Schema
 
@@ -1272,6 +1290,27 @@ The `ssoProvider` schema is extended as follows:
         { name: "domainVerified", type: "boolean", description: "A flag indicating whether the provider domain has been verified.", isRequired: false },
     ]}
 />
+
+### IdP-Initiated SAML SSO
+
+Better Auth supports **IdP-initiated SSO flows**, where users access your application directly from their Identity Provider dashboard (e.g., Okta, Azure AD, OneLogin). This is common in enterprise environments where IT admins prefer centralized app access.
+
+**How it works:**
+
+1. User clicks your app icon in the IdP dashboard
+2. IdP POSTs SAMLResponse to `/api/auth/sso/saml2/callback/{providerId}`
+3. Better Auth processes the assertion, creates a session, and redirects to your `callbackUrl`
+4. Browser follows the redirect with a GET request (handled automatically)
+
+**No additional configuration required** - the callback route automatically handles both GET and POST requests.
+
+<Callout type="info">
+If you previously created a manual GET handler for the SAML callback route as a workaround, you can remove it after upgrading. Better Auth now handles GET requests automatically.
+</Callout>
+
+<Callout type="info">
+**Security:** Better Auth validates all redirect URLs to prevent open redirect attacks. Only relative paths (e.g., `/dashboard`) and URLs matching your configured `trustedOrigins` are allowed. Malicious URLs like `https://evil.com` or protocol-relative URLs (`//evil.com`) are automatically blocked.
+</Callout>
 
 For a detailed guide on setting up SAML SSO with examples for Okta and testing with DummyIDP, see our [SAML SSO with Okta](/docs/guides/saml-sso-with-okta).
 

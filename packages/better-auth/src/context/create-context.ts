@@ -179,6 +179,8 @@ export async function createAuthContext(
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
+	const trustedOrigins = await getTrustedOrigins(options);
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
 		socialProviders: providers,
@@ -190,7 +192,7 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: await getTrustedOrigins(options),
+		trustedOrigins,
 		isTrustedOrigin(
 			url: string,
 			settings?: {
