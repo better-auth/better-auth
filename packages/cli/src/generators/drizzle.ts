@@ -196,12 +196,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
 
-		let indexes: Index[] = [];
+		const indexes: Index[] = [];
 
 		const assignIndexes = (indexes: Index[]): string => {
 			if (!indexes.length) return "";
 
-			let code: string[] = [`, (table) => [`];
+			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
 				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);

@@ -428,7 +428,7 @@ export const createTestSuite = <
 			};
 
 			const transformGeneratedModel = (data: Record<string, any>) => {
-				let newData = { ...data };
+				const newData = { ...data };
 				if (helpers.transformIdOutput) {
 					newData.id = helpers.transformIdOutput(newData.id);
 				}
@@ -515,7 +515,7 @@ export const createTestSuite = <
 				model: M,
 				count: Count = 1 as Count,
 			) => {
-				let res: any[] = [];
+				const res: any[] = [];
 				const a = wrapperAdapter();
 
 				for (let i = 0; i < count; i++) {
@@ -819,7 +819,7 @@ export const createTestSuite = <
 				);
 				const isFirstInGroup = testGroup && testGroup.testIndices[0] === i;
 
-				let shouldSkip =
+				const shouldSkip =
 					(allDisabled && options?.disableTests?.[testName] !== false) ||
 					(options?.disableTests?.[testName] ?? false);
 

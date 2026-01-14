@@ -36,7 +36,7 @@ export const initGetIdField = ({
 			options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-		let shouldGenerateId: boolean = (() => {
+		const shouldGenerateId: boolean = (() => {
 			if (disableIdGeneration) {
 				return false;
 			} else if (useNumberId && !forceAllowId) {
@@ -58,7 +58,7 @@ export const initGetIdField = ({
 				? {
 						defaultValue() {
 							if (disableIdGeneration) return undefined;
-							let generateId = options.advanced?.database?.generateId;
+							const generateId = options.advanced?.database?.generateId;
 							if (generateId === false || useNumberId) return undefined;
 							if (typeof generateId === "function") {
 								return generateId({

@@ -310,7 +310,7 @@ const getDefaultAuthClientConfig = async ({
 		}
 		return result;
 	}
-	let imports = groupImportVariables();
+	const imports = groupImportVariables();
 	let importString = "";
 	for (const import_ of imports) {
 		if (Array.isArray(import_.variables)) {
@@ -882,7 +882,7 @@ async function initAction(opts: any) {
 			authClientConfigPath = path.join(cwd, "auth-client.ts");
 			log.info(`Creating auth client config file: ${authClientConfigPath}`);
 			try {
-				let contents = await getDefaultAuthClientConfig({
+				const contents = await getDefaultAuthClientConfig({
 					auth_config_path: (
 						"./" + path.join(config_path.replace(cwd, ""))
 					).replace(".//", "./"),
@@ -963,7 +963,7 @@ async function initAction(opts: any) {
 					cancel(`✋ Operation cancelled.`);
 					process.exit(0);
 				}
-				let envs: string[] = [];
+				const envs: string[] = [];
 				if (isMissingSecret) {
 					envs.push("BETTER_AUTH_SECRET");
 				}
@@ -1095,7 +1095,7 @@ async function getPackageManager() {
 		hint: "not recommended",
 	});
 
-	let packageManager = await select({
+	const packageManager = await select({
 		message: "Choose a package manager",
 		options: packageManagerOptions,
 	});

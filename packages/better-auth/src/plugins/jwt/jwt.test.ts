@@ -166,7 +166,7 @@ describe("jwt", async () => {
 
 	for (const algorithm of algorithmsToTest) {
 		const expectedOutcome = algorithm.expectedOutcome;
-		for (let disablePrivateKeyEncryption of [false, true]) {
+		for (const disablePrivateKeyEncryption of [false, true]) {
 			const jwtOptions: JwtOptions = {
 				jwks: {
 					keyPairConfig: {

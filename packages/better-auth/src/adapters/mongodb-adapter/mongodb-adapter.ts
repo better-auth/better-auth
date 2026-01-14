@@ -315,7 +315,7 @@ export const mongodbAdapter = (
 							// For unique relationships, limit is ignored (as per JoinConfig type)
 							// For non-unique relationships, apply limit if specified
 							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;
@@ -425,7 +425,7 @@ export const mongodbAdapter = (
 								joinConfig.relation !== "one-to-one" &&
 								joinConfig.limit !== undefined;
 
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;

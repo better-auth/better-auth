@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getTestInstance } from "../test-utils/test-instance";
 
 describe("secondary storage - get returns JSON string", async () => {
-	let store = new Map<string, string>();
+	const store = new Map<string, string>();
 
 	const { client, signInWithTestUser } = await getTestInstance({
 		secondaryStorage: {
@@ -70,7 +70,7 @@ describe("secondary storage - get returns JSON string", async () => {
 });
 
 describe("secondary storage - get returns already-parsed object", async () => {
-	let store = new Map<string, any>();
+	const store = new Map<string, any>();
 
 	const { client, signInWithTestUser } = await getTestInstance({
 		secondaryStorage: {

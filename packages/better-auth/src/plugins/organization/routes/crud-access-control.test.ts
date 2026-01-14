@@ -113,7 +113,7 @@ describe("dynamic access control", async (it) => {
 			headers,
 		});
 		if (!member) throw new Error("Member not found");
-		let userHeaders = new Headers();
+		const userHeaders = new Headers();
 		await authClient.signIn.email({
 			email: normalUserDetails.email,
 			password: normalUserDetails.password,

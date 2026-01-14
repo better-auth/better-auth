@@ -254,7 +254,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								);
 								continue;
 							}
-							let jsonArray = [];
+							const jsonArray = [];
 							for (const value of attr.defaultValue) jsonArray.push(value);
 							fieldBuilder.attribute(
 								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
@@ -269,12 +269,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							typeof attr.defaultValue[0] === "string" &&
 							attr.type === "string[]"
 						) {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(JSON.stringify(value));
 							fieldBuilder.attribute(`default([${valueArray}])`);
 						} else if (typeof attr.defaultValue[0] === "number") {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(`${value}`);
 							fieldBuilder.attribute(`default([${valueArray}])`);

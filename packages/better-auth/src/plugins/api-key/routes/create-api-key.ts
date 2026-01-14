@@ -397,7 +397,7 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
-			let data: Omit<ApiKey, "id"> = {
+			const data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,

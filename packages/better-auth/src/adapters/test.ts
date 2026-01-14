@@ -98,7 +98,7 @@ function adapterTest(
 	const getUniqueEmail = (base: string) => `${testRunId}_${base}`;
 
 	//@ts-expect-error - intentionally omitting id
-	let user: {
+	const user: {
 		name: string;
 		email: string;
 		emailVerified: boolean;

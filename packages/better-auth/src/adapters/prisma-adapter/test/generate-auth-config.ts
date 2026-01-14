@@ -6,7 +6,7 @@ export const generateAuthConfigFile = async (_options: BetterAuthOptions) => {
 	const options = { ..._options };
 	// biome-ignore lint/performance/noDelete: perf doesn't matter here.
 	delete options.database;
-	let code = `import { betterAuth } from "../../../auth";
+	const code = `import { betterAuth } from "../../../auth";
 import { prismaAdapter } from "../prisma-adapter";		
 import { PrismaClient } from "@prisma/client";
 const db = new PrismaClient();

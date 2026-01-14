@@ -49,11 +49,11 @@ export function useStore<SomeStore extends Store>(
 	store: SomeStore,
 	options: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
-	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
+	const snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 
 	const { keys, deps = [store, keys] } = options;
 
-	let subscribe = useCallback((onChange: () => void) => {
+	const subscribe = useCallback((onChange: () => void) => {
 		const emitChange = (value: StoreValue<SomeStore>) => {
 			if (snapshotRef.current === value) return;
 			snapshotRef.current = value;
@@ -67,7 +67,7 @@ export function useStore<SomeStore extends Store>(
 		return store.listen(emitChange);
 	}, deps);
 
-	let get = () => snapshotRef.current as StoreValue<SomeStore>;
+	const get = () => snapshotRef.current as StoreValue<SomeStore>;
 
 	return useSyncExternalStore(subscribe, get, get);
 }

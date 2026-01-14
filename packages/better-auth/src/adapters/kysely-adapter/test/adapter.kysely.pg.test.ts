@@ -22,7 +22,7 @@ const pgDB = new Pool({
 	connectionString: "postgres://user:password@localhost:5433/better_auth",
 });
 
-let kyselyDB = new Kysely({
+const kyselyDB = new Kysely({
 	dialect: new PostgresDialect({ pool: pgDB }),
 });
 

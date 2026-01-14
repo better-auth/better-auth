@@ -115,7 +115,7 @@ export async function signJWT(
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
-	let privateWebKey = privateKeyEncryptionEnabled
+	const privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: JSON.parse(key.privateKey),

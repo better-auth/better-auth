@@ -67,7 +67,7 @@ export const getAllBlogPosts = cache(async (): Promise<BlogPost[]> => {
 });
 
 export function formatBlogDate(date: Date) {
-	let d = new Date(date);
+	const d = new Date(date);
 	return d.toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",

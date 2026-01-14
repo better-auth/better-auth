@@ -144,7 +144,7 @@ export const APIMethod = ({
 	 */
 	forceAsParam?: boolean;
 }) => {
-	let { props, functionName, code_prefix, code_suffix } = parseCode(children);
+	const { props, functionName, code_prefix, code_suffix } = parseCode(children);
 
 	const authClientMethodPath = pathToDotNotation(path);
 
@@ -213,7 +213,7 @@ export const APIMethod = ({
 		return serverTabContent;
 	}
 
-	let pathId = path.replaceAll("/", "-");
+	const pathId = path.replaceAll("/", "-");
 
 	return (
 		<>
@@ -454,7 +454,7 @@ function parseCode(children: JSX.Element) {
 		.join("")
 		.split("\n");
 
-	let props: Property[] = [];
+	const props: Property[] = [];
 
 	let functionName: string = "";
 	let currentJSDocDescription: string = "";
@@ -463,9 +463,9 @@ function parseCode(children: JSX.Element) {
 	let hasAlreadyDefinedApiMethodType = false;
 	let isServerOnly_ = false;
 	let isClientOnly_ = false;
-	let nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
-	let serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
-	let clientOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	const nestPath: string[] = []; // str arr segmented-path, eg: ["data", "metadata", "something"]
+	const serverOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
+	const clientOnlyPaths: string[] = []; // str arr full-path, eg: ["data.metadata.something"]
 	let isNullable = false;
 
 	let code_prefix = "";

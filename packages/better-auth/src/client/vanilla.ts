@@ -51,7 +51,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		atomListeners,
 		$store,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}

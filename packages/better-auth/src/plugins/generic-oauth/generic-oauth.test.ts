@@ -109,7 +109,7 @@ describe("oauth2", async () => {
 	}
 
 	it("should redirect to the provider and handle the response", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -141,7 +141,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		let headers = new Headers();
+		const headers = new Headers();
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -183,7 +183,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -220,7 +220,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 500;
 		});
 
-		let headers = new Headers();
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2(
 			{
 				providerId: "test",

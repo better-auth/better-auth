@@ -102,7 +102,7 @@ async function validateJwtAccessToken(
 	}
 
 	// Validate JWT against its session if it exists
-	let sessionId = jwtPayload.sid;
+	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",

@@ -241,7 +241,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
+		const toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -419,7 +419,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				let builder = db.schema.alterTable(table.table);
+				const builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
 					const index = db.schema
@@ -428,7 +428,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 					migrations.push(index);
 				}
 
-				let built = builder.addColumn(fieldName, type, (col) => {
+				const built = builder.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
@@ -461,7 +461,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
-	let toBeIndexed: CreateIndexBuilder[] = [];
+	const toBeIndexed: CreateIndexBuilder[] = [];
 
 	if (config.advanced?.database?.useNumberId) {
 		logger.warn(
@@ -531,7 +531,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				});
 
 				if (field.index) {
-					let builder = db.schema
+					const builder = db.schema
 						.createIndex(
 							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
 						)

@@ -159,7 +159,7 @@ describe("phone auth flow", async () => {
 		expect(session?.session.token).toBeDefined();
 	});
 
-	let headers = new Headers();
+	const headers = new Headers();
 	it("should go through send-verify and sign-in the user", async () => {
 		await client.phoneNumber.sendOtp({
 			phoneNumber: "+251911121314",

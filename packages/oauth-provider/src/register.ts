@@ -165,7 +165,7 @@ export async function createOAuthClientEndpoint(
 				session: session?.session,
 			})
 		: undefined;
-	let schema = oauthToSchema({
+	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,

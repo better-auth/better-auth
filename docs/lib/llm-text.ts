@@ -95,7 +95,7 @@ function parseTypeBody(typeBody: string): PropertyDefinition[] {
 			const [, name, optional, type, , exampleValue, , description] = propMatch;
 
 			let cleanType = type.trim();
-			let cleanExampleValue = exampleValue || "";
+			const cleanExampleValue = exampleValue || "";
 
 			cleanType = cleanType.replace(/,$/, "");
 

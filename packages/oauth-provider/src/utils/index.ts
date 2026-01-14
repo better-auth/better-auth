@@ -415,7 +415,7 @@ export function parsePrompt(prompt: string) {
  * @param prompt - the prompt value to delete
  */
 export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	let prompts = query.get("prompt")?.split(" ");
+	const prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);

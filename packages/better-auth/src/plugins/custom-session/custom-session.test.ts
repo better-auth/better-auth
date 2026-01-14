@@ -82,7 +82,7 @@ describe("Custom Session Plugin Tests", async () => {
 	});
 
 	it("should return the custom session for multi-session", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const testUser = {
 			email: "second-email@test.com",
 			password: "password",

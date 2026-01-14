@@ -18,8 +18,8 @@ import { getMigrations } from "./db";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
-let server = new OAuth2Server();
-let port = 8005;
+const server = new OAuth2Server();
+const port = 8005;
 
 const mswServer = setupServer();
 let shouldUseUpdatedProfile = false;
