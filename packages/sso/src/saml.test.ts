@@ -1152,7 +1152,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		let samlRedirectUrl = new URL(signInResponse?.url);
+		const samlRedirectUrl = new URL(signInResponse?.url);
 		const callbackResponse = await auth.api.callbackSSOSAML({
 			method: "POST",
 			body: {
@@ -1297,7 +1297,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 
-		let samlRedirectUrl = new URL(signInResponse?.url);
+		const samlRedirectUrl = new URL(signInResponse?.url);
 		const callbackResponse = await auth.api.callbackSSOSAML({
 			method: "POST",
 			body: {
