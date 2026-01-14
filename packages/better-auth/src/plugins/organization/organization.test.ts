@@ -1270,7 +1270,7 @@ describe("organization", async (it) => {
 });
 
 describe("invitation expiration and filtering", async () => {
-	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance({
+	const { auth, signInWithUser } = await getTestInstance({
 		plugins: [
 			organization({
 				invitationExpiresIn: 1, // 1 second expiration for testing
