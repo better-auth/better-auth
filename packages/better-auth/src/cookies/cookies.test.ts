@@ -1207,23 +1207,7 @@ describe("parse cookies", () => {
 });
 
 describe("expireCookie", () => {
-	it("preserves attributes with options format", () => {
-		const setCookie = vi.fn();
-		expireCookie({ setCookie } as any, {
-			name: "test",
-			options: {
-				path: "/custom",
-				httpOnly: true,
-			},
-		});
-		expect(setCookie).toHaveBeenCalledWith("test", "", {
-			path: "/custom",
-			httpOnly: true,
-			maxAge: 0,
-		});
-	});
-
-	it("preserves attributes with attributes format", () => {
+	it("preserves options", () => {
 		const setCookie = vi.fn();
 		expireCookie({ setCookie } as any, {
 			name: "test",
