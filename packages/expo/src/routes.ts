@@ -8,10 +8,24 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 		method: "GET",
 		query: z.object({
 			authorizationURL: z.string(),
+			oauthState: z.string().optional(),
 		}),
 		metadata: HIDE_METADATA,
 	},
 	async (ctx) => {
+		const { oauthState } = ctx.query;
+		if (oauthState) {
+			const oauthStateCookie = ctx.context.createAuthCookie("oauth_state", {
+				maxAge: 10 * 60 * 1000, // 10 minutes
+			});
+			ctx.setCookie(
+				oauthStateCookie.name,
+				oauthState,
+				oauthStateCookie.attributes,
+			);
+			return ctx.redirect(ctx.query.authorizationURL);
+		}
+
 		const { authorizationURL } = ctx.query;
 		const url = new URL(authorizationURL);
 		const state = url.searchParams.get("state");
