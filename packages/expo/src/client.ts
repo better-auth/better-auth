@@ -3,6 +3,10 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import {
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "better-auth/cookies";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -196,9 +200,9 @@ function getOAuthStateValue(
 	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
 
 	for (const prefix of prefixes) {
-		// cookie strategy uses: <prefix>.oauth_state (secure cookies may be __Secure-*)
+		// cookie strategy uses: <prefix>.oauth_state
 		const candidates = [
-			`__Secure-${prefix}.oauth_state`,
+			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
 			`${prefix}.oauth_state`,
 		];
 
@@ -289,9 +293,7 @@ export function hasBetterAuthCookies(
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
 		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		const nameWithoutSecure = stripSecureCookiePrefix(name);
 
 		// Check against all provided prefixes
 		for (const prefix of prefixes) {
