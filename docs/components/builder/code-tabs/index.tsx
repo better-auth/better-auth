@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { optionsAtom } from "../store";
 import { CodeEditor } from "./code-editor";
 import { resolveNextJSFiles } from "./frameworks/nextjs";
-import { resolveNuxtJSFiles } from "./frameworks/nuxtjs";
+import { resolveNuxtFiles } from "./frameworks/nuxt";
 import { TabBar } from "./tab-bar";
 
 export default function CodeTabs({ framework }: { framework: string }) {
@@ -15,7 +15,7 @@ export default function CodeTabs({ framework }: { framework: string }) {
 			case "nextjs":
 				return resolveNextJSFiles(options);
 			case "nuxt":
-				return resolveNuxtJSFiles(options);
+				return resolveNuxtFiles(options);
 			case "svelte-kit":
 				break;
 			case "solid-start":

@@ -1,7 +1,7 @@
 import { socialProviders } from "../../social-provider";
 import type { SignInBoxOptions } from "../../store";
 
-export function resolveNuxtJSFiles(options: SignInBoxOptions) {
+export function resolveNuxtFiles(options: SignInBoxOptions) {
 	const files = [
 		{
 			id: "1",
