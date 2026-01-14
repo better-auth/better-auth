@@ -1,5 +1,5 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
 	getCookieCache,
 	getCookies,
@@ -96,6 +96,43 @@ describe("cookies", async () => {
 				},
 			},
 		);
+	});
+
+	describe("production environment", () => {
+		afterEach(() => {
+			vi.unstubAllEnvs();
+			vi.resetModules();
+		});
+
+		it("should use secure cookies when baseURL is not configured", async () => {
+			// Set NODE_ENV to production
+			vi.stubEnv("NODE_ENV", "production");
+
+			// Reset modules to reload with new NODE_ENV
+			vi.resetModules();
+
+			// Re-import modules after NODE_ENV change
+			const { getTestInstance: getTestInstanceReloaded } = await import(
+				"../test-utils/test-instance"
+			);
+
+			const { client, testUser } = await getTestInstanceReloaded({
+				baseURL: undefined,
+			});
+
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onResponse(context) {
+						const setCookie = context.response.headers.get("set-cookie");
+						expect(setCookie).toContain("Secure");
+					},
+				},
+			);
+		});
 	});
 });
 
