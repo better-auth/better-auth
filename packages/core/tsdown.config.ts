@@ -14,9 +14,11 @@ export default defineConfig({
 		"./src/oauth2/index.ts",
 		"./src/api/index.ts",
 		"./src/social-providers/index.ts",
-		"./src/utils/index.ts",
+		"./src/utils/*.ts",
+		"!./src/utils/*.test.ts",
 		"./src/error/index.ts",
 	],
 	external: ["@better-auth/core/async_hooks"],
+	unbundle: true,
 	clean: true,
 });

@@ -373,6 +373,10 @@ export const linkSocialAccount = createAuthEndpoint(
 			scopes: c.body.scopes,
 		});
 
+		if (!c.body.disableRedirect) {
+			c.setHeader("Location", url.toString());
+		}
+
 		return c.json({
 			url: url.toString(),
 			redirect: !c.body.disableRedirect,
@@ -534,7 +538,7 @@ export const getAccessToken = createAuthEndpoint(
 				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 			account = accounts.find((acc) =>
 				accountId
-					? acc.id === accountId && acc.providerId === providerId
+					? acc.accountId === accountId && acc.providerId === providerId
 					: acc.providerId === providerId,
 			);
 		}
@@ -712,7 +716,7 @@ export const refreshToken = createAuthEndpoint(
 				await ctx.context.internalAdapter.findAccounts(resolvedUserId);
 			account = accounts.find((acc) =>
 				accountId
-					? acc.id === accountId && acc.providerId === providerId
+					? acc.accountId === accountId && acc.providerId === providerId
 					: acc.providerId === providerId,
 			);
 		}
