@@ -308,28 +308,66 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
-	it("should allow override cookie prefix", async () => {
-		const { client, testUser, cookieSetter } = await getTestInstance({
-			advanced: {
-				useSecureCookies: true,
-				cookiePrefix: "test-prefix",
-			},
-		});
+	it.each([
+		{
+			config: {},
+			cookie: "better-auth.session_token=token-123",
+			expected: "token-123",
+			desc: "default prefix, default name, '.' separator",
+		},
+		{
+			config: {},
+			cookie: "better-auth-session_token=token-123",
+			expected: "token-123",
+			desc: "default prefix, default name, '-' separator",
+		},
+		{
+			config: { cookiePrefix: "myprefix" },
+			cookie: "myprefix.session_token=token-123",
+			expected: "token-123",
+			desc: "custom prefix, default name, '.' separator",
+		},
+		{
+			config: { cookiePrefix: "myprefix" },
+			cookie: "myprefix-session_token=token-123",
+			expected: "token-123",
+			desc: "custom prefix, default name, '-' separator",
+		},
+		{
+			config: { cookieName: "my_token" },
+			cookie: "better-auth.my_token=token-123",
+			expected: "token-123",
+			desc: "default prefix, custom name, '.' separator",
+		},
+		{
+			config: { cookieName: "my_token" },
+			cookie: "better-auth-my_token=token-123",
+			expected: "token-123",
+			desc: "default prefix, custom name, '-' separator",
+		},
+		{
+			config: { cookiePrefix: "myprefix", cookieName: "my_token" },
+			cookie: "myprefix.my_token=token-123",
+			expected: "token-123",
+			desc: "custom prefix, custom name, '.' separator",
+		},
+		{
+			config: { cookiePrefix: "myprefix", cookieName: "my_token" },
+			cookie: "myprefix-my_token=token-123",
+			expected: "token-123",
+			desc: "custom prefix, custom name, '-' separator",
+		},
+	])("should find cookie: $desc", ({ config, cookie, expected }) => {
 		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{ onSuccess: cookieSetter(headers) },
-		);
+		headers.set("cookie", cookie);
+
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
 		});
-		const cookies = getSessionCookie(request, {
-			cookiePrefix: "test-prefix",
-		});
-		expect(cookies).not.toBeNull();
+
+		const result = getSessionCookie(request, config);
+
+		expect(result).toBe(expected);
 	});
 
 	it("should allow override cookie name", async () => {
