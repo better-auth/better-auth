@@ -370,6 +370,30 @@ describe("getSessionCookie", async () => {
 		expect(result).toBe(expected);
 	});
 
+	it("should allow override cookie prefix with secure cookies", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance({
+			advanced: {
+				useSecureCookies: true,
+				cookiePrefix: "test-prefix",
+			},
+		});
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{ onSuccess: cookieSetter(headers) },
+		);
+		const request = new Request("https://example.com/api/auth/session", {
+			headers,
+		});
+		const cookies = getSessionCookie(request, {
+			cookiePrefix: "test-prefix",
+		});
+		expect(cookies).not.toBeNull();
+	});
+
 	it("should allow override cookie name", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
