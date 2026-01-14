@@ -59,8 +59,6 @@ describe("sign-in", async (it) => {
 			},
 		});
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
-
 		await expect(
 			auth.api.signInEmail({
 				body: {
@@ -72,7 +70,7 @@ describe("sign-in", async (it) => {
 			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(2);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 
 	it("verification email will not be sent if sendOnSignIn is disabled", async () => {
@@ -88,8 +86,6 @@ describe("sign-in", async (it) => {
 			},
 		});
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
-
 		await expect(
 			auth.api.signInEmail({
 				body: {
@@ -101,7 +97,7 @@ describe("sign-in", async (it) => {
 			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
 		);
 
-		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
 	});
 });
 

@@ -378,3 +378,217 @@ describe("sign-up with form data", async (it) => {
 		expect(response.status).toBe(200);
 	});
 });
+
+describe("sign-up email verification logic", async (it) => {
+	it("should send verification email when both sendOnSignUp and sendVerificationEmail are set", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify1@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(1);
+		expect(mockSendVerificationEmail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({
+					email: "verify1@test.com",
+					name: "Test User",
+				}),
+				token: expect.any(String),
+				url: expect.stringContaining("/verify-email"),
+			}),
+			undefined,
+		);
+	});
+
+	it("should NOT send verification email when only sendOnSignUp is set (without sendVerificationEmail)", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					// sendVerificationEmail is not set
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify2@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should NOT send verification email when only sendVerificationEmail is set (without sendOnSignUp)", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify3@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should NOT send verification email when neither sendOnSignUp nor sendVerificationEmail are set", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					// Both are not set or false
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify4@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should NOT send verification email when sendOnSignUp is false even if sendVerificationEmail is set", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify5@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should create user with emailVerified false when verification email is sent", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth, db } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify6@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		const users = await db.findMany({ model: "user" });
+		const user = users.find((u: any) => u.email === "verify6@test.com");
+		expect(user).toBeDefined();
+		expect(user?.emailVerified).toBe(false);
+	});
+
+	it("should include callbackURL in verification email URL when provided", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify7@test.com",
+				password: "password",
+				name: "Test User",
+				callbackURL: "/dashboard",
+			},
+		});
+
+		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(1);
+		const callArgs = mockSendVerificationEmail.mock.calls[0][0];
+		expect(callArgs.url).toContain("callbackURL=%2Fdashboard");
+	});
+});
