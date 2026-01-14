@@ -486,7 +486,7 @@ export const getAccessToken = createAuthEndpoint(
 											type: "string",
 										},
 										accessTokenExpiresAt: {
-											type: "date",
+												type: "string",
 											format: "date-time",
 										},
 									},
