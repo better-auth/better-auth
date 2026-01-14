@@ -417,22 +417,38 @@ Create a new file or route in your framework's designated catch-all route handle
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
+    import { auth } from '@/lib/auth'
     import { createFileRoute } from '@tanstack/react-router'
-    import { auth } from '@/lib/auth/auth'
 
     export const Route = createFileRoute('/api/auth/$')({
-    server: {
-        handlers: {
-            GET: async ({ request }:{ request: Request }) => {
-                return await auth.handler(request)
-            },
-            POST: async ({ request }:{ request: Request }) => {
-                return await auth.handler(request)
+        server: {
+            handlers: {
+                GET: async ({ request }:{ request: Request }) => {
+                    return await auth.handler(request)
+                },
+                POST: async ({ request }:{ request: Request }) => {
+                    return await auth.handler(request)
+                },
             },
         },
-    },
     })
     ```
+
+    <Callout type="info">
+    When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
+
+    ```ts title="src/lib/auth.ts"
+    import { betterAuth } from "better-auth";
+    import { tanstackStartCookies } from "better-auth/tanstack-start";
+
+    export const auth = betterAuth({
+        //...your config
+        plugins: [tanstackStartCookies()] // make sure this is the last plugin in the array
+    })
+    ```
+
+    Now, when you call functions that set cookies, they will be automatically set using TanStack Start's cookie handling system.
+    </Callout>
     </Tab>
     <Tab value="expo">
     ```ts title="app/api/auth/[...all]+api.ts"
