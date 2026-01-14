@@ -419,7 +419,9 @@ describe("jwt - remote signing", async () => {
 					}),
 				],
 			}),
-		).toThrowError("jwks_config");
+		).toThrowError(
+			"options.jwks.remoteUrl must be set when using options.jwt.sign",
+		);
 	});
 });
 
@@ -435,7 +437,9 @@ describe("jwt - remote url", async () => {
 					}),
 				],
 			}),
-		).toThrowError("jwks_config");
+		).toThrowError(
+			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
+		);
 	});
 
 	it("should accept remoteUrl with alg specified", async () => {
