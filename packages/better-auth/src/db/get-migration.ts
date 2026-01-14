@@ -118,7 +118,18 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
+export interface GetMigrationsOptions {
+	/**
+	 * Force schema generation by treating the database as empty.
+	 * When true, all tables will be included in migrations as if they don't exist.
+	 */
+	force?: boolean;
+}
+
+export async function getMigrations(
+	config: BetterAuthOptions,
+	options?: GetMigrationsOptions,
+) {
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
 
@@ -213,8 +224,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 		order: number;
 	}[] = [];
 
+	const force = options?.force === true;
+
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
-		const table = tableMetadata.find((t) => t.name === key);
+		// When force is true, treat all tables as not existing to regenerate everything
+		const table = force ? undefined : tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
 			const tableData = {

@@ -4,6 +4,7 @@ import * as path from "node:path";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { getMigrations } from "better-auth/db";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
@@ -976,5 +977,64 @@ describe("Prisma v7 compatibility", () => {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
 		}
+	});
+});
+
+describe("generate with force flag", () => {
+	it("should generate kysely schema with force flag even when tables exist", async () => {
+		const db = new Database(":memory:");
+
+		// First, run migrations to create tables
+		const { runMigrations } = await getMigrations({ database: db });
+		await runMigrations();
+
+		// Without force - should return empty schema
+		const schemaWithoutForce = await generateKyselySchema({
+			file: "test.sql",
+			options: {
+				database: db,
+			},
+			adapter: {} as any,
+		});
+		expect(schemaWithoutForce.code).toBe("");
+
+		// With force - should return full schema
+		const schemaWithForce = await generateKyselySchema({
+			file: "test.sql",
+			options: {
+				database: db,
+			},
+			adapter: {} as any,
+			force: true,
+		});
+		expect(schemaWithForce.code).not.toBe("");
+		expect(schemaWithForce.code.toLowerCase()).toContain("create table");
+		expect(schemaWithForce.code).toContain("user");
+		expect(schemaWithForce.code).toContain("session");
+	});
+
+	it("should regenerate schema after deleting migration files with force flag", async () => {
+		const db = new Database(":memory:");
+
+		// First, generate and run migrations
+		const { runMigrations } = await getMigrations({ database: db });
+		await runMigrations();
+
+		// Simulate the scenario from issue #3980:
+		// User deleted migration files and wants to regenerate them
+		// Without force, they get "no migrations needed"
+
+		// With force flag - should regenerate full schema
+		const schema = await generateKyselySchema({
+			file: "test.sql",
+			options: {
+				database: db,
+			},
+			adapter: {} as any,
+			force: true,
+		});
+
+		expect(schema.code.toLowerCase()).toContain("create table");
+		expect(schema.fileName).toContain(".sql");
 	});
 });

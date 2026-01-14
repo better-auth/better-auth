@@ -4,8 +4,9 @@ import type { SchemaGenerator } from "./types";
 export const generateKyselySchema: SchemaGenerator = async ({
 	options,
 	file,
+	force,
 }) => {
-	const { compileMigrations } = await getMigrations(options);
+	const { compileMigrations } = await getMigrations(options, { force });
 	const migrations = await compileMigrations();
 	return {
 		code: migrations.trim() === ";" ? "" : migrations,

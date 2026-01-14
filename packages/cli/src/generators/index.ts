@@ -14,6 +14,11 @@ export const generateSchema = (opts: {
 	adapter: DBAdapter;
 	file?: string;
 	options: BetterAuthOptions;
+	/**
+	 * Force schema generation by treating the database as empty.
+	 * When true, all tables will be included as if they don't exist.
+	 */
+	force?: boolean;
 }) => {
 	const adapter = opts.adapter;
 	const generator =

@@ -18,6 +18,7 @@ npx @better-auth/cli@latest generate
 - `--output` - Where to save the generated schema. For Prisma, it will be saved in prisma/schema.prisma. For Drizzle, it goes to schema.ts in your project root. For Kysely, it's an SQL file saved as schema.sql in your project root.
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 - `--yes` - Skip the confirmation prompt and generate the schema directly.
+- `--force` - Force generation of schema file even if no changes are detected. This is useful when you need to regenerate migration files after deleting them.
 
 
 ## Migrate
@@ -32,6 +33,11 @@ npx @better-auth/cli@latest migrate
 
 - `--config` - The path to your Better Auth config file. By default, the CLI will search for an auth.ts file in **./**, **./utils**, **./lib**, or any of these directories under the `src` directory.
 - `--yes` - Skip the confirmation prompt and apply the schema directly.
+- `--force` - Force migration by treating the database as empty, recreating all tables. Use this when you need to regenerate your database schema from scratch.
+
+<Callout type="warn">
+The `--force` flag will treat your database as if it has no existing tables. This is useful for development environments or when you need to regenerate your schema, but should be used with caution in production environments.
+</Callout>
 
 <Callout type="info">
 **Using PostgreSQL with a non-default schema?**

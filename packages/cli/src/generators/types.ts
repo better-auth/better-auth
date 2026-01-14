@@ -8,10 +8,17 @@ export interface SchemaGeneratorResult {
 	append?: boolean;
 }
 
+export interface SchemaGeneratorOptions {
+	file?: string;
+	adapter: DBAdapter;
+	options: BetterAuthOptions;
+	/**
+	 * Force schema generation by treating the database as empty.
+	 * When true, all tables will be included as if they don't exist.
+	 */
+	force?: boolean;
+}
+
 export interface SchemaGenerator {
-	<Options extends BetterAuthOptions>(opts: {
-		file?: string;
-		adapter: DBAdapter;
-		options: Options;
-	}): Promise<SchemaGeneratorResult>;
+	(opts: SchemaGeneratorOptions): Promise<SchemaGeneratorResult>;
 }
