@@ -45,6 +45,9 @@ export interface DrizzleAdapterConfig {
 	 * If the table names in the schema are plural
 	 * set this to true. For example, if the schema
 	 * has an object with a key "users" instead of "user"
+	 *
+	 * @deprecated Use `advanced.database.usePlural` in the main config instead.
+	 * This option will be removed in a future release.
 	 */
 	usePlural?: boolean | undefined;
 	/**
@@ -75,6 +78,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
 		({ getFieldName, options }) => {
+			const usePlural =
+				config.usePlural ?? options.advanced?.database?.usePlural ?? false;
 			function getSchema(model: string) {
 				const schema = config.schema || db._.fullSchema;
 				if (!schema) {
@@ -384,7 +389,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
 									const isUnique = joinAttr.relation === "one-to-one";
-									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
+									const pluralSuffix = isUnique || usePlural ? "" : "s";
 									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
@@ -401,7 +406,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 							if (res) {
 								for (const pluralJoinResult of pluralJoinResults) {
-									let singularKey = !config.usePlural
+									let singularKey = !usePlural
 										? pluralJoinResult.slice(0, -1)
 										: pluralJoinResult;
 									res[singularKey] = res[pluralJoinResult];
@@ -450,7 +455,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										joinAttr.limit ??
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
-									let pluralSuffix = isUnique || config.usePlural ? "" : "s";
+									let pluralSuffix = isUnique || usePlural ? "" : "s";
 									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
@@ -477,7 +482,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 							if (res) {
 								for (const item of res) {
 									for (const pluralJoinResult of pluralJoinResults) {
-										const singularKey = !config.usePlural
+										const singularKey = !usePlural
 											? pluralJoinResult.slice(0, -1)
 											: pluralJoinResult;
 										if (singularKey === pluralJoinResult) continue;
@@ -576,7 +581,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 		config: {
 			adapterId: "drizzle",
 			adapterName: "Drizzle Adapter",
-			usePlural: config.usePlural ?? false,
+			usePlural: config.usePlural,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
 			supportsJSON:

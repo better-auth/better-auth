@@ -264,6 +264,16 @@ export type BetterAuthAdvancedOptions = {
 				 * function.
 				 */
 				generateId?: GenerateIdFn | false | "serial" | "uuid";
+				/**
+				 * Use plural table names (e.g., "users" instead of "user").
+				 *
+				 * This option is used as a fallback for database adapters
+				 * that support plural table names. If set here, it will apply
+				 * to all adapters unless overridden in the adapter-specific config.
+				 *
+				 * @default false
+				 */
+				usePlural?: boolean;
 		  }
 		| undefined;
 	/**
