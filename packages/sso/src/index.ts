@@ -7,6 +7,7 @@ import {
 	requestDomainVerification,
 	verifyDomain,
 } from "./routes/domain-verification";
+import { getSSOProvider, listSSOProviders } from "./routes/providers";
 import {
 	acsEndpoint,
 	callbackSSO,
@@ -93,6 +94,8 @@ type SSOEndpoints<O extends SSOOptions> = {
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	listSSOProviders: ReturnType<typeof listSSOProviders>;
+	getSSOProvider: ReturnType<typeof getSSOProvider>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
@@ -142,6 +145,8 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		listSSOProviders: listSSOProviders(),
+		getSSOProvider: getSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {
@@ -183,10 +188,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-							(plugin: { id: string }) => plugin.id === "organization",
-						);
-						if (!isOrgPluginEnabled) {
+						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
 
