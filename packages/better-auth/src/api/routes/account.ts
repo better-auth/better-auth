@@ -582,7 +582,7 @@ export const getAccessToken = createAuthEndpoint(
 				}
 			}
 
-			let accessTokenExpiresAt = (() => {
+			const accessTokenExpiresAt = (() => {
 				if (newTokens?.accessTokenExpiresAt) {
 					if (typeof newTokens.accessTokenExpiresAt === "string") {
 						return new Date(newTokens.accessTokenExpiresAt);
