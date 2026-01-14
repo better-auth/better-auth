@@ -32,7 +32,7 @@ export const baseUrl =
 				`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
 			);
 export function formatDate(date: Date) {
-	let d = new Date(date);
+	const d = new Date(date);
 	return d
 		.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 		.replace(",", "");

@@ -542,7 +542,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 					);
 				}
-				let user =
+				const user =
 					await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
 						session.user.id,
 						{

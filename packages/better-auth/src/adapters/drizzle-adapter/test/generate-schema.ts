@@ -27,7 +27,7 @@ export const generateDrizzleSchema = async (
 		};
 	}
 	generationCount++;
-	let thisCount = generationCount;
+	const thisCount = generationCount;
 	const i = async (x: string) => {
 		// Clear the Node.js module cache for the generated schema file to ensure fresh import
 		try {
@@ -63,9 +63,9 @@ export const generateDrizzleSchema = async (
 		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
 	}
 
-	let adapter = drizzleAdapter(db, { provider: dialect })(options);
+	const adapter = drizzleAdapter(db, { provider: dialect })(options);
 
-	let { code } = await generateSchema({
+	const { code } = await generateSchema({
 		adapter,
 		options,
 	});
