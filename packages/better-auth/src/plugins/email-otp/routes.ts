@@ -93,11 +93,11 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 					message: BASE_ERROR_CODES.INVALID_EMAIL,
 				});
 			}
-			let otp =
+			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
 
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 
 			await ctx.context.internalAdapter
 				.createVerificationValue({
@@ -186,7 +186,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: `${ctx.body.type}-otp-${email}`,
@@ -271,7 +271,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			let [storedOtp, _attempts] = splitAtLastColon(verificationValue.value);
+			const [storedOtp, _attempts] = splitAtLastColon(verificationValue.value);
 			let otp = storedOtp;
 			if (opts.storeOTP === "encrypted") {
 				otp = await symmetricDecrypt({
@@ -834,7 +834,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 				defaultOTPGenerator(opts);
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: `forget-password-otp-${email}`,
@@ -987,7 +987,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			let account = user.accounts?.find(
+			const account = user.accounts?.find(
 				(account) => account.providerId === "credential",
 			);
 			if (!account) {

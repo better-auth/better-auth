@@ -79,7 +79,7 @@ export function IntroFooter() {
 }
 
 export function SignUpForm() {
-	let id = useId();
+	const id = useId();
 
 	return (
 		<form className="relative isolate mt-8 flex items-center pr-1">

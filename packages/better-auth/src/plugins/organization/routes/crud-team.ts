@@ -872,7 +872,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 		async (ctx) => {
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
-			let teamId = ctx.query?.teamId || session?.session.activeTeamId;
+			const teamId = ctx.query?.teamId || session?.session.activeTeamId;
 			if (!teamId) {
 				throw new APIError("BAD_REQUEST", {
 					message: ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,

@@ -507,7 +507,7 @@ export const getAccessToken = createAuthEndpoint(
 		if (req && !session) {
 			throw ctx.error("UNAUTHORIZED");
 		}
-		let resolvedUserId = session?.user?.id || userId;
+		const resolvedUserId = session?.user?.id || userId;
 		if (!resolvedUserId) {
 			throw ctx.error("UNAUTHORIZED");
 		}
@@ -689,7 +689,7 @@ export const refreshToken = createAuthEndpoint(
 		if (req && !session) {
 			throw ctx.error("UNAUTHORIZED");
 		}
-		let resolvedUserId = session?.user?.id || userId;
+		const resolvedUserId = session?.user?.id || userId;
 		if (!resolvedUserId) {
 			throw new APIError("BAD_REQUEST", {
 				message: `Either userId or session is required`,
