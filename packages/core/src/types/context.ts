@@ -178,6 +178,8 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 	PluginContext &
 		InfoContext & {
 			options: Options;
+			appName: string;
+			baseURL: string;
 			trustedOrigins: string[];
 			/**
 			 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
