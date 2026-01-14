@@ -36,7 +36,7 @@ export async function generateRelayState(
 	};
 
 	try {
-		return await generateGenericState(c, stateData, {
+		return generateGenericState(c, stateData, {
 			cookieName: "relay_state",
 		});
 	} catch (error) {
