@@ -502,7 +502,7 @@
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
-    "@tanstack/react-start": "^1.0.0",
+    "@tanstack/start-server-core": "^1.0.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4",
     "drizzle-orm": ">=0.41.0",
@@ -528,7 +528,7 @@
     "@sveltejs/kit": {
       "optional": true
     },
-    "@tanstack/react-start": {
+    "@tanstack/start-server-core": {
       "optional": true
     },
     "next": {
