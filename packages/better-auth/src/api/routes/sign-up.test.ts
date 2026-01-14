@@ -419,34 +419,6 @@ describe("sign-up email verification logic", async (it) => {
 		);
 	});
 
-	it("should NOT send verification email when only sendVerificationEmail is set (without sendOnSignUp)", async () => {
-		const mockSendVerificationEmail = vi.fn();
-		const { auth } = await getTestInstance(
-			{
-				emailVerification: {
-					sendOnSignUp: false,
-					sendVerificationEmail: mockSendVerificationEmail,
-				},
-				emailAndPassword: {
-					enabled: true,
-				},
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-
-		await auth.api.signUpEmail({
-			body: {
-				email: "verify3@test.com",
-				password: "password",
-				name: "Test User",
-			},
-		});
-
-		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
-	});
-
 	it("should create user with emailVerified false when verification email is sent", async () => {
 		const mockSendVerificationEmail = vi.fn();
 		const { auth, db } = await getTestInstance(
@@ -515,7 +487,6 @@ describe("sign-up email verification logic", async (it) => {
 		const { auth } = await getTestInstance(
 			{
 				emailVerification: {
-					// sendOnSignUp is not set (undefined), should default to false
 					sendVerificationEmail: mockSendVerificationEmail,
 				},
 				emailAndPassword: {
@@ -536,5 +507,76 @@ describe("sign-up email verification logic", async (it) => {
 		});
 
 		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should NOT send verification email when requireEmailVerification is true but sendOnSignUp is false", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify9@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should send verification email when requireEmailVerification is true and sendOnSignUp is true", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify10@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		// When both requireEmailVerification and sendOnSignUp are true,
+		// and sendVerificationEmail is provided, email should be sent.
+		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(1);
+		expect(mockSendVerificationEmail).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({
+					email: "verify10@test.com",
+					name: "Test User",
+				}),
+				token: expect.any(String),
+				url: expect.stringContaining("/verify-email"),
+			}),
+			undefined,
+		);
 	});
 });
