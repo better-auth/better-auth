@@ -1,11 +1,11 @@
 import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
-import { getBetterAuthGlobal } from "./global";
+import { __getBetterAuthGlobal } from "./global";
 
 export type RequestStateWeakMap = WeakMap<object, any>;
 
 const ensureAsyncStorage = async () => {
-	const betterAuthGlobal = getBetterAuthGlobal();
+	const betterAuthGlobal = __getBetterAuthGlobal();
 	if (!betterAuthGlobal.context.requestStateAsyncStorage) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
 		betterAuthGlobal.context.requestStateAsyncStorage =
