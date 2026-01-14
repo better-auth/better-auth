@@ -266,7 +266,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-nostr",
 		url: "https://github.com/leon-wbr/better-auth-nostr",
 		description:
-			"Nostr authentication plugin for Better auth (NIP-98).",
+			"Nostr authentication plugin for Better Auth (NIP-98).",
 		author: {
 			name: "leon-wbr",
 			github: "leon-wbr",
