@@ -7,7 +7,11 @@ import type { Where } from "@better-auth/core/db/adapter";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	expireCookie,
+	setSessionCookie,
+} from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import type { AccessControl } from "../access";
@@ -1157,10 +1161,10 @@ export const stopImpersonating = () =>
 					message: "Failed to find user",
 				});
 			}
-			const adminCookieName =
-				ctx.context.createAuthCookie("admin_session").name;
+			const adminSessionCookie = ctx.context.createAuthCookie("admin_session");
+
 			const adminCookie = await ctx.getSignedCookie(
-				adminCookieName,
+				adminSessionCookie.name,
 				ctx.context.secret,
 			);
 
@@ -1180,10 +1184,7 @@ export const stopImpersonating = () =>
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
-			await ctx.setSignedCookie(adminCookieName, "", ctx.context.secret, {
-				...ctx.context.authCookies.sessionToken.options,
-				maxAge: 0,
-			});
+			expireCookie(ctx, adminSessionCookie);
 			return ctx.json(adminSession);
 		},
 	);
