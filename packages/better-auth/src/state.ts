@@ -1,4 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { BetterAuthError } from "@better-auth/core/error";
 import * as z from "zod";
 import {
 	generateRandomString,
@@ -29,7 +30,7 @@ export type StateErrorCode =
 	| "state_mismatch"
 	| "state_security_mismatch";
 
-export class StateError extends Error {
+export class StateError extends BetterAuthError {
 	code: string;
 	details?: Record<string, any>;
 
@@ -38,7 +39,7 @@ export class StateError extends Error {
 		opts: { code: StateErrorCode; details?: Record<string, any> },
 		errorOptions?: ErrorOptions,
 	) {
-		super(message, errorOptions);
+		super(message, errorOptions?.cause as string | undefined);
 		this.code = opts.code;
 		this.details = opts.details;
 	}
