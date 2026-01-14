@@ -790,7 +790,7 @@ export const createInternalAdapter = (
 					});
 					return {
 						user,
-						linkedAccount: undefined,
+						linkedAccount: null,
 						accounts: accounts || [],
 					};
 				} else {

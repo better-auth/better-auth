@@ -115,7 +115,7 @@ export interface InternalAdapter<
 		providerId: string,
 	): Promise<{
 		user: User;
-		linkedAccount?: Account;
+		linkedAccount: Account | null;
 		accounts: Account[];
 	} | null>;
 
