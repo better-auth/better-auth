@@ -34,16 +34,14 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 	// Remote url must be set when using signing function
 	if (options?.jwt?.sign && !options.jwks?.remoteUrl) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"jwks.remoteUrl must be set when using jwt.sign",
+			"options.jwks.remoteUrl must be set when using options.jwt.sign",
 		);
 	}
 
 	// Alg is required to be specified when using remote url (needed in openid metadata)
 	if (options?.jwks?.remoteUrl && !options.jwks?.keyPairConfig?.alg) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"must specify alg when using the oidc plugin and jwks.remoteUrl",
+			"options.jwks.keyPairConfig.alg must be specified when using the oidc plugin with options.jwks.remoteUrl",
 		);
 	}
 
@@ -55,8 +53,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 		jwksPath.includes("..")
 	) {
 		throw new BetterAuthError(
-			"jwks_config",
-			"jwksPath must be a non-empty string starting with '/' and not contain '..'",
+			"options.jwks.jwksPath must be a non-empty string starting with '/' and not contain '..'",
 		);
 	}
 
