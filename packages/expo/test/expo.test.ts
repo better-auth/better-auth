@@ -426,6 +426,23 @@ describe("expo", async () => {
 			).toBe(parsedCookieBefore[key]?.value);
 		});
 	});
+
+	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
+		fn.mockClear();
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect(fn).toHaveBeenCalled();
+		const [url] = fn.mock.calls.at(-1)!;
+		const proxyUrl = new URL(String(url));
+
+		expect(proxyUrl.pathname).toContain("expo-authorization-proxy");
+		expect(proxyUrl.searchParams.has("authorizationURL")).toBe(true);
+		expect(proxyUrl.searchParams.has("oauthState")).toBe(false);
+	});
 });
 
 describe("expo with cookieCache", async () => {
