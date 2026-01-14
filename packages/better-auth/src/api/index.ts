@@ -6,11 +6,11 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
 import { isAPIError } from "../utils/is-api-error";
-import { normalizePathname } from "../utils/url";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
 import {
