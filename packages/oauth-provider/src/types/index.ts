@@ -772,6 +772,8 @@ export interface SchemaClient<
 	 * If not defined, any scope can be requested.
 	 */
 	scopes?: Scopes;
+	/** For some older OIDC clients that don't support PKCE - not part of OAuth2.1 spec */
+	unsafeDontRequirePKCE?: boolean;
 	//---- Recommended client data ----//
 	/** User who owns this client */
 	userId?: string | null;

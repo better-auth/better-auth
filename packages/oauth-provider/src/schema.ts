@@ -31,6 +31,12 @@ export const schema = {
 				type: "string[]",
 				required: false,
 			},
+			// For some older OIDC clients that don't support PKCE - not part of OAuth2.1 spec
+			unsafeDontRequirePKCE: {
+				type: "boolean",
+				defaultValue: false,
+				required: false,
+			},
 			// Recommended client data
 			userId: {
 				type: "string",
