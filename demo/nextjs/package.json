@@ -16,6 +16,7 @@
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
+    "@better-auth/scim": "workspace:^",
     "@better-auth/stripe": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.8.1",
