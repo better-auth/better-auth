@@ -7,7 +7,7 @@ import { env } from "@better-auth/core/env";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db/internal-adapter";
 import { isPromise } from "../utils/is-promise";
-import { getBaseURL } from "../utils/url";
+import { getBaseCallbackURL, getBaseURL } from "../utils/url";
 
 export async function runPluginInit(ctx: AuthContext) {
 	let options = ctx.options;
@@ -65,9 +65,20 @@ export async function getTrustedOrigins(
 	request?: Request,
 ): Promise<string[]> {
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const baseCallbackURL = getBaseCallbackURL(options.baseCallbackURL, baseURL);
 	const trustedOrigins: (string | undefined | null)[] = baseURL
 		? [new URL(baseURL).origin]
 		: [];
+	if (baseCallbackURL) {
+		try {
+			const callbackOrigin = new URL(baseCallbackURL).origin;
+			if (!trustedOrigins.includes(callbackOrigin)) {
+				trustedOrigins.push(callbackOrigin);
+			}
+		} catch {
+			// Invalid URL, skip adding to trusted origins
+		}
+	}
 	if (options.trustedOrigins) {
 		if (Array.isArray(options.trustedOrigins)) {
 			trustedOrigins.push(...options.trustedOrigins);

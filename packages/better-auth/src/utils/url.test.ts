@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { getBaseURL } from "./url";
+import { describe, expect, it, vi } from "vitest";
+import { getBaseCallbackURL, getBaseURL } from "./url";
 
 describe("getBaseURL", () => {
 	describe("trustedProxyHeaders validation", () => {
@@ -258,6 +258,153 @@ describe("getBaseURL", () => {
 			const result = getBaseURL(undefined, "/auth", request, false, true);
 
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
+		});
+	});
+});
+
+describe("getBaseCallbackURL", () => {
+	it("should return baseCallbackURL when explicitly provided", () => {
+		const result = getBaseCallbackURL(
+			"http://localhost:4000",
+			"http://localhost:3000",
+		);
+		expect(result).toBe("http://localhost:4000");
+	});
+
+	it("should fallback to baseURL origin when baseCallbackURL is not provided", () => {
+		const result = getBaseCallbackURL(
+			undefined,
+			"http://localhost:3000/api/auth",
+		);
+		expect(result).toBe("http://localhost:3000");
+	});
+
+	it("should return undefined when neither baseCallbackURL nor baseURL is provided", () => {
+		const result = getBaseCallbackURL(undefined, undefined);
+		expect(result).toBeUndefined();
+	});
+
+	it("should handle baseURL without path", () => {
+		const result = getBaseCallbackURL(undefined, "http://localhost:3000");
+		expect(result).toBe("http://localhost:3000");
+	});
+
+	it("should preserve full baseCallbackURL including path", () => {
+		const result = getBaseCallbackURL(
+			"http://localhost:4000/custom/path",
+			"http://localhost:3000",
+		);
+		expect(result).toBe("http://localhost:4000/custom/path");
+	});
+
+	it("should handle empty string baseCallbackURL by falling back to baseURL", () => {
+		const result = getBaseCallbackURL("", "http://localhost:3000");
+		expect(result).toBe("http://localhost:3000");
+	});
+
+	it("should handle invalid baseURL gracefully", () => {
+		const result = getBaseCallbackURL(undefined, "not-a-valid-url");
+		expect(result).toBe("not-a-valid-url");
+	});
+
+	describe("environment variable support", () => {
+		it("should use BETTER_AUTH_CALLBACK_URL env variable", () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://localhost:5000");
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				true,
+			);
+			expect(result).toBe("http://localhost:5000");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should use NEXT_PUBLIC_BETTER_AUTH_CALLBACK_URL env variable", () => {
+			vi.stubEnv(
+				"NEXT_PUBLIC_BETTER_AUTH_CALLBACK_URL",
+				"http://localhost:5001",
+			);
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				true,
+			);
+			expect(result).toBe("http://localhost:5001");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should use PUBLIC_BETTER_AUTH_CALLBACK_URL env variable", () => {
+			vi.stubEnv("PUBLIC_BETTER_AUTH_CALLBACK_URL", "http://localhost:5002");
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				true,
+			);
+			expect(result).toBe("http://localhost:5002");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should use NUXT_PUBLIC_BETTER_AUTH_CALLBACK_URL env variable", () => {
+			vi.stubEnv(
+				"NUXT_PUBLIC_BETTER_AUTH_CALLBACK_URL",
+				"http://localhost:5003",
+			);
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				true,
+			);
+			expect(result).toBe("http://localhost:5003");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should prefer explicit baseCallbackURL over env variable", () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://localhost:5000");
+
+			const result = getBaseCallbackURL(
+				"http://localhost:4000",
+				"http://localhost:3000",
+				true,
+			);
+			expect(result).toBe("http://localhost:4000");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should not use env variables when loadEnv is false", () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://localhost:5000");
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				false,
+			);
+			expect(result).toBe("http://localhost:3000");
+
+			vi.unstubAllEnvs();
+		});
+
+		it("should prioritize env variables in order", () => {
+			vi.stubEnv("BETTER_AUTH_CALLBACK_URL", "http://first:1000");
+			vi.stubEnv("NEXT_PUBLIC_BETTER_AUTH_CALLBACK_URL", "http://second:2000");
+
+			const result = getBaseCallbackURL(
+				undefined,
+				"http://localhost:3000",
+				true,
+			);
+			// BETTER_AUTH_CALLBACK_URL should take priority
+			expect(result).toBe("http://first:1000");
+
+			vi.unstubAllEnvs();
 		});
 	});
 });

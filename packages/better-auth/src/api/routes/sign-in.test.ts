@@ -137,6 +137,110 @@ describe("url checks", async (it) => {
 	});
 });
 
+describe("baseCallbackURL", async (it) => {
+	it("should resolve relative callbackURL against baseCallbackURL", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			baseCallbackURL: "http://localhost:4000",
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect(res.data).toMatchObject({
+			url: expect.stringContaining("accounts.google.com"),
+			redirect: true,
+		});
+	});
+
+	it("should use baseCallbackURL as fallback when no callbackURL provided", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			baseCallbackURL: "http://localhost:4000",
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+		});
+
+		expect(res.data).toMatchObject({
+			url: expect.stringContaining("accounts.google.com"),
+			redirect: true,
+		});
+	});
+
+	it("should add baseCallbackURL to trusted origins automatically", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			baseCallbackURL: "http://localhost:4000",
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "http://localhost:4000/dashboard",
+		});
+
+		expect(res.error?.status).not.toBe(403);
+	});
+
+	it("should allow absolute callbackURL that matches baseCallbackURL origin", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			baseCallbackURL: "http://localhost:4000",
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "http://localhost:4000/custom/path",
+		});
+
+		expect(res.error?.status).not.toBe(403);
+	});
+
+	it("should still reject untrusted origins even with baseCallbackURL set", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			baseCallbackURL: "http://localhost:4000",
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "http://malicious.com/dashboard",
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+
+	it("should fallback to baseURL when baseCallbackURL is not set", async () => {
+		const { client } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			// No baseCallbackURL
+		});
+
+		const res = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		expect(res.data).toMatchObject({
+			url: expect.stringContaining("accounts.google.com"),
+			redirect: true,
+		});
+	});
+});
+
 describe("sign-in CSRF protection", async (it) => {
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],

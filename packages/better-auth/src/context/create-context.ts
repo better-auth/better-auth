@@ -19,7 +19,7 @@ import { createInternalAdapter } from "../db/internal-adapter";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
-import { getBaseURL } from "../utils/url";
+import { getBaseCallbackURL, getBaseURL } from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
@@ -104,6 +104,7 @@ export async function createAuthContext(
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
 	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const baseCallbackURL = getBaseCallbackURL(options.baseCallbackURL, baseURL);
 
 	if (!baseURL) {
 		logger.warn(
@@ -202,6 +203,7 @@ export async function createAuthContext(
 			);
 		},
 		baseURL: baseURL || "",
+		baseCallbackURL: baseCallbackURL || baseURL || "",
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined
