@@ -13,6 +13,7 @@ export const defaultStatements = {
 		"update",
 	],
 	session: ["list", "revoke", "delete"],
+	ac: ["create", "read", "read-own", "update", "delete"],
 } as const;
 
 export const defaultAc = createAccessControl(defaultStatements);
@@ -30,11 +31,13 @@ export const adminAc = defaultAc.newRole({
 		"update",
 	],
 	session: ["list", "revoke", "delete"],
+	ac: ["create", "read", "update", "delete"],
 });
 
 export const userAc = defaultAc.newRole({
 	user: [],
 	session: [],
+	ac: ["read-own"], // Allow users to read their own roles
 });
 
 export const defaultRoles = {

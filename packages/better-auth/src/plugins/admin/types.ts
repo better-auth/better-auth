@@ -1,17 +1,13 @@
-import type { InferOptionSchema, Session, User } from "../../types";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
-import type { AdminSchema } from "./schema";
+import type { AdminSessionFields, AdminUserFields, UserRole } from "./schema";
 
-export interface UserWithRole extends User {
-	role?: string | undefined;
-	banned: boolean | null;
-	banReason?: (string | null) | undefined;
-	banExpires?: (Date | null) | undefined;
-}
+export interface UserWithRole extends User, AdminUserFields {}
 
-export interface SessionWithImpersonatedBy extends Session {
-	impersonatedBy?: string | undefined;
-}
+export interface SessionWithImpersonatedBy
+	extends Session,
+		AdminSessionFields {}
 
 export interface AdminOptions {
 	/**
@@ -50,7 +46,39 @@ export interface AdminOptions {
 	/**
 	 * Custom schema for the admin plugin
 	 */
-	schema?: InferOptionSchema<AdminSchema> | undefined;
+	schema?:
+		| {
+				user?:
+					| {
+							fields?:
+								| {
+										[key in keyof AdminUserFields]?: string | undefined;
+								  }
+								| undefined;
+					  }
+					| undefined;
+				session?:
+					| {
+							fields?:
+								| {
+										[key in keyof AdminSessionFields]?: string | undefined;
+								  }
+								| undefined;
+					  }
+					| undefined;
+				role?: {
+					modelName?: string;
+					fields?:
+						| {
+								[key in keyof Omit<UserRole, "id">]?: string;
+						  }
+						| undefined;
+					additionalFields?: {
+						[key in string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
 	/**
 	 * Configure the roles and permissions for the admin
 	 * plugin.
@@ -62,6 +90,19 @@ export interface AdminOptions {
 	roles?:
 		| {
 				[key in string]?: Role;
+		  }
+		| undefined;
+	/**
+	 * Dynamic access control for the admin plugin.
+	 */
+	dynamicAccessControl?:
+		| {
+				/**
+				 * Whether to enable dynamic access control for the admin plugin.
+				 *
+				 * @default false
+				 */
+				enabled?: boolean | undefined;
 		  }
 		| undefined;
 	/**
