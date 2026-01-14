@@ -821,6 +821,164 @@ admin({
 });
 ```
 
+### Events
+
+The admin plugin provides event callbacks that are triggered when specific admin operations occur.
+These events are useful for logging, auditing, notifications, and other side effects.
+
+```ts title="auth.ts"
+admin({
+  events: {
+    impersonateStart: async (adminSession, impersonatedUser) => {
+      // Called when admin.impersonateUser is called
+      await logAuditEvent({
+        type: "impersonation_started",
+        adminId: adminSession?.user.id,
+        impersonatedUserId: impersonatedUser.id,
+      });
+    },
+    impersonateEnd: async (adminSession) => {
+      // Called when admin.stopImpersonating is called
+      await logAuditEvent({
+        type: "impersonation_ended",
+        adminId: adminSession?.user.id,
+      });
+    },
+    ban: async (adminSession, bannedUser) => {
+      // Called when admin.banUser is called
+      await sendNotification({
+        userId: bannedUser.id,
+        message: `You have been banned: ${bannedUser.banReason}`,
+      });
+    },
+    unban: async (adminSession, unbannedUser) => {
+      // Called when admin.unbanUser is called
+      await sendNotification({
+        userId: unbannedUser.id,
+        message: "Your ban has been lifted",
+      });
+    },
+    userCreate: async (adminSession, createdUser) => {
+      // Called when admin.createUser is called
+      await sendWelcomeEmail(createdUser.email);
+    },
+    userRemove: async (adminSession, removedUser) => {
+      // Called when admin.removeUser is called
+      await cleanupUserData(removedUser.id);
+    },
+  },
+});
+```
+
+#### Event Callbacks
+
+##### `impersonateStart`
+
+Triggered when `admin.impersonateUser` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+- `impersonatedUser`: The user object that is being impersonated.
+
+**Example:**
+```ts
+impersonateStart: async (adminSession, impersonatedUser) => {
+  console.log(`Admin ${adminSession?.user.email} started impersonating ${impersonatedUser.email}`);
+}
+```
+
+##### `impersonateEnd`
+
+Triggered when `admin.stopImpersonating` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+
+**Example:**
+```ts
+impersonateEnd: async (adminSession) => {
+  console.log(`Admin ${adminSession?.user.email} stopped impersonating`);
+}
+```
+
+##### `ban`
+
+Triggered when `admin.banUser` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
+- `bannedUser`: The user object that was banned (includes `banned`, `banReason`, and `banExpires` fields).
+
+**Example:**
+```ts
+ban: async (adminSession, bannedUser) => {
+  await auditLog.create({
+    action: "ban_user",
+    adminId: adminSession.user.id,
+    targetUserId: bannedUser.id,
+    reason: bannedUser.banReason,
+  });
+}
+```
+
+##### `unban`
+
+Triggered when `admin.unbanUser` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Always defined (not null).
+- `unbannedUser`: The user object that was unbanned (the `banned` field will be `false`).
+
+**Example:**
+```ts
+unban: async (adminSession, unbannedUser) => {
+  await auditLog.create({
+    action: "unban_user",
+    adminId: adminSession.user.id,
+    targetUserId: unbannedUser.id,
+  });
+}
+```
+
+##### `userCreate`
+
+Triggered when `admin.createUser` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+- `createdUser`: The user object that was created.
+
+**Example:**
+```ts
+userCreate: async (adminSession, createdUser) => {
+  await sendWelcomeEmail({
+    to: createdUser.email,
+    name: createdUser.name,
+  });
+}
+```
+
+##### `userRemove`
+
+Triggered when `admin.removeUser` is called.
+
+**Parameters:**
+- `adminSession`: The admin's session object (contains `user` and `session`). Will be `null` if the request is made from the server (without a session).
+- `removedUser`: The user object that was removed (this is the user object before deletion).
+
+**Example:**
+```ts
+userRemove: async (adminSession, removedUser) => {
+  // Archive user data before deletion
+  await archiveUserData(removedUser.id);
+}
+```
+
+<Callout>
+  **Note:** All event callbacks are `async` functions and should return a `Promise<void>`.
+  If an event callback throws an error, it will not prevent the admin operation from completing.
+</Callout>
+
 ### allowImpersonatingAdmins
 
 Whether to allow impersonating other admin users. Defaults to `false`.

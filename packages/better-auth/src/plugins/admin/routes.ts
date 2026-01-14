@@ -2,7 +2,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { Session } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
@@ -377,6 +377,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				password: hashedPassword,
 				userId: user.id,
 			});
+
+			// Call userCreate event
+			if (opts.events?.userCreate) {
+				const adminSession = session
+					? {
+							user: session.user as User & Record<string, unknown>,
+							session: session.session as Session & Record<string, unknown>,
+						}
+					: null;
+				await opts.events.userCreate(adminSession, user as UserWithRole);
+			}
+
 			return ctx.json({
 				user: user as UserWithRole,
 			});
@@ -841,6 +853,18 @@ export const unbanUser = (opts: AdminOptions) =>
 					updatedAt: new Date(),
 				},
 			);
+
+			// Call unban event
+			if (opts.events?.unban) {
+				await opts.events.unban(
+					{
+						user: session.user as User & Record<string, unknown>,
+						session: session.session as Session & Record<string, unknown>,
+					},
+					user as UserWithRole,
+				);
+			}
+
 			return ctx.json({
 				user: user,
 			});
@@ -965,6 +989,18 @@ export const banUser = (opts: AdminOptions) =>
 			);
 			//revoke all sessions
 			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
+
+			// Call ban event
+			if (opts.events?.ban) {
+				await opts.events.ban(
+					{
+						user: session.user as User & Record<string, unknown>,
+						session: session.session as Session & Record<string, unknown>,
+					},
+					user as UserWithRole,
+				);
+			}
+
 			return ctx.json({
 				user: user,
 			});
@@ -1109,6 +1145,17 @@ export const impersonateUser = (opts: AdminOptions) =>
 				},
 				true,
 			);
+
+			// Call impersonateStart event
+			if (opts.events?.impersonateStart) {
+				const adminSession = {
+					user: ctx.context.session.user as User & Record<string, unknown>,
+					session: ctx.context.session.session as Session &
+						Record<string, unknown>,
+				};
+				await opts.events.impersonateStart(adminSession, targetUser);
+			}
+
 			return ctx.json({
 				session: session,
 				user: targetUser,
@@ -1131,7 +1178,7 @@ export const impersonateUser = (opts: AdminOptions) =>
  *
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/admin#api-method-admin-stop-impersonating)
  */
-export const stopImpersonating = () =>
+export const stopImpersonating = (opts: AdminOptions) =>
 	createAuthEndpoint(
 		"/admin/stop-impersonating",
 		{
@@ -1188,6 +1235,16 @@ export const stopImpersonating = () =>
 				...ctx.context.authCookies.sessionToken.options,
 				maxAge: 0,
 			});
+
+			// Call impersonateEnd event
+			if (opts.events?.impersonateEnd) {
+				const adminSessionForEvent = {
+					user: user as User & Record<string, unknown>,
+					session: adminSession.session as Session & Record<string, unknown>,
+				};
+				await opts.events.impersonateEnd(adminSessionForEvent);
+			}
+
 			return ctx.json(adminSession);
 		},
 	);
@@ -1428,6 +1485,15 @@ export const removeUser = (opts: AdminOptions) =>
 
 			if (!user) {
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
+			// Call userRemove event before deleting the user
+			if (opts.events?.userRemove) {
+				const adminSession = {
+					user: session.user as User & Record<string, unknown>,
+					session: session.session as Session & Record<string, unknown>,
+				};
+				await opts.events.userRemove(adminSession, user as UserWithRole);
 			}
 
 			await ctx.context.internalAdapter.deleteUser(ctx.body.userId);

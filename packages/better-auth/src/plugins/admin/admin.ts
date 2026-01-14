@@ -169,7 +169,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 			unbanUser: unbanUser(opts),
 			banUser: banUser(opts),
 			impersonateUser: impersonateUser(opts),
-			stopImpersonating: stopImpersonating(),
+			stopImpersonating: stopImpersonating(opts),
 			revokeUserSession: revokeUserSession(opts),
 			revokeUserSessions: revokeUserSessions(opts),
 			removeUser: removeUser(opts),

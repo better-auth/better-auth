@@ -77,6 +77,82 @@ export interface AdminOptions {
 	 */
 	bannedUserMessage?: string | undefined;
 	/**
+	 * Events for the admin plugin
+	 */
+	events?: {
+		/**
+		 * A callback when `admin.impersonateUser` is called.
+		 */
+		impersonateStart: (
+			/**
+			 * `null` if the request is made from the server
+			 */
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			} | null,
+			impersonatedUser: UserWithRole,
+		) => Promise<void>;
+		/**
+		 * A callback when `admin.stopImpersonating` is called.
+		 */
+		impersonateEnd: (
+			/**
+			 * `null` if the request is made from the server
+			 */
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			} | null,
+		) => Promise<void>;
+		/**
+		 * A callback when `admin.banUser` is called.
+		 */
+		ban: (
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			},
+			bannedUser: UserWithRole,
+		) => Promise<void>;
+		/**
+		 * A callback when `admin.unbanUser` is called.
+		 */
+		unban: (
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			},
+			unbannedUser: UserWithRole,
+		) => Promise<void>;
+		/**
+		 * A callback when `admin.createUser` is called.
+		 */
+		userCreate: (
+			/**
+			 * `null` if the request is made from the server
+			 */
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			} | null,
+			createdUser: UserWithRole,
+		) => Promise<void>;
+		/**
+		 * A callback when `admin.removeUser` is called.
+		 */
+		userRemove: (
+			/**
+			 * `null` if the request is made from the server
+			 */
+			adminSession: {
+				user: User & Record<string, unknown>;
+				session: Session & Record<string, unknown>;
+			} | null,
+			removedUser: UserWithRole,
+		) => Promise<void>;
+	};
+	/*
 	 * Whether to allow impersonating other admins
 	 *
 	 * @default false

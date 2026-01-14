@@ -1564,3 +1564,1014 @@ describe("edge cases: userId validation", async () => {
 		).rejects.toThrow("user not found");
 	});
 });
+
+describe("Admin plugin - Events", async () => {
+	const { signInWithTestUser, customFetchImpl } = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					bannedUserMessage: "Custom banned user message",
+					events: {
+						impersonateStart: vi.fn(),
+						impersonateEnd: vi.fn(),
+						ban: vi.fn(),
+						unban: vi.fn(),
+						userCreate: vi.fn(),
+						userRemove: vi.fn(),
+					},
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+
+	const client = createAuthClient({
+		fetchOptions: {
+			customFetchImpl,
+		},
+		plugins: [adminClient()],
+		baseURL: "http://localhost:3000",
+	});
+
+	await signInWithTestUser();
+	const testUser = {
+		id: "123",
+		email: "eventtest@test.com",
+		password: "password",
+		name: "Event Test User",
+	};
+	const { data: testUserRes } = await client.signUp.email(testUser);
+	testUser.id = testUserRes?.user.id || "";
+
+	describe("userCreate event", () => {
+		it("should call userCreate event when admin creates a user", async () => {
+			const mockUserCreate = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: mockUserCreate,
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			const res = await clientWithMocks.admin.createUser(
+				{
+					name: "Created User",
+					email: "created@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(res.data?.user).toBeDefined();
+			expect(mockUserCreate).toHaveBeenCalled();
+			const callArgs = mockUserCreate.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeDefined(); // adminSession
+			expect(callArgs?.[1]?.email).toBe("created@test.com");
+			expect(callArgs?.[1]?.name).toBe("Created User");
+		});
+
+		it("should pass null adminSession when creating user from server", async () => {
+			const mockUserCreate = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: mockUserCreate,
+				userRemove: vi.fn(),
+			};
+
+			const { auth: authWithMocks } = await getTestInstance(
+				{
+					plugins: [
+						admin({
+							events: mockEvents,
+						}),
+					],
+				},
+				{
+					testUser: {
+						name: "Admin",
+					},
+				},
+			);
+
+			// Create user directly from server
+			const createdUser = await authWithMocks.api.createUser({
+				body: {
+					email: "servercreated@test.com",
+					password: "password123",
+					name: "Server Created",
+					role: "user",
+				},
+			});
+
+			expect(createdUser.user).toBeDefined();
+			expect(mockUserCreate).toHaveBeenCalled();
+			const callArgs = mockUserCreate.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeNull(); // adminSession should be null from server
+			expect(callArgs?.[1]?.email).toBe("servercreated@test.com");
+		});
+	});
+
+	describe("userRemove event", () => {
+		it("should call userRemove event when admin removes a user", async () => {
+			const mockUserRemove = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: mockUserRemove,
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			// Create a user first
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "User to Remove",
+					email: "toremove@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id;
+			expect(userId).toBeDefined();
+
+			// Clear previous calls
+			mockUserRemove.mockClear();
+
+			// Remove the user
+			const removeRes = await clientWithMocks.admin.removeUser(
+				{ userId: userId || "" },
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(removeRes.data?.success).toBe(true);
+			expect(mockUserRemove).toHaveBeenCalled();
+			const callArgs = mockUserRemove.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeDefined(); // adminSession
+			expect(callArgs?.[1]?.email).toBe("toremove@test.com");
+		});
+	});
+
+	describe("ban event", () => {
+		it("should call ban event when admin bans a user", async () => {
+			const mockBan = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: mockBan,
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			// Create a user first
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "User to Ban",
+					email: "toban@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id;
+			mockBan.mockClear();
+
+			// Ban the user
+			const banRes = await clientWithMocks.admin.banUser(
+				{
+					userId: userId || "",
+					banReason: "Violating terms",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(banRes.data?.user.banned).toBe(true);
+			expect(banRes.data?.user.banReason).toBe("Violating terms");
+			expect(mockBan).toHaveBeenCalled();
+			const callArgs = mockBan.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeDefined(); // adminSession
+			expect(callArgs?.[1]?.email).toBe("toban@test.com");
+			expect(callArgs?.[1]?.banned).toBe(true);
+		});
+
+		it("should receive adminSession in ban event", async () => {
+			const mockBan = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: mockBan,
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "Ban Test User",
+					email: "bantest@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			mockBan.mockClear();
+
+			await clientWithMocks.admin.banUser(
+				{
+					userId: createRes.data?.user.id || "",
+					banReason: "Test reason",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(mockBan).toHaveBeenCalled();
+			const callArgs = mockBan.mock.calls[0];
+			const [adminSession, bannedUser] = callArgs || [];
+			expect(adminSession?.user).toBeDefined();
+			expect(adminSession?.user.role).toBe("admin");
+			expect(adminSession?.session).toBeDefined();
+			expect(bannedUser?.banned).toBe(true);
+		});
+	});
+
+	describe("unban event", () => {
+		it("should call unban event when admin unban's a user", async () => {
+			const mockUnban = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: mockUnban,
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			// Create and ban a user
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "User to Unban",
+					email: "tounban@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id || "";
+
+			await clientWithMocks.admin.banUser(
+				{
+					userId,
+					banReason: "Test ban",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			mockUnban.mockClear();
+
+			// Unban the user
+			const unbanRes = await clientWithMocks.admin.unbanUser(
+				{ userId },
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(unbanRes.data?.user.banned).toBe(false);
+			expect(mockUnban).toHaveBeenCalled();
+			const callArgs = mockUnban.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeDefined(); // adminSession
+			expect(callArgs?.[1]?.email).toBe("tounban@test.com");
+			expect(callArgs?.[1]?.banned).toBe(false);
+		});
+
+		it("should receive adminSession in unban event", async () => {
+			const mockUnban = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: mockUnban,
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "Unban Test User",
+					email: "unbantest@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id || "";
+
+			await clientWithMocks.admin.banUser(
+				{ userId, banReason: "Test" },
+				{
+					headers: adminHead,
+				},
+			);
+
+			mockUnban.mockClear();
+
+			await clientWithMocks.admin.unbanUser(
+				{ userId },
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(mockUnban).toHaveBeenCalled();
+			const callArgs = mockUnban.mock.calls[0];
+			const [adminSession, unbannedUser] = callArgs || [undefined, undefined];
+			expect(adminSession?.user).toBeDefined();
+			expect(adminSession?.user.role).toBe("admin");
+			expect(adminSession?.session).toBeDefined();
+			expect(unbannedUser?.banned).toBe(false);
+		});
+	});
+
+	describe("impersonateStart event", () => {
+		it("should call impersonateStart event when admin impersonates a user", async () => {
+			const mockImpersonateStart = vi.fn();
+			const mockEvents = {
+				impersonateStart: mockImpersonateStart,
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			// Create a user to impersonate
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "User to Impersonate",
+					email: "toimpersonate@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id || "";
+			mockImpersonateStart.mockClear();
+
+			// Impersonate the user
+			const impersonateRes = await clientWithMocks.admin.impersonateUser(
+				{ userId },
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(impersonateRes.data?.user).toBeDefined();
+			expect(mockImpersonateStart).toHaveBeenCalled();
+			const callArgs = mockImpersonateStart.mock.calls[0];
+			expect(callArgs).toBeDefined();
+			expect(callArgs?.[0]).toBeDefined(); // adminSession
+			expect(callArgs?.[1]?.email).toBe("toimpersonate@test.com");
+		});
+
+		it("should receive adminSession and impersonated user in impersonateStart", async () => {
+			const mockImpersonateStart = vi.fn();
+			const mockEvents = {
+				impersonateStart: mockImpersonateStart,
+				impersonateEnd: vi.fn(),
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const { customFetchImpl: fetchImpl, signInWithTestUser: signInTest } =
+				await getTestInstance(
+					{
+						plugins: [
+							admin({
+								events: mockEvents,
+							}),
+						],
+						databaseHooks: {
+							user: {
+								create: {
+									before: async (user) => {
+										if (user.name === "Admin") {
+											return {
+												data: {
+													...user,
+													role: "admin",
+												},
+											};
+										}
+									},
+								},
+							},
+						},
+					},
+					{
+						testUser: {
+							name: "Admin",
+						},
+					},
+				);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "Impersonate Test User",
+					email: "impersonatetest@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			mockImpersonateStart.mockClear();
+
+			await clientWithMocks.admin.impersonateUser(
+				{ userId: createRes.data?.user.id || "" },
+				{
+					headers: adminHead,
+				},
+			);
+
+			expect(mockImpersonateStart).toHaveBeenCalled();
+			const callArgs = mockImpersonateStart.mock.calls[0];
+			const [adminSession, impersonatedUser] = callArgs || [
+				undefined,
+				undefined,
+			];
+			expect(adminSession?.user).toBeDefined();
+			expect(adminSession?.user.role).toBe("admin");
+			expect(adminSession?.session).toBeDefined();
+			expect(impersonatedUser?.email).toBe("impersonatetest@test.com");
+		});
+	});
+
+	describe("impersonateEnd event", () => {
+		it("should call impersonateEnd event when admin stops impersonating", async () => {
+			const mockImpersonateEnd = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: mockImpersonateEnd,
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const {
+				customFetchImpl: fetchImpl,
+				signInWithTestUser: signInTest,
+				cookieSetter: testCookieSetter,
+			} = await getTestInstance(
+				{
+					plugins: [
+						admin({
+							events: mockEvents,
+						}),
+					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return {
+											data: {
+												...user,
+												role: "admin",
+											},
+										};
+									}
+								},
+							},
+						},
+					},
+				},
+				{
+					testUser: {
+						name: "Admin",
+					},
+				},
+			);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			// Create and impersonate a user
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "User to Stop Impersonating",
+					email: "tostopimpersonate@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const userId = createRes.data?.user.id || "";
+
+			const impersonateHeaders = new Headers();
+			await clientWithMocks.admin.impersonateUser(
+				{ userId },
+				{
+					headers: adminHead,
+					onSuccess: (ctx) => {
+						testCookieSetter(impersonateHeaders)(ctx);
+					},
+				},
+			);
+
+			mockImpersonateEnd.mockClear();
+
+			// Stop impersonating
+			const stopRes = await clientWithMocks.admin.stopImpersonating(
+				{},
+				{
+					headers: impersonateHeaders,
+					onSuccess: (ctx) => {
+						testCookieSetter(impersonateHeaders)(ctx);
+					},
+				},
+			);
+
+			expect(stopRes.data).toBeDefined();
+			expect(mockImpersonateEnd).toHaveBeenCalled();
+		});
+
+		it("should receive adminSession in impersonateEnd event", async () => {
+			const mockImpersonateEnd = vi.fn();
+			const mockEvents = {
+				impersonateStart: vi.fn(),
+				impersonateEnd: mockImpersonateEnd,
+				ban: vi.fn(),
+				unban: vi.fn(),
+				userCreate: vi.fn(),
+				userRemove: vi.fn(),
+			};
+
+			const {
+				customFetchImpl: fetchImpl,
+				signInWithTestUser: signInTest,
+				cookieSetter: testCookieSetter,
+			} = await getTestInstance(
+				{
+					plugins: [
+						admin({
+							events: mockEvents,
+						}),
+					],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return {
+											data: {
+												...user,
+												role: "admin",
+											},
+										};
+									}
+								},
+							},
+						},
+					},
+				},
+				{
+					testUser: {
+						name: "Admin",
+					},
+				},
+			);
+
+			const clientWithMocks = createAuthClient({
+				fetchOptions: {
+					customFetchImpl: fetchImpl,
+				},
+				plugins: [adminClient()],
+				baseURL: "http://localhost:3000",
+			});
+
+			const { headers: adminHead } = await signInTest();
+
+			const createRes = await clientWithMocks.admin.createUser(
+				{
+					name: "Impersonate End Test User",
+					email: "impersonateendtest@test.com",
+					password: "password123",
+					role: "user",
+				},
+				{
+					headers: adminHead,
+				},
+			);
+
+			const impersonateHeaders = new Headers();
+			await clientWithMocks.admin.impersonateUser(
+				{ userId: createRes.data?.user.id || "" },
+				{
+					headers: adminHead,
+					onSuccess: (ctx) => {
+						testCookieSetter(impersonateHeaders)(ctx);
+					},
+				},
+			);
+
+			mockImpersonateEnd.mockClear();
+
+			await clientWithMocks.admin.stopImpersonating(
+				{},
+				{
+					headers: impersonateHeaders,
+					onSuccess: (ctx) => {
+						testCookieSetter(impersonateHeaders)(ctx);
+					},
+				},
+			);
+
+			expect(mockImpersonateEnd).toHaveBeenCalled();
+			const callArgs = mockImpersonateEnd.mock.calls[0];
+			const [adminSession] = callArgs || [undefined];
+			expect(adminSession?.user).toBeDefined();
+			expect(adminSession?.user.role).toBe("admin");
+			expect(adminSession?.session).toBeDefined();
+		});
+	});
+});
