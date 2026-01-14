@@ -3,6 +3,7 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
 	SECURE_COOKIE_PREFIX,
 	stripSecureCookiePrefix,
@@ -12,7 +13,6 @@ import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
-import { safeJSONParse } from "@better-auth/core/utils/json";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
