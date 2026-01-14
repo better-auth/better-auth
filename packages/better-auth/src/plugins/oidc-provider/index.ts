@@ -403,7 +403,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						}
 						expireCookie(ctx, {
 							name: "oidc_login_prompt",
-							options: { path: "/" },
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -583,7 +583,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					// Clear the cookie
 					expireCookie(ctx, {
 						name: "oidc_consent_prompt",
-						options: { path: "/" },
+						attributes: { path: "/" },
 					});
 
 					const value = JSON.parse(verification.value) as CodeVerificationValue;

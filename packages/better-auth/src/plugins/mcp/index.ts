@@ -207,7 +207,7 @@ export const mcp = (options: MCPOptions) => {
 						}
 						expireCookie(ctx, {
 							name: "oidc_login_prompt",
-							options: { path: "/" },
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
