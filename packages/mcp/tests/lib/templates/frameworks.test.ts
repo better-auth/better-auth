@@ -3,7 +3,7 @@ import {
 	FRAMEWORK_CONFIGS,
 	getDefaultApiPath,
 	getDefaultAuthPath,
-} from "./frameworks";
+} from "../../../src/lib/templates/frameworks";
 
 describe("FRAMEWORK_CONFIGS", () => {
 	it("should have config for all supported frameworks", () => {

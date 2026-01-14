@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeFeatureDiff, parseExistingSetup } from "./parser";
+import { computeFeatureDiff, parseExistingSetup } from "../../src/lib/parser";
 
 describe("parseExistingSetup", () => {
 	describe("database detection", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generateSetup, isSetupError } from "./generator";
-import type { SetupAuthOutput } from "./types";
+import { generateSetup, isSetupError } from "../../src/lib/generator";
+import type { SetupAuthOutput } from "../../src/lib/types";
 
 describe("generateSetup", () => {
 	describe("basic setup generation", () => {

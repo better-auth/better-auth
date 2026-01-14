@@ -3,7 +3,7 @@ import {
 	generateDatabaseConfig,
 	getDatabaseCommands,
 	getDatabaseEnvVar,
-} from "./database";
+} from "../../../src/lib/templates/database";
 
 describe("generateDatabaseConfig", () => {
 	describe("no ORM (direct connection)", () => {

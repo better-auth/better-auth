@@ -5,7 +5,7 @@ import {
 	generatePluginSetup,
 	getPluginEnvVars,
 	getSocialProviderEnvVars,
-} from "./features";
+} from "../../../src/lib/templates/features";
 
 describe("categorizeFeatures", () => {
 	it("should categorize email-password", () => {
