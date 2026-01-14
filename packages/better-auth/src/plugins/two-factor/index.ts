@@ -354,7 +354,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 									newTrustDeviceCookie.name,
 									`${newToken}!${data.session.token}`,
 									ctx.context.secret,
-									trustDeviceCookieAttrs.attributes,
+									trustDeviceCookieAttrs.options,
 								);
 								return;
 							}
@@ -382,7 +382,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 							twoFactorCookie.name,
 							identifier,
 							ctx.context.secret,
-							twoFactorCookie.attributes,
+							twoFactorCookie.options,
 						);
 						return ctx.json({
 							twoFactorRedirect: true,
