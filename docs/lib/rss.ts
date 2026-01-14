@@ -2,7 +2,7 @@ import { Feed } from "feed";
 import { blogs } from "./source";
 
 export function getRSS() {
-  const baseUrl = "https://better-auth.com/";
+	const baseUrl = "https://better-auth.com/";
 	const feed = new Feed({
 		title: "Better Auth Blog",
 		description: "Latest updates, articles, and insights about Better Auth",
