@@ -486,7 +486,7 @@ export const getAccessToken = createAuthEndpoint(
 											type: "string",
 										},
 										accessTokenExpiresAt: {
-												type: "string",
+											type: "string",
 											format: "date-time",
 										},
 									},
@@ -583,17 +583,17 @@ export const getAccessToken = createAuthEndpoint(
 			}
 
 			let accessTokenExpiresAt = (() => {
-				if (
-					newTokens?.accessTokenExpiresAt &&
-					typeof newTokens?.accessTokenExpiresAt === "string"
-				) {
-					return new Date(newTokens.accessTokenExpiresAt);
+				if (newTokens?.accessTokenExpiresAt) {
+					if (typeof newTokens.accessTokenExpiresAt === "string") {
+						return new Date(newTokens.accessTokenExpiresAt);
+					}
+					return newTokens.accessTokenExpiresAt;
 				}
-				if (
-					account.accessTokenExpiresAt &&
-					typeof account.accessTokenExpiresAt === "string"
-				) {
-					return new Date(account.accessTokenExpiresAt);
+				if (account.accessTokenExpiresAt) {
+					if (typeof account.accessTokenExpiresAt === "string") {
+						return new Date(account.accessTokenExpiresAt);
+					}
+					return account.accessTokenExpiresAt;
 				}
 				return undefined;
 			})();
