@@ -36,12 +36,14 @@ export class StateError extends BetterAuthError {
 
 	constructor(
 		message: string,
-		opts: { code: StateErrorCode; details?: Record<string, any> },
-		errorOptions?: ErrorOptions,
+		options: ErrorOptions & {
+			code: StateErrorCode;
+			details?: Record<string, any>;
+		},
 	) {
-		super(message, errorOptions?.cause as string | undefined);
-		this.code = opts.code;
-		this.details = opts.details;
+		super(message, options);
+		this.code = options.code;
+		this.details = options.details;
 	}
 }
 
@@ -151,8 +153,8 @@ export async function parseGenericState(
 				{
 					code: "state_invalid",
 					details: { state },
+					cause: error,
 				},
-				{ cause: error },
 			);
 		}
 
