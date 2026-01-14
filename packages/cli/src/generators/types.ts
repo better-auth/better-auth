@@ -8,10 +8,17 @@ export interface SchemaGeneratorResult {
 	append?: boolean;
 }
 
+export interface SchemaGeneratorOptions {
+	file?: string;
+	adapter: DBAdapter;
+	options: BetterAuthOptions;
+	/**
+	 * When true, forces regeneration of all migrations by treating
+	 * the database as if it were empty.
+	 */
+	force?: boolean;
+}
+
 export interface SchemaGenerator {
-	<Options extends BetterAuthOptions>(opts: {
-		file?: string;
-		adapter: DBAdapter;
-		options: Options;
-	}): Promise<SchemaGeneratorResult>;
+	(opts: SchemaGeneratorOptions): Promise<SchemaGeneratorResult>;
 }

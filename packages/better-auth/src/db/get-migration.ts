@@ -12,9 +12,21 @@ import type {
 	ColumnDataType,
 	CreateIndexBuilder,
 	CreateTableBuilder,
+	DropTableBuilder,
 	Kysely,
 	RawBuilder,
 } from "kysely";
+
+export interface GetMigrationsOptions {
+	/**
+	 * When true, forces regeneration of all migrations by treating
+	 * the database as if it were empty. This will drop existing
+	 * tables and recreate them.
+	 * @default false
+	 */
+	force?: boolean;
+}
+
 import { sql } from "kysely";
 import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
 import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
@@ -118,7 +130,11 @@ async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	return "public";
 }
 
-export async function getMigrations(config: BetterAuthOptions) {
+export async function getMigrations(
+	config: BetterAuthOptions,
+	options: GetMigrationsOptions = {},
+) {
+	const { force = false } = options;
 	const betterAuthSchema = getSchema(config);
 	const logger = createLogger(config.logger);
 
@@ -214,7 +230,8 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}[] = [];
 
 	for (const [key, value] of Object.entries(betterAuthSchema)) {
-		const table = tableMetadata.find((t) => t.name === key);
+		// When force is true, treat all tables as not existing
+		const table = force ? undefined : tableMetadata.find((t) => t.name === key);
 		if (!table) {
 			const tIndex = toBeCreated.findIndex((t) => t.table === key);
 			const tableData = {
@@ -272,6 +289,29 @@ export async function getMigrations(config: BetterAuthOptions) {
 		| CreateTableBuilder<string, string>
 		| CreateIndexBuilder
 	)[] = [];
+
+	// Drop table migrations (only used when force is true)
+	const dropMigrations: DropTableBuilder[] = [];
+
+	// When force is true, we need to drop the tables in the reverse order of creation
+	// (to handle foreign key constraints properly)
+	if (force) {
+		const schemaOrder: { name: string; order: number }[] = Object.entries(
+			betterAuthSchema,
+		).map(([name, data]) => ({ name, order: data.order ?? Infinity }));
+
+		// Sort by order (ascending), then reverse to get highest order first
+		const dropOrder = schemaOrder
+			.sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
+			.reverse();
+
+		for (const { name } of dropOrder) {
+			const existsInDb = tableMetadata.find((t) => t.name === name);
+			if (existsInDb) {
+				dropMigrations.push(db.schema.dropTable(name).ifExists());
+			}
+		}
+	}
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
 	const useNumberId =
@@ -553,13 +593,21 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	async function runMigrations() {
+		// Execute drops first when forcing
+		if (force) {
+			for (const drop of dropMigrations) {
+				await drop.execute();
+			}
+		}
 		for (const migration of migrations) {
 			await migration.execute();
 		}
 	}
 	async function compileMigrations() {
+		const dropCompiled = dropMigrations.map((m) => m.compile().sql);
 		const compiled = migrations.map((m) => m.compile().sql);
-		return compiled.join(";\n\n") + ";";
+		const allStatements = [...dropCompiled, ...compiled];
+		return allStatements.join(";\n\n") + ";";
 	}
 	return { toBeCreated, toBeAdded, runMigrations, compileMigrations };
 }

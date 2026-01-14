@@ -4,13 +4,17 @@ import * as path from "node:path";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { getMigrations } from "better-auth/db";
 import { organization, twoFactor, username } from "better-auth/plugins";
 import Database from "better-sqlite3";
 import { describe, expect, it } from "vitest";
 import type { SupportedPlugin } from "../src/commands/init";
 import { generateAuthConfig } from "../src/generators/auth-config";
 import { generateDrizzleSchema } from "../src/generators/drizzle";
-import { generateKyselySchema } from "../src/generators/kysely";
+import {
+	generateKyselySchema,
+	generateMigrations,
+} from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
 
@@ -976,5 +980,77 @@ describe("Prisma v7 compatibility", () => {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
 		}
+	});
+});
+
+describe("generate command with force flag", () => {
+	it("should regenerate schema with force flag", async () => {
+		const db = new Database(":memory:");
+
+		const firstSchema = await generateMigrations({
+			file: "test-force-regenerate.sql",
+			options: {
+				database: db,
+			},
+			force: true,
+		});
+
+		expect(firstSchema.code).toBeDefined();
+		expect(typeof firstSchema.code).toBe("string");
+		expect(firstSchema.code?.length).toBeGreaterThan(0);
+	});
+
+	it("should regenerate schema multiple times with force flag", async () => {
+		const db = new Database(":memory:");
+
+		// First generation
+		const firstSchema = await generateMigrations({
+			file: "test-force-regenerate.sql",
+			options: {
+				database: db,
+			},
+			force: true,
+		});
+
+		expect(firstSchema.code).toBeDefined();
+		expect(firstSchema.code?.length).toBeGreaterThan(0);
+
+		// Run migrations to create tables
+		const { runMigrations } = await getMigrations({ database: db });
+		await runMigrations();
+
+		// Second generation with force - should still generate schema
+		const secondSchema = await generateMigrations({
+			file: "test-force-regenerate.sql",
+			options: {
+				database: db,
+			},
+			force: true,
+		});
+
+		expect(secondSchema.code).toBeDefined();
+		expect(secondSchema.code?.length).toBeGreaterThan(0);
+		// Should contain DROP TABLE statements since tables exist
+		expect(secondSchema.code?.toLowerCase()).toContain("drop table");
+	});
+
+	it("should not generate drop statements without force flag when tables exist", async () => {
+		const db = new Database(":memory:");
+
+		// Run migrations to create tables first
+		const { runMigrations } = await getMigrations({ database: db });
+		await runMigrations();
+
+		// Generate without force flag
+		const schema = await generateMigrations({
+			file: "test-no-force.sql",
+			options: {
+				database: db,
+			},
+			force: false,
+		});
+
+		// Should be empty since no changes needed
+		expect(schema.code).toBe("");
 	});
 });

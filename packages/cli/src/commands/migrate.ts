@@ -20,6 +20,7 @@ export async function migrateAction(opts: any) {
 			config: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
+			force: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -101,7 +102,10 @@ export async function migrateAction(opts: any) {
 
 	const spinner = yoctoSpinner({ text: "preparing migration..." }).start();
 
-	const { toBeAdded, toBeCreated, runMigrations } = await getMigrations(config);
+	const { toBeAdded, toBeCreated, runMigrations } = await getMigrations(
+		config,
+		{ force: options.force },
+	);
 
 	if (!toBeAdded.length && !toBeCreated.length) {
 		spinner.stop();
@@ -187,6 +191,11 @@ export const migrate = new Command("migrate")
 	.option(
 		"-y, --yes",
 		"automatically accept and run migrations without prompting",
+		false,
+	)
+	.option(
+		"-f, --force",
+		"force migration by dropping and recreating all relevant tables",
 		false,
 	)
 	.option("--y", "(deprecated) same as --yes", false)
