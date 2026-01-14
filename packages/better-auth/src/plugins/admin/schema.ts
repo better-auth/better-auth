@@ -34,7 +34,7 @@ export const getAdditionalFields = <
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
 	let additionalFields = {
-	  ...options?.schema?.role?.additionalFields || {},
+	  ...(options?.schema?.role?.additionalFields || {}),
 	};
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
