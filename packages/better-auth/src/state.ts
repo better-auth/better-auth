@@ -71,7 +71,7 @@ export async function generateGenericState(
 			},
 		);
 
-		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
+		c.setCookie(stateCookie.name, encryptedData, stateCookie.options);
 
 		return {
 			state,
@@ -92,7 +92,7 @@ export async function generateGenericState(
 		stateCookie.name,
 		state,
 		c.context.secret,
-		stateCookie.attributes,
+		stateCookie.options,
 	);
 
 	const expiresAt = new Date();

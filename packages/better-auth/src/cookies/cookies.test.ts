@@ -1227,7 +1227,7 @@ describe("expireCookie", () => {
 		const setCookie = vi.fn();
 		expireCookie({ setCookie } as any, {
 			name: "test",
-			attributes: {
+			options: {
 				path: "/custom",
 				httpOnly: true,
 			},
