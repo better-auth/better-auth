@@ -12,8 +12,12 @@ import { getRequestEvent } from "$app/server";${
 				options.socialProviders.length > 0
 					? `
 import {
-	${options.socialProviders.map((provider) => `${provider.toUpperCase()}_CLIENT_ID,
-		${provider.toUpperCase()}_CLIENT_SECRET`).join("\n\t")}
+	${options.socialProviders
+		.map(
+			(provider) => `${provider.toUpperCase()}_CLIENT_ID,
+		${provider.toUpperCase()}_CLIENT_SECRET`,
+		)
+		.join("\n\t")}
 } from "$env/static/private";`
 					: ""
 			}${
@@ -226,7 +230,7 @@ const signInString = (options: SignInBoxOptions) => `<script lang="ts">
 					/>
 					<Button
 						disabled={loading}
-						on:click={async () => {
+						onclick={async () => {
 							await signIn.magicLink({
 								email,
 								fetchOptions: {
@@ -255,7 +259,7 @@ const signInString = (options: SignInBoxOptions) => `<script lang="ts">
 				type="submit"
 				class="w-full"
 				disabled={loading}
-				on:click={async () => {
+				onclick={async () => {
 					await signIn.email({
 						email,
 						password,${
@@ -289,7 +293,7 @@ const signInString = (options: SignInBoxOptions) => `<script lang="ts">
 				variant="secondary"
 				disabled={loading}
 				class="gap-2"
-				on:click={async () => {
+				onclick={async () => {
 					await signIn.passkey({
 						fetchOptions: {
 							onRequest: () => {
@@ -330,7 +334,7 @@ const signInString = (options: SignInBoxOptions) => `<script lang="ts">
 							: '"w-full gap-2"'
 					}
 					disabled={loading}
-					on:click={async () => {
+					onclick={async () => {
 						await signIn.social({
 							provider: "${provider}",
 							callbackURL: "/dashboard",
@@ -508,13 +512,13 @@ const signUpString = (options: SignInBoxOptions) => `<script lang="ts">
 							id="image"
 							type="file"
 							accept="image/*"
-							on:change={handleImageChange}
+							onchange={handleImageChange}
 							class="w-full"
 						/>
 						{#if imagePreview}
 							<X
 								class="cursor-pointer"
-								on:click={() => {
+								onclick={() => {
 									image = null;
 									imagePreview = null;
 								}}
@@ -527,7 +531,7 @@ const signUpString = (options: SignInBoxOptions) => `<script lang="ts">
 				type="submit"
 				class="w-full"
 				disabled={loading}
-				on:click={async () => {
+				onclick={async () => {
 					await signUp.email({
 						email,
 						password,
