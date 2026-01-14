@@ -243,15 +243,15 @@ type upgradeSubscription = {
      */
     seats?: number = 1
     /**
-     * Callback URL to redirect back after successful subscription. 
+     * The URL to which Stripe should send customers when payment or setup is complete.
      */
     successUrl: string
     /**
      * If set, checkout shows a back button and customers will be directed here if they cancel payment.
      */
-    cancelUrl: string 
+    cancelUrl: string
     /**
-     * URL to take customers to when they click on the billing portal’s link to return to your website.
+     * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
      */
     returnUrl?: string
     /**
