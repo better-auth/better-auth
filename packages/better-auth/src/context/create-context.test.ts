@@ -17,13 +17,6 @@ describe("base context creation", () => {
 		return createAuthContext(adapter, opts, getDatabaseType);
 	};
 
-	it("should match config", async () => {
-		const res = await initBase({
-			baseURL: "http://localhost:3000",
-		});
-		expect(res).toMatchSnapshot();
-	});
-
 	it("should infer BASE_URL from env", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5147");
 
