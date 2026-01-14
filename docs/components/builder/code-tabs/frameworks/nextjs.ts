@@ -6,10 +6,11 @@ export function resolveNextJSFiles(options: SignInBoxOptions) {
 		{
 			id: "1",
 			name: "auth.ts",
-			content: `import { betterAuth } from "better-auth";${
+			content: `import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next";${
 				options.magicLink
 					? `
-import { magicLink } from "better-auth/plugins/magic-link";`
+import { magicLink } from "better-auth/plugins";`
 					: ""
 			}${
 				options.passkey
@@ -48,21 +49,23 @@ ${
 				).replace(/"/g, "")},`
 			: ""
 	}
-  	${
-			options.magicLink || options.passkey
-				? `plugins: [
-  		${
-				options.magicLink
-					? `magicLink({
-        async sendMagicLink(data) {
-          // Send an email to the user with a magic link
-        },
-      }),`
-					: `${options.passkey ? `passkey(),` : ""}`
-			}
-${options.passkey && options.magicLink ? `passkey(),` : ""}],`
+	  plugins: [${
+			options.magicLink
+				? `
+			magicLink({
+				async sendMagicLink(data) {
+					// Send an email to the user with a magic link
+				},
+			}),`
+				: ""
+		}${
+			options.passkey
+				? `
+			passkey(),`
 				: ""
 		}
+			nextCookies(),
+		],
 		/** if no database is provided, the user data will be stored in memory.
 	 * Make sure to provide a database to persist user data **/
 	});
@@ -131,7 +134,7 @@ import { cn } from "@/lib/utils";
 export default function SignIn() {${
 	options.email || options.magicLink
 		? `
-  const [email, setEmail] = useState("");`
+	const [email, setEmail] = useState("");`
 		: ""
 }${
 	options.email
@@ -324,13 +327,11 @@ export default function SignIn() {${
 										?.stringIcon || "";
 								return `<Button
 							variant="outline"
-							className={cn(
-								${
-									options.socialProviders.length > 3
-										? '"flex-grow"'
-										: '"w-full gap-2"'
-								}
-							)}
+							className=${
+								options.socialProviders.length > 3
+									? '"flex-grow"'
+									: '"w-full gap-2"'
+							}
 							disabled={loading}
 							onClick={async () => {
 								await signIn.social({
@@ -569,10 +570,10 @@ export default function SignUp() {
 						)}
 					</Button>
 				</div>
-			</CardContent>
-      ${
+			</CardContent>${
 				options.label
-					? `<CardFooter>
+					? `
+			<CardFooter>
 				<div className="flex justify-center w-full border-t py-4">
 					<p className="text-center text-xs text-neutral-500">
 						Secured by <span className="text-orange-400">better-auth.</span>

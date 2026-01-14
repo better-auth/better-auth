@@ -47,10 +47,10 @@ export function resolveNuxtFiles(options: SignInBoxOptions) {
 						),
 					).replace(/"/g, "")},`
 				: ""
-		}
-    	${
-				options.magicLink || options.passkey
-					? `plugins: [
+		}${
+			options.magicLink || options.passkey
+				? `
+			plugins: [
     		${
 					options.magicLink
 						? `magicLink({
@@ -61,8 +61,8 @@ export function resolveNuxtFiles(options: SignInBoxOptions) {
 						: `${options.passkey ? `passkey(),` : ""}`
 				}
   ${options.passkey && options.magicLink ? `passkey(),` : ""}],`
-					: ""
-			}
+				: ""
+		}
 		/** if no database is provided, the user data will be stored in memory.
 	 * Make sure to provide a database to persist user data **/
 	});
@@ -371,10 +371,10 @@ const handleSocialSignIn = async (provider: string) => {
 						: ""
 				}
 			</div>
-		</CardContent>
-		${
+		</CardContent>${
 			options.label
-				? `<CardFooter>
+				? `
+		<CardFooter>
 			<div class="flex justify-center w-full border-t py-4">
 				<p class="text-center text-xs text-neutral-500">
 					built with

@@ -37,7 +37,13 @@ import { socialProviders } from "./social-provider";
 import { defaultOptions, optionsAtom } from "./store";
 import { AuthTabs } from "./tabs";
 
-const frameworks = [
+const frameworks: {
+	id: string;
+	title: string;
+	description: string;
+	Icon: React.ComponentType;
+	disabled?: boolean;
+}[] = [
 	{
 		id: "nextjs",
 		title: "Next.js",
@@ -85,7 +91,6 @@ const frameworks = [
 		id: "svelte-kit",
 		title: "SvelteKit",
 		description: "Web development for the rest of us",
-		disabled: true,
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
