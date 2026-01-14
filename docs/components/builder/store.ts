@@ -1,18 +1,6 @@
 import { atom } from "jotai";
-import * as z from "zod";
 
-export const signInBoxOptionsSchema = z.object({
-	email: z.boolean(),
-	passkey: z.boolean(),
-	socialProviders: z.string().array(),
-	magicLink: z.boolean(),
-	signUp: z.boolean(),
-	label: z.boolean(),
-	rememberMe: z.boolean(),
-	requestPasswordReset: z.boolean(),
-});
-
-export type SignInBoxOptions = z.infer<typeof signInBoxOptionsSchema>;
+export type SignInBoxOptions = typeof defaultOptions;
 
 export const defaultOptions = {
 	email: true,
