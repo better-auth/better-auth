@@ -383,8 +383,8 @@ export const getSessionCookie = (
 		parsedCookie.get(name) ||
 		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
 	return (
-		tryGet(`${prefix}-${cookieName}`) ||
 		tryGet(`${prefix}.${cookieName}`) ||
+		tryGet(`${prefix}-${cookieName}`) ||
 		null
 	);
 };
