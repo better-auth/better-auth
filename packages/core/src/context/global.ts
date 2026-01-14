@@ -2,6 +2,10 @@ import type { AsyncLocalStorage } from "@better-auth/core/async_hooks";
 
 interface BetterAuthGlobal {
 	/**
+	 * The version of BetterAuth.
+	 */
+	version: string;
+	/**
 	 * Used to track the number of BetterAuth instances in the same process.
 	 *
 	 * Debugging purposes only.
@@ -29,6 +33,7 @@ const context: Record<string, AsyncLocalStorage<unknown>> = {};
 export function getBetterAuthGlobal(): BetterAuthGlobal {
 	if (!(globalThis as any)[symbol]) {
 		(globalThis as any)[symbol] = {
+			version: import.meta.env.BETTER_AUTH_VERSION as string,
 			epoch: 1,
 			context,
 		};
@@ -36,8 +41,15 @@ export function getBetterAuthGlobal(): BetterAuthGlobal {
 	} else {
 		if (!bind) {
 			bind = (globalThis as any)[symbol] as BetterAuthGlobal;
-			bind.epoch++;
+			if (bind.version !== import.meta.env.BETTER_AUTH_VERSION) {
+				// Different versions of BetterAuth are loaded in the same process.
+				bind.epoch++;
+			}
 		}
 	}
 	return (globalThis as any)[symbol] as BetterAuthGlobal;
+}
+
+export function getBetterAuthVersion() {
+	return getBetterAuthGlobal().version;
 }
