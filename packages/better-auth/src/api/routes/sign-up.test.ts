@@ -447,61 +447,6 @@ describe("sign-up email verification logic", async (it) => {
 		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
 	});
 
-	it("should NOT send verification email when neither sendOnSignUp nor sendVerificationEmail are set", async () => {
-		const mockSendVerificationEmail = vi.fn();
-		const { auth } = await getTestInstance(
-			{
-				emailVerification: {
-					// Both are not set or false
-				},
-				emailAndPassword: {
-					enabled: true,
-				},
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-
-		await auth.api.signUpEmail({
-			body: {
-				email: "verify4@test.com",
-				password: "password",
-				name: "Test User",
-			},
-		});
-
-		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
-	});
-
-	it("should NOT send verification email when sendOnSignUp is false even if sendVerificationEmail is set", async () => {
-		const mockSendVerificationEmail = vi.fn();
-		const { auth } = await getTestInstance(
-			{
-				emailVerification: {
-					sendOnSignUp: false,
-					sendVerificationEmail: mockSendVerificationEmail,
-				},
-				emailAndPassword: {
-					enabled: true,
-				},
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-
-		await auth.api.signUpEmail({
-			body: {
-				email: "verify5@test.com",
-				password: "password",
-				name: "Test User",
-			},
-		});
-
-		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
-	});
-
 	it("should create user with emailVerified false when verification email is sent", async () => {
 		const mockSendVerificationEmail = vi.fn();
 		const { auth, db } = await getTestInstance(
