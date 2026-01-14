@@ -344,6 +344,11 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 export function organization<
 	O extends OrganizationOptions & {
 		teams: { enabled: true };
+		dynamicAccessControl?:
+			| {
+					enabled?: false | undefined;
+			  }
+			| undefined;
 	},
 >(
 	options?: O | undefined,
@@ -407,6 +412,7 @@ export function organization<
 export function organization<
 	O extends OrganizationOptions & {
 		dynamicAccessControl: { enabled: true };
+		teams?: { enabled?: false | undefined } | undefined;
 	},
 >(
 	options?: O | undefined,
