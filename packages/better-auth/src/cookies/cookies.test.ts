@@ -308,66 +308,27 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
-	it.each([
-		{
-			config: {},
-			cookie: "better-auth.session_token=token-123",
-			expected: "token-123",
-			desc: "default prefix, default name, '.' separator",
-		},
-		{
-			config: {},
-			cookie: "better-auth-session_token=token-123",
-			expected: "token-123",
-			desc: "default prefix, default name, '-' separator",
-		},
-		{
-			config: { cookiePrefix: "myprefix" },
-			cookie: "myprefix.session_token=token-123",
-			expected: "token-123",
-			desc: "custom prefix, default name, '.' separator",
-		},
-		{
-			config: { cookiePrefix: "myprefix" },
-			cookie: "myprefix-session_token=token-123",
-			expected: "token-123",
-			desc: "custom prefix, default name, '-' separator",
-		},
-		{
-			config: { cookieName: "my_token" },
-			cookie: "better-auth.my_token=token-123",
-			expected: "token-123",
-			desc: "default prefix, custom name, '.' separator",
-		},
-		{
-			config: { cookieName: "my_token" },
-			cookie: "better-auth-my_token=token-123",
-			expected: "token-123",
-			desc: "default prefix, custom name, '-' separator",
-		},
-		{
-			config: { cookiePrefix: "myprefix", cookieName: "my_token" },
-			cookie: "myprefix.my_token=token-123",
-			expected: "token-123",
-			desc: "custom prefix, custom name, '.' separator",
-		},
-		{
-			config: { cookiePrefix: "myprefix", cookieName: "my_token" },
-			cookie: "myprefix-my_token=token-123",
-			expected: "token-123",
-			desc: "custom prefix, custom name, '-' separator",
-		},
-	])("should find cookie: $desc", ({ config, cookie, expected }) => {
-		const headers = new Headers();
-		headers.set("cookie", cookie);
+	describe.each([".", "-"])("with '%s' separator", (separator) => {
+		describe.each([
+			["", "regular"],
+			[SECURE_COOKIE_PREFIX, "secure"],
+		])("with %s prefix (%s)", (securePrefix) => {
+			it.each([
+				[{}, "better-auth", "session_token"],
+				[{ cookiePrefix: "myprefix" }, "myprefix", "session_token"],
+				[{ cookieName: "my_token" }, "better-auth", "my_token"],
+				[{ cookiePrefix: "myprefix", cookieName: "my_token" }, "myprefix", "my_token"],
+			])("finds cookie with config %j", (config, prefix, name) => {
+				const headers = new Headers();
+				headers.set("cookie", `${securePrefix}${prefix}${separator}${name}=token-123`);
 
-		const request = new Request("https://example.com/api/auth/session", {
-			headers,
+				const request = new Request("https://example.com/api/auth/session", {
+					headers,
+				});
+
+				expect(getSessionCookie(request, config)).toBe("token-123");
+			});
 		});
-
-		const result = getSessionCookie(request, config);
-
-		expect(result).toBe(expected);
 	});
 
 	it("should allow override cookie prefix with secure cookies", async () => {
