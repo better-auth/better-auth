@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.5.0-beta.4",
+  "version": "1.5.0-beta.6",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",

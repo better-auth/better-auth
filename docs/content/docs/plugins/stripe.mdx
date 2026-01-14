@@ -76,7 +76,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
         import { createAuthClient } from "better-auth/client"
         import { stripeClient } from "@better-auth/stripe/client"
 
-        export const client = createAuthClient({
+        export const authClient = createAuthClient({
             // ... your existing config
             plugins: [
                 stripeClient({
@@ -243,15 +243,15 @@ type upgradeSubscription = {
      */
     seats?: number = 1
     /**
-     * Callback URL to redirect back after successful subscription. 
+     * The URL to which Stripe should send customers when payment or setup is complete.
      */
     successUrl: string
     /**
      * If set, checkout shows a back button and customers will be directed here if they cancel payment.
      */
-    cancelUrl: string 
+    cancelUrl: string
     /**
-     * URL to take customers to when they click on the billing portal’s link to return to your website.
+     * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
      */
     returnUrl?: string
     /**
@@ -265,7 +265,7 @@ type upgradeSubscription = {
 **Simple Example:**
 
 ```ts title="client.ts"
-await client.subscription.upgrade({
+await authClient.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
@@ -284,7 +284,7 @@ If the user already has an active subscription, you *must* provide the `subscrip
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
 
 ```ts
-const { error } = await client.subscription.upgrade({
+const { error } = await authClient.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
@@ -302,7 +302,7 @@ For each reference ID (user or organization), only one active or trialing subscr
 
 To switch a subscription to a different plan, use the `subscription.upgrade` method:
 ```ts title="client.ts"
-await client.subscription.upgrade({
+await authClient.subscription.upgrade({
     plan: "pro",
     successUrl: "/dashboard",
     cancelUrl: "/pricing",
@@ -501,7 +501,7 @@ By default, subscriptions are associated with the user ID. However, you can use 
 
 ```ts title="client.ts"
 // Create a subscription for an organization
-await client.subscription.upgrade({
+await authClient.subscription.upgrade({
     plan: "pro",
     referenceId: "org_123456",
     successUrl: "/dashboard",
@@ -510,7 +510,7 @@ await client.subscription.upgrade({
 });
 
 // List subscriptions for an organization
-const { data: subscriptions } = await client.subscription.list({
+const { data: subscriptions } = await authClient.subscription.list({
     query: {
         referenceId: "org_123456"
     }
@@ -522,7 +522,7 @@ const { data: subscriptions } = await client.subscription.list({
 For team or organization plans, you can specify the number of seats:
 
 ```ts
-await client.subscription.upgrade({
+await authClient.subscription.upgrade({
     plan: "team",
     referenceId: "org_123456",
     seats: 10, // 10 team members
@@ -888,7 +888,7 @@ plugins: [
 Even with Organization Customer enabled, user subscriptions remain available and are the default. To use the organization as the billing entity, pass `customerType: "organization"`:
 
 ```ts title="client.ts"
-await client.subscription.upgrade({
+await authClient.subscription.upgrade({
     plan: "team",
     referenceId: activeOrg.id,
     customerType: "organization", // [!code highlight]
