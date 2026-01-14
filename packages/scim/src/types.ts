@@ -18,6 +18,11 @@ export type SCIMEmail = { value?: string; primary?: boolean };
 
 export type SCIMOptions = {
 	/**
+	 * Default list of SCIM providers for testing
+	 * These will take precedence over the database when present
+	 */
+	defaultSCIM?: Omit<SCIMProvider, "id">[];
+	/**
 	 * A callback that runs before a new SCIM token is generated.
 	 * @returns
 	 */

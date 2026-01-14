@@ -267,6 +267,9 @@ importers:
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../packages/passkey
+      '@better-auth/scim':
+        specifier: workspace:^
+        version: link:../../packages/scim
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../packages/sso
