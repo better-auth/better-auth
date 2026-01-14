@@ -36,9 +36,7 @@ export const AuthTabs = ({ tabs: propTabs }: { tabs: Tab[] }) => {
 						onClick={() => {
 							moveSelectedTabToTop(idx);
 						}}
-						className={cn(
-							"relative px-4 py-2 rounded-full opacity-80 hover:opacity-100",
-						)}
+						className={cn("relative px-4 py-2 opacity-80 hover:opacity-100")}
 					>
 						{active.value === tab.value && (
 							<div
