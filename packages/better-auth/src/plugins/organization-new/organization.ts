@@ -16,15 +16,13 @@ export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): {
 	id: "organization";
-	endpoints: InferOrganizationEndpoints<
-		ReturnType<typeof resolveOrgOptions<O>>
-	>;
+	endpoints: InferOrganizationEndpoints<O>;
 	schema: InferOrganizationSchema<ReturnType<typeof resolveOrgOptions<O>>>;
 	$Infer: {
 		Organization: InferOrganization<ReturnType<typeof resolveOrgOptions<O>>>;
 		Invitation: InferInvitation<ReturnType<typeof resolveOrgOptions<O>>>;
 		Member: InferMember<ReturnType<typeof resolveOrgOptions<O>>>;
-		//TODO: Add team and dynamic access control infers
+		//TODO: infer from addons as well
 	};
 	$ERROR_CODES: typeof $ERROR_CODES;
 	options: NoInfer<O>;
@@ -34,7 +32,7 @@ export function organization<O extends OrganizationOptions>(
 	opts?: O | undefined,
 ): any {
 	const options = resolveOrgOptions<O>(opts);
-	const endpoints = getEndpoints(options);
+	const endpoints = getEndpoints(opts || {});
 	const schema = getSchema(options);
 
 	return {

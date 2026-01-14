@@ -7,19 +7,22 @@ import defu from "defu";
 import type { Addon, ResolvedOrganizationOptions } from "../types";
 
 /** Base organization fields */
-type BaseOrganizationFields = {
+type BaseOrganizationFields<DisableSlugs extends boolean> = {
 	name: { type: "string"; required: true; sortable: true };
-	slug: {
-		type: "string";
-		required: true;
-		unique: true;
-		sortable: true;
-		index: true;
-	};
 	logo: { type: "string"; required: false };
 	createdAt: { type: "date"; required: true };
 	metadata: { type: "string"; required: false };
-};
+} & (DisableSlugs extends true
+	? {}
+	: {
+			slug: {
+				type: "string";
+				required: true;
+				unique: true;
+				sortable: true;
+				index: true;
+			};
+		});
 
 /** Base member fields */
 type BaseMemberFields = {
@@ -123,7 +126,7 @@ export type InferOrganizationSchema<O extends ResolvedOrganizationOptions> =
 			organization: {
 				modelName?: string;
 				fields: Prettify<
-					BaseOrganizationFields &
+					BaseOrganizationFields<O["disableSlugs"]> &
 						ExtractAddonModelFields<
 							MergedAddonSchemas<O["use"]>,
 							"organization"
@@ -171,14 +174,18 @@ export const getSchema = <O extends ResolvedOrganizationOptions>(
 				sortable: true,
 				fieldName: opts.schema?.organization?.fields?.name,
 			},
-			slug: {
-				type: "string",
-				required: true,
-				unique: true,
-				sortable: true,
-				fieldName: opts.schema?.organization?.fields?.slug,
-				index: true,
-			},
+			...(opts.disableSlugs
+				? {}
+				: {
+						slug: {
+							type: "string",
+							required: true,
+							unique: true,
+							sortable: true,
+							fieldName: opts.schema?.organization?.fields?.slug,
+							index: true,
+						},
+					}),
 			logo: {
 				type: "string",
 				required: false,

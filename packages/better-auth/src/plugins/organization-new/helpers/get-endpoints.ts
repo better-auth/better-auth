@@ -4,7 +4,7 @@ import { getSessionFromCtx } from "../../../api";
 import { shimContext } from "../../../utils/shim";
 import type { CreateOrganization } from "../routes/create-organizations";
 import { createOrganization } from "../routes/create-organizations";
-import type { Addon, ResolvedOrganizationOptions } from "../types";
+import type { Addon, OrganizationOptions } from "../types";
 
 /** Extract endpoints from a single addon, returns empty object if no endpoints */
 type ExtractAddonEndpoints<A> = A extends {
@@ -27,18 +27,23 @@ type MergedAddonEndpoints<Addons extends readonly Addon[]> =
 	UnionToIntersection<ExtractAddonEndpoints<Addons[number]>>;
 
 /** Base endpoints provided by the organization plugin */
-type BaseEndpoints<O extends ResolvedOrganizationOptions> = {
+type BaseEndpoints<O extends OrganizationOptions> = {
 	createOrganization: CreateOrganization<O>;
 };
 
 /** Inferred endpoints type from options */
-export type InferOrganizationEndpoints<O extends ResolvedOrganizationOptions> =
-	Prettify<BaseEndpoints<O> & MergedAddonEndpoints<O["use"]>>;
+export type InferOrganizationEndpoints<O extends OrganizationOptions> =
+	Prettify<
+		BaseEndpoints<O> &
+			MergedAddonEndpoints<
+				O extends { use: readonly Addon[] } ? O["use"] : Addon[]
+			>
+	>;
 
-export const getEndpoints = <O extends ResolvedOrganizationOptions>(
+export const getEndpoints = <O extends OrganizationOptions>(
 	options: O,
 ): InferOrganizationEndpoints<O> => {
-	const addonEndpoints = options.use.reduce(
+	const addonEndpoints = options.use?.reduce(
 		(acc, addon) => {
 			return {
 				...acc,
@@ -50,7 +55,7 @@ export const getEndpoints = <O extends ResolvedOrganizationOptions>(
 
 	const endpoints = {
 		createOrganization: createOrganization(options),
-		...addonEndpoints,
+		...(addonEndpoints || {}),
 	};
 
 	/**
