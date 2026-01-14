@@ -35,7 +35,6 @@
 				// implicit integrations dependencies
 				"@lynx-js/react",
 				"@sveltejs/kit",
-				"@tanstack/react-start",
 				"@tanstack/start-server-core",
 				"next",
 				"react",
@@ -49,7 +48,10 @@
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!"
+				"nanostores!",
+
+				// implicit test dependencies
+				"vitest"
 			]
 		},
 		"packages/cli": {
