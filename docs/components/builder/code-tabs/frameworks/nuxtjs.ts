@@ -398,6 +398,8 @@ import { signUp } from "~/lib/auth-client";
 import { toast } from "vue-sonner";
 import { cn } from "~/lib/utils";
 
+const router = useRouter();
+
 const firstName = ref("");
 const lastName = ref("");
 const email = ref("");
@@ -406,6 +408,15 @@ const passwordConfirmation = ref("");
 const image = ref<File | null>(null);
 const imagePreview = ref<string | null>(null);
 const loading = ref(false);
+
+async function convertImageToBase64(file: File): Promise<string> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onloadend = () => resolve(reader.result as string);
+		reader.onerror = reject;
+		reader.readAsDataURL(file);
+	});
+}
 
 const handleSignUp = async () => {
 	await signUp.email({
@@ -417,7 +428,7 @@ const handleSignUp = async () => {
 		fetchOptions: {
 			onResponse: () => {
 				loading.value = false;
-			}.
+			},
 			onRequest: () => {
 				loading.value = true;
 			},
@@ -425,13 +436,13 @@ const handleSignUp = async () => {
 				toast.error(ctx.error.message);
 			},
 			onSuccess: () => {
-				useRouter().push("/dashboard");
+				router.push("/dashboard");
 			},
 		},
 	})
 };
 
-const handleImageChange = (event: Event) => {
+const handleImageChange = (e: Event) => {
 	const file = (e.target as HTMLInputElement)?.files?.[0];
 	if (file) {
 		image.value = file;

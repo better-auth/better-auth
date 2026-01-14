@@ -45,7 +45,7 @@ export default function CodeTabs({
 	const activeFile = files.find((file) => file.id === activeFileId);
 
 	return (
-		<div className="w-full mr-auto max-w-[45rem] mt-8 border border-border rounded-md overflow-hidden">
+		<div className="w-full mr-auto max-w-[60.65rem] mt-8 border border-border rounded-md overflow-hidden">
 			<TabBar
 				files={files}
 				activeFileId={activeFileId}
