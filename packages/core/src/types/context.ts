@@ -308,7 +308,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * to avoid blocking the response when possible (for timing attack
 			 * mitigation), but still ensure the operation completes.
 			 */
-			runInBackgroundOrAwait: (
-				promise: Promise<unknown> | Promise<void> | void | unknown,
-			) => Promise<unknown>;
-		};
+		runInBackgroundOrAwait: (
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) => Promise<unknown>;
+	};
