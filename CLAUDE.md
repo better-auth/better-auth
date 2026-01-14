@@ -54,7 +54,7 @@ use `vitest /path/to/<test-file> -t <pattern>` to run specific tests.
 ## Documentation
 
 - Please update the documentation when you make changes to the public API
-- Documentation is located in the `docs/` directory ushered
+- Documentation is located in the `docs/` directory using
   by [Next.js](https://nextjs.org/) + [Fumadocs](https://fumadocs.dev/)
 
 ## Git Workflow
