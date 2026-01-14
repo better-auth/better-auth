@@ -12,6 +12,7 @@ import * as Linking from "expo-linking";
 import { Platform } from "react-native";
 import { setupExpoFocusManager } from "./focus-manager";
 import { setupExpoOnlineManager } from "./online-manager";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
@@ -190,12 +191,8 @@ function getOAuthStateValue(
 ): string | null {
 	if (!cookieJson) return null;
 
-	let parsed: Record<string, StoredCookie>;
-	try {
-		parsed = JSON.parse(cookieJson);
-	} catch {
-		return null;
-	}
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookieJson);
+	if (!parsed) return null;
 
 	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
 
