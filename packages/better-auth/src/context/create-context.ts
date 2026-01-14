@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -183,6 +184,8 @@ export async function createAuthContext(
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
+		baseURL: baseURL || "",
+		version: getBetterAuthVersion(),
 		socialProviders: providers,
 		options,
 		oauthConfig: {
@@ -203,7 +206,6 @@ export async function createAuthContext(
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
-		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined

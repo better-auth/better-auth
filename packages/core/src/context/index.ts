@@ -4,6 +4,7 @@ export {
 	getCurrentAuthContextAsyncLocalStorage,
 	runWithEndpointContext,
 } from "./endpoint-context";
+export { getBetterAuthVersion } from "./global";
 export {
 	defineRequestState,
 	getCurrentRequestState,
