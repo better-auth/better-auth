@@ -11,7 +11,7 @@ import type {
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
-import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+import type { BetterAuthCookies } from "./cookie";
 import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
@@ -172,7 +172,10 @@ export interface InternalAdapter<
 type CreateCookieGetterFn = (
 	cookieName: string,
 	overrideAttributes?: Partial<CookieOptions> | undefined,
-) => BetterAuthCookie;
+) => {
+	name: string;
+	attributes: CookieOptions;
+};
 
 type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	userId: string,

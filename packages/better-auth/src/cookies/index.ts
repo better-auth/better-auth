@@ -59,7 +59,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 
 		return {
 			name: `${secureCookiePrefix}${name}`,
-			options: {
+			attributes: {
 				secure: !!secureCookiePrefix,
 				sameSite: "lax",
 				path: "/",
@@ -68,8 +68,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				...options.advanced?.defaultCookieAttributes,
 				...overrideAttributes,
 				...attributes,
-			},
-		} satisfies BetterAuthCookie;
+			} as CookieOptions,
+		};
 	}
 	return createCookie;
 }
@@ -90,7 +90,7 @@ export function getCookies(options: BetterAuthOptions) {
 	return {
 		sessionToken: {
 			name: sessionToken.name,
-			options: sessionToken.options,
+			options: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -98,15 +98,15 @@ export function getCookies(options: BetterAuthOptions) {
 		 */
 		sessionData: {
 			name: sessionData.name,
-			options: sessionData.options,
+			options: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
-			options: dontRememberToken.options,
+			options: dontRememberToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
-			options: accountData.options,
+			options: accountData.attributes,
 		},
 	};
 }
@@ -301,8 +301,10 @@ export function expireCookie(
 	ctx: GenericEndpointContext,
 	cookie: BetterAuthCookie,
 ) {
+	const cookieOptions =
+		"options" in cookie ? cookie.options : cookie.attributes;
 	ctx.setCookie(cookie.name, "", {
-		...cookie.options,
+		...cookieOptions,
 		maxAge: 0,
 	});
 }

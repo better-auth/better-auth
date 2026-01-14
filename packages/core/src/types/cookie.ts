@@ -1,10 +1,13 @@
 import type { CookieOptions } from "better-call";
 
-export type BetterAuthCookie = { name: string; options: CookieOptions };
+// TODO: keep only one of options or attributes
+export type BetterAuthCookie =
+	| { name: string; options: CookieOptions }
+	| { name: string; attributes: CookieOptions };
 
 export type BetterAuthCookies = {
-	sessionToken: BetterAuthCookie;
-	sessionData: BetterAuthCookie;
-	accountData: BetterAuthCookie;
-	dontRememberToken: BetterAuthCookie;
+	sessionToken: { name: string; options: CookieOptions };
+	sessionData: { name: string; options: CookieOptions };
+	accountData: { name: string; options: CookieOptions };
+	dontRememberToken: { name: string; options: CookieOptions };
 };
