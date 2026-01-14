@@ -360,7 +360,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 													SECURE_COOKIE_PREFIX.toLowerCase(),
 													SECURE_COOKIE_PREFIX,
 												),
-											attributes: ctx.context.authCookies.sessionToken.attributes,
+											attributes:
+												ctx.context.authCookies.sessionToken.attributes,
 										});
 										return verifiedToken;
 									}
