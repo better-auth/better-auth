@@ -108,7 +108,10 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 					`[Dynamic Access Control] The admin plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/admin#dynamic-access-control`,
 				);
-				throw APIError.from("EXPECTATION_FAILED", ADMIN_ERROR_CODES.MISSING_AC_INSTANCE);
+				throw APIError.from(
+					"EXPECTATION_FAILED",
+					ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
+				);
 			}
 
 			roleName = normalizeRoleName(roleName);
@@ -138,7 +141,10 @@ export const createRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE);
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+				);
 			}
 
 			await checkForInvalidResources({ ac, ctx, permission });
@@ -224,7 +230,10 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE);
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+				);
 			}
 
 			if (ctx.body.roleName) {
@@ -241,7 +250,10 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 							defaultRoles,
 						},
 					);
-					throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE);
+					throw APIError.from(
+						"BAD_REQUEST",
+						ADMIN_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
+					);
 				}
 			}
 
@@ -344,7 +356,10 @@ export const listRoles = <O extends AdminOptions>(options: O) => {
 							role: user.role,
 						},
 					);
-					throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE);
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+					);
 				}
 			}
 
@@ -431,7 +446,10 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 							role: user.role,
 						},
 					);
-					throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE);
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
+					);
 				}
 			}
 
@@ -475,7 +493,10 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 
 			const userRole = (user.role || options.defaultRole || "user").split(",");
 			if (canOnlyReadOwnRoles && !userRole.some((r) => r === role.role)) {
-				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE);
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
+				);
 			}
 
 			role.permission = JSON.parse(role.permission as never as string);
@@ -526,7 +547,10 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 					`[Dynamic Access Control] The admin plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/admin#dynamic-access-control`,
 				);
-				throw APIError.from("NOT_IMPLEMENTED", ADMIN_ERROR_CODES.MISSING_AC_INSTANCE);
+				throw APIError.from(
+					"NOT_IMPLEMENTED",
+					ADMIN_ERROR_CODES.MISSING_AC_INSTANCE,
+				);
 			}
 
 			const canUpdateRole = await hasPermission(
@@ -548,7 +572,10 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 						role: user.role,
 					},
 				);
-				throw APIError.from("FORBIDDEN", ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE);
+				throw APIError.from(
+					"FORBIDDEN",
+					ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+				);
 			}
 
 			let condition: Where;
@@ -713,7 +740,10 @@ function checkIfRoleNameIsTakenByPreDefinedRole({
 				defaultRoles,
 			},
 		);
-		throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN);
+		throw APIError.from(
+			"BAD_REQUEST",
+			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		);
 	}
 }
 
@@ -738,7 +768,10 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 		ctx.context.logger.error(
 			`[Dynamic Access Control] The role name "${role}" is already taken by a role in the database.`,
 		);
-		throw APIError.from("BAD_REQUEST", ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN);
+		throw APIError.from(
+			"BAD_REQUEST",
+			ADMIN_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		);
 	}
 }
 

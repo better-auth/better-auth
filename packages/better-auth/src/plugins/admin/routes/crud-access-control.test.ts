@@ -353,7 +353,9 @@ describe("dynamic access control", async () => {
 				body: { roleName: testRole.data.roleData.role },
 				headers,
 			}),
-		).rejects.toThrow(ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE.message);
+		).rejects.toThrow(
+			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE.message,
+		);
 	});
 
 	it("should not be allowed to delete a role that doesn't exist", async () => {
