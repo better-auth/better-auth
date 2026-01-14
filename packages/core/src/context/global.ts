@@ -50,6 +50,6 @@ export function getBetterAuthGlobal(): BetterAuthGlobal {
 	return (globalThis as any)[symbol] as BetterAuthGlobal;
 }
 
-export function getBetterAuthVersion() {
+export function getBetterAuthVersion(): string {
 	return getBetterAuthGlobal().version;
 }
