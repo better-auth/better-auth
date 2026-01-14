@@ -111,7 +111,7 @@ describe("oauth2", async () => {
 	}
 
 	it("should delete state cookie with path attribute", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
