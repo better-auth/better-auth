@@ -581,15 +581,28 @@ export const getAccessToken = createAuthEndpoint(
 					});
 				}
 			}
+
+			let accessTokenExpiresAt = (() => {
+				if (
+					newTokens?.accessTokenExpiresAt &&
+					typeof newTokens?.accessTokenExpiresAt === "string"
+				) {
+					return new Date(newTokens.accessTokenExpiresAt);
+				}
+				if (
+					account.accessTokenExpiresAt &&
+					typeof account.accessTokenExpiresAt === "string"
+				) {
+					return new Date(account.accessTokenExpiresAt);
+				}
+				return undefined;
+			})();
+
 			const tokens = {
 				accessToken:
 					newTokens?.accessToken ??
 					(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
-				accessTokenExpiresAt: newTokens?.accessTokenExpiresAt
-					? new Date(newTokens.accessTokenExpiresAt)
-					: account.accessTokenExpiresAt
-						? new Date(account.accessTokenExpiresAt)
-						: undefined,
+				accessTokenExpiresAt,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 			};
