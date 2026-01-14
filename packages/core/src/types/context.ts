@@ -267,7 +267,10 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			window: number;
 			max: number;
 			storage: "memory" | "database" | "secondary-storage";
-		} & BetterAuthRateLimitOptions;
+		} & Omit<
+			BetterAuthRateLimitOptions,
+			"enabled" | "window" | "max" | "storage"
+		>;
 		adapter: DBAdapter<Options>;
 		internalAdapter: InternalAdapter<Options>;
 		createAuthCookie: CreateCookieGetterFn;
@@ -305,17 +308,18 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			payload: Record<string, any>;
 		}) => Promise<void>;
 		/**
-		 * This skips the origin check for all requests.
+		 * Skip origin check for requests.
 		 *
-		 * set to true by default for `test` environments and `false`
-		 * for other environments.
+		 * - `true`: Skip for ALL requests (DANGEROUS - disables CSRF protection)
+		 * - `string[]`: Skip only for specific paths (e.g., SAML callbacks)
+		 * - `false`: Enable origin check (default)
 		 *
-		 * It's inferred from the `options.advanced?.disableCSRFCheck`
-		 * option or `options.advanced?.disableOriginCheck` option.
+		 * Paths support prefix matching (e.g., "/sso/saml2/callback" matches
+		 * "/sso/saml2/callback/provider-name").
 		 *
-		 * @default false
+		 * @default false (true in test environments)
 		 */
-		skipOriginCheck: boolean;
+		skipOriginCheck: boolean | string[];
 		/**
 		 * This skips the CSRF check for all requests.
 		 *
