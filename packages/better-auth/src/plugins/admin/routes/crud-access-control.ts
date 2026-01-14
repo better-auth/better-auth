@@ -261,7 +261,7 @@ export const deleteRole = <O extends AdminOptions>(options: O) => {
 			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
-					value: ctx.body.roleName,
+					value: normalizeRoleName(ctx.body.roleName),
 					operator: "eq",
 					connector: "AND",
 				};
@@ -457,7 +457,7 @@ export const getRole = <O extends AdminOptions>(options: O) => {
 			if (ctx.query?.roleName) {
 				conditions.push({
 					field: "role",
-					value: ctx.query.roleName,
+					value: normalizeRoleName(ctx.query.roleName),
 					operator: "eq",
 					connector: "AND",
 				});
@@ -582,7 +582,7 @@ export const updateRole = <O extends AdminOptions>(options: O) => {
 			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
-					value: ctx.body.roleName,
+					value: normalizeRoleName(ctx.body.roleName),
 					operator: "eq",
 					connector: "AND",
 				};
