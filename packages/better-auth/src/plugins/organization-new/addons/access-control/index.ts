@@ -6,5 +6,6 @@ export const accessControl = <O extends AccessControlOptions>(
 ) => {
 	return {
 		id: "access-control",
-	} satisfies OrganizationAddons;
+		priority: 5, // Run early to set up access control before other addons
+	} satisfies OrganizationAddons<O>;
 };

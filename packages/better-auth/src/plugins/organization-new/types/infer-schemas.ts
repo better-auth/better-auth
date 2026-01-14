@@ -2,7 +2,11 @@ import type { Prettify } from "@better-auth/core";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import type { InferOrganizationRolesFromOption } from "../access";
 import type { Organization } from "../schema";
-import type { ResolvedOrganizationOptions } from "./organization-options";
+import type { Addon } from "./addon";
+import type {
+	OrganizationOptions,
+	ResolvedOrganizationOptions,
+} from "./organization-options";
 
 export type InferMember<
 	O extends ResolvedOrganizationOptions,
@@ -42,42 +46,44 @@ export type InferMember<
 >;
 
 export type InferOrganization<
-	O extends ResolvedOrganizationOptions,
+	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
 	Organization &
-		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
-> &
-	(O["disableSlugs"] extends false ? { slug: string } : never);
+		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide> &
+		(O["disableSlugs"] extends false ? { slug: string } : {})
+>;
 
 export type InferInvitation<
-	O extends ResolvedOrganizationOptions,
+	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
-	(O["use"][number] extends {
-		id: "teams";
-	}
-		? {
-				id: string;
-				organizationId: string;
-				email: string;
-				role: InferOrganizationRolesFromOption<O>;
-				status: InvitationStatus;
-				inviterId: string;
-				expiresAt: Date;
-				createdAt: Date;
-				teamId?: string | undefined;
+	(O["use"] extends readonly Addon[]
+		? O["use"][number] extends {
+				id: "teams";
 			}
-		: {
-				id: string;
-				organizationId: string;
-				email: string;
-				role: InferOrganizationRolesFromOption<O>;
-				status: InvitationStatus;
-				inviterId: string;
-				expiresAt: Date;
-				createdAt: Date;
-			}) &
+			? {
+					id: string;
+					organizationId: string;
+					email: string;
+					role: InferOrganizationRolesFromOption<O>;
+					status: InvitationStatus;
+					inviterId: string;
+					expiresAt: Date;
+					createdAt: Date;
+					teamId?: string | undefined;
+				}
+			: {
+					id: string;
+					organizationId: string;
+					email: string;
+					role: InferOrganizationRolesFromOption<O>;
+					status: InvitationStatus;
+					inviterId: string;
+					expiresAt: Date;
+					createdAt: Date;
+				}
+		: {}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
 >;
 

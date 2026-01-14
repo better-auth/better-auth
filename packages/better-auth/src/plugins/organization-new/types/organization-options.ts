@@ -7,11 +7,11 @@ import type {
 	Organization,
 	Role,
 } from "../..";
-import type { OrganizationAddons } from "./organization-addons";
+import type { Addon } from "./addon";
 import type { OrganizationHooks } from "./organization-hooks";
 
 export type ResolvedOrganizationOptions = {
-	use: OrganizationAddons[];
+	use: Addon[];
 	allowUserToCreateOrganization: (user: User) => Awaitable<boolean>;
 	organizationLimit: (user: User) => Awaitable<number>;
 	creatorRole: string;
@@ -31,7 +31,7 @@ export type OrganizationOptions = {
 	 * use: [teams(), accessControl()]
 	 * ```
 	 */
-	use?: OrganizationAddons[];
+	use?: Addon[];
 	/**
 	 * Whether the user is allowed to create an organization.
 	 * @example

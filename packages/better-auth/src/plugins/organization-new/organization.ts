@@ -1,13 +1,38 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { ORGANIZATION_ERROR_CODES as $ERROR_CODES } from "./helpers/error-codes";
+import type { InferOrganizationEndpoints } from "./helpers/get-endpoints";
 import { getEndpoints } from "./helpers/get-endpoints";
+import type { InferOrganizationSchema } from "./helpers/get-schema";
 import { getSchema } from "./helpers/get-schema";
 import { resolveOrgOptions } from "./helpers/resolve-org-options";
-import type { OrganizationOptions } from "./types";
+import type {
+	InferInvitation,
+	InferMember,
+	InferOrganization,
+	OrganizationOptions,
+} from "./types";
 
-export const organization = <O extends OrganizationOptions>(
+export function organization<O extends OrganizationOptions>(
+	options?: O | undefined,
+): {
+	id: "organization";
+	endpoints: InferOrganizationEndpoints<
+		ReturnType<typeof resolveOrgOptions<O>>
+	>;
+	schema: InferOrganizationSchema<ReturnType<typeof resolveOrgOptions<O>>>;
+	$Infer: {
+		Organization: InferOrganization<ReturnType<typeof resolveOrgOptions<O>>>;
+		Invitation: InferInvitation<ReturnType<typeof resolveOrgOptions<O>>>;
+		Member: InferMember<ReturnType<typeof resolveOrgOptions<O>>>;
+		//TODO: Add team and dynamic access control infers
+	};
+	$ERROR_CODES: typeof $ERROR_CODES;
+	options: NoInfer<O>;
+};
+
+export function organization<O extends OrganizationOptions>(
 	opts?: O | undefined,
-) => {
+): any {
 	const options = resolveOrgOptions<O>(opts);
 	const endpoints = getEndpoints(options);
 	const schema = getSchema(options);
@@ -19,4 +44,4 @@ export const organization = <O extends OrganizationOptions>(
 		$ERROR_CODES,
 		options: opts as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
-};
+}

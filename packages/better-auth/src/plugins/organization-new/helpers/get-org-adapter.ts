@@ -3,9 +3,9 @@ import { getCurrentAdapter } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import type { Member, MemberInput, OrganizationInput } from "../schema";
-import type { InferOrganization, ResolvedOrganizationOptions } from "../types";
+import type { InferOrganization, OrganizationOptions } from "../types";
 
-export const getOrgAdapter = <O extends ResolvedOrganizationOptions>(
+export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
 ) => {
@@ -44,10 +44,8 @@ export const getOrgAdapter = <O extends ResolvedOrganizationOptions>(
 			>({
 				model: "organization",
 				data: {
-					...data.organization,
-					metadata: data.organization.metadata
-						? JSON.stringify(data.organization.metadata)
-						: undefined,
+					...data,
+					metadata: data.metadata ? JSON.stringify(data.metadata) : undefined,
 				},
 				forceAllowId: true,
 			});
