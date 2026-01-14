@@ -485,14 +485,7 @@ export const getAccessToken = createAuthEndpoint(
 										accessToken: {
 											type: "string",
 										},
-										refreshToken: {
-											type: "string",
-										},
 										accessTokenExpiresAt: {
-											type: "string",
-											format: "date-time",
-										},
-										refreshTokenExpiresAt: {
 											type: "string",
 											format: "date-time",
 										},
@@ -588,14 +581,28 @@ export const getAccessToken = createAuthEndpoint(
 					});
 				}
 			}
+
+			const accessTokenExpiresAt = (() => {
+				if (newTokens?.accessTokenExpiresAt) {
+					if (typeof newTokens.accessTokenExpiresAt === "string") {
+						return new Date(newTokens.accessTokenExpiresAt);
+					}
+					return newTokens.accessTokenExpiresAt;
+				}
+				if (account.accessTokenExpiresAt) {
+					if (typeof account.accessTokenExpiresAt === "string") {
+						return new Date(account.accessTokenExpiresAt);
+					}
+					return account.accessTokenExpiresAt;
+				}
+				return undefined;
+			})();
+
 			const tokens = {
 				accessToken:
 					newTokens?.accessToken ??
 					(await decryptOAuthToken(account.accessToken ?? "", ctx.context)),
-				accessTokenExpiresAt:
-					newTokens?.accessTokenExpiresAt ??
-					account.accessTokenExpiresAt ??
-					undefined,
+				accessTokenExpiresAt,
 				scopes: account.scope?.split(",") ?? [],
 				idToken: newTokens?.idToken ?? account.idToken ?? undefined,
 			};
