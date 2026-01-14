@@ -7,13 +7,13 @@ import { getAddonHook } from "../helpers/get-addon-hook";
 import { getHook } from "../helpers/get-hook";
 import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { getUserFromSessionOrBody } from "../helpers/get-user-from-session-or-body";
+import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import { orgMiddleware } from "../middleware/org-middleware";
 import type {
 	InferOrganization,
 	OrganizationOptions,
 	ResolvedOrganizationOptions,
 } from "../types";
-import { resolveOrgOptions } from "../helpers/resolve-org-options";
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
@@ -47,8 +47,9 @@ const baseOrganizationSchema = z.object({
 		.optional(),
 });
 
-export type CreateOrganization<O extends ResolvedOrganizationOptions> =
-	ReturnType<typeof createOrganization<O>>;
+export type CreateOrganization<O extends OrganizationOptions> = ReturnType<
+	typeof createOrganization<O>
+>;
 
 export const createOrganization = <O extends OrganizationOptions>(
 	_options: O,

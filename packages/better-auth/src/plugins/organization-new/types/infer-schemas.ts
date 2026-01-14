@@ -51,7 +51,7 @@ export type InferOrganization<
 > = Prettify<
 	Organization &
 		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide> &
-		(O["disableSlugs"] extends false ? { slug: string } : {})
+		(O["disableSlugs"] extends true ? {} : { slug: string })
 >;
 
 export type InferInvitation<
