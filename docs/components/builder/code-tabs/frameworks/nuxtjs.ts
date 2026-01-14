@@ -2,63 +2,67 @@ import { socialProviders } from "../../social-provider";
 import type { SignInBoxOptions } from "../../store";
 
 export function resolveNuxtJSFiles(options: SignInBoxOptions) {
-  const files = [
-    {
+	const files = [
+		{
 			id: "1",
 			name: "auth.ts",
-			content: `import { betterAuth } from "better-auth";${options.magicLink
-    ? `
+			content: `import { betterAuth } from "better-auth";${
+				options.magicLink
+					? `
   import { magicLink } from "better-auth/plugins/magic-link";`
-    : ""}${options.passkey
-    ? `
+					: ""
+			}${
+				options.passkey
+					? `
   import { passkey } from "@better-auth/passkey";`
-    : ""}
+					: ""
+			}
 
   export const auth = betterAuth({
     ${
-		options.email
-			? `emailAndPassword: {
+			options.email
+				? `emailAndPassword: {
     enabled: true,
   ${
-	options.requestPasswordReset
-		? `async sendResetPassword(data, request) {
+		options.requestPasswordReset
+			? `async sendResetPassword(data, request) {
         // Send an email to the user with a link to reset their password
       },`
-		: ``
-  }
-      },`
-			: ""
-	}${
-		options.socialProviders.length
-			? `socialProviders: ${JSON.stringify(
-					options.socialProviders.reduce(
-						(acc, provider) => ({
-							...acc,
-							[provider]: {
-								clientId: `process.env.${provider.toUpperCase()}_CLIENT_ID!`,
-								clientSecret: `process.env.${provider.toUpperCase()}_CLIENT_SECRET!`,
-							},
-						}),
-						{},
-					),
-				).replace(/"/g, "")},`
-			: ""
+			: ``
 	}
+      },`
+				: ""
+		}${
+			options.socialProviders.length
+				? `socialProviders: ${JSON.stringify(
+						options.socialProviders.reduce(
+							(acc, provider) => ({
+								...acc,
+								[provider]: {
+									clientId: `process.env.${provider.toUpperCase()}_CLIENT_ID!`,
+									clientSecret: `process.env.${provider.toUpperCase()}_CLIENT_SECRET!`,
+								},
+							}),
+							{},
+						),
+					).replace(/"/g, "")},`
+				: ""
+		}
     	${
-			options.magicLink || options.passkey
-				? `plugins: [
+				options.magicLink || options.passkey
+					? `plugins: [
     		${
-				options.magicLink
-					? `magicLink({
+					options.magicLink
+						? `magicLink({
           async sendMagicLink(data) {
             // Send an email to the user with a magic link
           },
         }),`
-					: `${options.passkey ? `passkey(),` : ""}`
-			}
+						: `${options.passkey ? `passkey(),` : ""}`
+				}
   ${options.passkey && options.magicLink ? `passkey(),` : ""}],`
-				: ""
-		}
+					: ""
+			}
 		/** if no database is provided, the user data will be stored in memory.
 	 * Make sure to provide a database to persist user data **/
 	});
@@ -72,10 +76,12 @@ export function resolveNuxtJSFiles(options: SignInBoxOptions) {
 					? `
 			import { magicLinkClient } from "better-auth/client/plugins";`
 					: ""
-			}${options.passkey
-			    ? `
+			}${
+				options.passkey
+					? `
 			import { passkeyClient } from "@better-auth/passkey/client";`
-					: ""}
+					: ""
+			}
 
 			export const authClient = createAuthClient({
 				baseURL: process.env.NEXT_PUBLIC_APP_URL,${
@@ -96,16 +102,16 @@ export function resolveNuxtJSFiles(options: SignInBoxOptions) {
 			name: "sign-in.vue",
 			content: signInString(options),
 		},
-  ];
-  if (options.signUp) {
-    files.push({
-      id: "4",
-      name: "sign-up.vue",
-      content: signUpString(options),
-    });
-  }
+	];
+	if (options.signUp) {
+		files.push({
+			id: "4",
+			name: "sign-up.vue",
+			content: signUpString(options),
+		});
+	}
 
-  return files;
+	return files;
 }
 
 const signInString = (options: SignInBoxOptions) => `<script setup lang="ts">
@@ -118,31 +124,34 @@ import { Loader2, Key } from "lucide-vue";
 import { signIn } from "~/lib/auth-client";
 import { cn } from "~/lib/utils";
 ${
-  options.email || options.magicLink
-    ? `
+	options.email || options.magicLink
+		? `
 const email = ref("");`
-    : ""
+		: ""
 }${
-  options.email
-    ? `
+	options.email
+		? `
 const password = ref("");`
-    : ""
+		: ""
 }
 const loading = ref(false);${
-  options.rememberMe
-    ? `
+	options.rememberMe
+		? `
 const rememberMe = ref(false);`
-    : ""
-}${options.email
-    ? `
+		: ""
+}${
+	options.email
+		? `
 
 const handleSignIn = async () => {
 	await signIn.email({
 		email: email.value,
-		password: password.value,${options.rememberMe
-		    ? `
+		password: password.value,${
+			options.rememberMe
+				? `
 		rememberMe: rememberMe.value,`
-		    : ""}
+				: ""
+		}
 		fetchOptions: {
 			onRequest: () => {
 			  loading.value = true;
@@ -153,9 +162,10 @@ const handleSignIn = async () => {
 		},
 	});
 };`
-    : ""
-}${options.magicLink
-    ? `
+		: ""
+}${
+	options.magicLink
+		? `
 
 const handleMagicLink = async () => {
 	await signIn.magicLink({
@@ -171,9 +181,10 @@ const handleMagicLink = async () => {
 	});
 };
 `
-    : ""
-}${options.passkey
-    ? `
+		: ""
+}${
+	options.passkey
+		? `
 
 const handlePasskey = async () => {
 	await signIn.passkey({
@@ -187,9 +198,10 @@ const handlePasskey = async () => {
 		},
 	});
 };`
-    : ""}${
-  options.socialProviders.length > 0
-    ? `
+		: ""
+}${
+	options.socialProviders.length > 0
+		? `
 
 const handleSocialSignIn = async (provider: string) => {
 	await signIn.social({
@@ -205,7 +217,7 @@ const handleSocialSignIn = async (provider: string) => {
 		},
 	});
 }`
-    : ""
+		: ""
 }
 </script>
 
@@ -220,7 +232,7 @@ const handleSocialSignIn = async (provider: string) => {
 		<CardContent>
 			<div class="grid gap-4">
 				${
-				  options.email
+					options.email
 						? `<div class="grid gap-2">
 					<Label for="email">Email</Label>
 					<Input
@@ -235,7 +247,7 @@ const handleSocialSignIn = async (provider: string) => {
 				<div class="grid gap-2">
 					<div class="flex items-center">
 						<Label for="password">Password</Label>${
-						  options.requestPasswordReset
+							options.requestPasswordReset
 								? `
 						<NuxtLink
 							to="#"
@@ -254,8 +266,9 @@ const handleSocialSignIn = async (provider: string) => {
 						autoComplete="password"
 						v-model="password"
 					/>
-				</div>${options.rememberMe
-				  ? `
+				</div>${
+					options.rememberMe
+						? `
 				<div class="flex items-center gap-2">
 					<Checkbox
 						id="remember"
@@ -263,11 +276,11 @@ const handleSocialSignIn = async (provider: string) => {
 					/>
 					<Label for="remember">Remember me</Label>
 				</div>`
-					: ""
+						: ""
 				}`
-					  : ""
+						: ""
 				}${
-				  options.magicLink
+					options.magicLink
 						? `<div class="grid gap-2">
 					<Label for="email">Email</Label>
 					<Input
@@ -290,7 +303,7 @@ const handleSocialSignIn = async (provider: string) => {
 				</div>`
 						: ""
 				}${
-				  options.email
+					options.email
 						? `
 				<Button
 					type="submit"
@@ -302,8 +315,9 @@ const handleSocialSignIn = async (provider: string) => {
 					<p v-else>Login</p>
 				</Button>`
 						: ""
-				}${options.passkey
-				  ? `
+				}${
+					options.passkey
+						? `
 				<Button
 					variant="secondary"
 					:disabled="loading"
@@ -313,14 +327,14 @@ const handleSocialSignIn = async (provider: string) => {
 					<Key size="16" />
 					Sign-in with Passkey
 				</Button>`
-					: ``
+						: ``
 				}${
-				  options.socialProviders.length > 0
+					options.socialProviders.length > 0
 						? `
 				<div :class="cn(
 					'w-full gap-2 flex items-center',
 					${
-					  options.socialProviders.length > 3
+						options.socialProviders.length > 3
 							? "'justify-between flex-wrap'"
 							: "'justify-between flex-col'"
 					}
@@ -328,14 +342,15 @@ const handleSocialSignIn = async (provider: string) => {
 					${options.socialProviders
 						.map((provider: string) => {
 							const icon =
-		 						socialProviders[provider as keyof typeof socialProviders]?.stringIcon || "";
+								socialProviders[provider as keyof typeof socialProviders]
+									?.stringIcon || "";
 							return `<Button
 						variant="outline"
 						:class="cn(
 							${
-							options.socialProviders.length > 3
-							? "'flex-grow'"
-							: "'w-full gap-2'"
+								options.socialProviders.length > 3
+									? "'flex-grow'"
+									: "'w-full gap-2'"
 							}
 						)"
 						:disabled="loading"
@@ -343,22 +358,22 @@ const handleSocialSignIn = async (provider: string) => {
 					>
 						${icon}
 						${
-						  options.socialProviders.length <= 3
+							options.socialProviders.length <= 3
 								? `Sign in with ${
 										provider.charAt(0).toUpperCase() + provider.slice(1)
 									}`
 								: ""
 						}
 					</Button>`;
-					})
-					  .join("\n\t\t\t\t\t")}
+						})
+						.join("\n\t\t\t\t\t")}
 				</div>`
-				    : ""
+						: ""
 				}
 			</div>
 		</CardContent>
 		${
-		  options.label
+			options.label
 				? `<CardFooter>
 			<div class="flex justify-center w-full border-t py-4">
 				<p class="text-center text-xs text-neutral-500">
@@ -375,7 +390,7 @@ const handleSocialSignIn = async (provider: string) => {
 				</p>
 			</div>
 		</CardFooter>`
-		    : ""
+				: ""
 		}
 	</Card>
 </template>
@@ -552,7 +567,7 @@ const handleImageChange = (e: Event) => {
 			</div>
 		</CardContent>
 		${
-		  options.label
+			options.label
 				? `<CardFooter>
 			<div class="flex justify-center w-full border-t py-4">
 				<p class="text-center text-xs text-neutral-500">

@@ -6,13 +6,17 @@ export function resolveNextJSFiles(options: SignInBoxOptions) {
 		{
 			id: "1",
 			name: "auth.ts",
-			content: `import { betterAuth } from "better-auth";${options.magicLink
-  ? `
+			content: `import { betterAuth } from "better-auth";${
+				options.magicLink
+					? `
 import { magicLink } from "better-auth/plugins/magic-link";`
-  : ""}${options.passkey
-  ? `
+					: ""
+			}${
+				options.passkey
+					? `
 import { passkey } from "@better-auth/passkey";`
-  : ""}
+					: ""
+			}
 
 export const auth = betterAuth({
   ${
@@ -72,10 +76,12 @@ ${options.passkey && options.magicLink ? `passkey(),` : ""}],`
 					? `
 			import { magicLinkClient } from "better-auth/client/plugins";`
 					: ""
-			}${options.passkey
-			    ? `
+			}${
+				options.passkey
+					? `
 			import { passkeyClient } from "@better-auth/passkey/client";`
-					: ""}
+					: ""
+			}
 
 			export const authClient = createAuthClient({
 				baseURL: process.env.NEXT_PUBLIC_APP_URL,${
@@ -123,16 +129,16 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function SignIn() {${
-    options.email || options.magicLink
-      ? `
+	options.email || options.magicLink
+		? `
   const [email, setEmail] = useState("");`
-      : ""
-  }${
-	  options.email
-			? `
+		: ""
+}${
+	options.email
+		? `
 	const [password, setPassword] = useState("");`
-	    : ""
-	}
+		: ""
+}
 	const [loading, setLoading] = useState(false);${
 		options.rememberMe
 			? `
@@ -252,10 +258,11 @@ export default function SignIn() {${
 						onClick={async () => {
 							await signIn.email({
 								email,
-								password,${options.rememberMe
-								    ? `
+								password,${
+									options.rememberMe
+										? `
 								rememberMe,`
-								    : ""
+										: ""
 								}
 								fetchOptions: {
 									onRequest: () => {
@@ -349,8 +356,8 @@ export default function SignIn() {${
 									: ""
 							}
 						</Button>`;
-						})
-						.join("\n\t\t\t\t\t\t")}
+							})
+							.join("\n\t\t\t\t\t\t")}
 					</div>`
 							: ""
 					}

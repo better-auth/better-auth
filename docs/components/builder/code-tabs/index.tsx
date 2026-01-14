@@ -7,11 +7,7 @@ import { resolveNextJSFiles } from "./frameworks/nextjs";
 import { resolveNuxtJSFiles } from "./frameworks/nuxtjs";
 import { TabBar } from "./tab-bar";
 
-export default function CodeTabs({
-	framework,
-}: {
-	framework: string;
-}) {
+export default function CodeTabs({ framework }: { framework: string }) {
 	const [options] = useAtom(optionsAtom);
 
 	const files = useMemo(() => {
@@ -20,10 +16,10 @@ export default function CodeTabs({
 				return resolveNextJSFiles(options);
 			case "nuxt":
 				return resolveNuxtJSFiles(options);
-  		case "svelte-kit":
-  		  break;
-      case "solid-start":
-        break;
+			case "svelte-kit":
+				break;
+			case "solid-start":
+				break;
 		}
 
 		console.error("Invalid framework", framework);
