@@ -99,6 +99,35 @@ describe("sign-in", async (it) => {
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
 	});
+
+	it("verification email will be sent if sendOnSignIn is undefined but sendVerificationEmail is set (defaults to true)", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth, testUser } = await getTestInstance({
+			emailVerification: {
+				// sendOnSignIn is not set (undefined), should default to false
+				sendVerificationEmail,
+			},
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
+
+		await expect(
+			auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+			}),
+		).rejects.toThrowError(
+			APIError.from("FORBIDDEN", BASE_ERROR_CODES.EMAIL_NOT_VERIFIED),
+		);
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(0);
+	});
 });
 
 describe("url checks", async (it) => {

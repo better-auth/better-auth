@@ -556,7 +556,7 @@ describe("sign-up email verification logic", async (it) => {
 		});
 
 		const users = await db.findMany({ model: "user" });
-		const user = users.find((u: any) => u.email === "verify6@test.com");
+		const user = users.find((u: any) => u.email === "verify6@test.com") as any;
 		expect(user).toBeDefined();
 		expect(user?.emailVerified).toBe(false);
 	});
@@ -588,7 +588,36 @@ describe("sign-up email verification logic", async (it) => {
 		});
 
 		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(1);
-		const callArgs = mockSendVerificationEmail.mock.calls[0][0];
-		expect(callArgs.url).toContain("callbackURL=%2Fdashboard");
+		const callArgs = mockSendVerificationEmail.mock.calls[0]?.[0];
+		expect(callArgs).toBeDefined();
+		expect(callArgs?.url).toContain("callbackURL=%2Fdashboard");
+	});
+
+	it("should send verification email when sendOnSignUp is undefined but sendVerificationEmail is set (defaults to true)", async () => {
+		const mockSendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					// sendOnSignUp is not set (undefined), should default to false
+					sendVerificationEmail: mockSendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "verify8@test.com",
+				password: "password",
+				name: "Test User",
+			},
+		});
+
+		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(0);
 	});
 });
