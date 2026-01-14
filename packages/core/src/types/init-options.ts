@@ -1417,13 +1417,59 @@ export type BetterAuthOptions = {
 	hooks?:
 		| {
 				/**
-				 * Before a request is processed
+				 * Before a request is processed.
+				 *
+				 * Can be either a middleware function directly (runs before plugin hooks - "pre"),
+				 * or an object with `handler` and `position` to control execution order.
+				 *
+				 * @example
+				 * ```ts
+				 * // Simple usage (runs before plugins - "pre")
+				 * hooks: { before: (ctx) => { ... } }
+				 *
+				 * // With position control (runs after plugins - "post")
+				 * hooks: { before: { handler: (ctx) => { ... }, position: "post" } }
+				 * ```
 				 */
-				before?: AuthMiddleware;
+				before?:
+					| AuthMiddleware
+					| {
+							handler: AuthMiddleware;
+							/**
+							 * When to run the hook relative to plugin hooks.
+							 * - "pre": Run before plugin hooks (default)
+							 * - "post": Run after plugin hooks
+							 * @default "pre"
+							 */
+							position?: "pre" | "post";
+					  };
 				/**
-				 * After a request is processed
+				 * After a request is processed.
+				 *
+				 * Can be either a middleware function directly (runs before plugin hooks - "pre"),
+				 * or an object with `handler` and `position` to control execution order.
+				 *
+				 * @example
+				 * ```ts
+				 * // Simple usage (runs before plugins - "pre")
+				 * hooks: { after: (ctx) => { ... } }
+				 *
+				 * // With position control (runs after plugins - "post")
+				 * hooks: { after: { handler: (ctx) => { ... }, position: "post" } }
+				 * ```
 				 */
-				after?: AuthMiddleware;
+				after?:
+					| AuthMiddleware
+					| {
+							handler: AuthMiddleware;
+							/**
+							 * When to run the hook relative to plugin hooks.
+							 * - "pre": Run before plugin hooks (default)
+							 * - "post": Run after plugin hooks
+							 * @default "pre"
+							 */
+							position?: "pre" | "post";
+					  };
 		  }
 		| undefined;
 	/**

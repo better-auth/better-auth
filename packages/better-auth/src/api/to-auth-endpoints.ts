@@ -326,22 +326,7 @@ function getHooks(authContext: AuthContext) {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
 	}[] = [];
-	const beforeHookHandler = authContext.options.hooks?.before;
-	if (beforeHookHandler) {
-		hooksSourceWeakMap.set(beforeHookHandler, "user");
-		beforeHooks.push({
-			matcher: () => true,
-			handler: beforeHookHandler,
-		});
-	}
-	const afterHookHandler = authContext.options.hooks?.after;
-	if (afterHookHandler) {
-		hooksSourceWeakMap.set(afterHookHandler, "user");
-		afterHooks.push({
-			matcher: () => true,
-			handler: afterHookHandler,
-		});
-	}
+
 	const pluginBeforeHooks = plugins
 		.filter((plugin) => plugin.hooks?.before)
 		.map((plugin) => plugin.hooks?.before!)
@@ -351,11 +336,64 @@ function getHooks(authContext: AuthContext) {
 		.map((plugin) => plugin.hooks?.after!)
 		.flat();
 
+	// Helper to extract handler and position from user hook config
+	const getUserHook = (
+		hook:
+			| AuthMiddleware
+			| { handler: AuthMiddleware; position?: "pre" | "post" }
+			| undefined,
+	): { handler: AuthMiddleware; position: "pre" | "post" } | null => {
+		if (!hook) return null;
+		if (typeof hook === "function") {
+			return { handler: hook, position: "pre" };
+		}
+		return { handler: hook.handler, position: hook.position ?? "pre" };
+	};
+
+	const beforeHookConfig = getUserHook(authContext.options.hooks?.before);
+	const afterHookConfig = getUserHook(authContext.options.hooks?.after);
+
 	/**
-	 * Add plugin added hooks at last
+	 * Add user-defined "pre" hooks first (before plugin hooks)
+	 */
+	if (beforeHookConfig && beforeHookConfig.position === "pre") {
+		hooksSourceWeakMap.set(beforeHookConfig.handler, "user");
+		beforeHooks.push({
+			matcher: () => true,
+			handler: beforeHookConfig.handler,
+		});
+	}
+	if (afterHookConfig && afterHookConfig.position === "pre") {
+		hooksSourceWeakMap.set(afterHookConfig.handler, "user");
+		afterHooks.push({
+			matcher: () => true,
+			handler: afterHookConfig.handler,
+		});
+	}
+
+	/**
+	 * Add plugin hooks
 	 */
 	if (pluginBeforeHooks.length) beforeHooks.push(...pluginBeforeHooks);
 	if (pluginAfterHooks.length) afterHooks.push(...pluginAfterHooks);
+
+	/**
+	 * Add user-defined "post" hooks last (after plugin hooks)
+	 */
+	if (beforeHookConfig && beforeHookConfig.position === "post") {
+		hooksSourceWeakMap.set(beforeHookConfig.handler, "user");
+		beforeHooks.push({
+			matcher: () => true,
+			handler: beforeHookConfig.handler,
+		});
+	}
+	if (afterHookConfig && afterHookConfig.position === "post") {
+		hooksSourceWeakMap.set(afterHookConfig.handler, "user");
+		afterHooks.push({
+			matcher: () => true,
+			handler: afterHookConfig.handler,
+		});
+	}
 
 	return {
 		beforeHooks,

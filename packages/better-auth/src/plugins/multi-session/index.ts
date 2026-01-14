@@ -94,6 +94,20 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						)
 					).filter((v) => typeof v === "string");
 
+					// Also get the active session token from the main session cookie
+					const activeSessionToken = await ctx.getSignedCookie(
+						ctx.context.authCookies.sessionToken.name,
+						ctx.context.secret,
+					);
+
+					// Include active session token if not already in the list
+					if (
+						activeSessionToken &&
+						!sessionTokens.includes(activeSessionToken)
+					) {
+						sessionTokens.push(activeSessionToken);
+					}
+
 					if (!sessionTokens.length) return ctx.json([]);
 					const sessions =
 						await ctx.context.internalAdapter.findSessions(sessionTokens);
@@ -159,14 +173,22 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
+					const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 					const multiSessionCookieName = `${
-						ctx.context.authCookies.sessionToken.name
+						sessionCookieConfig.name
 					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
-					if (!sessionCookie) {
+
+					const activeSessionToken = await ctx.getSignedCookie(
+						sessionCookieConfig.name,
+						ctx.context.secret,
+					);
+					const isCurrentActiveSession = activeSessionToken === sessionToken;
+
+					if (!sessionCookie && !isCurrentActiveSession) {
 						throw APIError.from(
 							"UNAUTHORIZED",
 							ERROR_CODES.INVALID_SESSION_TOKEN,
@@ -175,15 +197,45 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionToken);
 					if (!session || session.session.expiresAt < new Date()) {
-						ctx.setCookie(multiSessionCookieName, "", {
-							...ctx.context.authCookies.sessionToken.options,
-							maxAge: 0,
-						});
+						if (sessionCookie) {
+							ctx.setCookie(multiSessionCookieName, "", {
+								...sessionCookieConfig.options,
+								maxAge: 0,
+							});
+						}
 						throw APIError.from(
 							"UNAUTHORIZED",
 							ERROR_CODES.INVALID_SESSION_TOKEN,
 						);
 					}
+
+					if (activeSessionToken && activeSessionToken !== sessionToken) {
+						const currentMultiCookieName = `${
+							sessionCookieConfig.name
+						}_multi-${activeSessionToken.toLowerCase()}`;
+						const hasMultiCookie = await ctx.getSignedCookie(
+							currentMultiCookieName,
+							ctx.context.secret,
+						);
+						if (!hasMultiCookie) {
+							await ctx.setSignedCookie(
+								currentMultiCookieName,
+								activeSessionToken,
+								ctx.context.secret,
+								sessionCookieConfig.options,
+							);
+						}
+					}
+
+					if (!sessionCookie) {
+						await ctx.setSignedCookie(
+							multiSessionCookieName,
+							sessionToken,
+							ctx.context.secret,
+							sessionCookieConfig.options,
+						);
+					}
+
 					await setSessionCookie(ctx, session);
 					return ctx.json(session);
 				},
@@ -235,14 +287,22 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 				},
 				async (ctx) => {
 					const sessionToken = ctx.body.sessionToken;
+					const sessionCookieConfig = ctx.context.authCookies.sessionToken;
 					const multiSessionCookieName = `${
-						ctx.context.authCookies.sessionToken.name
+						sessionCookieConfig.name
 					}_multi-${sessionToken.toLowerCase()}`;
 					const sessionCookie = await ctx.getSignedCookie(
 						multiSessionCookieName,
 						ctx.context.secret,
 					);
-					if (!sessionCookie) {
+
+					const activeSessionToken = await ctx.getSignedCookie(
+						sessionCookieConfig.name,
+						ctx.context.secret,
+					);
+					const isCurrentActiveSession = activeSessionToken === sessionToken;
+
+					if (!sessionCookie && !isCurrentActiveSession) {
 						throw APIError.from(
 							"UNAUTHORIZED",
 							ERROR_CODES.INVALID_SESSION_TOKEN,
@@ -250,10 +310,14 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					}
 
 					await ctx.context.internalAdapter.deleteSession(sessionToken);
-					ctx.setCookie(multiSessionCookieName, "", {
-						...ctx.context.authCookies.sessionToken.options,
-						maxAge: 0,
-					});
+
+					if (sessionCookie) {
+						ctx.setCookie(multiSessionCookieName, "", {
+							...sessionCookieConfig.options,
+							maxAge: 0,
+						});
+					}
+
 					const isActive = ctx.context.session?.session.token === sessionToken;
 					if (!isActive) return ctx.json({ status: true });
 
@@ -270,7 +334,9 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 											await ctx.getSignedCookie(key, ctx.context.secret),
 									),
 							)
-						).filter((v) => typeof v === "string");
+						).filter(
+							(v) => typeof v === "string" && v !== sessionToken,
+						) as string[];
 						const internalAdapter = ctx.context.internalAdapter;
 
 						if (sessionTokens.length > 0) {
@@ -307,7 +373,8 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						if (!cookieString) return;
 						const setCookies = parseSetCookieHeader(cookieString);
 						const sessionCookieConfig = ctx.context.authCookies.sessionToken;
-						const sessionToken = ctx.context.newSession?.session.token;
+						const newSession = ctx.context.newSession;
+						const sessionToken = newSession?.session.token;
 						if (!sessionToken) return;
 						const cookies = parseCookies(ctx.headers?.get("cookie") || "");
 
@@ -317,10 +384,59 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 						if (setCookies.get(cookieName) || cookies.get(cookieName)) return;
 
-						const currentMultiSessions =
-							Object.keys(Object.fromEntries(cookies)).filter(
-								isMultiSessionCookie,
-							).length + (cookieString.includes("session_token") ? 1 : 0);
+						const newUserId = newSession.user.id;
+						const existingMultiSessionCookies = Object.keys(
+							Object.fromEntries(cookies),
+						).filter(isMultiSessionCookie);
+
+						const existingTokens = await Promise.all(
+							existingMultiSessionCookies.map(async (key) => {
+								const token = await ctx.getSignedCookie(
+									key,
+									ctx.context.secret,
+								);
+								return { key, token };
+							}),
+						);
+
+						const validTokens = existingTokens.filter(
+							(t) => t.token !== null,
+						) as { key: string; token: string }[];
+
+						let removedDuplicateForSameUser = false;
+						if (validTokens.length > 0) {
+							const existingSessions =
+								await ctx.context.internalAdapter.findSessions(
+									validTokens.map((t) => t.token),
+								);
+
+							for (const existing of existingSessions) {
+								if (existing && existing.user.id === newUserId) {
+									const oldCookieEntry = validTokens.find(
+										(t) => t.token === existing.session.token,
+									);
+									if (oldCookieEntry) {
+										ctx.setCookie(
+											oldCookieEntry.key
+												.toLowerCase()
+												.replace("__secure-", "__Secure-"),
+											"",
+											{
+												...sessionCookieConfig.options,
+												maxAge: 0,
+											},
+										);
+										removedDuplicateForSameUser = true;
+									}
+								}
+							}
+						}
+
+						// Count unique user sessions
+						// If we removed a duplicate for the same user, we have one less slot taken
+						const currentMultiSessions = removedDuplicateForSameUser
+							? existingMultiSessionCookies.length - 1
+							: existingMultiSessionCookies.length;
 
 						if (currentMultiSessions >= opts.maximumSessions) {
 							return;
