@@ -593,7 +593,7 @@ describe("sign-up email verification logic", async (it) => {
 		expect(callArgs?.url).toContain("callbackURL=%2Fdashboard");
 	});
 
-	it("should send verification email when sendOnSignUp is undefined but sendVerificationEmail is set (defaults to true)", async () => {
+	it("should not send verification email when sendOnSignUp is undefined but sendVerificationEmail is set (defaults to false)", async () => {
 		const mockSendVerificationEmail = vi.fn();
 		const { auth } = await getTestInstance(
 			{
@@ -618,6 +618,6 @@ describe("sign-up email verification logic", async (it) => {
 			},
 		});
 
-		expect(mockSendVerificationEmail).toHaveBeenCalledTimes(0);
+		expect(mockSendVerificationEmail).not.toHaveBeenCalled();
 	});
 });
