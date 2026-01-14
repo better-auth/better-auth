@@ -1,7 +1,7 @@
 import { useAtom } from "jotai";
 import { CircleX, ListFilter, Moon, PlusIcon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 import {
 	Accordion,
