@@ -159,7 +159,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Success URL to redirect back after successful subscription
+	 * The URL to which Stripe should send customers when payment or setup is complete.
 	 */
 	successUrl: z
 		.string()
@@ -169,7 +169,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Cancel URL
+	 * If set, checkout shows a back button and customers will be directed here if they cancel payment.
 	 */
 	cancelUrl: z
 		.string()
@@ -179,7 +179,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Return URL
+	 * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
 	 */
 	returnUrl: z
 		.string()
