@@ -4,6 +4,7 @@ export type {
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
 	GenericEndpointContext,
+	InfoContext,
 	InternalAdapter,
 	PluginContext,
 } from "./context";
