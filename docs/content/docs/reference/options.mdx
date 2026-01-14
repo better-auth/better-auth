@@ -269,6 +269,24 @@ export const auth = betterAuth({
 })
 ```
 
+- `clientId`: OAuth client ID from the provider
+- `clientSecret`: OAuth client secret from the provider
+- `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
+- `redirectURI`: Custom redirect URI for the OAuth callback (optional)
+- `scope`: Additional OAuth scopes to request (optional)
+- `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+- `disableSignUp`: Disable sign up for new users (optional)
+- `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
+- `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+- `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
+- `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
+- `getUserInfo`: Custom function to get user info from the provider (optional)
+- `refreshAccessToken`: Custom function to refresh a token (optional)
+- `verifyIdToken`: Custom function to verify the ID token (optional)
+- `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
+- `disableDefaultScope`: Disable the provider's default scopes (optional)
+- `authorizationEndpoint`: Custom authorization endpoint URL (optional)
+
 ## `plugins`
 
 List of Better Auth plugins.

@@ -12,7 +12,10 @@ function addCorsHeaders(url: URL, headers: Headers) {
 			"/api/auth/oauth2/register",
 		].includes(url.pathname)
 	) {
-		headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		headers.set(
+			"Access-Control-Allow-Methods",
+			"GET, POST, PUT, PATCH, DELETE, OPTIONS",
+		);
 		headers.set("Access-Control-Allow-Origin", "*");
 		headers.set("Access-Control-Allow-Headers", "authorization, content-type");
 		headers.set(
@@ -35,6 +38,9 @@ const handler = toNextJsHandler(auth);
 
 export const GET = withCors(handler.GET);
 export const POST = withCors(handler.POST);
+export const PUT = withCors(handler.PUT);
+export const PATCH = withCors(handler.PATCH);
+export const DELETE = withCors(handler.DELETE);
 
 export async function OPTIONS(req: NextRequest): Promise<NextResponse> {
 	const headers = new Headers();

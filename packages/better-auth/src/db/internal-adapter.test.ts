@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -747,6 +747,77 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL).toBeDefined();
 		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
+
+		// Clean up DB
+		testDb.close();
+	});
+
+	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+
+		const testMap = new Map<string, string>();
+		const testExpirationMap = new Map<string, number>();
+
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+					if (ttl !== undefined) {
+						testExpirationMap.set(key, ttl);
+					}
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+					testExpirationMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testAuthContext = await init(testOpts);
+		const testInternalAdapter = testAuthContext.internalAdapter;
+
+		// Create a user
+		const user = await testInternalAdapter.createUser({
+			name: "corrupt-sessions-test-user",
+			email: "corrupt-sessions-test@example.com",
+		});
+
+		// Create a session
+		const session = await testInternalAdapter.createSession(user.id);
+
+		// Manually corrupt the active-sessions list by adding duplicate tokens
+		const listStr = testMap.get(`active-sessions-${user.id}`);
+		const list = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			listStr!,
+		);
+
+		// Add duplicates of the same token
+		const corruptedList = [
+			...list!,
+			{ token: session.token, expiresAt: session.expiresAt.getTime() },
+			{ token: session.token, expiresAt: session.expiresAt.getTime() },
+		];
+		testMap.set(`active-sessions-${user.id}`, JSON.stringify(corruptedList));
+
+		// Verify corruption
+		const corruptedListStr = testMap.get(`active-sessions-${user.id}`);
+		const parsed = safeJSONParse<{ token: string; expiresAt: number }[]>(
+			corruptedListStr!,
+		);
+		expect(parsed!.length).toBe(3); // 1 original + 2 duplicates
+
+		// listSessions should deduplicate and return only unique sessions
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(1);
 
 		// Clean up DB
 		testDb.close();
