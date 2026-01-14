@@ -260,11 +260,6 @@ const frameworks = [
 export function Builder() {
 	const [framework, setFramework] = useState("nextjs");
 	const [currentStep, setCurrentStep] = useState(0);
-	useEffect(() => {
-		if (currentStep === 0) {
-			reset();
-		}
-	}, [currentStep]);
 
 	const [options, setOptions] = useAtom(optionsAtom);
 	const { setTheme, resolvedTheme } = useTheme();
@@ -322,18 +317,19 @@ export function Builder() {
 		const optionKeys = Object.keys(
 			defaultOptions,
 		) as (keyof typeof defaultOptions)[];
-		for (const key of optionKeys) {
-			if (Array.isArray(options[key])) {
-				return (
-					options[key].every(
-						(val, index) => val === (defaultOptions as any)?.[key]?.[index],
-					) === false
+		return optionKeys.some((key) => {
+			const optionValue = options[key];
+			const defaultValue = defaultOptions[key];
+			if (Array.isArray(optionValue) && Array.isArray(defaultValue)) {
+				if (optionValue.length !== (defaultValue as any).length) {
+					return true;
+				}
+				return optionValue.some(
+					(val, index) => val !== (defaultValue as any)?.[index],
 				);
-			} else if (options[key] !== defaultOptions[key]) {
-				return false;
 			}
-		}
-		return true;
+			return optionValue !== defaultValue;
+		});
 	}, [debouncedSearch, options]);
 
 	return (

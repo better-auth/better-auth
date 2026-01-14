@@ -84,7 +84,7 @@ export function resolveNuxtFiles(options: SignInBoxOptions) {
 			}
 
 			export const authClient = createAuthClient({
-				baseURL: process.env.NEXT_PUBLIC_APP_URL,${
+				baseURL: process.env.NUXT_PUBLIC_APP_URL,${
 					options.magicLink || options.passkey
 						? `
 				plugins: [${options.magicLink ? `magicLinkClient()${options.passkey ? "," : ""}` : ""}${
@@ -224,7 +224,7 @@ const handleSocialSignIn = async (provider: string) => {
 <template>
 	<Card class="max-w-md">
 		<CardHeader>
-			<CardTitle class="text-xs md:text-sm>Sign In</CardTitle>
+			<CardTitle class="text-xs md:text-sm">Sign In</CardTitle>
 			<CardDescription>
 				Enter your email below to login to your account
 			</CardDescription>

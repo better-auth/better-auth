@@ -12,8 +12,6 @@ export const signInBoxOptionsSchema = z.object({
 	requestPasswordReset: z.boolean(),
 });
 
-signInBoxOptionsSchema.default;
-
 export type SignInBoxOptions = z.infer<typeof signInBoxOptionsSchema>;
 
 export const defaultOptions = {
