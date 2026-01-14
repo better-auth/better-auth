@@ -153,7 +153,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								// Inherit cookie attributes from Better Auth's centralized cookie system
 								// This ensures consistency with cross-origin, cross-subdomain, and security settings
 								const cookieAttributes = {
-									...ctx.context.authCookies.sessionToken.options,
+									...ctx.context.authCookies.sessionToken.attributes,
 									maxAge: config.maxAge,
 									httpOnly: false, // Override: plugin cookies are not httpOnly
 								};

@@ -13,7 +13,7 @@ import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -401,8 +401,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -580,8 +581,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					// Clear the cookie
-					ctx.setCookie("oidc_consent_prompt", "", {
-						maxAge: 0,
+					expireCookie(ctx, {
+						name: "oidc_consent_prompt",
+						attributes: { path: "/" },
 					});
 
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
@@ -1725,14 +1727,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						await ctx.context.internalAdapter.deleteSession(
 							session.session.token,
 						);
-						ctx.setSignedCookie(
-							ctx.context.authCookies.sessionToken.name,
-							"",
-							ctx.context.secret,
-							{
-								maxAge: 0,
-							},
-						);
+						expireCookie(ctx, ctx.context.authCookies.sessionToken);
 					}
 
 					if (post_logout_redirect_uri) {
