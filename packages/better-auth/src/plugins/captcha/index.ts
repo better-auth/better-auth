@@ -47,37 +47,38 @@ export const captcha = (options: CaptchaOptions) =>
 				const siteVerifyURL =
 					options.siteVerifyURLOverride || siteVerifyMap[options.provider];
 
-				const handlerParams = {
-					siteVerifyURL,
-					captchaResponse,
-					secretKey: options.secretKey,
-					remoteIP: remoteUserIP,
-				};
+			const handlerParams = {
+				siteVerifyURL,
+				captchaResponse,
+				secretKey: options.secretKey,
+				remoteIP: remoteUserIP,
+				fetch: ctx.fetch,
+			};
 
-				if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
-					return await verifyHandlers.cloudflareTurnstile(handlerParams);
-				}
+			if (options.provider === Providers.CLOUDFLARE_TURNSTILE) {
+				return await verifyHandlers.cloudflareTurnstile(handlerParams);
+			}
 
-				if (options.provider === Providers.GOOGLE_RECAPTCHA) {
-					return await verifyHandlers.googleRecaptcha({
-						...handlerParams,
-						minScore: options.minScore,
-					});
-				}
+			if (options.provider === Providers.GOOGLE_RECAPTCHA) {
+				return await verifyHandlers.googleRecaptcha({
+					...handlerParams,
+					minScore: options.minScore,
+				});
+			}
 
-				if (options.provider === Providers.HCAPTCHA) {
-					return await verifyHandlers.hCaptcha({
-						...handlerParams,
-						siteKey: options.siteKey,
-					});
-				}
+			if (options.provider === Providers.HCAPTCHA) {
+				return await verifyHandlers.hCaptcha({
+					...handlerParams,
+					siteKey: options.siteKey,
+				});
+			}
 
-				if (options.provider === Providers.CAPTCHAFOX) {
-					return await verifyHandlers.captchaFox({
-						...handlerParams,
-						siteKey: options.siteKey,
-					});
-				}
+			if (options.provider === Providers.CAPTCHAFOX) {
+				return await verifyHandlers.captchaFox({
+					...handlerParams,
+					siteKey: options.siteKey,
+				});
+			}
 			} catch (_error) {
 				const errorMessage =
 					_error instanceof Error ? _error.message : undefined;

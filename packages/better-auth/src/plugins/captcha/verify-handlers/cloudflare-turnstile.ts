@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import type { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
 
@@ -7,6 +7,7 @@ type Params = {
 	secretKey: string;
 	captchaResponse: string;
 	remoteIP?: string | undefined;
+	fetch: typeof betterFetch;
 };
 
 type SiteVerifyResponse = {
@@ -29,8 +30,9 @@ export const cloudflareTurnstile = async ({
 	captchaResponse,
 	secretKey,
 	remoteIP,
+	fetch,
 }: Params) => {
-	const response = await betterFetch<SiteVerifyResponse>(siteVerifyURL, {
+	const response = await fetch<SiteVerifyResponse>(siteVerifyURL, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify({

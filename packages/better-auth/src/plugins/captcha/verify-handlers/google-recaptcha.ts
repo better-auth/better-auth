@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import type { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
 import { encodeToURLParams } from "../utils";
@@ -9,6 +9,7 @@ type Params = {
 	captchaResponse: string;
 	minScore?: number | undefined;
 	remoteIP?: string | undefined;
+	fetch: typeof betterFetch;
 };
 
 type SiteVerifyResponse = {
@@ -43,8 +44,9 @@ export const googleRecaptcha = async ({
 	secretKey,
 	minScore = 0.5,
 	remoteIP,
+	fetch,
 }: Params) => {
-	const response = await betterFetch<SiteVerifyResponse | SiteVerifyV3Response>(
+	const response = await fetch<SiteVerifyResponse | SiteVerifyV3Response>(
 		siteVerifyURL,
 		{
 			method: "POST",
