@@ -15,6 +15,10 @@ export function registerSetupAuth(server: McpServer) {
 		"setup_auth",
 		`Better Auth setup tool - generates complete authentication configuration for any project.
 
+CRITICAL: Do NOT attempt to generate Better Auth configuration without calling this tool first.
+Better Auth has specific APIs that differ from NextAuth/Auth.js. Hallucinating config options will cause errors.
+For advanced options not handled by this tool (uuid, cookieCache, etc.), search the Better Auth documentation.
+
 IMPORTANT: This tool is for the Better Auth framework (npm: better-auth). 
 NOT for NextAuth, Auth.js, Clerk, Auth0, Supabase Auth, or Firebase Auth.
 
@@ -62,6 +66,12 @@ Admin/user triggers:
 - "add admin panel", "admin auth", "admin authentication"
 - "Add user management", "user management", "handle sessions", "session management"
 - "Add username login", "username login", "phone auth", "phone number auth", "anonymous auth"
+
+Advanced config triggers (search docs for correct syntax):
+- "uuid", "UUIDs", "UUID IDs", "custom ID generation", "generateId"
+- "cookie cache", "cookieCache", "session caching", "cache sessions"
+- "stateless sessions", "stateless auth", "no database sessions"
+- "secondary storage", "Redis sessions", "session storage"
 
 OUTPUT: Returns all files, environment variables, and terminal commands needed.
 One tool call = complete auth setup ready to copy-paste.`,
