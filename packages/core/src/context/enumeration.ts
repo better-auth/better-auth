@@ -5,17 +5,38 @@ import {
 import { isDevelopment } from "../env";
 
 /**
- * Request state for storing enumeration-safe response.
+ * Request state for storing enumeration-safe response and timing function.
  * When set, this response will be returned instead of errors that could leak user existence.
  */
-const enumerationSafeResponseState = defineRequestState<unknown | null>(
-	() => null,
-);
+type EnumerationSafeState = {
+	response: unknown;
+	timingFn?: () => Promise<unknown>;
+} | null;
 
-export const {
-	get: getEnumerationSafeResponse,
-	set: setEnumerationSafeResponseState,
-} = enumerationSafeResponseState;
+const { get: getEnumerationSafeState, set: setEnumerationSafeState } =
+	defineRequestState<EnumerationSafeState>(() => null);
+
+/**
+ * Get the enumeration-safe response if one was set.
+ *
+ * @internal
+ */
+export async function getEnumerationSafeResponse(): Promise<unknown | null> {
+	const state = await getEnumerationSafeState();
+	return state?.response ?? null;
+}
+
+/**
+ * Get the timing function if one was set.
+ *
+ * @internal
+ */
+export async function getEnumerationSafeTimingFn(): Promise<
+	(() => Promise<unknown>) | null
+> {
+	const state = await getEnumerationSafeState();
+	return state?.timingFn ?? null;
+}
 
 /**
  * Check if enumeration protection is enabled based on config and environment.
@@ -37,7 +58,8 @@ async function isEnumerationProtectionEnabled(): Promise<boolean> {
  * The response will be automatically returned by toAuthEndpoints when an error is thrown.
  *
  * @param response - The fake response to return instead of the error
- * @param timingFn - Optional async function to run for timing attack prevention (e.g., password hashing)
+ * @param timingFn - Optional async function to run for timing attack prevention (e.g., password hashing).
+ *                   This function will be executed in toAuthEndpoints right before returning the safe response.
  *
  * @example
  * ```ts
@@ -60,9 +82,8 @@ export async function setEnumerationSafeResponse(
 		return;
 	}
 
-	if (timingFn) {
-		await timingFn();
-	}
-
-	await setEnumerationSafeResponseState(response);
+	await setEnumerationSafeState({
+		response,
+		timingFn,
+	});
 }

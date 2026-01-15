@@ -6,6 +6,7 @@ export {
 } from "./endpoint-context";
 export {
 	getEnumerationSafeResponse,
+	getEnumerationSafeTimingFn,
 	setEnumerationSafeResponse,
 } from "./enumeration";
 export { getBetterAuthVersion } from "./global";

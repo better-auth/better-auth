@@ -2,6 +2,7 @@ import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import {
 	getEnumerationSafeResponse,
+	getEnumerationSafeTimingFn,
 	hasRequestState,
 	runWithEndpointContext,
 	runWithRequestState,
@@ -164,6 +165,12 @@ export function toAuthEndpoints<
 
 					const safeResponse = await getEnumerationSafeResponse();
 					if (isAPIError(result.response) && safeResponse !== null) {
+						// Execute the timing function for timing attack prevention
+						const timingFn = await getEnumerationSafeTimingFn();
+						if (timingFn) {
+							await timingFn();
+						}
+
 						authContext.logger.debug(
 							`Enumeration protection applied for ${endpoint.path}`,
 						);
