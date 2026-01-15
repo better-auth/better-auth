@@ -1,10 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to AI assistants (Claude Code, Cursor, etc.) when working with code in this repository.
+This file provides guidance to AI assistants (Claude Code, Cursor, etc.)
+when working with code in this repository.
 
 ## Project Overview
 
-Better Auth is a comprehensive, framework-agnostic authentication framework for TypeScript.
+Better Auth is a comprehensive, framework-agnostic authentication
+framework for TypeScript.
 
 ## Development Commands
 
@@ -46,14 +48,16 @@ run specific tests.
 * Formatter: Biome (tabs for code, 2-space for JSON)
 * Avoid unsafe typecasts or types like `any`
 * Avoid classes, use functions and objects
-* Do not use runtime-specific feature like `Buffer` in codebase except test, use `Uint8Array` instead
+* Do not use runtime-specific feature like `Buffer` in codebase except
+  test, use `Uint8Array` instead
 
 ## Testing
 
 * Most of the tests use Vitest
 * Some tests under `e2e` directory use playwright
 * Adapter tests require Docker containers running (`docker compose up -d`)
-* Consider using test helpers like `getTestInstance()` from `better-auth/test` first
+* Consider using test helpers like `getTestInstance()` from
+  `better-auth/test` first
 
 ## Documentation
 
