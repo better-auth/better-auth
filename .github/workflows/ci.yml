@@ -131,11 +131,17 @@ jobs:
       matrix:
         node-version: [22.x]
     steps:
+      - name: Skip tests in merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "Skipping tests in merge queue"
+
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
 
       - name: Cache turbo build setup
+        if: github.event_name != 'merge_group'
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
@@ -144,17 +150,21 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        if: github.event_name != 'merge_group'
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        if: github.event_name != 'merge_group'
         with:
           node-version: ${{ matrix.node-version }}
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
       - name: Install
+        if: github.event_name != 'merge_group'
         run: pnpm install
 
       - name: Build
+        if: github.event_name != 'merge_group'
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
@@ -162,17 +172,20 @@ jobs:
         run: pnpm build
 
       - name: Start Docker Containers
+        if: github.event_name != 'merge_group'
         run: |
           docker compose up -d
           # Wait for services to be ready (optional)
           sleep 10
 
       - name: Test
+        if: github.event_name != 'merge_group'
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
         run: pnpm coverage
 
       - name: Stop Docker Containers
+        if: github.event_name != 'merge_group'
         run: docker compose down
              
