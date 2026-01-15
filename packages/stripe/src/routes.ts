@@ -832,20 +832,47 @@ const createEmbeddedCheckoutBodySchema = z.object({
  * **client:**
  * `authClient.subscription.createEmbeddedCheckout`
  *
- * ### Usage with Stripe.js
+ * ### Usage (Recommended)
+ *
+ * Use the built-in helper that handles Stripe.js loading automatically:
  *
  * ```typescript
- * // Client-side
+ * import { authClient } from './auth-client';
+ * import { createStripeEmbeddedCheckout } from '@better-auth/stripe/client';
+ *
+ * // Create the checkout instance once
+ * const stripeCheckout = createStripeEmbeddedCheckout({
+ *   publishableKey: 'pk_...',
+ *   onComplete: () => console.log('Checkout submitted!'),
+ * });
+ *
+ * // Get the client secret from the server
+ * const { data } = await authClient.subscription.createEmbeddedCheckout({
+ *   plan: 'pro',
+ *   returnUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+ * });
+ *
+ * // Mount the checkout (Stripe.js loads automatically)
+ * await stripeCheckout.mount({
+ *   clientSecret: data.clientSecret,
+ *   container: '#checkout-container',
+ * });
+ * ```
+ *
+ * ### Alternative: Manual Stripe.js
+ *
+ * If you need more control, you can use Stripe.js directly:
+ *
+ * ```typescript
  * import { loadStripe } from '@stripe/stripe-js';
  *
  * const stripe = await loadStripe('pk_...');
- * const { clientSecret } = await authClient.subscription.createEmbeddedCheckout({
+ * const { data } = await authClient.subscription.createEmbeddedCheckout({
  *   plan: 'pro',
  *   returnUrl: 'https://example.com/success?session_id={CHECKOUT_SESSION_ID}'
  * });
  *
- * // Mount embedded checkout
- * const checkout = await stripe.initEmbeddedCheckout({ clientSecret });
+ * const checkout = await stripe.initEmbeddedCheckout({ clientSecret: data.clientSecret });
  * checkout.mount('#checkout-container');
  * ```
  *
@@ -1178,6 +1205,23 @@ export const createEmbeddedCheckout = (options: StripeOptions) => {
  *
  * **client:**
  * `authClient.subscription.getCheckoutStatus`
+ *
+ * ### Usage
+ *
+ * On your return page (the URL you passed as `returnUrl`):
+ *
+ * ```typescript
+ * // Get session_id from URL (Stripe replaces {CHECKOUT_SESSION_ID})
+ * const sessionId = new URLSearchParams(window.location.search).get('session_id');
+ *
+ * const { data } = await authClient.subscription.getCheckoutStatus({
+ *   query: { sessionId }
+ * });
+ *
+ * if (data?.status === 'complete') {
+ *   console.log('Payment successful for:', data.customerEmail);
+ * }
+ * ```
  */
 export const getCheckoutStatus = (options: StripeOptions) => {
 	const client = options.stripeClient;
