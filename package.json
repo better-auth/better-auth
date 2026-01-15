@@ -2,7 +2,7 @@
   "name": "@better-auth/root",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@10.26.2",
+  "packageManager": "pnpm@10.28.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git"
