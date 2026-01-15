@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -179,8 +180,12 @@ export async function createAuthContext(
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
+	const trustedOrigins = await getTrustedOrigins(options);
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
+		baseURL: baseURL || "",
+		version: getBetterAuthVersion(),
 		socialProviders: providers,
 		options,
 		oauthConfig: {
@@ -190,7 +195,7 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: await getTrustedOrigins(options),
+		trustedOrigins,
 		isTrustedOrigin(
 			url: string,
 			settings?: {
@@ -201,7 +206,6 @@ export async function createAuthContext(
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
-		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined

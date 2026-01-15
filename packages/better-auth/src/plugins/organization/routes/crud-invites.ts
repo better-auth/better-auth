@@ -770,11 +770,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			const invitation = await adapter.findInvitationById(
 				ctx.body.invitationId,
 			);
-			if (
-				!invitation ||
-				invitation.expiresAt < new Date() ||
-				invitation.status !== "pending"
-			) {
+			if (!invitation || invitation.status !== "pending") {
 				throw APIError.from("BAD_REQUEST", {
 					message: "Invitation not found!",
 					code: "INVITATION_NOT_FOUND",
@@ -1240,6 +1236,9 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
 			const invitations = await adapter.listUserInvitations(userEmail);
-			return ctx.json(invitations);
+			const pendingInvitations = invitations.filter(
+				(inv) => inv.status === "pending",
+			);
+			return ctx.json(pendingInvitations);
 		},
 	);

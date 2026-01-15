@@ -235,7 +235,7 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
 		}
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);

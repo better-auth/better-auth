@@ -738,7 +738,7 @@ export const getNormalTestSuiteTests = (
 					},
 					forceAllowId: true,
 				});
-				let result = await adapter.findOne<
+				const result = await adapter.findOne<
 					User & { oneToOneTable: OneToOneTable; session: Session[] }
 				>({
 					model: "user",
@@ -890,7 +890,7 @@ export const getNormalTestSuiteTests = (
 					},
 					forceAllowId: true,
 				});
-				let sessions: Session[] = [];
+				const sessions: Session[] = [];
 				for (let index = 0; index < 3; index++) {
 					const session = await adapter.create<Session>({
 						model: "session",
@@ -899,7 +899,7 @@ export const getNormalTestSuiteTests = (
 					});
 					sessions.push(session);
 				}
-				let accounts: Account[] = [];
+				const accounts: Account[] = [];
 				for (let index = 0; index < 3; index++) {
 					const account = await adapter.create<Account>({
 						model: "account",
@@ -1386,7 +1386,7 @@ export const getNormalTestSuiteTests = (
 					update: { name: user.name.toLowerCase() }, // make name lowercase
 				});
 				if (!res) throw new Error("No result");
-				let u = users.find((u) => u.id === user.id)!;
+				const u = users.find((u) => u.id === user.id)!;
 				u.name = res.name;
 				u.updatedAt = res.updatedAt;
 			}
@@ -1836,7 +1836,7 @@ export const getNormalTestSuiteTests = (
 					},
 					true,
 				);
-				let users = (await insertRandom("user", 10)).map(
+				const users = (await insertRandom("user", 10)).map(
 					(x) => x[0],
 				) as (User & { numericField: number })[];
 
