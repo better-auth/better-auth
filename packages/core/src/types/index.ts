@@ -6,7 +6,7 @@ export type {
 	InternalAdapter,
 	PluginContext,
 } from "./context";
-export type { BetterAuthCookies } from "./cookie";
+export type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,
