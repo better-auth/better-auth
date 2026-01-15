@@ -469,7 +469,7 @@
   "devDependencies": {
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
-    "@sveltejs/kit": "^2.37.1",
+    "@sveltejs/kit": "^2.49.5",
     "@tanstack/react-start-server": "^1.150.0",
     "@tanstack/solid-start-server": "^1.150.0",
     "@types/better-sqlite3": "^7.6.13",
