@@ -72,4 +72,4 @@ run specific tests.
 
 **Unless the user asked for it or you are working on CI, DO NOT COMMIT**
 
-* Make sure `pnpm format`, `pnpm lint` and `pnpm typecheck` pass
+* Make sure `pnpm format:check`, `pnpm lint` and `pnpm typecheck` pass
