@@ -49,6 +49,28 @@ const session = await authClient.getSession({
 ```
 </Accordion>
 
+<Accordion id="corporate-proxy-configuration" title="How to configure a corporate proxy for server-side requests">
+If you need to configure a corporate proxy for Better Auth's outbound requests (e.g., OAuth provider requests), you can use undici's ProxyAgent to set up a global fetch proxy.
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { ProxyAgent, setGlobalDispatcher } from "undici";
+
+const proxyAgent = new ProxyAgent("http://your-proxy.example.com:8080");
+setGlobalDispatcher(proxyAgent);
+
+export const auth = betterAuth({
+  // your configuration
+});
+```
+
+Since Better Auth runs on the server side, you have full control over Node.js's fetch behavior through undici's global dispatcher. This approach allows all outbound requests from Better Auth to go through your corporate proxy.
+
+<Callout type="info">
+  Learn more about undici ProxyAgent in the [undici documentation](https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md).
+</Callout>
+</Accordion>
+
 <Accordion id="adding-custom-fields-to-the-users-table" title="Adding custom fields to the users table">
 
 Better Auth provides a type-safe way to extend the user and session schemas, take a look at our docs on <Link href="/docs/concepts/database#extending-core-schema">extending core schema</Link>.
