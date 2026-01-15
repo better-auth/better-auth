@@ -1,6 +1,4 @@
 import type {
-	EndpointBaseOptions,
-	EndpointBodyMethodOptions,
 	EndpointContext,
 	EndpointOptions,
 	StrictEndpoint,
@@ -8,22 +6,6 @@ import type {
 import { createEndpoint, createMiddleware } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
-
-/**
- * Extended endpoint options for Better Auth endpoints.
- */
-export type AuthEndpointOptions = EndpointBaseOptions &
-	EndpointBodyMethodOptions & {
-		metadata?: {
-			[key: string]: unknown;
-		};
-	};
-
-export type AuthEndpointContext<
-	Path extends string,
-	Options extends AuthEndpointOptions,
-	Context = {},
-> = EndpointContext<Path, Options, Context>;
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -53,13 +35,13 @@ const use = [optionsMiddleware];
 
 type EndpointHandler<
 	Path extends string,
-	Options extends AuthEndpointOptions,
+	Options extends EndpointOptions,
 	R,
-> = (context: AuthEndpointContext<Path, Options, AuthContext>) => Promise<R>;
+> = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends AuthEndpointOptions,
+	Options extends EndpointOptions,
 	R,
 >(
 	path: Path,
@@ -69,7 +51,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends AuthEndpointOptions,
+	Options extends EndpointOptions,
 	R,
 >(
 	options: Options,
@@ -78,7 +60,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Opts extends AuthEndpointOptions,
+	Opts extends EndpointOptions,
 	R,
 >(
 	pathOrOptions: Path | Opts,
