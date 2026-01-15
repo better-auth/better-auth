@@ -54,9 +54,15 @@ For maintaining older versions (e.g., v1.3.x while v1.4.x is latest):
 
 ## Notes
 
-* **Do not merge breaking changes to `main` branch** unless upgrading minor versions (e.g., 1.4 to 1.5)
-* **Merge conflicts**: Resolve them carefully. Review each conflict to ensure no code is accidentally removed or duplicated
-* **Keep the release branch clean**: Do not create extra commits on the releasing branch. If you need to fix CI issues, squash the fix into the appropriate existing commit
+* **Do not merge breaking changes to `main` branch** unless upgrading
+  minor versions (e.g., 1.4 to 1.5)
+* **Merge conflicts**: Resolve them carefully.
+  Review each conflict to ensure no code is accidentally removed or
+  duplicated
+* **Keep the release branch clean**: Do not create extra commits on
+  the releasing branch.
+  If you need to fix CI issues, squash the fix into the appropriate
+  existing commit
 * All releases are triggered by pushing tags matching `v*`
 * The CI determines the npm tag based on:
   * Pre-release suffix in tag name (canary, beta, rc, next)
