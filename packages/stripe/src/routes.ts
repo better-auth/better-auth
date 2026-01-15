@@ -743,6 +743,466 @@ export const upgradeSubscription = (options: StripeOptions) => {
 	);
 };
 
+const createEmbeddedCheckoutBodySchema = z.object({
+	/**
+	 * The name of the plan to subscribe
+	 */
+	plan: z.string().meta({
+		description: 'The name of the plan to subscribe to. Eg: "pro"',
+	}),
+	/**
+	 * If annual plan should be applied.
+	 */
+	annual: z
+		.boolean()
+		.meta({
+			description: "Whether to subscribe to an annual plan. Eg: true",
+		})
+		.optional(),
+	/**
+	 * Reference ID for the subscription based on customerType:
+	 * - `user`: defaults to `user.id`
+	 * - `organization`: defaults to `session.activeOrganizationId`
+	 */
+	referenceId: z
+		.string()
+		.meta({
+			description: 'Reference ID for the subscription. Eg: "org_123"',
+		})
+		.optional(),
+	/**
+	 * Customer type for the subscription.
+	 * - `user`: User owns the subscription (default)
+	 * - `organization`: Organization owns the subscription (requires referenceId)
+	 */
+	customerType: z
+		.enum(["user", "organization"])
+		.meta({
+			description:
+				'Customer type for the subscription. Eg: "user" or "organization"',
+		})
+		.optional(),
+	/**
+	 * Additional metadata to store with the subscription.
+	 */
+	metadata: z.record(z.string(), z.any()).optional(),
+	/**
+	 * Number of seats for subscriptions.
+	 */
+	seats: z
+		.number()
+		.meta({
+			description: "Number of seats for the subscription. Eg: 1",
+		})
+		.optional(),
+	/**
+	 * The URL to redirect customers after successful payment.
+	 * Must include `{CHECKOUT_SESSION_ID}` template variable which will be replaced with the session ID.
+	 */
+	returnUrl: z
+		.string()
+		.meta({
+			description:
+				'Return URL after checkout completion. Must include {CHECKOUT_SESSION_ID}. Eg: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}"',
+		}),
+});
+
+/**
+ * ### Endpoint
+ *
+ * POST `/subscription/create-embedded-checkout`
+ *
+ * Creates an embedded Stripe Checkout session that can be used with Stripe Elements.
+ * Returns a `clientSecret` that you use to initialize the embedded checkout on the client.
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.createEmbeddedCheckout`
+ *
+ * **client:**
+ * `authClient.subscription.createEmbeddedCheckout`
+ *
+ * ### Usage with Stripe.js
+ *
+ * ```typescript
+ * // Client-side
+ * import { loadStripe } from '@stripe/stripe-js';
+ *
+ * const stripe = await loadStripe('pk_...');
+ * const { clientSecret } = await authClient.subscription.createEmbeddedCheckout({
+ *   plan: 'pro',
+ *   returnUrl: 'https://example.com/success?session_id={CHECKOUT_SESSION_ID}'
+ * });
+ *
+ * // Mount embedded checkout
+ * const checkout = await stripe.initEmbeddedCheckout({ clientSecret });
+ * checkout.mount('#checkout-container');
+ * ```
+ *
+ * @see [Stripe Embedded Checkout](https://docs.stripe.com/checkout/embedded/quickstart)
+ */
+export const createEmbeddedCheckout = (options: StripeOptions) => {
+	const client = options.stripeClient;
+	const subscriptionOptions = options.subscription as SubscriptionOptions;
+
+	return createAuthEndpoint(
+		"/subscription/create-embedded-checkout",
+		{
+			method: "POST",
+			body: createEmbeddedCheckoutBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "createEmbeddedCheckout",
+				},
+			},
+			use: [
+				stripeSessionMiddleware,
+				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
+			],
+		},
+		async (ctx) => {
+			const { user, session } = ctx.context.session;
+			const customerType = ctx.body.customerType || "user";
+			const referenceId =
+				ctx.body.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
+
+			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
+				});
+			}
+
+			const plan = await getPlanByName(options, ctx.body.plan);
+			if (!plan) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+				});
+			}
+
+			// Determine customer id
+			let customerId: string | undefined;
+			if (customerType === "organization") {
+				const org = await ctx.context.adapter.findOne<
+					Organization & WithStripeCustomerId
+				>({
+					model: "organization",
+					where: [{ field: "id", value: referenceId }],
+				});
+				if (!org) {
+					throw new APIError("BAD_REQUEST", {
+						message: STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					});
+				}
+				customerId = org.stripeCustomerId;
+
+				// If org doesn't have a customer ID, create one
+				if (!customerId) {
+					try {
+						const existingOrgCustomers = await client.customers.search({
+							query: `metadata["organizationId"]:"${org.id}"`,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingOrgCustomers.data[0];
+
+						if (!stripeCustomer) {
+							let extraCreateParams: Partial<StripeType.CustomerCreateParams> =
+								{};
+							if (options.organization?.getCustomerCreateParams) {
+								extraCreateParams =
+									await options.organization.getCustomerCreateParams(org, ctx);
+							}
+
+							const customerParams: StripeType.CustomerCreateParams = defu(
+								{
+									name: org.name,
+									metadata: {
+										...ctx.body.metadata,
+										organizationId: org.id,
+										customerType: "organization",
+									},
+								},
+								extraCreateParams,
+							);
+							stripeCustomer = await client.customers.create(customerParams);
+
+							await options.organization?.onCustomerCreate?.(
+								{
+									stripeCustomer,
+									organization: { ...org, stripeCustomerId: stripeCustomer.id },
+								},
+								ctx,
+							);
+						}
+
+						await ctx.context.adapter.update({
+							model: "organization",
+							update: { stripeCustomerId: stripeCustomer.id },
+							where: [{ field: "id", value: org.id }],
+						});
+
+						customerId = stripeCustomer.id;
+					} catch (e: any) {
+						ctx.context.logger.error(e);
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						});
+					}
+				}
+			} else {
+				customerId = user.stripeCustomerId;
+				if (!customerId) {
+					try {
+						const existingCustomers = await client.customers.search({
+							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
+								email: user.email,
+								name: user.name,
+								metadata: {
+									...ctx.body.metadata,
+									userId: user.id,
+									customerType: "user",
+								},
+							});
+						}
+
+						await ctx.context.adapter.update({
+							model: "user",
+							update: { stripeCustomerId: stripeCustomer.id },
+							where: [{ field: "id", value: user.id }],
+						});
+
+						customerId = stripeCustomer.id;
+					} catch (e: any) {
+						ctx.context.logger.error(e);
+						throw new APIError("BAD_REQUEST", {
+							message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						});
+					}
+				}
+			}
+
+			// Check for existing active subscription
+			const existingSubscription =
+				await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [{ field: "referenceId", value: referenceId }],
+				});
+
+			if (
+				existingSubscription &&
+				isActiveOrTrialing(existingSubscription) &&
+				existingSubscription.plan === ctx.body.plan.toLowerCase()
+			) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+				});
+			}
+
+			// Create or update subscription record
+			let subscription: Subscription;
+			if (
+				existingSubscription &&
+				existingSubscription.status === "incomplete"
+			) {
+				const updated = await ctx.context.adapter.update<Subscription>({
+					model: "subscription",
+					update: {
+						plan: plan.name.toLowerCase(),
+						seats: ctx.body.seats || 1,
+						updatedAt: new Date(),
+					},
+					where: [{ field: "id", value: existingSubscription.id }],
+				});
+				subscription = (updated as Subscription) || existingSubscription;
+			} else if (!existingSubscription) {
+				subscription = await ctx.context.adapter.create<Subscription>({
+					model: "subscription",
+					data: {
+						plan: plan.name.toLowerCase(),
+						stripeCustomerId: customerId,
+						status: "incomplete",
+						referenceId,
+						seats: ctx.body.seats || 1,
+					},
+				});
+			} else {
+				subscription = existingSubscription;
+			}
+
+			// Check trial eligibility
+			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
+				{
+					model: "subscription",
+					where: [{ field: "referenceId", value: referenceId }],
+				},
+			);
+			const hasEverTrialed = allSubscriptions.some(
+				(s) =>
+					!!(s.trialStart || s.trialEnd) || s.status === "trialing",
+			);
+
+			const freeTrial =
+				!hasEverTrialed && plan.freeTrial
+					? { trial_period_days: plan.freeTrial.days }
+					: undefined;
+
+			// Resolve price ID
+			let priceIdToUse: string | undefined = undefined;
+			if (ctx.body.annual) {
+				priceIdToUse = plan.annualDiscountPriceId;
+				if (!priceIdToUse && plan.annualDiscountLookupKey) {
+					priceIdToUse = await resolvePriceIdFromLookupKey(
+						client,
+						plan.annualDiscountLookupKey,
+					);
+				}
+			} else {
+				priceIdToUse = plan.priceId;
+				if (!priceIdToUse && plan.lookupKey) {
+					priceIdToUse = await resolvePriceIdFromLookupKey(
+						client,
+						plan.lookupKey,
+					);
+				}
+			}
+
+			if (!priceIdToUse) {
+				throw new APIError("BAD_REQUEST", {
+					message: STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+				});
+			}
+
+			// Get custom checkout session params
+			const params = await subscriptionOptions.getCheckoutSessionParams?.(
+				{ user, session, plan, subscription },
+				ctx.request,
+				ctx,
+			);
+
+			// Create embedded checkout session
+			const checkoutSession = await client.checkout.sessions
+				.create(
+					{
+						ui_mode: "embedded",
+						...(customerId
+							? {
+									customer: customerId,
+									customer_update:
+										customerType !== "user"
+											? ({ address: "auto" } as const)
+											: ({ name: "auto", address: "auto" } as const),
+								}
+							: {
+									customer_email: user.email,
+								}),
+						return_url: ctx.body.returnUrl,
+						line_items: [
+							{
+								price: priceIdToUse,
+								quantity: ctx.body.seats || 1,
+							},
+						],
+						subscription_data: {
+							...freeTrial,
+							metadata: {
+								...ctx.body.metadata,
+								...params?.params?.subscription_data?.metadata,
+								userId: user.id,
+								subscriptionId: subscription.id,
+								referenceId,
+							},
+						},
+						mode: "subscription",
+						client_reference_id: referenceId,
+						...params?.params,
+						metadata: {
+							...ctx.body.metadata,
+							...params?.params?.metadata,
+							userId: user.id,
+							subscriptionId: subscription.id,
+							referenceId,
+						},
+					},
+					params?.options,
+				)
+				.catch(async (e) => {
+					throw new APIError("BAD_REQUEST", {
+						message: e.message,
+					});
+				});
+
+			return ctx.json({
+				clientSecret: checkoutSession.client_secret,
+				sessionId: checkoutSession.id,
+			});
+		},
+	);
+};
+
+/**
+ * ### Endpoint
+ *
+ * GET `/subscription/checkout-status`
+ *
+ * Retrieves the status of an embedded checkout session.
+ * Use this on your return page to check if the checkout completed successfully.
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.getCheckoutStatus`
+ *
+ * **client:**
+ * `authClient.subscription.getCheckoutStatus`
+ */
+export const getCheckoutStatus = (options: StripeOptions) => {
+	const client = options.stripeClient;
+
+	return createAuthEndpoint(
+		"/subscription/checkout-status",
+		{
+			method: "GET",
+			query: z.object({
+				sessionId: z.string().meta({
+					description: "The Checkout Session ID to retrieve status for",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					operationId: "getCheckoutStatus",
+				},
+			},
+			use: [stripeSessionMiddleware],
+		},
+		async (ctx) => {
+			const { sessionId } = ctx.query;
+
+			const checkoutSession = await client.checkout.sessions
+				.retrieve(sessionId)
+				.catch((e) => {
+					throw new APIError("BAD_REQUEST", {
+						message: e.message,
+					});
+				});
+
+			return ctx.json({
+				status: checkoutSession.status,
+				paymentStatus: checkoutSession.payment_status,
+				customerEmail: checkoutSession.customer_details?.email,
+			});
+		},
+	);
+};
+
 const cancelSubscriptionCallbackQuerySchema = z
 	.record(z.string(), z.any())
 	.optional();

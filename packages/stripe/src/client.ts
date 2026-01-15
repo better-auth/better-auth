@@ -30,6 +30,8 @@ export const stripeClient = <
 		pathMethods: {
 			"/subscription/billing-portal": "POST",
 			"/subscription/restore": "POST",
+			"/subscription/create-embedded-checkout": "POST",
+			"/subscription/checkout-status": "GET",
 		},
 	} satisfies BetterAuthClientPlugin;
 };
