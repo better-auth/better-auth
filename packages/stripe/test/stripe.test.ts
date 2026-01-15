@@ -2053,8 +2053,14 @@ describe("stripe", () => {
 			},
 		});
 
-		expect((res.data as { clientSecret: string | null; sessionId: string })?.clientSecret).toBe("cs_test_secret_embedded123");
-		expect((res.data as { clientSecret: string | null; sessionId: string })?.sessionId).toBe("cs_test_embedded123");
+		expect(
+			(res.data as { clientSecret: string | null; sessionId: string })
+				?.clientSecret,
+		).toBe("cs_test_secret_embedded123");
+		expect(
+			(res.data as { clientSecret: string | null; sessionId: string })
+				?.sessionId,
+		).toBe("cs_test_embedded123");
 
 		// Verify the checkout session was created with ui_mode: 'embedded'
 		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
@@ -2157,7 +2163,9 @@ describe("stripe", () => {
 			},
 		});
 
-		expect((res.data as { clientSecret: string | null })?.clientSecret).toBe("cs_test_secret_annual123");
+		expect((res.data as { clientSecret: string | null })?.clientSecret).toBe(
+			"cs_test_secret_annual123",
+		);
 		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				ui_mode: "embedded",
@@ -2769,8 +2777,12 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 
 		// Verify the response has a redirect URL
-		expect((upgradeRes.data as { url: string; redirect: boolean })?.url).toBe("https://billing.stripe.com/mock");
-		expect((upgradeRes.data as { url: string; redirect: boolean })?.redirect).toBe(true);
+		expect((upgradeRes.data as { url: string; redirect: boolean })?.url).toBe(
+			"https://billing.stripe.com/mock",
+		);
+		expect(
+			(upgradeRes.data as { url: string; redirect: boolean })?.redirect,
+		).toBe(true);
 
 		// Verify no new subscription was created in the database
 		const allSubs = await ctx.adapter.findMany<Subscription>({
