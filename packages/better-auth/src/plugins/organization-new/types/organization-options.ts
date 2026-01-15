@@ -87,6 +87,12 @@ export type OrganizationOptions = {
 	 */
 	disableSlugs?: boolean;
 	/**
+	 * Endpoint parameters or return value's `organizationId` field to reference either `id` or `slug`.
+	 *
+	 * @default "id"
+	 */
+	defaultOrganizationIdField?: "id" | "slug";
+	/**
 	 * The access control for the organization plugin.
 	 */
 	ac?: AccessControl;
