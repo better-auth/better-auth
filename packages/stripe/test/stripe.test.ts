@@ -124,6 +124,7 @@ describe("stripe", () => {
 					url: "https://checkout.stripe.com/mock",
 					id: "",
 				}),
+				retrieve: vi.fn(),
 			},
 		},
 		billingPortal: {
@@ -1998,6 +1999,351 @@ describe("stripe", () => {
 			customer: expect.any(String),
 			return_url: "http://localhost:3000/dashboard",
 		});
+	});
+
+	it("should create embedded checkout session", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+			id: "cs_test_embedded123",
+			client_secret: "cs_test_secret_embedded123",
+			url: null,
+		});
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "embedded-checkout@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "embedded-checkout@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.createEmbeddedCheckout({
+			plan: "starter",
+			returnUrl:
+				"https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.clientSecret).toBe("cs_test_secret_embedded123");
+		expect(res.data?.sessionId).toBe("cs_test_embedded123");
+
+		// Verify the checkout session was created with ui_mode: 'embedded'
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				ui_mode: "embedded",
+				mode: "subscription",
+				return_url:
+					"https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+				line_items: [
+					{
+						price: "price_lookup_123", // resolved from lookup key
+						quantity: 1,
+					},
+				],
+			}),
+			undefined,
+		);
+
+		// Verify subscription was created in database
+		const subscription = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+		expect(subscription).toMatchObject({
+			id: expect.any(String),
+			plan: "starter",
+			referenceId: userRes.user.id,
+			status: "incomplete",
+		});
+	});
+
+	it("should create embedded checkout session with annual plan", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+			id: "cs_test_annual123",
+			client_secret: "cs_test_secret_annual123",
+			url: null,
+		});
+
+		const annualStripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				plans: [
+					{
+						priceId: "price_monthly_123",
+						annualDiscountPriceId: "price_annual_123",
+						name: "pro",
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(annualStripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "annual-embedded@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "annual-embedded@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.createEmbeddedCheckout({
+			plan: "pro",
+			annual: true,
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.clientSecret).toBe("cs_test_secret_annual123");
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				ui_mode: "embedded",
+				line_items: [
+					{
+						price: "price_annual_123",
+						quantity: 1,
+					},
+				],
+			}),
+			undefined,
+		);
+	});
+
+	it("should get checkout session status", async () => {
+		mockStripe.checkout.sessions.retrieve = vi.fn().mockResolvedValueOnce({
+			id: "cs_test_status123",
+			status: "complete",
+			payment_status: "paid",
+			customer_details: {
+				email: "customer@email.com",
+			},
+		});
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "checkout-status@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "checkout-status@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.checkoutStatus({
+			query: { sessionId: "cs_test_status123" },
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.status).toBe("complete");
+		expect(res.data?.paymentStatus).toBe("paid");
+		expect(res.data?.customerEmail).toBe("customer@email.com");
+		expect(mockStripe.checkout.sessions.retrieve).toHaveBeenCalledWith(
+			"cs_test_status123",
+		);
+	});
+
+	it("should reject embedded checkout for non-existent plan", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "nonexistent-plan@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "nonexistent-plan@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.createEmbeddedCheckout({
+			plan: "nonexistent",
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Subscription plan not found");
+	});
+
+	it("should reject embedded checkout if already subscribed to same plan", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValue({
+			id: "cs_test_123",
+			client_secret: "cs_test_secret_123",
+			url: null,
+		});
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "already-subscribed-embedded@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "already-subscribed-embedded@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// Create an active subscription first
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_mock123",
+				stripeSubscriptionId: "sub_existing123",
+				status: "active",
+			},
+		});
+
+		const res = await client.subscription.createEmbeddedCheckout({
+			plan: "starter",
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("already subscribed");
 	});
 
 	it("should not update personal subscription when upgrading with an org referenceId", async () => {

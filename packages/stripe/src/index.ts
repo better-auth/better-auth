@@ -8,6 +8,8 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
+	createEmbeddedCheckout,
+	getCheckoutStatus,
 	listActiveSubscriptions,
 	restoreSubscription,
 	stripeWebhook,
@@ -44,6 +46,8 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		listActiveSubscriptions: listActiveSubscriptions(options),
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
+		createEmbeddedCheckout: createEmbeddedCheckout(options),
+		getCheckoutStatus: getCheckoutStatus(options),
 	};
 
 	return {
@@ -131,7 +135,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 							) {
 								throw APIError.from(
 									"BAD_REQUEST",
-									STRIPE_ERROR_CODES.ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION,
+										STRIPE_ERROR_CODES.ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION,
 								);
 							}
 						}
