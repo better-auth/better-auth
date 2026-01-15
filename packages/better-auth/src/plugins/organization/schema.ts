@@ -216,69 +216,70 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					>["fields"];
 				};
 			}
-		: {}) & (O["teams"] extends { enabled: true }
-				? {
-						team: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"team",
-							TeamDefaultFields
-						>;
-						teamMember: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"teamMember",
-							TeamMemberDefaultFields
-						>;
-					}
-				: {}) & {
-					organization: InferSchema<
+		: {}) &
+		(O["teams"] extends { enabled: true }
+			? {
+					team: InferSchema<
 						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-						"organization",
-						OrganizationDefaultFields
+						"team",
+						TeamDefaultFields
 					>;
-					member: InferSchema<
+					teamMember: InferSchema<
 						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-						"member",
-						MemberDefaultFields
+						"teamMember",
+						TeamMemberDefaultFields
 					>;
-					invitation: {
-						modelName: O["schema"] extends BetterAuthPluginDBSchema
-							? InferSchema<
-									O["schema"],
-									"invitation",
-									InvitationDefaultFields
-								>["modelName"]
-							: string;
-						fields: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				}
+			: {}) & {
+			organization: InferSchema<
+				O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				"organization",
+				OrganizationDefaultFields
+			>;
+			member: InferSchema<
+				O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				"member",
+				MemberDefaultFields
+			>;
+			invitation: {
+				modelName: O["schema"] extends BetterAuthPluginDBSchema
+					? InferSchema<
+							O["schema"],
 							"invitation",
 							InvitationDefaultFields
-						>["fields"] &
-							(O extends { teams: { enabled: true } }
-								? {
-										teamId: {
-											type: "string";
-											required: false;
-											sortable: true;
-										};
-									}
-								: {});
-					};
-					session: {
-						fields: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"session",
-							SessionDefaultFields
-						>["fields"] &
-							(O["teams"] extends { enabled: true }
-								? {
-										activeTeamId: {
-											type: "string";
-											required: false;
-										};
-									}
-								: {});
-					};
-				};
+						>["modelName"]
+					: string;
+				fields: InferSchema<
+					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+					"invitation",
+					InvitationDefaultFields
+				>["fields"] &
+					(O extends { teams: { enabled: true } }
+						? {
+								teamId: {
+									type: "string";
+									required: false;
+									sortable: true;
+								};
+							}
+						: {});
+			};
+			session: {
+				fields: InferSchema<
+					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+					"session",
+					SessionDefaultFields
+				>["fields"] &
+					(O["teams"] extends { enabled: true }
+						? {
+								activeTeamId: {
+									type: "string";
+									required: false;
+								};
+							}
+						: {});
+			};
+		};
 
 export const roleSchema = z.string();
 export const invitationStatus = z
