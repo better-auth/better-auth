@@ -21,7 +21,7 @@ import { parseSetCookieHeader } from "../cookies";
  */
 export const tanstackStartCookies = () => {
 	return {
-		id: "tanstack-start-cookies",
+		id: "tanstack-start-cookies-solid",
 		hooks: {
 			after: [
 				{
