@@ -1,8 +1,6 @@
-import {
-	defineRequestState,
-	getCurrentAuthContext,
-} from "@better-auth/core/context";
 import { isDevelopment } from "../env";
+import { getCurrentAuthContext } from "./endpoint-context";
+import { defineRequestState } from "./request-state";
 
 /**
  * Request state for storing enumeration-safe response and timing function.
