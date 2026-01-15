@@ -14,17 +14,17 @@ const enumerationSafeResponseState = defineRequestState<unknown | null>(
 
 export const {
 	get: getEnumerationSafeResponse,
-	set: __setEnumerationSafeResponse,
+	set: setEnumerationSafeResponseState,
 } = enumerationSafeResponseState;
 
 /**
  * Check if enumeration protection is enabled based on config and environment.
+ * Default: enabled in production, disabled in development.
  */
 async function isEnumerationProtectionEnabled(): Promise<boolean> {
 	const context = await getCurrentAuthContext();
 	const configValue =
 		context.context.options.advanced?.security?.preventEnumeration;
-	// Default: enabled in production, disabled in development
 	if (configValue === undefined) {
 		return !isDevelopment();
 	}
@@ -41,15 +41,11 @@ async function isEnumerationProtectionEnabled(): Promise<boolean> {
  *
  * @example
  * ```ts
- * // In an endpoint handler:
  * const user = await findUserByEmail(email);
  * if (!user) {
  *   await setEnumerationSafeResponse(
  *     { token: null, user: null },
- *     async () => {
- *       // Hash password to prevent timing attacks
- *       await ctx.context.password.hash(password);
- *     }
+ *     () => ctx.context.password.hash(password)
  *   );
  *   throw APIError.from("...", USER_NOT_FOUND);
  * }
@@ -57,16 +53,16 @@ async function isEnumerationProtectionEnabled(): Promise<boolean> {
  */
 export async function setEnumerationSafeResponse(
 	response: unknown,
-	timingFn?: () => Promise<void>,
+	timingFn?: () => Promise<unknown>,
 ): Promise<void> {
-	if (!(await isEnumerationProtectionEnabled())) {
+	const isEnabled = await isEnumerationProtectionEnabled();
+	if (!isEnabled) {
 		return;
 	}
 
-	// Run timing function to prevent timing attacks
 	if (timingFn) {
 		await timingFn();
 	}
 
-	await __setEnumerationSafeResponse(response);
+	await setEnumerationSafeResponseState(response);
 }

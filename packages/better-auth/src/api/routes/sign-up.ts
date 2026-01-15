@@ -236,12 +236,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					ctx.context.logger.info(
 						`Sign-up attempt for existing email: ${email}`,
 					);
-					await setEnumerationSafeResponse(
-						{ token: null, user: null },
-						async () => {
-							// Hash password to prevent timing attacks
-							await ctx.context.password.hash(password);
-						},
+					await setEnumerationSafeResponse({ token: null, user: null }, () =>
+						ctx.context.password.hash(password),
 					);
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",

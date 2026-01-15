@@ -162,15 +162,13 @@ export function toAuthEndpoints<
 						result.response.stack = result.response.errorStack;
 					}
 
-					if (isAPIError(result.response)) {
-						const safeResponse = await getEnumerationSafeResponse();
-						if (safeResponse !== null) {
-							authContext.logger.debug(
-								`Enumeration protection applied for ${endpoint.path}`,
-							);
-							result.response = safeResponse;
-							result.status = 200;
-						}
+					const safeResponse = await getEnumerationSafeResponse();
+					if (isAPIError(result.response) && safeResponse !== null) {
+						authContext.logger.debug(
+							`Enumeration protection applied for ${endpoint.path}`,
+						);
+						result.response = safeResponse;
+						result.status = 200;
 					}
 
 					if (isAPIError(result.response) && !context?.asResponse) {

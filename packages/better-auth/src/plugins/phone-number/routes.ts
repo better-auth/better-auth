@@ -109,12 +109,8 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				],
 			});
 			if (!user) {
-				await setEnumerationSafeResponse(
-					{ token: null, user: null },
-					async () => {
-						// Hash password to prevent timing attacks
-						await ctx.context.password.hash(password);
-					},
+				await setEnumerationSafeResponse({ token: null, user: null }, () =>
+					ctx.context.password.hash(password),
 				);
 				throw APIError.from(
 					"UNAUTHORIZED",

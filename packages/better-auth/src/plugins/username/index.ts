@@ -308,15 +308,9 @@ export const username = (options?: UsernameOptions | undefined) => {
 						],
 					});
 					if (!user) {
-						ctx.context.logger.error("User not found", {
-							username,
-						});
-						await setEnumerationSafeResponse(
-							{ token: null, user: null },
-							async () => {
-								// Hash password to prevent timing attacks from revealing valid usernames
-								await ctx.context.password.hash(ctx.body.password);
-							},
+						ctx.context.logger.error("User not found", { username });
+						await setEnumerationSafeResponse({ token: null, user: null }, () =>
+							ctx.context.password.hash(ctx.body.password),
 						);
 						throw APIError.from(
 							"UNAUTHORIZED",
