@@ -6,7 +6,10 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { createEmailVerificationToken } from "../../api";
+import {
+	createEmailVerificationToken,
+	setEnumerationSafeResponse,
+} from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -305,12 +308,16 @@ export const username = (options?: UsernameOptions | undefined) => {
 						],
 					});
 					if (!user) {
-						// Hash password to prevent timing attacks from revealing valid usernames
-						// By hashing passwords for invalid usernames, we ensure consistent response times
-						await ctx.context.password.hash(ctx.body.password);
 						ctx.context.logger.error("User not found", {
 							username,
 						});
+						await setEnumerationSafeResponse(
+							{ token: null, user: null },
+							async () => {
+								// Hash password to prevent timing attacks from revealing valid usernames
+								await ctx.context.password.hash(ctx.body.password);
+							},
+						);
 						throw APIError.from(
 							"UNAUTHORIZED",
 							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,

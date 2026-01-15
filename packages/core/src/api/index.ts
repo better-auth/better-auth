@@ -1,4 +1,6 @@
 import type {
+	EndpointBaseOptions,
+	EndpointBodyMethodOptions,
 	EndpointContext,
 	EndpointOptions,
 	StrictEndpoint,
@@ -6,6 +8,22 @@ import type {
 import { createEndpoint, createMiddleware } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
+
+/**
+ * Extended endpoint options for Better Auth endpoints.
+ */
+export type AuthEndpointOptions = EndpointBaseOptions &
+	EndpointBodyMethodOptions & {
+		metadata?: {
+			[key: string]: unknown;
+		};
+	};
+
+export type AuthEndpointContext<
+	Path extends string,
+	Options extends AuthEndpointOptions,
+	Context = {},
+> = EndpointContext<Path, Options, Context>;
 
 export const optionsMiddleware = createMiddleware(async () => {
 	/**
@@ -35,13 +53,13 @@ const use = [optionsMiddleware];
 
 type EndpointHandler<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
-> = (context: EndpointContext<Path, Options, AuthContext>) => Promise<R>;
+> = (context: AuthEndpointContext<Path, Options, AuthContext>) => Promise<R>;
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
 >(
 	path: Path,
@@ -51,7 +69,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Options extends EndpointOptions,
+	Options extends AuthEndpointOptions,
 	R,
 >(
 	options: Options,
@@ -60,7 +78,7 @@ export function createAuthEndpoint<
 
 export function createAuthEndpoint<
 	Path extends string,
-	Opts extends EndpointOptions,
+	Opts extends AuthEndpointOptions,
 	R,
 >(
 	pathOrOptions: Path | Opts,
@@ -94,7 +112,8 @@ export function createAuthEndpoint<
 			use: [...(options?.use || []), ...use],
 		},
 		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		async (ctx) =>
+			runWithEndpointContext(ctx as any, () => handler(ctx as any)),
 	);
 }
 

@@ -115,6 +115,25 @@ export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
 
 export type BetterAuthAdvancedOptions = {
 	/**
+	 * Security configuration
+	 */
+	security?: {
+		/**
+		 * Prevent user enumeration attacks by returning generic
+		 * success responses instead of specific error messages
+		 * for endpoints that could reveal whether a user exists.
+		 *
+		 * When enabled, endpoints like sign-up will return success
+		 * responses even when the user already exists, preventing
+		 * attackers from discovering valid email addresses.
+		 *
+		 * This is important for HIPAA, SOC2, PCI-DSS compliance.
+		 *
+		 * @default true in production, false in development
+		 */
+		preventEnumeration?: boolean;
+	};
+	/**
 	 * Ip address configuration
 	 */
 	ipAddress?:

@@ -9,6 +9,7 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import { setEnumerationSafeResponse } from "../middlewares/enumeration";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -234,6 +235,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				if (dbUser?.user) {
 					ctx.context.logger.info(
 						`Sign-up attempt for existing email: ${email}`,
+					);
+					await setEnumerationSafeResponse(
+						{ token: null, user: null },
+						async () => {
+							// Hash password to prevent timing attacks
+							await ctx.context.password.hash(password);
+						},
 					);
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",

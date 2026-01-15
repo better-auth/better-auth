@@ -1,7 +1,7 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../api";
+import { getSessionFromCtx, setEnumerationSafeResponse } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import type { User } from "../../types";
@@ -109,6 +109,13 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				],
 			});
 			if (!user) {
+				await setEnumerationSafeResponse(
+					{ token: null, user: null },
+					async () => {
+						// Hash password to prevent timing attacks
+						await ctx.context.password.hash(password);
+					},
+				);
 				throw APIError.from(
 					"UNAUTHORIZED",
 					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,

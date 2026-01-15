@@ -15,6 +15,7 @@ import type {
 import { toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
+import { getEnumerationSafeResponse } from "./middlewares/enumeration";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -159,6 +160,17 @@ export function toAuthEndpoints<
 					) {
 						// inherit stack from errorStack if debug mode is enabled
 						result.response.stack = result.response.errorStack;
+					}
+
+					if (isAPIError(result.response)) {
+						const safeResponse = await getEnumerationSafeResponse();
+						if (safeResponse !== null) {
+							authContext.logger.debug(
+								`Enumeration protection applied for ${endpoint.path}`,
+							);
+							result.response = safeResponse;
+							result.status = 200;
+						}
 					}
 
 					if (isAPIError(result.response) && !context?.asResponse) {
