@@ -42,7 +42,10 @@ export const captcha = (options: CaptchaOptions) =>
 
 				const captchaResponse = request.headers.get(captchaResponseHeader);
 				
-				const remoteUserIP = options.includeUserIP ? getIp(request, ctx.options) ?? undefined : undefined;
+				const remoteUserIP = options.includeUserIP
+					? (getIp(request, ctx.options) ?? undefined)
+					: undefined;
+
 
 				if (!captchaResponse) {
 					return middlewareResponse({

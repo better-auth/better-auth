@@ -93,7 +93,7 @@ describe("captcha", async (it) => {
 				captcha({
 					provider: "cloudflare-turnstile",
 					secretKey: "xx-secret-key",
-					captchaResponseHeader: "x-custom-captcha-header"
+					captchaResponseHeader: "x-custom-captcha-header",
 				}),
 			],
 		});
@@ -216,7 +216,11 @@ describe("captcha", async (it) => {
 	describe("google-recaptcha", async (it) => {
 		const { client } = await getTestInstance({
 			plugins: [
-				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key", includeUserIP: true }),
+				captcha({
+					provider: "google-recaptcha",
+					secretKey: "xx-secret-key",
+					includeUserIP: true,
+				}),
 			],
 		});
 
@@ -316,7 +320,7 @@ describe("captcha", async (it) => {
 					provider: "hcaptcha",
 					secretKey: "xx-secret-key",
 					siteKey: "xx-site-key",
-					includeUserIP: true
+					includeUserIP: true,
 				}),
 			],
 		});
