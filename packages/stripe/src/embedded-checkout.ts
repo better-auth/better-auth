@@ -123,7 +123,7 @@ export interface StripeEmbeddedCheckoutOptions {
 
 export interface MountOptions {
 	/**
-	 * The client secret returned from createEmbeddedCheckout endpoint
+	 * The client secret returned from upgrade endpoint with embeddedCheckout: true
 	 */
 	clientSecret: string;
 	/**
@@ -273,9 +273,10 @@ async function loadStripeJs(
  *   },
  * });
  *
- * // After getting clientSecret from createEmbeddedCheckout endpoint
- * const { data } = await authClient.subscription.createEmbeddedCheckout({
+ * // After getting clientSecret from upgrade endpoint with embeddedCheckout option
+ * const { data } = await authClient.subscription.upgrade({
  *   plan: "pro",
+ *   embeddedCheckout: true,
  *   returnUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
  * });
  *
@@ -314,7 +315,7 @@ export function createStripeEmbeddedCheckout(
 
 		if (!clientSecret) {
 			throw new Error(
-				"clientSecret is required. Get it from the createEmbeddedCheckout endpoint.",
+				"clientSecret is required. Get it from the upgrade endpoint with embeddedCheckout: true.",
 			);
 		}
 
@@ -398,8 +399,9 @@ export function createStripeEmbeddedCheckout(
  * ```ts
  * import { mountEmbeddedCheckout } from "@better-auth/stripe/client";
  *
- * const { data } = await authClient.subscription.createEmbeddedCheckout({
+ * const { data } = await authClient.subscription.upgrade({
  *   plan: "pro",
+ *   embeddedCheckout: true,
  *   returnUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
  * });
  *

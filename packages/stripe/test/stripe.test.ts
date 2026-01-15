@@ -256,7 +256,7 @@ describe("stripe", () => {
 				headers,
 			},
 		});
-		expect(res.data?.url).toBeDefined();
+		expect((res.data as { url: string })?.url).toBeDefined();
 		const subscription = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
@@ -1842,7 +1842,7 @@ describe("stripe", () => {
 			},
 		});
 
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 	});
 
 	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
@@ -2044,16 +2044,17 @@ describe("stripe", () => {
 			},
 		);
 
-		const res = await client.subscription.createEmbeddedCheckout({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
+			embeddedCheckout: true,
 			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
 			fetchOptions: {
 				headers,
 			},
 		});
 
-		expect(res.data?.clientSecret).toBe("cs_test_secret_embedded123");
-		expect(res.data?.sessionId).toBe("cs_test_embedded123");
+		expect((res.data as { clientSecret: string | null; sessionId: string })?.clientSecret).toBe("cs_test_secret_embedded123");
+		expect((res.data as { clientSecret: string | null; sessionId: string })?.sessionId).toBe("cs_test_embedded123");
 
 		// Verify the checkout session was created with ui_mode: 'embedded'
 		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
@@ -2146,16 +2147,17 @@ describe("stripe", () => {
 			},
 		);
 
-		const res = await client.subscription.createEmbeddedCheckout({
+		const res = await client.subscription.upgrade({
 			plan: "pro",
 			annual: true,
+			embeddedCheckout: true,
 			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
 			fetchOptions: {
 				headers,
 			},
 		});
 
-		expect(res.data?.clientSecret).toBe("cs_test_secret_annual123");
+		expect((res.data as { clientSecret: string | null })?.clientSecret).toBe("cs_test_secret_annual123");
 		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				ui_mode: "embedded",
@@ -2266,8 +2268,9 @@ describe("stripe", () => {
 			},
 		);
 
-		const res = await client.subscription.createEmbeddedCheckout({
+		const res = await client.subscription.upgrade({
 			plan: "nonexistent",
+			embeddedCheckout: true,
 			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
 			fetchOptions: {
 				headers,
@@ -2330,11 +2333,13 @@ describe("stripe", () => {
 				stripeCustomerId: "cus_mock123",
 				stripeSubscriptionId: "sub_existing123",
 				status: "active",
+				seats: 1,
 			},
 		});
 
-		const res = await client.subscription.createEmbeddedCheckout({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
+			embeddedCheckout: true,
 			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
 			fetchOptions: {
 				headers,
@@ -2434,7 +2439,7 @@ describe("stripe", () => {
 		});
 		// It should NOT go through billing portal (which would update the personal sub)
 		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 
 		const orgSub = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
@@ -2489,7 +2494,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(firstUpgradeRes.data?.url).toBeDefined();
+		expect((firstUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
 		await ctx.adapter.update({
@@ -2527,7 +2532,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(secondUpgradeRes.data?.url).toBeDefined();
+		expect((secondUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that the checkout session was created without trial_period_days
 		// We can't directly test the Stripe session, but we can verify the logic
@@ -2624,7 +2629,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that NO trial was granted despite processing the incomplete subscription
 		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
@@ -2764,8 +2769,8 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 
 		// Verify the response has a redirect URL
-		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
-		expect(upgradeRes.data?.redirect).toBe(true);
+		expect((upgradeRes.data as { url: string; redirect: boolean })?.url).toBe("https://billing.stripe.com/mock");
+		expect((upgradeRes.data as { url: string; redirect: boolean })?.redirect).toBe(true);
 
 		// Verify no new subscription was created in the database
 		const allSubs = await ctx.adapter.findMany<Subscription>({
@@ -2816,7 +2821,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(firstUpgradeRes.data?.url).toBeDefined();
+		expect((firstUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
 		await ctx.adapter.update({
@@ -2854,7 +2859,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(secondUpgradeRes.data?.url).toBeDefined();
+		expect((secondUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that the user has trial history from the first plan
 		const subscriptions = (await ctx.adapter.findMany({
@@ -4810,7 +4815,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 
 			it("should pass when referenceId equals user id", async () => {
@@ -4846,7 +4851,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 
 			it("should reject when authorizeReference is not defined but other referenceId is provided", async () => {
@@ -4968,7 +4973,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 		});
 
