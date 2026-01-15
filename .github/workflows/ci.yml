@@ -129,6 +129,7 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
+    if: github.event_name != 'merge_group'
     strategy:
       fail-fast: false
       matrix:
