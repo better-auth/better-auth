@@ -87,6 +87,28 @@ describe("captcha", async (it) => {
 		expect(res.error?.status).toBe(400);
 	});
 
+	it("Should return 400 if the captcha response header does not match the configured header", async () => {
+		const { client } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "cloudflare-turnstile",
+					secretKey: "xx-secret-key",
+					captchaResponseHeader: "x-custom-captcha-header"
+				}),
+			],
+		});
+		const res = await client.signIn.email({
+			email: "test@test.com",
+			password: "test123456",
+			fetchOptions: {
+				headers: {
+					"x-captcha-response": "captcha-token",
+				},
+			},
+		});
+		expect(res.error?.status).toBe(400);
+	});
+
 	it("Should return 500 if an unexpected error occurs", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
@@ -194,7 +216,7 @@ describe("captcha", async (it) => {
 	describe("google-recaptcha", async (it) => {
 		const { client } = await getTestInstance({
 			plugins: [
-				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key" }),
+				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key", includeUserIP: true }),
 			],
 		});
 
@@ -294,6 +316,7 @@ describe("captcha", async (it) => {
 					provider: "hcaptcha",
 					secretKey: "xx-secret-key",
 					siteKey: "xx-site-key",
+					includeUserIP: true
 				}),
 			],
 		});
