@@ -1586,6 +1586,9 @@ importers:
       openid-client:
         specifier: ^6.8.1
         version: 6.8.1
+      undici:
+        specifier: ^7.0.0
+        version: 7.14.0
       vitest:
         specifier: catalog:vitest
         version: 4.0.16(@opentelemetry/api@1.9.0)(@types/node@25.0.6)(happy-dom@20.0.11)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.6)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
@@ -20658,9 +20661,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
