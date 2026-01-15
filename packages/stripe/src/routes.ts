@@ -1623,7 +1623,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 			if (!isPendingCancel(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
-						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 				);
 			}
 
