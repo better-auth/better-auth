@@ -34,8 +34,15 @@ export const captcha = (options: CaptchaOptions) =>
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
 				}
 
-				const captchaResponse = request.headers.get("x-captcha-response");
-				const remoteUserIP = getIp(request, ctx.options) ?? undefined;
+				const captchaResponseHeader =
+					options.captchaResponseHeader &&
+					options.captchaResponseHeader.trim() !== ""
+						? options.captchaResponseHeader
+						: "x-captcha-response";
+
+				const captchaResponse = request.headers.get(captchaResponseHeader);
+				
+				const remoteUserIP = options.includeUserIP ? getIp(request, ctx.options) ?? undefined : undefined;
 
 				if (!captchaResponse) {
 					return middlewareResponse({
