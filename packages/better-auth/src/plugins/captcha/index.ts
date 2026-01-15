@@ -41,11 +41,10 @@ export const captcha = (options: CaptchaOptions) =>
 						: "x-captcha-response";
 
 				const captchaResponse = request.headers.get(captchaResponseHeader);
-				
+
 				const remoteUserIP = options.includeUserIP
 					? (getIp(request, ctx.options) ?? undefined)
 					: undefined;
-
 
 				if (!captchaResponse) {
 					return middlewareResponse({
