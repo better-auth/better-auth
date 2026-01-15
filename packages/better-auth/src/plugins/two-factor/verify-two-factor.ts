@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
-import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { expireCookie, setSessionCookie } from "../../cookies";
 import {
