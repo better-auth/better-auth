@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { APIError } from "better-call";
 import type {
 	JSONWebKeySet,
@@ -86,20 +86,22 @@ export async function getJwks(
 
 	// Fetch jwks if not set or has a different kid than the one stored
 	if (!jwks || !jwks.keys.find((jwk) => jwk.kid === jwtHeaders.kid)) {
-		jwks =
-			typeof opts.jwksFetch === "string"
-				? await betterFetch<JSONWebKeySet>(opts.jwksFetch, {
-						headers: {
-							Accept: "application/json",
-						},
-					}).then(async (res) => {
-						if (res.error)
-							throw new Error(
-								`Jwks failed: ${res.error.message ?? res.error.statusText}`,
-							);
-						return res.data;
-					})
-				: await opts.jwksFetch();
+		if (typeof opts.jwksFetch === "string") {
+			const ctx = await getCurrentAuthContext();
+			jwks = await ctx.context.fetch<JSONWebKeySet>(opts.jwksFetch, {
+				headers: {
+					Accept: "application/json",
+				},
+			}).then(async (res) => {
+				if (res.error)
+					throw new Error(
+						`Jwks failed: ${res.error.message ?? res.error.statusText}`,
+					);
+				return res.data;
+			});
+		} else {
+			jwks = await opts.jwksFetch();
+		}
 		if (!jwks) throw new Error("No jwks found");
 	}
 
@@ -156,7 +158,8 @@ export async function verifyAccessToken(
 
 	// Remote verify
 	if (opts?.remoteVerify) {
-		const { data: introspect, error: introspectError } = await betterFetch<
+		const ctx = await getCurrentAuthContext();
+		const { data: introspect, error: introspectError } = await ctx.context.fetch<
 			JWTPayload & {
 				active: boolean;
 			}

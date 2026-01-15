@@ -1,5 +1,5 @@
 import { base64 } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { jwtVerify } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
@@ -111,7 +111,8 @@ export async function validateAuthorizationCode({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<object>(tokenEndpoint, {
+	const ctx = await getCurrentAuthContext();
+	const { data, error } = await ctx.context.fetch<object>(tokenEndpoint, {
 		method: "POST",
 		body: body,
 		headers: requestHeaders,
@@ -125,7 +126,8 @@ export async function validateAuthorizationCode({
 }
 
 export async function validateToken(token: string, jwksEndpoint: string) {
-	const { data, error } = await betterFetch<{
+	const ctx = await getCurrentAuthContext();
+	const { data, error } = await ctx.context.fetch<{
 		keys: {
 			kid: string;
 			kty: string;

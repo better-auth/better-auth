@@ -1,5 +1,5 @@
 import { base64Url } from "@better-auth/utils/base64";
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
 export function createClientCredentialsTokenRequest({
@@ -72,7 +72,8 @@ export async function clientCredentialsToken({
 		resource,
 	});
 
-	const { data, error } = await betterFetch<{
+	const ctx = await getCurrentAuthContext();
+	const { data, error } = await ctx.context.fetch<{
 		access_token: string;
 		expires_in?: number | undefined;
 		token_type?: string | undefined;
