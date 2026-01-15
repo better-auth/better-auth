@@ -2046,8 +2046,7 @@ describe("stripe", () => {
 
 		const res = await client.subscription.createEmbeddedCheckout({
 			plan: "starter",
-			returnUrl:
-				"https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
 			fetchOptions: {
 				headers,
 			},

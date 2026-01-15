@@ -810,12 +810,10 @@ const createEmbeddedCheckoutBodySchema = z.object({
 	 * The URL to redirect customers after successful payment.
 	 * Must include `{CHECKOUT_SESSION_ID}` template variable which will be replaced with the session ID.
 	 */
-	returnUrl: z
-		.string()
-		.meta({
-			description:
-				'Return URL after checkout completion. Must include {CHECKOUT_SESSION_ID}. Eg: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}"',
-		}),
+	returnUrl: z.string().meta({
+		description:
+			'Return URL after checkout completion. Must include {CHECKOUT_SESSION_ID}. Eg: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}"',
+	}),
 });
 
 /**
@@ -1063,8 +1061,7 @@ export const createEmbeddedCheckout = (options: StripeOptions) => {
 				},
 			);
 			const hasEverTrialed = allSubscriptions.some(
-				(s) =>
-					!!(s.trialStart || s.trialEnd) || s.status === "trialing",
+				(s) => !!(s.trialStart || s.trialEnd) || s.status === "trialing",
 			);
 
 			const freeTrial =
