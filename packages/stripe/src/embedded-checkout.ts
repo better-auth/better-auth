@@ -186,7 +186,7 @@ async function loadStripeJs(
 	} = {},
 ): Promise<StripeInstance> {
 	// Return cached instance if same publishable key
-	if (stripePromise && loadedPublishableKey === publishableKey) {
+	if (stripePromise !== null && loadedPublishableKey === publishableKey) {
 		return stripePromise;
 	}
 
