@@ -67,7 +67,7 @@ export async function authorize(
 			},
 		);
 		const queryParams = new URLSearchParams(ctx.query);
-		return handleRedirect(`${options.loginPage}?${queryParams.toString}`);
+		return handleRedirect(`${options.loginPage}?${queryParams.toString()}`);
 	}
 
 	const query = ctx.query as AuthorizationQuery;
