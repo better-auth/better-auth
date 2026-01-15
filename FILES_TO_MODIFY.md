@@ -28,10 +28,10 @@ These files are endpoints/routes with `ctx` parameter.
 
 ---
 
-## Category B: No Context - Needs Fetch Parameter 🔧
+## Category B: No Direct ctx - Use Async Storage 🔧
 
-These are pure functions/factories without context access.  
-**Change:** Accept optional `fetch` parameter, default to betterFetch for backwards compat
+These don't receive `ctx` as parameter but can access it via async local storage.  
+**Change:** Use `getCurrentAuthContext()` to access `ctx.context.fetch`
 
 ### OAuth2 Core Functions (4 files)
 - `packages/core/src/oauth2/validate-authorization-code.ts`
@@ -146,18 +146,21 @@ Batch implementation, can be parallelized.
 
 ---
 
-## Cannot Access Context: Final Answer ✅
+## Can All Files Access Context? Final Answer ✅
 
-**YES**, these files cannot access context:
+**YES!** All files can access context via `getCurrentAuthContext()` from async local storage.
 
+Files without direct `ctx` parameter:
 1. **OAuth2 Core (4 files)** - Pure utility functions
 2. **Social Providers (28 files)** - Factory functions
 3. **SSO Discovery (1 file)** - Helper function
 4. **Generic OAuth Plugin factories (1 file)** - Factory function
 
-**Total: 34 files cannot access context**
+**Total: 35 files without direct ctx parameter**
 
-**Solution:** These will accept an optional `fetch` parameter that routes/endpoints pass from `ctx.context.fetch`.
+**Solution:** These use `getCurrentAuthContext()` to access `ctx.context.fetch`.
+
+No need to modify function signatures or pass parameters! 🎉
 
 ---
 
@@ -168,15 +171,13 @@ User Config (fetchOptions)
   ↓
 createAuthContext() creates fetch instance
   ↓
-Stored in ctx.context.fetch
+Stored in ctx.context.fetch + AsyncLocalStorage
   ↓
-Routes/Endpoints access via ctx.context.fetch
-  ↓
-Routes call providers, passing ctx.context.fetch
-  ↓
-Providers accept fetch, use it and pass to OAuth2 core
-  ↓
-OAuth2 core accepts fetch, uses it
+Any code anywhere:
+  - Has ctx? → ctx.context.fetch
+  - No ctx? → (await getCurrentAuthContext()).context.fetch
 ```
 
-Every betterFetch call eventually uses the configured instance! ✅
+**Every file can access the configured fetch instance!** ✅
+
+No parameter passing needed - async local storage makes it available everywhere.

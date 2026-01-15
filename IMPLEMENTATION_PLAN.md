@@ -124,8 +124,8 @@ Files:
 - `/packages/sso/src/routes/sso.ts`
 - Any other endpoint files
 
-#### Category B: OAuth2 Core Functions (No ctx - need to accept it)
-These need to accept `fetch` parameter and use it:
+#### Category B: OAuth2 Core Functions (No ctx - use async storage)
+These use `getCurrentAuthContext()` to access the fetch instance:
 
 Files:
 - `/packages/core/src/oauth2/validate-authorization-code.ts`
@@ -136,40 +136,55 @@ Files:
 Pattern:
 ```typescript
 // Before
+import { betterFetch } from "@better-fetch/fetch";
+
 export async function validateAuthorizationCode({ code, ... }) {
   const { data } = await betterFetch(url, options);
 }
 
 // After
-export async function validateAuthorizationCode({ 
-  code, 
-  ...,
-  fetch = betterFetch // Default for backwards compat
-}) {
-  const { data } = await fetch(url, options);
+import { getCurrentAuthContext } from "@better-auth/core/context";
+
+export async function validateAuthorizationCode({ code, ... }) {
+  const ctx = await getCurrentAuthContext();
+  const { data } = await ctx.context.fetch(url, options);
 }
 ```
 
-#### Category C: Social Providers (No ctx - call OAuth2 core)
-These call OAuth2 core functions, so they need to pass fetch through.
+#### Category C: Social Providers (No ctx - use async storage)
+These use `getCurrentAuthContext()` to access the fetch instance:
 
 All 34 providers in `/packages/core/src/social-providers/*.ts`
 
 Pattern:
 ```typescript
-// Provider definition
+// Before
+import { betterFetch } from "@better-fetch/fetch";
+
 export const github = (options: GithubOptions) => {
   return {
-    validateAuthorizationCode: async ({ code, ... }, fetch?) => {
-      return validateAuthorizationCode({
-        code,
-        ...,
-        fetch, // Pass through
-      });
+    validateAuthorizationCode: async ({ code, ... }) => {
+      return validateAuthorizationCode({ code, ... });
     },
     
-    async getUserInfo(token, fetch = betterFetch) {
-      const { data } = await fetch(url, options); // Use passed fetch
+    async getUserInfo(token) {
+      const { data } = await betterFetch(url, options);
+    }
+  };
+};
+
+// After
+import { getCurrentAuthContext } from "@better-auth/core/context";
+
+export const github = (options: GithubOptions) => {
+  return {
+    validateAuthorizationCode: async ({ code, ... }) => {
+      return validateAuthorizationCode({ code, ... }); // OAuth2 core uses async storage
+    },
+    
+    async getUserInfo(token) {
+      const ctx = await getCurrentAuthContext();
+      const { data } = await ctx.context.fetch(url, options);
     }
   };
 };
@@ -194,21 +209,23 @@ File: `/packages/telemetry/src/index.ts`
 
 This is separate from auth context, can keep using betterFetch directly OR accept optional fetch parameter
 
-## Files That Can't Access Context
+## Files Without Direct ctx Parameter
 
-Based on the audit, these files DON'T have direct context access:
+These files don't receive `ctx` as a parameter, but they CAN access context via async local storage:
 
 1. **OAuth2 Core** (4 files) - Pure functions called by providers
-   - Solution: Accept optional `fetch` parameter, default to betterFetch
+   - Solution: Use `getCurrentAuthContext()` to get fetch instance
    
-2. **Social Providers** (34 files) - Factory functions that return provider object
-   - Solution: Accept `fetch` in methods, pass to OAuth2 core
+2. **Social Providers** (28 files) - Factory functions that return provider object
+   - Solution: Use `getCurrentAuthContext()` in methods
    
-3. **Generic OAuth Providers** (9 files) - Similar to social providers
-   - Solution: Same pattern as social providers
+3. **Generic OAuth Providers** (2 files) - Similar to social providers
+   - Solution: Use `getCurrentAuthContext()` in methods
 
-4. **SSO Discovery** - Helper functions
-   - Solution: Accept optional `fetch` parameter
+4. **SSO Discovery** (1 file) - Helper functions
+   - Solution: Use `getCurrentAuthContext()` to get fetch instance
+
+All these files can access `ctx.context.fetch` via `getCurrentAuthContext()` ✅
 
 ## How Fetch Propagates
 
@@ -219,18 +236,19 @@ fetchOptions in BetterAuthOptions
   ↓
 createAuthContext creates fetch instance
   ↓
-Stored in ctx.context.fetch
+Stored in ctx.context.fetch + AsyncLocalStorage
   ↓
   ├─→ Endpoints: use ctx.context.fetch directly
   │
-  ├─→ Routes call providers: pass ctx.context.fetch
-  │     ↓
-  │   Providers accept fetch parameter
-  │     ↓
-  │   Pass to OAuth2 core functions
+  ├─→ Providers: await getCurrentAuthContext(), use ctx.context.fetch
   │
-  └─→ Helpers: await getCurrentAuthContext() then use ctx.context.fetch
+  ├─→ OAuth2 Core: await getCurrentAuthContext(), use ctx.context.fetch
+  │
+  └─→ Any Helper: await getCurrentAuthContext(), use ctx.context.fetch
 ```
+
+**Key insight:** Everything can access the configured fetch via async local storage! 🎉
+No need to pass parameters through function chains.
 
 ## Implementation Order
 
@@ -311,22 +329,22 @@ test('OAuth flow uses configured proxy', async () => {
 ## Backwards Compatibility
 
 - `fetchOptions` is optional - existing code works unchanged
-- OAuth2 core functions default `fetch` parameter to `betterFetch`
-- Provider methods default `fetch` parameter to `betterFetch`
-- Zero breaking changes
+- When `fetchOptions` is not provided, fetch instance is created with default config
+- `getCurrentAuthContext()` already exists and is used in many places
+- Zero breaking changes - we're just replacing direct betterFetch imports with context.fetch
 
-## Questions to Resolve
+## Questions Resolved ✅
 
 1. ✅ Should telemetry use the configured fetch? 
-   - Probably not - it's reporting to Better Auth servers, not OAuth providers
-   - Can keep using betterFetch directly
+   - **No** - it reports to Better Auth servers, not OAuth providers
+   - Keep using betterFetch directly
 
 2. ✅ How to handle provider factory functions that don't have ctx?
-   - Accept fetch in the methods (validateAuthorizationCode, getUserInfo)
-   - Routes pass ctx.context.fetch when calling these methods
+   - **Use `getCurrentAuthContext()`** - much cleaner than passing parameters!
+   - No function signature changes needed
 
 3. ✅ Should we update OAuthProvider interface?
-   - Yes, methods should accept optional fetch parameter
+   - **No** - not needed since we use getCurrentAuthContext() internally
 
 ## File Count Estimate
 
