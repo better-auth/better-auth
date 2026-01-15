@@ -127,13 +127,18 @@ type signInEmailOTP = {
     /**
      * OTP sent to the email. 
      */
-    otp: string = "123456"
+    otp: string = "123456",
+    /**
+     * Additional signup properties
+    */
+    signupData?: Record<string, any> = { name: "Daniel", image: "https://user-profiles.com/users/daniel" }
 }
 ```
 </APIMethod>
 
 <Callout>
-If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
+If the user is not registered, they'll be automatically registered by default. During registration, you can pass other core properties (e.g `image` or `name`) or [additional fields](/docs/concepts/typescript#additional-fields) through the `signupData` property.
+If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
 ### Verify Email with OTP
