@@ -1,0 +1,113 @@
+---
+title: Invitations
+description: Set up the invitation system for your organizations.
+---
+
+The invitation system allows organization admins to invite new members via email or shareable links.
+
+## Sending Invitations
+
+Invite a user by email:
+
+```ts
+await authClient.organization.inviteMember({
+    organizationId: "org_123",
+    email: "user@example.com",
+    role: "member"
+})
+```
+
+## Listing Invitations
+
+Get all pending invitations for an organization:
+
+```ts
+const { data: invitations } = await authClient.organization.listInvitations({
+    organizationId: "org_123"
+})
+```
+
+## Accepting Invitations
+
+Accept an invitation (as the invited user):
+
+```ts
+await authClient.organization.acceptInvitation({
+    invitationId: "inv_123"
+})
+```
+
+## Rejecting Invitations
+
+Reject an invitation:
+
+```ts
+await authClient.organization.rejectInvitation({
+    invitationId: "inv_123"
+})
+```
+
+## Canceling Invitations
+
+Cancel a pending invitation (as an admin):
+
+```ts
+await authClient.organization.cancelInvitation({
+    organizationId: "org_123",
+    invitationId: "inv_123"
+})
+```
+
+## Invitation Links
+
+Generate a shareable invitation link:
+
+```ts
+const { data: link } = await authClient.organization.createInvitationLink({
+    organizationId: "org_123",
+    role: "member",
+    expiresIn: 7 * 24 * 60 * 60 // 7 days in seconds
+})
+
+// link.url contains the shareable URL
+```
+
+## Invitation Schema
+
+The invitation table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier |
+| `organizationId` | string | Organization reference |
+| `email` | string | Invitee's email |
+| `role` | string | Role to assign on acceptance |
+| `status` | string | pending, accepted, rejected, expired |
+| `inviterId` | string | User who sent the invitation |
+| `expiresAt` | Date | Expiration timestamp |
+| `createdAt` | Date | Creation timestamp |
+
+## Email Configuration
+
+To send invitation emails, configure the email provider in your auth config:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            sendInvitationEmail: async ({ email, organization, invitationLink }) => {
+                // Send email using your email provider
+                await sendEmail({
+                    to: email,
+                    subject: `You've been invited to ${organization.name}`,
+                    html: `<a href="${invitationLink}">Accept invitation</a>`
+                })
+            }
+        })
+    ]
+})
+```
+

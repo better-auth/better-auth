@@ -9,11 +9,7 @@ import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { getUserFromSessionOrBody } from "../helpers/get-user-from-session-or-body";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import { orgMiddleware } from "../middleware/org-middleware";
-import type {
-	InferOrganization,
-	OrganizationOptions,
-	ResolvedOrganizationOptions,
-} from "../types";
+import type { InferOrganization, OrganizationOptions } from "../types";
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
