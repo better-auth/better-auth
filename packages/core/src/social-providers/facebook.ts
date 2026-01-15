@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
@@ -124,10 +124,11 @@ export const facebook = (options: FacebookOptions) => {
 							"https://graph.facebook.com/v18.0/oauth/access_token",
 					});
 				},
-		async getUserInfo(token) {
-			if (options.getUserInfo) {
-				return options.getUserInfo(token);
-			}
+	async getUserInfo(token) {
+		if (options.getUserInfo) {
+			return options.getUserInfo(token);
+		}
+		const ctx = await getCurrentAuthContext();
 
 			if (token.idToken && token.idToken.split(".").length === 3) {
 				const profile = decodeJwt(token.idToken) as {
@@ -176,15 +177,15 @@ export const facebook = (options: FacebookOptions) => {
 				"picture",
 				...(options?.fields || []),
 			];
-			const { data: profile, error } = await betterFetch<FacebookProfile>(
-				"https://graph.facebook.com/me?fields=" + fields.join(","),
-				{
-					auth: {
-						type: "Bearer",
-						token: token.accessToken,
-					},
+		const { data: profile, error } = await ctx.context.fetch<FacebookProfile>(
+			"https://graph.facebook.com/me?fields=" + fields.join(","),
+			{
+				auth: {
+					type: "Bearer",
+					token: token.accessToken,
 				},
-			);
+			},
+		);
 			if (error) {
 				return null;
 			}

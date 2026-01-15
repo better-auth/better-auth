@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { refreshAccessToken, validateAuthorizationCode } from "../oauth2";
 export interface DiscordProfile extends Record<string, any> {
@@ -125,18 +125,19 @@ export const discord = (options: DiscordOptions) => {
 						tokenEndpoint: "https://discord.com/api/oauth2/token",
 					});
 				},
-		async getUserInfo(token) {
-			if (options.getUserInfo) {
-				return options.getUserInfo(token);
-			}
-			const { data: profile, error } = await betterFetch<DiscordProfile>(
-				"https://discord.com/api/users/@me",
-				{
-					headers: {
-						authorization: `Bearer ${token.accessToken}`,
-					},
+	async getUserInfo(token) {
+		if (options.getUserInfo) {
+			return options.getUserInfo(token);
+		}
+		const ctx = await getCurrentAuthContext();
+		const { data: profile, error} = await ctx.context.fetch<DiscordProfile>(
+			"https://discord.com/api/users/@me",
+			{
+				headers: {
+					authorization: `Bearer ${token.accessToken}`,
 				},
-			);
+			},
+		);
 
 			if (error) {
 				return null;

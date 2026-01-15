@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -59,11 +59,12 @@ export const spotify = (options: SpotifyOptions) => {
 						tokenEndpoint: "https://accounts.spotify.com/api/token",
 					});
 				},
-		async getUserInfo(token) {
-			if (options.getUserInfo) {
-				return options.getUserInfo(token);
-			}
-			const { data: profile, error } = await betterFetch<SpotifyProfile>(
+	async getUserInfo(token) {
+		if (options.getUserInfo) {
+			return options.getUserInfo(token);
+		}
+		const ctx = await getCurrentAuthContext();
+		const { data: profile, error } = await ctx.context.fetch<SpotifyProfile>(
 				"https://api.spotify.com/v1/me",
 				{
 					method: "GET",

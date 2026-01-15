@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -107,35 +107,36 @@ export const github = (options: GithubOptions) => {
 						tokenEndpoint: "https://github.com/login/oauth/access_token",
 					});
 				},
-		async getUserInfo(token) {
-			if (options.getUserInfo) {
-				return options.getUserInfo(token);
-			}
-			const { data: profile, error } = await betterFetch<GithubProfile>(
-				"https://api.github.com/user",
-				{
-					headers: {
-						"User-Agent": "better-auth",
-						authorization: `Bearer ${token.accessToken}`,
-					},
-				},
-			);
-			if (error) {
-				return null;
-			}
-			const { data: emails } = await betterFetch<
-				{
-					email: string;
-					primary: boolean;
-					verified: boolean;
-					visibility: "public" | "private";
-				}[]
-			>("https://api.github.com/user/emails", {
+	async getUserInfo(token) {
+		if (options.getUserInfo) {
+			return options.getUserInfo(token);
+		}
+		const ctx = await getCurrentAuthContext();
+		const { data: profile, error } = await ctx.context.fetch<GithubProfile>(
+			"https://api.github.com/user",
+			{
 				headers: {
-					Authorization: `Bearer ${token.accessToken}`,
 					"User-Agent": "better-auth",
+					authorization: `Bearer ${token.accessToken}`,
 				},
-			});
+			},
+		);
+		if (error) {
+			return null;
+		}
+		const { data: emails } = await ctx.context.fetch<
+			{
+				email: string;
+				primary: boolean;
+				verified: boolean;
+				visibility: "public" | "private";
+			}[]
+		>("https://api.github.com/user/emails", {
+			headers: {
+				Authorization: `Bearer ${token.accessToken}`,
+				"User-Agent": "better-auth",
+			},
+		});
 
 			if (!profile.email && emails) {
 				profile.email = (emails.find((e) => e.primary) ?? emails[0])

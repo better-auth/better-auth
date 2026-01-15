@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -148,12 +148,13 @@ export const twitter = (options: TwitterOption) => {
 						tokenEndpoint: "https://api.x.com/2/oauth2/token",
 					});
 				},
-		async getUserInfo(token) {
-			if (options.getUserInfo) {
-				return options.getUserInfo(token);
-			}
-			const { data: profile, error: profileError } =
-				await betterFetch<TwitterProfile>(
+	async getUserInfo(token) {
+		if (options.getUserInfo) {
+			return options.getUserInfo(token);
+		}
+		const ctx = await getCurrentAuthContext();
+		const { data: profile, error: profileError } =
+			await ctx.context.fetch<TwitterProfile>(
 					"https://api.x.com/2/users/me?user.fields=profile_image_url",
 					{
 						method: "GET",
@@ -167,9 +168,9 @@ export const twitter = (options: TwitterOption) => {
 				return null;
 			}
 
-			const { data: emailData, error: emailError } = await betterFetch<{
-				data: { confirmed_email: string };
-			}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
+		const { data: emailData, error: emailError } = await ctx.context.fetch<{
+			data: { confirmed_email: string };
+		}>("https://api.x.com/2/users/me?user.fields=confirmed_email", {
 				method: "GET",
 				headers: {
 					Authorization: `Bearer ${token.accessToken}`,

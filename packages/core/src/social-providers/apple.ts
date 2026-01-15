@@ -1,4 +1,4 @@
-import { betterFetch } from "@better-fetch/fetch";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { APIError } from "../error";
@@ -200,7 +200,8 @@ export const apple = (options: AppleOptions) => {
 export const getApplePublicKey = async (kid: string) => {
 	const APPLE_BASE_URL = "https://appleid.apple.com";
 	const JWKS_APPLE_URI = "/auth/keys";
-	const { data } = await betterFetch<{
+	const ctx = await getCurrentAuthContext();
+	const { data } = await ctx.context.fetch<{
 		keys: Array<{
 			kid: string;
 			alg: string;
