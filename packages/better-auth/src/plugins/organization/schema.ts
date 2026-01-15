@@ -200,7 +200,7 @@ interface SessionDefaultFields {
 }
 
 export type OrganizationSchema<O extends OrganizationOptions> =
-	O["dynamicAccessControl"] extends { enabled: true }
+	(O["dynamicAccessControl"] extends { enabled: true }
 		? {
 				organizationRole: InferSchema<
 					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
@@ -216,7 +216,7 @@ export type OrganizationSchema<O extends OrganizationOptions> =
 					>["fields"];
 				};
 			}
-		: {} & (O["teams"] extends { enabled: true }
+		: {}) & (O["teams"] extends { enabled: true }
 				? {
 						team: InferSchema<
 							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
