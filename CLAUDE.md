@@ -43,7 +43,7 @@ run specific tests.
 
 ## Code Style
 
-* Formatter: Biome (4-tabs for code, 2-space for JSON)
+* Formatter: Biome (tabs for code, 2-space for JSON)
 * Avoid unsafe typecasts or types like `any`
 * Avoid classes, use functions and objects
 * Do not use runtime-specific feature like `Buffer` in codebase except test, use `Uint8Array` instead
