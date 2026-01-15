@@ -68,6 +68,10 @@ run specific tests.
   following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 * Use `docs:` for documentation, `chore:` for non-functional changes
 
+## Postmortems
+
+Check `postmortem/` directory for lessons learned from past issues.
+
 ## After Everything is done
 
 **Unless the user asked for it or you are working on CI, DO NOT COMMIT**
