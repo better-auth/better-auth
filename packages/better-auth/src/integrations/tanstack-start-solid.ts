@@ -3,16 +3,16 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { parseSetCookieHeader } from "../cookies";
 
 /**
- * TanStack Start cookie plugin for React.
+ * TanStack Start cookie plugin for Solid.js.
  *
- * This plugin automatically handles cookie setting for TanStack Start with React.
- * It uses `@tanstack/react-start-server` to set cookies.
+ * This plugin automatically handles cookie setting for TanStack Start with Solid.js.
+ * It uses `@tanstack/solid-start-server` to set cookies.
  *
- * For Solid.js, use `better-auth/tanstack-start/solid` instead.
+ * For React, use `better-auth/tanstack-start` instead.
  *
  * @example
  * ```ts
- * import { tanstackStartCookies } from "better-auth/tanstack-start";
+ * import { tanstackStartCookies } from "better-auth/tanstack-start/solid";
  *
  * const auth = betterAuth({
  *   plugins: [tanstackStartCookies()],
@@ -38,7 +38,7 @@ export const tanstackStartCookies = () => {
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
 							const { setCookie } = await import(
-								"@tanstack/react-start-server"
+								"@tanstack/solid-start-server"
 							);
 							parsed.forEach((value, key) => {
 								if (!key) return;
