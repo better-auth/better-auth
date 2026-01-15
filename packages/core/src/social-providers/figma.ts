@@ -20,6 +20,7 @@ export interface FigmaOptions extends ProviderOptions<FigmaProfile> {
 }
 
 export const figma = (options: FigmaOptions) => {
+	const tokenEndpoint = "https://www.figma.com/api/oauth/token";
 	return {
 		id: "figma",
 		name: "Figma",
@@ -56,7 +57,7 @@ export const figma = (options: FigmaOptions) => {
 				codeVerifier,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://www.figma.com/api/oauth/token",
+				tokenEndpoint,
 			});
 		},
 		refreshAccessToken: options.refreshAccessToken
@@ -69,7 +70,7 @@ export const figma = (options: FigmaOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://www.figma.com/api/oauth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

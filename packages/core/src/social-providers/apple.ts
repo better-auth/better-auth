@@ -147,7 +147,7 @@ export const apple = (options: AppleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://appleid.apple.com/auth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
