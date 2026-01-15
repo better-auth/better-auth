@@ -5,7 +5,7 @@
  * Reference: https://github.com/nodejs/undici/blob/main/docs/docs/api/ProxyAgent.md
  * Related issue: https://github.com/better-auth/better-auth/issues/7396
  */
-
+import { betterFetch } from "@better-fetch/fetch";
 import type { Dispatcher } from "undici";
 import { getGlobalDispatcher, MockAgent, setGlobalDispatcher } from "undici";
 import { afterEach, describe, expect, it } from "vitest";
@@ -20,7 +20,7 @@ describe("ProxyAgent with better-auth", () => {
 		}
 	});
 
-	it("should intercept fetch requests when global dispatcher is set", async () => {
+	it("should intercept better-fetch requests when global dispatcher is set", async () => {
 		// Save original dispatcher
 		originalDispatcher = getGlobalDispatcher();
 
@@ -40,9 +40,10 @@ describe("ProxyAgent with better-auth", () => {
 		// Set mock agent as global dispatcher (same as setting ProxyAgent in production)
 		setGlobalDispatcher(mockAgent);
 
-		// Make a fetch request - it should go through the mock agent
-		const response = await fetch("https://api.github.com/user");
-		const data = await response.json();
+		// Make a better-fetch request - it should go through the mock agent
+		const { data } = await betterFetch<{ login: string; id: number }>(
+			"https://api.github.com/user",
+		);
 
 		// Verify the request was intercepted
 		expect(data).toEqual({ login: "test-user", id: 12345 });
@@ -79,23 +80,22 @@ describe("ProxyAgent with better-auth", () => {
 		setGlobalDispatcher(mockAgent);
 
 		// Simulate the OAuth token exchange that better-auth would make
-		const response = await fetch(
-			"https://github.com/login/oauth/access_token",
-			{
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "application/json",
-				},
-				body: JSON.stringify({
-					client_id: "test_client_id",
-					client_secret: "test_client_secret",
-					code: "test_code",
-				}),
+		const { data } = await betterFetch<{
+			access_token: string;
+			token_type: string;
+			scope: string;
+		}>("https://github.com/login/oauth/access_token", {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Accept: "application/json",
 			},
-		);
-
-		const data = await response.json();
+			body: {
+				client_id: "test_client_id",
+				client_secret: "test_client_secret",
+				code: "test_code",
+			},
+		});
 
 		expect(data).toEqual({
 			access_token: "mock_access_token",
@@ -133,7 +133,11 @@ describe("ProxyAgent with better-auth", () => {
 
 		setGlobalDispatcher(mockAgent);
 
-		const response = await fetch("https://oauth2.googleapis.com/token", {
+		const { data } = await betterFetch<{
+			access_token: string;
+			expires_in: number;
+			token_type: string;
+		}>("https://oauth2.googleapis.com/token", {
 			method: "POST",
 			headers: { "Content-Type": "application/x-www-form-urlencoded" },
 			body: new URLSearchParams({
@@ -145,9 +149,7 @@ describe("ProxyAgent with better-auth", () => {
 			}),
 		});
 
-		const data: any = await response.json();
-
-		expect(data.access_token).toBe("google_mock_token");
+		expect(data?.access_token).toBe("google_mock_token");
 
 		await mockAgent.close();
 	});
