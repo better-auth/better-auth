@@ -34,7 +34,8 @@
 				// implicit integrations dependencies
 				"@lynx-js/react",
 				"@sveltejs/kit",
-				"@tanstack/start-server-core",
+				"@tanstack/react-start-server",
+				"@tanstack/solid-start-server",
 				"next",
 				"react",
 				"react-dom",

@@ -150,6 +150,11 @@
       "types": "./dist/integrations/tanstack-start.d.mts",
       "default": "./dist/integrations/tanstack-start.mjs"
     },
+    "./tanstack-start/solid": {
+      "dev-source": "./src/integrations/tanstack-start-solid.ts",
+      "types": "./dist/integrations/tanstack-start-solid.d.mts",
+      "default": "./dist/integrations/tanstack-start-solid.mjs"
+    },
     "./node": {
       "dev-source": "./src/integrations/node.ts",
       "types": "./dist/integrations/node.d.mts",
@@ -361,6 +366,9 @@
       "tanstack-start": [
         "./dist/integrations/tanstack-start.d.mts"
       ],
+      "tanstack-start/solid": [
+        "./dist/integrations/tanstack-start-solid.d.mts"
+      ],
       "adapters": [
         "./dist/adapters/index.d.mts"
       ],
@@ -462,6 +470,8 @@
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.37.1",
+    "@tanstack/react-start-server": "^1.150.0",
+    "@tanstack/solid-start-server": "^1.150.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.3",
     "@types/pg": "^8.15.5",
@@ -494,7 +504,8 @@
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
-    "@tanstack/start-server-core": "^1.0.0",
+    "@tanstack/react-start-server": "^1.0.0",
+    "@tanstack/solid-start-server": "^1.0.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4",
     "drizzle-orm": ">=0.41.0",
@@ -520,7 +531,10 @@
     "@sveltejs/kit": {
       "optional": true
     },
-    "@tanstack/start-server-core": {
+    "@tanstack/react-start-server": {
+      "optional": true
+    },
+    "@tanstack/solid-start-server": {
       "optional": true
     },
     "next": {
