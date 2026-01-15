@@ -1,6 +1,7 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
 import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
 import {
+	getEnumerationSafeResponse,
 	hasRequestState,
 	runWithEndpointContext,
 	runWithRequestState,
@@ -15,7 +16,6 @@ import type {
 import { toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
-import { getEnumerationSafeResponse } from "./middlewares/enumeration";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>

@@ -4,6 +4,10 @@ export {
 	getCurrentAuthContextAsyncLocalStorage,
 	runWithEndpointContext,
 } from "./endpoint-context";
+export {
+	getEnumerationSafeResponse,
+	setEnumerationSafeResponse,
+} from "./enumeration";
 export { getBetterAuthVersion } from "./global";
 export {
 	defineRequestState,
