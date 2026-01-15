@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.4.12",
+  "version": "1.4.13",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
