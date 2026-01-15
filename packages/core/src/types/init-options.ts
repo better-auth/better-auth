@@ -1452,6 +1452,56 @@ export type BetterAuthOptions = {
 		  }
 		| undefined;
 	/**
+	 * Fetch options for server-side requests (OAuth, captcha verification, etc.)
+	 *
+	 * Configure custom fetch behavior for all outbound HTTP requests made by Better Auth.
+	 * This is useful for:
+	 * - Corporate proxy configuration
+	 * - Custom fetch implementations
+	 * - Adding global headers or interceptors
+	 *
+	 * @example
+	 * ```typescript
+	 * import { ProxyAgent } from 'undici';
+	 *
+	 * betterAuth({
+	 *   fetchOptions: {
+	 *     // Corporate proxy
+	 *     dispatcher: new ProxyAgent(process.env.PROXY_URL)
+	 *   }
+	 * })
+	 * ```
+	 *
+	 * @example
+	 * ```typescript
+	 * betterAuth({
+	 *   fetchOptions: {
+	 *     // Custom headers
+	 *     headers: {
+	 *       'User-Agent': 'MyApp/1.0'
+	 *     }
+	 *   }
+	 * })
+	 * ```
+	 */
+	fetchOptions?:
+		| {
+				/**
+				 * Custom fetch implementation to use instead of the default fetch
+				 */
+				customFetchImpl?: typeof fetch;
+				/**
+				 * Additional fetch options that will be merged with each request.
+				 * Supports standard fetch options and library-specific options like:
+				 * - `dispatcher` (undici) - for proxy configuration
+				 * - `agent` (node-fetch) - for proxy configuration
+				 * - `headers` - custom headers for all requests
+				 * - etc.
+				 */
+				[key: string]: any;
+		  }
+		| undefined;
+	/**
 	 * Experimental features
 	 */
 	experimental?: {

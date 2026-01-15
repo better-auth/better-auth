@@ -261,10 +261,27 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 					user: User & Record<string, any>;
 				} | null,
 			) => void;
-			socialProviders: OAuthProvider[];
-			authCookies: BetterAuthCookies;
-			logger: ReturnType<typeof createLogger>;
-			rateLimit: {
+		socialProviders: OAuthProvider[];
+		authCookies: BetterAuthCookies;
+		logger: ReturnType<typeof createLogger>;
+		/**
+		 * Configured fetch instance for all outbound HTTP requests.
+		 *
+		 * This fetch instance is configured with options from `fetchOptions` in BetterAuthOptions.
+		 * Use this for all HTTP requests (OAuth, captcha, etc.) to ensure consistent behavior.
+		 *
+		 * @example
+		 * ```typescript
+		 * // In an endpoint with ctx
+		 * const { data } = await ctx.context.fetch(url, options);
+		 *
+		 * // In a helper without ctx
+		 * const ctx = await getCurrentAuthContext();
+		 * const { data } = await ctx.context.fetch(url, options);
+		 * ```
+		 */
+		fetch: typeof import("@better-fetch/fetch").betterFetch;
+		rateLimit: {
 				enabled: boolean;
 				window: number;
 				max: number;

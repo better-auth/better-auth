@@ -10,6 +10,7 @@ import { socialProviders } from "@better-auth/core/social-providers";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
+import { createFetch } from "@better-fetch/fetch";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
@@ -111,6 +112,12 @@ export async function createAuthContext(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
 	}
+
+	// Create configured fetch instance
+	const configuredFetch = createFetch({
+		customFetchImpl: fetch,
+		...options.fetchOptions,
+	});
 
 	const secret =
 		options.secret ||
@@ -263,6 +270,7 @@ export async function createAuthContext(
 		},
 		authCookies: cookies,
 		logger,
+		fetch: configuredFetch,
 		generateId: generateIdFunc,
 		session: null,
 		secondaryStorage: options.secondaryStorage,
