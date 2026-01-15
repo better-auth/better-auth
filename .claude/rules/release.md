@@ -25,8 +25,7 @@
    ```bash
    git checkout main
    git pull origin main
-   pnpm bump  # Interactive prompt to select version, creates commit & tag
-   git push origin main --follow-tags
+   pnpm bump  # Interactive prompt to select version, creates commit & tag, automatically pushes
    ```
 
 7. The release workflow (`.github/workflows/release.yml`) will automatically:
