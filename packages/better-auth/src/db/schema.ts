@@ -38,9 +38,9 @@ function parseOutputData<T extends Record<string, any>>(
 function getFields(
 	options: BetterAuthOptions,
 	table: string,
-	includeCoreSchema: boolean,
+	mode: "input" | "output",
 ) {
-	const cacheKey = includeCoreSchema ? `${table}:output` : `${table}:input`;
+	const cacheKey = `${table}:${mode}`;
 	if (!cache.has(options)) {
 		cache.set(options, new Map());
 	}
@@ -48,9 +48,8 @@ function getFields(
 	if (tableCache.has(cacheKey)) {
 		return tableCache.get(cacheKey)!;
 	}
-	const coreSchema = includeCoreSchema
-		? (getAuthTables(options)[table]?.fields ?? {})
-		: {};
+	const coreSchema =
+		mode === "output" ? (getAuthTables(options)[table]?.fields ?? {}) : {};
 	const additionalFields =
 		table === "user" || table === "session" || table === "account"
 			? options[table]?.additionalFields
@@ -75,7 +74,7 @@ export function parseUserOutput<T extends User>(
 	options: BetterAuthOptions,
 	user: T,
 ) {
-	const schema = getFields(options, "user", true);
+	const schema = getFields(options, "user", "output");
 	return {
 		...parseOutputData(user, { fields: schema }),
 		id: user.id,
@@ -86,7 +85,7 @@ export function parseAccountOutput<T extends Account>(
 	options: BetterAuthOptions,
 	account: T,
 ) {
-	const schema = getFields(options, "account", true);
+	const schema = getFields(options, "account", "output");
 	return parseOutputData(account, { fields: schema });
 }
 
@@ -94,7 +93,7 @@ export function parseSessionOutput<T extends Session>(
 	options: BetterAuthOptions,
 	session: T,
 ) {
-	const schema = getFields(options, "session", true);
+	const schema = getFields(options, "session", "output");
 	return parseOutputData(session, { fields: schema });
 }
 
@@ -179,7 +178,7 @@ export function parseUserInput(
 	user: Record<string, any> = {},
 	action: "create" | "update",
 ) {
-	const schema = getFields(options, "user", false);
+	const schema = getFields(options, "user", "input");
 	return parseInputData(user, { fields: schema, action });
 }
 
@@ -187,7 +186,7 @@ export function parseAdditionalUserInput(
 	options: BetterAuthOptions,
 	user?: Record<string, any> | undefined,
 ) {
-	const schema = getFields(options, "user", false);
+	const schema = getFields(options, "user", "input");
 	return parseInputData(user || {}, { fields: schema });
 }
 
@@ -195,7 +194,7 @@ export function parseAccountInput(
 	options: BetterAuthOptions,
 	account: Partial<Account>,
 ) {
-	const schema = getFields(options, "account", false);
+	const schema = getFields(options, "account", "input");
 	return parseInputData(account, { fields: schema });
 }
 
@@ -203,7 +202,7 @@ export function parseSessionInput(
 	options: BetterAuthOptions,
 	session: Partial<Session>,
 ) {
-	const schema = getFields(options, "session", false);
+	const schema = getFields(options, "session", "input");
 	return parseInputData(session, { fields: schema });
 }
 
