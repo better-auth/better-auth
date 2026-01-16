@@ -15,6 +15,7 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import * as z from "zod";
 import {
 	deleteSessionCookie,
+	expireCookie,
 	getChunkedCookie,
 	setCookieCache,
 	setSessionCookie,
@@ -119,10 +120,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 							return ctx.json(null);
 						}
 					} else if (strategy === "jwt") {
@@ -146,10 +144,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 							return ctx.json(null);
 						}
 					} else {
@@ -180,10 +175,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (isValid) {
 								sessionDataPayload = parsed;
 							} else {
-								const dataCookie = ctx.context.authCookies.sessionData.name;
-								ctx.setCookie(dataCookie, "", {
-									maxAge: 0,
-								});
+								expireCookie(ctx, ctx.context.authCookies.sessionData);
 								return ctx.json(null);
 							}
 						}
@@ -221,10 +213,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					const cookieVersion = session.version || "1";
 					if (cookieVersion !== expectedVersion) {
 						// Version mismatch - invalidate the cookie cache
-						const dataCookie = ctx.context.authCookies.sessionData.name;
-						ctx.setCookie(dataCookie, "", {
-							maxAge: 0,
-						});
+						expireCookie(ctx, ctx.context.authCookies.sessionData);
 					} else {
 						const cachedSessionExpiresAt = new Date(
 							session.session.expiresAt as unknown as string | number | Date,
@@ -236,10 +225,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						if (hasExpired) {
 							// When the session data cookie has expired, delete it;
 							//  then we try to fetch from DB
-							const dataCookie = ctx.context.authCookies.sessionData.name;
-							ctx.setCookie(dataCookie, "", {
-								maxAge: 0,
-							});
+							expireCookie(ctx, ctx.context.authCookies.sessionData);
 						} else {
 							// Check if the cookie cache needs to be refreshed based on refreshCache
 							const cookieRefreshCache =

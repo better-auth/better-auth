@@ -60,7 +60,7 @@ describe("session", async () => {
 				expiresIn: 60 * 2,
 			},
 		});
-		let headers = new Headers();
+		const headers = new Headers();
 
 		await client.signIn.email(
 			{
@@ -141,7 +141,7 @@ describe("session", async () => {
 	});
 
 	it("should handle 'don't remember me' option", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -220,7 +220,7 @@ describe("session", async () => {
 	});
 
 	it("should clear session on sign out", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		await client.signIn.email(
 			{
 				email: testUser.email,
@@ -372,7 +372,7 @@ describe("session", async () => {
 });
 
 describe("session storage", async () => {
-	let store = new Map<string, string>();
+	const store = new Map<string, string>();
 	const { client, signInWithTestUser } = await getTestInstance({
 		secondaryStorage: {
 			set(key, value, ttl) {

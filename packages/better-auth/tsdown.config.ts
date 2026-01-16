@@ -34,6 +34,7 @@ export default defineConfig({
 		"./src/integrations/solid-start.ts",
 		"./src/integrations/next-js.ts",
 		"./src/integrations/tanstack-start.ts",
+		"./src/integrations/tanstack-start-solid.ts",
 		"./src/integrations/node.ts",
 		"./src/plugins/admin/index.ts",
 		"./src/plugins/admin/access/index.ts",
