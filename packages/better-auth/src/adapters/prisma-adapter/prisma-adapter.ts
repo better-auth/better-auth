@@ -384,7 +384,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 					return result;
 				},
-				async findMany({ model, where, limit, offset, sortBy, join }) {
+				async findMany({ model, where, select, limit, offset, sortBy, join }) {
 					// this is just "JoinOption" type because we disabled join transformation in adapter config
 					const whereClause = convertWhereClause({
 						model,
@@ -405,7 +405,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						}
 					}
 
-					const selects = convertSelect(undefined, model, join);
+					const selects = convertSelect(select, model, join);
 
 					const result = await db[model]!.findMany({
 						where: whereClause,

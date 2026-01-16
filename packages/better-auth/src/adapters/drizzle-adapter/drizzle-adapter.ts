@@ -359,7 +359,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const returned = await withReturning(model, builder, values);
 					return returned;
 				},
-				async findOne({ model, where, join }) {
+				async findOne({ model, where, select, join }) {
 					const schemaModel = getSchema(model);
 					const clause = convertWhereClause(where, model);
 
@@ -415,7 +415,12 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const query = db
-						.select()
+						.select(select?.length
+						  ? select.reduce((acc, field) => ({
+     							...acc,
+     							[field]: schemaModel[getFieldName({ model, field })],
+    						}), {})
+							: undefined)
 						.from(schemaModel)
 						.where(...clause);
 
@@ -424,7 +429,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					if (!res.length) return null;
 					return res[0];
 				},
-				async findMany({ model, where, sortBy, limit, offset, join }) {
+				async findMany({ model, where, select, sortBy, limit, offset, join }) {
 					const schemaModel = getSchema(model);
 					const clause = where ? convertWhereClause(where, model) : [];
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;

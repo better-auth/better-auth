@@ -389,9 +389,13 @@ export const kyselyAdapter = (
 									eb.or(or.map((expr: any) => expr(eb))),
 								);
 							}
-							return b.selectAll().as("primary");
-						})
-						.selectAll("primary");
+							if (select) {
+							  b = b.select(select.map((field) => getFieldName({ model, field })));
+							} else {
+							  b = b.selectAll();
+							}
+							return b.as("primary");
+						});
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
@@ -412,7 +416,7 @@ export const kyselyAdapter = (
 					}
 
 					const { allSelectsStr, allSelects } = selectAllJoins(join);
-					query = query.select(allSelects);
+					query = query.select(["primary.*", ...allSelects]);
 
 					const res = await query.execute();
 					if (!res || !Array.isArray(res) || res.length === 0) return null;
@@ -432,7 +436,7 @@ export const kyselyAdapter = (
 
 					return row as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy, join }) {
+				async findMany({ model, where, select, limit, offset, sortBy, join }) {
 					const { and, or } = convertWhereClause(model, where);
 					let query: any = db
 						.selectFrom((eb) => {
@@ -475,9 +479,13 @@ export const kyselyAdapter = (
 								);
 							}
 
-							return b.selectAll().as("primary");
-						})
-						.selectAll("primary");
+							if (select) {
+							  b = b.select(select.map((field) => getFieldName({ model, field })));
+							} else {
+							  b = b.selectAll();
+							}
+							return b.as("primary");
+						});
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
@@ -500,7 +508,7 @@ export const kyselyAdapter = (
 
 					const { allSelectsStr, allSelects } = selectAllJoins(join);
 
-					query = query.select(allSelects);
+					query = query.select(["primary.*", ...allSelects]);
 
 					if (sortBy?.field) {
 						query = query.orderBy(

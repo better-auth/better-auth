@@ -391,7 +391,7 @@ export const mongodbAdapter = (
 					if (!res || res.length === 0) return null;
 					return res[0] as any;
 				},
-				async findMany({ model, where, limit, offset, sortBy, join }) {
+				async findMany({ model, where, select, limit, offset, sortBy, join }) {
 					const matchStage = where
 						? { $match: convertWhereClause({ where, model }) }
 						: { $match: {} };
@@ -473,6 +473,22 @@ export const mongodbAdapter = (
 							}
 							// For one-to-many, keep as array - no unwind
 						}
+					}
+
+					if (select) {
+						const projection: any = {};
+						select.forEach((field) => {
+							projection[getFieldName({ field, model })] = 1;
+						});
+
+						// Include joined collections in projection
+						if (join) {
+							for (const joinedModel of Object.keys(join)) {
+								projection[joinedModel] = 1;
+							}
+						}
+
+						pipeline.push({ $project: projection });
 					}
 
 					if (sortBy) {

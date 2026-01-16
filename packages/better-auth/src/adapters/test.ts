@@ -1,7 +1,7 @@
 import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateId } from "@better-auth/core/utils/id";
-import { beforeAll, describe, expect, test } from "vitest";
+import { beforeAll, describe, expect, onTestFailed, test } from "vitest";
 import type { User } from "../types";
 
 interface AdapterTestOptions {
@@ -31,6 +31,7 @@ const adapterTests = {
 	UPDATE_MODEL: "update model",
 	SHOULD_FIND_MANY: "should find many",
 	SHOULD_FIND_MANY_WITH_WHERE: "should find many with where",
+	SHOULD_FIND_MANY_WITH_SELECT: "should find many with select",
 	SHOULD_FIND_MANY_WITH_OPERATORS: "should find many with operators",
 	SHOULD_WORK_WITH_REFERENCE_FIELDS: "should work with reference fields",
 	SHOULD_FIND_MANY_WITH_NOT_IN_OPERATOR:
@@ -351,6 +352,26 @@ function adapterTest(
 				],
 			});
 			expect(res.length).toBe(1);
+		},
+	);
+
+	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_SELECT)(
+	  `${testPrefix ? `${testPrefix} - ` : ""}${
+			adapterTests.SHOULD_FIND_MANY_WITH_SELECT
+		}`,
+		async ({ onTestFailed }) => {
+		  await resetDebugLogs();
+			onTestFailed(async () => {
+  			await printDebugLogs();
+			});
+			const users = await (await adapter()).findMany<User>({
+			  model: "user",
+				select: ["email"],
+			});
+			expect(users.length).toBeGreaterThanOrEqual(1);
+			expect(users).toContainEqual({
+			  email: expect.any(String),
+			});
 		},
 	);
 
