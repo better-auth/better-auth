@@ -376,26 +376,29 @@ export const kyselyAdapter = (
 				},
 				async findOne({ model, where, select, join }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query: any = db.selectFrom((eb) => {
-						let b = eb.selectFrom(model);
-						if (and) {
-							b = b.where((eb: any) =>
-								eb.and(and.map((expr: any) => expr(eb))),
-							);
-						}
-						if (or) {
-							b = b.where((eb: any) => eb.or(or.map((expr: any) => expr(eb))));
-						}
-						if (select) {
-							b = b.select(
-								select.map((field) => getFieldName({ model, field })),
-							);
-						} else {
-							b = b.selectAll();
-						}
-						return b.as("primary");
-					})
-					.selectAll("primary");
+					let query: any = db
+						.selectFrom((eb) => {
+							let b = eb.selectFrom(model);
+							if (and) {
+								b = b.where((eb: any) =>
+									eb.and(and.map((expr: any) => expr(eb))),
+								);
+							}
+							if (or) {
+								b = b.where((eb: any) =>
+									eb.or(or.map((expr: any) => expr(eb))),
+								);
+							}
+							if (select) {
+								b = b.select(
+									select.map((field) => getFieldName({ model, field })),
+								);
+							} else {
+								b = b.selectAll();
+							}
+							return b.as("primary");
+						})
+						.selectAll("primary");
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
@@ -438,54 +441,57 @@ export const kyselyAdapter = (
 				},
 				async findMany({ model, where, select, limit, offset, sortBy, join }) {
 					const { and, or } = convertWhereClause(model, where);
-					let query: any = db.selectFrom((eb) => {
-						let b = eb.selectFrom(model);
+					let query: any = db
+						.selectFrom((eb) => {
+							let b = eb.selectFrom(model);
 
-						if (config?.type === "mssql") {
-							if (offset !== undefined) {
-								if (!sortBy) {
-									b = b.orderBy(getFieldName({ model, field: "id" }));
+							if (config?.type === "mssql") {
+								if (offset !== undefined) {
+									if (!sortBy) {
+										b = b.orderBy(getFieldName({ model, field: "id" }));
+									}
+									b = b.offset(offset).fetch(limit || 100);
+								} else if (limit !== undefined) {
+									b = b.top(limit);
 								}
-								b = b.offset(offset).fetch(limit || 100);
-							} else if (limit !== undefined) {
-								b = b.top(limit);
+							} else {
+								if (limit !== undefined) {
+									b = b.limit(limit);
+								}
+								if (offset !== undefined) {
+									b = b.offset(offset);
+								}
 							}
-						} else {
-							if (limit !== undefined) {
-								b = b.limit(limit);
+
+							if (sortBy?.field) {
+								b = b.orderBy(
+									`${getFieldName({ model, field: sortBy.field })}`,
+									sortBy.direction,
+								);
 							}
-							if (offset !== undefined) {
-								b = b.offset(offset);
+
+							if (and) {
+								b = b.where((eb: any) =>
+									eb.and(and.map((expr: any) => expr(eb))),
+								);
 							}
-						}
 
-						if (sortBy?.field) {
-							b = b.orderBy(
-								`${getFieldName({ model, field: sortBy.field })}`,
-								sortBy.direction,
-							);
-						}
+							if (or) {
+								b = b.where((eb: any) =>
+									eb.or(or.map((expr: any) => expr(eb))),
+								);
+							}
 
-						if (and) {
-							b = b.where((eb: any) =>
-								eb.and(and.map((expr: any) => expr(eb))),
-							);
-						}
-
-						if (or) {
-							b = b.where((eb: any) => eb.or(or.map((expr: any) => expr(eb))));
-						}
-
-						if (select) {
-							b = b.select(
-								select.map((field) => getFieldName({ model, field })),
-							);
-						} else {
-							b = b.selectAll();
-						}
-						return b.as("primary");
-					})
-					.selectAll("primary");
+							if (select) {
+								b = b.select(
+									select.map((field) => getFieldName({ model, field })),
+								);
+							} else {
+								b = b.selectAll();
+							}
+							return b.as("primary");
+						})
+						.selectAll("primary");
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
