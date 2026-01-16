@@ -509,7 +509,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								}
 							}
 							const clause = convertNewWhereClause(where, model);
-							let query = db.query[model].findFirst({
+							const query = db.query[model].findFirst({
 								where: clause,
 								with: includes,
 							});
@@ -517,7 +517,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 							if (res) {
 								for (const pluralJoinResult of pluralJoinResults) {
-									let singularKey = !config.usePlural
+									const singularKey = !config.usePlural
 										? pluralJoinResult.slice(0, -1)
 										: pluralJoinResult;
 									res[singularKey] = res[pluralJoinResult];
@@ -530,7 +530,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 						}
 					}
 
-					let query = db
+					const query = db
 						.select()
 						.from(schemaModel)
 						.where(...clause);
@@ -566,7 +566,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 										joinAttr.limit ??
 										options.advanced?.database?.defaultFindManyLimit ??
 										100;
-									let pluralSuffix = isUnique || config.usePlural ? "" : "s";
+									const pluralSuffix = isUnique || config.usePlural ? "" : "s";
 									includes[`${model}${pluralSuffix}`] = isUnique
 										? true
 										: { limit };
@@ -583,14 +583,14 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 								};
 							}
 
-							let query = db.query[model].findMany({
+							const query = db.query[model].findMany({
 								where: where ? convertNewWhereClause(where, model) : undefined,
 								with: includes,
 								limit: limit ?? 100,
 								offset: offset ?? 0,
 								orderBy,
 							});
-							let res = await query;
+							const res = await query;
 							if (res) {
 								for (const item of res) {
 									for (const pluralJoinResult of pluralJoinResults) {
