@@ -14,8 +14,12 @@ import { ObjectId } from "mongodb";
  * Check if a value is ObjectId-like using duck-typing.
  * This avoids instanceof checks which fail across module boundaries
  * when different instances of the mongodb package are loaded.
+ *
+ * @see https://github.com/jdesboeufs/connect-mongo/issues/172
+ * @see https://github.com/mongodb/js-bson/blob/main/src/objectid.ts
+ * @see https://github.com/Automattic/mongoose/pull/11841
  */
-const isObjectIdLike = (value: unknown): value is ObjectId =>
+export const isObjectIdLike = (value: unknown): value is ObjectId =>
 	value !== null &&
 	typeof value === "object" &&
 	typeof (value as ObjectId).toHexString === "function";
