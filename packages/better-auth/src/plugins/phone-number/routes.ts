@@ -5,6 +5,7 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
+import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
@@ -189,17 +190,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: user.id,
-					email: user.email,
-					emailVerified: user.emailVerified,
-					name: user.name,
-					image: user.image,
-					phoneNumber: user.phoneNumber,
-					phoneNumberVerified: user.phoneNumberVerified,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-				} as UserWithPhoneNumber,
+				user: parseUserOutput(ctx.context.options, user),
 			});
 		},
 	);
@@ -541,17 +532,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						phoneNumber: user.phoneNumber,
-						phoneNumberVerified: user.phoneNumberVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					} as UserWithPhoneNumber,
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			}
 
@@ -622,34 +603,14 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						phoneNumber: user.phoneNumber,
-						phoneNumberVerified: user.phoneNumberVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					} as UserWithPhoneNumber,
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			}
 
 			return ctx.json({
 				status: true,
 				token: null,
-				user: {
-					id: user.id,
-					email: user.email,
-					emailVerified: user.emailVerified,
-					name: user.name,
-					image: user.image,
-					phoneNumber: user.phoneNumber,
-					phoneNumberVerified: user.phoneNumberVerified,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-				} as UserWithPhoneNumber,
+				user: parseUserOutput(ctx.context.options, user),
 			});
 		},
 	);

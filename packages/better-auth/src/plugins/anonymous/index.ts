@@ -15,7 +15,7 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -127,14 +127,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: newUser.id,
-							email: newUser.email,
-							emailVerified: newUser.emailVerified,
-							name: newUser.name,
-							createdAt: newUser.createdAt,
-							updatedAt: newUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, newUser),
 					});
 				},
 			),

@@ -5,6 +5,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
+import { parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
@@ -568,15 +569,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.token,
-					user: {
-						id: updatedUser.id,
-						email: updatedUser.email,
-						emailVerified: updatedUser.emailVerified,
-						name: updatedUser.name,
-						image: updatedUser.image,
-						createdAt: updatedUser.createdAt,
-						updatedAt: updatedUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, updatedUser),
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
@@ -600,15 +593,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			return ctx.json({
 				status: true,
 				token: null,
-				user: {
-					id: updatedUser.id,
-					email: updatedUser.email,
-					emailVerified: updatedUser.emailVerified,
-					name: updatedUser.name,
-					image: updatedUser.image,
-					createdAt: updatedUser.createdAt,
-					updatedAt: updatedUser.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, updatedUser),
 			});
 		},
 	);
@@ -736,15 +721,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: newUser.id,
-						email: newUser.email,
-						emailVerified: newUser.emailVerified,
-						name: newUser.name,
-						image: newUser.image,
-						createdAt: newUser.createdAt,
-						updatedAt: newUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, newUser),
 				});
 			}
 
@@ -763,15 +740,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			});
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: user.user.id,
-					email: user.user.email,
-					emailVerified: user.user.emailVerified,
-					name: user.user.name,
-					image: user.user.image,
-					createdAt: user.user.createdAt,
-					updatedAt: user.user.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, user.user),
 			});
 		},
 	);
