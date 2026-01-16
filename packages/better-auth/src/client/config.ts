@@ -124,7 +124,7 @@ export const getClientConfig = (
 
 	const pluginsActions = defu(
 		{},
-		plugins.map((p) => p.getActions?.($fetch, $store, options)),
+		...plugins.map((p) => p.getActions?.($fetch, $store, options)),
 	) as Record<string, any>;
 
 	return {
