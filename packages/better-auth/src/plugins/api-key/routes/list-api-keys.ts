@@ -30,12 +30,13 @@ export function listApiKeys({
 			use: [sessionMiddleware],
 			query: z
 				.object({
-					limit: z
-						.string()
+					limit: z.coerce
+						.number()
+						.int()
+						.nonnegative()
 						.meta({
 							description: "The number of API keys to return",
 						})
-						.or(z.number())
 						.optional(),
 					offset: z.coerce
 						.number()
