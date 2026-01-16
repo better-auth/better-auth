@@ -37,12 +37,13 @@ export function listApiKeys({
 						})
 						.or(z.number())
 						.optional(),
-					offset: z
-						.string()
+					offset: z.coerce
+						.number()
+						.int()
+						.nonnegative()
 						.meta({
 							description: "The offset to start from",
 						})
-						.or(z.number())
 						.optional(),
 					sortBy: z
 						.string()
