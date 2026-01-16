@@ -1,0 +1,93 @@
+---
+title: Organizations
+description: Learn how to create, update, and manage organizations.
+---
+
+Organizations are the top-level entity in the organization plugin. They represent a group of users working together.
+
+## Creating an Organization
+
+To create a new organization, use the `organization.create` method:
+
+```ts
+const org = await authClient.organization.create({
+    name: "My Organization",
+    slug: "my-org", // optional, auto-generated if not provided
+})
+```
+
+## Listing Organizations
+
+Get all organizations for the current user:
+
+```ts
+const { data: organizations } = await authClient.organization.list()
+```
+
+## Getting an Organization
+
+Retrieve a specific organization by ID or slug:
+
+```ts
+// By ID
+const org = await authClient.organization.getById({
+    organizationId: "org_123"
+})
+
+// By slug
+const org = await authClient.organization.getBySlug({
+    slug: "my-org"
+})
+```
+
+## Updating an Organization
+
+Update organization details:
+
+```ts
+await authClient.organization.update({
+    organizationId: "org_123",
+    data: {
+        name: "Updated Organization Name",
+        logo: "https://example.com/logo.png"
+    }
+})
+```
+
+## Deleting an Organization
+
+Delete an organization (requires owner or admin permissions):
+
+```ts
+await authClient.organization.delete({
+    organizationId: "org_123"
+})
+```
+
+<Callout type="warn">
+Deleting an organization will also delete all associated members, invitations, and related data.
+</Callout>
+
+## Setting Active Organization
+
+Set the active organization for the current session:
+
+```ts
+await authClient.organization.setActive({
+    organizationId: "org_123"
+})
+```
+
+## Organization Schema
+
+The organization table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier |
+| `name` | string | Organization name |
+| `slug` | string | URL-friendly identifier |
+| `logo` | string? | Organization logo URL |
+| `metadata` | object? | Custom metadata |
+| `createdAt` | Date | Creation timestamp |
+
