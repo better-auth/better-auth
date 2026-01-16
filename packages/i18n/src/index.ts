@@ -64,15 +64,33 @@ function parseAcceptLanguage(header: string | null): string[] {
 export const i18n = <Locales extends string[]>(
 	options: I18nOptions<Locales>,
 ) => {
+	const availableLocales = Object.keys(options.translations);
+
+	// Determine default locale: use provided defaultLocale if it exists in translations,
+	// otherwise use "en" if it exists, otherwise use the first available locale
+	let defaultLocale: Locales[number];
+	if (
+		options.defaultLocale &&
+		availableLocales.includes(options.defaultLocale)
+	) {
+		defaultLocale = options.defaultLocale;
+	} else if (availableLocales.includes("en")) {
+		defaultLocale = "en" as Locales[number];
+	} else if (availableLocales.length > 0) {
+		defaultLocale = availableLocales[0] as Locales[number];
+	} else {
+		throw new Error(
+			"i18n plugin: translations object is empty. At least one locale must be provided.",
+		);
+	}
+
 	const opts = {
-		defaultLocale: "en",
+		defaultLocale,
 		detection: ["header"] as LocaleDetectionStrategy[],
 		localeCookie: "locale",
 		userLocaleField: "locale",
 		...options,
 	};
-
-	const availableLocales = Object.keys(opts.translations);
 
 	async function detectLocale(
 		request: Request | undefined,
