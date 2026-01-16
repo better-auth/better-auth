@@ -58,6 +58,45 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["upgradeSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["createBillingPortal"]>().toBeFunction();
 	});
+
+	it("should infer plugin schema fields on user type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
+
+	it("should infer plugin schema fields alongside additional user fields", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+			user: {
+				additionalFields: {
+					customField: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["customField"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
 });
 
 describe("stripe", () => {

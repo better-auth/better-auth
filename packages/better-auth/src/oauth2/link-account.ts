@@ -35,7 +35,7 @@ export async function handleOAuthUserInfo(
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;
-	let isRegister = !user;
+	const isRegister = !user;
 
 	if (dbUser) {
 		const linkedAccount =

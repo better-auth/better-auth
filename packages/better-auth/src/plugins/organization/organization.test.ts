@@ -1269,6 +1269,203 @@ describe("organization", async (it) => {
 	});
 });
 
+describe("invitation expiration and filtering", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				invitationExpiresIn: 1, // 1 second expiration for testing
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should allow rejecting expired invitations", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin-${rng}@email.com`,
+			password: rng,
+			name: `admin-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited-${rng}@email.com`,
+			password: rng,
+			name: `invited-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create organization and send invitation
+		const org = await auth.api.createOrganization({
+			body: { name: rng, slug: rng },
+			headers: adminHeaders,
+		});
+
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation.data).toBeDefined();
+
+		// Wait for invitation to expire
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+
+		// Rejecting expired invitation should succeed
+		const rejectResult = await client.organization.rejectInvitation({
+			invitationId: invitation.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(rejectResult.error).toBeFalsy();
+		expect(rejectResult.data?.invitation?.status).toBe("rejected");
+	});
+
+	it("should only list pending invitations for a user", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin2-${rng}@email.com`,
+			password: rng,
+			name: `admin2-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited2-${rng}@email.com`,
+			password: rng,
+			name: `invited2-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create two organizations
+		const org1 = await auth.api.createOrganization({
+			body: { name: `${rng}-org1`, slug: `${rng}-org1` },
+			headers: adminHeaders,
+		});
+		const org2 = await auth.api.createOrganization({
+			body: { name: `${rng}-org2`, slug: `${rng}-org2` },
+			headers: adminHeaders,
+		});
+
+		// Create invitations
+		const invitation1 = await client.organization.inviteMember({
+			organizationId: org1?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+		const invitation2 = await client.organization.inviteMember({
+			organizationId: org2?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation1.data).toBeDefined();
+		expect(invitation2.data).toBeDefined();
+
+		// Accept one invitation
+		await client.organization.acceptInvitation({
+			invitationId: invitation1.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		// List user invitations - should only show pending ones (not accepted)
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(userInvitations.data?.length).toBe(1);
+		expect(userInvitations.data?.[0]?.id).toBe(invitation2.data?.id);
+		expect(userInvitations.data?.[0]?.status).toBe("pending");
+	});
+
+	it("should not list rejected invitations", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin3-${rng}@email.com`,
+			password: rng,
+			name: `admin3-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited3-${rng}@email.com`,
+			password: rng,
+			name: `invited3-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create organization
+		const org = await auth.api.createOrganization({
+			body: { name: `${rng}-org`, slug: `${rng}-org` },
+			headers: adminHeaders,
+		});
+
+		// Create invitation
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation.data).toBeDefined();
+
+		// Reject the invitation
+		await client.organization.rejectInvitation({
+			invitationId: invitation.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		// List user invitations - should be empty since the only invitation was rejected
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(userInvitations.data?.length).toBe(0);
+	});
+});
+
 describe("access control", async (it) => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
@@ -2275,7 +2472,7 @@ describe("Additional Fields", async () => {
 		}>();
 	});
 
-	let addedMemberHeaders = new Headers();
+	const addedMemberHeaders = new Headers();
 
 	const { data: addedMember, error } = await client.signUp.email({
 		email: "new-member-for-org@email.com",
@@ -2450,7 +2647,7 @@ describe("Additional Fields", async () => {
 			updatedAt: new Date(),
 			password: "password",
 		} satisfies Omit<User, "id"> & { password: string };
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);

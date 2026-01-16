@@ -62,12 +62,12 @@ export const getClientConfig = (
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
-	let pluginsActions = {} as Record<string, any>;
-	let pluginsAtoms = {
+	const pluginsActions = {} as Record<string, any>;
+	const pluginsAtoms = {
 		$sessionSignal,
 		session,
 	} as Record<string, WritableAtom<any>>;
-	let pluginPathMethods: Record<string, "POST" | "GET"> = {
+	const pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",

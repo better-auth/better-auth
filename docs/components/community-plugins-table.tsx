@@ -262,6 +262,16 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://sequenzy.com/logo.png",
 		},
 	},
+	{
+		name: "better-auth-nostr",
+		url: "https://github.com/leon-wbr/better-auth-nostr",
+		description: "Nostr authentication plugin for Better Auth (NIP-98).",
+		author: {
+			name: "leon-wbr",
+			github: "leon-wbr",
+			avatar: "https://github.com/leon-wbr.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
