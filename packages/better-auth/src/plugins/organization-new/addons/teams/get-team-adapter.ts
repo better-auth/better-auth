@@ -1,18 +1,29 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { Team, TeamMember } from "./schema";
-import type { ResolvedTeamsOptions } from "./types";
+import type { TeamMember } from "./schema";
+import type { InferTeam, TeamsOptions } from "./types";
 
-export const getTeamAdapter = <O extends ResolvedTeamsOptions>(
+export const getTeamAdapter = <O extends TeamsOptions>(
 	context: AuthContext,
 	options?: O | undefined,
 ) => {
 	const baseAdapter = context.adapter;
+
 	return {
-		createTeam: async (teamData: Omit<Team, "id"> & Record<string, any>) => {
+		isSlugTaken: async (slug: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			type TeamData = Team & Record<string, any>;
-			const team = await adapter.create<TeamData>({
+			const team = await adapter.findOne({
+				model: "team",
+				where: [{ field: "slug", value: slug }],
+				select: ["id"],
+			});
+			return team ? true : false;
+		},
+		createTeam: async (
+			teamData: Omit<InferTeam<O>, "id"> & Record<string, any>,
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const team = await adapter.create<InferTeam<O>>({
 				model: "team",
 				data: teamData,
 				forceAllowId: true,
@@ -28,6 +39,22 @@ export const getTeamAdapter = <O extends ResolvedTeamsOptions>(
 				forceAllowId: true,
 			});
 			return teamMember;
+		},
+		getTeamCount: async (organizationId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const count = await adapter.count({
+				model: "team",
+				where: [{ field: "organizationId", value: organizationId }],
+			});
+			return count;
+		},
+		getTeams: async (organizationId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const teams = await adapter.findMany<InferTeam<O>>({
+				model: "team",
+				where: [{ field: "organizationId", value: organizationId }],
+			});
+			return teams;
 		},
 	};
 };

@@ -191,8 +191,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			// Set the active organization
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
 				const token = ctx.context.session.session.token;
-				const organizationId = organization.id;
-				await adapter.setActiveOrganization(token, organizationId);
+				await adapter.setActiveOrganization(token, organization.id);
 			}
 
 			// Parse the metadata

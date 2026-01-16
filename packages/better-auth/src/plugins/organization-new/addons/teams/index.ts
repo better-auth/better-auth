@@ -1,62 +1,99 @@
-import { APIError } from "@better-auth/core/error";
 import type { Addon } from "../../types";
+import { createDefaultTeam } from "./create-default-team";
 import { TEAMS_ERROR_CODES } from "./errors";
-import { getTeamAdapter } from "./get-team-adapter";
 import { resolveTeamOptions } from "./resolve-team-options";
-import type { Team } from "./schema";
-import type { TeamsOptions } from "./types";
-import { getHook } from "./get-team-hook";
+import { createTeam } from "./routes/create-team";
+import type { InferTeam, TeamsOptions } from "./types";
 
 export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 	const options = resolveTeamOptions(_options);
 	return {
 		id: "teams",
 		priority: 10, // Run early to create default teams before other addons
+		errorCodes: TEAMS_ERROR_CODES,
 		hooks: {
 			async afterCreateOrganization({ organization, user }, ctx) {
-				const adapter = getTeamAdapter(ctx.context, options);
-				const { customCreateDefaultTeam, enabled } = options.defaultTeam;
-				if (!enabled) return;
-
-				const teamData: Omit<Team, "id"> = {
-					organizationId: organization.id,
-					name: `${organization.name}`,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-				};
-
-				const teamHook = getHook("CreateTeam", options);
-
-				const team = await (async () => {
-					try {
-						if (customCreateDefaultTeam) {
-							return await customCreateDefaultTeam(organization, ctx);
-						}
-						const mutate = await teamHook.before({
-							team: teamData,
-							user,
-							organization,
-						});
-						return await adapter.createTeam({ ...teamData, ...(mutate ?? {}) });
-					} catch (error) {
-						ctx.context.logger.error("Failed to create default team:", error);
-						const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM;
-						throw APIError.from("INTERNAL_SERVER_ERROR", msg);
-					}
-				})();
-
-				try {
-					await adapter.createTeamMember({
-						teamId: team.id,
-						userId: user.id,
-					});
-				} catch (error) {
-					ctx.context.logger.error("Failed to create team member:", error);
-					const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM_MEMBER;
-					throw APIError.from("INTERNAL_SERVER_ERROR", msg);
-				}
+				return await createDefaultTeam({ user, organization }, ctx, options);
 			},
 		},
-		errorCodes: TEAMS_ERROR_CODES,
+		Infer: {
+			Team: {} as InferTeam<O>,
+		},
+		endpoints: {
+			createTeam: createTeam(_options),
+		},
+		schema: {
+			team: {
+				modelName: options.schema?.team?.modelName,
+				fields: {
+					name: {
+						type: "string",
+						required: true,
+						fieldName: options.schema?.team?.fields?.name,
+					},
+					organizationId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "organization",
+							field: "id",
+						},
+						fieldName: options.schema?.team?.fields?.organizationId,
+						index: true,
+					},
+					createdAt: {
+						type: "date",
+						required: true,
+						fieldName: options.schema?.team?.fields?.createdAt,
+					},
+					updatedAt: {
+						type: "date",
+						required: false,
+						fieldName: options.schema?.team?.fields?.updatedAt,
+						onUpdate: () => new Date(),
+					},
+					...(options.enableSlugs
+						? {
+								slug: {
+									type: "string",
+									required: false,
+									fieldName: options.schema?.team?.fields?.slug,
+								},
+							}
+						: {}),
+					...(options.schema?.team?.additionalFields || {}),
+				},
+			},
+			teamMember: {
+				modelName: options.schema?.teamMember?.modelName,
+				fields: {
+					teamId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "team",
+							field: "id",
+						},
+						fieldName: options.schema?.teamMember?.fields?.teamId,
+						index: true,
+					},
+					userId: {
+						type: "string",
+						required: true,
+						references: {
+							model: "user",
+							field: "id",
+						},
+						fieldName: options.schema?.teamMember?.fields?.userId,
+						index: true,
+					},
+					createdAt: {
+						type: "date",
+						required: false,
+						fieldName: options.schema?.teamMember?.fields?.createdAt,
+					},
+				},
+			},
+		},
 	} satisfies Addon<O>;
 };

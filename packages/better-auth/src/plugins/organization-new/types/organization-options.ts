@@ -18,6 +18,7 @@ export type ResolvedOrganizationOptions = {
 	membershipLimit: number;
 	disableSlugs: boolean;
 	roles: Record<string, Role>;
+	defaultOrganizationIdField: "id" | "slug";
 	ac?: AccessControl;
 	schema?: OrganizationOptionsSchema;
 	hooks?: OrganizationHooks;
