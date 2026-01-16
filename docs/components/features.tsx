@@ -2,7 +2,6 @@
 
 import { LockClosedIcon } from "@radix-ui/react-icons";
 import {
-	Globe2Icon,
 	PlugIcon,
 	PlugZap2Icon,
 	Plus,
