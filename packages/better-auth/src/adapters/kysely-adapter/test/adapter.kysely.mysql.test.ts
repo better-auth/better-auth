@@ -18,7 +18,7 @@ const mysqlDB = createPool({
 	timezone: "Z",
 });
 
-let kyselyDB = new Kysely({
+const kyselyDB = new Kysely({
 	dialect: new MysqlDialect(mysqlDB),
 });
 

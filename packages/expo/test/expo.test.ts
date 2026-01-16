@@ -347,7 +347,7 @@ describe("expo", async () => {
 	});
 
 	it("should not modify origin header if origin is set", async () => {
-		let originalOrigin = "test.com";
+		const originalOrigin = "test.com";
 		let origin = null;
 		const { client, testUser } = await getTestInstance({
 			hooks: {

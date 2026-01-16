@@ -83,7 +83,7 @@ describe("api-key", async () => {
 	}
 
 	it("should fail to create API Keys from server without headers and userId", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -253,7 +253,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a name that's shorter than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -277,7 +277,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a name that's longer than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -315,7 +315,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a prefix that's shorter than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -339,7 +339,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a prefix that's longer than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -455,7 +455,7 @@ describe("api-key", async () => {
 		);
 
 		const { headers } = await signInWithTestUser();
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -479,7 +479,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create an API key with an expiresIn that's smaller than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -504,7 +504,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create an API key with an expiresIn that's larger than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -559,7 +559,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -584,7 +584,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create API key when refill amount is provided, but no refill interval", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -704,7 +704,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create API key with invalid metadata", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1098,7 +1098,7 @@ describe("api-key", async () => {
 	}
 
 	it("should fail to update API key name without headers or userId", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1239,7 +1239,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1286,7 +1286,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1333,7 +1333,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1372,7 +1372,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail update the refillInterval value since it requires refillAmount as well", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1397,7 +1397,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail update the refillAmount value since it requires refillInterval as well", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1453,7 +1453,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to update metadata with invalid metadata type", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1665,7 +1665,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to list API keys without headers", async () => {
-		let result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1807,7 +1807,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to delete an API key by ID without headers", async () => {
-		let result: { data: { success: boolean } | null; error: Err | null } = {
+		const result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1859,7 +1859,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to delete an API key by ID that doesn't exist", async () => {
-		let result: { data: { success: boolean } | null; error: Err | null } = {
+		const result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -2248,7 +2248,7 @@ describe("api-key", async () => {
 	});
 
 	describe("secondary storage", async () => {
-		let store = new Map<string, string>();
+		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
 		const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -2600,7 +2600,7 @@ describe("api-key", async () => {
 	});
 
 	describe("secondary-storage-with-fallback", async () => {
-		let store = new Map<string, string>();
+		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
 		const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -3103,7 +3103,7 @@ describe("api-key", async () => {
 	});
 
 	describe("custom storage methods", async () => {
-		let customStore = new Map<string, string>();
+		const customStore = new Map<string, string>();
 		let customGetCalled = false;
 		let customSetCalled = false;
 		let customDeleteCalled = false;
