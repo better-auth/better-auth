@@ -80,6 +80,23 @@ describe("sign-up with custom fields", async (it) => {
 		);
 	});
 
+	it("should succeed when passing empty name", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "noname@test.com",
+				password: "password",
+				name: "",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBe("");
+	});
+
 	it("should get the ipAddress and userAgent from headers", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
