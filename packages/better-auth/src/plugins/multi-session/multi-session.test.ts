@@ -213,4 +213,83 @@ describe("multi-session", async () => {
 		});
 		expect(attackerSessionAfter.data).toBeNull();
 	});
+
+	it("should deduplicate sessions based on getUniqSessionId", async () => {
+		const dedupeHeaders = new Headers();
+		const userCredentials = {
+			email: "dedupe@test.com",
+			password: "password",
+			name: "Dedupe User",
+		};
+
+		await client.signUp.email(userCredentials, {
+			onSuccess: cookieSetter(dedupeHeaders),
+		});
+
+		await client.signIn.email(userCredentials, {
+			onSuccess: cookieSetter(dedupeHeaders),
+		});
+
+		const res = await client.multiSession.listDeviceSessions({
+			fetchOptions: {
+				headers: dedupeHeaders,
+			},
+		});
+
+		expect(res.data).toHaveLength(1);
+		expect(res.data!.at(0)!.user.email).toBe(userCredentials.email);
+	});
+
+	describe("multi-session with custom unique logic", async () => {
+		const { client, testUser, cookieSetter } = await getTestInstance(
+			{
+				plugins: [
+					multiSession({
+						getUniqSessionId: (data) => data.session.token,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [multiSessionClient()],
+				},
+			},
+		);
+
+		it("should show multiple sessions for the same user with custom getUniqSessionId", async () => {
+			const customHeaders = new Headers();
+
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onSuccess: cookieSetter(customHeaders),
+				},
+			);
+
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onSuccess: cookieSetter(customHeaders),
+				},
+			);
+
+			const res = await client.multiSession.listDeviceSessions({
+				fetchOptions: {
+					headers: customHeaders,
+				},
+			});
+
+			expect(res.data).toHaveLength(2);
+			expect(res.data!.at(0)!.session.token).not.toBe(
+				res.data!.at(1)!.session.token,
+			);
+			expect(res.data!.at(0)!.user.id).toBe(res.data!.at(1)!.user.id);
+		});
+	});
 });

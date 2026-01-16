@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
@@ -30,6 +31,13 @@ export interface MultiSessionConfig {
 	 * @default 5
 	 */
 	maximumSessions?: number | undefined;
+
+	/**
+	 * Determines the unique identifier for a session to prevent duplicates in the session list.
+	 * By default, it groups sessions by User ID.
+	 * @default (data) => data.user.id
+	 */
+	getUniqSessionId?: (data: { session: Session; user: User }) => string;
 }
 
 import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
@@ -51,8 +59,9 @@ const revokeDeviceSessionBodySchema = z.object({
 export const multiSession = (options?: MultiSessionConfig | undefined) => {
 	const opts = {
 		maximumSessions: 5,
+		getUniqSessionId: (data) => data.user.id,
 		...options,
-	};
+	} satisfies Required<MultiSessionConfig>;
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
 
@@ -102,16 +111,13 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
-					const uniqueUserSessions = validSessions.reduce(
-						(acc, session) => {
-							if (!acc.find((s) => s.user.id === session.user.id)) {
-								acc.push(session);
-							}
-							return acc;
-						},
-						[] as typeof validSessions,
+					const uniqueSessionsMap = new Map(
+						validSessions.map((session) => [
+							opts.getUniqSessionId(session),
+							session,
+						]),
 					);
-					return ctx.json(uniqueUserSessions);
+					return ctx.json([...uniqueSessionsMap.values()]);
 				},
 			),
 			/**
