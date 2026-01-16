@@ -1,23 +1,79 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
-import { importJWK, type JWTPayload, SignJWT } from "jose";
+import type { JWTPayload } from "jose";
+import { importJWK, SignJWT } from "jose";
 import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
 import { createJwk, toExpJWT } from "./utils";
 
+type JWTPayloadWithOptional = {
+	/**
+	 * JWT Issuer
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.1 RFC7519#section-4.1.1}
+	 */
+	iss?: string | undefined;
+
+	/**
+	 * JWT Subject
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.2 RFC7519#section-4.1.2}
+	 */
+	sub?: string | undefined;
+
+	/**
+	 * JWT Audience
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.3 RFC7519#section-4.1.3}
+	 */
+	aud?: string | string[] | undefined;
+
+	/**
+	 * JWT ID
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.7 RFC7519#section-4.1.7}
+	 */
+	jti?: string | undefined;
+
+	/**
+	 * JWT Not Before
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.5 RFC7519#section-4.1.5}
+	 */
+	nbf?: number | undefined;
+
+	/**
+	 * JWT Expiration Time
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.4 RFC7519#section-4.1.4}
+	 */
+	exp?: number | undefined;
+
+	/**
+	 * JWT Issued At
+	 *
+	 * @see {@link https://www.rfc-editor.org/rfc/rfc7519#section-4.1.6 RFC7519#section-4.1.6}
+	 */
+	iat?: number | undefined;
+
+	/** Any other JWT Claim Set member. */
+	[propName: string]: unknown | undefined;
+};
+
 export async function signJWT(
 	ctx: GenericEndpointContext,
 	config: {
 		options?: JwtOptions | undefined;
-		payload: JWTPayload;
+		payload: JWTPayloadWithOptional;
 	},
 ) {
-	const { options, payload } = config;
+	const { options } = config;
+	const payload = config.payload as JWTPayload;
 
 	// Iat
 	const nowSeconds = Math.floor(Date.now() / 1000);
-	const iat = payload.iat;
+	const iat = payload.iat!;
 
 	// Exp
 	let exp = payload.exp;
@@ -28,7 +84,7 @@ export async function signJWT(
 	exp = exp ?? defaultExp;
 
 	// Nbf
-	const nbf = payload.nbf;
+	const nbf = payload.nbf!;
 
 	// Iss
 	const iss = payload.iss;
@@ -53,17 +109,13 @@ export async function signJWT(
 
 	const adapter = getJwksAdapter(ctx.context.adapter, options);
 	let key = await adapter.getLatestKey(ctx);
-	if (!key) {
+	if (!key || (key.expiresAt && key.expiresAt < new Date())) {
 		key = await createJwk(ctx, options);
 	}
 	const privateKeyEncryptionEnabled =
 		!options?.jwks?.disablePrivateKeyEncryption;
 
-	if (key === undefined) {
-		key = await createJwk(ctx, options);
-	}
-
-	let privateWebKey = privateKeyEncryptionEnabled
+	const privateWebKey = privateKeyEncryptionEnabled
 		? await symmetricDecrypt({
 				key: ctx.context.secret,
 				data: JSON.parse(key.privateKey),
@@ -97,7 +149,7 @@ export async function getJwtToken(
 ) {
 	const payload = !options?.jwt?.definePayload
 		? ctx.context.session!.user
-		: await options?.jwt.definePayload(ctx.context.session!);
+		: await options.jwt.definePayload(ctx.context.session!);
 
 	return await signJWT(ctx, {
 		options,

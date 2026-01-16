@@ -1,4 +1,5 @@
-import { type ClassValue, clsx } from "clsx";
+import type { ClassValue } from "clsx";
+import { clsx } from "clsx";
 import type * as React from "react";
 import { twMerge } from "tailwind-merge";
 
@@ -24,11 +25,14 @@ export function kFormatter(num: number) {
 }
 
 export const baseUrl =
-	process.env.NODE_ENV === "development" || !process.env.VERCEL_URL
+	process.env.NODE_ENV === "development" ||
+	(!process.env.VERCEL_PROJECT_PRODUCTION_URL && !process.env.VERCEL_URL)
 		? new URL("http://localhost:3000")
-		: new URL(`https://${process.env.VERCEL_URL}`);
+		: new URL(
+				`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
+			);
 export function formatDate(date: Date) {
-	let d = new Date(date);
+	const d = new Date(date);
 	return d
 		.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 		.replace(",", "");

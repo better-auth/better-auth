@@ -25,7 +25,17 @@
             }
           },
           "level": "error"
-        }
+        },
+        "useImportType": {
+          "level": "error",
+          "options": {
+            "style": "separatedType"
+          }
+        },
+        "useNodejsImportProtocol": "error",
+        "useConst": "error",
+        "noRestrictedTypes": "off",
+        "noRestrictedGlobals": "off"
       },
       "recommended": false,
       "suspicious": {
@@ -43,7 +53,8 @@
         "noUselessTypeConstraint": "warn"
       },
       "correctness": {
-        "noUnusedImports": "warn"
+        "noUnusedImports": "warn",
+        "noUnusedVariables": "warn"
       },
       "nursery": {
         "noMisusedPromises": "error",
@@ -68,12 +79,58 @@
         "indentStyle": "space",
         "indentWidth": 2
       }
+    },
+    {
+      "includes": ["packages/**/src/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedTypes": {
+              "level": "error",
+              "options": {
+                "types": {
+                  "Buffer": {
+                    "message": "Buffer is deprecated. Use `Uint8Array` instead.",
+                    "use": "Uint8Array"
+                  }
+                }
+              }
+            },
+            "noRestrictedGlobals": {
+              "level": "error",
+              "options": {
+                "deniedGlobals": {
+                  "Buffer": "Buffer is deprecated. Use `Uint8Array` instead."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.test.*",
+        "**/*.spec.*",
+        "**/test/**",
+        "**/__tests__/**",
+        "packages/sso/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedTypes": "off",
+            "noRestrictedGlobals": "off"
+          }
+        }
+      }
     }
   ],
   "files": {
     "includes": [
       "**",
       "!**/dist",
+      "!**/coverage",
       "!**/build",
       "!**/.next",
       "!**/.svelte-kit",

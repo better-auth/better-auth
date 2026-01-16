@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { APIError } from "better-call";
-import { type JWTPayload, type JWTVerifyResult, jwtVerify } from "jose";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import type { JWTPayload, JWTVerifyResult } from "jose";
+import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
@@ -21,11 +22,16 @@ export async function createEmailVerificationToken(
 	 * The time in seconds for the token to expire
 	 */
 	expiresIn: number = 3600,
+	/**
+	 * Extra payload to include in the token
+	 */
+	extraPayload?: Record<string, any>,
 ) {
 	const token = await signJWT(
 		{
 			email: email.toLowerCase(),
 			updateTo,
+			...extraPayload,
 		},
 		secret,
 		expiresIn,
@@ -42,9 +48,10 @@ export async function sendVerificationEmailFn(
 ) {
 	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 		ctx.context.logger.error("Verification email isn't enabled.");
-		throw new APIError("BAD_REQUEST", {
-			message: "Verification email isn't enabled",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+		);
 	}
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
@@ -56,13 +63,15 @@ export async function sendVerificationEmailFn(
 		? encodeURIComponent(ctx.body.callbackURL)
 		: encodeURIComponent("/");
 	const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-	await ctx.context.options.emailVerification.sendVerificationEmail(
-		{
-			user: user,
-			url,
-			token,
-		},
-		ctx.request,
+	await ctx.context.runInBackgroundOrAwait(
+		ctx.context.options.emailVerification.sendVerificationEmail(
+			{
+				user: user,
+				url,
+				token,
+			},
+			ctx.request,
+		),
 	);
 }
 export const sendVerificationEmail = createAuthEndpoint(
@@ -152,15 +161,22 @@ export const sendVerificationEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			);
 		}
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
+				await createEmailVerificationToken(
+					ctx.context.secret,
+					email,
+					undefined,
+					ctx.context.options.emailVerification?.expiresIn,
+				);
 				//we're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
@@ -171,16 +187,14 @@ export const sendVerificationEmail = createAuthEndpoint(
 				status: true,
 			});
 		}
-		if (session?.user.emailVerified) {
-			throw new APIError("BAD_REQUEST", {
-				message:
-					"You can only send a verification email to an unverified email",
-			});
-		}
 		if (session?.user.email !== email) {
-			throw new APIError("BAD_REQUEST", {
-				message: "You can only send a verification email to your own email",
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
+		}
+		if (session?.user.emailVerified) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+			);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
@@ -257,16 +271,14 @@ export const verifyEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		function redirectOnError(error: string) {
+		function redirectOnError(error: { code: string; message: string }) {
 			if (ctx.query.callbackURL) {
 				if (ctx.query.callbackURL.includes("?")) {
-					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error.code}`);
 				}
-				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error.code}`);
 			}
-			throw new APIError("UNAUTHORIZED", {
-				message: error,
-			});
+			throw APIError.from("UNAUTHORIZED", error);
 		}
 		const { token } = ctx.query;
 		let jwt: JWTVerifyResult<JWTPayload>;
@@ -280,86 +292,197 @@ export const verifyEmail = createAuthEndpoint(
 			);
 		} catch (e) {
 			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
+				return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
 			}
-			return redirectOnError("invalid_token");
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const schema = z.object({
 			email: z.email(),
 			updateTo: z.string().optional(),
+			requestType: z.string().optional(),
 		});
 		const parsed = schema.parse(jwt.payload);
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
 		if (!user) {
-			return redirectOnError("user_not_found");
+			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
-			if (!session) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
-				}
-				return redirectOnError("unauthorized");
+			if (session && session.user.email !== parsed.email) {
+				return redirectOnError(BASE_ERROR_CODES.INVALID_USER);
 			}
-			if (session.user.email !== parsed.email) {
-				if (ctx.query.callbackURL) {
-					throw ctx.redirect(`${ctx.query.callbackURL}?error=unauthorized`);
+			switch (parsed.requestType) {
+				/**
+				 * User clicks confirmation -> sends verification to new email
+				 */
+				case "change-email-confirmation": {
+					const newToken = await createEmailVerificationToken(
+						ctx.context.secret,
+						parsed.email,
+						parsed.updateTo,
+						ctx.context.options.emailVerification?.expiresIn,
+						{ requestType: "change-email-verification" },
+					);
+					const updateCallbackURL = ctx.query.callbackURL
+						? encodeURIComponent(ctx.query.callbackURL)
+						: encodeURIComponent("/");
+					const url = `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`;
+					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+						await ctx.context.runInBackgroundOrAwait(
+							ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: { ...user.user, email: parsed.updateTo },
+									url,
+									token: newToken,
+								},
+								ctx.request,
+							),
+						);
+					}
+					if (ctx.query.callbackURL) {
+						throw ctx.redirect(ctx.query.callbackURL);
+					}
+					return ctx.json({ status: true });
 				}
-				return redirectOnError("unauthorized");
+				/**
+				 * User clicks verification -> updates email
+				 */
+				case "change-email-verification": {
+					let activeSession = session;
+					if (!activeSession) {
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.user.id,
+						);
+						if (!newSession) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
+						}
+						activeSession = {
+							session: newSession,
+							user: user.user,
+						};
+					}
+					if (ctx.context.options.emailVerification?.onEmailVerification) {
+						await ctx.context.options.emailVerification.onEmailVerification(
+							user.user,
+							ctx.request,
+						);
+					}
+					const updatedUser =
+						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+							email: parsed.updateTo,
+							emailVerified: true,
+						});
+					if (ctx.context.options.emailVerification?.afterEmailVerification) {
+						await ctx.context.options.emailVerification.afterEmailVerification(
+							updatedUser,
+							ctx.request,
+						);
+					}
+					await setSessionCookie(ctx, {
+						session: activeSession.session,
+						user: {
+							...activeSession.user,
+							email: parsed.updateTo,
+							emailVerified: true,
+						},
+					});
+					if (ctx.query.callbackURL) {
+						throw ctx.redirect(ctx.query.callbackURL);
+					}
+					return ctx.json({ status: true, user: updatedUser });
+				}
+				/**
+				 * Legacy flow
+				 *
+				 * - skips two-step verification
+				 * - updates email immediately
+				 */
+				default: {
+					let activeSession = session;
+					if (!activeSession) {
+						const newSession = await ctx.context.internalAdapter.createSession(
+							user.user.id,
+						);
+						if (!newSession) {
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
+						}
+						activeSession = {
+							session: newSession,
+							user: user.user,
+						};
+					}
+					const updatedUser =
+						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
+							email: parsed.updateTo,
+							emailVerified: false,
+						});
+					const newToken = await createEmailVerificationToken(
+						ctx.context.secret,
+						parsed.updateTo,
+					);
+					const updateCallbackURL = ctx.query.callbackURL
+						? encodeURIComponent(ctx.query.callbackURL)
+						: encodeURIComponent("/");
+					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+						await ctx.context.runInBackgroundOrAwait(
+							ctx.context.options.emailVerification.sendVerificationEmail(
+								{
+									user: updatedUser,
+									url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
+									token: newToken,
+								},
+								ctx.request,
+							),
+						);
+					}
+					await setSessionCookie(ctx, {
+						session: activeSession.session,
+						user: {
+							...activeSession.user,
+							email: parsed.updateTo,
+							emailVerified: false,
+						},
+					});
+					if (ctx.query.callbackURL) {
+						throw ctx.redirect(ctx.query.callbackURL);
+					}
+					return ctx.json({
+						status: true,
+						user: {
+							id: updatedUser.id,
+							email: updatedUser.email,
+							name: updatedUser.name,
+							image: updatedUser.image,
+							emailVerified: updatedUser.emailVerified,
+							createdAt: updatedUser.createdAt,
+							updatedAt: updatedUser.updatedAt,
+						},
+					});
+				}
 			}
-
-			const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
-				parsed.email,
-				{
-					email: parsed.updateTo,
-					emailVerified: false,
-				},
-			);
-
-			const newToken = await createEmailVerificationToken(
-				ctx.context.secret,
-				parsed.updateTo,
-			);
-
-			//send verification email to the new email
-			const updateCallbackURL = ctx.query.callbackURL
-				? encodeURIComponent(ctx.query.callbackURL)
-				: encodeURIComponent("/");
-			await ctx.context.options.emailVerification?.sendVerificationEmail?.(
-				{
-					user: updatedUser,
-					url: `${ctx.context.baseURL}/verify-email?token=${newToken}&callbackURL=${updateCallbackURL}`,
-					token: newToken,
-				},
-				ctx.request,
-			);
-
-			await setSessionCookie(ctx, {
-				session: session.session,
-				user: {
-					...session.user,
-					email: parsed.updateTo,
-					emailVerified: false,
-				},
-			});
-
+		}
+		if (user.user.emailVerified) {
 			if (ctx.query.callbackURL) {
 				throw ctx.redirect(ctx.query.callbackURL);
 			}
 			return ctx.json({
 				status: true,
-				user: {
-					id: updatedUser.id,
-					email: updatedUser.email,
-					name: updatedUser.name,
-					image: updatedUser.image,
-					emailVerified: updatedUser.emailVerified,
-					createdAt: updatedUser.createdAt,
-					updatedAt: updatedUser.updatedAt,
-				},
+				user: null,
 			});
+		}
+		if (ctx.context.options.emailVerification?.beforeEmailVerification) {
+			await ctx.context.options.emailVerification.beforeEmailVerification(
+				user.user,
+				ctx.request,
+			);
 		}
 		if (ctx.context.options.emailVerification?.onEmailVerification) {
 			await ctx.context.options.emailVerification.onEmailVerification(
@@ -386,9 +509,10 @@ export const verifyEmail = createAuthEndpoint(
 					user.user.id,
 				);
 				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					);
 				}
 				await setSessionCookie(ctx, {
 					session,

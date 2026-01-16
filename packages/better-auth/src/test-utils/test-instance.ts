@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
+	Awaitable,
 	BetterAuthClientOptions,
 	BetterAuthOptions,
 } from "@better-auth/core";
@@ -96,7 +97,7 @@ export async function getTestInstance<
 				clientSecret: "test",
 			},
 		},
-		secret: "better-auth.secret",
+		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
 				? { db: await getPostgres(), type: "postgres" }
@@ -234,13 +235,13 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
 		}
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data, error } = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
@@ -314,7 +315,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void> | void,
+			fn: (headers: Headers) => Awaitable<void>,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {

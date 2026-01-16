@@ -1,7 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
+import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
 
 // Cookie size constants based on browser limits
 const ALLOWED_COOKIE_SIZE = 4096;
@@ -13,7 +16,7 @@ const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
 interface Cookie {
 	name: string;
 	value: string;
-	options: CookieOptions;
+	attributes: CookieOptions;
 }
 
 type Chunks = Record<string, string>;
@@ -88,6 +91,7 @@ function joinChunks(chunks: Chunks): string {
  * Split a cookie value into chunks if needed
  */
 function chunkCookie(
+	storeName: string,
 	cookie: Cookie,
 	chunks: Chunks,
 	logger: InternalLogger,
@@ -108,8 +112,8 @@ function chunkCookie(
 		chunks[name] = value;
 	}
 
-	logger.debug("CHUNKING_SESSION_COOKIE", {
-		message: `Session cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
+	logger.debug(`CHUNKING_${storeName.toUpperCase()}_COOKIE`, {
+		message: `${storeName} cookie exceeds allowed ${ALLOWED_COOKIE_SIZE} bytes.`,
 		emptyCookieSize: ESTIMATED_EMPTY_COOKIE_SIZE,
 		valueSize: cookie.value.length,
 		chunkCount,
@@ -131,7 +135,7 @@ function getCleanCookies(
 		cleanedChunks[name] = {
 			name,
 			value: "",
-			options: { ...cookieOptions, maxAge: 0 },
+			attributes: { ...cookieOptions, maxAge: 0 },
 		};
 	}
 	return cleanedChunks;
@@ -144,82 +148,88 @@ function getCleanCookies(
  * Based on next-auth's SessionStore implementation.
  * @see https://github.com/nextauthjs/next-auth/blob/27b2519b84b8eb9cf053775dea29d577d2aa0098/packages/next-auth/src/core/lib/cookie.ts
  */
-export function createSessionStore(
-	cookieName: string,
-	cookieOptions: CookieOptions,
-	ctx: GenericEndpointContext,
-) {
-	const chunks = readExistingChunks(cookieName, ctx);
-	const logger = ctx.context.logger;
+const storeFactory =
+	(storeName: string) =>
+	(
+		cookieName: string,
+		cookieOptions: CookieOptions,
+		ctx: GenericEndpointContext,
+	) => {
+		const chunks = readExistingChunks(cookieName, ctx);
+		const logger = ctx.context.logger;
 
-	return {
-		/**
-		 * Get the full session data by joining all chunks
-		 */
-		getValue(): string {
-			return joinChunks(chunks);
-		},
+		return {
+			/**
+			 * Get the full session data by joining all chunks
+			 */
+			getValue(): string {
+				return joinChunks(chunks);
+			},
 
-		/**
-		 * Check if there are existing chunks
-		 */
-		hasChunks(): boolean {
-			return Object.keys(chunks).length > 0;
-		},
+			/**
+			 * Check if there are existing chunks
+			 */
+			hasChunks(): boolean {
+				return Object.keys(chunks).length > 0;
+			},
 
-		/**
-		 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
-		 */
-		chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {
-			// Start by cleaning all existing chunks
-			const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-			// Clear the chunks object
-			for (const name in chunks) {
-				delete chunks[name];
-			}
-			const cookies: Record<string, Cookie> = cleanedChunks;
+			/**
+			 * Chunk a cookie value and return all cookies to set (including cleanup cookies)
+			 */
+			chunk(value: string, options?: Partial<CookieOptions>): Cookie[] {
+				// Start by cleaning all existing chunks
+				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
+				// Clear the chunks object
+				for (const name in chunks) {
+					delete chunks[name];
+				}
+				const cookies: Record<string, Cookie> = cleanedChunks;
 
-			// Create new chunks
-			const chunked = chunkCookie(
-				{
-					name: cookieName,
-					value,
-					options: { ...cookieOptions, ...options },
-				},
-				chunks,
-				logger,
-			);
+				// Create new chunks
+				const chunked = chunkCookie(
+					storeName,
+					{
+						name: cookieName,
+						value,
+						attributes: { ...cookieOptions, ...options },
+					},
+					chunks,
+					logger,
+				);
 
-			// Update with new chunks
-			for (const chunk of chunked) {
-				cookies[chunk.name] = chunk;
-			}
+				// Update with new chunks
+				for (const chunk of chunked) {
+					cookies[chunk.name] = chunk;
+				}
 
-			return Object.values(cookies);
-		},
+				return Object.values(cookies);
+			},
 
-		/**
-		 * Get cookies to clean up all chunks
-		 */
-		clean(): Cookie[] {
-			const cleanedChunks = getCleanCookies(chunks, cookieOptions);
-			// Clear the chunks object
-			for (const name in chunks) {
-				delete chunks[name];
-			}
-			return Object.values(cleanedChunks);
-		},
+			/**
+			 * Get cookies to clean up all chunks
+			 */
+			clean(): Cookie[] {
+				const cleanedChunks = getCleanCookies(chunks, cookieOptions);
+				// Clear the chunks object
+				for (const name in chunks) {
+					delete chunks[name];
+				}
+				return Object.values(cleanedChunks);
+			},
 
-		/**
-		 * Set all cookies in the context
-		 */
-		setCookies(cookies: Cookie[]): void {
-			for (const cookie of cookies) {
-				ctx.setCookie(cookie.name, cookie.value, cookie.options);
-			}
-		},
+			/**
+			 * Set all cookies in the context
+			 */
+			setCookies(cookies: Cookie[]): void {
+				for (const cookie of cookies) {
+					ctx.setCookie(cookie.name, cookie.value, cookie.attributes);
+				}
+			},
+		};
 	};
-}
+
+export const createSessionStore = storeFactory("Session");
+export const createAccountStore = storeFactory("Account");
 
 export function getChunkedCookie(
 	ctx: GenericEndpointContext,
@@ -260,6 +270,58 @@ export function getChunkedCookie(
 	if (chunks.length > 0) {
 		chunks.sort((a, b) => a.index - b.index);
 		return chunks.map((c) => c.value).join("");
+	}
+
+	return null;
+}
+
+export async function setAccountCookie(
+	c: GenericEndpointContext,
+	accountData: Record<string, any>,
+) {
+	const accountDataCookie = c.context.authCookies.accountData;
+	const options = {
+		maxAge: 60 * 5,
+		...accountDataCookie.attributes,
+	};
+	const data = await symmetricEncodeJWT(
+		accountData,
+		c.context.secret,
+		"better-auth-account",
+		options.maxAge,
+	);
+
+	if (data.length > ALLOWED_COOKIE_SIZE) {
+		const accountStore = createAccountStore(accountDataCookie.name, options, c);
+
+		const cookies = accountStore.chunk(data, options);
+		accountStore.setCookies(cookies);
+	} else {
+		const accountStore = createAccountStore(accountDataCookie.name, options, c);
+		if (accountStore.hasChunks()) {
+			const cleanCookies = accountStore.clean();
+			accountStore.setCookies(cleanCookies);
+		}
+		c.setCookie(accountDataCookie.name, data, options);
+	}
+}
+
+export async function getAccountCookie(c: GenericEndpointContext) {
+	const accountCookie = getChunkedCookie(
+		c,
+		c.context.authCookies.accountData.name,
+	);
+	if (accountCookie) {
+		const accountData = safeJSONParse<Account>(
+			await symmetricDecodeJWT(
+				accountCookie,
+				c.context.secret,
+				"better-auth-account",
+			),
+		);
+		if (accountData) {
+			return accountData;
+		}
 	}
 
 	return null;

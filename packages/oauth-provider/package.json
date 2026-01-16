@@ -1,0 +1,82 @@
+{
+  "name": "@better-auth/oauth-provider",
+  "version": "1.5.0-beta.7",
+  "type": "module",
+  "description": "An oauth provider plugin for Better Auth",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest",
+    "lint:package": "publint run --strict",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    },
+    "./resource-client": {
+      "dev-source": "./src/client-resource.ts",
+      "types": "./dist/client-resource.d.mts",
+      "default": "./dist/client-resource.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ],
+      "resource-client": [
+        "./dist/client-resource.d.mts"
+      ]
+    }
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "listhen": "^1.9.0",
+    "tsdown": "catalog:"
+  },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/oauth-provider"
+  },
+  "homepage": "https://www.better-auth.com/docs/plugins/oauth-provider",
+  "keywords": [
+    "auth",
+    "oauth",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
+}

@@ -18,7 +18,7 @@ The phone number plugin extends the authentication system by allowing users to s
         const auth = betterAuth({
             plugins: [ 
                 phoneNumber({  // [!code highlight]
-                    sendOTP: ({ phoneNumber, code }, request) => { // [!code highlight]
+                    sendOTP: ({ phoneNumber, code }, ctx) => { // [!code highlight]
                         // Implement sending OTP code via SMS // [!code highlight]
                     } // [!code highlight]
                 }) // [!code highlight]
@@ -33,12 +33,12 @@ The phone number plugin extends the authentication system by allowing users to s
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -117,7 +117,7 @@ To allow users to sign up using their phone number, you can pass `signUpOnVerifi
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            sendOTP: ({ phoneNumber, code }, request) => {
+            sendOTP: ({ phoneNumber, code }, ctx) => {
                 // Implement sending OTP code via SMS
             },
             signUpOnVerification: {
@@ -133,6 +133,10 @@ export const auth = betterAuth({
     ]
 })
 ```
+
+<Callout>
+We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
+</Callout>
 
 ### Sign In with Phone Number
 
@@ -250,10 +254,10 @@ A function that is called after the phone number is verified. It takes the phone
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            sendOTP: ({ phoneNumber, code }, request) => {
+            sendOTP: ({ phoneNumber, code }, ctx) => {
                 // Implement sending OTP code via SMS
             },
-            callbackOnVerification: async ({ phoneNumber, user }, request) => { // [!code highlight]
+            callbackOnVerification: async ({ phoneNumber, user }, ctx) => { // [!code highlight]
                 // Implement callback after phone number verification // [!code highlight]
             } // [!code highlight]
         })
@@ -277,10 +281,10 @@ A custom function to verify the OTP code. When provided, this function will be u
 export const auth = betterAuth({
     plugins: [
         phoneNumber({
-            sendOTP: ({ phoneNumber, code }, request) => {
+            sendOTP: ({ phoneNumber, code }, ctx) => {
                 // Send OTP via your SMS provider
             },
-            verifyOTP: async ({ phoneNumber, code }, request) => { // [!code highlight]
+            verifyOTP: async ({ phoneNumber, code }, ctx) => { // [!code highlight]
                 // Verify OTP with your desired logic (e.g., Twilio Verify) // [!code highlight]
                 // This is just an example, not a real implementation. // [!code highlight]
                 const isValid = await twilioClient.verify // [!code highlight]

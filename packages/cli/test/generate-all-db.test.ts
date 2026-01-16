@@ -1,5 +1,5 @@
+import type { BetterAuthOptions } from "@better-auth/core";
 import { passkey } from "@better-auth/passkey";
-import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { twoFactor, username } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
@@ -39,7 +39,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql.txt",
 		);
 	});
@@ -77,7 +77,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite.txt",
 		);
 	});
@@ -120,7 +120,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-number-id.txt",
 		);
 	});
@@ -162,7 +162,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-uuid.txt",
 		);
 	});
@@ -205,7 +205,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-pg-uuid.txt",
 		);
 	});
@@ -247,7 +247,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-uuid.txt",
 		);
 	});
@@ -290,7 +290,7 @@ describe("generate drizzle schema for all databases", async () => {
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-number-id.txt",
 		);
 	});
@@ -330,7 +330,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-passkey.txt",
 		);
 	});
@@ -368,7 +368,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-passkey.txt",
 		);
 	});
@@ -406,7 +406,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-pg-passkey.txt",
 		);
 	});
@@ -449,7 +449,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-mysql-passkey-number-id.txt",
 		);
 	});
@@ -492,7 +492,7 @@ describe("generate drizzle schema for all databases with passkey plugin", async 
 				},
 			},
 		});
-		expect(schema.code).toMatchFileSnapshot(
+		await expect(schema.code).toMatchFileSnapshot(
 			"./__snapshots__/auth-schema-sqlite-passkey-number-id.txt",
 		);
 	});

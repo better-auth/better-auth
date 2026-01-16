@@ -20,7 +20,7 @@ describe("multi-session", async () => {
 		},
 	);
 
-	let headers = new Headers();
+	const headers = new Headers();
 	const testUser2 = {
 		email: "second-email@test.com",
 		password: "password",
@@ -97,7 +97,7 @@ describe("multi-session", async () => {
 			name: "Name",
 		};
 		let token = "";
-		const signUpRes = await client.signUp.email(testUser3, {
+		await client.signUp.email(testUser3, {
 			onSuccess: (ctx) => {
 				const header = ctx.response.headers.get("set-cookie");
 				expect(header).toContain("better-auth.session_token");
@@ -147,5 +147,70 @@ describe("multi-session", async () => {
 			},
 		});
 		expect(res2.data).toHaveLength(0);
+	});
+
+	it("should reject forged multi-session cookies on sign-out", async () => {
+		const attackerUser = {
+			email: "attacker@test.com",
+			password: "password",
+			name: "Attacker",
+		};
+		const victimUser = {
+			email: "victim@test.com",
+			password: "password",
+			name: "Victim",
+		};
+
+		const attackerHeaders = new Headers();
+		await client.signUp.email(attackerUser, {
+			onSuccess: cookieSetter(attackerHeaders),
+		});
+
+		const victimHeaders = new Headers();
+		let victimSessionToken = "";
+		await client.signUp.email(victimUser, {
+			onSuccess: cookieSetter(victimHeaders),
+			onResponse(context) {
+				const header = context.response.headers.get("set-cookie");
+				const cookies = parseSetCookieHeader(header || "");
+				victimSessionToken =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+			},
+		});
+
+		const attackerSession = await client.getSession({
+			fetchOptions: { headers: attackerHeaders },
+		});
+		const victimSession = await client.getSession({
+			fetchOptions: { headers: victimHeaders },
+		});
+		expect(attackerSession.data?.user.email).toBe(attackerUser.email);
+		expect(victimSession.data?.user.email).toBe(victimUser.email);
+
+		const forgedCookieName = `better-auth.session_token_multi-${victimSessionToken.toLowerCase()}`;
+		const forgedCookieValue = `${victimSessionToken}.fake-signature`;
+
+		const signOutHeaders = new Headers(attackerHeaders);
+		signOutHeaders.set(
+			"cookie",
+			`${attackerHeaders.get("cookie")}; ${forgedCookieName}=${forgedCookieValue}`,
+		);
+
+		await client.signOut({
+			fetchOptions: {
+				headers: signOutHeaders,
+			},
+		});
+
+		const victimSessionAfter = await client.getSession({
+			fetchOptions: { headers: victimHeaders },
+		});
+		expect(victimSessionAfter.data?.user.email).toBe(victimUser.email);
+		expect(victimSessionAfter.data?.session.token).toBe(victimSessionToken);
+
+		const attackerSessionAfter = await client.getSession({
+			fetchOptions: { headers: attackerHeaders },
+		});
+		expect(attackerSessionAfter.data).toBeNull();
 	});
 });

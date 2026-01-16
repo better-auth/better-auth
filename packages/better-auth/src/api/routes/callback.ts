@@ -1,12 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
 import { setTokenUtil } from "../../oauth2/utils";
 import { HIDE_METADATA } from "../../utils/hide-metadata";
-import { safeJSONParse } from "../../utils/json";
 
 const schema = z.object({
 	code: z.string().optional(),
@@ -24,7 +24,13 @@ export const callbackOAuth = createAuthEndpoint(
 		operationId: "handleOAuthCallback",
 		body: schema.optional(),
 		query: schema.optional(),
-		metadata: HIDE_METADATA,
+		metadata: {
+			...HIDE_METADATA,
+			allowedMediaTypes: [
+				"application/x-www-form-urlencoded",
+				"application/json",
+			],
+		},
 	},
 	async (c) => {
 		let queryOrBody: z.infer<typeof schema>;
@@ -62,7 +68,14 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
-		const { code, error, state, error_description, device_id } = queryOrBody;
+		const {
+			code,
+			error,
+			state,
+			error_description,
+			device_id,
+			user: userData,
+		} = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
@@ -125,10 +138,24 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("", e);
 			throw redirectOnError("invalid_code");
 		}
+		const parsedUserData = userData
+			? safeJSONParse<{
+					name?: {
+						firstName?: string;
+						lastName?: string;
+					};
+					email?: string;
+				}>(userData)
+			: null;
+
 		const userInfo = await provider
 			.getUserInfo({
 				...tokens,
-				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+				/**
+				 * The user object from the provider
+				 * This is only available for some providers like Apple
+				 */
+				user: parsedUserData ?? undefined,
 			})
 			.then((res) => res?.user);
 
@@ -215,7 +242,12 @@ export const callbackOAuth = createAuthEndpoint(
 			);
 			return redirectOnError("email_not_found");
 		}
-
+		const accountData = {
+			providerId: provider.id,
+			accountId: String(userInfo.id),
+			...tokens,
+			scope: tokens.scopes?.join(","),
+		};
 		const result = await handleOAuthUserInfo(c, {
 			userInfo: {
 				...userInfo,
@@ -223,12 +255,7 @@ export const callbackOAuth = createAuthEndpoint(
 				email: userInfo.email,
 				name: userInfo.name || userInfo.email,
 			},
-			account: {
-				providerId: provider.id,
-				accountId: String(userInfo.id),
-				...tokens,
-				scope: tokens.scopes?.join(","),
-			},
+			account: accountData,
 			callbackURL,
 			disableSignUp:
 				(provider.disableImplicitSignUp && !requestSignUp) ||
@@ -244,6 +271,7 @@ export const callbackOAuth = createAuthEndpoint(
 			session,
 			user,
 		});
+
 		let toRedirectTo: string;
 		try {
 			const url = result.isRegister ? newUserURL || callbackURL : callbackURL;

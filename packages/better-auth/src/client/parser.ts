@@ -56,7 +56,7 @@ function parseISODate(value: string): Date | null {
 		offsetMinute,
 	] = match;
 
-	let date = new Date(
+	const date = new Date(
 		Date.UTC(
 			parseInt(year!, 10),
 			parseInt(month!, 10) - 1,
@@ -176,5 +176,3 @@ export function parseJSON<T = unknown>(
 ): T {
 	return betterJSONParse<T>(value, options);
 }
-
-export default parseJSON;

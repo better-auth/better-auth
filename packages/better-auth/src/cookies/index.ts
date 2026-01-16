@@ -1,15 +1,16 @@
 import type {
+	BetterAuthCookie,
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
 import type { CookieOptions } from "better-call";
-import { ms } from "ms";
 import {
 	signJWT,
 	symmetricDecodeJWT,
@@ -19,9 +20,9 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
-import { safeJSONParse } from "../utils/json";
-import { getBaseURL } from "../utils/url";
-import { createSessionStore } from "./session-store";
+import { sec } from "../utils/time";
+import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
+import { createAccountStore, createSessionStore } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -32,7 +33,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 					? true
 					: false
 				: isProduction;
-	const secureCookiePrefix = secure ? "__Secure-" : "";
+	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
@@ -67,26 +68,29 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				...options.advanced?.defaultCookieAttributes,
 				...overrideAttributes,
 				...attributes,
-			} as CookieOptions,
-		};
+			},
+		} satisfies BetterAuthCookie;
 	}
 	return createCookie;
 }
 
 export function getCookies(options: BetterAuthOptions) {
 	const createCookie = createCookieGetter(options);
-	const sessionMaxAge = options.session?.expiresIn || ms("7d") / 1000;
+	const sessionMaxAge = options.session?.expiresIn || sec("7d");
 	const sessionToken = createCookie("session_token", {
 		maxAge: sessionMaxAge,
 	});
 	const sessionData = createCookie("session_data", {
 		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
 	});
+	const accountData = createCookie("account_data", {
+		maxAge: options.session?.cookieCache?.maxAge || 60 * 5,
+	});
 	const dontRememberToken = createCookie("dont_remember");
 	return {
 		sessionToken: {
 			name: sessionToken.name,
-			options: sessionToken.attributes,
+			attributes: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -94,11 +98,15 @@ export function getCookies(options: BetterAuthOptions) {
 		 */
 		sessionData: {
 			name: sessionData.name,
-			options: sessionData.attributes,
+			attributes: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
-			options: dontRememberToken.attributes,
+			attributes: dontRememberToken.attributes,
+		},
+		accountData: {
+			name: accountData.name,
+			attributes: accountData.attributes,
 		},
 	};
 }
@@ -150,10 +158,10 @@ export async function setCookieCache(
 		};
 
 		const options = {
-			...ctx.context.authCookies.sessionData.options,
+			...ctx.context.authCookies.sessionData.attributes,
 			maxAge: dontRememberMe
 				? undefined
-				: ctx.context.authCookies.sessionData.options.maxAge,
+				: ctx.context.authCookies.sessionData.attributes.maxAge,
 		};
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
@@ -242,7 +250,7 @@ export async function setSessionCookie(
 	dontRememberMe =
 		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
 
-	const options = ctx.context.authCookies.sessionToken.options;
+	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
@@ -262,7 +270,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.name,
 			"true",
 			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.options,
+			ctx.context.authCookies.dontRememberToken.attributes,
 		);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
@@ -286,29 +294,54 @@ export async function setSessionCookie(
 	}
 }
 
+/**
+ * Expires a cookie by setting `maxAge: 0` while preserving its attributes
+ */
+export function expireCookie(
+	ctx: GenericEndpointContext,
+	cookie: BetterAuthCookie,
+) {
+	ctx.setCookie(cookie.name, "", {
+		...cookie.attributes,
+		maxAge: 0,
+	});
+}
+
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
 	skipDontRememberMe?: boolean | undefined,
 ) {
-	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-		...ctx.context.authCookies.sessionToken.options,
-		maxAge: 0,
-	});
+	expireCookie(ctx, ctx.context.authCookies.sessionToken);
+	expireCookie(ctx, ctx.context.authCookies.sessionData);
+
+	if (ctx.context.options.account?.storeAccountCookie) {
+		expireCookie(ctx, ctx.context.authCookies.accountData);
+
+		//clean up the account data chunks
+		const accountStore = createAccountStore(
+			ctx.context.authCookies.accountData.name,
+			ctx.context.authCookies.accountData.attributes,
+			ctx,
+		);
+		const cleanCookies = accountStore.clean();
+		accountStore.setCookies(cleanCookies);
+	}
+
+	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+		expireCookie(ctx, ctx.context.createAuthCookie("oauth_state"));
+	}
 
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
-		ctx.context.authCookies.sessionData.options,
+		ctx.context.authCookies.sessionData.attributes,
 		ctx,
 	);
 	const cleanCookies = sessionStore.clean();
 	sessionStore.setCookies(cleanCookies);
 
 	if (!skipDontRememberMe) {
-		ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-			...ctx.context.authCookies.dontRememberToken.options,
-			maxAge: 0,
-		});
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
 }
 
@@ -317,7 +350,7 @@ export function parseCookies(cookieHeader: string) {
 	const cookieMap = new Map<string, string>();
 
 	cookies.forEach((cookie) => {
-		const [name, value] = cookie.split("=");
+		const [name, value] = cookie.split(/=(.*)/s);
 		cookieMap.set(name!, value!);
 	});
 	return cookieMap;
@@ -343,8 +376,6 @@ export const getSessionCookie = (
 		}
 	}
 	const headers = "headers" in request ? request.headers : request;
-	const req = request instanceof Request ? request : undefined;
-	const url = getBaseURL(req?.url, config?.path, req);
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
@@ -352,7 +383,7 @@ export const getSessionCookie = (
 	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
 		config || {};
 	const name = `${cookiePrefix}${cookieName}`;
-	const secureCookieName = `__Secure-${name}`;
+	const secureCookieName = `${SECURE_COOKIE_PREFIX}${name}`;
 	const parsedCookie = parseCookies(cookies);
 	const sessionToken =
 		parsedCookie.get(name) || parsedCookie.get(secureCookieName);
@@ -402,10 +433,10 @@ export const getCookieCache = async <
 	const name =
 		config?.isSecure !== undefined
 			? config.isSecure
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`
 			: isProduction
-				? `__Secure-${cookiePrefix}.${cookieName}`
+				? `${SECURE_COOKIE_PREFIX}${cookiePrefix}.${cookieName}`
 				: `${cookiePrefix}.${cookieName}`;
 	const parsedCookie = parseCookies(cookies);
 

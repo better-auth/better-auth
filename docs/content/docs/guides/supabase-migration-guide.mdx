@@ -930,6 +930,10 @@ You can configure the script using `CONFIG` inside the script.
 <Step>
 ### Run the migration script
 
+<Callout type="warning">
+  **Large Datasets (100k+ users)**: Use streaming/pagination with [`pg-cursor`](https://www.npmjs.com/package/pg-cursor) or [keyset pagination](https://use-the-index-luke.com/no-offset) to avoid OOM errors. Process in batches of 1000 rows with concurrency limit of 8. Add `NODE_OPTIONS="--max-old-space-size=8192"` as temporary fix.
+</Callout>
+
 Run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 ```bash title="Terminal"
@@ -984,18 +988,18 @@ Here's a list of the Supabase auth API calls and their Better Auth counterparts.
 
 Learn more:
 - [Basic Usage](/docs/basic-usage): Learn how to use the auth client to sign up, sign in, and sign out.
-- [Email and Password](/docs/authentication/email-and-password): Learn how to add email and password authentication to your project.
+- [Email and Password](/docs/authentication/email-password): Learn how to add email and password authentication to your project.
 - [Anonymous](/docs/plugins/anonymous): Learn how to add anonymous authentication to your project.
 - [Admin](/docs/plugins/admin): Learn how to add admin authentication to your project.
-- [Email OTP](/docs/authentication/email-otp): Learn how to add email OTP authentication to your project.
+- [Email OTP](/docs/plugins/email-otp): Learn how to add email OTP authentication to your project.
 - [Hooks](/docs/concepts/hooks): Learn how to use the hooks to listen for events.
 - [Next.js](/docs/integrations/next): Learn how to use the auth client in a Next.js project.
 </Step>
 </Steps>
 
-### Middleware
+### Auth Protection
 
-To protect routes with middleware, refer to the [Next.js middleware guide](/docs/integrations/next#middleware) or your framework's documentation.
+To protect routes with proxy(middleware), refer to the [Next.js Auth Protection Guide](/docs/integrations/next#auth-protection) or your framework's documentation.
 
 ## Wrapping Up
 

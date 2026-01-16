@@ -9,3 +9,5 @@ export const oidcClient = () => {
 };
 
 export type OidcClientPlugin = ReturnType<typeof oidcClient>;
+
+export type * from "./types";

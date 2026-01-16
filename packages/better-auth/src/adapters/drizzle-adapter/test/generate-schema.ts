@@ -1,7 +1,7 @@
+import fs from "node:fs/promises";
+import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import fs from "fs/promises";
-import { join } from "path";
 import { drizzleAdapter } from "../drizzle-adapter";
 
 let generationCount = 0;
@@ -27,7 +27,7 @@ export const generateDrizzleSchema = async (
 		};
 	}
 	generationCount++;
-	let thisCount = generationCount;
+	const thisCount = generationCount;
 	const i = async (x: string) => {
 		// Clear the Node.js module cache for the generated schema file to ensure fresh import
 		try {
@@ -37,7 +37,7 @@ export const generateDrizzleSchema = async (
 			if (resolvedPath && typeof resolvedPath === "string" && require?.cache) {
 				delete require.cache[resolvedPath];
 			}
-		} catch (error) {}
+		} catch {}
 		return await import(x);
 	};
 
@@ -63,9 +63,9 @@ export const generateDrizzleSchema = async (
 		await fs.mkdir(join(import.meta.dirname, `/.tmp`), { recursive: true });
 	}
 
-	let adapter = drizzleAdapter(db, { provider: dialect })(options);
+	const adapter = drizzleAdapter(db, { provider: dialect })(options);
 
-	let { code } = await generateSchema({
+	const { code } = await generateSchema({
 		adapter,
 		options,
 	});

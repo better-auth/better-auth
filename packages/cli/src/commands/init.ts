@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
 import {
 	cancel,
 	confirm,
@@ -13,9 +16,6 @@ import {
 import chalk from "chalk";
 import { Command } from "commander";
 import { parse } from "dotenv";
-import { existsSync } from "fs";
-import fs from "fs/promises";
-import path from "path";
 import { format as prettierFormat } from "prettier";
 import semver from "semver";
 import * as z from "zod/v4";
@@ -50,7 +50,7 @@ const supportedDatabases = [
 
 export type SupportedDatabases = (typeof supportedDatabases)[number];
 
-export const supportedPlugins = [
+const supportedPlugins = [
 	{
 		id: "two-factor",
 		name: "twoFactor",
@@ -162,6 +162,20 @@ export const supportedPlugins = [
 		clientName: "multiSessionClient",
 		path: `better-auth/plugins`,
 		clientPath: "better-auth/client/plugins",
+	},
+	{
+		id: "oauth-provider",
+		name: "oauthProvider",
+		clientName: "oauthProviderClient",
+		path: `@better-auth/oauth-provider`,
+		clientPath: "@better-auth/oauth-provider/client",
+	},
+	{
+		id: "oauth-provider-resource-client",
+		name: "oauthProviderResource",
+		clientName: "oauthProviderResourceClient",
+		path: `@better-auth/oauth-provider`,
+		clientPath: "@better-auth/oauth-provider/client",
 	},
 	{
 		id: "oauth-proxy",
@@ -296,7 +310,7 @@ const getDefaultAuthClientConfig = async ({
 		}
 		return result;
 	}
-	let imports = groupImportVariables();
+	const imports = groupImportVariables();
 	let importString = "";
 	for (const import_ of imports) {
 		if (Array.isArray(import_.variables)) {
@@ -353,7 +367,7 @@ const optionsSchema = z.object({
 
 const outroText = `🥳 All Done, Happy Hacking!`;
 
-export async function initAction(opts: any) {
+async function initAction(opts: any) {
 	console.log();
 	intro("👋 Initializing Better Auth");
 
@@ -868,7 +882,7 @@ export async function initAction(opts: any) {
 			authClientConfigPath = path.join(cwd, "auth-client.ts");
 			log.info(`Creating auth client config file: ${authClientConfigPath}`);
 			try {
-				let contents = await getDefaultAuthClientConfig({
+				const contents = await getDefaultAuthClientConfig({
 					auth_config_path: (
 						"./" + path.join(config_path.replace(cwd, ""))
 					).replace(".//", "./"),
@@ -949,7 +963,7 @@ export async function initAction(opts: any) {
 					cancel(`✋ Operation cancelled.`);
 					process.exit(0);
 				}
-				let envs: string[] = [];
+				const envs: string[] = [];
 				if (isMissingSecret) {
 					envs.push("BETTER_AUTH_SECRET");
 				}
@@ -1011,7 +1025,7 @@ export async function initAction(opts: any) {
 					}
 				}
 			}
-		} catch (error) {
+		} catch {
 			// if fails, ignore, and do not proceed with ENV operations.
 		}
 	}
@@ -1081,7 +1095,7 @@ async function getPackageManager() {
 		hint: "not recommended",
 	});
 
-	let packageManager = await select({
+	const packageManager = await select({
 		message: "Choose a package manager",
 		options: packageManagerOptions,
 	});

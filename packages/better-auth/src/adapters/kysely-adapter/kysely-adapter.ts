@@ -1,22 +1,20 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	JoinConfig,
 	Where,
 } from "@better-auth/core/db/adapter";
-import {
-	type InsertQueryBuilder,
-	type Kysely,
-	type RawBuilder,
-	sql,
-	type UpdateQueryBuilder,
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type {
+	InsertQueryBuilder,
+	Kysely,
+	RawBuilder,
+	UpdateQueryBuilder,
 } from "kysely";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
-} from "../adapter-factory";
+import { sql } from "kysely";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
@@ -65,18 +63,27 @@ export const kyselyAdapter = (
 			const selectAllJoins = (join: JoinConfig | undefined) => {
 				// Use selectAll which will handle column naming appropriately
 				const allSelects: RawBuilder<unknown>[] = [];
-				const allSelectsStr: { joinModel: string; fieldName: string }[] = [];
+				const allSelectsStr: {
+					joinModel: string;
+					joinModelRef: string;
+					fieldName: string;
+				}[] = [];
 				if (join) {
 					for (const [joinModel, _] of Object.entries(join)) {
 						const fields = schema[getDefaultModelName(joinModel)]?.fields;
+						const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+							? joinModel.split(".")
+							: [undefined, joinModel];
+
 						if (!fields) continue;
 						fields.id = { type: "string" }; // make sure there is at least an id field
 						for (const [field, fieldAttr] of Object.entries(fields)) {
 							allSelects.push(
-								sql`${sql.ref(`join_${joinModel}`)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModel}_${fieldAttr.fieldName || field}`)}`,
+								sql`${sql.ref(`join_${joinModelName}`)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModelName}_${fieldAttr.fieldName || field}`)}`,
 							);
 							allSelectsStr.push({
-								joinModel,
+								joinModel: joinModel,
+								joinModelRef: joinModelName,
 								fieldName: fieldAttr.fieldName || field,
 							});
 						}
@@ -144,14 +151,14 @@ export const kyselyAdapter = (
 				};
 
 				w.forEach((condition) => {
-					let {
+					const {
 						field: _field,
 						value: _value,
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					let value: any = _value;
-					let field: string | any = getFieldName({
+					const value: any = _value;
+					const field: string | any = getFieldName({
 						model,
 						field: _field,
 					});
@@ -229,7 +236,11 @@ export const kyselyAdapter = (
 			function processJoinedResults(
 				rows: any[],
 				joinConfig: JoinConfig | undefined,
-				allSelectsStr: { joinModel: string; fieldName: string }[],
+				allSelectsStr: {
+					joinModel: string;
+					joinModelRef: string;
+					fieldName: string;
+				}[],
 			) {
 				if (!joinConfig || !rows.length) {
 					return rows;
@@ -254,8 +265,12 @@ export const kyselyAdapter = (
 						let assigned = false;
 
 						// Check if this is a joined column
-						for (const { joinModel, fieldName } of allSelectsStr) {
-							if (keyStr === `_joined_${joinModel}_${fieldName}`) {
+						for (const {
+							joinModel,
+							fieldName,
+							joinModelRef,
+						} of allSelectsStr) {
+							if (keyStr === `_joined_${joinModelRef}_${fieldName}`) {
 								joinedModelFields[getModelName(joinModel)]![
 									getFieldName({
 										model: joinModel,
@@ -341,7 +356,7 @@ export const kyselyAdapter = (
 					}
 				}
 
-				let result = Array.from(groupedByMainId.values());
+				const result = Array.from(groupedByMainId.values());
 
 				// Apply final limit to non-unique join arrays as a safety measure
 				for (const entry of result) {
@@ -382,25 +397,23 @@ export const kyselyAdapter = (
 									eb.or(or.map((expr: any) => expr(eb))),
 								);
 							}
-							return b.selectAll().as(model);
+							return b.selectAll().as("primary");
 						})
-						.selectAll(model);
+						.selectAll("primary");
 
 					if (join) {
-						// Add joins
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							let joinQuery = db
-								.selectFrom(joinModel)
-								.selectAll()
-								.as(`join_${joinModel}`);
+							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+								? joinModel.split(".")
+								: [undefined, joinModel];
 
 							query = query.leftJoin(
-								() => joinQuery,
+								`${joinModel} as join_${joinModelName}`,
 								(join: any) =>
 									join.onRef(
-										`join_${joinModel}.${joinAttr.on.to}`,
+										`join_${joinModelName}.${joinAttr.on.to}`,
 										"=",
-										`${model}.${joinAttr.on.from}`,
+										`primary.${joinAttr.on.from}`,
 									),
 							);
 						}
@@ -470,30 +483,31 @@ export const kyselyAdapter = (
 								);
 							}
 
-							return b.selectAll().as(model);
+							return b.selectAll().as("primary");
 						})
-						.selectAll(model);
+						.selectAll("primary");
 
 					if (join) {
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
-							let joinQueryBuilder = db
-								.selectFrom(joinModel)
-								.selectAll()
-								.as(`join_${joinModel}`);
+							// it's possible users provide a schema name in the model name (`<schema>.<model>`)
+							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+								? joinModel.split(".")
+								: [undefined, joinModel];
 
 							query = query.leftJoin(
-								() => joinQueryBuilder,
+								`${joinModel} as join_${joinModelName}`,
 								(join: any) =>
 									join.onRef(
-										`join_${joinModel}.${joinAttr.on.to}`,
+										`join_${joinModelName}.${joinAttr.on.to}`,
 										"=",
-										`${model}.${joinAttr.on.from}`,
+										`primary.${joinAttr.on.from}`,
 									),
 							);
 						}
 					}
 
 					const { allSelectsStr, allSelects } = selectAllJoins(join);
+
 					query = query.select(allSelects);
 
 					if (sortBy?.field) {
@@ -503,9 +517,7 @@ export const kyselyAdapter = (
 						);
 					}
 
-					// console.log("sql query:", await query.compile());
 					const res = await query.execute();
-					// console.log(`raw unparsed result:`, res);
 
 					if (!res) return [];
 					if (join) return processJoinedResults(res, join, allSelectsStr);
@@ -532,8 +544,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					const res = await query.execute();
-					return res.length;
+					const res = (await query.executeTakeFirst()).numUpdatedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				async count({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -577,7 +591,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return (await query.execute()).length;
+					const res = (await query.executeTakeFirst()).numDeletedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				options: config,
 			};
@@ -601,7 +618,11 @@ export const kyselyAdapter = (
 				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
 					? false
 					: true,
-			supportsJSON: false,
+			supportsJSON:
+				config?.type === "postgres"
+					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
+					: false,
+			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
 			supportsUUIDs: config?.type === "postgres" ? true : false,
 			transaction: config?.transaction
 				? (cb) =>

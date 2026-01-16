@@ -1,6 +1,10 @@
 import { betterFetch } from "@better-fetch/fetch";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
-import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
+import {
+	createAuthorizationURL,
+	refreshAccessToken,
+	validateAuthorizationCode,
+} from "../oauth2";
 
 export interface KickProfile {
 	/**
@@ -53,6 +57,18 @@ export const kick = (options: KickOptions) => {
 				codeVerifier,
 			});
 		},
+		refreshAccessToken: options.refreshAccessToken
+			? options.refreshAccessToken
+			: async (refreshToken) => {
+					return refreshAccessToken({
+						refreshToken,
+						options: {
+							clientId: options.clientId,
+							clientSecret: options.clientSecret,
+						},
+						tokenEndpoint: "https://id.kick.com/oauth/token",
+					});
+				},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -74,14 +90,15 @@ export const kick = (options: KickOptions) => {
 			const profile = data.data[0]!;
 
 			const userMap = await options.mapProfileToUser?.(profile);
-
+			// Kick does not provide email_verified claim.
+			// We default to false for security consistency.
 			return {
 				user: {
 					id: profile.user_id,
 					name: profile.name,
 					email: profile.email,
 					image: profile.profile_picture,
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: profile,

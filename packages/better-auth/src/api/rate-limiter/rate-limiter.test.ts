@@ -107,7 +107,7 @@ describe(
 );
 
 describe("custom rate limiting storage", async () => {
-	let store = new Map<string, string>();
+	const store = new Map<string, string>();
 	const expirationMap = new Map<string, number>();
 	const { client, testUser } = await getTestInstance({
 		rateLimit: {

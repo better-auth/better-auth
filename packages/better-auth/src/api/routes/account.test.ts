@@ -2,6 +2,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
+import type { MockInstance } from "vitest";
 import {
 	afterAll,
 	afterEach,
@@ -9,11 +10,10 @@ import {
 	describe,
 	expect,
 	it,
-	type MockInstance,
 	vi,
 } from "vitest";
 import { parseSetCookieHeader } from "../../cookies";
-import { signJWT } from "../../crypto";
+import { signJWT, symmetricDecodeJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { Account } from "../../types";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -166,6 +166,27 @@ describe("account", async () => {
 			const accessToken = await client.getAccessToken({
 				providerId: "google",
 			});
+			expect(accessToken.data?.accessToken).toBe("test");
+		});
+	});
+
+	it("should get access token using accountId from listAccounts", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			const googleAccount = accounts.data?.find(
+				(a) => a.providerId === "google",
+			);
+			expect(googleAccount).toBeDefined();
+			expect(googleAccount?.accountId).toBeDefined();
+
+			// Use accountId from listAccounts to get access token
+			const accessToken = await client.getAccessToken({
+				providerId: "google",
+				accountId: googleAccount!.accountId,
+			});
+
+			expect(accessToken.error).toBeNull();
 			expect(accessToken.data?.accessToken).toBe("test");
 		});
 	});
@@ -327,7 +348,7 @@ describe("account", async () => {
 				accountId: unlinkAccountId,
 			});
 			expect(unlinkRes.error?.message).toBe(
-				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
 			);
 		});
 	});
@@ -413,5 +434,424 @@ describe("account", async () => {
 			);
 			expect(remainingGoogleAccounts.length).toBe(1);
 		});
+	});
+
+	it("should store account data cookie after oauth flow and retrieve it through getAccessToken", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		// Start OAuth sign-in flow
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/callback");
+
+				// Verify account data cookie is set
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const accountDataCookie = cookies.get(accountDataCookieName);
+				expect(accountDataCookie).toBeDefined();
+				expect(accountDataCookie?.value).toBeDefined();
+
+				// Set all cookies including account data cookie
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
+
+	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			account: {
+				storeAccountCookie: true,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			async onError(context) {
+				const setCookie = context.response.headers.get("set-cookie");
+				expect(setCookie).toBeDefined();
+
+				const parsed = parseSetCookieHeader(setCookie!);
+				let hasChunks = false;
+				let hasSingleAccountData = false;
+
+				parsed.forEach((_value, name) => {
+					if (
+						name.includes("account_data.0") ||
+						name.includes("account_data.1")
+					) {
+						hasChunks = true;
+					}
+					if (name.endsWith("account_data")) {
+						hasSingleAccountData = true;
+					}
+				});
+
+				expect(hasChunks).toBe(false);
+				expect(hasSingleAccountData).toBe(true);
+
+				parsed.forEach((value, name) => {
+					headers.append("cookie", `${name}=${value.value}`);
+				});
+			},
+		});
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
+
+	it("should chunk account data cookies when exceeding 4KB", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			account: {
+				storeAccountCookie: true,
+				additionalFields: {
+					largeField: {
+						type: "string",
+						defaultValue: "x".repeat(5000), // 5KB field to exceed cookie size
+					},
+				},
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			async onError(context) {
+				const setCookie = context.response.headers.get("set-cookie");
+				expect(setCookie).toBeDefined();
+
+				const parsed = parseSetCookieHeader(setCookie!);
+				let hasChunks = false;
+
+				parsed.forEach((_value, name) => {
+					if (
+						name.includes("account_data.0") ||
+						name.includes("account_data.1")
+					) {
+						hasChunks = true;
+					}
+				});
+
+				expect(hasChunks).toBe(true);
+
+				parsed.forEach((value, name) => {
+					headers.append("cookie", `${name}=${value.value}`);
+				});
+			},
+		});
+		const accessTokenRes = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(accessTokenRes.data).toBeDefined();
+		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
+
+	it("should encrypt account cookie payload", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			secret: "better-auth.secret",
+			account: {
+				storeAccountCookie: true,
+			},
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+		});
+		const ctx = await auth.$context;
+
+		const headers = new Headers();
+		email = "oauth-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		// Complete OAuth callback
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			async onError(context) {
+				const setCookie = context.response.headers.get("set-cookie");
+				expect(setCookie).toBeDefined();
+
+				const parsed = parseSetCookieHeader(setCookie!);
+				const accountData = parsed.get("better-auth.account_data")?.value;
+
+				expect(accountData).toBeDefined();
+				expect(accountData!.startsWith("ey")).toBe(true);
+				await expect(
+					symmetricDecodeJWT(accountData!, ctx.secret, "better-auth-account"),
+				).resolves.toMatchObject({
+					accessToken: "test",
+					refreshToken: "test",
+					providerId: "google",
+				});
+			},
+		});
+	});
+
+	it("should set account cookie on re-login after sign-out when updateAccountOnSignIn is false", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+				updateAccountOnSignIn: false, // important to test this scenario
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "re-login-test@test.com";
+
+		// first login with new user
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		// verify account cookie is set after first login
+		const firstLoginAccessToken = await client.getAccessToken(
+			{ providerId: "google" },
+			{ headers },
+		);
+		expect(firstLoginAccessToken.error).toBeFalsy();
+		expect(firstLoginAccessToken.data?.accessToken).toBe("test");
+
+		// sign out
+		await client.signOut({ fetchOptions: { headers } });
+
+		// clear headers to simulate fresh session
+		const newHeaders = new Headers();
+
+		// re-login with same OAuth account
+		const reLoginRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(newHeaders),
+			},
+		});
+
+		const reLoginState =
+			reLoginRes.data && "url" in reLoginRes.data && reLoginRes.data.url
+				? new URL(reLoginRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		let accountCookieSetOnReLogin = false;
+		await client.$fetch("/callback/google", {
+			query: { state: reLoginState, code: "test" },
+			headers: newHeaders,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+
+				// check if account_data cookie is set on re-login
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const accountDataCookie = cookies.get(accountDataCookieName);
+				accountCookieSetOnReLogin = !!accountDataCookie?.value;
+
+				cookieSetter(newHeaders)({ response: context.response });
+			},
+		});
+
+		// verify account cookie is set on re-login
+		expect(accountCookieSetOnReLogin).toBe(true);
+
+		// verify getAccessToken works after re-login
+		const reLoginAccessToken = await client.getAccessToken(
+			{ providerId: "google" },
+			{ headers: newHeaders },
+		);
+
+		expect(reLoginAccessToken.error).toBeFalsy();
+		expect(reLoginAccessToken.data?.accessToken).toBe("test");
 	});
 });

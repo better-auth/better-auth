@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
+
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { APIError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -160,9 +161,18 @@ export const apple = (options: AppleOptions) => {
 			if (!profile) {
 				return null;
 			}
-			const name = token.user
-				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
-				: profile.name || profile.email;
+
+			// TODO: " " masking will be removed when the name field is made optional
+			let name: string;
+			if (token.user?.name) {
+				const firstName = token.user.name.firstName || "";
+				const lastName = token.user.name.lastName || "";
+				const fullName = `${firstName} ${lastName}`.trim();
+				name = fullName || " ";
+			} else {
+				name = profile.name || " ";
+			}
+
 			const emailVerified =
 				typeof profile.email_verified === "boolean"
 					? profile.email_verified

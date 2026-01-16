@@ -6,20 +6,25 @@ packages:
   - test
 
 catalog:
-  '@better-fetch/fetch': 1.1.18
-  better-call: 1.0.26
-  tsdown: ^0.16.0
+  '@better-auth/utils': 0.3.0
+  '@better-fetch/fetch': 1.1.21
+  better-call: 1.1.8
+  tsdown: ^0.19.0
   typescript: ^5.9.3
-  vitest: 4.0.9
 
 catalogs:
-  react18:
-    '@types/react': ^19.1.12
-    '@types/react-dom': ^19.1.9
-    react: 19.1.1
-    react-dom: 19.1.1
+  react19:
+    '@types/react': ^19.2.0
+    '@types/react-dom': ^19.2.0
+    react: ^19.2.3
+    react-dom: ^19.2.3
+  tailwind:
+    '@tailwindcss/postcss': ^4.1.18
+    '@tailwindcss/vite': ^4.1.18
+    tailwindcss: ^4.1.18
+    tailwindcss-animate: ^1.0.7
+  vitest:
+    '@vitest/coverage-istanbul': ^4.0.15
+    vitest: ^4.0.15
 
 neverBuiltDependencies: []
-
-patchedDependencies:
-  msw: patches/msw.patch

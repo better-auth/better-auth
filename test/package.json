@@ -3,14 +3,18 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack ."
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "msw": "^2.12.1",
+    "msw": "^2.12.4",
     "openid-client": "^6.8.1",
-    "vitest": "catalog:"
+    "undici": "^7.0.0",
+    "vitest": "catalog:vitest"
   }
 }

@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@config "../tailwind.config.ts";
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -30,6 +29,14 @@
 	--chart-3: hsl(197 37% 24%);
 	--chart-4: hsl(43 74% 66%);
 	--chart-5: hsl(27 87% 67%);
+	--sidebar: hsl(0 0% 98%);
+	--sidebar-foreground: hsl(20 14.3% 4.1%);
+	--sidebar-primary: hsl(24 9.8% 10%);
+	--sidebar-primary-foreground: hsl(60 9.1% 97.8%);
+	--sidebar-accent: hsl(60 4.8% 95.9%);
+	--sidebar-accent-foreground: hsl(24 9.8% 10%);
+	--sidebar-border: hsl(20 5.9% 90%);
+	--sidebar-ring: hsl(20 14.3% 4.1%);
 }
 
 .dark {
@@ -57,6 +64,14 @@
 	--chart-3: hsl(30 80% 55%);
 	--chart-4: hsl(280 65% 60%);
 	--chart-5: hsl(340 75% 55%);
+	--sidebar: hsl(20 14.3% 4.1%);
+	--sidebar-foreground: hsl(60 9.1% 97.8%);
+	--sidebar-primary: hsl(60 9.1% 97.8%);
+	--sidebar-primary-foreground: hsl(24 9.8% 10%);
+	--sidebar-accent: hsl(12 6.5% 15.1%);
+	--sidebar-accent-foreground: hsl(60 9.1% 97.8%);
+	--sidebar-border: hsl(12 6.5% 15.1%);
+	--sidebar-ring: hsl(24 5.7% 82.9%);
 }
 
 @theme inline {
@@ -96,6 +111,45 @@
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
+
+	--animate-accordion-down: accordion-down 0.2s ease-out;
+	--animate-accordion-up: accordion-up 0.2s ease-out;
+
+	@keyframes accordion-down {
+		from {
+			height: 0;
+		}
+		to {
+			height: var(--radix-accordion-content-height);
+		}
+	}
+
+	@keyframes accordion-up {
+		from {
+			height: var(--radix-accordion-content-height);
+		}
+		to {
+			height: 0;
+		}
+	}
+
+	@keyframes cell-ripple {
+		0% {
+			transform: scale(1);
+			opacity: 0.5;
+		}
+		50% {
+			transform: scale(1.2);
+			opacity: 0.9;
+		}
+		100% {
+			transform: scale(1);
+			opacity: 0.5;
+		}
+	}
+
+	--animate-cell-ripple: cell-ripple var(--duration, 400ms) ease-out
+		var(--delay, 0ms) 1;
 }
 
 @layer base {
@@ -107,12 +161,34 @@
 	}
 }
 
-.no-visible-scrollbar {
+@utility no-visible-scrollbar {
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 	-webkit-overflow-scrolling: touch;
+	&::-webkit-scrollbar {
+		display: none;
+	}
 }
 
-.no-visible-scrollbar::-webkit-scrollbar {
-	display: none;
+@utility bg-grid {
+	background-image:
+		linear-gradient(currentColor 1px, transparent 1px),
+		linear-gradient(90deg, currentColor 1px, transparent 1px);
+	background-size: 32px 32px;
+}
+
+@utility bg-grid-small {
+	background-image:
+		linear-gradient(currentColor 1px, transparent 1px),
+		linear-gradient(90deg, currentColor 1px, transparent 1px);
+	background-size: 8px 8px;
+}
+
+@utility bg-dot {
+	background-image: radial-gradient(
+		circle at 50% 50%,
+		currentColor 1.6px,
+		transparent 1.6px
+	);
+	background-size: 16px 16px;
 }

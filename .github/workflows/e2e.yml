@@ -4,27 +4,32 @@ on:
     branches: [ main, canary ]
   merge_group:
   pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   smoke:
     name: Smoke test
     timeout-minutes: 30
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
@@ -50,7 +55,7 @@ jobs:
 
       - uses: denoland/setup-deno@e95548e56dfa95d4e1a28d6f422fafe75c4c26fb # v2.0.3
         with:
-          deno-version: v2.x
+          deno-version: 2.6.4
 
       - name: Smoke
         env:
@@ -66,34 +71,45 @@ jobs:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: Skip integration tests in merge queue
+        if: github.event_name == 'merge_group'
+        run: echo "Skipping integration tests in merge queue"
+
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
 
       - name: Cache turbo build setup
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        if: github.event_name != 'merge_group'
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
           key: ${{ runner.os }}-turbo-${{ github.sha }}
           restore-keys: |
             ${{ runner.os }}-turbo-
 
-      - uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+        if: github.event_name != 'merge_group'
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        if: github.event_name != 'merge_group'
         with:
           node-version: 22.x
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
       - name: Install
+        if: github.event_name != 'merge_group'
         run: pnpm install
 
       - name: Install Playwright Browsers
+        if: github.event_name != 'merge_group'
         run: pnpm exec playwright install --with-deps
         working-directory:  e2e/integration
 
       - name: Build
+        if: github.event_name != 'merge_group'
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
@@ -101,12 +117,14 @@ jobs:
         run: pnpm build
 
       - name: Start Docker Containers
+        if: github.event_name != 'merge_group'
         run: |
           docker compose up -d
           # Wait for services to be ready (optional)
           sleep 10
 
       - name: Integration
+        if: github.event_name != 'merge_group'
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
@@ -114,4 +132,5 @@ jobs:
         run: pnpm e2e:integration
 
       - name: Stop Docker Containers
+        if: github.event_name != 'merge_group'
         run: docker compose down

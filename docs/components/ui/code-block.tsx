@@ -1,14 +1,16 @@
 "use client";
 import { Check, Copy } from "lucide-react";
-import {
+import type {
 	ButtonHTMLAttributes,
-	type ComponentProps,
+	ComponentProps,
+	HTMLAttributes,
+	ReactElement,
+	ReactNode,
+	RefObject,
+} from "react";
+import {
 	createContext,
 	forwardRef,
-	type HTMLAttributes,
-	ReactElement,
-	type ReactNode,
-	type RefObject,
 	useCallback,
 	useContext,
 	useMemo,
@@ -233,8 +235,6 @@ export function CodeBlockTabs({ ref, ...props }: ComponentProps<typeof Tabs>) {
 	);
 }
 export function CodeBlockTabsList(props: ComponentProps<typeof TabsList>) {
-	const { containerRef, nested } = useContext(TabsContext)!;
-
 	return (
 		<TabsList
 			{...props}

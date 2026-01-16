@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "../../api";
+import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db";
 import { getDate } from "../../utils/date";
 import { getIp } from "../../utils/get-request-ip";
@@ -11,6 +11,15 @@ import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyOptions } from "./types";
+
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"api-key": {
+			creator: typeof apiKey;
+		};
+	}
+}
 
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
@@ -22,39 +31,9 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-export const ERROR_CODES = defineErrorCodes({
-	INVALID_METADATA_TYPE: "metadata must be an object or undefined",
-	REFILL_AMOUNT_AND_INTERVAL_REQUIRED:
-		"refillAmount is required when refillInterval is provided",
-	REFILL_INTERVAL_AND_AMOUNT_REQUIRED:
-		"refillInterval is required when refillAmount is provided",
-	USER_BANNED: "User is banned",
-	UNAUTHORIZED_SESSION: "Unauthorized or invalid session",
-	KEY_NOT_FOUND: "API Key not found",
-	KEY_DISABLED: "API Key is disabled",
-	KEY_EXPIRED: "API Key has expired",
-	USAGE_EXCEEDED: "API Key has reached its usage limit",
-	KEY_NOT_RECOVERABLE: "API Key is not recoverable",
-	EXPIRES_IN_IS_TOO_SMALL:
-		"The expiresIn is smaller than the predefined minimum value.",
-	EXPIRES_IN_IS_TOO_LARGE:
-		"The expiresIn is larger than the predefined maximum value.",
-	INVALID_REMAINING: "The remaining count is either too large or too small.",
-	INVALID_PREFIX_LENGTH: "The prefix length is either too large or too small.",
-	INVALID_NAME_LENGTH: "The name length is either too large or too small.",
-	METADATA_DISABLED: "Metadata is disabled.",
-	RATE_LIMIT_EXCEEDED: "Rate limit exceeded.",
-	NO_VALUES_TO_UPDATE: "No values to update.",
-	KEY_DISABLED_EXPIRATION: "Custom key expiration values are disabled.",
-	INVALID_API_KEY: "Invalid API key.",
-	INVALID_USER_ID_FROM_API_KEY: "The user id from the API key is invalid.",
-	INVALID_API_KEY_GETTER_RETURN_TYPE:
-		"API Key getter returned an invalid key type. Expected string.",
-	SERVER_ONLY_PROPERTY:
-		"The property you're trying to set can only be set from the server auth instance only.",
-	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
-	NAME_REQUIRED: "API Key name is required.",
-});
+import { API_KEY_ERROR_CODES } from "./error-codes";
+
+export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
@@ -70,6 +49,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		enableMetadata: options?.enableMetadata ?? false,
 		disableKeyHashing: options?.disableKeyHashing ?? false,
 		requireName: options?.requireName ?? false,
+		storage: options?.storage ?? "database",
 		rateLimit: {
 			enabled:
 				options?.rateLimit?.enabled === undefined
@@ -91,6 +71,9 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 				options?.startingCharactersConfig?.charactersLength ?? 6,
 		},
 		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
+		fallbackToDatabase: options?.fallbackToDatabase ?? false,
+		customStorage: options?.customStorage,
+		deferUpdates: options?.deferUpdates ?? false,
 	} satisfies ApiKeyOptions;
 
 	const schema = mergeSchema(
@@ -119,21 +102,15 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 	const keyGenerator =
 		opts.customKeyGenerator ||
 		(async (options: { length: number; prefix: string | undefined }) => {
-			const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-			let apiKey = `${options.prefix || ""}`;
-			for (let i = 0; i < options.length; i++) {
-				const randomIndex = Math.floor(Math.random() * characters.length);
-				apiKey += characters[randomIndex];
-			}
-
-			return apiKey;
+			const key = generateRandomString(options.length, "a-z", "A-Z");
+			return `${options.prefix || ""}${key}`;
 		});
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
 
 	return {
 		id: "api-key",
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: API_KEY_ERROR_CODES,
 		hooks: {
 			before: [
 				{
@@ -142,26 +119,29 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						const key = getter(ctx)!;
 
 						if (typeof key !== "string") {
-							throw new APIError("BAD_REQUEST", {
-								message: ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+							);
 						}
 
 						if (key.length < opts.defaultKeyLength) {
 							// if the key is shorter than the default key length, than we know the key is invalid.
 							// we can't check if the key is exactly equal to the default key length, because
 							// a prefix may be added to the key.
-							throw new APIError("FORBIDDEN", {
-								message: ERROR_CODES.INVALID_API_KEY,
-							});
+							throw APIError.from(
+								"FORBIDDEN",
+								API_KEY_ERROR_CODES.INVALID_API_KEY,
+							);
 						}
 
 						if (opts.customAPIKeyValidator) {
 							const isValid = await opts.customAPIKeyValidator({ ctx, key });
 							if (!isValid) {
-								throw new APIError("FORBIDDEN", {
-									message: ERROR_CODES.INVALID_API_KEY,
-								});
+								throw APIError.from(
+									"FORBIDDEN",
+									API_KEY_ERROR_CODES.INVALID_API_KEY,
+								);
 							}
 						}
 
@@ -176,21 +156,26 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							schema,
 						});
 
-						//for cleanup purposes
-						deleteAllExpiredApiKeys(ctx.context).catch((err) => {
-							ctx.context.logger.error(
-								"Failed to delete expired API keys:",
-								err,
-							);
-						});
+						const cleanupTask = deleteAllExpiredApiKeys(ctx.context).catch(
+							(err) => {
+								ctx.context.logger.error(
+									"Failed to delete expired API keys:",
+									err,
+								);
+							},
+						);
+						if (opts.deferUpdates) {
+							ctx.context.runInBackground(cleanupTask);
+						}
 
 						const user = await ctx.context.internalAdapter.findUserById(
 							apiKey.userId,
 						);
 						if (!user) {
-							throw new APIError("UNAUTHORIZED", {
-								message: ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-							});
+							throw APIError.from(
+								"UNAUTHORIZED",
+								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+							);
 						}
 
 						const session = {
@@ -337,5 +322,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

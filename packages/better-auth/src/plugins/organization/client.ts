@@ -11,18 +11,16 @@ import type {
 } from "../../plugins/organization/schema";
 import type { BetterAuthOptions, BetterAuthPlugin } from "../../types";
 import type { Prettify } from "../../types/helper";
-import { type AccessControl, type Role } from "../access";
-import {
-	adminAc,
-	defaultRoles,
-	defaultStatements,
-	memberAc,
-	ownerAc,
-} from "./access";
+import type { AccessControl, Role } from "../access";
+import type { defaultStatements } from "./access";
+import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
+
+export * from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -92,9 +90,8 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 	const $activeMemberRoleSignal = atom<boolean>(false);
 
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = CO["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		CO["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -281,6 +278,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				signal: "$activeMemberRoleSignal",
 			},
 		],
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 
@@ -304,14 +302,26 @@ export const inferOrgAdditionalFields = <
 		Auth["options"]["plugins"],
 		"organization"
 	>;
+
+	// The server schema can contain more properties other than additionalFields, but the client only supports additionalFields
+	// if we don't remove all other properties we may see assignability issues
+
+	type ExtractClientOnlyFields<T> = {
+		[K in keyof T]: T[K] extends { additionalFields: infer _AF }
+			? T[K]
+			: undefined;
+	};
+
 	type Schema = O extends Object
 		? O extends Exclude<OrganizationOptions["schema"], undefined>
 			? O
 			: OrganizationPlugin extends { options: { schema: infer S } }
 				? S extends OrganizationOptions["schema"]
-					? S
+					? ExtractClientOnlyFields<S>
 					: undefined
 				: undefined
 		: undefined;
 	return {} as undefined extends S ? Schema : S;
 };
+
+export type * from "./schema";

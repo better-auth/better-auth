@@ -1,7 +1,10 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
-import type { GoogleProfile } from "@better-auth/core/social-providers";
+import type {
+	GoogleProfile,
+	VercelProfile,
+} from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
 import { HttpResponse, http } from "msw";
@@ -15,8 +18,8 @@ import { getMigrations } from "./db";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
-let server = new OAuth2Server();
-let port = 8005;
+const server = new OAuth2Server();
+const port = 8005;
 
 const mswServer = setupServer();
 let shouldUseUpdatedProfile = false;
@@ -137,6 +140,9 @@ describe("Social Providers", async (c) => {
 					clientSecret: "test",
 				},
 			},
+			advanced: {
+				disableOriginCheck: false,
+			},
 		},
 		{
 			disableTestUser: true,
@@ -152,7 +158,7 @@ describe("Social Providers", async (c) => {
 	afterAll(async () => {
 		await server.stop().catch(console.error);
 	});
-	server.service.on("beforeRsponse", (tokenResponse, req) => {
+	server.service.on("beforeResponse", (tokenResponse, req) => {
 		tokenResponse.body = {
 			accessToken: "access-token",
 			refreshToken: "refresher-token",
@@ -379,7 +385,7 @@ describe("Social Providers", async (c) => {
 				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
 			},
 		});
-		const accounts = await client.listAccounts({
+		await client.listAccounts({
 			fetchOptions: { headers },
 		});
 		await client.$fetch("/refresh-token", {
@@ -945,5 +951,554 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+	});
+});
+
+describe("Apple Provider", async () => {
+	it("should not use email as fallback for name when name is not provided", async () => {
+		const appleProfile = {
+			sub: "001341.example.1128",
+			email: "user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+			// No name field
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						// Disable ID token verification for testing
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/apple", {
+			query: {
+				state,
+				code: "apple_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Name should NOT be the email address
+		expect(session.data?.user.name).not.toBe("user@privaterelay.appleid.com");
+		// Name should be undefined, null, or space when not provided
+		expect(
+			session.data?.user.name === undefined ||
+				session.data?.user.name === null ||
+				session.data?.user.name === " ",
+		).toBe(true);
+	});
+
+	it("should use firstName and lastName when provided in token.user", async () => {
+		const appleProfile = {
+			sub: "001341.example.1129",
+			email: "user2@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const userData = JSON.stringify({
+			name: {
+				firstName: "Better",
+				lastName: "Auth",
+			},
+			email: "user2@privaterelay.appleid.com",
+		});
+
+		let redirectLocation: string | null = null;
+
+		await client.$fetch("/callback/apple", {
+			body: {
+				state,
+				code: "apple_test_code",
+				user: userData,
+			},
+			headers,
+			method: "POST",
+			onError(context) {
+				// Expecting 302 redirect
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location");
+				expect(redirectLocation).toBeDefined();
+				expect(redirectLocation).toContain("/callback/apple");
+				expect(redirectLocation).toContain("user=");
+			},
+		});
+
+		const redirectUrl = new URL(redirectLocation!);
+		await client.$fetch("/callback/apple", {
+			query: Object.fromEntries(redirectUrl.searchParams),
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.name).toBe("Better Auth");
+	});
+});
+
+describe("Vercel Provider", async () => {
+	beforeAll(async () => {
+		mswServer.use(
+			http.post(
+				"https://api.vercel.com/login/oauth/token",
+				async ({ request }) => {
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+
+					// Verify PKCE is present
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
+					const profile: VercelProfile = {
+						sub: "vercel_user_123",
+						email: "vercel@test.com",
+						email_verified: true,
+						name: "Vercel User",
+						preferred_username: "verceluser",
+						picture: "https://vercel.com/avatar.png",
+					};
+
+					const idToken = await signJWT(profile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "vercel_access_token",
+						refresh_token: "vercel_refresh_token",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://api.vercel.com/login/oauth/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "vercel_user_123",
+					email: "vercel@test.com",
+					email_verified: true,
+					name: "Vercel User",
+					preferred_username: "verceluser",
+					picture: "https://vercel.com/avatar.png",
+				});
+			}),
+		);
+	});
+
+	it("should configure Vercel provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const vercelProvider = ctx.socialProviders.find((p) => p.id === "vercel");
+
+		expect(vercelProvider).toBeDefined();
+		expect(vercelProvider?.id).toBe("vercel");
+		expect(vercelProvider?.name).toBe("Vercel");
+	});
+
+	it("should initiate Vercel OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("vercel.com/oauth/authorize");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		// Verify PKCE parameters are present
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should complete Vercel OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: {
+				state,
+				code: "vercel_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.email).toBe("vercel@test.com");
+		expect(session.data?.user.name).toBe("Vercel User");
+		expect(session.data?.user.image).toBe("https://vercel.com/avatar.png");
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Verify account was created
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("vercel");
+		expect(accounts[0]?.accountId).toBe("vercel_user_123");
+	});
+
+	it("should use preferred_username as fallback for name", async () => {
+		mswServer.use(
+			http.post("https://api.vercel.com/login/oauth/token", async () => {
+				const profile: VercelProfile = {
+					sub: "vercel_user_456",
+					email: "noname@vercel.com",
+					email_verified: true,
+					preferred_username: "cooldev",
+					// No name field
+					picture: "https://vercel.com/avatar2.png",
+				};
+
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "vercel_access_token_2",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+			http.get("https://api.vercel.com/login/oauth/userinfo", async () => {
+				return HttpResponse.json({
+					sub: "vercel_user_456",
+					email: "noname@vercel.com",
+					email_verified: true,
+					preferred_username: "cooldev",
+					picture: "https://vercel.com/avatar2.png",
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state, code: "vercel_test_code_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user.name).toBe("cooldev");
+	});
+
+	it("should allow additional scopes", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+					scope: ["openid", "email", "profile", "offline_access"],
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data?.url).toBeDefined();
+		const authUrl = new URL(signInRes.data!.url!);
+		const scopes = authUrl.searchParams.get("scope");
+
+		expect(scopes).toContain("openid");
+		expect(scopes).toContain("email");
+		expect(scopes).toContain("profile");
+		expect(scopes).toContain("offline_access");
+	});
+
+	it("should support mapProfileToUser", async () => {
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						vercelUserId: {
+							type: "string",
+						},
+					},
+				},
+				socialProviders: {
+					vercel: {
+						clientId: "vercel-test-client-id",
+						clientSecret: "vercel-test-client-secret",
+						mapProfileToUser(profile: VercelProfile) {
+							return {
+								vercelUserId: profile.sub,
+							};
+						},
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state, code: "vercel_test_code_3" },
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: { headers },
+		});
+
+		expect(session.data?.user).toHaveProperty("vercelUserId");
+		// The test uses the mocked userinfo which returns vercel_user_123 at this point
+		expect((session.data?.user as any).vercelUserId).toBeDefined();
+	});
+
+	it("should redirect existing Vercel users to callback URL", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				vercel: {
+					clientId: "vercel-test-client-id",
+					clientSecret: "vercel-test-client-secret",
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		// First sign-in (new user)
+		const signInRes1 = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state1 =
+			new URL(signInRes1.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state: state1, code: "vercel_test_code_existing" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.headers.get("location")).toContain("/welcome");
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		// Second sign-in (existing user)
+		const signInRes2 = await client.signIn.social({
+			provider: "vercel",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state2 =
+			new URL(signInRes2.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/vercel", {
+			query: { state: state2, code: "vercel_test_code_existing_2" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toContain("/dashboard");
+				expect(location).not.toContain("/welcome");
+			},
+		});
 	});
 });

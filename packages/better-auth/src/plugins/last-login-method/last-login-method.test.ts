@@ -124,7 +124,6 @@ describe("lastLoginMethod", async () => {
 			},
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
-		console.log("rans" + cookies);
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("siwe");
 	});
 
@@ -303,7 +302,7 @@ describe("lastLoginMethod", async () => {
 			{ throw: true },
 		);
 
-		let session = await auth.api.getSession({
+		const session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${emailSignInData.token}`,
 			}),

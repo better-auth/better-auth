@@ -49,6 +49,7 @@ export interface GitlabProfile extends Record<string, any> {
 	commit_email: string;
 	shared_runners_minutes_limit: number;
 	extra_shared_runners_minutes_limit: number;
+	email_verified?: boolean | undefined;
 }
 
 export interface GitlabOptions extends ProviderOptions<GitlabProfile> {
@@ -64,7 +65,7 @@ const cleanDoubleSlashes = (input: string = "") => {
 };
 
 const issuerToEndpoints = (issuer?: string | undefined) => {
-	let baseUrl = issuer || "https://gitlab.com";
+	const baseUrl = issuer || "https://gitlab.com";
 	return {
 		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),
 		tokenEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/token`),
@@ -135,13 +136,15 @@ export const gitlab = (options: GitlabOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
+			// GitLab may provide email_verified claim, but it's not guaranteed.
+			// We check for it first, then default to false for security consistency.
 			return {
 				user: {
 					id: profile.id,
 					name: profile.name ?? profile.username,
 					email: profile.email,
 					image: profile.avatar_url,
-					emailVerified: true,
+					emailVerified: profile.email_verified ?? false,
 					...userMap,
 				},
 				data: profile,

@@ -6,7 +6,16 @@ import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
@@ -22,6 +31,13 @@ interface OneTapOptions {
 	clientId?: string | undefined;
 }
 
+const oneTapCallbackBodySchema = z.object({
+	idToken: z.string().meta({
+		description:
+			"Google ID token, which the client obtains from the One Tap API",
+	}),
+});
+
 export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
@@ -30,12 +46,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				"/one-tap/callback",
 				{
 					method: "POST",
-					body: z.object({
-						idToken: z.string().meta({
-							description:
-								"Google ID token, which the client obtains from the One Tap API",
-						}),
-					}),
+					body: oneTapCallbackBodySchema,
 					metadata: {
 						openapi: {
 							summary: "One tap callback",
@@ -85,7 +96,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 							},
 						);
 						payload = verifiedPayload;
-					} catch (error) {
+					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -146,8 +157,8 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
-							accountLinking?.enabled &&
-							(accountLinking.trustedProviders?.includes("google") ||
+							accountLinking?.enabled !== false &&
+							(accountLinking?.trustedProviders?.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
@@ -186,4 +197,5 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

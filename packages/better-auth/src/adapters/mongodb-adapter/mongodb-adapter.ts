@@ -1,15 +1,24 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
 	DBAdapter,
 	DBAdapterDebugLogOption,
 	Where,
 } from "@better-auth/core/db/adapter";
-import { ClientSession, type Db, type MongoClient, ObjectId } from "mongodb";
-import {
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-	createAdapterFactory,
-} from "../adapter-factory";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type { ClientSession, Db, MongoClient } from "mongodb";
+import { ObjectId } from "mongodb";
+
+class MongoAdapterError extends Error {
+	constructor(
+		public code: "INVALID_ID" | "UNSUPPORTED_OPERATOR",
+		message: string,
+	) {
+		super(message);
+		this.name = "MongoAdapterError";
+	}
+}
 
 export interface MongoDBAdapterConfig {
 	/**
@@ -32,9 +41,11 @@ export interface MongoDBAdapterConfig {
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * ⚠️ Important:
+	 * - Defaults to `true` when a MongoDB client is provided.
+	 * - If your MongoDB instance does not support transactions
+	 *   (e.g. standalone server without a replica set),
+	 *   you must explicitly set `transaction: false`.
 	 */
 	transaction?: boolean | undefined;
 }
@@ -46,8 +57,7 @@ export const mongodbAdapter = (
 	let lazyOptions: BetterAuthOptions | null;
 
 	const getCustomIdGenerator = (options: BetterAuthOptions) => {
-		const generator =
-			options.advanced?.database?.generateId || options.advanced?.generateId;
+		const generator = options.advanced?.database?.generateId;
 		if (typeof generator === "function") {
 			return generator;
 		}
@@ -101,25 +111,21 @@ export const mongodbAdapter = (
 								if (typeof v === "string") {
 									try {
 										return new ObjectId(v);
-									} catch (e) {
+									} catch {
 										return v;
 									}
 								}
 								if (v instanceof ObjectId) {
 									return v;
 								}
-								throw new Error(
-									"Invalid id value, recieved: " + JSON.stringify(v),
-								);
+								throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 							});
 						}
-						throw new Error(
-							"Invalid id value, recieved: " + JSON.stringify(value),
-						);
+						throw new MongoAdapterError("INVALID_ID", "Invalid id value");
 					}
 					try {
 						return new ObjectId(value);
-					} catch (e) {
+					} catch {
 						return value;
 					}
 				}
@@ -257,7 +263,10 @@ export const mongodbAdapter = (
 							};
 							break;
 						default:
-							throw new Error(`Unsupported operator: ${operator}`);
+							throw new MongoAdapterError(
+								"UNSUPPORTED_OPERATOR",
+								`Unsupported operator: ${operator}`,
+							);
 					}
 					return { condition, connector };
 				});
@@ -318,7 +327,7 @@ export const mongodbAdapter = (
 							// For unique relationships, limit is ignored (as per JoinConfig type)
 							// For non-unique relationships, apply limit if specified
 							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;
@@ -428,7 +437,7 @@ export const mongodbAdapter = (
 								joinConfig.relation !== "one-to-one" &&
 								joinConfig.limit !== undefined;
 
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;
@@ -525,10 +534,12 @@ export const mongodbAdapter = (
 						{
 							session,
 							returnDocument: "after",
+							includeResultMetadata: true,
 						},
 					);
-					if (!res) return null;
-					return res as any;
+					const doc = (res as any)?.value ?? null;
+					if (!doc) return null;
+					return doc as any;
 				},
 				async updateMany({ model, where, update: values }) {
 					const clause = convertWhereClause({ where, model });
@@ -572,6 +583,7 @@ export const mongodbAdapter = (
 			mapKeysTransformOutput: {
 				_id: "id",
 			},
+			supportsArrays: true,
 			supportsNumericIds: false,
 			transaction:
 				config?.client && (config?.transaction ?? true)
@@ -616,7 +628,7 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action === "update") {
+					if (action !== "create") {
 						return data;
 					}
 					if (Array.isArray(data)) {
@@ -625,7 +637,7 @@ export const mongodbAdapter = (
 								try {
 									const oid = new ObjectId(v);
 									return oid;
-								} catch (error) {
+								} catch {
 									return v;
 								}
 							}
@@ -636,8 +648,8 @@ export const mongodbAdapter = (
 						try {
 							const oid = new ObjectId(data);
 							return oid;
-						} catch (error) {
-							return new ObjectId();
+						} catch {
+							return data;
 						}
 					}
 					if (

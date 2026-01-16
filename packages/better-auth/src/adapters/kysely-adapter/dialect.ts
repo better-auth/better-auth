@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
+import type { Dialect } from "kysely";
 import {
-	type Dialect,
 	Kysely,
 	MssqlDialect,
 	MysqlDialect,
@@ -114,7 +114,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 		let DatabaseSync: typeof import("node:sqlite").DatabaseSync | undefined =
 			undefined;
 		try {
-			let nodeSqlite: string = "node:sqlite";
+			const nodeSqlite: string = "node:sqlite";
 			// Ignore both Vite and Webpack for dynamic import as they both try to pre-bundle 'node:sqlite' which might fail
 			// It's okay because we are in a try-catch block
 			({ DatabaseSync } = await import(

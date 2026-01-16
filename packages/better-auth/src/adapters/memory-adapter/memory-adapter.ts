@@ -4,8 +4,8 @@ import type {
 	DBAdapterDebugLogOption,
 	JoinConfig,
 } from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
 import { logger } from "@better-auth/core/env";
-import { createAdapterFactory } from "../adapter-factory";
 
 export interface MemoryDB {
 	[key: string]: any[];
@@ -20,12 +20,13 @@ export const memoryAdapter = (
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	let adapterCreator = createAdapterFactory({
+	const adapterCreator = createAdapterFactory({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
 			usePlural: false,
 			debugLogs: config?.debugLogs || false,
+			supportsArrays: true,
 			customTransformInput(props) {
 				const useNumberId =
 					props.options.advanced?.database?.useNumberId ||
@@ -36,7 +37,7 @@ export const memoryAdapter = (
 				return props.data;
 			},
 			transaction: async (cb) => {
-				let clone = structuredClone(db);
+				const clone = structuredClone(db);
 				try {
 					const r = await cb(adapterCreator(lazyOptions!));
 					return r;
@@ -274,7 +275,7 @@ export const memoryAdapter = (
 					return record;
 				},
 				findMany: async ({ model, where, sortBy, limit, offset, join }) => {
-					let res = convertWhereClause(where || [], model, join);
+					const res = convertWhereClause(where || [], model, join);
 
 					if (join) {
 						// When join is present, res is an array of nested objects

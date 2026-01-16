@@ -5,7 +5,7 @@ import { signJWT } from "better-auth/crypto";
 import { getTestInstance } from "better-auth/test";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, expect, test, vi } from "vitest";
 
 const DEFAULT_SECRET = "better-auth-secret-123456789";
 const mswServer = setupServer();
@@ -45,7 +45,8 @@ afterAll(() => mswServer.close());
 
 test("should login with google successfully", async () => {
 	let latestOauthStore: Record<string, any> | null = null;
-	const { client } = await getTestInstance({
+	const log = vi.fn();
+	const { auth, client } = await getTestInstance({
 		secret: DEFAULT_SECRET,
 		hooks: {
 			after: createAuthMiddleware(async (ctx) => {
@@ -54,7 +55,40 @@ test("should login with google successfully", async () => {
 				}
 			}),
 		},
+		logger: {
+			log,
+		},
 	});
+
+	{
+		const response = await auth.api.signInSocial({
+			body: { provider: "microsoft" },
+			asResponse: true,
+		});
+
+		expect(response).toBeInstanceOf(Response);
+		expect(log).toHaveBeenCalledOnce();
+		expect(log).toHaveBeenCalledWith(
+			"error",
+			"Provider not found. Make sure to add the provider in your auth config",
+			{
+				provider: "microsoft",
+			},
+		);
+	}
+	log.mockClear();
+
+	{
+		{
+			const response = await auth.api.signInSocial({
+				body: { provider: "google" },
+				asResponse: true,
+			});
+
+			expect(response).toBeInstanceOf(Response);
+			expect(log).not.toHaveBeenCalled();
+		}
+	}
 
 	const headers = new Headers();
 
@@ -104,4 +138,33 @@ test("should login with google successfully", async () => {
 		expiresAt: expect.any(Number),
 		invitedBy: "user-123",
 	});
+});
+
+test("should use custom authorizationEndpoint when provided", async () => {
+	const customAuthEndpoint = "http://localhost:8080/custom-oauth/authorize";
+
+	const { client } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		socialProviders: {
+			google: {
+				clientId: "test-client-id",
+				clientSecret: "test-client-secret",
+				authorizationEndpoint: customAuthEndpoint,
+			},
+		},
+	});
+
+	const signInRes = await client.signIn.social({
+		provider: "google",
+		callbackURL: "/dashboard",
+	});
+
+	expect(signInRes.data).toMatchObject({
+		url: expect.stringContaining(customAuthEndpoint),
+		redirect: true,
+	});
+
+	// Verify it uses custom endpoint instead of default google.com
+	expect(signInRes.data?.url).not.toContain("accounts.google.com");
+	expect(signInRes.data?.url).toContain("localhost:8080");
 });

@@ -1,8 +1,15 @@
 import { useAtom } from "jotai";
-import { Moon, PlusIcon, Sun } from "lucide-react";
+import { CircleX, ListFilter, Moon, PlusIcon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
+import {
+	Accordion,
+	AccordionContent,
+	AccordionItem,
+	AccordionTrigger,
+} from "../ui/accordion";
+import { Button } from "../ui/button";
 import {
 	Card,
 	CardContent,
@@ -10,6 +17,7 @@ import {
 	CardHeader,
 	CardTitle,
 } from "../ui/card";
+import { Checkbox } from "../ui/checkbox";
 import {
 	Dialog,
 	DialogContent,
@@ -18,19 +26,26 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "../ui/dialog";
+import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { ScrollArea } from "../ui/scroll-area";
-import { Separator } from "../ui/separator";
 import { Switch } from "../ui/switch";
 import CodeTabs from "./code-tabs";
 import SignIn from "./sign-in";
 import { SignUp } from "./sign-up";
 import { socialProviders } from "./social-provider";
-import { optionsAtom } from "./store";
+import { defaultOptions, optionsAtom } from "./store";
 import { AuthTabs } from "./tabs";
 
-const frameworks = [
+const frameworks: {
+	id: string;
+	title: string;
+	description: string;
+	Icon: React.ComponentType;
+	disabled?: boolean;
+}[] = [
 	{
+		id: "nextjs",
 		title: "Next.js",
 		description: "The React Framework for Production",
 		Icon: () => (
@@ -39,6 +54,7 @@ const frameworks = [
 				width="2em"
 				height="2em"
 				viewBox="0 0 15 15"
+				aria-hidden="true"
 			>
 				<path
 					fill="currentColor"
@@ -50,6 +66,7 @@ const frameworks = [
 		),
 	},
 	{
+		id: "nuxt",
 		title: "Nuxt",
 		description: "The Intuitive Vue Framework",
 		Icon: () => (
@@ -58,6 +75,7 @@ const frameworks = [
 				width="2em"
 				height="2em"
 				viewBox="0 0 256 256"
+				aria-hidden="true"
 			>
 				<g fill="none">
 					<rect width="256" height="256" fill="#242938" rx="60"></rect>
@@ -70,6 +88,7 @@ const frameworks = [
 		),
 	},
 	{
+		id: "svelte-kit",
 		title: "SvelteKit",
 		description: "Web development for the rest of us",
 		Icon: () => (
@@ -78,6 +97,7 @@ const frameworks = [
 				width="2em"
 				height="2em"
 				viewBox="0 0 256 256"
+				aria-hidden="true"
 			>
 				<g fill="none">
 					<rect width="256" height="256" fill="#FF3E00" rx="60"></rect>
@@ -101,8 +121,10 @@ const frameworks = [
 		),
 	},
 	{
+		id: "solid-start",
 		title: "SolidStart",
 		description: "Fine-grained reactivity goes fullstack",
+		disabled: true,
 		Icon: () => (
 			<svg
 				data-hk="00000010210"
@@ -111,7 +133,7 @@ const frameworks = [
 				viewBox="0 0 500 500"
 				fill="none"
 				xmlns="http://www.w3.org/2000/svg"
-				role="presentation"
+				aria-hidden="true"
 			>
 				<path
 					d="M233.205 430.856L304.742 425.279C304.742 425.279 329.208 421.295 343.569 397.659L293.041 385.443L233.205 430.856Z"
@@ -241,10 +263,80 @@ const frameworks = [
 ];
 
 export function Builder() {
+	const [framework, setFramework] = useState("nextjs");
 	const [currentStep, setCurrentStep] = useState(0);
 
 	const [options, setOptions] = useAtom(optionsAtom);
 	const { setTheme, resolvedTheme } = useTheme();
+
+	const [socialProviderSearchInput, setSocialProviderSearchInputState] =
+		useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
+	const [debounceTimer, setDebounceTimer] = useState<number | null>(null);
+
+	const setSocialProviderSearchInput = (value: string) => {
+		setSocialProviderSearchInputState(value);
+
+		if (value === "") {
+			if (debounceTimer) {
+				clearTimeout(debounceTimer);
+			}
+			setDebouncedSearch("");
+			setDebounceTimer(null);
+			return;
+		}
+
+		if (debounceTimer) {
+			clearTimeout(debounceTimer);
+		}
+
+		const id = window.setTimeout(() => {
+			setDebouncedSearch(value);
+			setDebounceTimer(null);
+		}, 300);
+
+		setDebounceTimer(id);
+	};
+
+	const filteredSocialProviders = useMemo(() => {
+		const providers = Object.entries(socialProviders);
+		if (debouncedSearch.length === 0) {
+			return providers;
+		}
+
+		return providers.filter(([name]) =>
+			name.toLowerCase().includes(debouncedSearch.toLowerCase()),
+		);
+	}, [debouncedSearch]);
+
+	const resetSocialProviderSearch = () => {
+		setSocialProviderSearchInput("");
+	};
+
+	const reset = () => {
+		setOptions(defaultOptions);
+		setFramework("nextjs");
+	};
+
+	const isModified = useMemo(() => {
+		const optionKeys = Object.keys(
+			defaultOptions,
+		) as (keyof typeof defaultOptions)[];
+		return optionKeys.some((key) => {
+			const optionValue = options[key];
+			const defaultValue = defaultOptions[key];
+			if (Array.isArray(optionValue) && Array.isArray(defaultValue)) {
+				if (optionValue.length !== (defaultValue as any).length) {
+					return true;
+				}
+				return optionValue.some(
+					(val, index) => val !== (defaultValue as any)?.[index],
+				);
+			}
+			return optionValue !== defaultValue;
+		});
+	}, [debouncedSearch, options]);
+
 	return (
 		<Dialog>
 			<DialogTrigger asChild>
@@ -259,8 +351,8 @@ export function Builder() {
 					<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
 				</button>
 			</DialogTrigger>
-			<DialogContent className="max-w-7xl h-5/6 overflow-clip !rounded-none">
-				<DialogHeader>
+			<DialogContent className="@container/create-box px-0! pb-0! max-w-7xl max-h-[85dvh] overflow-clip flex flex-col !rounded-none">
+				<DialogHeader className="px-6">
 					<DialogTitle>Create Sign in Box</DialogTitle>
 					<DialogDescription>
 						Configure the sign in box to your liking and copy the code to your
@@ -268,332 +360,356 @@ export function Builder() {
 					</DialogDescription>
 				</DialogHeader>
 
-				<div className="overflow-y-scroll no-scrollbar flex gap-4 md:gap-12 flex-col md:flex-row items-center md:items-start">
-					<div className={cn("w-4/12")}>
-						<div className="overflow-scroll h-[580px] relative no-scrollbar">
-							{options.signUp ? (
-								<AuthTabs
-									tabs={[
-										{
-											title: "Sign In",
-											value: "sign-in",
-											content: <SignIn />,
-										},
-										{
-											title: "Sign Up",
-											value: "sign-up",
-											content: <SignUp />,
-										},
-									]}
-								/>
-							) : (
-								<SignIn />
-							)}
-						</div>
+				<div className="flex-1 min-h-0 grid overflow-y-scroll no-scrollbar @5xl/create-box:grid-cols-9 border-t md:divide-x">
+					<div className="group/preview @5xl/create-box:col-span-4 flex @5xl/create-box:min-h-0 relative">
+						<ScrollArea className="size-full @5xl/create-box:min-h-0 relative">
+							<div className="absolute md:opacity-0 md:group-hover/preview:opacity-100 md:group-focus-within/preview:opacity-100 transition-opacity top-0 right-0 bg-background p-1 z-20">
+								<Button
+									size="icon"
+									variant="outline"
+									className="size-8"
+									onClick={() => {
+										if (resolvedTheme === "dark") {
+											setTheme("light");
+										} else {
+											setTheme("dark");
+										}
+									}}
+									aria-label="Toggle Theme"
+								>
+									{resolvedTheme === "dark" ? (
+										<Moon className="size-3.5" />
+									) : (
+										<Sun className="size-3.5" />
+									)}
+								</Button>
+							</div>
+							<div className="p-6 min-h-0 grid place-items-center">
+								<div className="max-w-md w-full">
+									{options.signUp ? (
+										<AuthTabs
+											tabs={[
+												{
+													title: "Sign In",
+													value: "sign-in",
+													content: <SignIn />,
+												},
+												{
+													title: "Sign Up",
+													value: "sign-up",
+													content: <SignUp />,
+												},
+											]}
+										/>
+									) : (
+										<SignIn />
+									)}
+								</div>
+							</div>
+						</ScrollArea>
 					</div>
-					<ScrollArea className="w-[45%] flex-grow no-scrollbar">
-						<div className="h-[580px]">
-							{currentStep === 0 ? (
-								<Card className="rounded-none flex-grow h-full">
-									<CardHeader className="flex flex-row justify-between">
-										<CardTitle>Configuration</CardTitle>
-										<div
-											className="cursor-pointer"
-											onClick={() => {
-												if (resolvedTheme === "dark") {
-													setTheme("light");
-												} else {
-													setTheme("dark");
-												}
-											}}
-										>
-											{resolvedTheme === "dark" ? (
-												<Moon onClick={() => setTheme("light")} size={18} />
-											) : (
-												<Sun onClick={() => setTheme("dark")} size={18} />
-											)}
-										</div>
-									</CardHeader>
-									<CardContent className="max-h-[400px] overflow-scroll">
-										<div className="flex flex-col gap-2">
-											<div>
-												<Label>Email & Password</Label>
-											</div>
-											<Separator />
-											<div className="flex items-center justify-between">
-												<div className="flex items-center">
-													<Label
-														className="cursor-pointer"
-														htmlFor="email-provider-email"
-													>
-														Enabled
-													</Label>
-												</div>
-												<Switch
-													id="email-provider-email"
-													checked={options.email}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															email: checked,
-															magicLink: checked ? false : prev.magicLink,
-															signUp: checked,
-														}));
-													}}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<Label
-														className="cursor-pointer"
-														htmlFor="email-provider-remember-me"
-													>
-														Remember Me
-													</Label>
-												</div>
-												<Switch
-													id="email-provider-remember-me"
-													checked={options.rememberMe}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															rememberMe: checked,
-														}));
-													}}
-												/>
-											</div>
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<Label
-														className="cursor-pointer"
-														htmlFor="email-provider-forget-password"
-													>
-														Forget Password
-													</Label>
-												</div>
-												<Switch
-													id="email-provider-forget-password"
-													checked={options.requestPasswordReset}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															requestPasswordReset: checked,
-														}));
-													}}
-												/>
-											</div>
-										</div>
-										<div className="flex flex-col gap-2 mt-4">
-											<div>
-												<Label>Social Providers</Label>
-											</div>
-											<Separator />
-											{Object.entries(socialProviders).map(
-												([provider, { Icon }]) => (
-													<div
-														className="flex items-center justify-between"
-														key={provider}
-													>
-														<div className="flex items-center gap-2">
-															<Icon />
-															<Label
-																className="cursor-pointer"
-																htmlFor={"social-provider".concat(
-																	"-",
-																	provider,
-																)}
-															>
-																{provider.charAt(0).toUpperCase() +
-																	provider.slice(1)}
-															</Label>
-														</div>
-														<Switch
-															id={"social-provider".concat("-", provider)}
-															checked={options.socialProviders.includes(
-																provider,
-															)}
-															onCheckedChange={(checked) => {
-																setOptions((prev) => ({
-																	...prev,
-																	socialProviders: checked
-																		? [...prev.socialProviders, provider]
-																		: prev.socialProviders.filter(
-																				(p) => p !== provider,
-																			),
-																}));
-															}}
-														/>
-													</div>
-												),
-											)}
-										</div>
-										<div className="flex flex-col gap-2 mt-4">
-											<div>
-												<Label>Plugins</Label>
-											</div>
-											<Separator />
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														width="1em"
-														height="1em"
-														viewBox="0 0 24 24"
-													>
-														<path
-															fill="currentColor"
-															d="M5 20q-.825 0-1.412-.587T3 18v-.8q0-.85.438-1.562T4.6 14.55q1.55-.775 3.15-1.162T11 13q.35 0 .7.013t.7.062q.275.025.437.213t.163.462q.05 1.175.575 2.213t1.4 1.762q.175.125.275.313t.1.412V19q0 .425-.288.713T14.35 20zm6-8q-1.65 0-2.825-1.175T7 8t1.175-2.825T11 4t2.825 1.175T15 8t-1.175 2.825T11 12m7.5 2q.425 0 .713-.288T19.5 13t-.288-.712T18.5 12t-.712.288T17.5 13t.288.713t.712.287m.15 8.65l-1-1q-.05-.05-.15-.35v-4.45q-1.1-.325-1.8-1.237T15 13.5q0-1.45 1.025-2.475T18.5 10t2.475 1.025T22 13.5q0 1.125-.638 2t-1.612 1.25l.9.9q.15.15.15.35t-.15.35l-.8.8q-.15.15-.15.35t.15.35l.8.8q.15.15.15.35t-.15.35l-1.3 1.3q-.15.15-.35.15t-.35-.15"
-														></path>
-													</svg>
-													<Label
-														className="cursor-pointer"
-														htmlFor="plugin-passkey"
-													>
-														Passkey
-													</Label>
-												</div>
-												<Switch
-													id="plugin-passkey"
-													checked={options.passkey}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															passkey: checked,
-														}));
-													}}
-												/>
-											</div>
-
-											<div className="flex items-center justify-between">
-												<div className="flex items-center gap-2">
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														width="1em"
-														height="1em"
-														viewBox="0 0 24 24"
-													>
-														<g fill="none">
-															<path d="m12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035q-.016-.005-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093q.019.005.029-.008l.004-.014l-.034-.614q-.005-.018-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z"></path>
-															<path
-																fill="currentColor"
-																d="M17.5 3a4.5 4.5 0 0 1 4.495 4.288L22 7.5V15a2 2 0 0 1-1.85 1.995L20 17h-3v3a1 1 0 0 1-1.993.117L15 20v-3H4a2 2 0 0 1-1.995-1.85L2 15V7.5a4.5 4.5 0 0 1 4.288-4.495L6.5 3zm-11 2A2.5 2.5 0 0 0 4 7.5V15h5V7.5A2.5 2.5 0 0 0 6.5 5M7 8a1 1 0 0 1 .117 1.993L7 10H6a1 1 0 0 1-.117-1.993L6 8z"
-															></path>
-														</g>
-													</svg>
-													<Label
-														className="cursor-pointer"
-														htmlFor="plugin-otp-magic-link"
-													>
-														Magic Link
-													</Label>
-												</div>
-												<Switch
-													id="plugin-otp-magic-link"
-													checked={options.magicLink}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															magicLink: checked,
-															email: checked ? false : prev.email,
-															signUp: checked ? false : prev.signUp,
-														}));
-													}}
-												/>
-											</div>
-										</div>
-										<div className="mt-4">
-											<Separator />
-											<div className="flex items-center justify-between mt-2">
-												<Label
-													className="cursor-pointer"
-													htmlFor="label-powered-by"
+					<div className="@5xl/create-box:col-span-5 @max-5xl/create-box:border-t flex @5xl/create-box:min-h-0">
+						<ScrollArea className="size-full h-full min-h-fit min-h-0 [&_[data-radix-scroll-area-viewport]>div]:min-h-full [&_[data-radix-scroll-area-viewport]>div]:flex! [&_[data-radix-scroll-area-viewport]>div]:flex-col">
+							<Card className="flex flex-col flex-grow h-full rounded-none border-none">
+								{currentStep === 0 && (
+									<>
+										<CardHeader className="flex flex-row items-center justify-between gap-4">
+											<CardTitle className="py-0.5">Configuration</CardTitle>
+											{isModified && (
+												<button
+													type="button"
+													className="text-xs px-1.5 py-0.5 hover:text-foreground focus-visible:text-foreground text-muted-foreground transition-colors uppercase"
+													onClick={reset}
 												>
-													Show Built with label
-												</Label>
-												<Switch
-													id="label-powered-by"
-													checked={options.label}
-													onCheckedChange={(checked) => {
-														setOptions((prev) => ({
-															...prev,
-															label: checked,
-														}));
-													}}
-												/>
-											</div>
-										</div>
-									</CardContent>
-									<CardFooter>
-										<button
-											className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white inline-block w-full"
-											onClick={() => {
-												setCurrentStep(currentStep + 1);
-											}}
-										>
-											<span className="absolute inset-0 overflow-hidden rounded-sm">
-												<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
-											</span>
-											<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 justify-center">
-												<span>Continue</span>
-											</div>
-											<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
-										</button>
-									</CardFooter>
-								</Card>
-							) : currentStep === 1 ? (
-								<Card className="rounded-none flex-grow  h-full">
-									<CardHeader>
-										<CardTitle>Choose Framework</CardTitle>
-										<p
-											className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
-											onClick={() => {
-												setCurrentStep(0);
-											}}
-										>
-											Go Back
-										</p>
-									</CardHeader>
-									<CardContent className="flex items-start gap-2 flex-wrap justify-between">
-										{frameworks.map((fm) => (
-											<div
-												onClick={() => {
-													if (fm.title === "Next.js") {
-														setCurrentStep(currentStep + 1);
-													}
-												}}
-												className={cn(
-													"flex flex-col items-center gap-4 border p-6 rounded-md w-5/12 flex-grow h-44 relative",
-													fm.title !== "Next.js"
-														? "opacity-55"
-														: "hover:ring-1 transition-all ring-border hover:bg-background duration-200 ease-in-out cursor-pointer",
-												)}
-												key={fm.title}
+													Reset
+												</button>
+											)}
+										</CardHeader>
+
+										<CardContent className="flex-1 @container/config">
+											<Accordion
+												type="multiple"
+												defaultValue={[
+													"email-and-password",
+													"social-providers",
+													"plugins",
+												]}
 											>
-												{fm.title !== "Next.js" && (
-													<span className="absolute top-4 right-4 text-xs">
-														Coming Soon
-													</span>
-												)}
-												<fm.Icon />
-												<Label className="text-2xl">{fm.title}</Label>
-												<p className="text-sm">{fm.description}</p>
-											</div>
-										))}
-									</CardContent>
-								</Card>
-							) : (
-								<Card className="rounded-none w-full overflow-y-hidden h-full overflow-auto">
-									<CardHeader>
-										<div className="flex flex-col -mb-2 items-start">
-											<CardTitle>Code</CardTitle>
-										</div>
-									</CardHeader>
-									<CardContent>
-										<div className="flex gap-2 items-baseline">
-											<p>
-												Copy the code below and paste it in your application to
-												get started.
-											</p>
+												<AccordionItem value="email-and-password">
+													<AccordionTrigger>Email & Password</AccordionTrigger>
+													<AccordionContent className="space-y-2 px-1 pt-1">
+														<div className="flex items-center justify-between">
+															<div className="flex items-center">
+																<Label
+																	className="cursor-pointer"
+																	htmlFor="email-provider-email"
+																>
+																	Enabled
+																</Label>
+															</div>
+															<Switch
+																id="email-provider-email"
+																checked={options.email}
+																onCheckedChange={(checked) => {
+																	setOptions((prev) => ({
+																		...prev,
+																		email: checked,
+																		magicLink: checked ? false : prev.magicLink,
+																		signUp: checked,
+																	}));
+																}}
+															/>
+														</div>
+														<div className="flex items-center justify-between">
+															<div className="flex items-center gap-2">
+																<Label
+																	className="cursor-pointer"
+																	htmlFor="email-provider-remember-me"
+																>
+																	Remember Me
+																</Label>
+															</div>
+															<Switch
+																id="email-provider-remember-me"
+																checked={options.rememberMe}
+																onCheckedChange={(checked) => {
+																	setOptions((prev) => ({
+																		...prev,
+																		rememberMe: checked,
+																	}));
+																}}
+															/>
+														</div>
+														<div className="flex items-center justify-between">
+															<div className="flex items-center gap-2">
+																<Label
+																	className="cursor-pointer"
+																	htmlFor="email-provider-forget-password"
+																>
+																	Forget Password
+																</Label>
+															</div>
+															<Switch
+																id="email-provider-forget-password"
+																checked={options.requestPasswordReset}
+																onCheckedChange={(checked) => {
+																	setOptions((prev) => ({
+																		...prev,
+																		requestPasswordReset: checked,
+																	}));
+																}}
+															/>
+														</div>
+													</AccordionContent>
+												</AccordionItem>
+												<AccordionItem value="social-providers">
+													<AccordionTrigger>Social providers</AccordionTrigger>
+													<AccordionContent className="space-y-4 px-1 pt-1">
+														<div className="relative">
+															<Input
+																placeholder="Filter by name..."
+																className="h-8 ps-9 pe-9"
+																value={socialProviderSearchInput}
+																onChange={(e) =>
+																	setSocialProviderSearchInput(e.target.value)
+																}
+															/>
+															<div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 text-muted-foreground/80">
+																<ListFilter className="size-4" />
+															</div>
+															{socialProviderSearchInput?.length > 0 && (
+																<button
+																	type="button"
+																	className="text-muted-foreground/80 hover:text-foreground focus-visible:outline-ring/70 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-lg outline-offset-2 transition-colors focus:z-10 focus-visible:outline focus-visible:outline-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
+																	onClick={resetSocialProviderSearch}
+																	aria-label="Clear filter"
+																>
+																	<CircleX className="size-4" />
+																</button>
+															)}
+														</div>
+														<div className="grid gap-2 grid-cols-1 @sm/config:grid-cols-2 @md/config:grid-cols-3 @xl/config:grid-cols-4">
+															{filteredSocialProviders
+																.sort(([a], [b]) => a.localeCompare(b))
+																.map(([provider, { Icon }]) => (
+																	<Label
+																		key={provider}
+																		htmlFor={"social-provider".concat(
+																			"-",
+																			provider,
+																		)}
+																		className={cn(
+																			"px-2.5 py-2 rounded-lg border transition-colors flex flex-col items-center justify-center",
+																			options.socialProviders.includes(provider)
+																				? "border-primary"
+																				: "",
+																		)}
+																	>
+																		<Icon />
+																		<span className="text-xs break-all text-center">
+																			{provider.charAt(0).toUpperCase() +
+																				provider.slice(1)}
+																		</span>
+																		<Checkbox
+																			id={"social-provider".concat(
+																				"-",
+																				provider,
+																			)}
+																			className="hidden"
+																			checked={options.socialProviders.includes(
+																				provider,
+																			)}
+																			onCheckedChange={(checked) => {
+																				setOptions((prev) => ({
+																					...prev,
+																					socialProviders: checked
+																						? [
+																								...prev.socialProviders,
+																								provider,
+																							]
+																						: prev.socialProviders.filter(
+																								(p) => p !== provider,
+																							),
+																				}));
+																			}}
+																		/>
+																	</Label>
+																))}
+															{filteredSocialProviders.length === 0 && (
+																<div className="col-span-full flex flex-col gap-2 items-center justify-center py-10 border border-dashed bg-muted dark:bg-muted/20">
+																	No providers found.
+																	<Button
+																		size="sm"
+																		className="text-xs gap-1"
+																		onClick={resetSocialProviderSearch}
+																	>
+																		<X className="-ms-1 size-3.5" />
+																		Clear filter
+																	</Button>
+																</div>
+															)}
+														</div>
+													</AccordionContent>
+												</AccordionItem>
+												<AccordionItem value="plugins" className="border-b!">
+													<AccordionTrigger>Plugins</AccordionTrigger>
+													<AccordionContent className="space-y-2 px-1 pt-1">
+														<div className="flex items-center justify-between">
+															<div className="flex items-center gap-2">
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	width="1em"
+																	height="1em"
+																	viewBox="0 0 24 24"
+																	aria-hidden="true"
+																>
+																	<path
+																		fill="currentColor"
+																		d="M5 20q-.825 0-1.412-.587T3 18v-.8q0-.85.438-1.562T4.6 14.55q1.55-.775 3.15-1.162T11 13q.35 0 .7.013t.7.062q.275.025.437.213t.163.462q.05 1.175.575 2.213t1.4 1.762q.175.125.275.313t.1.412V19q0 .425-.288.713T14.35 20zm6-8q-1.65 0-2.825-1.175T7 8t1.175-2.825T11 4t2.825 1.175T15 8t-1.175 2.825T11 12m7.5 2q.425 0 .713-.288T19.5 13t-.288-.712T18.5 12t-.712.288T17.5 13t.288.713t.712.287m.15 8.65l-1-1q-.05-.05-.15-.35v-4.45q-1.1-.325-1.8-1.237T15 13.5q0-1.45 1.025-2.475T18.5 10t2.475 1.025T22 13.5q0 1.125-.638 2t-1.612 1.25l.9.9q.15.15.15.35t-.15.35l-.8.8q-.15.15-.15.35t.15.35l.8.8q.15.15.15.35t-.15.35l-1.3 1.3q-.15.15-.35.15t-.35-.15"
+																	></path>
+																</svg>
+																<Label
+																	className="cursor-pointer"
+																	htmlFor="plugin-passkey"
+																>
+																	Passkey
+																</Label>
+															</div>
+															<Switch
+																id="plugin-passkey"
+																checked={options.passkey}
+																onCheckedChange={(checked) => {
+																	setOptions((prev) => ({
+																		...prev,
+																		passkey: checked,
+																	}));
+																}}
+															/>
+														</div>
+
+														<div className="flex items-center justify-between">
+															<div className="flex items-center gap-2">
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	width="1em"
+																	height="1em"
+																	viewBox="0 0 24 24"
+																	aria-hidden="true"
+																>
+																	<g fill="none">
+																		<path d="m12.593 23.258l-.011.002l-.071.035l-.02.004l-.014-.004l-.071-.035q-.016-.005-.024.005l-.004.01l-.017.428l.005.02l.01.013l.104.074l.015.004l.012-.004l.104-.074l.012-.016l.004-.017l-.017-.427q-.004-.016-.017-.018m.265-.113l-.013.002l-.185.093l-.01.01l-.003.011l.018.43l.005.012l.008.007l.201.093q.019.005.029-.008l.004-.014l-.034-.614q-.005-.018-.02-.022m-.715.002a.02.02 0 0 0-.027.006l-.006.014l-.034.614q.001.018.017.024l.015-.002l.201-.093l.01-.008l.004-.011l.017-.43l-.003-.012l-.01-.01z"></path>
+																		<path
+																			fill="currentColor"
+																			d="M17.5 3a4.5 4.5 0 0 1 4.495 4.288L22 7.5V15a2 2 0 0 1-1.85 1.995L20 17h-3v3a1 1 0 0 1-1.993.117L15 20v-3H4a2 2 0 0 1-1.995-1.85L2 15V7.5a4.5 4.5 0 0 1 4.288-4.495L6.5 3zm-11 2A2.5 2.5 0 0 0 4 7.5V15h5V7.5A2.5 2.5 0 0 0 6.5 5M7 8a1 1 0 0 1 .117 1.993L7 10H6a1 1 0 0 1-.117-1.993L6 8z"
+																		></path>
+																	</g>
+																</svg>
+																<Label
+																	className="cursor-pointer"
+																	htmlFor="plugin-otp-magic-link"
+																>
+																	Magic Link
+																</Label>
+															</div>
+															<Switch
+																id="plugin-otp-magic-link"
+																checked={options.magicLink}
+																onCheckedChange={(checked) => {
+																	setOptions((prev) => ({
+																		...prev,
+																		magicLink: checked,
+																		email: checked ? false : prev.email,
+																		signUp: checked ? false : prev.signUp,
+																	}));
+																}}
+															/>
+														</div>
+													</AccordionContent>
+												</AccordionItem>
+												<div className="flex items-center justify-between py-4">
+													<Label
+														className="cursor-pointer"
+														htmlFor="label-powered-by"
+													>
+														Show Built with label
+													</Label>
+													<Switch
+														id="label-powered-by"
+														checked={options.label}
+														onCheckedChange={(checked) => {
+															setOptions((prev) => ({
+																...prev,
+																label: checked,
+															}));
+														}}
+													/>
+												</div>
+											</Accordion>
+										</CardContent>
+
+										<CardFooter>
+											<button
+												className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white inline-block w-full"
+												onClick={() => {
+													setCurrentStep(currentStep + 1);
+												}}
+											>
+												<span className="absolute inset-0 overflow-hidden rounded-sm">
+													<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
+												</span>
+												<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 justify-center">
+													<span>Continue</span>
+												</div>
+												<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
+											</button>
+										</CardFooter>
+									</>
+								)}
+
+								{currentStep === 1 && (
+									<>
+										<CardHeader>
+											<CardTitle>Choose Framework</CardTitle>
 											<p
 												className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
 												onClick={() => {
@@ -602,15 +718,66 @@ export function Builder() {
 											>
 												Go Back
 											</p>
-										</div>
-										<div>
-											<CodeTabs />
-										</div>
-									</CardContent>
-								</Card>
-							)}
-						</div>
-					</ScrollArea>
+										</CardHeader>
+										<CardContent className="flex items-start justify-center gap-2 flex-wrap justify-between">
+											{frameworks.map((fm) => (
+												<div
+													onClick={() => {
+														if (fm.disabled !== true) {
+															setCurrentStep(currentStep + 1);
+															setFramework(fm.id);
+														}
+													}}
+													className={cn(
+														"flex flex-col items-center gap-4 border p-6 rounded-md w-5/12 flex-grow h-44 relative",
+														fm.disabled === true
+															? "opacity-55"
+															: "hover:ring-1 transition-all ring-border hover:bg-background duration-200 ease-in-out cursor-pointer",
+													)}
+													key={fm.id}
+												>
+													{fm.disabled === true && (
+														<span className="absolute top-4 right-4 text-xs">
+															Coming Soon
+														</span>
+													)}
+													<fm.Icon />
+													<Label className="text-2xl">{fm.title}</Label>
+													<p className="text-sm">{fm.description}</p>
+												</div>
+											))}
+										</CardContent>
+									</>
+								)}
+
+								{currentStep === 2 && (
+									<>
+										<CardHeader className="flex flex-row justify-between gap-2">
+											<CardTitle>Code</CardTitle>
+											<p
+												className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
+												onClick={() => {
+													setCurrentStep(0);
+												}}
+											>
+												Go Back
+											</p>
+										</CardHeader>
+
+										<CardContent>
+											<div className="flex gap-2 items-baseline">
+												<p>
+													Copy the code below and paste it in your application
+													to get started.
+												</p>
+											</div>
+											<CodeTabs framework={framework} />
+										</CardContent>
+									</>
+								)}
+							</Card>
+						</ScrollArea>
+					</div>
 				</div>
 			</DialogContent>
 		</Dialog>

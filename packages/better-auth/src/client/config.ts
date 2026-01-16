@@ -3,9 +3,9 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
-import { type WritableAtom } from "nanostores";
+import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
-import { redirectPlugin, userAgentPlugin } from "./fetch-plugins";
+import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
 
@@ -32,8 +32,13 @@ export const getClientConfig = (
 			onResponse: options?.fetchOptions?.onResponse,
 		},
 	};
-	const { onSuccess, onError, onRequest, onResponse, ...restOfFetchOptions } =
-		options?.fetchOptions || {};
+	const {
+		onSuccess: _onSuccess,
+		onError: _onError,
+		onRequest: _onRequest,
+		onResponse: _onResponse,
+		...restOfFetchOptions
+	} = options?.fetchOptions || {};
 	const $fetch = createFetch({
 		baseURL,
 		...(isCredentialsSupported ? { credentials: "include" } : {}),
@@ -50,7 +55,6 @@ export const getClientConfig = (
 		...restOfFetchOptions,
 		plugins: [
 			lifeCyclePlugin,
-			userAgentPlugin,
 			...(restOfFetchOptions.plugins || []),
 			...(options?.disableDefaultFetchPlugins ? [] : [redirectPlugin]),
 			...pluginsFetchPlugins,
@@ -58,12 +62,12 @@ export const getClientConfig = (
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
-	let pluginsActions = {} as Record<string, any>;
-	let pluginsAtoms = {
+	const pluginsActions = {} as Record<string, any>;
+	const pluginsAtoms = {
 		$sessionSignal,
 		session,
 	} as Record<string, WritableAtom<any>>;
-	let pluginPathMethods: Record<string, "POST" | "GET"> = {
+	const pluginPathMethods: Record<string, "POST" | "GET"> = {
 		"/sign-out": "POST",
 		"/revoke-sessions": "POST",
 		"/revoke-other-sessions": "POST",

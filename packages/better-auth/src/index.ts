@@ -6,9 +6,12 @@ export * from "@better-auth/core/db";
 export * from "@better-auth/core/env";
 export * from "@better-auth/core/error";
 export * from "@better-auth/core/oauth2";
-export * from "@better-auth/core/utils";
+export * from "@better-auth/core/utils/error-codes";
+export * from "@better-auth/core/utils/id";
+export * from "@better-auth/core/utils/json";
 //#endregion
-export * from "./auth";
+export { betterAuth } from "./auth";
+// @ts-expect-error
 export * from "./types";
 export * from "./utils";
 // export this as we are referencing OAuth2Tokens in the `refresh-token` api as return type
@@ -20,6 +23,7 @@ export {
 	type TelemetryEvent,
 } from "@better-auth/telemetry";
 // re-export third party types
+// @ts-expect-error
 export type * from "better-call";
 export type { JSONWebKeySet, JWTPayload } from "jose";
 export type * from "zod";

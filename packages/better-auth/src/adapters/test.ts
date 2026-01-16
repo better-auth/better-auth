@@ -1,13 +1,13 @@
-import type { BetterAuthOptions } from "@better-auth/core";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { generateId } from "@better-auth/core/utils/id";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { User } from "../types";
-import { generateId } from "../utils";
 
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<DBAdapter<BetterAuthOptions>> | DBAdapter<BetterAuthOptions>;
+	) => Awaitable<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -98,7 +98,7 @@ function adapterTest(
 	const getUniqueEmail = (base: string) => `${testRunId}_${base}`;
 
 	//@ts-expect-error - intentionally omitting id
-	let user: {
+	const user: {
 		name: string;
 		email: string;
 		emailVerified: boolean;

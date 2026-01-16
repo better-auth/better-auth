@@ -4,6 +4,14 @@ import type {
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"last-login-method": {
+			creator: typeof lastLoginMethod;
+		};
+	}
+}
 /**
  * Configuration for tracking different authentication methods
  */
@@ -64,6 +72,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 			);
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
+		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
 		return null;
 	};
 
@@ -144,7 +153,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 								// Inherit cookie attributes from Better Auth's centralized cookie system
 								// This ensures consistency with cross-origin, cross-subdomain, and security settings
 								const cookieAttributes = {
-									...ctx.context.authCookies.sessionToken.options,
+									...ctx.context.authCookies.sessionToken.attributes,
 									maxAge: config.maxAge,
 									httpOnly: false, // Override: plugin cookies are not httpOnly
 								};
@@ -187,5 +196,6 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 					};
 				}
 			: undefined,
+		options: userConfig as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 };
