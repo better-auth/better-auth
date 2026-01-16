@@ -368,12 +368,12 @@ export const magicLink = (options: MagicLinkOptions) => {
 						name?: string | undefined;
             attempt: number;
 					};
-					if (attempt && attempt >= opts.allowedAttempts) {
+					if (attempt >= opts.allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
 
-						throw ctx.redirect(`${errorCallbackURL}?error=INVALID_TOKEN`);
+						throw ctx.redirect(`${errorCallbackURL}?error=ATTEMPTS_EXCEEDED`);
 					}
 					await ctx.context.internalAdapter.updateVerificationValue(
 						tokenValue.id,

@@ -73,7 +73,7 @@ describe("magic link", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=INVALID_TOKEN");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
 				},
 			},
 		);
@@ -506,7 +506,7 @@ describe("magic link allowedAttempts", async () => {
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 
-		// Second attempt should be rejected with INVALID_TOKEN
+		// Second attempt should be rejected with ATTEMPTS_EXCEEDED
 		await client.magicLink.verify(
 			{
 				query: {
@@ -517,7 +517,7 @@ describe("magic link allowedAttempts", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=INVALID_TOKEN");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
 				},
 				onSuccess() {
 					throw new Error("Should not succeed");
@@ -575,7 +575,7 @@ describe("magic link allowedAttempts", async () => {
 			expect(betterAuthCookie).toBeDefined();
 		}
 
-		// Fourth attempt should be rejected with INVALID_TOKEN
+		// Fourth attempt should be rejected with ATTEMPTS_EXCEEDED
 		await client.magicLink.verify(
 			{
 				query: {
@@ -586,7 +586,7 @@ describe("magic link allowedAttempts", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=INVALID_TOKEN");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
 				},
 				onSuccess() {
 					throw new Error("Should not succeed");
