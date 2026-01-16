@@ -8,6 +8,7 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
+	getCheckoutStatus,
 	listActiveSubscriptions,
 	restoreSubscription,
 	stripeWebhook,
@@ -44,6 +45,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		listActiveSubscriptions: listActiveSubscriptions(options),
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
+		getCheckoutStatus: getCheckoutStatus(options),
 	};
 
 	return {

@@ -200,6 +200,18 @@ const upgradeSubscriptionBodySchema = z.object({
 			description: "Disable redirect after successful subscription. Eg: true",
 		})
 		.default(false),
+	/**
+	 * Use Stripe Embedded Checkout instead of Stripe-hosted checkout.
+	 * When enabled, returns a `clientSecret` for use with Stripe Elements.
+	 * @see https://docs.stripe.com/checkout/embedded/quickstart
+	 */
+	embeddedCheckout: z
+		.boolean()
+		.meta({
+			description:
+				"Use embedded checkout mode. Returns clientSecret instead of redirect URL. Eg: true",
+		})
+		.optional(),
 });
 
 /**
@@ -688,9 +700,29 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					);
 				}
 			}
+
+			// Build checkout session parameters based on mode
+			const isEmbedded = ctx.body.embeddedCheckout === true;
+
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
+						...(isEmbedded
+							? {
+									ui_mode: "embedded" as const,
+									return_url: ctx.body.returnUrl || ctx.body.successUrl,
+								}
+							: {
+									success_url: getUrl(
+										ctx,
+										`${
+											ctx.context.baseURL
+										}/subscription/success?callbackURL=${encodeURIComponent(
+											ctx.body.successUrl,
+										)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
+									),
+									cancel_url: getUrl(ctx, ctx.body.cancelUrl),
+								}),
 						...(customerId
 							? {
 									customer: customerId,
@@ -702,15 +734,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							: {
 									customer_email: user.email,
 								}),
-						success_url: getUrl(
-							ctx,
-							`${
-								ctx.context.baseURL
-							}/subscription/success?callbackURL=${encodeURIComponent(
-								ctx.body.successUrl,
-							)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
-						),
-						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
 							{
 								price: priceIdToUse,
@@ -746,9 +769,90 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						code: e.code,
 					});
 				});
+
+			// Return different response based on mode
+			if (isEmbedded) {
+				return ctx.json({
+					clientSecret: checkoutSession.client_secret,
+					sessionId: checkoutSession.id,
+				});
+			}
+
 			return ctx.json({
 				...checkoutSession,
 				redirect: !ctx.body.disableRedirect,
+			});
+		},
+	);
+};
+
+/**
+ * ### Endpoint
+ *
+ * GET `/subscription/checkout-status`
+ *
+ * Retrieves the status of an embedded checkout session.
+ * Use this on your return page to check if the checkout completed successfully.
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.getCheckoutStatus`
+ *
+ * **client:**
+ * `authClient.subscription.getCheckoutStatus`
+ *
+ * ### Usage
+ *
+ * On your return page (the URL you passed as `returnUrl`):
+ *
+ * ```typescript
+ * // Get session_id from URL (Stripe replaces {CHECKOUT_SESSION_ID})
+ * const sessionId = new URLSearchParams(window.location.search).get('session_id');
+ *
+ * const { data } = await authClient.subscription.getCheckoutStatus({
+ *   query: { sessionId }
+ * });
+ *
+ * if (data?.status === 'complete') {
+ *   console.log('Payment successful for:', data.customerEmail);
+ * }
+ * ```
+ */
+export const getCheckoutStatus = (options: StripeOptions) => {
+	const client = options.stripeClient;
+
+	return createAuthEndpoint(
+		"/subscription/checkout-status",
+		{
+			method: "GET",
+			query: z.object({
+				sessionId: z.string().meta({
+					description: "The Checkout Session ID to retrieve status for",
+				}),
+			}),
+			metadata: {
+				openapi: {
+					operationId: "getCheckoutStatus",
+				},
+			},
+			use: [stripeSessionMiddleware],
+		},
+		async (ctx) => {
+			const { sessionId } = ctx.query;
+
+			const checkoutSession = await client.checkout.sessions
+				.retrieve(sessionId)
+				.catch((e) => {
+					throw new APIError("BAD_REQUEST", {
+						message: e.message,
+					});
+				});
+
+			return ctx.json({
+				status: checkoutSession.status,
+				paymentStatus: checkoutSession.payment_status,
+				customerEmail: checkoutSession.customer_details?.email,
 			});
 		},
 	);

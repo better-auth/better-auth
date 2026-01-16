@@ -35,4 +35,6 @@ export const stripeClient = <
 		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export * from "./embedded-checkout";
 export * from "./error-codes";

@@ -139,7 +139,7 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.data?.url).toBeDefined();
+		expect((res.data as { url: string })?.url).toBeDefined();
 
 		// Verify Stripe customer was created for org
 		expect(mockStripeOrg.customers.create).toHaveBeenCalledWith(
@@ -368,7 +368,9 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.data?.url).toBe("https://billing.stripe.com/mock");
+		expect((res.data as { url: string })?.url).toBe(
+			"https://billing.stripe.com/mock",
+		);
 		expect(mockStripeOrg.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_portal_org_123",
@@ -447,7 +449,7 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.data?.url).toBeDefined();
+		expect((res.data as { url: string })?.url).toBeDefined();
 		expect(mockStripeOrg.billingPortal.sessions.create).toHaveBeenCalledWith(
 			expect.objectContaining({
 				customer: "cus_cancel_org_123",

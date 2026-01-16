@@ -124,6 +124,7 @@ describe("stripe", () => {
 					url: "https://checkout.stripe.com/mock",
 					id: "",
 				}),
+				retrieve: vi.fn(),
 			},
 		},
 		billingPortal: {
@@ -255,7 +256,7 @@ describe("stripe", () => {
 				headers,
 			},
 		});
-		expect(res.data?.url).toBeDefined();
+		expect((res.data as { url: string })?.url).toBeDefined();
 		const subscription = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [
@@ -1841,7 +1842,7 @@ describe("stripe", () => {
 			},
 		});
 
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 	});
 
 	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
@@ -2000,6 +2001,363 @@ describe("stripe", () => {
 		});
 	});
 
+	it("should create embedded checkout session", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+			id: "cs_test_embedded123",
+			client_secret: "cs_test_secret_embedded123",
+			url: null,
+		});
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "embedded-checkout@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "embedded-checkout@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.upgrade({
+			plan: "starter",
+			embeddedCheckout: true,
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(
+			(res.data as { clientSecret: string | null; sessionId: string })
+				?.clientSecret,
+		).toBe("cs_test_secret_embedded123");
+		expect(
+			(res.data as { clientSecret: string | null; sessionId: string })
+				?.sessionId,
+		).toBe("cs_test_embedded123");
+
+		// Verify the checkout session was created with ui_mode: 'embedded'
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				ui_mode: "embedded",
+				mode: "subscription",
+				return_url:
+					"https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+				line_items: [
+					{
+						price: "price_lookup_123", // resolved from lookup key
+						quantity: 1,
+					},
+				],
+			}),
+			undefined,
+		);
+
+		// Verify subscription was created in database
+		const subscription = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [
+				{
+					field: "referenceId",
+					value: userRes.user.id,
+				},
+			],
+		});
+		expect(subscription).toMatchObject({
+			id: expect.any(String),
+			plan: "starter",
+			referenceId: userRes.user.id,
+			status: "incomplete",
+		});
+	});
+
+	it("should create embedded checkout session with annual plan", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+			id: "cs_test_annual123",
+			client_secret: "cs_test_secret_annual123",
+			url: null,
+		});
+
+		const annualStripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				plans: [
+					{
+						priceId: "price_monthly_123",
+						annualDiscountPriceId: "price_annual_123",
+						name: "pro",
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(annualStripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "annual-embedded@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "annual-embedded@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.upgrade({
+			plan: "pro",
+			annual: true,
+			embeddedCheckout: true,
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect((res.data as { clientSecret: string | null })?.clientSecret).toBe(
+			"cs_test_secret_annual123",
+		);
+		expect(mockStripe.checkout.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				ui_mode: "embedded",
+				line_items: [
+					{
+						price: "price_annual_123",
+						quantity: 1,
+					},
+				],
+			}),
+			undefined,
+		);
+	});
+
+	it("should get checkout session status", async () => {
+		mockStripe.checkout.sessions.retrieve = vi.fn().mockResolvedValueOnce({
+			id: "cs_test_status123",
+			status: "complete",
+			payment_status: "paid",
+			customer_details: {
+				email: "customer@email.com",
+			},
+		});
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "checkout-status@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "checkout-status@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.checkoutStatus({
+			query: { sessionId: "cs_test_status123" },
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.data?.status).toBe("complete");
+		expect(res.data?.paymentStatus).toBe("paid");
+		expect(res.data?.customerEmail).toBe("customer@email.com");
+		expect(mockStripe.checkout.sessions.retrieve).toHaveBeenCalledWith(
+			"cs_test_status123",
+		);
+	});
+
+	it("should reject embedded checkout for non-existent plan", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "nonexistent-plan@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "nonexistent-plan@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const res = await client.subscription.upgrade({
+			plan: "nonexistent",
+			embeddedCheckout: true,
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("Subscription plan not found");
+	});
+
+	it("should reject embedded checkout if already subscribed to same plan", async () => {
+		mockStripe.checkout.sessions.create.mockResolvedValue({
+			id: "cs_test_123",
+			client_secret: "cs_test_secret_123",
+			url: null,
+		});
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "already-subscribed-embedded@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "already-subscribed-embedded@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// Create an active subscription first
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_mock123",
+				stripeSubscriptionId: "sub_existing123",
+				status: "active",
+				seats: 1,
+			},
+		});
+
+		const res = await client.subscription.upgrade({
+			plan: "starter",
+			embeddedCheckout: true,
+			returnUrl: "https://example.com/success?session_id={CHECKOUT_SESSION_ID}",
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toContain("already subscribed");
+	});
+
 	it("should not update personal subscription when upgrading with an org referenceId", async () => {
 		/* cspell:disable-next-line */
 		const orgId = "org_b67GF32Cljh7u588AuEblmLVobclDRcP";
@@ -2089,7 +2447,7 @@ describe("stripe", () => {
 		});
 		// It should NOT go through billing portal (which would update the personal sub)
 		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 
 		const orgSub = await testCtx.adapter.findOne<Subscription>({
 			model: "subscription",
@@ -2144,7 +2502,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(firstUpgradeRes.data?.url).toBeDefined();
+		expect((firstUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
 		await ctx.adapter.update({
@@ -2182,7 +2540,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(secondUpgradeRes.data?.url).toBeDefined();
+		expect((secondUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that the checkout session was created without trial_period_days
 		// We can't directly test the Stripe session, but we can verify the logic
@@ -2279,7 +2637,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(upgradeRes.data?.url).toBeDefined();
+		expect((upgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that NO trial was granted despite processing the incomplete subscription
 		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
@@ -2419,8 +2777,12 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 
 		// Verify the response has a redirect URL
-		expect(upgradeRes.data?.url).toBe("https://billing.stripe.com/mock");
-		expect(upgradeRes.data?.redirect).toBe(true);
+		expect((upgradeRes.data as { url: string; redirect: boolean })?.url).toBe(
+			"https://billing.stripe.com/mock",
+		);
+		expect(
+			(upgradeRes.data as { url: string; redirect: boolean })?.redirect,
+		).toBe(true);
 
 		// Verify no new subscription was created in the database
 		const allSubs = await ctx.adapter.findMany<Subscription>({
@@ -2471,7 +2833,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(firstUpgradeRes.data?.url).toBeDefined();
+		expect((firstUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Simulate the subscription being created with trial data
 		await ctx.adapter.update({
@@ -2509,7 +2871,7 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(secondUpgradeRes.data?.url).toBeDefined();
+		expect((secondUpgradeRes.data as { url: string })?.url).toBeDefined();
 
 		// Verify that the user has trial history from the first plan
 		const subscriptions = (await ctx.adapter.findMany({
@@ -4465,7 +4827,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 
 			it("should pass when referenceId equals user id", async () => {
@@ -4501,7 +4863,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 
 			it("should reject when authorizeReference is not defined but other referenceId is provided", async () => {
@@ -4623,7 +4985,7 @@ describe("stripe", () => {
 				});
 
 				expect(res.error).toBeNull();
-				expect(res.data?.url).toBeDefined();
+				expect((res.data as { url: string })?.url).toBeDefined();
 			});
 		});
 
