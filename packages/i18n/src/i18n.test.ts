@@ -236,4 +236,113 @@ describe("i18n plugin", async () => {
 			});
 		});
 	});
+
+	describe("defaultLocale validation", () => {
+		it("should use first available locale when defaultLocale not provided and 'en' not available", async () => {
+			const translationsWithoutEn = {
+				fr: {
+					USER_NOT_FOUND: "Utilisateur non trouvé",
+					INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+				},
+				de: {
+					USER_NOT_FOUND: "Benutzer nicht gefunden",
+					INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+				},
+			};
+
+			const { auth: authWithoutEn } = await getTestInstance({
+				plugins: [
+					i18n({
+						translations: translationsWithoutEn,
+						detection: ["header"],
+						// No defaultLocale specified
+					}),
+				],
+			});
+
+			// Should fall back to first available locale (fr in this case)
+			const response = await authWithoutEn.api.signInEmail({
+				body: {
+					email: "nonexistent@example.com",
+					password: "wrongpassword",
+				},
+				// No Accept-Language header
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.message).toBe("Email ou mot de passe invalide");
+		});
+
+		it("should use specified defaultLocale when it exists in translations", async () => {
+			const { auth: authWithCustomDefault } = await getTestInstance({
+				plugins: [
+					i18n({
+						translations: {
+							fr: {
+								INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+							},
+							de: {
+								INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+							},
+						},
+						defaultLocale: "de",
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await authWithCustomDefault.api.signInEmail({
+				body: {
+					email: "nonexistent@example.com",
+					password: "wrongpassword",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.message).toBe("Ungültige E-Mail oder Passwort");
+		});
+
+		it("should use 'en' as default when available but not specified", async () => {
+			const { auth: authWithEn } = await getTestInstance({
+				plugins: [
+					i18n({
+						translations: {
+							de: {
+								INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+							},
+							en: {
+								INVALID_EMAIL_OR_PASSWORD: "Invalid email or password",
+							},
+							fr: {
+								INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+							},
+						},
+						// No defaultLocale specified, should use 'en'
+						detection: ["header"],
+					}),
+				],
+			});
+
+			const response = await authWithEn.api.signInEmail({
+				body: {
+					email: "nonexistent@example.com",
+					password: "wrongpassword",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.message).toBe("Invalid email or password");
+		});
+
+		it("should throw error when translations object is empty", () => {
+			expect(() => {
+				i18n({
+					translations: {} as any,
+				});
+			}).toThrow("i18n plugin: translations object is empty");
+		});
+	});
 });
