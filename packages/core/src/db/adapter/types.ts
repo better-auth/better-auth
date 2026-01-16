@@ -2,10 +2,10 @@ import type { BetterAuthOptions } from "../../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
 	DBAdapterSchemaCreation as AdapterSchemaCreation,
-	CleanedWhere as NewCleanedWhere,
 	CustomAdapter as CoreCustomAdapter,
 	DBAdapterFactoryConfig,
 	JoinConfig,
+	CleanedWhere as NewCleanedWhere,
 	DBTransactionAdapter as TransactionAdapter,
 	Where,
 } from "./index";
