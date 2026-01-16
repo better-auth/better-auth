@@ -1443,9 +1443,17 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 };
 
 const createBillingPortalBodySchema = z.object({
+	/**
+	 * The IETF language tag of the locale Customer Portal is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
 	locale: z
 		.custom<StripeType.Checkout.Session.Locale>((localization) => {
 			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The IETF language tag of the locale Customer Portal is displayed in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
 		})
 		.optional(),
 	referenceId: z.string().optional(),
