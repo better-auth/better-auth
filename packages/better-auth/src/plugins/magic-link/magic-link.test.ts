@@ -647,7 +647,7 @@ describe("magic link allowedAttempts", async () => {
 		// Third attempt after expiration should be rejected with EXPIRED_TOKEN
 		vi.useFakeTimers();
 		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
-		const response = await client.magicLink.verify(
+		const _response = await client.magicLink.verify(
 			{
 				query: {
 					token,
