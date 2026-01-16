@@ -234,9 +234,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							if (cookieRefreshCache === false) {
 								// If refreshCache is disabled, return the session from cookie as-is
 								ctx.context.session = session;
+								// Parse session and user to ensure additionalFields are included
+								// Rehydrate date fields from JSON strings before parsing
+								const parsedSession = parseSessionOutput(ctx.context.options, {
+									...session.session,
+									expiresAt: new Date(session.session.expiresAt),
+									createdAt: new Date(session.session.createdAt),
+									updatedAt: new Date(session.session.updatedAt),
+								});
+								const parsedUser = parseUserOutput(ctx.context.options, {
+									...session.user,
+									createdAt: new Date(session.user.createdAt),
+									updatedAt: new Date(session.user.updatedAt),
+								});
 								return ctx.json({
-									session: session.session,
-									user: session.user,
+									session: parsedSession,
+									user: parsedUser,
 								} as {
 									session: InferSession<Option>;
 									user: InferUser<Option>;
@@ -420,12 +433,19 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					});
 				}
 				await setCookieCache(ctx, session, !!dontRememberMe);
-				return ctx.json(
-					session as unknown as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
-					},
+				// Parse session and user to ensure additionalFields are included
+				const parsedSession = parseSessionOutput(
+					ctx.context.options,
+					session.session,
 				);
+				const parsedUser = parseUserOutput(ctx.context.options, session.user);
+				return ctx.json({
+					session: parsedSession,
+					user: parsedUser,
+				} as {
+					session: InferSession<Option>;
+					user: InferUser<Option>;
+				});
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw APIError.from(
@@ -601,7 +621,9 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 					return session.expiresAt > new Date();
 				});
 				return ctx.json(
-					activeSessions as unknown as Prettify<InferSession<Option>>[],
+					activeSessions.map((session) =>
+						parseSessionOutput(ctx.context.options, session),
+					) as unknown as Prettify<InferSession<Option>>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);
