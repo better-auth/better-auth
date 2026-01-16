@@ -7,21 +7,13 @@ import { describe, expect, expectTypeOf, test } from "vitest";
 import { createAuthClient } from "../client";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
-import { betterAuth } from "./auth";
-import { betterAuth as betterAuthMinimal } from "./minimal";
+import { betterAuth } from "./full";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
-		{
-			const auth = betterAuth({});
-			type T = typeof auth;
-			expectTypeOf<T>().toEqualTypeOf<Auth>();
-		}
-		{
-			const auth = betterAuthMinimal({});
-			type T = typeof auth;
-			expectTypeOf<T>().toEqualTypeOf<Auth>();
-		}
+		const auth = betterAuth({});
+		type T = typeof auth;
+		expectTypeOf<T>().toEqualTypeOf<Auth>();
 	});
 
 	test("$ERROR_CODES in auth", () => {
