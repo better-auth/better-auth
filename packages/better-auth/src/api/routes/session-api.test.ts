@@ -1415,3 +1415,49 @@ describe("cookie cache versioning", async () => {
 		expect(s2.role).toBe(s1.role);
 	});
 });
+
+describe("date field type consistency", async () => {
+	it("should have consistent date types between cookie cache and refresh paths", async () => {
+		const { auth, testUser } = await getTestInstance({
+			database: undefined, // stateless mode
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: { updateAge: 60 },
+				},
+			},
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			returnHeaders: true,
+		});
+
+		const headers = new Headers();
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
+
+		// Get initial session from cookie cache
+		const initial = await auth.api.getSession({ headers });
+		expect(initial).not.toBeNull();
+
+		// Advance time to trigger refresh window
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		// Get session after refresh
+		const refreshed = await auth.api.getSession({ headers });
+		vi.useRealTimers();
+
+		expect(refreshed).not.toBeNull();
+
+		// Date types should be consistent across both paths
+		expect(typeof refreshed!.session.expiresAt).toBe(
+			typeof initial!.session.expiresAt,
+		);
+		expect(typeof refreshed!.session.createdAt).toBe(
+			typeof initial!.session.createdAt,
+		);
+	});
+});

@@ -8,7 +8,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db";
+import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -412,17 +412,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					);
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: user.id,
-							email: user.email,
-							emailVerified: user.emailVerified,
-							username: user.username,
-							displayUsername: user.displayUsername,
-							name: user.name,
-							image: user.image,
-							createdAt: user.createdAt,
-							updatedAt: user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user),
 					});
 				},
 			),

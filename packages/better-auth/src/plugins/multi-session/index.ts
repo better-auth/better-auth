@@ -13,6 +13,7 @@ import {
 	SECURE_COOKIE_PREFIX,
 	setSessionCookie,
 } from "../../cookies";
+import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
@@ -111,7 +112,12 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						},
 						[] as typeof validSessions,
 					);
-					return ctx.json(uniqueUserSessions);
+					return ctx.json(
+						uniqueUserSessions.map((item) => ({
+							session: parseSessionOutput(ctx.context.options, item.session),
+							user: parseUserOutput(ctx.context.options, item.user),
+						})),
+					);
 				},
 			),
 			/**
@@ -187,7 +193,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						);
 					}
 					await setSessionCookie(ctx, session);
-					return ctx.json(session);
+					return ctx.json({
+						session: parseSessionOutput(ctx.context.options, session.session),
+						user: parseUserOutput(ctx.context.options, session.user),
+					});
 				},
 			),
 			/**

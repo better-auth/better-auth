@@ -7,6 +7,7 @@ import { JWTExpired } from "jose/errors";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { signJWT } from "../../crypto/jwt";
+import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
 import { originCheck } from "../middlewares";
 import { getSessionFromCtx } from "./session";
@@ -394,7 +395,10 @@ export const verifyEmail = createAuthEndpoint(
 					if (ctx.query.callbackURL) {
 						throw ctx.redirect(ctx.query.callbackURL);
 					}
-					return ctx.json({ status: true, user: updatedUser });
+					return ctx.json({
+						status: true,
+						user: parseUserOutput(ctx.context.options, updatedUser),
+					});
 				}
 				/**
 				 * Legacy flow
@@ -456,15 +460,7 @@ export const verifyEmail = createAuthEndpoint(
 					}
 					return ctx.json({
 						status: true,
-						user: {
-							id: updatedUser.id,
-							email: updatedUser.email,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							emailVerified: updatedUser.emailVerified,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
 			}

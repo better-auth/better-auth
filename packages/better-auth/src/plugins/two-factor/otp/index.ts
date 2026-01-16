@@ -9,6 +9,7 @@ import {
 	symmetricDecrypt,
 	symmetricEncrypt,
 } from "../../../crypto";
+import { parseUserOutput } from "../../../db/schema";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";
 import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
@@ -353,15 +354,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					});
 					return ctx.json({
 						token: newSession.token,
-						user: {
-							id: updatedUser.id,
-							email: updatedUser.email,
-							emailVerified: updatedUser.emailVerified,
-							name: updatedUser.name,
-							image: updatedUser.image,
-							createdAt: updatedUser.createdAt,
-							updatedAt: updatedUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, updatedUser),
 					});
 				}
 				return valid(ctx);

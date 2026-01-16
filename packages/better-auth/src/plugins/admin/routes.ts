@@ -12,7 +12,7 @@ import {
 	expireCookie,
 	setSessionCookie,
 } from "../../cookies";
-import { parseUserOutput } from "../../db/schema";
+import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import type { AccessControl } from "../access";
 import type { defaultStatements } from "./access";
@@ -159,7 +159,7 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				},
 			);
 			return ctx.json({
-				user: updatedUser as UserWithRole,
+				user: parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
 			});
 		},
 	);
@@ -227,7 +227,7 @@ export const getUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			return parseUserOutput(ctx.context.options, user);
+			return parseUserOutput(ctx.context.options, user) as UserWithRole;
 		},
 	);
 
@@ -382,7 +382,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				userId: user.id,
 			});
 			return ctx.json({
-				user: user as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -505,7 +505,9 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				ctx.body.data,
 			);
 
-			return ctx.json(updatedUser as UserWithRole);
+			return ctx.json(
+				parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
+			);
 		},
 	);
 
@@ -671,7 +673,9 @@ export const listUsers = (opts: AdminOptions) =>
 					where.length ? where : undefined,
 				);
 				return ctx.json({
-					users: users as UserWithRole[],
+					users: users.map((user) =>
+						parseUserOutput(ctx.context.options, user),
+					) as UserWithRole[],
 					total: total,
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
@@ -760,9 +764,11 @@ export const listUserSessions = (opts: AdminOptions) =>
 
 			const sessions: SessionWithImpersonatedBy[] =
 				await ctx.context.internalAdapter.listSessions(ctx.body.userId);
-			return {
-				sessions: sessions,
-			};
+			return ctx.json({
+				sessions: sessions.map((s) =>
+					parseSessionOutput(ctx.context.options, s),
+				),
+			});
 		},
 	);
 
@@ -846,7 +852,7 @@ export const unbanUser = (opts: AdminOptions) =>
 				},
 			);
 			return ctx.json({
-				user: user,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -970,7 +976,7 @@ export const banUser = (opts: AdminOptions) =>
 			//revoke all sessions
 			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
 			return ctx.json({
-				user: user,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -1115,7 +1121,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 			);
 			return ctx.json({
 				session: session,
-				user: targetUser,
+				user: parseUserOutput(ctx.context.options, targetUser) as UserWithRole,
 			});
 		},
 	);
@@ -1189,7 +1195,10 @@ export const stopImpersonating = () =>
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
 			expireCookie(ctx, adminSessionCookie);
-			return ctx.json(adminSession);
+			return ctx.json({
+				session: parseSessionOutput(ctx.context.options, adminSession.session),
+				user: parseUserOutput(ctx.context.options, adminSession.user),
+			});
 		},
 	);
 
