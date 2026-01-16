@@ -415,12 +415,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					}
 
 					const query = db
-						.select(select?.length
-						  ? select.reduce((acc, field) => ({
-     							...acc,
-     							[field]: schemaModel[getFieldName({ model, field })],
-    						}), {})
-							: undefined)
+						.select(
+							select?.length
+								? select.reduce(
+										(acc, field) => ({
+											...acc,
+											[field]: schemaModel[getFieldName({ model, field })],
+										}),
+										{},
+									)
+								: undefined,
+						)
 						.from(schemaModel)
 						.where(...clause);
 

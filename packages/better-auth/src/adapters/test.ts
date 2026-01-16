@@ -1,7 +1,7 @@
 import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateId } from "@better-auth/core/utils/id";
-import { beforeAll, describe, expect, onTestFailed, test } from "vitest";
+import { beforeAll, describe, expect, test } from "vitest";
 import type { User } from "../types";
 
 interface AdapterTestOptions {
@@ -356,21 +356,21 @@ function adapterTest(
 	);
 
 	test.skipIf(disabledTests?.SHOULD_FIND_MANY_WITH_SELECT)(
-	  `${testPrefix ? `${testPrefix} - ` : ""}${
+		`${testPrefix ? `${testPrefix} - ` : ""}${
 			adapterTests.SHOULD_FIND_MANY_WITH_SELECT
 		}`,
 		async ({ onTestFailed }) => {
-		  await resetDebugLogs();
+			await resetDebugLogs();
 			onTestFailed(async () => {
-  			await printDebugLogs();
+				await printDebugLogs();
 			});
 			const users = await (await adapter()).findMany<User>({
-			  model: "user",
+				model: "user",
 				select: ["email"],
 			});
 			expect(users.length).toBeGreaterThanOrEqual(1);
 			expect(users).toContainEqual({
-			  email: expect.any(String),
+				email: expect.any(String),
 			});
 		},
 	);
