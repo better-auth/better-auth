@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { TechStackDisplay } from "./display-techstack";
 import { GithubStat } from "./github-stat";
 import { Testimonial } from "./landing/testimonials";
+import { TrustedBy } from "./landing/trusted-by";
 import { Ripple } from "./ripple";
 
 const features = [
@@ -119,18 +120,15 @@ export default function Features({ stars }: { stars: string | null }) {
 						</div>
 					))}
 				</div>
-				<div className="w-full md:border-l hidden md:block">
+				<div className="w-full md:border-l-[1.2px] md:border-t-[1.2px]">
+					<TrustedBy />
+				</div>
+				<div className="w-full md:border-l-[1.2px] md:border-t-[1.2px]">
 					<Testimonial />
 				</div>
 				<div className="relative col-span-3 md:border-l-[1.2px] md:border-t-[1.2px] h-full py-20">
 					<div className="w-full h-full p-16 pt-10 md:px-10 2xl:px-16">
 						<div className="flex flex-col items-center justify-center w-full h-full gap-3">
-							<div className="flex items-center gap-2">
-								<Globe2Icon className="w-4 h-4" />
-								<p className="text-gray-600 dark:text-gray-400">
-									Own your auth
-								</p>
-							</div>
 							<h2 className="max-w-md mx-auto mt-4 text-4xl font-bold tracking-tighter text-center md:text-4xl">
 								Roll your own auth with confidence in minutes!
 							</h2>

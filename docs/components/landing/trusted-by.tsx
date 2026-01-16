@@ -1,5 +1,7 @@
 "use client";
 
+import { Plus } from "lucide-react";
+
 const companies = [
 	{
 		name: "OpenAI",
@@ -7,8 +9,8 @@ const companies = [
 		logo: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="28"
-				height="28"
+				width="40"
+				height="40"
 				viewBox="0 0 24 24"
 			>
 				<path
@@ -24,8 +26,8 @@ const companies = [
 		logo: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
+				width="32"
+				height="32"
 				viewBox="0 0 128 128"
 			>
 				<path
@@ -57,8 +59,8 @@ const companies = [
 		logo: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
+				width="36"
+				height="36"
 				viewBox="0 0 256 222"
 				className="fill-foreground"
 			>
@@ -72,8 +74,8 @@ const companies = [
 		logo: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="24"
-				height="24"
+				width="36"
+				height="36"
 				viewBox="0 0 24 24"
 			>
 				<path
@@ -89,58 +91,102 @@ const companies = [
 		logo: (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				width="56"
-				height="24"
+				width="80"
+				height="32"
 				viewBox="0 0 78 27"
-				className="fill-[#15357A] dark:fill-white"
+				className="fill-[#1B1B1B] dark:fill-white"
 			>
-				<g>
-					<path d="M32.9309 26.3952C30.9274 26.3952 29.1412 26.009 27.5722 25.2366C26.0032 24.4642 24.7601 23.3417 23.8428 21.8693C22.9497 20.3727 22.5031 18.5986 22.5031 16.5468C22.5031 14.3985 22.9376 12.5036 23.8066 10.8622C24.6756 9.22083 25.8825 7.95357 27.4274 7.06045C28.9963 6.1432 30.7946 5.68457 32.8223 5.68457C34.9223 5.68457 36.6844 6.1432 38.1086 7.06045C39.5327 7.95357 40.5948 9.24497 41.2948 10.9347C42.019 12.6243 42.369 14.6278 42.3448 16.9451H24.4945V13.5778H39.5568L37.4206 15.1709C37.4206 13.9881 37.2516 12.9502 36.9137 12.0571C36.5999 11.164 36.093 10.4519 35.393 9.92084C34.7171 9.3898 33.8602 9.12428 32.8223 9.12428C31.7602 9.12428 30.8308 9.41394 30.0343 9.99326C29.2377 10.5726 28.6222 11.4174 28.1877 12.5278C27.7532 13.6381 27.536 14.9416 27.536 16.4382C27.536 17.7658 27.7653 18.9124 28.2239 19.8779C28.7067 20.8434 29.3584 21.5796 30.1791 22.0865C31.024 22.5693 31.9533 22.8107 32.9671 22.8107C34.3671 22.8107 35.5258 22.4366 36.443 21.6883C37.3844 20.9158 38.0723 19.9503 38.5068 18.7917L42.5983 21.2538C41.4396 22.9917 40.0275 24.2831 38.362 25.128C36.7206 25.9728 34.9102 26.3952 32.9309 26.3952Z" />
-					<path d="M54.2042 26.3952C52.2007 26.3952 50.4145 26.009 48.8455 25.2366C47.2765 24.4642 46.0334 23.3417 45.1161 21.8693C44.223 20.3727 43.7764 18.5986 43.7764 16.5468C43.7764 14.3985 44.2109 12.5036 45.0799 10.8622C45.9489 9.22083 47.1558 7.95357 48.7006 7.06045C50.2696 6.1432 52.0679 5.68457 54.0956 5.68457C56.1956 5.68457 57.9577 6.1432 59.3818 7.06045C60.806 7.95357 61.8681 9.24497 62.5681 10.9347C63.2922 12.6243 63.6423 14.6278 63.6181 16.9451H45.7678V13.5778H60.8301L58.6939 15.1709C58.6939 13.9881 58.5249 12.9502 58.187 12.0571C57.8732 11.164 57.3663 10.4519 56.6663 9.92084C55.9904 9.3898 55.1335 9.12428 54.0956 9.12428C53.0335 9.12428 52.1041 9.41394 51.3076 9.99326C50.511 10.5726 49.8955 11.4174 49.461 12.5278C49.0265 13.6381 48.8093 14.9416 48.8093 16.4382C48.8093 17.7658 49.0386 18.9124 49.4972 19.8779C49.98 20.8434 50.6317 21.5796 51.4524 22.0865C52.2972 22.5693 53.2266 22.8107 54.2404 22.8107C55.6404 22.8107 56.799 22.4366 57.7163 21.6883C58.6577 20.9158 59.3456 19.9503 59.7801 18.7917L63.8716 21.2538C62.7129 22.9917 61.3008 24.2831 59.6353 25.128C57.9939 25.9728 56.1835 26.3952 54.2042 26.3952Z" />
-					<path d="M65.2308 0H70.0826V21.1814C70.0826 22.8952 70.167 24.4642 70.336 25.8883H65.2308V0Z" />
-					<path d="M0 16.0536C0 8.88282 4.57742 5.69628 9.59667 5.69628C14.1776 5.69628 16.1093 8.60687 16.1093 8.60687V0.00960845H21.0708V21.1967C21.0708 22.9359 21.1306 24.5052 21.252 25.9046H16.1109V23.5265C16.1109 23.5265 14.1423 26.411 9.59829 26.411C4.75405 26.411 0 23.6312 0 16.0536ZM10.8639 22.604C14.3778 22.604 16.6497 19.9295 16.6497 16.0536C16.6497 12.0422 14.3762 9.5032 10.8639 9.5032C7.35158 9.5032 5.16209 11.9168 5.16209 16.0536C5.16209 20.1904 7.4438 22.604 10.8639 22.604Z" />
-					<path d="M73.2188 21.2539H77.9981V25.8885H73.2188V21.2539Z" />
+				<g id="Hug">
+					<g id="Vector">
+						<path
+							className="fill-[#1B1B1B] dark:fill-white"
+							d="M32.9309 26.3952C30.9274 26.3952 29.1412 26.009 27.5722 25.2366C26.0032 24.4642 24.7601 23.3417 23.8428 21.8693C22.9497 20.3727 22.5031 18.5986 22.5031 16.5468C22.5031 14.3985 22.9376 12.5036 23.8066 10.8622C24.6756 9.22083 25.8825 7.95357 27.4274 7.06045C28.9963 6.1432 30.7946 5.68457 32.8223 5.68457C34.9223 5.68457 36.6844 6.1432 38.1086 7.06045C39.5327 7.95357 40.5948 9.24497 41.2948 10.9347C42.019 12.6243 42.369 14.6278 42.3448 16.9451H24.4945V13.5778H39.5568L37.4206 15.1709C37.4206 13.9881 37.2516 12.9502 36.9137 12.0571C36.5999 11.164 36.093 10.4519 35.393 9.92084C34.7171 9.3898 33.8602 9.12428 32.8223 9.12428C31.7602 9.12428 30.8308 9.41394 30.0343 9.99326C29.2377 10.5726 28.6222 11.4174 28.1877 12.5278C27.7532 13.6381 27.536 14.9416 27.536 16.4382C27.536 17.7658 27.7653 18.9124 28.2239 19.8779C28.7067 20.8434 29.3584 21.5796 30.1791 22.0865C31.024 22.5693 31.9533 22.8107 32.9671 22.8107C34.3671 22.8107 35.5258 22.4366 36.443 21.6883C37.3844 20.9158 38.0723 19.9503 38.5068 18.7917L42.5983 21.2538C41.4396 22.9917 40.0275 24.2831 38.362 25.128C36.7206 25.9728 34.9102 26.3952 32.9309 26.3952Z"
+						/>
+						<path
+							className="fill-[#1B1B1B] dark:fill-white"
+							d="M54.2042 26.3952C52.2007 26.3952 50.4145 26.009 48.8455 25.2366C47.2765 24.4642 46.0334 23.3417 45.1161 21.8693C44.223 20.3727 43.7764 18.5986 43.7764 16.5468C43.7764 14.3985 44.2109 12.5036 45.0799 10.8622C45.9489 9.22083 47.1558 7.95357 48.7006 7.06045C50.2696 6.1432 52.0679 5.68457 54.0956 5.68457C56.1956 5.68457 57.9577 6.1432 59.3818 7.06045C60.806 7.95357 61.8681 9.24497 62.5681 10.9347C63.2922 12.6243 63.6423 14.6278 63.6181 16.9451H45.7678V13.5778H60.8301L58.6939 15.1709C58.6939 13.9881 58.5249 12.9502 58.187 12.0571C57.8732 11.164 57.3663 10.4519 56.6663 9.92084C55.9904 9.3898 55.1335 9.12428 54.0956 9.12428C53.0335 9.12428 52.1041 9.41394 51.3076 9.99326C50.511 10.5726 49.8955 11.4174 49.461 12.5278C49.0265 13.6381 48.8093 14.9416 48.8093 16.4382C48.8093 17.7658 49.0386 18.9124 49.4972 19.8779C49.98 20.8434 50.6317 21.5796 51.4524 22.0865C52.2972 22.5693 53.2266 22.8107 54.2404 22.8107C55.6404 22.8107 56.799 22.4366 57.7163 21.6883C58.6577 20.9158 59.3456 19.9503 59.7801 18.7917L63.8716 21.2538C62.7129 22.9917 61.3008 24.2831 59.6353 25.128C57.9939 25.9728 56.1835 26.3952 54.2042 26.3952Z"
+						/>
+						<path
+							className="fill-[#1B1B1B] dark:fill-white"
+							d="M65.2308 0H70.0826V21.1814C70.0826 22.8952 70.167 24.4642 70.336 25.8883H65.2308V0Z"
+						/>
+						<path
+							className="fill-[#1B1B1B] dark:fill-white"
+							d="M0 16.0536C0 8.88282 4.57742 5.69628 9.59667 5.69628C14.1776 5.69628 16.1093 8.60687 16.1093 8.60687V0.00960845H21.0708V21.1967C21.0708 22.9359 21.1306 24.5052 21.252 25.9046H16.1109V23.5265C16.1109 23.5265 14.1423 26.411 9.59829 26.411C4.75405 26.411 0 23.6312 0 16.0536ZM10.8639 22.604C14.3778 22.604 16.6497 19.9295 16.6497 16.0536C16.6497 12.0422 14.3762 9.5032 10.8639 9.5032C7.35158 9.5032 5.16209 11.9168 5.16209 16.0536C5.16209 20.1904 7.4438 22.604 10.8639 22.604Z"
+						/>
+					</g>
+					<path
+						id="."
+						className="fill-[#1B1B1B] dark:fill-white"
+						d="M73.2188 21.2539H77.9981V25.8885H73.2188V21.2539Z"
+					/>
 				</g>
+			</svg>
+		),
+	},
+	{
+		name: "Exa",
+		href: "https://exa.com",
+		logo: (
+			<svg
+				width="32"
+				height="32"
+				viewBox="0 0 80 100"
+				fill="none"
+				xmlns="http://www.w3.org/2000/svg"
+			>
+				<path
+					fill-rule="evenodd"
+					clip-rule="evenodd"
+					d="M0 0H78.1818V7.46269L44.8165 50L78.1818 92.5373V100H0V0ZM39.5825 43.1172L66.6956 7.46269H12.4695L39.5825 43.1172ZM8.79612 16.3977V46.2687H31.5111L8.79612 16.3977ZM31.5111 53.7313H8.79612V83.6023L31.5111 53.7313ZM12.4695 92.5373L39.5825 56.8828L66.6956 92.5373H12.4695Z"
+					fill="#1F40ED"
+				></path>
 			</svg>
 		),
 	},
 ];
 
-export function EnterpriseHero() {
+export function TrustedBy() {
 	return (
-		<div className="max-w-xl">
-			<div className="space-y-2 xl:space-y-3 text-center xl:text-left">
-				<h1 className="text-3xl sm:text-4xl md:text-5xl tracking-tight text-zinc-900 dark:text-white">
-					<span className="block sm:inline bg-foreground text-background px-2">
-						BETTER AUTH.
-					</span>{" "}
-					<span className="relative inline-block">
-						<span className="relative z-10 font-extralight">ENTERPRISE</span>
-						<span className="absolute bottom-0.5 sm:bottom-1 left-0 w-full h-1.5 sm:h-2 bg-zinc-200 dark:bg-zinc-800" />
-					</span>
-				</h1>
-				<p className="text-sm sm:text-base md:text-lg text-zinc-600 dark:text-zinc-400 leading-snug tracking-tight">
-					Get direct support from the Better Auth team and deploy Better Auth
-					securely inside your organization.
-				</p>
+		<div className="relative w-full py-20 overflow-hidden">
+			{/* Background grid pattern */}
+			<div className="absolute inset-0 bg-grid text-muted/50 dark:text-white/[0.02]" />
+			<div className="absolute inset-0 bg-gradient-to-b from-background via-transparent to-background" />
 
-				{/* Trusted By Section */}
-				<div className="pt-8 space-y-5 border-t border-dashed border-zinc-200 dark:border-zinc-800 mt-6">
-					<p className="text-xs text-zinc-500 dark:text-zinc-500 text-center xl:text-left uppercase tracking-widest font-medium">
-						Trusted by teams at
-					</p>
-					<div className="flex flex-wrap items-center justify-center xl:justify-start gap-5 md:gap-6">
+			<div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+				{/* Header */}
+				<div className="flex flex-col items-center gap-4 mb-12">
+					<div className="flex items-center gap-2">
+						<span className="text-xs text-muted-foreground uppercase tracking-widest font-medium">
+							Trusted by
+						</span>
+					</div>
+					<h3 className="text-2xl md:text-3xl font-bold tracking-tight text-center">
+						Teams building the future
+					</h3>
+				</div>
+
+				{/* Logos Grid */}
+				<div className="relative">
+					{/* Gradient overlay on sides */}
+					<div className="absolute left-0 top-0 bottom-0 w-8 bg-gradient-to-r from-background to-transparent z-10 pointer-events-none" />
+					<div className="absolute right-0 top-0 bottom-0 w-8 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
+
+					<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-6 md:gap-8 items-center justify-items-center py-8 px-4 border-y border-dashed border-zinc-200 dark:border-zinc-800">
 						{companies.map((company) => (
 							<a
 								key={company.name}
 								href={company.href}
 								target="_blank"
 								rel="noopener noreferrer"
-								className="flex items-center gap-2 group transition-all duration-200 hover:opacity-80"
+								className="flex flex-col items-center gap-3 group p-4 transition-all duration-200"
 							>
 								<div className="transition-transform duration-200 group-hover:scale-110">
 									{company.logo}
 								</div>
+								<span className="relative text-sm font-medium text-muted-foreground group-hover:text-foreground transition-colors after:absolute after:left-0 after:bottom-0 after:h-px after:w-0 after:bg-foreground after:transition-all after:duration-300 group-hover:after:w-full">
+									{company.name}
+								</span>
 							</a>
 						))}
 					</div>
