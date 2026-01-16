@@ -217,7 +217,6 @@ export const getAuthTables = (
 				scope: {
 					type: "string",
 					required: false,
-					returned: false,
 					fieldName: options.account?.fields?.scope || "scope",
 				},
 				password: {
