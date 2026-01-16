@@ -1,3 +1,5 @@
+"use client";
+
 import { useAtom } from "jotai";
 import { CircleX, ListFilter, Moon, PlusIcon, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";

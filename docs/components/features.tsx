@@ -14,7 +14,6 @@ import { cn } from "@/lib/utils";
 import { TechStackDisplay } from "./display-techstack";
 import { GithubStat } from "./github-stat";
 import { Testimonial } from "./landing/testimonials";
-import { TrustedBy } from "./landing/trusted-by";
 import { Ripple } from "./ripple";
 
 const features = [
@@ -121,12 +120,10 @@ export default function Features({ stars }: { stars: string | null }) {
 					))}
 				</div>
 				<div className="w-full md:border-l-[1.2px] md:border-t-[1.2px]">
-					<TrustedBy />
-				</div>
-				<div className="w-full md:border-l-[1.2px] md:border-t-[1.2px]">
 					<Testimonial />
 				</div>
-				<div className="relative col-span-3 md:border-l-[1.2px] md:border-t-[1.2px] h-full py-20">
+
+				<div className="relative col-span-3 md:border-l-[1.2px]  h-full py-20">
 					<div className="w-full h-full p-16 pt-10 md:px-10 2xl:px-16">
 						<div className="flex flex-col items-center justify-center w-full h-full gap-3">
 							<h2 className="max-w-md mx-auto mt-4 text-4xl font-bold tracking-tighter text-center md:text-4xl">
