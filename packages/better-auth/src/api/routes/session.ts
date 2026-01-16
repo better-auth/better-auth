@@ -235,14 +235,18 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								// If refreshCache is disabled, return the session from cookie as-is
 								ctx.context.session = session;
 								// Parse session and user to ensure additionalFields are included
-								const parsedSession = parseSessionOutput(
-									ctx.context.options,
-									session.session,
-								);
-								const parsedUser = parseUserOutput(
-									ctx.context.options,
-									session.user,
-								);
+								// Rehydrate date fields from JSON strings before parsing
+								const parsedSession = parseSessionOutput(ctx.context.options, {
+									...session.session,
+									expiresAt: new Date(session.session.expiresAt),
+									createdAt: new Date(session.session.createdAt),
+									updatedAt: new Date(session.session.updatedAt),
+								});
+								const parsedUser = parseUserOutput(ctx.context.options, {
+									...session.user,
+									createdAt: new Date(session.user.createdAt),
+									updatedAt: new Date(session.user.updatedAt),
+								});
 								return ctx.json({
 									session: parsedSession,
 									user: parsedUser,
@@ -272,13 +276,23 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								await setCookieCache(ctx, refreshedSession, false);
 
 								// Parse session and user to ensure additionalFields are included
+								// Rehydrate date fields from JSON strings before parsing
 								const parsedRefreshedSession = parseSessionOutput(
 									ctx.context.options,
-									refreshedSession.session,
+									{
+										...refreshedSession.session,
+										expiresAt: new Date(refreshedSession.session.expiresAt),
+										createdAt: new Date(refreshedSession.session.createdAt),
+										updatedAt: new Date(refreshedSession.session.updatedAt),
+									},
 								);
 								const parsedRefreshedUser = parseUserOutput(
 									ctx.context.options,
-									refreshedSession.user,
+									{
+										...refreshedSession.user,
+										createdAt: new Date(refreshedSession.user.createdAt),
+										updatedAt: new Date(refreshedSession.user.updatedAt),
+									},
 								);
 								ctx.context.session = {
 									session: parsedRefreshedSession,
@@ -294,14 +308,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							}
 
 							// Parse session and user to ensure additionalFields are included
-							const parsedSession = parseSessionOutput(
-								ctx.context.options,
-								session.session,
-							);
-							const parsedUser = parseUserOutput(
-								ctx.context.options,
-								session.user,
-							);
+							const parsedSession = parseSessionOutput(ctx.context.options, {
+								...session.session,
+								expiresAt: new Date(session.session.expiresAt),
+								createdAt: new Date(session.session.createdAt),
+								updatedAt: new Date(session.session.updatedAt),
+							});
+							const parsedUser = parseUserOutput(ctx.context.options, {
+								...session.user,
+								createdAt: new Date(session.user.createdAt),
+								updatedAt: new Date(session.user.updatedAt),
+							});
 							ctx.context.session = {
 								session: parsedSession,
 								user: parsedUser,
