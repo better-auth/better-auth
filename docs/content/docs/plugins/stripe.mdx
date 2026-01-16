@@ -215,11 +215,11 @@ To create a subscription, use the `subscription.upgrade` method:
 ```ts
 type upgradeSubscription = {
     /**
-     * The name of the plan to upgrade to. 
+     * The name of the plan to upgrade to.
      */
     plan: string = "pro"
     /**
-     * Whether to upgrade to an annual plan. 
+     * Whether to upgrade to an annual plan.
      */
     annual?: boolean = true
     /**
@@ -243,6 +243,11 @@ type upgradeSubscription = {
      */
     seats?: number = 1
     /**
+     * The IETF language tag of the locale Checkout is displayed in.
+     * If not provided or set to `auto`, the browser's locale is used.
+     */
+    locale?: string
+    /**
      * The URL to which Stripe should send customers when payment or setup is complete.
      */
     successUrl: string
@@ -255,7 +260,7 @@ type upgradeSubscription = {
      */
     returnUrl?: string
     /**
-     * Disable redirect after successful subscription. 
+     * Disable redirect after successful subscription.
      */
     disableRedirect: boolean = false
 }
@@ -271,7 +276,8 @@ await authClient.subscription.upgrade({
     cancelUrl: "/pricing",
     annual: true, // Optional: upgrade to an annual plan
     referenceId: "org_123", // Optional: defaults based on customerType
-    seats: 5 // Optional: for team plans
+    seats: 5, // Optional: for team plans
+    locale: "en" // Optional: display checkout in English
 });
 ```
 
@@ -466,7 +472,7 @@ To create a [Stripe billing portal session](https://docs.stripe.com/api/customer
 ```ts
 type createBillingPortal = {
     /**
-    * The IETF language tag of the locale customer portal is displayed in. If blank or auto, browser's locale is used.
+    * The IETF language tag of the locale Customer Portal is displayed in. If not provided or set to `auto`, the browser's locale is used.
     */
     locale?: string
     /**
