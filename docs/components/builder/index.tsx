@@ -1,7 +1,7 @@
 "use client";
 
 import { useAtom } from "jotai";
-import { CircleX, ListFilter, Moon, PlusIcon, Sun, X } from "lucide-react";
+import { ArrowLeft, Moon, PlusIcon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import { useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,6 @@ import {
 	DialogTitle,
 	DialogTrigger,
 } from "../ui/dialog";
-import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { ScrollArea } from "../ui/scroll-area";
 import { Switch } from "../ui/switch";
@@ -271,50 +270,6 @@ export function Builder() {
 	const [options, setOptions] = useAtom(optionsAtom);
 	const { setTheme, resolvedTheme } = useTheme();
 
-	const [socialProviderSearchInput, setSocialProviderSearchInputState] =
-		useState("");
-	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [debounceTimer, setDebounceTimer] = useState<number | null>(null);
-
-	const setSocialProviderSearchInput = (value: string) => {
-		setSocialProviderSearchInputState(value);
-
-		if (value === "") {
-			if (debounceTimer) {
-				clearTimeout(debounceTimer);
-			}
-			setDebouncedSearch("");
-			setDebounceTimer(null);
-			return;
-		}
-
-		if (debounceTimer) {
-			clearTimeout(debounceTimer);
-		}
-
-		const id = window.setTimeout(() => {
-			setDebouncedSearch(value);
-			setDebounceTimer(null);
-		}, 300);
-
-		setDebounceTimer(id);
-	};
-
-	const filteredSocialProviders = useMemo(() => {
-		const providers = Object.entries(socialProviders);
-		if (debouncedSearch.length === 0) {
-			return providers;
-		}
-
-		return providers.filter(([name]) =>
-			name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-		);
-	}, [debouncedSearch]);
-
-	const resetSocialProviderSearch = () => {
-		setSocialProviderSearchInput("");
-	};
-
 	const reset = () => {
 		setOptions(defaultOptions);
 		setFramework("nextjs");
@@ -337,7 +292,7 @@ export function Builder() {
 			}
 			return optionValue !== defaultValue;
 		});
-	}, [debouncedSearch, options]);
+	}, [options]);
 
 	return (
 		<Dialog>
@@ -368,7 +323,7 @@ export function Builder() {
 							<div className="absolute md:opacity-0 md:group-hover/preview:opacity-100 md:group-focus-within/preview:opacity-100 transition-opacity top-0 right-0 bg-background p-1 z-20">
 								<Button
 									size="icon"
-									variant="outline"
+									variant="ghost"
 									className="size-8"
 									onClick={() => {
 										if (resolvedTheme === "dark") {
@@ -506,32 +461,9 @@ export function Builder() {
 												</AccordionItem>
 												<AccordionItem value="social-providers">
 													<AccordionTrigger>Social providers</AccordionTrigger>
-													<AccordionContent className="space-y-4 px-1 pt-1">
-														<div className="relative">
-															<Input
-																placeholder="Filter by name..."
-																className="h-8 ps-9 pe-9"
-																value={socialProviderSearchInput}
-																onChange={(e) =>
-																	setSocialProviderSearchInput(e.target.value)
-																}
-															/>
-															<div className="pointer-events-none absolute inset-y-0 start-0 flex items-center justify-center ps-3 text-muted-foreground/80">
-																<ListFilter className="size-4" />
-															</div>
-															{socialProviderSearchInput?.length > 0 && (
-																<button
-																	type="button"
-																	className="text-muted-foreground/80 hover:text-foreground focus-visible:outline-ring/70 absolute inset-y-0 end-0 flex h-full w-9 items-center justify-center rounded-e-lg outline-offset-2 transition-colors focus:z-10 focus-visible:outline focus-visible:outline-2 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50"
-																	onClick={resetSocialProviderSearch}
-																	aria-label="Clear filter"
-																>
-																	<CircleX className="size-4" />
-																</button>
-															)}
-														</div>
+													<AccordionContent className="px-1 pt-1">
 														<div className="grid gap-2 grid-cols-1 @sm/config:grid-cols-2 @md/config:grid-cols-3 @xl/config:grid-cols-4">
-															{filteredSocialProviders
+															{Object.entries(socialProviders)
 																.sort(([a], [b]) => a.localeCompare(b))
 																.map(([provider, { Icon }]) => (
 																	<Label
@@ -541,9 +473,9 @@ export function Builder() {
 																			provider,
 																		)}
 																		className={cn(
-																			"px-2.5 py-2 rounded-lg border transition-colors flex flex-col items-center justify-center",
+																			"px-2.5 py-2 border transition-colors border-dashed flex flex-col items-center justify-center",
 																			options.socialProviders.includes(provider)
-																				? "border-primary"
+																				? "border-primary/40"
 																				: "",
 																		)}
 																	>
@@ -577,19 +509,6 @@ export function Builder() {
 																		/>
 																	</Label>
 																))}
-															{filteredSocialProviders.length === 0 && (
-																<div className="col-span-full flex flex-col gap-2 items-center justify-center py-10 border border-dashed bg-muted dark:bg-muted/20">
-																	No providers found.
-																	<Button
-																		size="sm"
-																		className="text-xs gap-1"
-																		onClick={resetSocialProviderSearch}
-																	>
-																		<X className="-ms-1 size-3.5" />
-																		Clear filter
-																	</Button>
-																</div>
-															)}
 														</div>
 													</AccordionContent>
 												</AccordionItem>
@@ -690,36 +609,32 @@ export function Builder() {
 										</CardContent>
 
 										<CardFooter>
-											<button
-												className="bg-stone-950 no-underline group cursor-pointer relative shadow-2xl shadow-zinc-900 rounded-sm p-px text-xs font-semibold leading-6  text-white inline-block w-full"
+											<Button
+												className="w-full"
 												onClick={() => {
 													setCurrentStep(currentStep + 1);
 												}}
 											>
-												<span className="absolute inset-0 overflow-hidden rounded-sm">
-													<span className="absolute inset-0 rounded-sm bg-[image:radial-gradient(75%_100%_at_50%_0%,rgba(56,189,248,0.6)_0%,rgba(56,189,248,0)_75%)] opacity-0 transition-opacity duration-500 group-hover:opacity-100"></span>
-												</span>
-												<div className="relative flex space-x-2 items-center z-10 rounded-none bg-zinc-950 py-2 px-4 ring-1 ring-white/10 justify-center">
-													<span>Continue</span>
-												</div>
-												<span className="absolute -bottom-0 left-[1.125rem] h-px w-[calc(100%-2.25rem)] bg-gradient-to-r from-emerald-400/0 via-stone-800/90 to-emerald-400/0 transition-opacity duration-500 group-hover:opacity-40"></span>
-											</button>
+												Continue
+											</Button>
 										</CardFooter>
 									</>
 								)}
 
 								{currentStep === 1 && (
 									<>
-										<CardHeader>
-											<CardTitle>Choose Framework</CardTitle>
-											<p
-												className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
+										<CardHeader className="flex flex-row items-center gap-2">
+											<Button
+												variant="ghost"
+												size="icon"
+												className="size-8"
 												onClick={() => {
 													setCurrentStep(0);
 												}}
 											>
-												Go Back
-											</p>
+												<ArrowLeft className="size-4" />
+											</Button>
+											<CardTitle>Choose Framework</CardTitle>
 										</CardHeader>
 										<CardContent className="flex items-start justify-center gap-2 flex-wrap justify-between">
 											{frameworks.map((fm) => (
@@ -754,16 +669,18 @@ export function Builder() {
 
 								{currentStep === 2 && (
 									<>
-										<CardHeader className="flex flex-row justify-between gap-2">
-											<CardTitle>Code</CardTitle>
-											<p
-												className="text-blue-400 hover:underline mt-1 text-sm cursor-pointer"
+										<CardHeader className="flex flex-row items-center gap-2">
+											<Button
+												variant="ghost"
+												size="icon"
+												className="size-8"
 												onClick={() => {
-													setCurrentStep(0);
+													setCurrentStep(1);
 												}}
 											>
-												Go Back
-											</p>
+												<ArrowLeft className="size-4" />
+											</Button>
+											<CardTitle>Code</CardTitle>
 										</CardHeader>
 
 										<CardContent>
