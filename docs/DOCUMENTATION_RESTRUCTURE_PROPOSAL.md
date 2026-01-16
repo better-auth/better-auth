@@ -1,59 +1,37 @@
 # Documentation Restructure Proposal
 
-This document outlines a recommended approach for restructuring the Better Auth documentation to address:
-1. **Token efficiency** - Reducing page sizes for AI consumption
-2. **Consistent structure** - Uniform organization across all sections
-3. **Accordion navigation** - Folder-based structure for plugins and similar items
-4. **Limited nesting** - Maximum one level deep (Category → sub-page)
+This document analyzes the current documentation layout and proposes a more straightforward structure using Fumadocs conventions.
 
 ## Current State Analysis
 
-### Content Location
-- Documentation: `/docs/content/docs/`
-- Sidebar: Manually constructed in `sidebar-content.tsx`
+### Current Navigation Structure (from `sidebar-content.tsx`)
 
-### Largest Files (Lines of Code)
+The sidebar currently has **9 top-level categories**:
 
-#### Plugins (need splitting)
-| File | Lines | Sections |
-|------|-------|----------|
-| `organization.mdx` | 2,539 | Organization, Invitations, Members, Access Control, Dynamic AC, Teams, Schema, Options |
-| `oauth-provider.mdx` | 1,879 | Multiple complex sections |
-| `sso.mdx` | 1,515 | OIDC, SAML, Provisioning, Security, Domain verification |
-| `api-key.mdx` | 1,270 | Multiple sections |
-| `stripe.mdx` | 1,052 | Multiple sections |
-| `creem.mdx` | 853 | Multiple sections |
-| `admin.mdx` | 832 | Multiple sections |
+| Category | Contents | Issues |
+|----------|----------|--------|
+| **Get Started** | Introduction, Comparison, Installation, Basic Usage | ✅ Good |
+| **Concepts** | API, CLI, Client, Cookies, Database, Email, Hooks, Plugins, OAuth, Rate Limit, Sessions, TypeScript, Users & Accounts | ⚠️ Catch-all, 13 items |
+| **Authentication** | Email & Password + 35 Social Providers | ⚠️ Mixed core + providers |
+| **Databases** | MySQL, SQLite, PostgreSQL, MS SQL, MongoDB + Drizzle, Prisma + Community | ⚠️ Mixes databases with ORMs |
+| **Integrations** | Full Stack + Backend + Mobile frameworks | ✅ Good grouping |
+| **Plugins** | 36 plugins in 6 groups (Auth, Authorization, Enterprise, Utility, Payments, Others) | ⚠️ Large flat list |
+| **Guides** | Tutorials + Migration guides | ✅ Good |
+| **Reference** | Options, Contributing, Resources, Security, Telemetry, FAQ | ⚠️ Mixed reference + meta |
+| **Examples** | Astro, Remix, Next.js, Nuxt, SvelteKit | ❓ Overlaps with Integrations |
 
-#### Concepts (consider splitting)
-| File | Lines |
-|------|-------|
-| `database.mdx` | 957 |
-| `plugins.mdx` | 579 |
-| `users-accounts.mdx` | 509 |
-| `session-management.mdx` | 508 |
-| `oauth.mdx` | 506 |
-
-#### Integrations (borderline)
-| File | Lines |
-|------|-------|
-| `expo.mdx` | 542 |
-| `waku.mdx` | 451 |
-| `convex.mdx` | 395 |
-| `next.mdx` | 392 |
-
-### Current Structure
+### Current File Structure
 ```
 content/docs/
-├── adapters/           # 9 flat files
-├── authentication/     # 35 flat files (social providers)
-├── concepts/           # 13 flat files
-├── errors/             # 14 flat files
-├── examples/           # 5 flat files
-├── guides/             # 10 flat files
-├── integrations/       # 17 flat files
-├── plugins/            # 36 flat files (LARGE)
-├── reference/          # 6 flat files
+├── adapters/           # 9 files (databases + ORMs mixed)
+├── authentication/     # 35 files (social providers)
+├── concepts/           # 13 files (mixed topics)
+├── errors/             # 14 files
+├── examples/           # 5 files
+├── guides/             # 10 files
+├── integrations/       # 17 files
+├── plugins/            # 36 flat files ← needs structure
+├── reference/          # 6 files
 ├── basic-usage.mdx
 ├── comparison.mdx
 ├── installation.mdx
@@ -63,379 +41,352 @@ content/docs/
 
 ---
 
-## Recommended Approach
+## Problem: Plugins as a Flat List
 
-### Strategy Overview
-
-Use **Fumadocs folder-based navigation** to create one level of nesting:
+The **Plugins** section currently lists 36 plugins as flat files, grouped only by visual separators in the sidebar:
 
 ```
-content/docs/
-├── plugins/
-│   ├── organization/
-│   │   ├── index.mdx           # Overview + Installation
-│   │   ├── usage.mdx           # Basic usage
-│   │   ├── invitations.mdx     # Invitations system
-│   │   ├── members.mdx         # Member management
-│   │   ├── access-control.mdx  # Roles & permissions
-│   │   ├── teams.mdx           # Teams feature
-│   │   └── meta.json           # Sidebar order
-│   ├── sso/
-│   │   ├── index.mdx
-│   │   ├── oidc.mdx
-│   │   ├── saml.mdx
-│   │   ├── provisioning.mdx
-│   │   └── meta.json
-│   ├── api-key.mdx             # Smaller plugins stay as single files
+Plugins/
+├── Authentication (group label)
+│   ├── 2fa.mdx
 │   ├── username.mdx
-│   └── ...
+│   ├── anonymous.mdx
+│   └── ... (10 plugins)
+├── Authorization (group label)
+│   ├── admin.mdx
+│   ├── api-key.mdx
+│   ├── organization.mdx
+│   └── mcp.mdx
+├── Enterprise (group label)
+│   ├── oidc-provider.mdx
+│   ├── oauth-provider.mdx
+│   ├── sso.mdx
+│   └── scim.mdx
+├── Utility (group label)
+│   └── ... (10 plugins)
+├── Payments (group label)
+│   └── ... (6 plugins)
+└── Others (group label)
+    └── ... (2 plugins)
 ```
 
-### Target Page Size Guidelines
-
-| Size | Lines | Tokens (est.) | Recommendation |
-|------|-------|---------------|----------------|
-| Small | < 200 | < 3K | Keep as single file |
-| Medium | 200-500 | 3-8K | Consider splitting if natural sections exist |
-| Large | 500-800 | 8-12K | Split into 2-3 pages |
-| Very Large | 800+ | 12K+ | Split into 4+ pages |
-
-**Target: ~300-400 lines per page** (approx. 5-6K tokens)
+**Issues:**
+1. No folder structure - just visual groups in sidebar code
+2. Can't use Fumadocs accordion/collapsible features
+3. All 36 plugins at same level
 
 ---
 
-## Detailed Restructure Plan
+## Proposed Structure
 
-### 1. Plugins (Priority: High)
+### Option A: Category Folders with meta.json (Recommended)
 
-#### Organization Plugin → Folder Structure
+Convert plugin groups into actual folders:
+
 ```
-plugins/organization/
-├── index.mdx           # Overview, Installation (lines 1-65)
-├── usage.mdx           # Basic organization CRUD (lines 67-835)
-├── invitations.mdx     # Invitation system (lines 836-1040)
-├── members.mdx         # Member management (lines 1041-1210)
-├── access-control.mdx  # Roles, permissions, custom (lines 1211-1453)
-├── dynamic-access.mdx  # Dynamic AC (lines 1453-1712)
-├── teams.mdx           # Teams feature (lines 1776-2124)
-├── schema.mdx          # Database schema (lines 2124-2520)
-└── meta.json
+content/docs/plugins/
+├── authentication/
+│   ├── meta.json           # { "title": "Authentication", "pages": [...] }
+│   ├── 2fa.mdx
+│   ├── username.mdx
+│   ├── anonymous.mdx
+│   ├── phone-number.mdx
+│   ├── magic-link.mdx
+│   ├── email-otp.mdx
+│   ├── passkey.mdx
+│   ├── generic-oauth.mdx
+│   ├── one-tap.mdx
+│   └── siwe.mdx
+├── authorization/
+│   ├── meta.json
+│   ├── admin.mdx
+│   ├── api-key.mdx
+│   ├── organization.mdx
+│   └── mcp.mdx
+├── enterprise/
+│   ├── meta.json
+│   ├── oidc-provider.mdx
+│   ├── oauth-provider.mdx
+│   ├── sso.mdx
+│   └── scim.mdx
+├── utility/
+│   ├── meta.json
+│   ├── bearer.mdx
+│   ├── device-authorization.mdx
+│   ├── captcha.mdx
+│   ├── have-i-been-pwned.mdx
+│   ├── last-login-method.mdx
+│   ├── multi-session.mdx
+│   ├── oauth-proxy.mdx
+│   ├── one-time-token.mdx
+│   ├── open-api.mdx
+│   └── jwt.mdx
+├── payments/
+│   ├── meta.json
+│   ├── stripe.mdx
+│   ├── polar.mdx
+│   ├── autumn.mdx
+│   ├── dodopayments.mdx
+│   ├── creem.mdx
+│   └── commet.mdx
+├── community-plugins.mdx
+└── meta.json               # Top-level plugins meta
 ```
 
-**meta.json:**
+**Sidebar Result:**
+```
+▼ Plugins
+  ▼ Authentication
+    • Two Factor
+    • Username
+    • Anonymous
+    • ...
+  ▼ Authorization
+    • Admin
+    • API Key
+    • Organization
+    • MCP
+  ▼ Enterprise
+    • OIDC Provider
+    • OAuth Provider
+    • SSO
+    • SCIM
+  ▼ Utility
+    • Bearer
+    • Captcha
+    • ...
+  ▼ Payments
+    • Stripe
+    • Polar
+    • ...
+  • Community Plugins
+```
+
+### Example meta.json for Plugin Category
+
+**`plugins/authentication/meta.json`:**
 ```json
 {
-  "title": "Organization",
+  "title": "Authentication",
+  "description": "Plugins that add authentication methods",
   "pages": [
-    "index",
-    "usage",
-    "invitations",
-    "members",
-    "access-control",
-    "dynamic-access",
-    "teams",
-    "schema"
+    "2fa",
+    "username",
+    "anonymous",
+    "phone-number",
+    "magic-link",
+    "email-otp",
+    "passkey",
+    "generic-oauth",
+    "one-tap",
+    "siwe"
   ]
 }
 ```
 
-#### SSO Plugin → Folder Structure
-```
-plugins/sso/
-├── index.mdx           # Overview, Installation
-├── oidc.mdx            # OIDC providers
-├── saml.mdx            # SAML providers
-├── provisioning.mdx    # User/Org provisioning
-├── security.mdx        # SAML security
-├── domain.mdx          # Domain verification
-├── schema.mdx          # Database schema
-└── meta.json
-```
-
-#### OAuth Provider Plugin → Folder Structure
-```
-plugins/oauth-provider/
-├── index.mdx           # Overview, Installation
-├── configuration.mdx   # Server configuration
-├── clients.mdx         # Client management
-├── tokens.mdx          # Token handling
-├── scopes.mdx          # Scope management
-├── schema.mdx          # Database schema
-└── meta.json
+**`plugins/meta.json`:**
+```json
+{
+  "title": "Plugins",
+  "pages": [
+    "authentication",
+    "authorization",
+    "enterprise",
+    "utility",
+    "payments",
+    "community-plugins"
+  ]
+}
 ```
 
-#### API Key Plugin → Folder Structure
+---
+
+### Option B: Also Restructure Other Sections
+
+Apply the same pattern to other sections that have logical subgroups:
+
+#### Databases → Adapters (Cleaner naming)
 ```
-plugins/api-key/
-├── index.mdx           # Overview, Installation
-├── usage.mdx           # Creating, validating keys
-├── scopes.mdx          # Scopes and permissions
-├── configuration.mdx   # Options and customization
-└── meta.json
-```
-
-#### Other Large Plugins (Split Similarly)
-- `stripe.mdx` → `plugins/stripe/` (webhooks, subscriptions, etc.)
-- `admin.mdx` → `plugins/admin/` (users, sessions, banning)
-- `oidc-provider.mdx` → `plugins/oidc-provider/`
-
-#### Small Plugins (Keep as Single Files)
-- `username.mdx` (357 lines) - Keep
-- `magic-link.mdx` - Keep
-- `anonymous.mdx` - Keep
-- `email-otp.mdx` - Keep
-- `passkey.mdx` (403 lines) - Keep
-- etc.
-
-### 2. Concepts (Priority: Medium)
-
-#### Database Concept → Folder Structure
-```
-concepts/database/
-├── index.mdx           # Overview, adapters intro
-├── cli.mdx             # CLI migrations
-├── programmatic.mdx    # Programmatic migrations
-├── core-schema.mdx     # Core tables
-├── custom-fields.mdx   # Field customization
-└── meta.json
+content/docs/adapters/
+├── databases/
+│   ├── meta.json
+│   ├── mysql.mdx
+│   ├── sqlite.mdx
+│   ├── postgresql.mdx
+│   ├── mssql.mdx
+│   └── mongo.mdx
+├── orms/
+│   ├── meta.json
+│   ├── drizzle.mdx
+│   └── prisma.mdx
+├── other-relational-databases.mdx
+└── community-adapters.mdx
 ```
 
-#### Session Management → Folder Structure
+#### Integrations (Already well-grouped, just formalize)
 ```
-concepts/sessions/
-├── index.mdx           # Overview
-├── configuration.mdx   # Cookie config, expiration
-├── stateless.mdx       # JWT-based sessions
-├── multi-session.mdx   # Multiple sessions
-└── meta.json
+content/docs/integrations/
+├── fullstack/
+│   ├── meta.json
+│   ├── next.mdx
+│   ├── remix.mdx
+│   ├── astro.mdx
+│   ├── nuxt.mdx
+│   ├── svelte-kit.mdx
+│   ├── solid-start.mdx
+│   └── tanstack.mdx
+├── backend/
+│   ├── meta.json
+│   ├── hono.mdx
+│   ├── fastify.mdx
+│   ├── express.mdx
+│   ├── elysia.mdx
+│   ├── nitro.mdx
+│   ├── nestjs.mdx
+│   └── convex.mdx
+├── mobile/
+│   ├── meta.json
+│   ├── expo.mdx
+│   └── lynx.mdx
+└── waku.mdx
 ```
 
-#### Keep as Single Files
-- `api.mdx` (117 lines)
-- `cli.mdx` (108 lines)
-- `cookies.mdx` (95 lines)
-- `email.mdx` (204 lines)
-- `hooks.mdx` (246 lines)
-- `typescript.mdx` (146 lines)
+---
 
-### 3. Integrations (Priority: Low)
+## Fumadocs Folder Convention
 
-Most integrations are appropriately sized. Only consider splitting if content grows:
+### How Fumadocs Handles Folders
 
-- `expo.mdx` (542 lines) - Could split into setup/usage/components
-- `waku.mdx` (451 lines) - Borderline, monitor
+1. **Folder = Collapsible Section**: A folder with `meta.json` creates a collapsible group
+2. **`index.mdx` = Section Landing**: Optional, clicking the folder navigates here
+3. **`meta.json` = Ordering**: Controls page order and titles
+4. **Automatic Discovery**: Fumadocs finds all `.mdx` files in the folder
 
-### 4. Sidebar Updates
+### Required Changes
 
-The sidebar is manually maintained in `sidebar-content.tsx`. After restructuring, update to use folder-based navigation:
+Currently, your sidebar is **manually built** in `sidebar-content.tsx`:
 
 ```tsx
-// Current: Flat list
-{
-  title: "Organization",
-  href: "/docs/plugins/organization",
-  icon: Users2,
-}
+// Current approach - everything hardcoded
+export const contents: Content[] = [
+  {
+    title: "Plugins",
+    list: [
+      { title: "Authentication", group: true },  // Visual only
+      { title: "Two Factor", href: "/docs/plugins/2fa" },
+      ...
+    ]
+  }
+]
+```
 
-// After: Folder with children (Fumadocs handles this automatically)
-// The folder structure will create accordion navigation
+**To use Fumadocs folder conventions**, you have two options:
+
+#### Option 1: Keep Manual Sidebar + Add Folder Structure
+Keep `sidebar-content.tsx` but update URLs to match new folder structure:
+```tsx
+{
+  title: "Two Factor",
+  href: "/docs/plugins/authentication/2fa",  // New path
+}
+```
+
+#### Option 2: Use Fumadocs Auto-Discovery
+Replace manual sidebar with Fumadocs source loader:
+```tsx
+// source.ts - let Fumadocs build the tree from folders
+export const source = loader({
+  baseUrl: "/docs",
+  source: docs.toFumadocsSource(),
+});
+
+// Remove manual pageTree override
+// source.pageTree = getPageTree();  ← Remove this
 ```
 
 ---
 
-## Implementation Steps
+## Recommended Migration Path
 
-### Phase 1: Large Plugin Restructure
-1. Create folder structure for `organization` plugin
-2. Split content by logical sections
-3. Add `meta.json` for ordering
-4. Update cross-references (internal links)
-5. Test sidebar navigation
-6. Repeat for: `sso`, `oauth-provider`, `api-key`, `stripe`
+### Phase 1: Restructure Plugins Folder (Minimal Risk)
 
-### Phase 2: Concept Restructure
-1. Split `database.mdx` into folder
-2. Split `session-management.mdx` if needed
-3. Update internal references
+1. Create subfolders: `plugins/authentication/`, `plugins/authorization/`, etc.
+2. Move MDX files into appropriate subfolders
+3. Add `meta.json` to each subfolder
+4. Update `sidebar-content.tsx` with new paths
+5. Set up redirects from old URLs
 
-### Phase 3: Sidebar Cleanup
-1. Simplify `sidebar-content.tsx` to leverage Fumadocs auto-discovery
-2. Or maintain manual control with folder awareness
+### Phase 2: Evaluate Sidebar Approach
 
-### Phase 4: Validation
-1. Check all internal links work
-2. Verify search indexing
-3. Test AI consumption (token counts)
+After Phase 1, decide:
+- Continue manual sidebar (full control, more maintenance)
+- Switch to Fumadocs auto-discovery (less control, automatic updates)
+
+### Phase 3: Apply to Other Sections (Optional)
+
+- Adapters: Split databases/orms
+- Integrations: Formalize fullstack/backend/mobile folders
 
 ---
 
-## Fumadocs Configuration
+## URL Structure Comparison
 
-### Using meta.json for Page Ordering
+### Current URLs
+```
+/docs/plugins/2fa
+/docs/plugins/organization
+/docs/plugins/stripe
+/docs/adapters/drizzle
+/docs/integrations/next
+```
 
-Each folder can have a `meta.json` to control sidebar order:
+### Proposed URLs
+```
+/docs/plugins/authentication/2fa
+/docs/plugins/authorization/organization
+/docs/plugins/payments/stripe
+/docs/adapters/orms/drizzle
+/docs/integrations/fullstack/next
+```
 
-```json
-{
-  "title": "Organization",
-  "description": "Manage organizations, teams, and access control",
-  "pages": [
-    "index",
-    "---Getting Started---",
-    "usage",
-    "---Features---",
-    "invitations",
-    "members",
-    "access-control",
-    "teams",
-    "---Reference---",
-    "schema"
+### Handling Redirects
+
+Add redirects in `next.config.js`:
+```js
+async redirects() {
+  return [
+    {
+      source: '/docs/plugins/2fa',
+      destination: '/docs/plugins/authentication/2fa',
+      permanent: true,
+    },
+    // ... more redirects
   ]
 }
 ```
 
-### Index Page Convention
-
-- `index.mdx` in a folder becomes the parent page
-- Clicking the folder name navigates to `index.mdx`
-- Sub-pages appear in the sidebar accordion
-
 ---
 
-## Example: Organization Plugin Split
+## Summary
 
-### Before (Single 2,539-line file)
+| Aspect | Current | Proposed |
+|--------|---------|----------|
+| Plugin structure | 36 flat files + visual groups | 6 folders with meta.json |
+| Sidebar | Fully manual in TSX | Manual or Fumadocs auto |
+| Nesting | None | One level (category → plugin) |
+| Accordion navigation | Not possible | Yes, via folders |
+| URL depth | `/docs/plugins/name` | `/docs/plugins/category/name` |
 
-```mdx
----
-title: Organization
-description: The organization plugin...
----
+### Key Benefits
+1. **Accordion sidebar** - Collapsible plugin categories
+2. **Consistent structure** - All sections follow same pattern
+3. **Easier discovery** - Users can browse by category
+4. **Fumadocs native** - Uses built-in folder conventions
+5. **One level only** - Category → Page (not deeper)
 
-## Installation
-...
+### Questions to Decide
 
-## Usage
-...
-
-## Invitations
-...
-
-## Members
-...
-(continues for 2500+ lines)
-```
-
-### After (8 focused files)
-
-**`organization/index.mdx`** (~100 lines)
-```mdx
----
-title: Organization
-description: The organization plugin allows you to manage organizations, members, and teams.
----
-
-Organizations simplify user access and permissions management...
-
-## Installation
-<Steps>
-...
-</Steps>
-
-## What's Next
-
-- [Basic Usage](/docs/plugins/organization/usage) - Create and manage organizations
-- [Invitations](/docs/plugins/organization/invitations) - Invite members
-- [Access Control](/docs/plugins/organization/access-control) - Configure roles and permissions
-```
-
-**`organization/usage.mdx`** (~400 lines)
-```mdx
----
-title: Organization Usage
-description: Creating and managing organizations
----
-
-## Create an Organization
-...
-
-## List Organizations
-...
-
-## Update Organization
-...
-
-## Delete Organization
-...
-```
-
-**`organization/invitations.mdx`** (~200 lines)
-```mdx
----
-title: Invitations
-description: Managing organization invitations
----
-
-## Setup Invitation Email
-...
-
-## Send Invitation
-...
-
-## Accept Invitation
-...
-```
-
----
-
-## Benefits of This Approach
-
-1. **Token Efficiency**: Each page ~300-400 lines (~5-6K tokens) vs 2,500+ lines
-2. **Better Navigation**: Accordion sidebar shows logical structure
-3. **Focused Reading**: Users find exactly what they need
-4. **Easier Maintenance**: Smaller files are easier to update
-5. **Consistent Structure**: All large plugins follow same pattern
-6. **SEO Improvement**: More specific URLs for each topic
-7. **AI-Friendly**: Smaller context windows, better responses
-
----
-
-## Files to Keep Unchanged
-
-These files are appropriately sized and don't need restructuring:
-
-- All files under `authentication/` (social providers)
-- All files under `errors/`
-- All files under `examples/`
-- All files under `reference/`
-- Most files under `guides/`
-- Small plugins (< 500 lines)
-- Small concepts (< 500 lines)
-
----
-
-## Migration Checklist
-
-- [ ] Create folder structure for `organization` plugin
-- [ ] Split `organization.mdx` into sub-pages
-- [ ] Add `meta.json` for `organization/`
-- [ ] Update internal links referencing organization sections
-- [ ] Repeat for `sso` plugin
-- [ ] Repeat for `oauth-provider` plugin
-- [ ] Repeat for `api-key` plugin
-- [ ] Repeat for `stripe` plugin
-- [ ] Split `concepts/database.mdx` if approved
-- [ ] Update `sidebar-content.tsx` for folder awareness
-- [ ] Run link checker
-- [ ] Test search functionality
-- [ ] Verify mobile navigation
-
----
-
-## Questions for Team
-
-1. Should we also split medium-sized plugins (500-800 lines)?
-2. Should `database.mdx` (concepts) follow the same pattern?
-3. Do you want automatic sidebar generation or keep manual control?
-4. Should we add "Overview" suffixes to index pages or keep titles simple?
-5. How should we handle existing bookmarks/links to anchors in the original files?
+1. **Which sections to restructure?** Just plugins, or also adapters/integrations?
+2. **Manual vs auto sidebar?** Keep control or let Fumadocs handle it?
+3. **Redirect strategy?** 301 redirects vs preserve old URLs?
+4. **Index pages?** Add landing pages for each category folder?
