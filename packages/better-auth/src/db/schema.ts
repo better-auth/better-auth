@@ -86,7 +86,19 @@ export function parseAccountOutput<T extends Account>(
 	account: T,
 ) {
 	const schema = getFields(options, "account", "output");
-	return parseOutputData(account, { fields: schema });
+	const parsed = parseOutputData(account, { fields: schema });
+	// destructuring for type inference
+	// runtime filtering is already done by `parseOutputData`
+	const {
+		accessToken,
+		refreshToken,
+		idToken,
+		accessTokenExpiresAt,
+		refreshTokenExpiresAt,
+		password,
+		...rest
+	} = parsed;
+	return rest;
 }
 
 export function parseSessionOutput<T extends Session>(
