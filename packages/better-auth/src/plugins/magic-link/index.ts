@@ -366,7 +366,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 					} = JSON.parse(tokenValue.value) as {
 						email: string;
 						name?: string | undefined;
-            attempt: number;
+						attempt: number;
 					};
 					if (attempt >= opts.allowedAttempts) {
 						await ctx.context.internalAdapter.deleteVerificationValue(
