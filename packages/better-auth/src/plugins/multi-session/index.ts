@@ -1,9 +1,9 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { Session, User } from "@better-auth/core/db";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
