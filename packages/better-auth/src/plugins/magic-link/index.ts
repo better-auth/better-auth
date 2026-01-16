@@ -8,6 +8,7 @@ import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
+import { parseSessionOutput, parseUserOutput } from "../../db";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
@@ -402,15 +403,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 					if (!ctx.query.callbackURL) {
 						return ctx.json({
 							token: session.token,
-							user: {
-								id: user.id,
-								email: user.email,
-								emailVerified: user.emailVerified,
-								name: user.name,
-								image: user.image,
-								createdAt: user.createdAt,
-								updatedAt: user.updatedAt,
-							},
+							user: parseUserOutput(ctx.context.options, user),
+							session: parseSessionOutput(ctx.context.options, session),
 						});
 					}
 					if (isNewUser) {
