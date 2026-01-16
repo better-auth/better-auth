@@ -3,12 +3,12 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
+import defu from "defu";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
-import defu from "defu";
 
 export const getClientConfig = (
 	options?: BetterAuthClientOptions | undefined,
@@ -63,10 +63,6 @@ export const getClientConfig = (
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
-	const pluginsActions = defu(
-	  {},
-		plugins.map((p) => p.getActions?.($fetch, $store, options)),
-	) as Record<string, any>;
 	const pluginsAtoms = {
 		$sessionSignal,
 		session,
@@ -125,6 +121,11 @@ export const getClientConfig = (
 		},
 		atoms: pluginsAtoms,
 	};
+
+	const pluginsActions = defu(
+		{},
+		plugins.map((p) => p.getActions?.($fetch, $store, options)),
+	) as Record<string, any>;
 
 	return {
 		get baseURL() {
