@@ -475,7 +475,7 @@ export const mongodbAdapter = (
 						}
 					}
 
-					if (select) {
+					if (select?.length) {
 						const projection: any = {};
 						select.forEach((field) => {
 							projection[getFieldName({ field, model })] = 1;

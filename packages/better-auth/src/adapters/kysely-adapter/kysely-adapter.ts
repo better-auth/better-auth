@@ -389,7 +389,7 @@ export const kyselyAdapter = (
 									eb.or(or.map((expr: any) => expr(eb))),
 								);
 							}
-							if (select) {
+							if (select?.length) {
 								b = b.select(
 									select.map((field) => getFieldName({ model, field })),
 								);
@@ -482,7 +482,7 @@ export const kyselyAdapter = (
 								);
 							}
 
-							if (select) {
+							if (select?.length) {
 								b = b.select(
 									select.map((field) => getFieldName({ model, field })),
 								);
