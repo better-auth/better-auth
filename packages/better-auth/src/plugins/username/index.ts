@@ -8,7 +8,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db";
+import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
@@ -212,6 +212,13 @@ export const username = (options?: UsernameOptions | undefined) => {
 											schema: {
 												type: "object",
 												properties: {
+													redirect: {
+														type: "boolean",
+													},
+													url: {
+														type: "string",
+														nullable: true,
+													},
 													token: {
 														type: "string",
 														description:
@@ -221,7 +228,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 														$ref: "#/components/schemas/User",
 													},
 												},
-												required: ["token", "user"],
+												required: ["token", "user", "redirect"],
 											},
 										},
 									},
@@ -411,18 +418,11 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
 						token: session.token,
-						user: {
-							id: user.id,
-							email: user.email,
-							emailVerified: user.emailVerified,
-							username: user.username,
-							displayUsername: user.displayUsername,
-							name: user.name,
-							image: user.image,
-							createdAt: user.createdAt,
-							updatedAt: user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user) as User &
+							Record<string, unknown>,
 					});
 				},
 			),
