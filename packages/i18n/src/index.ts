@@ -1,5 +1,6 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
+import { parseCookies } from "better-auth/cookies";
 import type { I18nOptions, LocaleDetectionStrategy } from "./types";
 
 export type {
@@ -34,18 +35,6 @@ function parseAcceptLanguage(header: string | null): string[] {
 		.filter((item) => item.locale.length > 0)
 		.sort((a, b) => b.q - a.q)
 		.map((item) => item.locale);
-}
-
-/**
- * Parse cookies from Cookie header
- */
-function getCookieValue(
-	cookieHeader: string | null,
-	cookieName: string,
-): string | null {
-	if (!cookieHeader) return null;
-	const match = cookieHeader.match(new RegExp(`${cookieName}=([^;]+)`));
-	return match?.[1] ?? null;
 }
 
 /**
@@ -102,10 +91,13 @@ export const i18n = <Locales extends string[]>(
 				}
 
 				case "cookie": {
-					const cookies = headers?.get("Cookie") ?? null;
-					const cookieLocale = getCookieValue(cookies, opts.localeCookie);
-					if (cookieLocale && availableLocales.includes(cookieLocale)) {
-						locale = cookieLocale;
+					const cookieHeader = headers?.get("Cookie");
+					if (cookieHeader) {
+						const cookies = parseCookies(cookieHeader);
+						const cookieLocale = cookies.get(opts.localeCookie);
+						if (cookieLocale && availableLocales.includes(cookieLocale)) {
+							locale = cookieLocale;
+						}
 					}
 					break;
 				}
