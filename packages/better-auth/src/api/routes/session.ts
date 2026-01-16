@@ -556,6 +556,17 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
+ * Attaches the session to the request context if present, without requiring authentication.
+ */
+export const optionalSessionMiddleware = createAuthMiddleware(async (ctx) => {
+	const session = await getSessionFromCtx(ctx);
+	
+	return {
+		session,
+	};
+});
+
+/**
  * This middleware forces the endpoint to require a valid session and ignores cookie cache.
  * This should be used for sensitive operations like password changes, account deletion, etc.
  * to ensure that revoked sessions cannot be used even if they're still cached in cookies.
