@@ -262,10 +262,13 @@ export const siwe = (options: SIWEPluginOptions) =>
 							});
 						}
 
-						if (!user) throw new Error("User not found");
+						if (!user) throw new APIError("NOT_FOUND", {
+							message: "User not found",
+							code: "USER_NOT_FOUND",
+						});
 
 						const session = await ctx.context.internalAdapter.createSession(
-							user!.id,
+							user.id,
 						);
 
 						if (!session) {
@@ -281,7 +284,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 							token: session.token,
 							success: true,
 							user: {
-								id: user!.id,
+								id:user.id,
 								walletAddress,
 								chainId,
 							},
