@@ -8,6 +8,7 @@ import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
 import { parseJSON } from "./parser";
 import { getSessionAtom } from "./session-atom";
+import defu from "defu";
 
 export const getClientConfig = (
 	options?: BetterAuthClientOptions | undefined,
@@ -62,7 +63,10 @@ export const getClientConfig = (
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
-	const pluginsActions = {} as Record<string, any>;
+	const pluginsActions = defu(
+	  {},
+		plugins.map((p) => p.getActions?.($fetch, $store, options)),
+	) as Record<string, any>;
 	const pluginsAtoms = {
 		$sessionSignal,
 		session,
@@ -122,14 +126,6 @@ export const getClientConfig = (
 		atoms: pluginsAtoms,
 	};
 
-	for (const plugin of plugins) {
-		if (plugin.getActions) {
-			Object.assign(
-				pluginsActions,
-				plugin.getActions?.($fetch, $store, options),
-			);
-		}
-	}
 	return {
 		get baseURL() {
 			return baseURL;
