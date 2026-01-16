@@ -103,4 +103,8 @@ export interface Addon<TOptions = unknown> {
 	 * Error codes for the addon.
 	 */
 	errorCodes?: Record<string, { code: string; message: string }>;
+	/**
+	 * Infer types for the addon.
+	 */
+	Infer?: Record<string, any>;
 }

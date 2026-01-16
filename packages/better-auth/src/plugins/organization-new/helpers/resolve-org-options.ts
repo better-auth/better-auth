@@ -20,6 +20,7 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 		creatorRole: opts?.creatorRole ?? DEFAULT_CREATOR_ROLE,
 		membershipLimit: opts?.membershipLimit ?? DEFAULT_MEMBERSHIP_LIMIT,
 		disableSlugs: opts?.disableSlugs ?? DEFAULT_DISABLE_SLUGS,
+		defaultOrganizationIdField: opts?.defaultOrganizationIdField ?? "id",
 		roles: { ...defaultRoles, ...roles },
 		allowUserToCreateOrganization: async (...args) => {
 			const allowCreateOrg = opts?.allowUserToCreateOrganization;

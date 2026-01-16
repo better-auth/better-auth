@@ -143,7 +143,7 @@ export const getAddonHook = <H extends AddonHookOptions>(
 			for (const { hookFn } of hooks) {
 				try {
 					// @ts-expect-error - intentional, complex union types
-					const response = await hookFn(data, ctx, context);
+					const response = await hookFn(data, ctx, addonCtx);
 
 					if (response && typeof response === "object" && "data" in response) {
 						const responseData = response.data as Record<string, any>;
@@ -171,8 +171,7 @@ export const getAddonHook = <H extends AddonHookOptions>(
 
 			for (const { hookFn } of hooks) {
 				try {
-					// @ts-expect-error - intentional, complex union types
-					await hookFn(data, ctx, context);
+					await hookFn(data, ctx, addonCtx);
 				} catch (error) {
 					// Re-throw errors to allow hooks to signal failures
 					throw error;

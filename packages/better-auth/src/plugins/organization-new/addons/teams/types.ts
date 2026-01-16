@@ -8,6 +8,8 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../../db";
 import type { Organization } from "../../schema";
 import type { Team, TeamMember } from "./schema";
 
+export type TeamId = `id:${string}` | `slug:${string}`;
+
 export interface TeamsOptions {
 	hooks?: TeamHooks;
 	/**
@@ -75,12 +77,21 @@ export interface TeamsOptions {
 	 * @default false
 	 */
 	allowRemovingAllTeams?: boolean;
+	/**
+	 * Enable slugs for teams.
+	 *
+	 * @default false
+	 */
+	enableSlugs?: boolean;
+	/**
+	 * Configure the team related schemas
+	 */
 	schema?:
 		| {
 				team?: {
 					modelName?: string;
 					fields?: {
-						[key in keyof Omit<Team, "id">]?: string;
+						[key in keyof Omit<Team & { slug: string }, "id">]?: string;
 					};
 					additionalFields?: {
 						[key in string]: DBFieldAttribute;
@@ -143,7 +154,9 @@ export type InferTeam<
 	TO extends TeamsOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", TO, isClientSide>
+	Team &
+		InferAdditionalFieldsFromPluginOptions<"team", TO, isClientSide> &
+		(TO["enableSlugs"] extends true ? { slug: string } : {})
 >;
 
 export type TeamHooks =

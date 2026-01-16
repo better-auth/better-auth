@@ -30,7 +30,7 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"You cannot leave the organization without an owner",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_MEMBER:
 		"You are not allowed to delete this member",
-	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
+	NOT_ALLOWED_TO_INVITE_USERS_TO_ORG:
 		"You are not allowed to invite users to this organization",
 	USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION:
 		"User is already invited to this organization",
@@ -53,7 +53,7 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to update this member",
 	ORGANIZATION_MEMBERSHIP_LIMIT_REACHED:
 		"Organization membership limit reached",
-	YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION:
+	NOT_ALLOWED_TO_CREATE_TEAMS_IN_ORG:
 		"You are not allowed to create teams in this organization",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION:
 		"You are not allowed to delete teams in this organization",

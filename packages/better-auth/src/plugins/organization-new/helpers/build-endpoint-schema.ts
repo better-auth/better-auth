@@ -132,18 +132,15 @@ export const buildEndpointSchema = <
 	optionalSchema?: OptionalSchema;
 }) => {
 	const {
-		additionalFields: additionalFieldsOptions,
+		additionalFields: _additionalFields,
 		baseSchema,
 		shouldBePartial,
 		optionalSchema,
 	} = opts;
 
 	// Process additional fields from Better Auth schema
-	const { model: schemaName, schema: schemaConfig } =
-		additionalFieldsOptions || {};
-	let additionalFields = {
-		...(schemaConfig?.[schemaName]?.additionalFields || {}),
-	};
+	const { model: schemaName, schema: schemaConfig } = _additionalFields || {};
+	const additionalFields = schemaConfig?.[schemaName]?.additionalFields || {};
 
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
