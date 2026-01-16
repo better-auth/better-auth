@@ -27,7 +27,10 @@ function parseOutputData<T extends Record<string, any>>(
 			parsedData[key] = data[key];
 			continue;
 		}
-		if (field.returned === false) {
+		if (
+			field.returned === false &&
+			key !== "id" // id is always returned
+		) {
 			continue;
 		}
 		parsedData[key] = data[key];
