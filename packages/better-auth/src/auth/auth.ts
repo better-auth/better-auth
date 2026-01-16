@@ -25,7 +25,7 @@ import { createBetterAuth } from "./base";
  * });
  */
 export const betterAuth = <Options extends BetterAuthOptions>(
-	options: Options & Record<never, never>,
+	options: Options,
 ): Auth<Options> => {
 	return createBetterAuth(options, init);
 };
