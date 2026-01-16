@@ -31,6 +31,7 @@ interface Content {
 		href: string;
 		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 		group?: boolean;
+		separator?: boolean;
 		isNew?: boolean;
 	}[];
 }
@@ -72,13 +73,20 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => ({
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			})),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
@@ -1979,6 +1987,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						></path>
 					</svg>
 				),
+			},
+			{
+				title: "3rd Party Payment",
+				separator: true,
+				href: "",
+				icon: () => null,
 			},
 			{
 				title: "Polar",
