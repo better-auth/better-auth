@@ -123,9 +123,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organizationId,
-		);
+		expect(session.data?.session?.activeOrganizationId).toBe(organizationId);
 	});
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
@@ -296,9 +294,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organizationId,
-		);
+		expect(session.data?.session.activeOrganizationId).toBe(organizationId);
 	});
 	it("should allow activating organization by slug", async () => {
 		const { headers } = await signInWithTestUser();
@@ -313,9 +309,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organization2Id,
-		);
+		expect(session.data?.session.activeOrganizationId).toBe(organization2Id);
 	});
 
 	it("should allow getting full org on server", async () => {
@@ -411,7 +405,7 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
-		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
+		expect(invitedUserSession.data?.session.activeOrganizationId).toBe(
 			organizationId,
 		);
 	});
@@ -548,7 +542,7 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		const memberUser = org.data.members.find((x: any) => x.role === "member");
+		const memberUser = org.data.members.find((x) => x.role === "member");
 		if (!memberUser) throw new Error("Member not found");
 		const member = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
@@ -2237,7 +2231,7 @@ describe("Additional Fields", async () => {
 			});
 
 			type Result = PrettifyDeep<typeof orgRes>;
-			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>({} as any);
+			expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
 			expect(orgRes).not.toBeNull();
 			if (!orgRes) throw new Error("Organization is null");
 			org = orgRes;
@@ -2378,7 +2372,7 @@ describe("Additional Fields", async () => {
 		type Data = PrettifyDeep<typeof data>;
 
 		expect(error).toBeNull();
-		expectTypeOf<Data>().toEqualTypeOf<{
+		expectTypeOf<Data>().toMatchTypeOf<{
 			id: string;
 			name: string;
 			slug: string;
@@ -2390,7 +2384,7 @@ describe("Additional Fields", async () => {
 			someHiddenField?: string | undefined;
 			members: any[];
 			invitations: any[];
-		} | null>({} as any);
+		} | null>();
 		if (data === null) return expect(data).not.toBe(null);
 		expect(data.someRequiredField).toBe("hey2");
 		expect(data.someOptionalField).toBe("hey");
@@ -2885,7 +2879,7 @@ async function getAtomValue<Result>(
 		object,
 ) {
 	// Trick the authClient to think it's on the client side in order to trigger the useAuthQuery hook
-	global.window = {} as any;
+	global.window = {} as unknown as Window & typeof globalThis;
 
 	// Run the hook and wait for the result
 	const res = await new Promise<{
@@ -2901,7 +2895,7 @@ async function getAtomValue<Result>(
 	});
 
 	// Reset the window object
-	global.window = undefined as any;
+	global.window = undefined as unknown as Window & typeof globalThis;
 
 	// Return the result
 	return res as
