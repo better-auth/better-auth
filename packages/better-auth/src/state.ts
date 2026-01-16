@@ -1,6 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import * as z from "zod";
+import { expireCookie } from "./cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -159,9 +160,7 @@ export async function parseGenericState(
 		}
 
 		// Clear the cookie after successful parsing
-		c.setCookie(stateCookie.name, "", {
-			maxAge: 0,
-		});
+		expireCookie(c, stateCookie);
 	} else {
 		// Default: database strategy
 		const data = await c.context.internalAdapter.findVerificationValue(state);
@@ -199,9 +198,7 @@ export async function parseGenericState(
 			});
 		}
 
-		c.setCookie(stateCookie.name, "", {
-			maxAge: 0,
-		});
+		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
 		await c.context.internalAdapter.deleteVerificationValue(data.id);

@@ -20,7 +20,7 @@ export const memoryAdapter = (
 	config?: MemoryAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
-	let adapterCreator = createAdapterFactory({
+	const adapterCreator = createAdapterFactory({
 		config: {
 			adapterId: "memory",
 			adapterName: "Memory Adapter",
@@ -37,7 +37,7 @@ export const memoryAdapter = (
 				return props.data;
 			},
 			transaction: async (cb) => {
-				let clone = structuredClone(db);
+				const clone = structuredClone(db);
 				try {
 					const r = await cb(adapterCreator(lazyOptions!));
 					return r;
@@ -271,7 +271,7 @@ export const memoryAdapter = (
 					return record;
 				},
 				findMany: async ({ model, where, sortBy, limit, offset, join }) => {
-					let res = convertWhereClause(where || [], model, join);
+					const res = convertWhereClause(where || [], model, join);
 
 					if (join) {
 						// When join is present, res is an array of nested objects
