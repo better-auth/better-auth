@@ -75,10 +75,15 @@ export function parseUserOutput<T extends User>(
 	user: T,
 ) {
 	const schema = getFields(options, "user", "output");
-	return {
-		...parseOutputData(user, { fields: schema }),
-		id: user.id,
-	};
+	return parseOutputData(user, { fields: schema });
+}
+
+export function parseSessionOutput<T extends Session>(
+	options: BetterAuthOptions,
+	session: T,
+) {
+	const schema = getFields(options, "session", "output");
+	return parseOutputData(session, { fields: schema });
 }
 
 export function parseAccountOutput<T extends Account>(
@@ -99,14 +104,6 @@ export function parseAccountOutput<T extends Account>(
 		...rest
 	} = parsed;
 	return rest;
-}
-
-export function parseSessionOutput<T extends Session>(
-	options: BetterAuthOptions,
-	session: T,
-) {
-	const schema = getFields(options, "session", "output");
-	return parseOutputData(session, { fields: schema });
 }
 
 export function parseInputData<T extends Record<string, any>>(
