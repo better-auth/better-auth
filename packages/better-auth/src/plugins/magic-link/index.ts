@@ -372,8 +372,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						await ctx.context.internalAdapter.deleteVerificationValue(
 							tokenValue.id,
 						);
-
-						throw ctx.redirect(`${errorCallbackURL}?error=ATTEMPTS_EXCEEDED`);
+						redirectWithError("ATTEMPTS_EXCEEDED");
 					}
 					await ctx.context.internalAdapter.updateVerificationValue(
 						tokenValue.id,
