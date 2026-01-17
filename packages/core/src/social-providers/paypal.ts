@@ -64,8 +64,8 @@ export const paypal = (options: PayPalOptions) => {
 	const isSandbox = environment === "sandbox";
 
 	const authorizationEndpoint = isSandbox
-		? "https://www.sandbox.paypal.com/signin/authorize"
-		: "https://www.paypal.com/signin/authorize";
+		? "https://www.sandbox.paypal.com/connect?"
+		: "https://www.paypal.com/connect?";
 
 	const tokenEndpoint = isSandbox
 		? "https://api-m.sandbox.paypal.com/v1/oauth2/token"
