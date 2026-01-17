@@ -15,6 +15,18 @@ import type { TwoFactorProvider, UserWithTwoFactor } from "../types";
 import { defaultKeyHasher } from "../utils";
 import { verifyTwoFactor } from "../verify-two-factor";
 
+export type OTPMethod = "email" | "phone";
+
+export type SendOTPData = {
+	user: UserWithTwoFactor;
+	otp: string;
+};
+
+export type SendOTPFn = (
+	data: SendOTPData,
+	ctx?: GenericEndpointContext,
+) => Awaitable<void>;
+
 export interface OTPOptions {
 	/**
 	 * How long the opt will be valid for in
@@ -30,30 +42,31 @@ export interface OTPOptions {
 	 */
 	digits?: number | undefined;
 	/**
-	 * Send the otp to the user
+	 * Send the otp to the user (used as fallback if sendEmailOTP/sendPhoneOTP are not provided)
 	 *
 	 * @param user - The user to send the otp to
 	 * @param otp - The otp to send
 	 * @param request - The request object
 	 * @returns void | Promise<void>
+	 * @deprecated Use `sendEmailOTP` or `sendPhoneOTP` instead for more explicit OTP delivery methods
 	 */
-	sendOTP?:
-		| ((
-				/**
-				 * The user to send the otp to
-				 * @type UserWithTwoFactor
-				 * @default UserWithTwoFactors
-				 */
-				data: {
-					user: UserWithTwoFactor;
-					otp: string;
-				},
-				/**
-				 * The request object
-				 */
-				ctx?: GenericEndpointContext,
-		  ) => Awaitable<void>)
-		| undefined;
+	sendOTP?: SendOTPFn | undefined;
+	/**
+	 * Send the otp to the user via email
+	 *
+	 * @param data - Object containing the user and the otp
+	 * @param ctx - The request context
+	 * @returns void | Promise<void>
+	 */
+	sendEmailOTP?: SendOTPFn | undefined;
+	/**
+	 * Send the otp to the user via phone (SMS)
+	 *
+	 * @param data - Object containing the user and the otp
+	 * @param ctx - The request context
+	 * @returns void | Promise<void>
+	 */
+	sendPhoneOTP?: SendOTPFn | undefined;
 	/**
 	 * The number of allowed attempts for the OTP
 	 *
@@ -89,19 +102,25 @@ const verifyOTPBodySchema = z.object({
 	}),
 });
 
-const send2FaOTPBodySchema = z
-	.object({
-		/**
-		 * if true, the device will be trusted
-		 * for 30 days. It'll be refreshed on
-		 * every sign in request within this time.
-		 */
-		trustDevice: z.boolean().optional().meta({
-			description:
-				"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
-		}),
-	})
-	.optional();
+const send2FaOTPBodySchema = z.object({
+	/**
+	 * The method to send the OTP
+	 * @default "email"
+	 */
+	method: z.enum(["email", "phone"]).optional().default("email").meta({
+		description:
+			'The method to use for sending the OTP. Can be "email" or "phone". Defaults to "email".',
+	}),
+	/**
+	 * if true, the device will be trusted
+	 * for 30 days. It'll be refreshed on
+	 * every sign in request within this time.
+	 */
+	trustDevice: z.boolean().optional().meta({
+		description:
+			"If true, the device will be trusted for 30 days. It'll be refreshed on every sign in request within this time. Eg: true",
+	}),
+});
 
 /**
  * The otp adapter is created from the totp adapter.
@@ -153,6 +172,19 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 	}
 
 	/**
+	 * Get the appropriate send function based on the method
+	 */
+	function getSendOTPFunction(method: OTPMethod): SendOTPFn | undefined {
+		if (method === "email") {
+			return options?.sendEmailOTP ?? options?.sendOTP;
+		}
+		if (method === "phone") {
+			return options?.sendPhoneOTP ?? options?.sendOTP;
+		}
+		return options?.sendOTP;
+	}
+
+	/**
 	 * Generate OTP and send it to the user.
 	 */
 	const send2FaOTP = createAuthEndpoint(
@@ -163,7 +195,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			metadata: {
 				openapi: {
 					summary: "Send two factor OTP",
-					description: "Send two factor OTP to the user",
+					description:
+						"Send two factor OTP to the user via email or phone based on the specified method",
 					responses: {
 						200: {
 							description: "Successful response",
@@ -185,15 +218,20 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			},
 		},
 		async (ctx) => {
-			if (!options || !options.sendOTP) {
+			const method = ctx.body?.method ?? "email";
+			const sendOTPFn = getSendOTPFunction(method);
+
+			if (!sendOTPFn) {
+				const methodName = method === "email" ? "sendEmailOTP" : "sendPhoneOTP";
 				ctx.context.logger.error(
-					"send otp isn't configured. Please configure the send otp function on otp options.",
+					`send otp isn't configured for method "${method}". Please configure the ${methodName} function on otp options.`,
 				);
 				throw APIError.from("BAD_REQUEST", {
-					message: "otp isn't configured",
+					message: `otp isn't configured for method "${method}"`,
 					code: "OTP_NOT_CONFIGURED",
 				});
 			}
+
 			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
@@ -202,14 +240,17 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				identifier: `2fa-otp-${key}`,
 				expiresAt: new Date(Date.now() + opts.period),
 			});
-			const sendOTPResult = options.sendOTP(
+			const sendOTPResult = sendOTPFn(
 				{ user: session.user as UserWithTwoFactor, otp: code },
 				ctx,
 			);
 			if (sendOTPResult instanceof Promise) {
 				await ctx.context.runInBackgroundOrAwait(
 					sendOTPResult.catch((e: unknown) => {
-						ctx.context.logger.error("Failed to send two-factor OTP", e);
+						ctx.context.logger.error(
+							`Failed to send two-factor OTP via ${method}`,
+							e,
+						);
 					}),
 				);
 			}
