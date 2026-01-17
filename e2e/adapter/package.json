@@ -17,6 +17,7 @@
     "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.5.0",
+    "drizzle-kit": "^0.30.0",
     "drizzle-orm": "^0.45.1",
     "mongodb": "^7.0.0",
     "mysql2": "^3.14.4",
