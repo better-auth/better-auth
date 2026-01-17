@@ -9,9 +9,7 @@ export type { BetterAuthOptions };
  * Better Auth initializer for minimal mode (without Kysely)
  */
 export const betterAuth = <Options extends BetterAuthOptions>(
-	options: Options &
-		// fixme(alex): do we need Record<never, never> here?
-		Record<never, never>,
+	options: Options & {},
 ): Auth<Options> => {
 	return createBetterAuth(options, initMinimal);
 };

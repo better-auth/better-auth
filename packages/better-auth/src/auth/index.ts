@@ -1,1 +1,0 @@
-export { betterAuth } from "./auth";
