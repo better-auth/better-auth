@@ -3,6 +3,7 @@ import type {
 	ClientAtomListener,
 } from "@better-auth/core";
 import { createFetch } from "@better-fetch/fetch";
+import { defu } from "defu";
 import type { WritableAtom } from "nanostores";
 import { getBaseURL } from "../utils/url";
 import { redirectPlugin } from "./fetch-plugins";
@@ -62,7 +63,7 @@ export const getClientConfig = (
 	});
 	const { $sessionSignal, session } = getSessionAtom($fetch, options);
 	const plugins = options?.plugins || [];
-	const pluginsActions = {} as Record<string, any>;
+	let pluginsActions = {} as Record<string, any>;
 	const pluginsAtoms = {
 		$sessionSignal,
 		session,
@@ -124,9 +125,9 @@ export const getClientConfig = (
 
 	for (const plugin of plugins) {
 		if (plugin.getActions) {
-			Object.assign(
+			pluginsActions = defu(
+				plugin.getActions?.($fetch, $store, options) ?? {},
 				pluginsActions,
-				plugin.getActions?.($fetch, $store, options),
 			);
 		}
 	}
