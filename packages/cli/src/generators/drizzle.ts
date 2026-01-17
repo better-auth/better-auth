@@ -143,17 +143,17 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array()`
 						: `integer('${name}').array()`,
-					mysql: `text('${name}', { mode: 'json' })`,
+					mysql: `json('${name}').$type<number[]>()`,
 				},
 				"string[]": {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `text('${name}').array()`,
-					mysql: `text('${name}', { mode: "json" })`,
+					mysql: `json('${name}').$type<string[]>()`,
 				},
 				json: {
 					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `jsonb('${name}')`,
-					mysql: `json('${name}', { mode: "json" })`,
+					mysql: `json('${name}').$type<Record<string, unknown>>()`,
 				},
 			} as const;
 			const dbTypeMap = (
@@ -542,13 +542,16 @@ function generateImport({
 
 	let hasBigint = false;
 	let hasJson = false;
+	let hasArrayType = false;
 
 	for (const table of Object.values(tables)) {
 		for (const field of Object.values(table.fields)) {
 			if (field.bigint) hasBigint = true;
 			if (field.type === "json") hasJson = true;
+			if (field.type === "string[]" || field.type === "number[]")
+				hasArrayType = true;
 		}
-		if (hasJson && hasBigint) break;
+		if (hasJson && hasBigint && hasArrayType) break;
 	}
 
 	const useNumberId =
@@ -632,6 +635,11 @@ function generateImport({
 		if (databaseType === "pg") coreImports.push("jsonb");
 		if (databaseType === "mysql") coreImports.push("json");
 		// sqlite uses text for JSON, so there's no need to handle this case
+	}
+
+	// MySQL uses json() for array types (string[], number[])
+	if (hasArrayType && databaseType === "mysql" && !hasJson) {
+		coreImports.push("json");
 	}
 
 	// Add sql import for SQLite timestamps with defaultNow
