@@ -231,8 +231,8 @@ describe("i18n plugin", async () => {
 						},
 					},
 				});
-				expect(data).to.toHaveProperty("session");
-				expect(data).to.toHaveProperty("user");
+				expect(data).toHaveProperty("session");
+				expect(data).toHaveProperty("user");
 			});
 		});
 	});
