@@ -22,6 +22,7 @@ async function generateAction(opts: any) {
 			output: z.string().optional(),
 			y: z.boolean().optional(),
 			yes: z.boolean().optional(),
+			force: z.boolean().optional(),
 		})
 		.parse(opts);
 
@@ -52,6 +53,7 @@ async function generateAction(opts: any) {
 		adapter,
 		file: options.output,
 		options: config,
+		force: options.force,
 	});
 
 	spinner.stop();
@@ -202,5 +204,10 @@ export const generate = new Command("generate")
 	)
 	.option("--output <output>", "the file to output to the generated schema")
 	.option("-y, --yes", "automatically answer yes to all prompts", false)
+	.option(
+		"-f, --force",
+		"force schema generation, overriding any existing schema files",
+		false,
+	)
 	.option("--y", "(deprecated) same as --yes", false)
 	.action(generateAction);

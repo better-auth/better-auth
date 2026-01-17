@@ -1,8 +1,7 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { generateDrizzleSchema } from "./drizzle";
 import { generateKyselySchema } from "./kysely";
 import { generatePrismaSchema } from "./prisma";
+import type { SchemaGeneratorOptions } from "./types";
 
 export const adapters = {
 	prisma: generatePrismaSchema,
@@ -10,11 +9,7 @@ export const adapters = {
 	kysely: generateKyselySchema,
 };
 
-export const generateSchema = (opts: {
-	adapter: DBAdapter;
-	file?: string;
-	options: BetterAuthOptions;
-}) => {
+export const generateSchema = (opts: SchemaGeneratorOptions) => {
 	const adapter = opts.adapter;
 	const generator =
 		adapter.id in adapters
