@@ -54,7 +54,6 @@ function parseAcceptLanguage(header: string | null): string[] {
  *         en: { USER_NOT_FOUND: "User not found" },
  *         fr: { USER_NOT_FOUND: "Utilisateur non trouvé" },
  *       },
- *       defaultLocale: "en",
  *       detection: ["header", "cookie"],
  *     }),
  *   ],

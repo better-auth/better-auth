@@ -39,7 +39,6 @@ export const auth = betterAuth({
                     INVALID_PASSWORD: "Ungültiges Passwort",
                 },
             },
-            defaultLocale: "en",
         }),
     ],
 })
@@ -70,7 +69,6 @@ By default, the plugin detects the locale from the `Accept-Language` HTTP header
 ```ts title="auth.ts"
 i18n({
     translations: { /* ... */ },
-    defaultLocale: "en",
     detection: ["cookie", "header", "session"], // Priority order
 })
 ```
