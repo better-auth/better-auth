@@ -262,8 +262,8 @@ importers:
   demo/nextjs:
     dependencies:
       '@better-auth/dash':
-        specifier: latest
-        version: 0.1.5(better-auth@packages+better-auth)(zod@4.3.5)
+        specifier: ^0.1.6
+        version: 0.1.6(better-auth@packages+better-auth)(zod@4.3.5)
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../packages/oauth-provider
@@ -2680,8 +2680,8 @@ packages:
     resolution: {integrity: sha512-0ZrskXVEHSWIqZM/sQZ4EV3jZJXRkio/WCxaqKZP1g//CEWEPSfeZFcms4XeKBCHU0ZKnIkdJeU/kF+eRp5lBg==}
     engines: {node: '>=6.9.0'}
 
-  '@better-auth/dash@0.1.5':
-    resolution: {integrity: sha512-6B75Oc2D6cGroem1cYSgwaqrBCv7qf+udt96wxsR+sUwbOLaXSVoNazZaoFj3GRge6ERxVIda2ljfpm7gRhViw==}
+  '@better-auth/dash@0.1.6':
+    resolution: {integrity: sha512-5FTWeto6oZVhZRHvHiAEM0D6ifQKbjdVTBUidd9gUn5f+SSa1Zxn4qPtW+iWyJPDLWanXZNXoXGvggtj1TQn9w==}
     peerDependencies:
       better-auth: '>=1.4.0'
 
@@ -17342,7 +17342,7 @@ snapshots:
       '@babel/helper-string-parser': 7.27.1
       '@babel/helper-validator-identifier': 7.28.5
 
-  '@better-auth/dash@0.1.5(better-auth@packages+better-auth)(zod@4.3.5)':
+  '@better-auth/dash@0.1.6(better-auth@packages+better-auth)(zod@4.3.5)':
     dependencies:
       '@better-auth/utils': 0.3.0
       '@better-fetch/fetch': 1.1.21
@@ -22220,7 +22220,7 @@ snapshots:
       '@babel/code-frame': 7.26.2
       '@babel/core': 7.28.5
       '@babel/traverse': 7.28.5
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
       '@tanstack/router-utils': 1.139.0
       babel-dead-code-elimination: 1.0.10
       tiny-invariant: 1.3.3
@@ -23373,9 +23373,9 @@ snapshots:
   babel-dead-code-elimination@1.0.10:
     dependencies:
       '@babel/core': 7.28.5
-      '@babel/parser': 7.28.5
+      '@babel/parser': 7.28.6
       '@babel/traverse': 7.28.5
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
     transitivePeerDependencies:
       - supports-color
 
@@ -27359,8 +27359,8 @@ snapshots:
 
   magicast@0.3.5:
     dependencies:
-      '@babel/parser': 7.28.5
-      '@babel/types': 7.28.5
+      '@babel/parser': 7.28.6
+      '@babel/types': 7.28.6
       source-map-js: 1.2.1
 
   magicast@0.5.1:
