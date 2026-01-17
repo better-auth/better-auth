@@ -93,6 +93,13 @@
 				"@better-auth/core",
 				"better-call"
 			]
+		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": [
+				// implicit dependencies
+				"@prisma/client",
+				"prisma"
+			]
 		}
 	},
 	"vitest": {
