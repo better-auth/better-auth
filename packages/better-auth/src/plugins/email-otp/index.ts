@@ -94,6 +94,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						}>(ctx);
 						const email = response?.user.email;
 						if (email) {
+							const user =
+								await ctx.context.internalAdapter.findUserByEmail(email);
 							const otp =
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
@@ -103,16 +105,19 @@ export const emailOTP = (options: EmailOTPOptions) => {
 								identifier: `email-verification-otp-${email}`,
 								expiresAt: getDate(opts.expiresIn, "sec"),
 							});
-							await ctx.context.runInBackgroundOrAwait(
-								options.sendVerificationOTP(
-									{
-										email,
-										otp,
-										type: "email-verification",
-									},
-									ctx,
-								),
-							);
+							if (user) {
+								await ctx.context.runInBackgroundOrAwait(
+									options.sendVerificationOTP(
+										{
+											email,
+											otp,
+											type: "email-verification" as const,
+											user: user.user,
+										},
+										ctx,
+									),
+								);
+							}
 						}
 					}),
 				},
