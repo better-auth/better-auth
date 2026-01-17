@@ -98,12 +98,12 @@ export function parseAccountOutput<T extends Account>(
 	// destructuring for type inference
 	// runtime filtering is already done by `parseOutputData`
 	const {
-		accessToken,
-		refreshToken,
-		idToken,
-		accessTokenExpiresAt,
-		refreshTokenExpiresAt,
-		password,
+		accessToken: _accessToken,
+		refreshToken: _refreshToken,
+		idToken: _idToken,
+		accessTokenExpiresAt: _accessTokenExpiresAt,
+		refreshTokenExpiresAt: _refreshTokenExpiresAt,
+		password: _password,
 		...rest
 	} = parsed;
 	return rest;
