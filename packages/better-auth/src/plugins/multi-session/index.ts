@@ -333,7 +333,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 								isMultiSessionCookie,
 							).length + (cookieString.includes("session_token") ? 1 : 0);
 
-						if (currentMultiSessions >= opts.maximumSessions) {
+						if (currentMultiSessions > opts.maximumSessions) {
 							return;
 						}
 
