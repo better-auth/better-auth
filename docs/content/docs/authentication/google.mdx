@@ -175,3 +175,77 @@ socialProviders: {
   already authorized your app, you must have them revoke your app's access in
   their Google account settings, then re-authorize.
 </Callout>
+
+### Supporting Multiple Platforms (Android, iOS, Web)
+
+When building apps with native mobile platforms (Android, iOS) alongside a web application, you'll need separate OAuth client IDs for each platform. Better Auth supports this by allowing `clientId` to be an array of client IDs.
+
+#### Setup Steps
+
+1. **Create OAuth Client IDs in Google Cloud Console**
+   - Create a **Web Application** client ID for your web app
+   - Create an **Android** client ID (provide your SHA-1 certificate fingerprint)
+   - Create an **iOS** client ID (provide your iOS bundle ID)
+
+2. **Configure Better Auth with all client IDs**
+
+Pass an array of client IDs to the `clientId` option. The first client ID will be used for OAuth flows, and all client IDs will be validated when verifying ID tokens.
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: [ // [!code highlight]
+            process.env.GOOGLE_CLIENT_ID as string, // Web (used for OAuth flows) // [!code highlight]
+            process.env.GOOGLE_ANDROID_CLIENT_ID as string, // Android // [!code highlight]
+            process.env.GOOGLE_IOS_CLIENT_ID as string, // iOS // [!code highlight]
+        ], // [!code highlight]
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+    },
+}
+```
+
+3. **Use with Native SDKs**
+
+When using native Google Sign-In SDKs (e.g., `@react-native-google-signin/google-signin` or Google Sign-In for iOS/Android), users sign in with the platform-specific client ID on the native side, and then you pass the ID token to Better Auth:
+
+```ts title="Mobile App"
+// After native Google Sign-In
+const { idToken, accessToken } = await GoogleSignin.signIn();
+
+// Send to Better Auth
+await authClient.signIn.social({
+    provider: "google",
+    idToken: {
+        token: idToken,
+        accessToken: accessToken,
+    }
+});
+```
+
+Better Auth will verify the token was issued by any of your configured client IDs (web, Android, or iOS).
+
+<Callout type="info">
+  **How it works:** When verifying ID tokens, Better Auth checks the token's `aud` (audience) claim against all configured client IDs. This allows tokens from any of your platforms to be accepted, enabling seamless cross-platform authentication.
+</Callout>
+
+#### Skip Nonce Check (Development Only)
+
+Some native mobile SDKs don't support nonce verification. For development purposes, you can skip nonce validation:
+
+```ts title="auth.ts"
+socialProviders: {
+    google: {
+        clientId: [
+            process.env.GOOGLE_CLIENT_ID as string,
+            process.env.GOOGLE_ANDROID_CLIENT_ID as string,
+            process.env.GOOGLE_IOS_CLIENT_ID as string,
+        ],
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
+        skipNonceCheck: process.env.NODE_ENV === "development", // [!code highlight]
+    },
+}
+```
+
+<Callout type="warn">
+  **Security Warning:** Only enable `skipNonceCheck` in development environments. Nonce verification helps prevent replay attacks and should be enabled in production.
+</Callout>
