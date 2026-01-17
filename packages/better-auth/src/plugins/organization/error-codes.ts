@@ -88,4 +88,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	INVITATION_NOT_EXPIRED:
+		"Only expired invitations can be dismissed. Use rejectInvitation for active invitations.",
+	INVITATION_CANNOT_BE_DISMISSED:
+		"This invitation cannot be dismissed because it has already been processed",
 });

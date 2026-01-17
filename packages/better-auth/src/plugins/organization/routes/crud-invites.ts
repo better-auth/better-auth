@@ -947,6 +947,128 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 		},
 	);
 
+const dismissInvitationBodySchema = z.object({
+	invitationId: z.string().meta({
+		description: "The ID of the expired invitation to dismiss",
+	}),
+});
+
+/**
+ * Dismiss an expired invitation from the user's invitation list.
+ * This endpoint allows users to clean up expired invitations that are stuck in their inbox.
+ * Only works for invitations that:
+ * - Have expired (expiresAt < now)
+ * - Are still in "pending" status
+ * - Belong to the requesting user (matching email)
+ */
+export const dismissInvitation = <O extends OrganizationOptions>(options: O) =>
+	createAuthEndpoint(
+		"/organization/dismiss-invitation",
+		{
+			method: "POST",
+			body: dismissInvitationBodySchema,
+			requireHeaders: true,
+			use: [orgMiddleware, orgSessionMiddleware],
+			metadata: {
+				openapi: {
+					description:
+						"Dismiss an expired invitation from the user's invitation list. " +
+						"Only works for invitations that have passed their expiration date. " +
+						"For active invitations, use rejectInvitation instead.",
+					responses: {
+						"200": {
+							description: "Invitation dismissed successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											invitation: {
+												type: "object",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+			const adapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
+			const invitation = await adapter.findInvitationById(
+				ctx.body.invitationId,
+			);
+
+			// 1. Check invitation exists
+			if (!invitation) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
+			}
+
+			// 2. Check recipient matches (case-insensitive email comparison)
+			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION,
+				);
+			}
+
+			// 3. Check invitation is expired (THE KEY CHECK - only expired invitations can be dismissed)
+			const now = new Date();
+			if (invitation.expiresAt >= now) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_EXPIRED,
+				);
+			}
+
+			// 4. Check status is still "pending" (can't dismiss already processed invitations)
+			if (invitation.status !== "pending") {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_CANNOT_BE_DISMISSED,
+				);
+			}
+
+			// 5. Get organization for hooks
+			const organization = await adapter.findOrganizationById(
+				invitation.organizationId,
+			);
+
+			// 6. Run beforeDismissInvitation hook
+			if (options?.organizationHooks?.beforeDismissInvitation) {
+				await options.organizationHooks.beforeDismissInvitation({
+					invitation: invitation as unknown as Invitation,
+					user: session.user,
+					organization: organization!,
+				});
+			}
+
+			// 7. Update invitation status to "dismissed"
+			const dismissedInvitation = await adapter.updateInvitation({
+				invitationId: ctx.body.invitationId,
+				status: "dismissed",
+			});
+
+			// 8. Run afterDismissInvitation hook
+			if (options?.organizationHooks?.afterDismissInvitation) {
+				await options.organizationHooks.afterDismissInvitation({
+					invitation:
+						dismissedInvitation || (invitation as unknown as Invitation),
+					user: session.user,
+					organization: organization!,
+				});
+			}
+
+			return ctx.json({ invitation: dismissedInvitation });
+		},
+	);
+
 const getInvitationQuerySchema = z.object({
 	id: z.string().meta({
 		description: "The ID of the invitation to get",

@@ -23,6 +23,7 @@ import {
 	acceptInvitation,
 	cancelInvitation,
 	createInvitation,
+	dismissInvitation,
 	getInvitation,
 	listInvitations,
 	listUserInvitations,
@@ -144,6 +145,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	getInvitation: ReturnType<typeof getInvitation<O>>;
 	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
+	dismissInvitation: ReturnType<typeof dismissInvitation<O>>;
 	listInvitations: ReturnType<typeof listInvitations<O>>;
 	getActiveMember: ReturnType<typeof getActiveMember<O>>;
 	checkOrganizationSlug: ReturnType<typeof checkOrganizationSlug<O>>;
@@ -622,6 +624,24 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
 		 */
 		rejectInvitation: rejectInvitation(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/dismiss-invitation`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.dismissInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.dismissInvitation`
+		 *
+		 * Dismisses an expired invitation from the user's invitation list.
+		 * Only works for invitations that have passed their expiration date.
+		 * For active invitations, use rejectInvitation instead.
+		 */
+		dismissInvitation: dismissInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
