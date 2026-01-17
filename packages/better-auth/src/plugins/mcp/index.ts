@@ -412,6 +412,15 @@ export const mcp = (options: MCPOptions) => {
 							});
 						}
 						if (token.refreshTokenExpiresAt < new Date()) {
+							await ctx.context.adapter.delete({
+								model: "oauthAccessToken",
+								where: [
+									{
+										field: "refreshToken",
+										value: refresh_token.toString(),
+									},
+								],
+							});
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "refresh token expired",
 								error: "invalid_grant",
@@ -438,6 +447,15 @@ export const mcp = (options: MCPOptions) => {
 								createdAt: new Date(),
 								updatedAt: new Date(),
 							},
+						});
+						await ctx.context.adapter.delete({
+							model: "oauthAccessToken",
+							where: [
+								{
+									field: "refreshToken",
+									value: refresh_token.toString(),
+								},
+							],
 						});
 						return ctx.json({
 							access_token: accessToken,
