@@ -7,7 +7,7 @@ import { describe, expect, expectTypeOf, test } from "vitest";
 import { createAuthClient } from "../client";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
-import { betterAuth } from "./auth";
+import { betterAuth } from "./full";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
