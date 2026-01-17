@@ -12,7 +12,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@better-auth/dash": "latest",
+    "@better-auth/dash": "^0.1.6",
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
