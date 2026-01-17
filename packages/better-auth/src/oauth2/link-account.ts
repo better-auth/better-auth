@@ -44,14 +44,15 @@ export async function handleOAuthUserInfo(
 				a.accountId === account.accountId,
 		);
 		if (!hasBeenLinked) {
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
+			const accountLinking = c.context.options.account?.accountLinking;
+			const trustedProviders = accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
 				trustedProviders?.includes(account.providerId as "apple");
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
 					logger.warn(

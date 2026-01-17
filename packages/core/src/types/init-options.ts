@@ -923,6 +923,17 @@ export type BetterAuthOptions = {
 					 */
 					enabled?: boolean;
 					/**
+					 * Disable implicit account linking on sign-in.
+					 *
+					 * When enabled, accounts will not be automatically linked
+					 * during OAuth sign-in, even if the email is verified or
+					 * the provider is trusted. Users must explicitly link
+					 * accounts using `linkSocial()` while authenticated.
+					 *
+					 * @default false
+					 */
+					disableImplicitLinking?: boolean;
+					/**
 					 * List of trusted providers
 					 */
 					trustedProviders?: Array<
