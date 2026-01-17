@@ -12,7 +12,7 @@
 			"ignoreDependencies": ["@better-auth/core"]
 		},
 		"packages/prisma-adapter": {
-			"ignoreDependencies": ["@prisma/client"]
+			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -92,13 +92,6 @@
 				// type-only dependencies
 				"@better-auth/core",
 				"better-call"
-			]
-		},
-		"packages/prisma-adapter": {
-			"ignoreDependencies": [
-				// implicit dependencies
-				"@prisma/client",
-				"prisma"
 			]
 		}
 	},
