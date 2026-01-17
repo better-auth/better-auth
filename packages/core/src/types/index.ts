@@ -17,6 +17,7 @@ export type {
 	BetterAuthRateLimitRule,
 	BetterAuthRateLimitStorage,
 	GenerateIdFn,
+	StoreIdentifierOption,
 } from "./init-options";
 export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";
 export type {

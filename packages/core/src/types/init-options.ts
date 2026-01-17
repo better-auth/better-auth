@@ -32,6 +32,16 @@ type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
 
+export type StoreIdentifierOption =
+	| "plain"
+	| "hashed"
+	| "encrypted"
+	| { hash: (identifier: string) => Promise<string> }
+	| {
+			encrypt: (identifier: string) => Promise<string>;
+			decrypt: (identifier: string) => Promise<string>;
+	  };
+
 export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
@@ -1015,6 +1025,16 @@ export type BetterAuthOptions = {
 				 * fetched
 				 */
 				disableCleanup?: boolean;
+				/**
+				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 * @default "plain"
+				 */
+				storeIdentifier?: StoreIdentifierOption;
+				/**
+				 * Per-prefix overrides for identifier storage.
+				 * Keys are identifier prefixes (e.g. "reset-password", "email-otp")
+				 */
+				overrides?: Record<string, StoreIdentifierOption>;
 		  }
 		| undefined;
 	/**
