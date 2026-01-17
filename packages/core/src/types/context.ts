@@ -67,7 +67,10 @@ export interface InternalAdapter<
 			T,
 	): Promise<T & Account>;
 
-	listSessions(userId: string): Promise<Session[]>;
+	listSessions(
+		userId: string,
+		options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+	): Promise<Session[]>;
 
 	listUsers(
 		limit?: number | undefined,
@@ -94,6 +97,11 @@ export interface InternalAdapter<
 
 	findSessions(
 		sessionTokens: string[],
+		options?:
+			| {
+					onlyActiveSessions?: boolean | undefined;
+			  }
+			| undefined,
 	): Promise<{ session: Session; user: User }[]>;
 
 	updateSession(

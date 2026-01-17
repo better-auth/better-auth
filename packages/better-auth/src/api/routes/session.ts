@@ -616,6 +616,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			try {
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
+					{ onlyActiveSessions: true },
 				);
 				const activeSessions = sessions.filter((session) => {
 					return session.expiresAt > new Date();
