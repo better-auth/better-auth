@@ -57,6 +57,21 @@ your database schema based on your Better Auth configuration and plugins.
 npx @better-auth/cli@latest generate
 ```
 
+### Skipping generator and datasource blocks
+
+If you want to skip generating the `generator` and `datasource` blocks in your Prisma schema,
+you can set the `skipGeneratorAndDatasource` option to `true` in your Prisma adapter configuration.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  database: prismaAdapter(prisma, {
+    provider: "sqlite",
+    skipGeneratorAndDatasource: true,
+  }),
+});
+```
+
+
 ## Joins (Experimental)
 
 Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.
@@ -82,3 +97,4 @@ export const auth = betterAuth({
 
 - If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
 - [How to use Prisma ORM with Better Auth and Next.js](https://www.prisma.io/docs/guides/betterauth-nextjs)
+
