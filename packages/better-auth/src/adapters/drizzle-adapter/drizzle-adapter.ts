@@ -68,6 +68,22 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Database schema namespace, used during the Better Auth CLI to generate the schema.
+	 *
+	 * It will generate something like this:
+	 *
+	 * ```ts
+	 * const authSchema = pgSchema("auth");
+	 *
+	 * export const user = authSchema.table("user", {...});
+	 * export const session = authSchema.table("session", {...});
+	 * ```
+	 *
+	 * @example "auth"
+	 * @default undefined
+	 */
+	schemaName?: string | undefined;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
