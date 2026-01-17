@@ -11,6 +11,9 @@
 			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": ["@better-auth/core"]
 		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",

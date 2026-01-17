@@ -59,11 +59,11 @@ jobs:
           sleep 10
 
       - name: Test Adapters
-        working-directory: packages/better-auth
+        working-directory: e2e/adapter
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-        run: pnpm test:adapters
+        run: pnpm test
 
       - name: Stop Docker Containers
         run: docker compose down

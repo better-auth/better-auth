@@ -31,6 +31,21 @@
       "path": "./packages/telemetry/tsconfig.json"
     },
     {
+      "path": "./packages/prisma-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/mongo-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/memory-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/drizzle-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/kysely-adapter/tsconfig.json"
+    },
+    {
       "path": "./test/tsconfig.json"
     }
   ]

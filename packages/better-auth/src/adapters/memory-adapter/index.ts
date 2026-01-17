@@ -1,1 +1,1 @@
-export * from "./memory-adapter";
+export * from "@better-auth/memory-adapter";
