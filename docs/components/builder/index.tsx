@@ -1,3 +1,5 @@
+"use client";
+
 import { useAtom } from "jotai";
 import { ArrowLeft, Moon, PlusIcon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
