@@ -36,7 +36,7 @@ const testimonials = [
 	},
 	{
 		name: "kitze",
-		profession: "http://sizzy.co",
+		profession: "Indie Developer",
 		link: "https://x.com/thekitze/status/1911524156115476831",
 		description:
 			"I rarely stumble upon a framework/library that makes me rethink things. @better_auth is a rare exception. it literally delayed @zerotoshipped for a week...",
@@ -57,7 +57,7 @@ const testimonials = [
 
 	{
 		name: "Dax",
-		profession: "Creator of SST",
+		profession: "Founder of Anomaly (Opencode)",
 		link: "https://x.com/thdxr/status/1866222656468705426",
 		description:
 			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
@@ -116,56 +116,6 @@ holy sh** is it good, works so nice with typescript + drizzle`,
 		social: <Icons.x />,
 	},
 	{
-		name: "Dagmawi Babi",
-		profession: "Developer",
-		link: "https://x.com/DagmawiBabi/status/1845966382703280458",
-		description:
-			"@better_auth exceeded all expectations, and it's just getting started",
-		avatar: "/people-say/dagmawi-babi.png",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Tech Nerd",
-		profession: "Developer",
-		link: "https://x.com/TechNerd556/status/1863523931614822784",
-		description:
-			"Using @better_auth with custom components feels like having someone hand you the remote while you're comfortably on the sofa. The ease I'm feeling rn is insane Auth done in under 5 minutes 🤌⚡️.",
-		avatar: "/people-say/tech-nerd.png",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Omar McAdam",
-		profession: "Creator of AugmentedHQ",
-		link: "https://x.com/McPizza0/status/1879526862046839249",
-		description:
-			"if you're building a code project in 2025 use @better_auth. It has everything you need now and everything you'll need at scale. dont take this suggestion lightly..",
-		avatar: "/people-say/omar-mcadam.png",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Guillermo Rauch",
-		profession: "CEO of Vercel",
-		link: "https://x.com/rauchg/status/1871628287962906846",
-		description: "Great project & maintainer",
-		avatar: "/people-say/guillermo-rauch.png",
-		image: "",
-		social: <Icons.x />,
-	},
-	{
-		name: "Nizzy",
-		profession: "Co-founder of Zero",
-		link: "https://x.com/NizzyABI/status/1889178812459422162",
-		description:
-			"i cant believe how easy @better_auth is compared to @authjs all i had to do was connect it to my drizzle schema and create a sign up page w the auth :)))",
-		avatar: "/people-say/nizzy.png",
-		image: "",
-		social: <Icons.x />,
-	},
-
-	{
 		name: "Vybhav Bhargav",
 		profession: "Founding engineer @glyfspace",
 		link: "https://x.com/vybhavab/status/1891589126513684669",
@@ -206,7 +156,7 @@ const TestimonialItem = ({
 						animationDuration: `${animeSeconds}s`,
 					}}
 					className={cn(
-						"scroller flex flex-nowrap w-max min-w-full duration-[1000s] hover:[animation-play-state:paused] overflow-hidden relative gap-5 justify-around shrink-0",
+						"scroller flex flex-nowrap w-max min-w-full duration-[1000s] hover:paused overflow-hidden relative gap-5 justify-around shrink-0",
 						reverse ? "animate-hrtl-scroll-reverse" : "animate-hrtl-scroll",
 					)}
 				>
@@ -237,7 +187,7 @@ const TestimonialItem = ({
 											</p>
 										</div>
 									</div>
-									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
+									<div className="w-px bg-black/20 dark:bg-white/20" />
 									<div className="flex items-center justify-center max-w-full mx-auto">
 										<Link
 											href={testimonial.link}
