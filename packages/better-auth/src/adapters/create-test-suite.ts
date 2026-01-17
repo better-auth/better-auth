@@ -9,7 +9,7 @@ import {
 import { TTY_COLORS } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils";
 import { test } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import type { Account, Session, User, Verification } from "../types";
 import type { Logger } from "./test-adapter";
 

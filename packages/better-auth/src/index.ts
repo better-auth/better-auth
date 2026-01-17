@@ -8,7 +8,7 @@ export * from "@better-auth/core/error";
 export * from "@better-auth/core/oauth2";
 export * from "@better-auth/core/utils";
 //#endregion
-export { betterAuth } from "./auth";
+export { betterAuth } from "./auth/full";
 // @ts-expect-error
 export * from "./types";
 export * from "./utils";
