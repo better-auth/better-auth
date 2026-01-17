@@ -1,5 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
@@ -704,37 +705,52 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
-const forgetPasswordEmailOTPBodySchema = z.object({
+const requestPasswordResetEmailOTPBodySchema = z.object({
 	email: z.string().meta({
 		description: "Email address to send the OTP",
 	}),
 });
 
 /**
+ * Request a password reset OTP via email.
+ *
+ * Sends a one-time password (OTP) to the user's email address that can be used
+ * to reset their password. The OTP can be verified using the `resetPasswordEmailOTP`
+ * endpoint along with the new password.
+ *
  * ### Endpoint
  *
- * POST `/forget-password/email-otp`
+ * POST `/request-password-reset/email-otp`
  *
  * ### API Methods
  *
  * **server:**
- * `auth.api.forgetPasswordEmailOTP`
+ * `auth.api.requestPasswordResetEmailOTP`
  *
  * **client:**
- * `authClient.forgetPassword.emailOtp`
+ * `authClient.requestPasswordReset.emailOtp`
  *
- * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#api-method-forget-password-email-otp)
+ * @example
+ * ```ts
+ * // Client-side usage
+ * await authClient.requestPasswordReset.emailOtp({
+ *   email: "user@example.com"
+ * });
+ * ```
+ *
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#reset-password-with-otp)
  */
-export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
+export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 	createAuthEndpoint(
-		"/forget-password/email-otp",
+		"/request-password-reset/email-otp",
 		{
 			method: "POST",
-			body: forgetPasswordEmailOTPBodySchema,
+			body: requestPasswordResetEmailOTPBodySchema,
 			metadata: {
 				openapi: {
-					operationId: "forgetPasswordWithEmailOTP",
-					description: "Forget password with email and OTP",
+					operationId: "requestPasswordResetWithEmailOTP",
+					description:
+						"Request a password reset OTP. Sends an OTP to the user's email address for password reset.",
 					responses: {
 						200: {
 							description: "Success",
@@ -792,6 +808,102 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			});
 		},
 	);
+
+/**
+ * Request a password reset OTP via email.
+ *
+ * @deprecated Use `requestPasswordResetEmailOTP` instead. This endpoint will be removed in the next major release.
+ *
+ * ### Endpoint
+ *
+ * POST `/forget-password/email-otp`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.forgetPasswordEmailOTP`
+ *
+ * **client:**
+ * `authClient.forgetPassword.emailOtp`
+ *
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#reset-password-with-otp)
+ */
+export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
+	const warnDeprecation = deprecate(
+		() => {},
+		'The "/forget-password/email-otp" endpoint is deprecated. Please use "/request-password-reset/email-otp" instead. This endpoint will be removed in the next major release.',
+	);
+
+	return createAuthEndpoint(
+		"/forget-password/email-otp",
+		{
+			method: "POST",
+			body: requestPasswordResetEmailOTPBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "forgetPasswordWithEmailOTP",
+					deprecated: true,
+					description:
+						"Forget password with email and OTP. Deprecated: Use /request-password-reset/email-otp instead.",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+												description:
+													"Indicates if the OTP was sent successfully",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			warnDeprecation();
+			const email = ctx.body.email;
+			const otp =
+				opts.generateOTP({ email, type: "forget-password" }, ctx) ||
+				defaultOTPGenerator(opts);
+			const storedOTP = await storeOTP(ctx, opts, otp);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${storedOTP}:0`,
+				identifier: `forget-password-otp-${email}`,
+				expiresAt: getDate(opts.expiresIn, "sec"),
+			});
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`forget-password-otp-${email}`,
+				);
+				return ctx.json({
+					success: true,
+				});
+			}
+			await ctx.context.runInBackgroundOrAwait(
+				opts.sendVerificationOTP(
+					{
+						email,
+						otp,
+						type: "forget-password",
+					},
+					ctx,
+				),
+			);
+			return ctx.json({
+				success: true,
+			});
+		},
+	);
+};
 
 const resetPasswordEmailOTPBodySchema = z.object({
 	email: z.string().meta({
