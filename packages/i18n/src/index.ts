@@ -66,8 +66,6 @@ export const i18n = <Locales extends string[]>(
 ) => {
 	const availableLocales = Object.keys(options.translations);
 
-	// Determine default locale: use provided defaultLocale if it exists in translations,
-	// otherwise use "en" if it exists, otherwise use the first available locale
 	let defaultLocale: Locales[number];
 	if (
 		options.defaultLocale &&
