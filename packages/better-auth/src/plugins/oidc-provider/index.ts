@@ -21,7 +21,7 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
-import { getJwtToken, verifyJWT } from "../jwt";
+import { getJwtToken, signJWT, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
 import { schema } from "./schema";
@@ -290,6 +290,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	};
 
 	const opts = {
+		accessTokenFormat: "opaque" as const,
 		codeExpiresIn: DEFAULT_CODE_EXPIRES_IN,
 		defaultScope: "openid",
 		accessTokenExpiresIn: DEFAULT_ACCESS_TOKEN_EXPIRES_IN,
@@ -378,6 +379,52 @@ export const oidcProvider = (options: OIDCOptions) => {
 		}
 
 		return clientSecret === storedClientSecret;
+	}
+
+	/**
+	 * Create an access token based on the configured format.
+	 */
+	async function createAccessToken(params: {
+		ctx: GenericEndpointContext;
+		clientId: string;
+		userId: string;
+		scopes: string[];
+		iat: number;
+		exp: number;
+	}) {
+		const { ctx, clientId, userId, scopes, iat, exp } = params;
+		if (opts.accessTokenFormat === "jwt") {
+			const jwtPlugin = ctx.context.getPlugin("jwt");
+			if (!jwtPlugin) {
+				ctx.context.logger.error(
+					"OIDC: accessTokenFormat is set to 'jwt' but the JWT plugin is not available. Make sure you have the JWT plugin in your plugins array.",
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					error_description: "JWT plugin is not enabled",
+					error: "internal_server_error",
+				});
+			}
+			const issuer =
+				jwtPlugin.options?.jwt?.issuer ?? ctx.context.options.baseURL;
+			const audience =
+				jwtPlugin.options?.jwt?.audience ?? ctx.context.options.baseURL;
+			const token = await signJWT(ctx, {
+				options: jwtPlugin.options,
+				payload: {
+					sub: userId,
+					aud: audience,
+					iss: issuer,
+					azp: clientId,
+					scope: scopes.join(" "),
+					iat,
+					exp,
+					jti: generateRandomString(16, "a-z", "A-Z", "0-9"),
+				},
+			});
+			return token;
+		}
+
+		return generateRandomString(32, "a-z", "A-Z");
 	}
 
 	return {
@@ -752,7 +799,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 								error: "invalid_grant",
 							});
 						}
-						const accessToken = generateRandomString(32, "a-z", "A-Z");
+						const scopes = token.scopes.split(" ").filter((scope) => scope);
+						const accessToken = await createAccessToken({
+							ctx,
+							clientId: client_id.toString(),
+							userId: token.userId,
+							scopes,
+							iat,
+							exp,
+						});
 						const newRefreshToken = generateRandomString(32, "a-z", "A-Z");
 
 						await ctx.context.adapter.create({
@@ -925,7 +980,15 @@ export const oidcProvider = (options: OIDCOptions) => {
 					await ctx.context.internalAdapter.deleteVerificationValue(
 						verificationValue.id,
 					);
-					const accessToken = generateRandomString(32, "a-z", "A-Z");
+
+					const accessToken = await createAccessToken({
+						ctx,
+						clientId: client_id.toString(),
+						userId: value.userId,
+						scopes: requestedScopes,
+						iat,
+						exp,
+					});
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
 					await ctx.context.adapter.create({
 						model: modelName.oauthAccessToken,

@@ -77,6 +77,7 @@ describe("oidc init", () => {
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "accessTokenExpiresIn": 3600,
+			  "accessTokenFormat": "opaque",
 			  "allowPlainCodeChallengeMethod": true,
 			  "codeExpiresIn": 600,
 			  "defaultScope": "openid",
@@ -91,6 +92,156 @@ describe("oidc init", () => {
 			  "storeClientSecret": "plain",
 			}
 		`);
+	});
+});
+
+describe("oidc-jwt-access-token", async () => {
+	let server: Listener | null = null;
+
+	afterEach(async () => {
+		if (server) {
+			await server.close();
+			server = null;
+		}
+	});
+
+	it("should issue JWT access tokens when accessTokenFormat is jwt", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: false,
+					useJWTPlugin: true,
+					accessTokenFormat: "jwt",
+				}),
+				jwt(),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		const createdClient = await serverClient.oauth2.register({
+			client_name: "test-app",
+			redirect_uris: ["http://localhost:3000/api/auth/oauth2/callback/test"],
+			logo_uri: "",
+		});
+
+		const application = {
+			clientId: createdClient.data!.client_id,
+			clientSecret: createdClient.data!.client_secret,
+		};
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "test",
+								clientId: application.clientId,
+								clientSecret: application.clientSecret,
+								authorizationUrl:
+									"http://localhost:3000/api/auth/oauth2/authorize",
+								tokenUrl: "http://localhost:3000/api/auth/oauth2/token",
+								scopes: ["openid", "profile", "email"],
+								pkce: false,
+							},
+						],
+					}),
+				],
+			});
+
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:5000",
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const oAuthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId: "test",
+				callbackURL: "/dashboard",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		);
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			onError(context) {
+				redirectURI = context.response.headers.get("Location") || "";
+				cookieSetter(consentHeaders)(context);
+			},
+		});
+
+		redirectURI = await handleConsentFlow(
+			redirectURI,
+			serverClient,
+			headers,
+			consentHeaders,
+		);
+
+		const url = new URL(redirectURI);
+		const code = url.searchParams.get("code")!;
+
+		const tokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					redirect_uri: "http://localhost:3000/api/auth/oauth2/callback/test",
+					client_id: application.clientId,
+					client_secret: application.clientSecret,
+				}),
+			},
+		);
+
+		const tokenData = await tokenResponse.json();
+
+		expect(tokenData.access_token).toBeDefined();
+		expect(tokenData.access_token.split(".")).toHaveLength(3);
+
+		const jwks = await authorizationServer.api.getJwks();
+		const jwkSet = createLocalJWKSet(jwks);
+		const verified = await jwtVerify(tokenData.access_token, jwkSet, {
+			issuer: "http://localhost:3000",
+			audience: "http://localhost:3000",
+		});
+
+		expect(verified.payload.sub).toBeDefined();
+		expect(verified.payload.azp).toBe(application.clientId);
 	});
 });
 

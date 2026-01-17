@@ -3,6 +3,15 @@ import type { OAuthApplication, schema } from "./schema";
 
 export interface OIDCOptions {
 	/**
+	 * The format of the access token returned by the token endpoint.
+	 *
+	 * - "opaque": A random string stored in the database (default)
+	 * - "jwt": A signed JWT access token (requires the JWT plugin)
+	 *
+	 * @default "opaque"
+	 */
+	accessTokenFormat?: "opaque" | "jwt" | undefined;
+	/**
 	 * The amount of time in seconds that the access token is valid for.
 	 *
 	 * @default 3600 (1 hour) - Recommended by the OIDC spec
