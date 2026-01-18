@@ -236,8 +236,9 @@ const createUserBodySchema = z.object({
 	email: z.string().meta({
 		description: "The email of the user",
 	}),
-	password: z.string().meta({
-		description: "The password of the user",
+	password: z.string().optional().meta({
+		description:
+			"The password of the user. If not provided, the user will be created without a credential account (useful for magic link or social login only users).",
 	}),
 	name: z.string().meta({
 		description: "The name of the user",
@@ -313,7 +314,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				$Infer: {
 					body: {} as {
 						email: string;
-						password: string;
+						password?: string | undefined;
 						name: string;
 						role?:
 							| (InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[])
@@ -374,13 +375,18 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					message: ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 				});
 			}
-			const hashedPassword = await ctx.context.password.hash(ctx.body.password);
-			await ctx.context.internalAdapter.linkAccount({
-				accountId: user.id,
-				providerId: "credential",
-				password: hashedPassword,
-				userId: user.id,
-			});
+			// Only create credential account if password is provided
+			if (ctx.body.password) {
+				const hashedPassword = await ctx.context.password.hash(
+					ctx.body.password,
+				);
+				await ctx.context.internalAdapter.linkAccount({
+					accountId: user.id,
+					providerId: "credential",
+					password: hashedPassword,
+					userId: user.id,
+				});
+			}
 			return ctx.json({
 				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
