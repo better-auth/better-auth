@@ -470,8 +470,8 @@
     "@lynx-js/react": "^0.114.0",
     "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.49.5",
-    "@tanstack/react-start-server": "^1.150.0",
-    "@tanstack/solid-start-server": "^1.150.0",
+    "@tanstack/react-start": "^1.151.2",
+    "@tanstack/solid-start": "^1.151.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.5",
     "@types/pg": "^8.15.5",
@@ -531,10 +531,10 @@
     "@sveltejs/kit": {
       "optional": true
     },
-    "@tanstack/react-start-server": {
+    "@tanstack/react-start": {
       "optional": true
     },
-    "@tanstack/solid-start-server": {
+    "@tanstack/solid-start": {
       "optional": true
     },
     "next": {
