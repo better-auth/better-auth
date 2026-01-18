@@ -416,7 +416,7 @@ To register a new OIDC client, use the `oauth2.register` method.
 ```ts
 import { authClient } from "@/lib/auth-client"
 
-const client = await client.oauth2.register({
+const client = await authClient.oauth2.register({
   client_name: "My Client",
   redirect_uris: ["https://client.example.com/callback"],
 });

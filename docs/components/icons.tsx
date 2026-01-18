@@ -242,7 +242,7 @@ export const Icons = {
 			></path>
 		</svg>
 	),
-	ReactRouter: () => (
+	reactRouter: () => (
 		<svg
 			width="1em"
 			height="1em"

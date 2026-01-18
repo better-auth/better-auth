@@ -75,7 +75,7 @@ There are multiple ways to retrieve JWT tokens:
 1. **Using the client plugin (recommended)**
 
 ```ts
-import { auth } from "@/lib/auth"
+import { authClient } from "@/lib/auth-client"
 
 const { data, error } = await authClient.token()
 if (error) {

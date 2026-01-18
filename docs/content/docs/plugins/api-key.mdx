@@ -518,6 +518,10 @@ Check secondary storage first, then fallback to database if not found.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { createClient } from "redis";
+
+const redis = createClient();
+await redis.connect();
 
 export const auth = betterAuth({
   secondaryStorage: {
