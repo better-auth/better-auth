@@ -100,6 +100,43 @@ describe("organization", async (it) => {
 		expect(organizationRoleIndex).not.toBe(-1);
 	});
 
+	it("should include activeTeamId when both dynamicAccessControl and teams are enabled", () => {
+		const orgPlugin = organization({
+			dynamicAccessControl: {
+				enabled: true,
+			},
+			teams: {
+				enabled: true,
+			},
+		});
+
+		const schema = orgPlugin.schema;
+
+		type SessionFields = {
+			activeOrganizationId: {
+				type: "string";
+				required: false;
+			};
+		} & {
+			activeTeamId: {
+				type: "string";
+				required: false;
+			};
+		};
+
+		expectTypeOf<typeof schema.session.fields>().toEqualTypeOf<SessionFields>();
+
+		expect(schema.session).toBeDefined();
+		expect(schema.session.fields.activeTeamId).toBeDefined();
+		expect(schema.session.fields.activeTeamId.type).toBe("string");
+		expect(schema.session.fields.activeTeamId.required).toBe(false);
+
+		expect(schema.team).toBeDefined();
+		expect(schema.teamMember).toBeDefined();
+
+		expect(schema.organizationRole).toBeDefined();
+	});
+
 	let organizationId: string;
 	let organization2Id: string;
 	it("create organization", async () => {
