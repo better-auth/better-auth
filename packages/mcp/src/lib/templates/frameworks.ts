@@ -74,8 +74,8 @@ export const POST: APIRoute = async (ctx) => {
 };`,
 		defaultPort: 4321,
 	},
-	remix: {
-		name: "Remix",
+	"react-router": {
+		name: "react-router",
 		defaultSrcDir: true,
 		defaultAuthPath: "lib/auth",
 		defaultApiPath: "routes/api.auth.$",
@@ -85,13 +85,13 @@ export const POST: APIRoute = async (ctx) => {
 		apiRouteTemplate: (
 			authPath: string,
 		) => `import { auth } from "~/${authPath}";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { Route } from './+types/your-route-name';
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export async function loader({ request }: Route.LoaderArgs) {
   return auth.handler(request);
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export async function action({ request }: Route.ActionArgs) {
   return auth.handler(request);
 }`,
 		defaultPort: 3000,

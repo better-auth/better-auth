@@ -12,7 +12,7 @@ describe("FRAMEWORK_CONFIGS", () => {
 			"next-pages-router",
 			"sveltekit",
 			"astro",
-			"remix",
+			"react-router",
 			"nuxt",
 			"solid-start",
 			"hono",
@@ -45,7 +45,7 @@ describe("getDefaultAuthPath", () => {
 	it("should work for different frameworks", () => {
 		expect(getDefaultAuthPath("sveltekit", false)).toBe("lib/auth");
 		expect(getDefaultAuthPath("sveltekit", true)).toBe("src/lib/auth");
-		expect(getDefaultAuthPath("remix", true)).toBe("src/lib/auth");
+		expect(getDefaultAuthPath("react-router", true)).toBe("src/lib/auth");
 	});
 });
 
@@ -71,6 +71,8 @@ describe("getDefaultApiPath", () => {
 			"src/routes/api/auth/[...all]",
 		);
 		expect(getDefaultApiPath("nuxt", false)).toBe("server/api/auth/[...all]");
-		expect(getDefaultApiPath("remix", true)).toBe("src/routes/api.auth.$");
+		expect(getDefaultApiPath("react-router", true)).toBe(
+			"src/routes/api.auth.$",
+		);
 	});
 });

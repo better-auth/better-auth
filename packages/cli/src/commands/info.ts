@@ -83,7 +83,7 @@ function getFrameworkInfo(projectRoot: string) {
 			express: deps["express"],
 			fastify: deps["fastify"],
 			hono: deps["hono"],
-			remix: deps["@remix-run/react"],
+			"react-router": deps["react-router"],
 			astro: deps["astro"],
 			solid: deps["solid-js"],
 			qwik: deps["@builder.io/qwik"],

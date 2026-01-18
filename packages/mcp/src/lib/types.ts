@@ -3,7 +3,7 @@ export type Framework =
 	| "next-pages-router"
 	| "sveltekit"
 	| "astro"
-	| "remix"
+	| "react-router"
 	| "nuxt"
 	| "solid-start"
 	| "hono"

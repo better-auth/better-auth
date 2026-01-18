@@ -5,7 +5,7 @@ export const FrameworkEnum = z.enum([
 	"next-pages-router",
 	"sveltekit",
 	"astro",
-	"remix",
+	"react-router",
 	"nuxt",
 	"solid-start",
 	"hono",

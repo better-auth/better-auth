@@ -1,16 +1,19 @@
 ---
-title: Remix Integration
-description: Integrate Better Auth with Remix.
+title: React Router v7 Integration
+description: Integrate Better Auth with React Router v7 (formerly Remix).
 ---
 
-Better Auth can be easily integrated with Remix. This guide will show you how to integrate Better Auth with Remix.
+Better Auth can be easily integrated with React Router v7. This guide will show you how to integrate Better Auth with React Router v7.
 
-You can follow the steps from [installation](/docs/installation) to get started or you can follow this guide to make it the Remix-way.
+<Callout type="info">
+    React Router v7 is the successor to Remix. If you're using Remix v2, the main difference is changing your imports from `@remix-run/*` to `react-router`. The APIs remain the same.
+</Callout>
+
+You can follow the steps from [installation](/docs/installation) to get started or you can follow this guide to make it the React Router way.
 
 If you have followed the installation steps, you can skip the first step.
 
 ## Create auth instance
-
 
 Create a file named `auth.server.ts` in one of these locations:
    - Project root
@@ -40,6 +43,23 @@ export const auth = betterAuth({
 
 We need to mount the handler to a API route. Create a resource route file `api.auth.$.ts` inside `app/routes/` directory. And add the following code:
 
+### React Router v7
+```ts title="app/routes/api.auth.$.ts"
+import { auth } from '~/lib/auth.server' // Adjust the path as necessary
+import type { LoaderFunctionArgs, ActionFunctionArgs } from "react-router"
+
+export async function loader({ request }: LoaderFunctionArgs) {
+    return auth.handler(request)
+}
+
+export async function action({ request }: ActionFunctionArgs) {
+    return auth.handler(request)
+}
+```
+
+### Remix v2 (Legacy)
+
+If you're still using Remix v2, the only difference is the import:
 ```ts title="app/routes/api.auth.$.ts"
 import { auth } from '~/lib/auth.server' // Adjust the path as necessary
 import type { LoaderFunctionArgs, ActionFunctionArgs } from "@remix-run/node"
@@ -73,8 +93,78 @@ Once you have created the client, you can use it to sign up, sign in, and perfor
 
 ### Example usage
 
-#### Sign Up
+### Sign Up
 
+#### React Router v7
+```ts title="app/routes/signup.tsx"
+import { Form } from "react-router"
+import { useState } from "react"
+import { authClient } from "~/lib/auth-client"
+
+export default function SignUp() {
+  const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
+  const [password, setPassword] = useState("")
+
+  const signUp = async () => {
+    await authClient.signUp.email(
+      {
+        email,
+        password,
+        name,
+      },
+      {
+        onRequest: (ctx) => {
+          // show loading state
+        },
+        onSuccess: (ctx) => {
+          // redirect to home
+        },
+        onError: (ctx) => {
+          alert(ctx.error)
+        },
+      },
+    )
+  }
+
+  return (
+    <div>
+      <h2>
+        Sign Up
+      </h2>
+      <Form
+        onSubmit={signUp}
+      >
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+        />
+        <button
+          type="submit"
+        >
+          Sign Up
+        </button>
+      </Form>
+    </div>
+  )
+}
+```
+
+#### Remix v2 (Legacy)
 ```ts title="app/routes/signup.tsx"
 import { Form } from "@remix-run/react"
 import { useState } from "react"
@@ -141,15 +231,15 @@ export default function SignUp() {
     </div>
   )
 }
-
 ```
 
-#### Sign In
+### Sign In
 
+#### React Router v7
 ```ts title="app/routes/signin.tsx"
-import { Form } from "@remix-run/react"
+import { Form } from "react-router"
 import { useState } from "react"
-import { authClient } from "~/services/auth-client"
+import { authClient } from "~/lib/auth-client"
 
 export default function SignIn() {
   const [email, setEmail] = useState("")
@@ -180,16 +270,93 @@ export default function SignIn() {
       <h2>
         Sign In
       </h2>
-      <Form onSubmit={signIn}>
+      <Form
+        onSubmit={signIn}
+      >
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+        />
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
         />
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
+        />
+        <button
+          type="submit"
+        >
+          Sign In
+        </button>
+      </Form>
+    </div>
+  )
+}
+```
+
+### Remix v2 (Legacy)
+```ts title="app/routes/signin.tsx"
+import { Form } from "@remix-run/react"
+import { useState } from "react"
+import { authClient } from "~/lib/auth-client"
+
+export default function SignIn() {
+  const [email, setEmail] = useState("")
+  const [password, setPassword] = useState("")
+
+  const signIn = async () => {
+    await authClient.signIn.email(
+      {
+        email,
+        password,
+      },
+      {
+        onRequest: (ctx) => {
+          // show loading state
+        },
+        onSuccess: (ctx) => {
+          // redirect to home
+        },
+        onError: (ctx) => {
+          alert(ctx.error)
+        },
+      },
+    )
+  }
+
+  return (
+    <div>
+      <h2>
+        Sign In
+      </h2>
+      <Form
+        onSubmit={signIn}
+      >
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Name"
+        />
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Email"
+        />
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="Password"
         />
         <button
           type="submit"

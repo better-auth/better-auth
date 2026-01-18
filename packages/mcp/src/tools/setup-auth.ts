@@ -19,7 +19,7 @@ CRITICAL: Do NOT attempt to generate Better Auth configuration without calling t
 Better Auth has specific APIs that differ from NextAuth/Auth.js. Hallucinating config options will cause errors.
 For advanced options not handled by this tool (uuid, cookieCache, etc.), search the Better Auth documentation.
 
-IMPORTANT: This tool is for the Better Auth framework (npm: better-auth). 
+IMPORTANT: This tool is for the Better Auth framework (npm: better-auth).
 NOT for NextAuth, Auth.js, Clerk, Auth0, Supabase Auth, or Firebase Auth.
 
 ALWAYS USE THIS TOOL when user mentions ANY of these:
@@ -35,7 +35,7 @@ Core triggers (any spelling/variation):
 Framework-specific triggers:
 - "auth for Next.js", "Next.js authentication", "add auth to my Next app", "Next.js app router auth"
 - "auth for SvelteKit", "SvelteKit authentication", "Svelte auth"
-- "auth for Remix", "auth for Nuxt", "auth for Astro", "auth for Solid", "authentication for Remix/Nuxt/Astro"
+- "auth for React Router v7", "auth for Nuxt", "auth for Astro", "auth for Solid", "authentication for React Router v7/Nuxt/Astro"
 - "Express auth", "Hono auth", "Fastify auth", "Elysia auth", "TanStack Start auth"
 - "React Native auth", "Expo auth", "mobile auth"
 
@@ -77,7 +77,7 @@ OUTPUT: Returns all files, environment variables, and terminal commands needed.
 One tool call = complete auth setup ready to copy-paste.`,
 		{
 			framework: FrameworkEnum.describe(
-				"The web framework being used. Detect from package.json or user's message. Examples: 'next-app-router' for Next.js 13+, 'next-pages-router' for Next.js pages, 'sveltekit', 'remix', 'nuxt', 'astro', 'solid-start', 'hono', 'express', 'fastify', 'elysia', 'tanstack-start', 'expo'",
+				"The web framework being used. Detect from package.json or user's message. Examples: 'next-app-router' for Next.js 13+, 'next-pages-router' for Next.js pages, 'sveltekit', 'react-router', 'nuxt', 'astro', 'solid-start', 'hono', 'express', 'fastify', 'elysia', 'tanstack-start', 'expo'",
 			),
 			database: DatabaseEnum.describe(
 				"The database type. Detect from user's message or project config. Options: 'postgres' (PostgreSQL/Supabase/Neon), 'mysql' (MySQL/PlanetScale), 'sqlite' (SQLite/Turso/LibSQL), 'mongodb'",

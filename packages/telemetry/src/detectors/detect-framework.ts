@@ -3,7 +3,7 @@ import { getPackageVersion } from "../utils/package-json";
 const FRAMEWORKS: Record<string, string> = {
 	next: "next",
 	nuxt: "nuxt",
-	"@remix-run/server-runtime": "remix",
+	"react-router": "react-router",
 	astro: "astro",
 	"@sveltejs/kit": "sveltekit",
 	"solid-start": "solid-start",
