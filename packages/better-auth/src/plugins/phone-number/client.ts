@@ -15,7 +15,9 @@ export const phoneNumberClient = () => {
 					return (
 						path === "/phone-number/update" ||
 						path === "/phone-number/verify" ||
-						path === "/sign-in/phone-number"
+						path === "/phone-number/verify-phone-number" ||
+						path === "/sign-in/phone-number" ||
+						path === "/sign-in/phone-number-otp"
 					);
 				},
 				signal: "$sessionSignal",
