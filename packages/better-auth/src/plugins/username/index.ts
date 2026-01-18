@@ -6,7 +6,7 @@ import {
 import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
-import { createEmailVerificationToken } from "../../api";
+import { createEmailVerificationToken, originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -220,8 +220,17 @@ export const username = (options?: UsernameOptions | undefined) => {
 													user: {
 														$ref: "#/components/schemas/User",
 													},
+													redirect: {
+														type: "boolean",
+														description:
+															"Whether to redirect to the callback URL",
+													},
+													url: {
+														type: "string",
+														description: "The URL to redirect to",
+													},
 												},
-												required: ["token", "user"],
+												required: ["token", "user", "redirect"],
 											},
 										},
 									},
@@ -410,7 +419,12 @@ export const username = (options?: UsernameOptions | undefined) => {
 						{ session, user },
 						ctx.body.rememberMe === false,
 					);
+					if (ctx.body.callbackURL) {
+						throw ctx.redirect(ctx.body.callbackURL);
+					}
 					return ctx.json({
+						redirect: !!ctx.body.callbackURL,
+						url: ctx.body.callbackURL,
 						token: session.token,
 						user: parseUserOutput(ctx.context.options, user),
 					});
