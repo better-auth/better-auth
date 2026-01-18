@@ -5,7 +5,6 @@ import { initGetFieldName, initGetModelName } from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
-import prettier from "prettier";
 import type { DrizzleAdapterConfig } from "./drizzle-adapter";
 
 interface SchemaGenerator {
@@ -480,9 +479,16 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	code += relationsString;
 
-	const formattedCode = await prettier.format(code, {
-		parser: "typescript",
-	});
+	//dynamically import prettier to prevent it from palluting globals with cjs shims by default
+	let formattedCode = code
+	try {
+		const { format } = await import("prettier");
+		const formattedCode = await format(code, {
+			parser: "typescript",
+		});
+
+	}
+
 	return {
 		code: formattedCode,
 		fileName: path.basename(filePath),
