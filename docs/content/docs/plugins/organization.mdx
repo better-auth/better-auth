@@ -12,12 +12,12 @@ Organizations simplifies user access and permissions management. Assign roles an
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { organization } from "better-auth/plugins"
+import { organization } from "better-auth/plugins" // [!code highlight]
 
 export const auth = betterAuth({
-    plugins: [ // [!code highlight]
+    plugins: [
         organization() // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 </Step>
@@ -48,12 +48,12 @@ export const auth = betterAuth({
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { organizationClient } from "better-auth/client/plugins"
+    import { organizationClient } from "better-auth/client/plugins" // [!code highlight]
 
     export const authClient = createAuthClient({
-        plugins: [ // [!code highlight]
+        plugins: [
             organizationClient() // [!code highlight]
-        ] // [!code highlight]
+        ]
     })
     ```
 
@@ -126,8 +126,7 @@ const auth = betterAuth({
   //...
   plugins: [
     organization({
-      allowUserToCreateOrganization: async (user) => {
-        // [!code highlight]
+      allowUserToCreateOrganization: async (user) => { // [!code highlight]
         const subscription = await getSubscription(user.id); // [!code highlight]
         return subscription.plan === "pro"; // [!code highlight]
       }, // [!code highlight]
@@ -300,6 +299,9 @@ export const auth = betterAuth({
 Control invitation lifecycle:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
 export const auth = betterAuth({
   plugins: [
     organization({
@@ -386,6 +388,9 @@ export const auth = betterAuth({
 Control team operations (when teams are enabled):
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
 export const auth = betterAuth({
   plugins: [
     organization({
@@ -487,6 +492,8 @@ export const auth = betterAuth({
 All hooks support error handling. Throwing an error in a `before` hook will prevent the operation from proceeding:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
 import { APIError } from "better-auth/api";
 
 export const auth = betterAuth({
@@ -641,6 +648,8 @@ To automatically set an active organization when a session is created, you can u
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
+  import { betterAuth } from "better-auth";
+
   databaseHooks: {
     session: {
       create: {
@@ -815,7 +824,10 @@ If the user has the necessary permissions (by default: role is owner) in the spe
 
 You can configure how organization deletion is handled through `organizationDeletion` option:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
 const auth = betterAuth({
   plugins: [
     organization({
@@ -847,6 +859,7 @@ You'll need to construct and send the invitation link to the user. The link shou
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
 import { sendOrganizationInvitation } from "./email";
+
 export const auth = betterAuth({
   plugins: [
     organization({
@@ -1019,13 +1032,15 @@ type listInvitations = {
 
 To list all invitations for a given user you can use the `listUserInvitations` function provided by the client.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const invitations = await authClient.organization.listUserInvitations();
 ```
 
 On the server, you can pass the user ID as a query parameter.
 
-```ts title="api.ts"
+```ts title="list-user-invitations.ts"
 const invitations = await auth.api.listUserInvitations({
   query: {
     email: "user@example.com",
@@ -1377,8 +1392,8 @@ The plugin provides an easy way to define your own set of permissions for each r
 
 You can use the `hasPermission` action provided by the `api` to check the permission of the user.
 
-```ts title="api.ts"
-import { auth } from "@/auth";
+```ts title="has-permission.ts"
+import { auth } from "@/lib/auth"
 
 await auth.api.hasPermission({
   headers: await headers(),
@@ -1425,6 +1440,8 @@ const canCreateProjectAndCreateSale =
 Once you have defined the roles and permissions to avoid checking the permission from the server you can use the `checkRolePermission` function provided by the client.
 
 ```ts title="auth-client.ts"
+import { authClient } from "@/lib/auth-client"
+
 const canCreateProject = authClient.organization.checkRolePermission({
   permissions: {
     organization: ["delete"],
@@ -1468,14 +1485,14 @@ import { organization } from "better-auth/plugins";
 import { ac } from "@/auth/permissions";
 
 export const auth = betterAuth({
-    plugins: [ // [!code highlight]
+    plugins: [
         organization({ // [!code highlight]
             ac, // Must be defined in order for dynamic access control to work // [!code highlight]
             dynamicAccessControl: { // [!code highlight]
               enabled: true, // [!code highlight]
             }, // [!code highlight]
         }) // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 
@@ -1484,13 +1501,13 @@ import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 
 export const authClient = createAuthClient({
-    plugins: [ // [!code highlight]
+    plugins: [
         organizationClient({ // [!code highlight]
             dynamicAccessControl: { // [!code highlight]
               enabled: true, // [!code highlight]
             }, // [!code highlight]
         }) // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 
@@ -1736,7 +1753,7 @@ Then, if you don't already use `inferOrgAdditionalFields` to infer the additiona
 ```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client"
 import { organizationClient, inferOrgAdditionalFields } from "better-auth/client/plugins"
-import type { auth } from "./auth"
+import type { auth } from "@/lib/auth" // import the auth object type only
 
 export const authClient = createAuthClient({
     plugins: [
@@ -2417,6 +2434,9 @@ Table Name: `invitation`
 To change the schema table name or fields, you can pass `schema` option to the organization plugin.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
 const auth = betterAuth({
   plugins: [
     organization({
@@ -2448,6 +2468,9 @@ Starting with [Better Auth v1.3](https://github.com/better-auth/better-auth/rele
 When you add extra fields to a model, the relevant API endpoints will automatically accept and return these new properties. For instance, if you add a custom field to the `organization` table, the `createOrganization` endpoint will include this field in its request and response payloads as needed.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
 const auth = betterAuth({
   plugins: [
     organization({
@@ -2476,7 +2499,7 @@ import {
   inferOrgAdditionalFields,
   organizationClient,
 } from "better-auth/client/plugins";
-import type { auth } from "@/auth"; // import the auth object type only
+import type { auth } "@/lib/auth" // import the auth object type only
 
 const client = createAuthClient({
   plugins: [
@@ -2490,6 +2513,12 @@ const client = createAuthClient({
 if you can't import the auth object type, you can use the `inferOrgAdditionalFields` function without the generic. This function will infer the additional fields from the schema object.
 
 ```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client";
+import {
+  inferOrgAdditionalFields,
+  organizationClient,
+} from "better-auth/client/plugins";
+
 const client = createAuthClient({
   plugins: [
     organizationClient({
@@ -2507,8 +2536,9 @@ const client = createAuthClient({
     }),
   ],
 });
-
-//example usage
+```
+#### Example usage
+```ts
 await client.organization.create({
   name: "Test",
   slug: "test",

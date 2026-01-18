@@ -91,7 +91,7 @@ To create an Auth Endpoint you'll need to import `createAuthEndpoint` from `bett
 Better Auth uses wraps around another library called <Link href="https://github.com/bekacru/better-call"> Better Call </Link> to create endpoints. Better call is a simple ts web framework made by the same team behind Better Auth.
 
 ```ts title="plugin.ts"
-import { createAuthEndpoint } from "better-auth/api";
+import type { BetterAuthPlugin } from "better-auth";
 
 const myPlugin = () => {
     return {
@@ -145,7 +145,7 @@ For other properties, you can check the <Link href="https://github.com/bekacru/b
 You can define a database schema for your plugin by passing a `schema` object. The schema object should have the table name as the key and the schema definition as the value.
 
 ```ts title="plugin.ts"
-import { BetterAuthPlugin } from "better-auth/plugins";
+import type { BetterAuthPlugin } from "better-auth";
 
 const myPlugin = () => {
     return {
@@ -186,6 +186,8 @@ The key is the column name and the value is the column definition. The column de
 `disableMigration`: if the table should not be migrated. (default: `false`)
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
 const myPlugin = (opts: PluginOptions) => {
     return {
         id: "my-plugin",
@@ -206,6 +208,7 @@ const myPlugin = (opts: PluginOptions) => {
 if you add additional fields to a `user` or `session` table, the types will be inferred automatically on `getSession` and `signUpEmail` calls.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
 
 const myPlugin = () => {
     return {
@@ -275,6 +278,9 @@ The `path` can be either a string or a path matcher, using the same path-matchin
 If you throw an `APIError` from the middleware or return a `Response` object, the request will be stopped, and the response will be sent to the client.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+import { createAuthMiddleware } from "better-auth/api";
+
 const myPlugin = () => {
     return {
         id: "my-plugin",
@@ -306,6 +312,8 @@ Here’s how it works:
 - **Modify the Request**: You can also return a modified `request` object to change the request before it's sent.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
 const myPlugin = () => {
     return  {
         id: "my-plugin",
@@ -326,6 +334,8 @@ Here’s how to use it:
 - **Continue Normally**: If you don't return anything, the response will be sent as is.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
 const myPlugin = () => {
     return {
         id: "my-plugin",
@@ -341,6 +351,8 @@ const myPlugin = () => {
 You can define custom rate limit rules for your plugin by passing a `rateLimit` array. The rate limit array should contain an array of rate limit objects.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
+
 const myPlugin = () => {
     return {
         id: "my-plugin",
@@ -363,6 +375,7 @@ If you're building custom plugins or endpoints, you can use the `isTrustedOrigin
 This ensures your custom endpoints respect the same security settings as Better Auth's built-in endpoints.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint, APIError } from "better-auth/api";
 import * as z from "zod"
 
@@ -406,6 +419,7 @@ Some additional helper functions for creating server plugins.
 Allows you to get the client's session data by passing the auth middleware's `context`.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/plugins";
 import { getSessionFromCtx } from "better-auth/api";
 
@@ -434,6 +448,7 @@ const myPlugin = {
 A middleware that checks if the client has a valid session. If the client has a valid session, it'll add the session data to the context object.
 
 ```ts title="plugin.ts"
+import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware } from "better-auth/plugins";
 import { sessionMiddleware } from "better-auth/api";
 

@@ -23,12 +23,12 @@ The API Key plugin allows you to create and manage API keys for your application
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { apiKey } from "better-auth/plugins"
+        import { apiKey } from "better-auth/plugins" // [!code highlight]
 
         export const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 apiKey() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -56,12 +56,12 @@ The API Key plugin allows you to create and manage API keys for your application
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { apiKeyClient } from "better-auth/client/plugins"
+        import { apiKeyClient } from "better-auth/client/plugins"  // [!code highlight]
 
         export const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 apiKeyClient() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -388,6 +388,9 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
 </Callout>
 
 ```ts
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -400,6 +403,8 @@ export const auth = betterAuth({
 <Tabs items={['Server']}>
     <Tab value="Server">
       ```ts
+      import { auth } from "@/lib/auth"
+      
       const session = await auth.api.getSession({
             headers: new Headers({
                   'x-api-key': apiKey,
@@ -412,7 +417,10 @@ export const auth = betterAuth({
 
 The default header key is `x-api-key`, but this can be changed by setting the `apiKeyHeaders` option in the plugin options.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -424,7 +432,10 @@ export const auth = betterAuth({
 
 Or optionally, you can pass an `apiKeyGetter` function to the plugin options, which will be called with the `GenericEndpointContext`, and from there, you should return the API key, or `null` if the request is invalid.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -448,7 +459,10 @@ The API Key plugin supports multiple storage modes for flexible API key manageme
 
 Store API keys only in the database adapter. This is the default mode and requires no additional configuration.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -463,7 +477,7 @@ export const auth = betterAuth({
 Store API keys only in secondary storage (e.g., Redis).
 No fallback to database. Best for high-performance scenarios where all keys are migrated to secondary storage.
 
-```ts
+```ts title="auth.ts"
 import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 import { apiKey } from "better-auth/plugins";
@@ -502,7 +516,9 @@ Check secondary storage first, then fallback to database if not found.
 - Writes to **both** database and secondary storage
 - Ensures consistency between both storage layers
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
 export const auth = betterAuth({
   secondaryStorage: {
     get: async (key) => await redis.get(key),
@@ -525,7 +541,10 @@ export const auth = betterAuth({
 
 You can provide custom storage methods specifically for API keys, overriding the global `secondaryStorage` configuration:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -549,10 +568,6 @@ export const auth = betterAuth({
 });
 ```
 
-
-
-
-
 ## Rate Limiting
 
 Every API key can have its own rate limit settings. The built-in rate-limiting applies whenever an API key is validated, which includes:
@@ -572,7 +587,10 @@ You can refer to the rate-limit default configurations below in the API Key plug
 
 An example default value:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -592,14 +610,16 @@ For each API key, you can customize the rate-limit options on create.
   You can only customize the rate-limit options on the server auth instance.
 </Callout>
 
-```ts
+```ts title="create-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const apiKey = await auth.api.createApiKey({
   body: {
     rateLimitEnabled: true,
     rateLimitTimeWindow: 1000 * 60 * 60 * 24, // 1 day
     rateLimitMax: 10, // 10 requests per day
   },
-  headers: user_headers,
+  headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -658,7 +678,10 @@ You can customize the key generation and verification process straight from the 
 
 Here's an example:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -684,7 +707,10 @@ export const auth = betterAuth({
 <Callout>
 If you're **not** using the `length` property provided by `customKeyGenerator`, you **must** set the `defaultKeyLength` property to how long generated keys will be.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -709,7 +735,10 @@ We allow you to store metadata alongside your API keys. This is useful for stori
 
 To store metadata, make sure you haven't disabled the metadata feature in the plugin options.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -721,19 +750,23 @@ export const auth = betterAuth({
 
 Then, you can store metadata in the `metadata` field of the API key object.
 
-```ts
+```ts title="create-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const apiKey = await auth.api.createApiKey({
   body: {
-    metadata: {
-      plan: "premium",
-    },
+    metadata: { // [!code highlight]
+      plan: "premium", // [!code highlight]
+    }, // [!code highlight]
   },
 });
 ```
 
 You can then retrieve the metadata from the API key object.
 
-```ts
+```ts title="get-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const apiKey = await auth.api.getApiKey({
   body: {
     keyId: "your_api_key_id_here",
@@ -899,7 +932,10 @@ Default is `false`.
   If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
 </Callout>
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   secondaryStorage: {
     get: async (key) => {
@@ -927,7 +963,10 @@ Custom storage methods for API keys. If provided, these methods will be used ins
 
 Useful when you want to use a different storage backend specifically for API keys, or when you need custom logic for storage operations.
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -1014,8 +1053,10 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
 
 Disable hashing of the API key.
 
-⚠️ Security Warning: It's strongly recommended to not disable hashing.
+<Callout type="warn">
+Security Warning: It's strongly recommended to not disable hashing.
 Storing API keys in plaintext makes them vulnerable to database breaches, potentially exposing all your users' API keys.
+</Callout>
 
 ---
 
@@ -1027,7 +1068,10 @@ API keys can have permissions associated with them, allowing you to control acce
 
 You can configure default permissions that will be applied to all newly created API keys:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -1044,7 +1088,10 @@ export const auth = betterAuth({
 
 You can also provide a function that returns permissions dynamically:
 
-```ts
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
 export const auth = betterAuth({
   plugins: [
     apiKey({
@@ -1066,7 +1113,9 @@ export const auth = betterAuth({
 
 When creating an API key, you can specify custom permissions:
 
-```ts
+```ts title="create-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const apiKey = await auth.api.createApiKey({
   body: {
     name: "My API Key",
@@ -1083,7 +1132,9 @@ const apiKey = await auth.api.createApiKey({
 
 When verifying an API key, you can check if it has the required permissions:
 
-```ts
+```ts title="verify-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const result = await auth.api.verifyApiKey({
   body: {
     key: "your_api_key_here",
@@ -1104,7 +1155,9 @@ if (result.valid) {
 
 You can update the permissions of an existing API key:
 
-```ts
+```ts title="update-api-key.ts"
+import { auth } from "@/lib/auth"
+
 const apiKey = await auth.api.updateApiKey({
   body: {
     keyId: existingApiKeyId,

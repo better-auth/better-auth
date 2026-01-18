@@ -65,11 +65,11 @@ This plugin offers two main methods to do a second factor verification:
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { twoFactorClient } from "better-auth/client/plugins"
+        import { twoFactorClient } from "better-auth/client/plugins" // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [
-                twoFactorClient()
+                twoFactorClient() // [!code highlight]
             ]
         })
         ```

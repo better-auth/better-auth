@@ -50,7 +50,7 @@ This plugin is in active development and may not be suitable for production use.
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
     import { jwt } from "better-auth/plugins";
-    import { oauthProvider } from "@better-auth/oauth-provider";
+    import { oauthProvider } from "@better-auth/oauth-provider"; // [!code highlight]
 
     const auth = betterAuth({
       disabledPaths: [
@@ -58,11 +58,11 @@ This plugin is in active development and may not be suitable for production use.
       ],
       plugins: [
         jwt(),
-        oauthProvider({
-          loginPage: "/sign-in",
-          consentPage: "/consent",
-          // ...other options
-        })
+        oauthProvider({ // [!code highlight]
+          loginPage: "/sign-in", // [!code highlight]
+          consentPage: "/consent", // [!code highlight]
+          // ...other options // [!code highlight]
+        }) // [!code highlight]
       ],
     });
     ```
@@ -129,11 +129,14 @@ There exists two clients. You may wish to add one or both depending on your setu
 
 The OAuth Client is the connecting `oauthClient` such a mobile or web application.
 
-```ts title="client.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderClient } from "@better-auth/oauth-provider/client"
+import { oauthProviderClient } from "@better-auth/oauth-provider/client" // [!code highlight]
+
 export const authClient = createAuthClient({
-  plugins: [oauthProviderClient()],
+  plugins: [
+    oauthProviderClient(), // [!code highlight]
+  ],
 });
 ```
 
@@ -144,9 +147,12 @@ The Resource Server is a client that operates on your API server to perform acti
 ```ts title="server-client.ts"
 import { auth } from "@/lib/auth";
 import { createAuthClient } from "better-auth/client";
-import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client"
+import { oauthProviderResourceClient } from "@better-auth/oauth-provider/resource-client" // [!code highlight]
+
 export const serverClient = createAuthClient({
-  plugins: [oauthProviderResourceClient(auth)], // auth optional
+  plugins: [
+    oauthProviderResourceClient(auth) // auth optional // [!code highlight]
+  ],
 });
 ```
 
@@ -215,7 +221,9 @@ The following fields on the database are considered restricted and should only b
 
 In some cases, you may wish to create logic to create oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint:
 
-```ts
+```ts title="admin-create-oauth.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.adminCreateOAuthClient({
   headers,
   body: {
@@ -252,7 +260,9 @@ Restrictions on this endpoint:
 
 In some cases, you may wish to create logic to update oauth clients with restricted fields through custom APIs, company admin portals, or server initialization, you may use the following server-only endpoint. The fields are described in the create section.:
 
-```ts
+```ts title="admin-update-oauth.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.adminUpdateOAuthClient({
   headers,
   body: {
@@ -404,6 +414,8 @@ oauthProvider({
 To register a new OIDC client, use the `oauth2.register` method.
 
 ```ts
+import { authClient } from "@/lib/auth-client"
+
 const client = await client.oauth2.register({
   client_name: "My Client",
   redirect_uris: ["https://client.example.com/callback"],
@@ -539,7 +551,9 @@ This endpoint allows specified trusted clients to logout remotely.
 
 To allow rp-initiated logout, a trusted client must specifically be created to perform session logout.
 
-```ts
+```ts title="admin-create-oauth.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.adminCreateOAuthClient({
   headers,
   body: {
@@ -558,7 +572,7 @@ If `disableJwtPlugin: true`, public clients will never be able to logout using t
 
 The UserInfo Endpoint provides [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant user information. Available at `/oauth2/userinfo`, the endpoint requires a valid access token with at least the scope `openid`.
 
-```ts title="client-app.ts"
+```ts
 // Example of how a client would use the UserInfo endpoint
 const response = await fetch('https://your-domain.com/api/auth/oauth2/userinfo', {
   headers: {
@@ -792,7 +806,9 @@ oauthProvider({
 The plugin will redirect the user to the specified path with `client_id` and `scope` query parameters. You can use this information to display a custom consent screen. Once the user consents, you can call `oauth2.consent` to complete the authorization.
 
 ```ts title="consent-page.ts"
-const res = await client.oauth2.consent({
+import { authClient } from "@/lib/auth-client"
+
+const res = await authClient.oauth2.consent({
 	accept: true,
   // optional scopes accepted (if not sent, accepted scopes matches the original request)
   scope: "openid profile email"
@@ -815,7 +831,7 @@ oauthProvider({
 To stop sign in process to complete registration forms, use the `shouldRedirect` function.
 
 ```ts title="auth.ts"
-import { userRegistered } from "@lib";
+import { userRegistered } from "@lib/registered";
 
 oauthProvider({
   signUp: {
@@ -852,6 +868,8 @@ oauthProvider({
 The plugin will redirect the user to the `selectAccount.page`. This page should prompt for account selection and upon completion of selection, should call `oauth2Continue`.
 
 ```ts title="select-account.ts"
+import { authClient } from "@/lib/auth-client"
+
 await authClient.multiSession.setActive({
   sessionToken,
 });
@@ -904,6 +922,8 @@ oauthProvider({
 The plugin will redirect the user to the `postLogin.page` to provide a prompt for account selection. Upon completion, you should call `oauth2Continue`.
 
 ```ts title="select-organization.ts"
+import { authClient } from "@/lib/auth-client"
+
 await authClient.organization.setActive({
   organizationId,
 });
@@ -1146,14 +1166,17 @@ oauthProvider({
 Pseudocode for a token encryption method:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
 import { CompactEncrypt, compactDecrypt } from 'jose'
+import { oauthProvider } from "@better-auth/oauth-provider"; 
 
 const secret = "SOME_SECRET_OR_KEY"
 const alg = "A256KW"
 const enc = "A256GCM"
 
 const auth = betterAuth({
-  plugins: [oauthProvider({
+  plugins: [
+    oauthProvider({
     formatRefreshToken: {
       encrypt: (token, sessionId) {
         const value = JSON.stringify({
@@ -1171,7 +1194,8 @@ const auth = betterAuth({
         return JSON.parse(payload);
       },
     }
-  })]
+  })
+]
 })
 ```
 

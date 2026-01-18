@@ -16,12 +16,12 @@ The JWT plugin provides endpoints to retrieve a JWT token and a JWKS endpoint to
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { jwt } from "better-auth/plugins"
+import { jwt } from "better-auth/plugins" // [!code highlight]
 
 export const auth = betterAuth({
-    plugins: [ // [!code highlight]
+    plugins: [
         jwt(), // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 </Step>
@@ -45,6 +45,20 @@ export const auth = betterAuth({
     </Tabs>
     See the [Schema](#schema) section to add the fields manually.
 </Step>
+<Step>
+### Add the client plugin to your auth client
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
+
+export const authClient = createAuthClient({
+  plugins: [
+    jwtClient() // [!code highlight]
+  ]
+})
+```
+</Step>
 </Steps>    
 
 
@@ -60,22 +74,9 @@ There are multiple ways to retrieve JWT tokens:
 
 1. **Using the client plugin (recommended)**
 
-Add the `jwtClient` plugin to your auth client configuration:
-
-```ts title="auth-client.ts"
-import { createAuthClient } from "better-auth/client"
-import { jwtClient } from "better-auth/client/plugins" // [!code highlight]
-
-export const authClient = createAuthClient({
-  plugins: [
-    jwtClient() // [!code highlight]
-  ]
-})
-```
-
-Then use the client to get JWT tokens:
-
 ```ts
+import { auth } from "@/lib/auth"
+
 const { data, error } = await authClient.token()
 if (error) {
   // handle error
@@ -113,6 +114,8 @@ await fetch("/api/auth/token", {
 When you call `getSession` method, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
 
 ```ts
+import { auth } from "@/lib/auth"
+
 await authClient.getSession({
   fetchOptions: {
     onSuccess: (ctx)=>{
@@ -148,14 +151,19 @@ In case a JWT with a different `kid` is received, it is recommended to fetch the
 If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
 
 ```ts title="auth.ts"
-betterAuth({
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
   disabledPaths: [
     "/token",
   ],
-  plugins: [jwt({
-    disableSettingJwtHeader: true,
-  })]
-})
+  
+  plugins: [
+    jwt({
+      disableSettingJwtHeader: true,
+    })
+  ]
+});
 ```
 
 #### Example using jose with remote JWKS

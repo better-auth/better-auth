@@ -21,8 +21,8 @@ Better Auth comes with a CLI tool to manage database migrations and generate sch
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is only supported for the built-in Kysely adapter. For other adapters, you can use the `generate` command to create the schema and handle the migration through your ORM.
 
-```bash
-npx @better-auth/cli migrate
+```package-install
+npx @better-auth/cli@latest migrate
 ```
 
 <Callout type="info">
@@ -33,8 +33,8 @@ For PostgreSQL users: The migrate command supports non-default schemas. It autom
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
-```bash
-npx @better-auth/cli generate
+```package-install
+npx @better-auth/cli@latest generate
 ```
 
 See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
@@ -153,12 +153,19 @@ If you're using Prisma or Drizzle with Cloudflare Workers, you have a few option
    ```
 
    With this approach, you can run the standard CLI commands:
-
-   ```bash
-   npx @better-auth/cli migrate
-   # or
-   npx @better-auth/cli generate
-   ```
+   
+   <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+      ```package-install
+      npx @better-auth/cli@latest migrate
+      ```
+      </Tab>
+      <Tab value="generate">
+      ```package-install
+      npx @better-auth/cli@latest generate
+      ```
+      </Tab>
+    </Tabs>
 
 2. **Use `process.env` with compatibility flag**:
 
@@ -181,8 +188,8 @@ If you're using Prisma or Drizzle with Cloudflare Workers, you have a few option
 
    After setting this up, run the CLI commands as normal:
 
-   ```bash
-   npx @better-auth/cli generate
+   ```package-install
+   npx @better-auth/cli@latest generate
    ```
 
 3. **Generate schema locally and push manually**:
@@ -211,7 +218,9 @@ interface SecondaryStorage {
 
 Then, provide your implementation to the `betterAuth` function:
 
-```typescript
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
 betterAuth({
   // ... other options
   secondaryStorage: {
@@ -224,7 +233,7 @@ betterAuth({
 
 Here's a basic example using Redis:
 
-```typescript
+```typescript title="auth.ts"
 import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
@@ -706,7 +715,7 @@ database will generate the numeric ID automatically.
 When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
 with auto-incrementing attributes associated with it.
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
@@ -938,6 +947,8 @@ it will still fallback to making multiple database queries and combining the res
 To enable joins, update your auth config with the following:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });

@@ -13,8 +13,8 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     <Step>
         ### Install the plugin
 
-        ```bash
-        npm install @better-auth/sso
+        ```package-install
+        @better-auth/sso
         ```
     </Step>
     <Step>
@@ -22,12 +22,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { sso } from "@better-auth/sso";
+        import { sso } from "@better-auth/sso"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 sso() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -55,12 +55,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { ssoClient } from "@better-auth/sso/client"
+        import { ssoClient } from "@better-auth/sso/client" // [!code highlight]
 
         const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 ssoClient() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -453,6 +453,8 @@ To sign in with an SSO provider, you can call `signIn.sso`
 You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     email: "user@example.com",
     callbackURL: "/dashboard",
@@ -462,6 +464,8 @@ const res = await authClient.signIn.sso({
 or you can specify the domain:
 
 ```ts title="sign-in-domain.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
@@ -471,6 +475,8 @@ const res = await authClient.signIn.sso({
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     organizationSlug: "example-org",
     callbackURL: "/dashboard",
@@ -480,6 +486,8 @@ const res = await authClient.signIn.sso({
 Alternatively, you can sign in using the provider's ID:
 
 ```ts title="sign-in-provider-id.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     callbackURL: "/dashboard",
@@ -489,6 +497,8 @@ const res = await authClient.signIn.sso({
 Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
 
 ```ts title="sign-in-with-login-hint.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     loginHint: "user@example.com",
@@ -499,6 +509,8 @@ const res = await authClient.signIn.sso({
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await auth.api.signInSSO({
     body: {
         organizationSlug: "example-org",
@@ -561,6 +573,9 @@ Note: If email is provided and loginHint is not specified, email will be sent as
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -594,6 +609,9 @@ User provisioning allows you to run custom logic whenever a user signs in throug
 - Updating user information from the SSO provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -645,6 +663,9 @@ Organization provisioning automatically manages user memberships in organization
 #### Basic Organization Provisioning
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -660,6 +681,9 @@ const auth = betterAuth({
 #### Advanced Organization Provisioning with Custom Roles
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -697,6 +721,8 @@ const auth = betterAuth({
 When registering an SSO provider, you can link it to a specific organization:
 
 ```ts title="register-org-provider.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
@@ -707,7 +733,7 @@ await auth.api.registerSSOProvider({
             // SAML configuration...
         },
     },
-    headers,
+    headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -718,6 +744,8 @@ Now when users from `acmecorp.com` sign in through this provider, they'll automa
 You can set up multiple SSO providers for different organizations:
 
 ```ts title="multi-org-setup.ts"
+import { auth } from "@/lib/auth"
+
 // Acme Corp SAML provider
 await auth.api.registerSSOProvider({
     body: {
@@ -808,6 +836,9 @@ organizationProvisioning: {
 ### Default SSO Provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -1143,6 +1174,9 @@ const authClient = createAuthClient({
 
     <Tab value="server">
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]

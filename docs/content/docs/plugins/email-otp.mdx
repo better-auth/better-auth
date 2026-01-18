@@ -41,11 +41,11 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { emailOTPClient } from "better-auth/client/plugins"
+    import { emailOTPClient } from "better-auth/client/plugins" // [!code highlight]
     
     export const authClient = createAuthClient({
         plugins: [
-            emailOTPClient()
+            emailOTPClient() // [!code highlight]
         ]
     })
     ```
@@ -235,6 +235,7 @@ To override the default email verification, pass `overrideDefaultEmailVerificati
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
   plugins: [
@@ -266,6 +267,7 @@ export const auth = betterAuth({
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -287,6 +289,7 @@ export const auth = betterAuth({
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [

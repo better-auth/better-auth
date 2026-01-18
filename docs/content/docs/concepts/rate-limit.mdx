@@ -28,6 +28,8 @@ export const auth = betterAuth({
 Rate limiting is disabled in development mode by default. In order to enable it, set `enabled` to `true`:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
     rateLimit: {
         enabled: true,
@@ -52,7 +54,9 @@ Rate limiting uses the connecting IP address to track the number of requests mad
 default header checked is `x-forwarded-for`, which is commonly used in production environments. If
 you are using a different header to track the user's IP address, you'll need to specify it.
 
-```ts title="auth.ts" 
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
     //...other options
     advanced: {
@@ -142,11 +146,15 @@ export const auth = betterAuth({
 })
 ```
 
-Make sure to run `migrate` to create the rate limit table in your database.
+Make sure to run `migrate` to create the rate limit table in your database:
 
-```bash
-npx @better-auth/cli migrate
+```package-install
+npx @better-auth/cli@latest migrate
 ```
+
+<Callout type="info">
+  The `migrate` command only works if you're using the built-in Kysely adapter. If you're using Prisma, Drizzle, or another ORM, run `npx @better-auth/cli@latest generate` first, then apply the schema using your ORM's migration tool. For more info, see the [Better Auth CLI](/docs/concepts/cli).
+</Callout>
 
 **Using Secondary Storage**
 

@@ -44,11 +44,11 @@ The Generic OAuth plugin provides a flexible way to integrate authentication wit
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { genericOAuthClient } from "better-auth/client/plugins"
+    import { genericOAuthClient } from "better-auth/client/plugins" // [!code highlight]
 
     export const authClient = createAuthClient({
         plugins: [
-            genericOAuthClient()
+            genericOAuthClient() // [!code highlight]
         ]
     })
     ```
@@ -446,5 +446,3 @@ getUserInfo: async (tokens) => {
 ### Error Handling
 
 The plugin includes built-in error handling for common OAuth issues. Errors are typically redirected to your application's error page with an appropriate error message in the URL parameters. If the callback URL is not provided, the user will be redirected to Better Auth's default error page.
-
-
