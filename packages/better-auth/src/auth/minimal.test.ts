@@ -1,10 +1,17 @@
 import Database from "better-sqlite3";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { memoryAdapter } from "../adapters/memory-adapter/memory-adapter";
+import type { Auth } from "../types";
 import { betterAuth } from "./minimal";
 
 describe("auth-minimal", () => {
 	const db: Record<string, any[]> = {};
+
+	it("default auth type should be okay", () => {
+		const auth = betterAuth({});
+		type T = typeof auth;
+		expectTypeOf<T>().toEqualTypeOf<Auth>();
+	});
 
 	it("should initialize with adapter without Kysely dependencies", async () => {
 		const auth = betterAuth({

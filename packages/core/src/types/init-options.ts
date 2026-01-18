@@ -37,25 +37,37 @@ export type GenerateIdFn = (options: {
 	size?: number | undefined;
 }) => string | false;
 
-export type BetterAuthRateLimitOptions = {
-	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
-	 */
-	enabled?: boolean | undefined;
+export interface BetterAuthRateLimitStorage {
+	get: (key: string) => Promise<RateLimit | null | undefined>;
+	set: (
+		key: string,
+		value: RateLimit,
+		update?: boolean | undefined,
+	) => Promise<void>;
+}
+
+export type BetterAuthRateLimitRule = {
 	/**
 	 * Default window to use for rate limiting. The value
 	 * should be in seconds.
 	 *
 	 * @default 10 seconds
 	 */
-	window?: number | undefined;
+	window: number;
 	/**
 	 * The default maximum number of requests allowed within the window.
 	 *
 	 * @default 100 requests
 	 */
-	max?: number | undefined;
+	max: number;
+};
+
+export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
+	/**
+	 * By default, rate limiting is only
+	 * enabled on production.
+	 */
+	enabled?: boolean | undefined;
 	/**
 	 * Custom rate limit rules to apply to
 	 * specific paths.
@@ -63,27 +75,12 @@ export type BetterAuthRateLimitOptions = {
 	customRules?:
 		| {
 				[key: string]:
-					| {
-							/**
-							 * The window to use for the custom rule.
-							 */
-							window: number;
-							/**
-							 * The maximum number of requests allowed within the window.
-							 */
-							max: number;
-					  }
+					| BetterAuthRateLimitRule
 					| false
-					| ((request: Request) =>
-							| { window: number; max: number }
-							| false
-							| Promise<
-									| {
-											window: number;
-											max: number;
-									  }
-									| false
-							  >);
+					| ((
+							request: Request,
+							currentRule: BetterAuthRateLimitRule,
+					  ) => Awaitable<false | BetterAuthRateLimitRule>);
 		  }
 		| undefined;
 	/**
@@ -113,10 +110,7 @@ export type BetterAuthRateLimitOptions = {
 	 * NOTE: If custom storage is used storage
 	 * is ignored
 	 */
-	customStorage?: {
-		get: (key: string) => Promise<RateLimit | undefined>;
-		set: (key: string, value: RateLimit) => Promise<void>;
-	};
+	customStorage?: BetterAuthRateLimitStorage;
 };
 
 export type BetterAuthAdvancedOptions = {
@@ -311,6 +305,12 @@ export type BetterAuthAdvancedOptions = {
 	backgroundTasks?: {
 		handler: (promise: Promise<void>) => void;
 	};
+	/**
+	 * Skip trailing slash validation in route matching
+	 *
+	 * @default false
+	 */
+	skipTrailingSlashes?: boolean | undefined;
 };
 
 export type BetterAuthOptions = {

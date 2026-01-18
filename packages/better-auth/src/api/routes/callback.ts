@@ -1,6 +1,6 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -68,7 +68,14 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
-		const { code, error, state, error_description, device_id } = queryOrBody;
+		const {
+			code,
+			error,
+			state,
+			error_description,
+			device_id,
+			user: userData,
+		} = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
@@ -131,10 +138,24 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("", e);
 			throw redirectOnError("invalid_code");
 		}
+		const parsedUserData = userData
+			? safeJSONParse<{
+					name?: {
+						firstName?: string;
+						lastName?: string;
+					};
+					email?: string;
+				}>(userData)
+			: null;
+
 		const userInfo = await provider
 			.getUserInfo({
 				...tokens,
-				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+				/**
+				 * The user object from the provider
+				 * This is only available for some providers like Apple
+				 */
+				user: parsedUserData ?? undefined,
 			})
 			.then((res) => res?.user);
 

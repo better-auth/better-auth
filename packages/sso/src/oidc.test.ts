@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 
-let server = new OAuth2Server();
+const server = new OAuth2Server();
 
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
