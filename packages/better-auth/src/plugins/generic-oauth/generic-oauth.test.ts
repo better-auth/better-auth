@@ -1667,4 +1667,91 @@ describe("oauth2", async () => {
 		expect(session.data?.user.name).toBe(customUserInfo.display_name);
 		expect(session.data?.user.image).toBe(customUserInfo.avatar_url);
 	});
+
+	it("should apply static authorizationUrlParams correctly", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-static-params",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							authorizationUrlParams: {
+								audience: "https://my-api/",
+								custom_param: "test-value",
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-static-params",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain("audience=https");
+		expect(res.data?.url).toContain("custom_param=test-value");
+	});
+
+	it("should apply function-based authorizationUrlParams correctly", async () => {
+		const { customFetchImpl, cookieSetter } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: "test-function-params",
+							discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+							clientId: clientId,
+							clientSecret: clientSecret,
+							pkce: true,
+							authorizationUrlParams: (ctx) => {
+								// Access context to determine dynamic parameters
+								return {
+									audience: "https://dynamic-api/",
+									dynamic_param: "dynamic-value",
+								};
+							},
+						},
+					],
+				}),
+			],
+		});
+
+		const authClient = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl,
+			},
+		});
+
+		const headers = new Headers();
+		const res = await authClient.signIn.oauth2({
+			providerId: "test-function-params",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.data?.url).toContain("audience=https");
+		expect(res.data?.url).toContain("dynamic_param=dynamic-value");
+	});
 });
