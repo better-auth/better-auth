@@ -112,6 +112,20 @@ describe("organization", async (it) => {
 
 		const schema = orgPlugin.schema;
 
+		type SessionFields = {
+			activeOrganizationId: {
+				type: "string";
+				required: false;
+			};
+		} & {
+			activeTeamId: {
+				type: "string";
+				required: false;
+			};
+		};
+
+		expectTypeOf<typeof schema.session.fields>().toEqualTypeOf<SessionFields>();
+
 		expect(schema.session).toBeDefined();
 		expect(schema.session.fields.activeTeamId).toBeDefined();
 		expect(schema.session.fields.activeTeamId.type).toBe("string");
