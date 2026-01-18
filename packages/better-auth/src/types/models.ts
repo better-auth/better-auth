@@ -1,6 +1,6 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { Session, User } from "@better-auth/core/db";
-import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db";
+import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../db/field";
 import type { Auth } from "./auth";
 import type { StripEmptyObjects, UnionToIntersection } from "./helper";
 
