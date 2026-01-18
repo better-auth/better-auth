@@ -479,15 +479,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 	code += relationsString;
 
-	//dynamically import prettier to prevent it from palluting globals with cjs shims by default
 	let formattedCode = code
 	try {
+		//dynamically import prettier to prevent it from palluting globals with cjs shims by default
 		const { format } = await import("prettier");
-		const formattedCode = await format(code, {
+		formattedCode = await format(code, {
 			parser: "typescript",
 		});
-
-	}
+	} catch {}
 
 	return {
 		code: formattedCode,
