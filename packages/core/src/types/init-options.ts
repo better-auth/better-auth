@@ -927,7 +927,7 @@ export type BetterAuthOptions = {
 					 */
 					trustedProviders?: Array<
 						LiteralUnion<
-							SocialProviderList[number] | "email-password" | "sso",
+							SocialProviderList[number] | "credential" | "sso" | "siwe",
 							string
 						>
 					>;

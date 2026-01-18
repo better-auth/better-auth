@@ -408,7 +408,7 @@ export const auth = betterAuth({
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
-			trustedProviders: ["google", "github", "email-password"],
+			trustedProviders: ["google", "github", "credential"],
 			allowDifferentEmails: false
 		}
 	},
