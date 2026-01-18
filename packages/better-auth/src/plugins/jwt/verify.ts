@@ -3,6 +3,7 @@ import { getCurrentAuthContext } from "@better-auth/core/context";
 import { base64 } from "@better-auth/utils/base64";
 import type { JWTPayload } from "jose";
 import { importJWK, jwtVerify } from "jose";
+import { symmetricDecrypt } from "../../crypto";
 import { getJwksAdapter } from "./adapter";
 import type { JwtOptions } from "./types";
 
@@ -45,9 +46,29 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 			return null;
 		}
 
-		const publicKey = JSON.parse(key.publicKey);
 		const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
-		const cryptoKey = await importJWK(publicKey, alg);
+
+		let cryptoKey;
+		if (alg === "HS256") {
+			// For HS256, we need to use the secret key (stored as privateKey)
+			const privateKeyEncryptionEnabled =
+				!options?.jwks?.disablePrivateKeyEncryption;
+			let secretWebKey = privateKeyEncryptionEnabled
+				? await symmetricDecrypt({
+						key: ctx.context.secret,
+						data: JSON.parse(key.privateKey),
+					}).catch(() => null)
+				: key.privateKey;
+
+			if (!secretWebKey) {
+				ctx.context.logger.debug("Failed to decrypt HS256 secret key");
+				return null;
+			}
+			cryptoKey = await importJWK(JSON.parse(secretWebKey), alg);
+		} else {
+			const publicKey = JSON.parse(key.publicKey);
+			cryptoKey = await importJWK(publicKey, alg);
+		}
 
 		const { payload } = await jwtVerify(token, cryptoKey, {
 			issuer: options?.jwt?.issuer ?? ctx.context.options.baseURL,
