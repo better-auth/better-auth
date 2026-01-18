@@ -78,7 +78,18 @@ const authOptions = {
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github", "demo-app", "sso"],
+			trustedProviders: [
+				"email-password",
+				"facebook",
+				"github",
+				"google",
+				"discord",
+				"microsoft",
+				"twitch",
+				"twitter",
+				"paypal",
+				"vercel",
+			],
 		},
 	},
 	emailAndPassword: {
