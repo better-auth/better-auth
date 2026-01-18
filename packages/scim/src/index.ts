@@ -72,3 +72,5 @@ export const scim = (options?: SCIMOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./types";
