@@ -647,6 +647,10 @@ export type BetterAuthOptions = {
 					[key: string]: DBFieldAttribute;
 				};
 				/**
+				 * Whether username is required
+				 */
+				requireUsername?: boolean;
+				/**
 				 * Changing email configuration
 				 */
 				changeEmail?: {
