@@ -4,6 +4,7 @@ import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
 import {
 	adminClient,
+	bearerClient,
 	customSessionClient,
 	deviceAuthorizationClient,
 	lastLoginMethodClient,
@@ -18,6 +19,7 @@ import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
 	plugins: [
+		bearerClient(),
 		dashClient(),
 		organizationClient(),
 		twoFactorClient({
