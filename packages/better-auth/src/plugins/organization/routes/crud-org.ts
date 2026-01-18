@@ -5,6 +5,7 @@ import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
 import { setSessionCookie } from "../../../cookies";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
+import type { Session, User } from "../../../types";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -18,6 +19,35 @@ import type {
 	TeamMember,
 } from "../schema";
 import type { OrganizationOptions } from "../types";
+
+async function checkGlobalOrganizationAccess(
+	options: OrganizationOptions | undefined,
+	user: User & Record<string, any>,
+	organizationId: string,
+	session: Session,
+): Promise<boolean> {
+	const globalAccess = options?.globalOrganizationAccess;
+	if (!globalAccess) return false;
+
+	if (typeof globalAccess === "function") {
+		return await globalAccess({ user, organizationId, session });
+	}
+
+	const userRole = user.role;
+	if (!userRole) return false;
+
+	const roles = typeof userRole === "string" ? userRole.split(",") : [];
+
+	if (globalAccess === true) {
+		return roles.includes("admin");
+	}
+
+	if (Array.isArray(globalAccess)) {
+		return globalAccess.some((allowedRole) => roles.includes(allowedRole));
+	}
+
+	return false;
+}
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({
@@ -468,33 +498,45 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
 				);
 			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
-			if (!member) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				);
-			}
-			const canUpdateOrg = await hasPermission(
-				{
-					permissions: {
-						organization: ["update"],
-					},
-					role: member.role,
-					options: ctx.context.orgOptions,
-					organizationId,
-				},
-				ctx,
+
+			const hasGlobalAccess = await checkGlobalOrganizationAccess(
+				options,
+				session.user,
+				organizationId,
+				session.session,
 			);
-			if (!canUpdateOrg) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			let member: any = null;
+			if (!hasGlobalAccess) {
+				member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId: organizationId,
+				});
+				if (!member) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
+				const canUpdateOrg = await hasPermission(
+					{
+						permissions: {
+							organization: ["update"],
+						},
+						role: member.role,
+						options: ctx.context.orgOptions,
+						organizationId,
+					},
+					ctx,
 				);
+				if (!canUpdateOrg) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+					);
+				}
 			}
 			// Check if slug is being updated and validate uniqueness
 			if (typeof ctx.body.data.slug === "string") {
@@ -511,6 +553,14 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					);
 				}
 			}
+
+			if (!member && hasGlobalAccess) {
+				member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId: organizationId,
+				});
+			}
+
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
 					await options.organizationHooks.beforeUpdateOrganization({
@@ -605,33 +655,44 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					},
 				});
 			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: session.user.id,
-				organizationId: organizationId,
-			});
-			if (!member) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				);
-			}
-			const canDeleteOrg = await hasPermission(
-				{
-					role: member.role,
-					permissions: {
-						organization: ["delete"],
-					},
-					organizationId,
-					options: ctx.context.orgOptions,
-				},
-				ctx,
+
+			const hasGlobalAccess = await checkGlobalOrganizationAccess(
+				options,
+				session.user,
+				organizationId,
+				session.session,
 			);
-			if (!canDeleteOrg) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+
+			if (!hasGlobalAccess) {
+				const member = await adapter.findMemberByOrgId({
+					userId: session.user.id,
+					organizationId: organizationId,
+				});
+				if (!member) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					);
+				}
+				const canDeleteOrg = await hasPermission(
+					{
+						role: member.role,
+						permissions: {
+							organization: ["delete"],
+						},
+						organizationId,
+						options: ctx.context.orgOptions,
+					},
+					ctx,
 				);
+				if (!canDeleteOrg) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+					);
+				}
 			}
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
