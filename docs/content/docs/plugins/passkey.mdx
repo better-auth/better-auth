@@ -68,6 +68,56 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
 </Steps>
 
+## Configuration (Optional)
+
+You can customize the passkey plugin to support passkey-first onboarding or WebAuthn extensions.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { passkey } from "@better-auth/passkey"
+
+export const auth = betterAuth({
+  plugins: [
+    passkey({
+      registration: {
+        // Default: true. Set false for passkey-first onboarding.
+        requireSession: false,
+        // Required if requireSession is false and no session exists.
+        resolveUser: async ({ ctx, context }) => {
+          // Validate context (e.g., a signed token), then create or load a user.
+          return { id: "user-id", name: "user@example.com" }
+        },
+        // Optional server-defined extensions
+        extensions: { credProps: true },
+      },
+      authentication: {
+        // Optional server-defined extensions
+        extensions: { credProps: true },
+      },
+    }),
+  ],
+})
+```
+
+### Passkey-first registration (pre-auth)
+
+When `registration.requireSession` is `false`, passkey registration can be initiated without a session. You can pass an opaque `context` to the registration options endpoint; it will be forwarded to `resolveUser`.
+
+```ts
+await auth.api.generatePasskeyRegistrationOptions({
+  context: "signed-registration-token",
+})
+```
+
+When using passkey-first flows (`registration.requireSession: false`), pass the same `context` from the client when registering the passkey so the server can resolve the user during verification:
+
+```ts
+await authClient.passkey.addPasskey({
+  name: "Primary passkey",
+  context: "signed-registration-token",
+})
+```
+
 ## Usage
 
 ### Add/Register a passkey
@@ -85,6 +135,18 @@ type addPasskey = {
      * You can also specify the type of authenticator you want to register. Default behavior allows both platform and cross-platform passkeys
     */
     authenticatorAttachment?: "platform" | "cross-platform" = "cross-platform"
+    /**
+     * Optional WebAuthn extensions (e.g., PRF, credProps, largeBlob)
+     */
+    extensions?: AuthenticationExtensionsClientInputs
+    /**
+     * Return WebAuthn response and extension results
+     */
+    returnWebAuthnResponse?: boolean
+    /**
+     * Optional context for passkey-first registration flows. Forwarded to `registration.resolveUser`.
+     */
+    context?: string
 }
 ```
 </APIMethod>
@@ -106,6 +168,14 @@ type signInPasskey = {
      * Browser autofill, a.k.a. Conditional UI. Read more: https://simplewebauthn.dev/docs/packages/browser#browser-autofill-aka-conditional-ui
     */
     autoFill?: boolean = true
+    /**
+     * Optional WebAuthn extensions (e.g., PRF, credProps, largeBlob)
+     */
+    extensions?: AuthenticationExtensionsClientInputs
+    /**
+     * Return WebAuthn response and extension results
+     */
+    returnWebAuthnResponse?: boolean
 }
 ```
 </APIMethod>
@@ -115,6 +185,8 @@ type signInPasskey = {
 // With post authentication redirect
 await authClient.signIn.passkey({
     autoFill: true,
+    // Optional extensions
+    extensions: { credProps: true },
     fetchOptions: {
         onSuccess(context) {
             // Redirect to dashboard after successful authentication
@@ -126,6 +198,23 @@ await authClient.signIn.passkey({
         }
     }
 });
+```
+
+### Extensions
+
+You can use WebAuthn extensions through the client API by passing `extensions`. When `returnWebAuthnResponse` is true, the client returns `webauthn.clientExtensionResults`.
+
+```ts
+const result = await authClient.passkey.addPasskey({
+  name: "My Passkey",
+  extensions: {
+    // Example extension input (generic)
+    credProps: true,
+  },
+  returnWebAuthnResponse: true,
+});
+
+console.log(result.webauthn?.clientExtensionResults);
 ```
 
 ### List passkeys
