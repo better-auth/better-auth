@@ -337,10 +337,23 @@ export const backupCode2fa = (opts: BackupCodeOptions) => {
 							TWO_FACTOR_ERROR_CODES.INVALID_BACKUP_CODE,
 						);
 					}
-					const updatedBackupCodes = await symmetricEncrypt({
-						key: ctx.context.secret,
-						data: JSON.stringify(validate.updated),
-					});
+					// Encrypt updated backup codes based on storeBackupCodes configuration
+					let updatedBackupCodes: string;
+					if (opts?.storeBackupCodes === "encrypted") {
+						updatedBackupCodes = await symmetricEncrypt({
+							key: ctx.context.secret,
+							data: JSON.stringify(validate.updated),
+						});
+					} else if (
+						typeof opts?.storeBackupCodes === "object" &&
+						"encrypt" in opts?.storeBackupCodes
+					) {
+						updatedBackupCodes = await opts.storeBackupCodes.encrypt(
+							JSON.stringify(validate.updated),
+						);
+					} else {
+						updatedBackupCodes = JSON.stringify(validate.updated);
+					}
 
 					const updated = await ctx.context.adapter.update({
 						model: twoFactorTable,
