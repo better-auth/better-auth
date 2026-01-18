@@ -1,17 +1,17 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
+	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../../tests";
+} from "better-auth/adapters/test-adapter";
+import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/better-sqlite3";
 import { drizzleAdapter } from "../drizzle-adapter";
 import {
 	clearSchemaCache,
@@ -25,11 +25,15 @@ let sqliteDB = new Database(dbFilePath);
 const { execute } = await testAdapter({
 	adapter: async (options) => {
 		const { schema } = await generateDrizzleSchema(sqliteDB, options, "sqlite");
-		return drizzleAdapter(drizzle(sqliteDB, { schema }), {
-			debugLogs: { isRunningAdapterTests: true },
-			schema,
-			provider: "sqlite",
-		});
+		const { relations, ...schemas } = schema;
+		return drizzleAdapter(
+			drizzle({ client: sqliteDB, schema: schemas, relations }),
+			{
+				debugLogs: { isRunningAdapterTests: true },
+				schema: { ...schemas, relations },
+				provider: "sqlite",
+			},
+		);
 	},
 	async runMigrations(betterAuthOptions) {
 		sqliteDB.close();
@@ -46,14 +50,15 @@ const { execute } = await testAdapter({
 			"sqlite",
 		);
 
-		const command = `npx drizzle-kit push --dialect=sqlite --schema=${fileName}.ts --url=./test.db`;
+		const command = `node ./node_modules/drizzle-kit/bin.cjs push --dialect=sqlite --schema=${path.join(import.meta.dirname, fileName)}.ts --url="${dbFilePath}"`;
 		console.log(`Running: ${command}`);
 		console.log(`Options:`, betterAuthOptions);
 		try {
 			// wait for the above console.log to be printed
 			await new Promise((resolve) => setTimeout(resolve, 10));
+
 			execSync(command, {
-				cwd: import.meta.dirname,
+				cwd: path.join(import.meta.dirname, ".."),
 				stdio: "inherit",
 			});
 		} catch (error) {
