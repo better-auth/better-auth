@@ -1934,6 +1934,10 @@ List all teams that the current user is a part of.
 <APIMethod path="/organization/list-user-teams" method="GET" requireSession>
   ```ts 
   type listUserTeams = {
+    /**
+    * The user ID to list teams for. Defaults to the current session user. Viewing other users requires 'member:read' permission.
+    */
+    userId?: string = "user-id"
   }
   ```
 </APIMethod>
