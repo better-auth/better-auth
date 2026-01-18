@@ -256,6 +256,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 										// this is because if the defaultValue is a function, it could have
 										// custom logic within that function that might not work in drizzle's context.
 									}
+								} else if (
+									databaseType === "pg" &&
+									attr.type === "json" &&
+									typeof attr.defaultValue === "object"
+								) {
+									type += `.default(${JSON.stringify(attr.defaultValue)})`;
 								} else if (typeof attr.defaultValue === "string") {
 									type += `.default("${attr.defaultValue}")`;
 								} else {

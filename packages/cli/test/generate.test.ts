@@ -462,6 +462,37 @@ describe("JSON field support in CLI generators", () => {
 		expect(schema.code).toContain("preferences: jsonb(");
 	});
 
+	it("should generate Drizzle schema with JSON Default for Postgres", async () => {
+		const schema = await generateDrizzleSchema({
+			file: "test.drizzle",
+			adapter: {
+				id: "drizzle",
+				options: {
+					provider: "pg",
+					schema: {},
+				},
+			} as any,
+			options: {
+				database: {} as any,
+				user: {
+					additionalFields: {
+						preferences: {
+							type: "json",
+							defaultValue: {
+								theme: "dark",
+							},
+						},
+					},
+				},
+			} as BetterAuthOptions,
+		});
+
+		expect(schema.code).toContain("preferences: jsonb(");
+		expect(schema.code).toContain(
+			'jsonb("preferences").default({ theme: "dark" })',
+		);
+	});
+
 	it("should generate Drizzle schema with JSON fields for MySQL", async () => {
 		const schema = await generateDrizzleSchema({
 			file: "test.drizzle",
