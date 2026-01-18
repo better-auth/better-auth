@@ -26,12 +26,14 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 	const filePath = file || "./auth-schema.ts";
 	const databaseType: "sqlite" | "mysql" | "pg" | undefined =
 		adapter.options?.provider;
+	const isRLSEnabled = databaseType === "pg" && adapter.options?.enableRLS;
 
 	if (!databaseType) {
 		throw new Error(
 			`Database provider type is undefined during Drizzle schema generation. Please define a \`provider\` in the Drizzle adapter config. Read more at https://better-auth.com/docs/adapters/drizzle`,
 		);
 	}
+
 	const fileExist = existsSync(filePath);
 
 	let code: string = generateImport({
@@ -283,7 +285,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 							}`;
 						})
 						.join(",\n ")}
-					}${assignIndexes(indexes)});`;
+					}${assignIndexes(indexes)})${isRLSEnabled ? ".enableRLS()" : ""};`;
 		code += `\n${schema}\n`;
 	}
 
