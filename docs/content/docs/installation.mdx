@@ -437,9 +437,23 @@ Create a new file or route in your framework's designated catch-all route handle
     <Callout type="info">
     When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
 
+    For React (TanStack Start with React):
+
     ```ts title="src/lib/auth.ts"
     import { betterAuth } from "better-auth";
     import { tanstackStartCookies } from "better-auth/tanstack-start";
+
+    export const auth = betterAuth({
+        //...your config
+        plugins: [tanstackStartCookies()] // make sure this is the last plugin in the array
+    })
+    ```
+
+    For Solid.js (TanStack Start with Solid):
+
+    ```ts title="src/lib/auth.ts"
+    import { betterAuth } from "better-auth";
+    import { tanstackStartCookies } from "better-auth/tanstack-start/solid";
 
     export const auth = betterAuth({
         //...your config
