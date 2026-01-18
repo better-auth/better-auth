@@ -290,6 +290,7 @@ export interface OAuthClient {
 	disabled?: boolean;
 	skip_consent?: boolean;
 	enable_end_session?: boolean;
+	unsafe_dont_require_pkce?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
 	[key: string]: unknown;

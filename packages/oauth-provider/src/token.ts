@@ -609,14 +609,6 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"Missing a required credential value for authorization_code grant",
-			error: "invalid_request",
-		});
-	}
-
 	/** Get and check Verification Value */
 	const verificationValue = await checkVerificationValue(
 		ctx,
@@ -642,31 +634,49 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 	);
 
-	/** Check challenge */
-	const challenge =
-		code_verifier && verificationValue.query?.code_challenge_method === "S256"
-			? await generateCodeChallenge(code_verifier)
-			: undefined;
-	if (
-		// AuthCodeWithSecret - Required if sent
-		isAuthCodeWithSecret &&
-		(challenge || verificationValue?.query?.code_challenge) &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
+	const ignorePkce = client.unsafeDontRequirePKCE && !client.public;
+
+	if (!ignorePkce && !(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+		throw new APIError("BAD_REQUEST", {
+			error_description:
+				"Missing a required credential value for authorization_code grant",
 			error: "invalid_request",
 		});
 	}
-	if (
-		// AuthCodeWithPkce - Always required
-		isAuthCodeWithPkce &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+
+	const shouldVerifyPkce =
+		!ignorePkce ||
+		Boolean(code_verifier) ||
+		Boolean(verificationValue.query?.code_challenge) ||
+		Boolean(verificationValue.query?.code_challenge_method);
+
+	/** Check challenge */
+	if (shouldVerifyPkce) {
+		const challenge =
+			code_verifier && verificationValue.query?.code_challenge_method === "S256"
+				? await generateCodeChallenge(code_verifier)
+				: undefined;
+		if (
+			// AuthCodeWithSecret - Required if sent
+			isAuthCodeWithSecret &&
+			(challenge || verificationValue?.query?.code_challenge) &&
+			challenge !== verificationValue.query?.code_challenge
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code verification failed",
+				error: "invalid_request",
+			});
+		}
+		if (
+			// AuthCodeWithPkce - Always required
+			isAuthCodeWithPkce &&
+			challenge !== verificationValue.query?.code_challenge
+		) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code verification failed",
+				error: "invalid_request",
+			});
+		}
 	}
 
 	/** Get user */

@@ -164,7 +164,15 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	if (!query.code_challenge || !query.code_challenge_method) {
+	const ignorePkce = client.unsafeDontRequirePKCE && !client.public;
+	if (client.unsafeDontRequirePKCE && client.public) {
+		// Would rather throw an error at setup time here
+		ctx.context.logger.warn(
+			`Client ${client.clientId} is public and cannot disable PKCE; enforcing PKCE.`,
+		);
+	}
+	const hasPkce = Boolean(query.code_challenge || query.code_challenge_method);
+	if (!hasPkce && !ignorePkce) {
 		throw ctx.redirect(
 			formatErrorURL(
 				query.redirect_uri,
@@ -174,18 +182,29 @@ export async function authorizeEndpoint(
 			),
 		);
 	}
-
-	// Check code challenges
-	const codeChallengesSupported = ["S256"];
-	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-				query.state,
-			),
-		);
+	if (hasPkce) {
+		if (!query.code_challenge || !query.code_challenge_method) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"pkce is required",
+					query.state,
+				),
+			);
+		}
+		// Check code challenges
+		const codeChallengesSupported = ["S256"];
+		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method",
+					query.state,
+				),
+			);
+		}
 	}
 
 	// Check for session
