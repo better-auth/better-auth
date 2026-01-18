@@ -877,6 +877,16 @@ export const getNormalTestSuiteTests = (
 				),
 			);
 		},
+		"findMany - should find many with select": async () => {
+		  const userEmails = (await insertRandom("user", 3)).map((x) => x[0].email);
+			const result = await adapter.findMany<User>({
+			  model: "user",
+				select: ["email"],
+			});
+			expect(result).toContainEqual({
+  			email: expect.toBeOneOf(userEmails),
+			});
+		},
 		"findMany - should find many models with join": async () => {
 			type ExpectedResult = User & { session: Session[]; account: Account[] };
 			let expectedResult: ExpectedResult[] = [];

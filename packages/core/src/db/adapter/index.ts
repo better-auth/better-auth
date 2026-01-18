@@ -404,6 +404,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	findMany: <T>(data: {
 		model: string;
 		where?: Where[] | undefined;
+		select?: string[] | undefined;
 		limit?: number | undefined;
 		sortBy?:
 			| {
@@ -499,6 +500,7 @@ export interface CustomAdapter {
 	}: {
 		model: string;
 		where?: CleanedWhere[] | undefined;
+		select?: string[] | undefined;
 		limit: number;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
