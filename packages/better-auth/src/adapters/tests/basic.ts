@@ -1528,6 +1528,181 @@ export const getNormalTestSuiteTests = (
 				});
 				expect(sortModels(result)).toEqual(sortModels(users));
 			},
+		"findMany - should find models with is_null operator": async () => {
+			const testData = [
+				{ image: null, name: "jane smith", email: "jane@gmail.com" },
+				{
+					image: "http://example.com/image.jpg",
+					name: "jane smith",
+					email: "jane2@gmail.com",
+				},
+				{
+					image: "http://example.com/image2.jpg",
+					name: "john doe",
+					email: "john@example.com",
+				},
+				{ image: null, name: "john doe", email: "john2@example.com" },
+			];
+
+			const createdUsers: User[] = [];
+			for (const data of testData) {
+				const user = await adapter.create({
+					model: "user",
+					data: {
+						...generate("user"),
+						...data,
+					},
+					forceAllowId: true,
+				});
+				createdUsers.push(user as User);
+			}
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "image",
+						operator: "is_null",
+					},
+				],
+			});
+			expect(sortModels(result)).toEqual(
+				sortModels(createdUsers.filter((user) => user.image === null)),
+			);
+
+			const result2 = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "image",
+						operator: "is_null",
+					},
+					{
+						field: "email",
+						operator: "contains",
+						value: "john",
+					},
+				],
+			});
+			expect(sortModels(result2)).toEqual(
+				sortModels(
+					createdUsers.filter(
+						(user) => user.image === null && user.email.includes("john"),
+					),
+				),
+			);
+		},
+		"findMany - should find models with is_not_null operator": async () => {
+			const testData = [
+				{ image: null, name: "jane smith", email: "jane@gmail.com" },
+				{
+					image: "http://example.com/image.jpg",
+					name: "jane smith",
+					email: "jane2@gmail.com",
+				},
+				{
+					image: "http://example.com/image2.jpg",
+					name: "john doe",
+					email: "john@example.com",
+				},
+				{ image: null, name: "john doe", email: "john2@example.com" },
+			];
+
+			const createdUsers: User[] = [];
+			for (const data of testData) {
+				const user = await adapter.create({
+					model: "user",
+					data: {
+						...generate("user"),
+						...data,
+					},
+					forceAllowId: true,
+				});
+				createdUsers.push(user as User);
+			}
+
+			const result = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "image",
+						operator: "is_not_null",
+					},
+				],
+			});
+			expect(sortModels(result)).toEqual(
+				sortModels(createdUsers.filter((user) => user.image !== null)),
+			);
+
+			const result2 = await adapter.findMany<User>({
+				model: "user",
+				where: [
+					{
+						field: "image",
+						operator: "is_not_null",
+					},
+					{
+						field: "email",
+						operator: "contains",
+						value: "john",
+					},
+				],
+			});
+			expect(sortModels(result2)).toEqual(
+				sortModels(
+					createdUsers.filter(
+						(user) => user.image !== null && user.email.includes("john"),
+					),
+				),
+			);
+		},
+		"findMany - should find all models with is_null OR is_not_null":
+			async () => {
+				const testData = [
+					{ image: null, name: "jane smith", email: "jane@gmail.com" },
+					{
+						image: "http://example.com/image.jpg",
+						name: "jane smith",
+						email: "jane2@gmail.com",
+					},
+					{
+						image: "http://example.com/image2.jpg",
+						name: "john doe",
+						email: "john@example.com",
+					},
+					{ image: null, name: "john doe", email: "john2@example.com" },
+				];
+
+				const createdUsers: User[] = [];
+				for (const data of testData) {
+					const user = await adapter.create({
+						model: "user",
+						data: {
+							...generate("user"),
+							...data,
+						},
+						forceAllowId: true,
+					});
+					createdUsers.push(user as User);
+				}
+
+				const result = await adapter.findMany<User>({
+					model: "user",
+					where: [
+						{
+							field: "image",
+							operator: "is_null",
+							connector: "OR",
+						},
+						{
+							field: "image",
+							operator: "is_not_null",
+							connector: "OR",
+						},
+					],
+				});
+				expect(sortModels(result)).toEqual(sortModels(createdUsers));
+			},
 		"findMany - should find many models with eq operator": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
 			const result = await adapter.findMany<User>({

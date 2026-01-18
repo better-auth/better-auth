@@ -230,6 +230,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (w.operator === "eq" || !w.operator) {
 						return { [fieldName]: w.value };
 					}
+					if (w.operator === "is_null") {
+						return { [fieldName]: null };
+					}
+					if (w.operator === "is_not_null") {
+						return { [fieldName]: { not: null } };
+					}
 					return {
 						[fieldName]: {
 							[operatorToPrismaOperator(w.operator)]: w.value,

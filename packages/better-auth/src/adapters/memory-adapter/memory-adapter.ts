@@ -115,6 +115,10 @@ export const memoryAdapter = (
 					const evalClause = (record: any, clause: CleanedWhere): boolean => {
 						const { field, value, operator } = clause;
 						switch (operator) {
+							case "is_not_null":
+								return record[field] !== null;
+							case "is_null":
+								return record[field] === null;
 							case "in":
 								if (!Array.isArray(value)) {
 									throw new Error("Value must be an array");
