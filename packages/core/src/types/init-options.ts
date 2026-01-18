@@ -926,7 +926,10 @@ export type BetterAuthOptions = {
 					 * List of trusted providers
 					 */
 					trustedProviders?: Array<
-						LiteralUnion<SocialProviderList[number] | "email-password", string>
+						LiteralUnion<
+							SocialProviderList[number] | "credential" | "sso" | "siwe",
+							string
+						>
 					>;
 					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.

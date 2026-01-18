@@ -115,7 +115,7 @@ export const auth = betterAuth({
   account: { // [!code highlight]
     accountLinking: { // [!code highlight]
       enabled: true, // [!code highlight]
-      trustedProviders: ["email-password", "github"], // [!code highlight]
+      trustedProviders: ["credential", "github"], // [!code highlight]
     }, // [!code highlight]
   }, // [!code highlight]
 });
