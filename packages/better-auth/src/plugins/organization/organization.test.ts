@@ -123,9 +123,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organizationId,
-		);
+		expect(session.data?.session?.activeOrganizationId).toBe(organizationId);
 	});
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
@@ -296,9 +294,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organizationId,
-		);
+		expect(session.data?.session.activeOrganizationId).toBe(organizationId);
 	});
 	it("should allow activating organization by slug", async () => {
 		const { headers } = await signInWithTestUser();
@@ -313,9 +309,7 @@ describe("organization", async (it) => {
 				headers,
 			},
 		});
-		expect((session.data?.session as any).activeOrganizationId).toBe(
-			organization2Id,
-		);
+		expect(session.data?.session.activeOrganizationId).toBe(organization2Id);
 	});
 
 	it("should allow getting full org on server", async () => {
@@ -411,7 +405,7 @@ describe("organization", async (it) => {
 				headers: headers2,
 			},
 		});
-		expect((invitedUserSession.data?.session as any).activeOrganizationId).toBe(
+		expect(invitedUserSession.data?.session.activeOrganizationId).toBe(
 			organizationId,
 		);
 	});
@@ -548,7 +542,7 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!org.data) throw new Error("Organization not found");
-		const memberUser = org.data.members.find((x: any) => x.role === "member");
+		const memberUser = org.data.members.find((x) => x.role === "member");
 		if (!memberUser) throw new Error("Member not found");
 		const member = await client.organization.updateMemberRole({
 			organizationId: org.data!.id,
@@ -1065,6 +1059,110 @@ describe("organization", async (it) => {
 		expect(getFullOrganization.data?.members.length).toBe(6);
 	});
 
+	it("should respect membershipLimit function when adding members to organization", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			user: {
+				modelName: "users",
+			},
+			plugins: [
+				organization({
+					membershipLimit: (user, organization) => {
+						// For organizations with "limit" in name, limit to 2 members
+						if (organization.name.includes("limit")) {
+							return 2;
+						}
+						return 100;
+					},
+					async sendInvitationEmail(data, request) {},
+				}),
+			],
+			logger: {
+				level: "error",
+			},
+		});
+
+		const { headers: headers2 } = await signInWithTestUser();
+		const client2 = createAuthClient({
+			plugins: [organizationClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					return auth.handler(new Request(url, init));
+				},
+			},
+		});
+
+		const org = await auth.api.createOrganization({
+			body: {
+				name: "test-membership-limit-func",
+				slug: "test-membership-limit-func",
+			},
+			headers: headers2,
+		});
+
+		// Add 1 member, now count = 2 (creator + 1)
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "user1@email.com",
+				password: "password",
+				name: "user1",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${newUser?.token}`,
+			}),
+		});
+		await auth.api.addMember({
+			body: {
+				organizationId: org?.id,
+				userId: session?.user.id!,
+				role: "admin",
+			},
+		});
+
+		// Try to add a second member, should fail since limit is 2
+		const secondUser = await auth.api.signUpEmail({
+			body: {
+				email: "user2@email.com",
+				password: "password",
+				name: "user2",
+			},
+		});
+		const session2 = await auth.api.getSession({
+			headers: new Headers({
+				Authorization: `Bearer ${secondUser?.token}`,
+			}),
+		});
+		await auth.api
+			.addMember({
+				body: {
+					organizationId: org?.id,
+					userId: session2?.user.id!,
+					role: "admin",
+				},
+			})
+			.catch((e: APIError) => {
+				expect(e).not.toBeNull();
+				expect(isAPIError(e)).toBeTruthy();
+				expect(e.message).toBe(
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED
+						.message,
+				);
+			});
+
+		// Check that only 2 members (creator + 1 added)
+		const getFullOrganization = await client2.organization.getFullOrganization({
+			query: {
+				organizationId: org?.id,
+			},
+			fetchOptions: {
+				headers: headers2,
+			},
+		});
+		expect(getFullOrganization.data?.members.length).toBe(2);
+	});
+
 	it("should allow listing invitations for an org", async () => {
 		const invitations = await client.organization.listInvitations({
 			query: {
@@ -1162,6 +1260,203 @@ describe("organization", async (it) => {
 				(x) => x.email === orgInvitations.data?.[0]!.email,
 			).length,
 		);
+	});
+});
+
+describe("invitation expiration and filtering", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				invitationExpiresIn: 1, // 1 second expiration for testing
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	it("should allow rejecting expired invitations", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin-${rng}@email.com`,
+			password: rng,
+			name: `admin-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited-${rng}@email.com`,
+			password: rng,
+			name: `invited-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create organization and send invitation
+		const org = await auth.api.createOrganization({
+			body: { name: rng, slug: rng },
+			headers: adminHeaders,
+		});
+
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation.data).toBeDefined();
+
+		// Wait for invitation to expire
+		await new Promise((resolve) => setTimeout(resolve, 1100));
+
+		// Rejecting expired invitation should succeed
+		const rejectResult = await client.organization.rejectInvitation({
+			invitationId: invitation.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(rejectResult.error).toBeFalsy();
+		expect(rejectResult.data?.invitation?.status).toBe("rejected");
+	});
+
+	it("should only list pending invitations for a user", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin2-${rng}@email.com`,
+			password: rng,
+			name: `admin2-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited2-${rng}@email.com`,
+			password: rng,
+			name: `invited2-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create two organizations
+		const org1 = await auth.api.createOrganization({
+			body: { name: `${rng}-org1`, slug: `${rng}-org1` },
+			headers: adminHeaders,
+		});
+		const org2 = await auth.api.createOrganization({
+			body: { name: `${rng}-org2`, slug: `${rng}-org2` },
+			headers: adminHeaders,
+		});
+
+		// Create invitations
+		const invitation1 = await client.organization.inviteMember({
+			organizationId: org1?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+		const invitation2 = await client.organization.inviteMember({
+			organizationId: org2?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation1.data).toBeDefined();
+		expect(invitation2.data).toBeDefined();
+
+		// Accept one invitation
+		await client.organization.acceptInvitation({
+			invitationId: invitation1.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		// List user invitations - should only show pending ones (not accepted)
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(userInvitations.data?.length).toBe(1);
+		expect(userInvitations.data?.[0]?.id).toBe(invitation2.data?.id);
+		expect(userInvitations.data?.[0]?.status).toBe("pending");
+	});
+
+	it("should not list rejected invitations", async () => {
+		const rng = crypto.randomUUID();
+		const adminUser = {
+			email: `admin3-${rng}@email.com`,
+			password: rng,
+			name: `admin3-${rng}`,
+		};
+		const invitedUser = {
+			email: `invited3-${rng}@email.com`,
+			password: rng,
+			name: `invited3-${rng}`,
+		};
+
+		await auth.api.signUpEmail({ body: adminUser });
+		await auth.api.signUpEmail({ body: invitedUser });
+
+		const { headers: adminHeaders } = await signInWithUser(
+			adminUser.email,
+			adminUser.password,
+		);
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedUser.email,
+			invitedUser.password,
+		);
+
+		// Create organization
+		const org = await auth.api.createOrganization({
+			body: { name: `${rng}-org`, slug: `${rng}-org` },
+			headers: adminHeaders,
+		});
+
+		// Create invitation
+		const invitation = await client.organization.inviteMember({
+			organizationId: org?.id,
+			email: invitedUser.email,
+			role: "member",
+			fetchOptions: { headers: adminHeaders },
+		});
+
+		expect(invitation.data).toBeDefined();
+
+		// Reject the invitation
+		await client.organization.rejectInvitation({
+			invitationId: invitation.data!.id!,
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		// List user invitations - should be empty since the only invitation was rejected
+		const userInvitations = await client.organization.listUserInvitations({
+			fetchOptions: { headers: invitedHeaders },
+		});
+
+		expect(userInvitations.data?.length).toBe(0);
 	});
 });
 
@@ -1936,7 +2231,7 @@ describe("Additional Fields", async () => {
 			});
 
 			type Result = PrettifyDeep<typeof orgRes>;
-			expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>({} as any);
+			expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
 			expect(orgRes).not.toBeNull();
 			if (!orgRes) throw new Error("Organization is null");
 			org = orgRes;
@@ -2077,7 +2372,7 @@ describe("Additional Fields", async () => {
 		type Data = PrettifyDeep<typeof data>;
 
 		expect(error).toBeNull();
-		expectTypeOf<Data>().toEqualTypeOf<{
+		expectTypeOf<Data>().toMatchTypeOf<{
 			id: string;
 			name: string;
 			slug: string;
@@ -2089,7 +2384,7 @@ describe("Additional Fields", async () => {
 			someHiddenField?: string | undefined;
 			members: any[];
 			invitations: any[];
-		} | null>({} as any);
+		} | null>();
 		if (data === null) return expect(data).not.toBe(null);
 		expect(data.someRequiredField).toBe("hey2");
 		expect(data.someOptionalField).toBe("hey");
@@ -2171,7 +2466,7 @@ describe("Additional Fields", async () => {
 		}>();
 	});
 
-	let addedMemberHeaders = new Headers();
+	const addedMemberHeaders = new Headers();
 
 	const { data: addedMember, error } = await client.signUp.email({
 		email: "new-member-for-org@email.com",
@@ -2346,7 +2641,7 @@ describe("Additional Fields", async () => {
 			updatedAt: new Date(),
 			password: "password",
 		} satisfies Omit<User, "id"> & { password: string };
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
@@ -2584,7 +2879,7 @@ async function getAtomValue<Result>(
 		object,
 ) {
 	// Trick the authClient to think it's on the client side in order to trigger the useAuthQuery hook
-	global.window = {} as any;
+	global.window = {} as unknown as Window & typeof globalThis;
 
 	// Run the hook and wait for the result
 	const res = await new Promise<{
@@ -2600,7 +2895,7 @@ async function getAtomValue<Result>(
 	});
 
 	// Reset the window object
-	global.window = undefined as any;
+	global.window = undefined as unknown as Window & typeof globalThis;
 
 	// Return the result
 	return res as

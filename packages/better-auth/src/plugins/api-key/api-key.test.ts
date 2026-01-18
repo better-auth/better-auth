@@ -83,7 +83,7 @@ describe("api-key", async () => {
 	}
 
 	it("should fail to create API Keys from server without headers and userId", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -253,7 +253,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a name that's shorter than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -277,7 +277,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a name that's longer than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -315,7 +315,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a prefix that's shorter than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -339,7 +339,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create the API key with a prefix that's longer than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -455,7 +455,7 @@ describe("api-key", async () => {
 		);
 
 		const { headers } = await signInWithTestUser();
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -479,7 +479,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create an API key with an expiresIn that's smaller than the allowed minimum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -504,7 +504,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create an API key with an expiresIn that's larger than the allowed maximum", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -559,7 +559,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -584,7 +584,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to create API key when refill amount is provided, but no refill interval", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -704,7 +704,7 @@ describe("api-key", async () => {
 	});
 
 	it("should create API key with invalid metadata", async () => {
-		let result: { data: ApiKey | null; error: Err | null } = {
+		const result: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1098,7 +1098,7 @@ describe("api-key", async () => {
 	}
 
 	it("should fail to update API key name without headers or userId", async () => {
-		let res: { data: ApiKey | null; error: Err | null } = {
+		const res: { data: ApiKey | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1239,7 +1239,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1286,7 +1286,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1333,7 +1333,7 @@ describe("api-key", async () => {
 
 		if (!firstApiKey) return;
 
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1372,7 +1372,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail update the refillInterval value since it requires refillAmount as well", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1397,7 +1397,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail update the refillAmount value since it requires refillInterval as well", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1453,7 +1453,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to update metadata with invalid metadata type", async () => {
-		let result: { data: Partial<ApiKey> | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey> | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1665,7 +1665,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to list API keys without headers", async () => {
-		let result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
+		const result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1807,7 +1807,7 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to delete an API key by ID without headers", async () => {
-		let result: { data: { success: boolean } | null; error: Err | null } = {
+		const result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -1859,7 +1859,7 @@ describe("api-key", async () => {
 	});
 
 	it("should fail to delete an API key by ID that doesn't exist", async () => {
-		let result: { data: { success: boolean } | null; error: Err | null } = {
+		const result: { data: { success: boolean } | null; error: Err | null } = {
 			data: null,
 			error: null,
 		};
@@ -2248,7 +2248,7 @@ describe("api-key", async () => {
 	});
 
 	describe("secondary storage", async () => {
-		let store = new Map<string, string>();
+		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
 		const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -2600,7 +2600,7 @@ describe("api-key", async () => {
 	});
 
 	describe("secondary-storage-with-fallback", async () => {
-		let store = new Map<string, string>();
+		const store = new Map<string, string>();
 		const expirationMap = new Map<string, number>();
 
 		const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -3103,7 +3103,7 @@ describe("api-key", async () => {
 	});
 
 	describe("custom storage methods", async () => {
-		let customStore = new Map<string, string>();
+		const customStore = new Map<string, string>();
 		let customGetCalled = false;
 		let customSetCalled = false;
 		let customDeleteCalled = false;
@@ -3195,6 +3195,259 @@ describe("api-key", async () => {
 			expect(deleteResult?.success).toBe(true);
 			expect(customDeleteCalled).toBe(true);
 			expect(customStore.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
+		});
+	});
+
+	// =========================================================================
+	// LEGACY DOUBLE-STRINGIFIED METADATA MIGRATION
+	// =========================================================================
+
+	describe("legacy double-stringified metadata migration", async () => {
+		const { auth, signInWithTestUser, db } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						enableMetadata: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("should migrate double-stringified metadata on getApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					metadata: { organizationId: "test-org" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter's transform.input will stringify it again,
+			// resulting in double-stringified data in the database (simulating legacy bug)
+			const legacyMetadata = JSON.stringify({ organizationId: "legacy-org" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Verify it's double-stringified in DB (adapter added extra layer of stringification)
+			const rawKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: string } | null;
+			expect(typeof rawKey?.metadata).toBe("string");
+
+			// Read via API - should return properly parsed object
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result).not.toBeNull();
+			expect(result.metadata).toEqual({ organizationId: "legacy-org" });
+			expect(typeof result.metadata).toBe("object");
+
+			// Verify the database was migrated (no longer double-stringified)
+			// After migration, the adapter's transform.output returns the parsed object
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+
+			// After migration, metadata should be a properly formatted object
+			expect(migratedKey?.metadata).toEqual({ organizationId: "legacy-org" });
+		});
+
+		it("should migrate double-stringified metadata on listApiKeys", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create first key with double-stringified metadata
+			const createdKey1 = await auth.api.createApiKey({
+				body: {
+					name: "key-1",
+					metadata: { plan: "pro" },
+				},
+				headers,
+			});
+
+			// Create second key with double-stringified metadata
+			const createdKey2 = await auth.api.createApiKey({
+				body: {
+					name: "key-2",
+					metadata: { plan: "enterprise" },
+				},
+				headers,
+			});
+
+			// Pass single-stringified values - the adapter will double-stringify them
+			const legacyMetadata1 = JSON.stringify({ plan: "legacy-1" });
+			const legacyMetadata2 = JSON.stringify({ plan: "legacy-2" });
+
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey1.id }],
+				update: { metadata: legacyMetadata1 },
+			});
+
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey2.id }],
+				update: { metadata: legacyMetadata2 },
+			});
+
+			// List via API - both keys should have properly parsed metadata objects
+			const results = await auth.api.listApiKeys({ headers });
+
+			const foundKey1 = results.find((k: any) => k.id === createdKey1.id);
+			const foundKey2 = results.find((k: any) => k.id === createdKey2.id);
+
+			expect(foundKey1).toBeDefined();
+			expect(foundKey1?.metadata).toEqual({ plan: "legacy-1" });
+			expect(typeof foundKey1?.metadata).toBe("object");
+
+			expect(foundKey2).toBeDefined();
+			expect(foundKey2?.metadata).toEqual({ plan: "legacy-2" });
+			expect(typeof foundKey2?.metadata).toBe("object");
+
+			// Verify the database was migrated for both keys
+			const migratedKey1 = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey1.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey1?.metadata).toEqual({ plan: "legacy-1" });
+
+			const migratedKey2 = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey2.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey2?.metadata).toEqual({ plan: "legacy-2" });
+		});
+
+		it("should migrate double-stringified metadata on updateApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					name: "test-key",
+					metadata: { tier: "free" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter will double-stringify it
+			const legacyMetadata = JSON.stringify({ tier: "legacy-tier" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Update via API (changing a different field, not metadata)
+			const result = await auth.api.updateApiKey({
+				body: {
+					keyId: createdKey.id,
+					name: "updated-name",
+				},
+				headers,
+			});
+
+			expect(result).not.toBeNull();
+			expect(result.name).toBe("updated-name");
+			// Metadata should be migrated and returned as object
+			expect(result.metadata).toEqual({ tier: "legacy-tier" });
+			expect(typeof result.metadata).toBe("object");
+
+			// Verify the database was migrated
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey?.metadata).toEqual({ tier: "legacy-tier" });
+		});
+
+		it("should migrate double-stringified metadata on verifyApiKey", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key first
+			const createdKey = await auth.api.createApiKey({
+				body: {
+					metadata: { scope: "read" },
+				},
+				headers,
+			});
+
+			// Pass a single-stringified value - the adapter will double-stringify it
+			const legacyMetadata = JSON.stringify({ scope: "legacy-scope" });
+			await db.update({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+				update: { metadata: legacyMetadata },
+			});
+
+			// Verify via API - should return properly parsed object
+			const result = await auth.api.verifyApiKey({
+				body: { key: createdKey.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key).not.toBeNull();
+			expect(result.key?.metadata).toEqual({ scope: "legacy-scope" });
+			expect(typeof result.key?.metadata).toBe("object");
+
+			// Verify the database was migrated
+			const migratedKey = (await db.findOne({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			})) as { metadata?: Record<string, any> } | null;
+			expect(migratedKey?.metadata).toEqual({ scope: "legacy-scope" });
+		});
+
+		it("should handle already properly formatted metadata (no migration needed)", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const metadata = { alreadyCorrect: true, value: 123 };
+
+			// Create a key with proper metadata
+			const createdKey = await auth.api.createApiKey({
+				body: { metadata },
+				headers,
+			});
+
+			// Read via API - should return the same object
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result.metadata).toEqual(metadata);
+			expect(typeof result.metadata).toBe("object");
+		});
+
+		it("should handle null metadata gracefully", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Create a key without metadata
+			const createdKey = await auth.api.createApiKey({
+				body: {},
+				headers,
+			});
+
+			// Read via API - should return null
+			const result = await auth.api.getApiKey({
+				query: { id: createdKey.id },
+				headers,
+			});
+
+			expect(result.metadata).toBeNull();
 		});
 	});
 });

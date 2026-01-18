@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.5.0-beta.2",
+  "version": "1.5.0-beta.8",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -48,10 +48,10 @@
       "types": "./dist/error/index.d.mts",
       "default": "./dist/error/index.mjs"
     },
-    "./utils": {
-      "dev-source": "./src/utils/index.ts",
-      "types": "./dist/utils/index.d.mts",
-      "default": "./dist/utils/index.mjs"
+    "./utils/*": {
+      "dev-source": "./src/utils/*.ts",
+      "types": "./dist/utils/*.d.mts",
+      "default": "./dist/utils/*.mjs"
     },
     "./social-providers": {
       "dev-source": "./src/social-providers/index.ts",
@@ -97,6 +97,9 @@
       "utils": [
         "dist/utils/index.d.mts"
       ],
+      "utils/*": [
+        "dist/utils/*.d.mts"
+      ],
       "social-providers": [
         "dist/social-providers/index.d.mts"
       ],
@@ -118,7 +121,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
-    "coverage": "vitest run --coverage"
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "devDependencies": {
     "@better-auth/utils": "catalog:",

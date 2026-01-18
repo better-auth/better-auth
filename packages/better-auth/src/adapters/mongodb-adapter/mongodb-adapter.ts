@@ -41,9 +41,11 @@ export interface MongoDBAdapterConfig {
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
-	 * If the database doesn't support transactions,
-	 * set this to `false` and operations will be executed sequentially.
-	 * @default false
+	 * ⚠️ Important:
+	 * - Defaults to `true` when a MongoDB client is provided.
+	 * - If your MongoDB instance does not support transactions
+	 *   (e.g. standalone server without a replica set),
+	 *   you must explicitly set `transaction: false`.
 	 */
 	transaction?: boolean | undefined;
 }
@@ -313,7 +315,7 @@ export const mongodbAdapter = (
 							// For unique relationships, limit is ignored (as per JoinConfig type)
 							// For non-unique relationships, apply limit if specified
 							const shouldLimit = !isUnique && joinConfig.limit !== undefined;
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;
@@ -423,7 +425,7 @@ export const mongodbAdapter = (
 								joinConfig.relation !== "one-to-one" &&
 								joinConfig.limit !== undefined;
 
-							let limit =
+							const limit =
 								joinConfig.limit ??
 								options.advanced?.database?.defaultFindManyLimit ??
 								100;

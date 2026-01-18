@@ -269,6 +269,24 @@ export const auth = betterAuth({
 })
 ```
 
+- `clientId`: OAuth client ID from the provider
+- `clientSecret`: OAuth client secret from the provider
+- `clientKey`: Client key (used by some providers like TikTok instead of clientId) (optional)
+- `redirectURI`: Custom redirect URI for the OAuth callback (optional)
+- `scope`: Additional OAuth scopes to request (optional)
+- `mapProfileToUser`: Custom function to map the provider profile to a user (optional)
+- `disableSignUp`: Disable sign up for new users (optional)
+- `disableImplicitSignUp`: Disable implicit sign up for new users (optional)
+- `overrideUserInfoOnSignIn`: Override user info with provider user info on sign in (optional)
+- `prompt`: The prompt to use for the authorization code request (`"select_account"`, `"consent"`, `"login"`, `"none"`, `"select_account consent"`) (optional)
+- `responseMode`: The response mode to use (`"query"`, `"form_post"`) (optional)
+- `getUserInfo`: Custom function to get user info from the provider (optional)
+- `refreshAccessToken`: Custom function to refresh a token (optional)
+- `verifyIdToken`: Custom function to verify the ID token (optional)
+- `disableIdTokenSignIn`: Disable sign in with ID token sent from the client (optional)
+- `disableDefaultScope`: Disable the provider's default scopes (optional)
+- `authorizationEndpoint`: Custom authorization endpoint URL (optional)
+
 ## `plugins`
 
 List of Better Auth plugins.
@@ -525,20 +543,22 @@ export const auth = betterAuth({
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
-		}
+		},
+		skipTrailingSlashes: true
 	},
 })
 ```
 
 - `ipAddress`: IP address configuration for rate limiting and session tracking
 - `useSecureCookies`: Use secure cookies (default: `false`)
-- `disableCSRFCheck`: Disable trusted origins check (⚠️ security risk)
-- `disableOriginCheck`: Disable origin check (⚠️ security risk)
+- `disableCSRFCheck`: Disable all CSRF protection including origin header validation and Fetch Metadata checks (⚠️ security risk)
+- `disableOriginCheck`: Disable URL validation for `callbackURL`, `redirectTo`, and other redirect URLs (⚠️ security risk)
 - `crossSubDomainCookies`: Configure cookies to be shared across subdomains
 - `cookies`: Customize cookie names and attributes
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
+- `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 - OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`

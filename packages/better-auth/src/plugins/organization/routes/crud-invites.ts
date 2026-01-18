@@ -592,13 +592,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				organizationId: invitation.organizationId,
 			});
 
-			if (membersCount >= membershipLimit) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
-				);
-			}
-
 			const organization = await adapter.findOrganizationById(
 				invitation.organizationId,
 			);
@@ -606,6 +599,18 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				throw APIError.from(
 					"BAD_REQUEST",
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const limit =
+				typeof membershipLimit === "number"
+					? membershipLimit
+					: await membershipLimit(session.user, organization);
+
+			if (membersCount >= limit) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);
 			}
 
@@ -765,11 +770,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 			const invitation = await adapter.findInvitationById(
 				ctx.body.invitationId,
 			);
-			if (
-				!invitation ||
-				invitation.expiresAt < new Date() ||
-				invitation.status !== "pending"
-			) {
+			if (!invitation || invitation.status !== "pending") {
 				throw APIError.from("BAD_REQUEST", {
 					message: "Invitation not found!",
 					code: "INVITATION_NOT_FOUND",
@@ -1235,6 +1236,9 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 
 			const invitations = await adapter.listUserInvitations(userEmail);
-			return ctx.json(invitations);
+			const pendingInvitations = invitations.filter(
+				(inv) => inv.status === "pending",
+			);
+			return ctx.json(pendingInvitations);
 		},
 	);

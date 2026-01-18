@@ -1,10 +1,10 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
-import { generateId } from "../../../utils";
 import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -397,7 +397,7 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
-			let data: Omit<ApiKey, "id"> = {
+			const data: Omit<ApiKey, "id"> = {
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -431,8 +431,8 @@ export function createApiKey({
 			};
 
 			if (metadata) {
-				//@ts-expect-error - we intentionally save the metadata as string on DB.
-				data.metadata = schema.apikey.fields.metadata.transform.input(metadata);
+				// The adapter will automatically apply the schema transform to stringify
+				data.metadata = metadata;
 			}
 
 			let apiKey: ApiKey;

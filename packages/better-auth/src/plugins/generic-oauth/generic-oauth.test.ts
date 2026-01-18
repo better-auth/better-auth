@@ -94,6 +94,7 @@ describe("oauth2", async () => {
 		if (!location) throw new Error("No redirect location found");
 
 		let callbackURL = "";
+		let setCookieHeader = "";
 		const newHeaders = new Headers();
 		await betterFetch(location, {
 			method: "GET",
@@ -101,6 +102,7 @@ describe("oauth2", async () => {
 			headers,
 			onError(context) {
 				callbackURL = context.response.headers.get("location") || "";
+				setCookieHeader = context.response.headers.get("set-cookie") || "";
 				cookieSetter(newHeaders)(context);
 			},
 		});
@@ -111,11 +113,33 @@ describe("oauth2", async () => {
 			callbackURL = url.toString();
 		}
 
-		return { callbackURL, headers: newHeaders };
+		return { callbackURL, headers: newHeaders, setCookieHeader };
 	}
 
+	it("should delete state cookie with path attribute", async () => {
+		const headers = new Headers();
+		const signInRes = await authClient.signIn.oauth2({
+			providerId: "test",
+			callbackURL: "http://localhost:3000/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const { setCookieHeader } = await simulateOAuthFlow(
+			signInRes.data?.url || "",
+			headers,
+		);
+
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		const stateCookie = cookies.get("better-auth.state");
+
+		expect(stateCookie?.["max-age"]).toBe(0);
+		expect(stateCookie?.path).toBe("/");
+	});
+
 	it("should redirect to the provider and handle the response", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -147,7 +171,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 200;
 		});
 
-		let headers = new Headers();
+		const headers = new Headers();
 		const signInRes = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -189,7 +213,7 @@ describe("oauth2", async () => {
 	});
 
 	it("should redirect to the provider and handle the response after linked", async () => {
-		let headers = new Headers();
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2({
 			providerId: "test",
 			callbackURL: "http://localhost:3000/dashboard",
@@ -226,7 +250,7 @@ describe("oauth2", async () => {
 			userInfoResponse.statusCode = 500;
 		});
 
-		let headers = new Headers();
+		const headers = new Headers();
 		const res = await authClient.signIn.oauth2(
 			{
 				providerId: "test",

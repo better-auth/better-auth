@@ -18,8 +18,8 @@ import { getMigrations } from "./db";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
-let server = new OAuth2Server();
-let port = 8005;
+const server = new OAuth2Server();
+const port = 8005;
 
 const mswServer = setupServer();
 let shouldUseUpdatedProfile = false;
@@ -139,6 +139,9 @@ describe("Social Providers", async (c) => {
 					clientId: "test",
 					clientSecret: "test",
 				},
+			},
+			advanced: {
+				disableOriginCheck: false,
 			},
 		},
 		{
@@ -782,7 +785,6 @@ describe("signin", async () => {
 			expiresAt: expect.any(Number),
 			invitedBy: "user-123",
 			errorURL: "http://localhost:3000/api/auth/error",
-			state: expect.any(String),
 		});
 	});
 
@@ -949,6 +951,178 @@ describe("updateAccountOnSignIn", async () => {
 			session2.data?.user.id!,
 		);
 		expect(userAccounts2[0]!.accessToken).toBe("new-access-token");
+	});
+});
+
+describe("Apple Provider", async () => {
+	it("should not use email as fallback for name when name is not provided", async () => {
+		const appleProfile = {
+			sub: "001341.example.1128",
+			email: "user@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+			// No name field
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						// Disable ID token verification for testing
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/apple", {
+			query: {
+				state,
+				code: "apple_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		// Name should NOT be the email address
+		expect(session.data?.user.name).not.toBe("user@privaterelay.appleid.com");
+		// Name should be undefined, null, or space when not provided
+		expect(
+			session.data?.user.name === undefined ||
+				session.data?.user.name === null ||
+				session.data?.user.name === " ",
+		).toBe(true);
+	});
+
+	it("should use firstName and lastName when provided in token.user", async () => {
+		const appleProfile = {
+			sub: "001341.example.1129",
+			email: "user2@privaterelay.appleid.com",
+			email_verified: true,
+			is_private_email: true,
+			real_user_status: 2,
+		};
+
+		mswServer.use(
+			http.post("https://appleid.apple.com/auth/token", async () => {
+				const idToken = await signJWT(appleProfile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "apple_access_token",
+					id_token: idToken,
+					token_type: "Bearer",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					apple: {
+						clientId: "test-apple-client",
+						clientSecret: "test-apple-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "apple",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		const userData = JSON.stringify({
+			name: {
+				firstName: "Better",
+				lastName: "Auth",
+			},
+			email: "user2@privaterelay.appleid.com",
+		});
+
+		let redirectLocation: string | null = null;
+
+		await client.$fetch("/callback/apple", {
+			body: {
+				state,
+				code: "apple_test_code",
+				user: userData,
+			},
+			headers,
+			method: "POST",
+			onError(context) {
+				// Expecting 302 redirect
+				expect(context.response.status).toBe(302);
+				redirectLocation = context.response.headers.get("location");
+				expect(redirectLocation).toBeDefined();
+				expect(redirectLocation).toContain("/callback/apple");
+				expect(redirectLocation).toContain("user=");
+			},
+		});
+
+		const redirectUrl = new URL(redirectLocation!);
+		await client.$fetch("/callback/apple", {
+			query: Object.fromEntries(redirectUrl.searchParams),
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.name).toBe("Better Auth");
 	});
 });
 
