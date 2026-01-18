@@ -1418,7 +1418,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 			},
 			{
 				title: "React Router v7",
-				icon: Icons.ReactRouter,
+				icon: Icons.reactRouter,
 				href: "/docs/integrations/react-router",
 			},
 			{
@@ -2603,7 +2603,7 @@ export const examples: Content[] = [
 			{
 				title: "React Router v7",
 				href: "/docs/examples/react-router",
-				icon: Icons.ReactRouter,
+				icon: Icons.reactRouter,
 			},
 			{
 				title: "SvelteKit",

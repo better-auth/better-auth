@@ -114,7 +114,7 @@ await fetch("/api/auth/token", {
 When you call `getSession` method, a JWT is returned in the `set-auth-jwt` header, which you can use to send to your services directly.
 
 ```ts
-import { auth } from "@/lib/auth"
+import { authClient } from "@/lib/auth-client"
 
 await authClient.getSession({
   fetchOptions: {
