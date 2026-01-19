@@ -1,6 +1,4 @@
 export * from "@better-auth/core/db";
-export * from "./adapter-base";
-export * from "./adapter-kysely";
 export * from "./field";
 export * from "./field-converter";
 export * from "./get-migration";

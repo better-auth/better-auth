@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
