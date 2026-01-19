@@ -31,6 +31,7 @@ interface Content {
 		href: string;
 		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 		group?: boolean;
+		separator?: boolean;
 		isNew?: boolean;
 	}[];
 }
@@ -72,13 +73,20 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => ({
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			})),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
