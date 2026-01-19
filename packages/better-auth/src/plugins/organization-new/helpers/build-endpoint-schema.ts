@@ -6,6 +6,7 @@ import type {
 } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { PrettifyDeep, UnionToIntersection } from "../../../types/helper";
+import type { OrganizationSchema } from "../../organization/schema";
 
 type InferOptionalSchemaType<
 	Fields extends readonly {
@@ -98,11 +99,24 @@ type InferOptionalSchemaTypeForGetBody<
  */
 export const buildEndpointSchema = <
 	SchemaName extends string,
-	S extends {
-		[key in SchemaName]?: {
-			additionalFields?: Record<string, DBFieldAttribute>;
-		};
-	},
+	S extends
+		| {
+				[key in string]?:
+					| {
+							fields?:
+								| {
+										[key in string]: string;
+								  }
+								| undefined;
+							additionalFields?:
+								| {
+										[key in string]: DBFieldAttribute;
+								  }
+								| undefined;
+					  }
+					| undefined;
+		  }
+		| undefined,
 	BaseSchema extends z.ZodObject<any>,
 	AllPartial extends boolean = false,
 	AdditionalFieldsNestedAs extends string | undefined = undefined,
@@ -119,14 +133,9 @@ export const buildEndpointSchema = <
 	 * Whether to make the additional fields partial.
 	 */
 	shouldBePartial?: AllPartial;
-	/**
-	 * The additional fields to add to the schema.
-	 */
-	additionalFields?: {
-		schema: S | undefined;
-		model: SchemaName;
-		nestedAs?: AdditionalFieldsNestedAs;
-	};
+	additionalFieldsSchema?: S | undefined;
+	additionalFieldsModel: SchemaName;
+	additionalFieldsNestedAs?: AdditionalFieldsNestedAs;
 	/**
 	 * The optional schemas to add to the schema based on a condition.
 	 * Each item should have a condition (boolean) and a Zod schema.
@@ -134,16 +143,16 @@ export const buildEndpointSchema = <
 	optionalSchema?: OptionalSchema;
 }) => {
 	const {
-		additionalFields: _additionalFields,
 		baseSchema,
 		shouldBePartial,
 		optionalSchema,
+		additionalFieldsModel: schemaName,
+		additionalFieldsSchema: schemaConfig,
+		additionalFieldsNestedAs,
 	} = opts;
 
 	// Process additional fields from Better Auth schema
-	const { model: schemaName, schema: schemaConfig } = _additionalFields || {};
 	const additionalFields = schemaConfig?.[schemaName]?.additionalFields || {};
-	const additionalFieldsNestedAs = _additionalFields?.nestedAs;
 
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
@@ -186,22 +195,18 @@ export const buildEndpointSchema = <
 	>;
 
 	const $Infer = {
-		body: {} as PrettifyDeep<
-			(AdditionalFieldsNestedAs extends string
-				? {
-						[K in AdditionalFieldsNestedAs]: AdditionalFields;
-					}
-				: AdditionalFields) &
-				z.infer<BaseSchema> &
-				InferOptionalSchemaType<OptionalSchema>
-		>,
+		body: {} as (AdditionalFieldsNestedAs extends string
+			? {
+					[K in AdditionalFieldsNestedAs]: AdditionalFields;
+				}
+			: AdditionalFields) &
+			z.infer<BaseSchema> &
+			InferOptionalSchemaType<OptionalSchema>,
 	};
 
-	type BodyType = PrettifyDeep<
-		AdditionalFields &
-			z.infer<BaseSchema> &
-			InferOptionalSchemaTypeForGetBody<OptionalSchema>
-	>;
+	type BodyType = AdditionalFields &
+		z.infer<BaseSchema> &
+		InferOptionalSchemaTypeForGetBody<OptionalSchema>;
 
 	const getBody = (ctx: GenericEndpointContext): BodyType => {
 		return ctx.body as BodyType;

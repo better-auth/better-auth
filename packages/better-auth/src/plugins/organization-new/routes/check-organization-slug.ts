@@ -51,6 +51,10 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			if (options.disableSlugs) {
+				const msg = ORGANIZATION_ERROR_CODES.SLUG_IS_NOT_ALLOWED;
+				throw APIError.from("FORBIDDEN", msg);
+			}
 			const orgAdapter = getOrgAdapter<O>(ctx.context, options);
 			const isTaken = await orgAdapter.isSlugTaken(ctx.body.slug);
 			if (isTaken) {

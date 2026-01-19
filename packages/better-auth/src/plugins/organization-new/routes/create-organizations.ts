@@ -56,10 +56,8 @@ export const createOrganization = <O extends OrganizationOptions>(
 
 	const { $Infer, schema, getBody } = buildEndpointSchema({
 		baseSchema: baseOrganizationSchema,
-		additionalFields: {
-			schema: options?.schema,
-			model: "organization",
-		},
+		additionalFieldsSchema: options?.schema as O["schema"],
+		additionalFieldsModel: "organization",
 		optionalSchema: [
 			{
 				condition: enableSlugs,
