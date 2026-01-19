@@ -2,6 +2,7 @@ import type {
 	AuthContext,
 	BetterAuthRateLimitStorage,
 } from "@better-auth/core";
+import { createRateLimitKey } from "@better-auth/core/utils/ip";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { RateLimit } from "../../types";
@@ -168,7 +169,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ip) {
 		return;
 	}
-	const key = ip + path;
+	const key = createRateLimitKey(ip, path);
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
