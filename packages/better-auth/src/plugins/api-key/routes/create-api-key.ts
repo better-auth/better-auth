@@ -444,10 +444,10 @@ export function createApiKey({
 				});
 				await setApiKey(ctx, apiKey, opts);
 			} else if (opts.storage === "secondary-storage") {
-				const id =
-					ctx.context.generateId({
-						model: API_KEY_TABLE_NAME,
-					}) ?? generateId();
+				const generatedId = ctx.context.generateId({
+					model: API_KEY_TABLE_NAME,
+				});
+				const id = generatedId !== false ? generatedId : generateId();
 				apiKey = {
 					...data,
 					id,
