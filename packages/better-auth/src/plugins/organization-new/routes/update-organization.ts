@@ -1,8 +1,11 @@
-import * as z from "zod/v4";
-import type { OrganizationOptions } from "../types";
-import { buildEndpointSchema } from "../helpers/build-endpoint-schema";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
+import * as z from "zod/v4";
+import { buildEndpointSchema } from "../helpers/build-endpoint-schema";
+import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
+import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { orgMiddleware } from "../middleware/org-middleware";
+import type { OrganizationOptions } from "../types";
 
 const baseUpdateOrganizationSchema = z.object({
 	data: z.object({
@@ -11,13 +14,6 @@ const baseUpdateOrganizationSchema = z.object({
 			.min(1)
 			.meta({
 				description: "The name of the organization",
-			})
-			.optional(),
-		slug: z
-			.string()
-			.min(1)
-			.meta({
-				description: "The slug of the organization",
 			})
 			.optional(),
 		logo: z
@@ -41,26 +37,39 @@ const baseUpdateOrganizationSchema = z.object({
 		.optional(),
 });
 
-updateOrganization({
-	schema: {
-		organization: {
-			additionalFields: {
-				test: { type: "string", required: true },
-			},
-		},
-	},
-})({ body: { data: {} } });
+export type UpdateOrganization<O extends OrganizationOptions> = ReturnType<
+	typeof updateOrganization<O>
+>;
 
 export const updateOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
 ) => {
+	type EnableSlugs = O["disableSlugs"] extends true ? false : true;
+	const enableSlugs = (options?.disableSlugs ?? false) as EnableSlugs;
+
 	const { $Infer, schema, getBody } = buildEndpointSchema({
 		baseSchema: baseUpdateOrganizationSchema,
-		additionalFields: {
-			schema: options?.schema,
-			model: "organization",
-			nestedAs: "data",
-		},
+		additionalFieldsSchema: options?.schema as O["schema"],
+		additionalFieldsModel: "organization",
+		additionalFieldsNestedAs: "data",
+		optionalSchema: [
+			{
+				condition: enableSlugs,
+				schema: z.object({
+					data: z
+						.object({
+							slug: z
+								.string()
+								.min(1)
+								.meta({
+									description: "The slug of the organization",
+								})
+								.optional(),
+						})
+						.optional(),
+				}),
+			},
+		],
 	});
 
 	return createAuthEndpoint(
@@ -92,6 +101,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			},
 		},
 		async (ctx) => {
+			const body = getBody(ctx);
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
 				throw APIError.fromStatus("UNAUTHORIZED", {
@@ -135,9 +145,9 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				);
 			}
 			// Check if slug is being updated and validate uniqueness
-			if (typeof ctx.body.data.slug === "string") {
+			if (typeof body.data.slug === "string") {
 				const existingOrganization = await adapter.findOrganizationBySlug(
-					ctx.body.data.slug,
+					body.data.slug,
 				);
 				if (
 					existingOrganization &&

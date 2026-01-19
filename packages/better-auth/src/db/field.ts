@@ -160,14 +160,22 @@ export type InferAdditionalFieldsFromPluginOptions<
 			| undefined;
 	},
 	isClientSide extends boolean = true,
-> = Options["schema"] extends {
-	[key in SchemaName]?: {
-		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
-	};
-}
-	? isClientSide extends true
-		? FieldAttributeToObject<RemoveFieldsWithInputFalse<Field>>
-		: FieldAttributeToObject<Field>
+> = Options["schema"] extends
+	| {
+			[key in SchemaName]?:
+				| {
+						additionalFields?: infer Field extends
+							| Record<string, DBFieldAttribute>
+							| undefined;
+				  }
+				| undefined;
+	  }
+	| undefined
+	? Field extends Record<string, DBFieldAttribute>
+		? isClientSide extends true
+			? FieldAttributeToObject<RemoveFieldsWithInputFalse<Field>>
+			: FieldAttributeToObject<Field>
+		: {}
 	: {};
 
 type RemoveFieldsWithInputFalse<T extends Record<string, DBFieldAttribute>> = {

@@ -1,46 +1,21 @@
 import type { AuthContext, Prettify } from "@better-auth/core";
 import type { Endpoint } from "better-call";
 import { getSessionFromCtx } from "../../../api";
+import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
 import type { CheckOrganizationSlug } from "../routes/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/check-organization-slug";
 import type { CreateOrganization } from "../routes/create-organizations";
 import { createOrganization } from "../routes/create-organizations";
+import type { UpdateOrganization } from "../routes/update-organization";
+import { updateOrganization } from "../routes/update-organization";
 import type { Addon, OrganizationOptions } from "../types";
-
-/** Extract endpoints from a single addon, returns empty object if no endpoints */
-type ExtractAddonEndpoints<A> = A extends {
-	endpoints: infer E extends Record<string, Endpoint>;
-}
-	? E
-	: {};
-
-/** Union to intersection helper */
-type UnionToIntersection<U> = (
-	U extends unknown
-		? (k: U) => void
-		: never
-) extends (k: infer I) => void
-	? I
-	: never;
-
-/** Merge all addon endpoints from the use array into a single intersection */
-type MergedAddonEndpoints<Addons extends readonly Addon[]> =
-	UnionToIntersection<ExtractAddonEndpoints<Addons[number]>>;
-
-/** Inferred endpoints type from options */
-export type InferOrganizationEndpoints<O extends OrganizationOptions> =
-	Prettify<
-		BaseEndpoints<O> &
-			MergedAddonEndpoints<
-				O extends { use: readonly Addon[] } ? O["use"] : Addon[]
-			>
-	>;
 
 /** Base endpoints provided by the organization plugin */
 type BaseEndpoints<O extends OrganizationOptions> = {
 	createOrganization: CreateOrganization<O>;
 	checkOrganizationSlug: CheckOrganizationSlug<O>;
+	updateOrganization: UpdateOrganization<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -59,6 +34,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 	const endpoints = {
 		createOrganization: createOrganization(options),
 		checkOrganizationSlug: checkOrganizationSlug(options),
+		updateOrganization: updateOrganization(options),
 		...(addonEndpoints || {}),
 	};
 
@@ -74,3 +50,23 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		},
 	}) as InferOrganizationEndpoints<O>;
 };
+
+/** Extract endpoints from a single addon, returns empty object if no endpoints */
+type ExtractAddonEndpoints<A> = A extends {
+	endpoints: infer E extends Record<string, Endpoint>;
+}
+	? E
+	: {};
+
+/** Merge all addon endpoints from the use array into a single intersection */
+type MergedAddonEndpoints<Addons extends readonly Addon[]> =
+	UnionToIntersection<ExtractAddonEndpoints<Addons[number]>>;
+
+/** Inferred endpoints type from options */
+export type InferOrganizationEndpoints<O extends OrganizationOptions> =
+	Prettify<
+		BaseEndpoints<O> &
+			MergedAddonEndpoints<
+				O extends { use: readonly Addon[] } ? O["use"] : Addon[]
+			>
+	>;
