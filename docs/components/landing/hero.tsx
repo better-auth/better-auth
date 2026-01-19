@@ -1,97 +1,77 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
-import useMeasure from "react-use-measure";
-import Link from "next/link";
 import clsx from "clsx";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { useTheme } from "next-themes";
 import { Highlight, themes } from "prism-react-renderer";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
+import { useEffect, useId, useState } from "react";
+import useMeasure from "react-use-measure";
+import { Button } from "@/components/ui/button";
 import { Builder } from "../builder";
-import { Spotlight } from "./spotlight";
 import { GradientBG } from "./gradient-bg";
-const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
-	{
-		name: "auth.ts",
-		code: `export const auth = betterAuth({
-	database: new Pool({
-		connectionString: DATABASE_URL,
-	}),
-    emailAndPassword: {
-        enabled: true,
-    },
-	plugins: [
-	  organization(),
-      twoFactor(),
-	]
-})`,
-	},
-	{
-		name: "client.ts",
-		code: `const client = createAuthClient({
-    plugins: [passkeyClient()]
-});
-        `,
-	},
-];
-
-function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
-	return (
-		<svg aria-hidden="true" viewBox="0 0 42 10" fill="none" {...props}>
-			<circle cx="5" cy="5" r="4.5" />
-			<circle cx="21" cy="5" r="4.5" />
-			<circle cx="37" cy="5" r="4.5" />
-		</svg>
-	);
-}
+import { Spotlight } from "./spotlight";
 
 export default function Hero() {
 	return (
-		<section className="max-h-[40rem] relative w-full flex md:items-center md:justify-center dark:bg-black/[0.96] antialiased bg-grid-white/[0.02] overflow-hidden md:min-h-[40rem]">
+		<section className="relative w-full flex md:items-center md:justify-center bg-white/96 dark:bg-black/[0.96] antialiased min-h-[40rem] md:min-h-[50rem] lg:min-h-[40rem]">
+			{/* Spotlight Effect */}
 			<Spotlight />
-			<div className="overflow-hidden px-2 bg-transparent dark:-mb-32 dark:mt-[-4.75rem] dark:pb-32 dark:pt-[4.75rem] md:w-10/12 mx-auto">
+
+			{/* Background Grid */}
+			<div className="absolute inset-0 left-5 right-5 lg:left-16 lg:right-14 xl:left-16 xl:right-14">
+				<div className="absolute inset-0 bg-grid text-muted/50 dark:text-white/[0.02]" />
+				<div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-background" />
+			</div>
+
+			{/* Content */}
+			<div className="px-4 py-8 md:w-10/12 mx-auto relative z-10">
 				<div className="mx-auto grid lg:max-w-8xl xl:max-w-full grid-cols-1 items-center gap-x-8 gap-y-16 px-4 py-2 lg:grid-cols-2 lg:px-8 lg:py-4 xl:gap-x-16 xl:px-0">
-					<div className="relative z-10 text-left mt-0 sm:mt-2 md:mt-8 lg:mt-0 md:text-center lg:text-left">
-						<div className="relative">
-							<div className="flex flex-col items-center lg:items-start gap-2">
-								<div className="flex items-end gap-1 mt-2 ">
-									<div className="flex items-center gap-1">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											width="0.8em"
-											height="0.8em"
-											viewBox="0 0 24 24"
-										>
-											<path
-												fill="currentColor"
-												d="M13 4V2c4.66.5 8.33 4.19 8.85 8.85c.6 5.49-3.35 10.43-8.85 11.03v-2c3.64-.45 6.5-3.32 6.96-6.96A7.994 7.994 0 0 0 13 4m-7.33.2A9.8 9.8 0 0 1 11 2v2.06c-1.43.2-2.78.78-3.9 1.68zM2.05 11a9.8 9.8 0 0 1 2.21-5.33L5.69 7.1A8 8 0 0 0 4.05 11zm2.22 7.33A10.04 10.04 0 0 1 2.06 13h2c.18 1.42.75 2.77 1.63 3.9zm1.4 1.41l1.39-1.37h.04c1.13.88 2.48 1.45 3.9 1.63v2c-1.96-.21-3.82-1-5.33-2.26M12 17l1.56-3.42L17 12l-3.44-1.56L12 7l-1.57 3.44L7 12l3.43 1.58z"
-											></path>
-										</svg>
-										<span className="text-xs text-opacity-75">
-											Own Your Auth
-										</span>
+					<div className="relative z-10 text-left lg:mt-0">
+						<div className="relative space-y-4">
+							<div className="space-y-2">
+								<div className="flex flex-col gap-2">
+									<div className="flex items-end gap-1 mt-2">
+										<div className="flex items-center gap-1">
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="0.8em"
+												height="0.8em"
+												viewBox="0 0 24 24"
+												aria-hidden="true"
+											>
+												<path
+													fill="currentColor"
+													d="M13 4V2c4.66.5 8.33 4.19 8.85 8.85c.6 5.49-3.35 10.43-8.85 11.03v-2c3.64-.45 6.5-3.32 6.96-6.96A7.994 7.994 0 0 0 13 4m-7.33.2A9.8 9.8 0 0 1 11 2v2.06c-1.43.2-2.78.78-3.9 1.68zM2.05 11a9.8 9.8 0 0 1 2.21-5.33L5.69 7.1A8 8 0 0 0 4.05 11zm2.22 7.33A10.04 10.04 0 0 1 2.06 13h2c.18 1.42.75 2.77 1.63 3.9zm1.4 1.41l1.39-1.37h.04c1.13.88 2.48 1.45 3.9 1.63v2c-1.96-.21-3.82-1-5.33-2.26M12 17l1.56-3.42L17 12l-3.44-1.56L12 7l-1.57 3.44L7 12l3.43 1.58z"
+												></path>
+											</svg>
+											<span className="text-xs text-opacity-75">
+												Own Your Auth
+											</span>
+										</div>
 									</div>
 								</div>
+
+								<h1 className="text-zinc-800 dark:text-zinc-300 tracking-tight text-2xl md:text-3xl text-pretty">
+									The most comprehensive authentication framework for
+									TypeScript.
+								</h1>
 							</div>
 
-							<p className="text-zinc-800 dark:text-zinc-300 mt-3 tracking-tight text-2xl md:text-3xl">
-								The most comprehensive authentication framework for TypeScript.
-							</p>
-							<div className="relative mt-2 md:flex items-center gap-2 w-10/12 hidden border border-white/5">
-								<GradientBG className="w-full flex items-center justify-between">
-									<div className="w-full flex items-center gap-2">
-										<p className="md:text-sm text-xs font-mono select-none">
+							<div className="relative flex items-center gap-2 w-full sm:w-[90%] border border-white/10">
+								<GradientBG className="w-full flex items-center justify-between gap-2">
+									<div className="w-full flex flex-col min-[350px]:flex-row min-[350px]:items-center gap-0.5 min-[350px]:gap-2 min-w-0">
+										<p className="text-xs sm:text-sm font-mono select-none tracking-tighter space-x-1 shrink-0">
 											<span>
-												<span className="text-[#4498c8]">git:</span>
-												<span className="text-[#F07178]">(main) </span>
+												<span className="text-sky-500">git:</span>
+												<span className="text-red-400">(main)</span>
 											</span>
-											<span className="italic text-amber-600"> x</span>
+											<span className="italic text-amber-600">x</span>
 										</p>
-										<p className=" relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono text-black">
-											npm add{" "}
-											<span className="relative dark:text-fuchsia-100 text-fuchsia-950">
+										<p className="relative inline tracking-tight opacity-90 md:text-sm text-xs dark:text-white font-mono text-black">
+											npm i{" "}
+											<span className="relative dark:text-fuchsia-300 text-fuchsia-800">
 												better-auth
 												<span className="absolute h-2 bg-gradient-to-tr from-white via-stone-200 to-stone-300 blur-3xl w-full top-0 left-2"></span>
 											</span>
@@ -101,12 +81,15 @@ export default function Hero() {
 										<Link
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
+											rel="noopener noreferrer"
+											aria-label="View better-auth package on npm"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												width="1em"
 												height="1em"
 												viewBox="0 0 128 128"
+												aria-hidden="true"
 											>
 												<path
 													fill="#cb3837"
@@ -121,12 +104,15 @@ export default function Hero() {
 										<Link
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
+											rel="noopener noreferrer"
+											aria-label="View better-auth repository on GitHub"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
 												width="1em"
 												height="1em"
 												viewBox="0 0 256 256"
+												aria-hidden="true"
 											>
 												<g fill="none">
 													<rect
@@ -146,23 +132,19 @@ export default function Hero() {
 								</GradientBG>
 							</div>
 
-							{
-								<>
-									<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
-										<Link
-											href="/docs"
-											className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
-										>
-											Get Started
-										</Link>
-										<Builder />
-									</div>
-								</>
-							}
+							<div className="mt-4 flex w-fit flex-col gap-4 font-sans md:flex-row md:justify-center lg:justify-start items-center">
+								<Link
+									href="/docs"
+									className="hover:shadow-sm dark:border-stone-100 dark:hover:shadow-sm border-2 border-black bg-white px-4 py-1.5 text-sm uppercase text-black shadow-[1px_1px_rgba(0,0,0),2px_2px_rgba(0,0,0),3px_3px_rgba(0,0,0),4px_4px_rgba(0,0,0),5px_5px_0px_0px_rgba(0,0,0)] transition duration-200 md:px-8 dark:shadow-[1px_1px_rgba(255,255,255),2px_2px_rgba(255,255,255),3px_3px_rgba(255,255,255),4px_4px_rgba(255,255,255),5px_5px_0px_0px_rgba(255,255,255)]"
+								>
+									Get Started
+								</Link>
+								<Builder />
+							</div>
 						</div>
 					</div>
 
-					<div className="relative hidden md:block lg:static xl:pl-10">
+					<div className="relative md:block lg:static xl:pl-10">
 						<div className="relative">
 							<div className="from-sky-300 via-sky-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5 blur-lg" />
 							<div className="from-stone-300 via-stone-300/70 to-blue-300 absolute inset-0 rounded-none bg-gradient-to-tr opacity-5" />
@@ -175,16 +157,58 @@ export default function Hero() {
 	);
 }
 
+const tabs: { name: "auth.ts" | "client.ts"; code: string }[] = [
+	{
+		name: "auth.ts",
+		code: `export const auth = betterAuth({
+	database: new Pool({
+		connectionString: DATABASE_URL,
+	}),
+    emailAndPassword: {
+        enabled: true,
+    },
+	plugins: [
+		organization(),
+    	twoFactor(),
+	]
+})`,
+	},
+	{
+		name: "client.ts",
+		code: `const client = createAuthClient({
+    plugins: [
+		organizationClient(),
+		twoFactorClient(),
+	]
+});`,
+	},
+];
+
+function TrafficLightsIcon(props: React.ComponentPropsWithoutRef<"svg">) {
+	return (
+		<svg aria-hidden="true" viewBox="0 0 42 10" fill="none" {...props}>
+			<circle cx="5" cy="5" r="4.5" />
+			<circle cx="21" cy="5" r="4.5" />
+			<circle cx="37" cy="5" r="4.5" />
+		</svg>
+	);
+}
+
 function CodePreview() {
+	const { resolvedTheme } = useTheme();
+	const [ref, { height }] = useMeasure();
+	const [copyState, setCopyState] = useState(false);
+	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
 	const [currentTab, setCurrentTab] = useState<"auth.ts" | "client.ts">(
 		"auth.ts",
 	);
 
-	const theme = useTheme();
+	useEffect(() => {
+		setCodeTheme(
+			resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
+		);
+	}, [resolvedTheme]);
 
-	const code = tabs.find((tab) => tab.name === currentTab)?.code ?? "";
-	const [copyState, setCopyState] = useState(false);
-	const [ref, { height }] = useMeasure();
 	const copyToClipboard = (text: string) => {
 		navigator.clipboard.writeText(text).then(() => {
 			setCopyState(true);
@@ -194,13 +218,7 @@ function CodePreview() {
 		});
 	};
 
-	const [codeTheme, setCodeTheme] = useState(themes.synthwave84);
-
-	useEffect(() => {
-		setCodeTheme(
-			theme.resolvedTheme === "light" ? themes.oneLight : themes.synthwave84,
-		);
-	}, [theme.resolvedTheme]);
+	const code = tabs.find((tab) => tab.name === currentTab)?.code ?? "";
 
 	return (
 		<AnimatePresence initial={false}>
@@ -238,7 +256,7 @@ function CodePreview() {
 								))}
 							</div>
 
-							<div className="mt-6 flex flex-col items-start px-1 text-sm">
+							<div className="flex flex-col items-start px-1 text-sm">
 								<div className="absolute top-2 right-4">
 									<Button
 										variant="outline"
@@ -254,75 +272,77 @@ function CodePreview() {
 										<span className="sr-only">Copy code</span>
 									</Button>
 								</div>
-								<motion.div
-									initial={{ opacity: 0 }}
-									animate={{ opacity: 1 }}
-									transition={{ duration: 0.5 }}
-									key={currentTab}
-									className="relative flex items-start px-1 text-sm"
-								>
-									<div
-										aria-hidden="true"
-										className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono"
+								<div className="w-full overflow-x-auto">
+									<motion.div
+										initial={{ opacity: 0 }}
+										animate={{ opacity: 1 }}
+										transition={{ duration: 0.5 }}
+										key={currentTab}
+										className="relative flex items-center px-1 text-sm min-w-max"
 									>
-										{Array.from({
-											length: code.split("\n").length,
-										}).map((_, index) => (
-											<div key={index}>
-												{(index + 1).toString().padStart(2, "0")}
-												<br />
-											</div>
-										))}
-									</div>
-									<Highlight
-										key={theme.resolvedTheme}
-										code={code}
-										language={"javascript"}
-										theme={{
-											...codeTheme,
-											plain: {
-												backgroundColor: "transparent",
-											},
-										}}
-									>
-										{({
-											className,
-											style,
-											tokens,
-											getLineProps,
-											getTokenProps,
-										}) => (
-											<pre
-												className={clsx(className, "flex overflow-x-auto pb-6")}
-												style={style}
-											>
-												<code className="px-4">
-													{tokens.map((line, lineIndex) => (
-														<div key={lineIndex} {...getLineProps({ line })}>
-															{line.map((token, tokenIndex) => (
-																<span
-																	key={tokenIndex}
-																	{...getTokenProps({ token })}
-																/>
-															))}
-														</div>
-													))}
-												</code>
-											</pre>
-										)}
-									</Highlight>
-								</motion.div>
-								<motion.div layout className="self-end">
+										<div
+											aria-hidden="true"
+											className="border-slate-300/5 text-slate-600 select-none border-r pr-4 font-mono"
+										>
+											{Array.from({
+												length: code.split("\n").length,
+											}).map((_, index) => (
+												<div key={index}>
+													{(index + 1).toString().padStart(2, "0")}
+													<br />
+												</div>
+											))}
+										</div>
+										<Highlight
+											key={resolvedTheme}
+											code={code}
+											language={"javascript"}
+											theme={{
+												...codeTheme,
+												plain: {
+													backgroundColor: "transparent",
+												},
+											}}
+										>
+											{({
+												className,
+												style,
+												tokens,
+												getLineProps,
+												getTokenProps,
+											}) => (
+												<pre className={clsx(className)} style={style}>
+													<code className="px-4 font-mono whitespace-pre">
+														{tokens.map((line, lineIndex) => (
+															<div key={lineIndex} {...getLineProps({ line })}>
+																{line.map((token, tokenIndex) => (
+																	<span
+																		key={tokenIndex}
+																		{...getTokenProps({ token })}
+																	/>
+																))}
+															</div>
+														))}
+													</code>
+												</pre>
+											)}
+										</Highlight>
+									</motion.div>
+								</div>
+								<motion.div layout className="self-end mt-3">
 									<Link
 										href="https://demo.better-auth.com"
 										target="_blank"
+										rel="noopener noreferrer"
 										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+										aria-label="View Better Auth demo"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
 											width="1em"
 											height="1em"
 											viewBox="0 0 24 24"
+											aria-hidden="true"
 										>
 											<path
 												fill="currentColor"

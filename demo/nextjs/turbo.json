@@ -19,7 +19,11 @@
         "MICROSOFT_CLIENT_ID",
         "MICROSOFT_CLIENT_SECRET",
         "STRIPE_KEY",
-        "STRIPE_WEBHOOK_SECRET"
+        "STRIPE_WEBHOOK_SECRET",
+        "APPLE_CLIENT_ID",
+        "APPLE_CLIENT_SECRET",
+        "VERCEL_CLIENT_ID",
+        "VERCEL_CLIENT_SECRET"
       ]
     }
   }

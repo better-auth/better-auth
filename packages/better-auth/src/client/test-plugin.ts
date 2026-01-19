@@ -1,9 +1,11 @@
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import { atom, computed } from "nanostores";
-import type { BetterAuthClientPlugin } from "./types";
-import type { BetterAuthPlugin } from "../types/plugins";
-import { createAuthEndpoint } from "../api/call";
+import * as z from "zod";
 import { useAuthQuery } from "./query";
-import z from "zod";
 
 const serverPlugin = {
 	id: "test",
@@ -17,6 +19,58 @@ const serverPlugin = {
 					message: z.string(),
 					test: z.boolean(),
 				}),
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testVirtual: createAuthEndpoint(
+			{
+				method: "GET",
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testServerScoped: createAuthEndpoint(
+			"/test-server-scoped",
+			{
+				method: "GET",
+				metadata: {
+					scope: "server",
+				},
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testHTTPScoped: createAuthEndpoint(
+			"/test-http-scoped",
+			{
+				method: "GET",
+				metadata: {
+					scope: "http",
+				},
+			},
+			async (c) => {
+				return {
+					data: "test",
+				};
+			},
+		),
+		testNonAction: createAuthEndpoint(
+			"/test-non-action",
+			{
+				method: "GET",
+				metadata: {
+					isAction: false,
+				},
 			},
 			async (c) => {
 				return {
@@ -125,5 +179,36 @@ export const testClientPlugin2 = () => {
 				signal: "$sessionSignal",
 			},
 		],
+	} satisfies BetterAuthClientPlugin;
+};
+
+/**
+ * Test plugins for verifying deep merge of plugin actions.
+ * When multiple plugins return the same top-level action key (e.g., `signIn`),
+ * all methods should be merged together instead of the last one overwriting.
+ */
+export const testDeepMergePluginA = () => {
+	return {
+		id: "test-deep-merge-a",
+		getActions() {
+			return {
+				signIn: {
+					methodA: async () => ({ success: true, method: "A" }),
+				},
+			};
+		},
+	} satisfies BetterAuthClientPlugin;
+};
+
+export const testDeepMergePluginB = () => {
+	return {
+		id: "test-deep-merge-b",
+		getActions() {
+			return {
+				signIn: {
+					methodB: async () => ({ success: true, method: "B" }),
+				},
+			};
+		},
 	} satisfies BetterAuthClientPlugin;
 };

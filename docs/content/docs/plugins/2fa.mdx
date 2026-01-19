@@ -38,19 +38,19 @@ This plugin offers two main methods to do a second factor verification:
         })
         ```
     </Step>
-      <Step>
+    <Step>
         ### Migrate the database
 
         Run the migration or generate the schema to add the necessary fields and tables to the database.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
+            ```package-install
             npx @better-auth/cli migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
+            ```package-install
             npx @better-auth/cli generate
             ```
             </Tab>
@@ -105,7 +105,7 @@ When 2FA is enabled:
 - An encrypted `secret` and `backupCodes` are generated.
 - `enable` returns `totpURI` and `backupCodes`.
 
-Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about veryifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
+Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
 Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
@@ -276,7 +276,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+				async sendOTP({ user, otp }, ctx) {
                     // send otp to user
 				},
 			},
@@ -356,7 +356,7 @@ When you generate backup codes, the old backup codes will be deleted and new one
 
 #### Using Backup Codes
 
-You can now allow users to provider backup code as account recover method.
+You can now allow users to provide a backup code as an account recovery method.
 
 
 <APIMethod path="/two-factor/verify-backup-code" method="POST">
@@ -384,11 +384,11 @@ Once a backup code is used, it will be removed from the database and can't be us
 
 #### Viewing Backup Codes
 
-To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only this if the user has a fresh session - a session that was just created.
+To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only do this if the user has a fresh session - a session that was just created.
 
 <APIMethod
   path="/two-factor/view-backup-codes"
-  method="GET"
+  method="POST"
   isServerOnly
   forceAsBody
 >
@@ -410,8 +410,7 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        callbackURL: "/dashboard",
-        trustDevice: true // Mark this device as trusted
+        trustDevice: true, // Mark this device as trusted
     })
     if (data) {
         // 2FA verified and device trusted
@@ -419,7 +418,7 @@ const verify2FA = async (code: string) => {
 }
 ```
 
-When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
+When `trustDevice` is set to `true`, the current device will be remembered for 30 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
 ### Issuer
 
@@ -436,7 +435,7 @@ twoFactor({
 
 ## Schema
 
-The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
+The plugin requires 1 additional field in the `user` table and 1 additional table to store the two factor authentication data.
 
 Table: `user`
 

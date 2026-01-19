@@ -1,50 +1,37 @@
 {
-  "compilerOptions": {
-    "baseUrl": ".",
-    "strict": true,
-    "target": "esnext",
-    "downlevelIteration": true,
-    "esModuleInterop": true,
-    "module": "esnext",
-    "moduleResolution": "bundler",
-    "skipLibCheck": true,
-    "verbatimModuleSyntax": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
-    "noUncheckedIndexedAccess": true,
-    "exactOptionalPropertyTypes": false,
-    "declaration": true,
-    "emitDeclarationOnly": true,
-    "composite": true,
-    "incremental": true,
-    "noErrorTruncation": true,
-    "types": ["node"],
-    "paths": {
-      "better-auth": ["./packages/better-auth/src"],
-      "better-auth/*": ["./packages/better-auth/src/*"]
-    }
-  },
+  "extends": "./tsconfig.base.json",
+  "include": [
+    // Only include files that are in the root directory. All other files are included by the references.
+    "./*.ts",
+    "./*.js"
+  ],
   "references": [
     {
-      "path": "./packages/better-auth"
+      "path": "./packages/better-auth/tsconfig.json"
     },
     {
-      "path": "./packages/cli"
+      "path": "./packages/cli/tsconfig.json"
     },
     {
-      "path": "./packages/cli/tsconfig.test.json"
+      "path": "./packages/core/tsconfig.json"
     },
     {
-      "path": "./packages/expo"
+      "path": "./packages/expo/tsconfig.json"
     },
     {
-      "path": "./packages/sso"
+      "path": "./packages/passkey/tsconfig.json"
     },
     {
-      "path": "./packages/stripe"
+      "path": "./packages/sso/tsconfig.json"
+    },
+    {
+      "path": "./packages/stripe/tsconfig.json"
+    },
+    {
+      "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./test/tsconfig.json"
     }
-  ],
-  "files": [],
-  "include": [],
-  "exclude": ["**/dist/**", "**/node_modules/**", "**/examples/**"]
+  ]
 }

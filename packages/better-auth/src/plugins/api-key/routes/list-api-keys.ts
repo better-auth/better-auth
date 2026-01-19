@@ -1,10 +1,14 @@
-import { createAuthEndpoint, sessionMiddleware } from "../../../api";
+import type { AuthContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import { sessionMiddleware } from "../../../api";
+import {
+	batchMigrateLegacyMetadata,
+	listApiKeys as listApiKeysFromStorage,
+	parseDoubleStringifiedMetadata,
+} from "../adapter";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
-import type { AuthContext } from "../../../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { safeJSONParse } from "../../../utils/json";
-import { API_KEY_TABLE_NAME } from "..";
 export function listApiKeys({
 	opts,
 	schema,
@@ -14,7 +18,7 @@ export function listApiKeys({
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
-		byPassLastCheckTime?: boolean,
+		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
 	return createAuthEndpoint(
@@ -64,7 +68,7 @@ export function listApiKeys({
 													type: "number",
 													nullable: true,
 													description:
-														"The interval in which the `remaining` count is refilled by day. Example: 1 // every day",
+														"The interval in milliseconds between refills of the `remaining` count. Example: 3600000 // refill every hour (3600000ms = 1h)",
 												},
 												refillAmount: {
 													type: "number",
@@ -164,39 +168,30 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
-			let apiKeys = await ctx.context.adapter.findMany<ApiKey>({
-				model: API_KEY_TABLE_NAME,
-				where: [
-					{
-						field: "userId",
-						value: session.user.id,
-					},
-				],
-			});
+			const apiKeys = await listApiKeysFromStorage(ctx, session.user.id, opts);
 
 			deleteAllExpiredApiKeys(ctx.context);
-			apiKeys = apiKeys.map((apiKey) => {
-				return {
-					...apiKey,
-					metadata: schema.apikey.fields.metadata.transform.output(
-						apiKey.metadata as never as string,
-					),
-				};
-			});
 
-			let returningApiKey = apiKeys.map((x) => {
-				const { key, ...returningApiKey } = x;
+			// Build response with parsed metadata (synchronous, no DB calls)
+			const returningApiKeys = apiKeys.map((apiKey) => {
+				const { key: _key, ...rest } = apiKey;
 				return {
-					...returningApiKey,
-					permissions: returningApiKey.permissions
+					...rest,
+					metadata: parseDoubleStringifiedMetadata(apiKey.metadata),
+					permissions: rest.permissions
 						? safeJSONParse<{
 								[key: string]: string[];
-							}>(returningApiKey.permissions)
+							}>(rest.permissions)
 						: null,
 				};
 			});
 
-			return ctx.json(returningApiKey);
+			// Batch migrate legacy metadata (parallel DB updates)
+			await ctx.context.runInBackgroundOrAwait(
+				batchMigrateLegacyMetadata(ctx, apiKeys, opts),
+			);
+
+			return ctx.json(returningApiKeys);
 		},
 	);
 }

@@ -60,12 +60,16 @@ await authClient.signIn.social({
 
 When the OAuth provider returns the user to your server, the plugin automatically redirects them to the intended callback URL.
 
-<Callout>
 To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
+
+<Callout type="warn">
+This plugin requires skipping the state cookie check. This has security implications and should only be used in dev or staging environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
 </Callout>
 
 ## Options
 
-**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn’t inferred correctly, you can specify it manually here.
+**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn't inferred correctly, you can specify it manually here.
 
 **productionURL**: If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.
+
+**maxAge**: Maximum age in seconds for encrypted cookie payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.

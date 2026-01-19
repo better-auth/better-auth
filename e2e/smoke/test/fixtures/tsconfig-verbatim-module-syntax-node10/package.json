@@ -1,0 +1,12 @@
+{
+  "name": "tsconfig-verbatim-module-syntax-node10",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@better-auth/expo": "workspace:*",
+    "better-auth": "workspace:*"
+  }
+}

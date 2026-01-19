@@ -1,20 +1,20 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { afterAll } from "vitest";
-import { betterAuth } from "../auth";
-import { createAuthClient } from "../client/vanilla";
-import type { BetterAuthOptions, ClientOptions, Session, User } from "../types";
-import { getMigrations } from "../db/get-migration";
-import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
+import type {
+	Awaitable,
+	BetterAuthClientOptions,
+	BetterAuthOptions,
+} from "@better-auth/core";
 import type { SuccessContext } from "@better-fetch/fetch";
-import { getAdapter } from "../db/utils";
-import Database from "better-sqlite3";
-import { getBaseURL } from "../utils/url";
-import { Kysely, MysqlDialect, PostgresDialect, sql } from "kysely";
-import { Pool } from "pg";
-import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "../adapters/mongodb-adapter";
-import { createPool } from "mysql2/promise";
+import { sql } from "kysely";
+import { afterAll } from "vitest";
+import { betterAuth } from "../auth/full";
+import { createAuthClient } from "../client";
+import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
+import { getAdapter } from "../db/adapter-kysely";
+import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
+import type { Session, User } from "../types";
+import { getBaseURL } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -32,36 +32,51 @@ afterAll(async () => {
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
-	C extends ClientOptions,
+	C extends BetterAuthClientOptions,
 >(
-	options?: O,
-	config?: {
-		clientOptions?: C;
-		port?: number;
-		disableTestUser?: boolean;
-		testUser?: Partial<User>;
-		testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
-	},
+	options?: O | undefined,
+	config?:
+		| {
+				clientOptions?: C;
+				port?: number;
+				disableTestUser?: boolean;
+				testUser?: Partial<User>;
+				testWith?: "sqlite" | "postgres" | "mongodb" | "mysql";
+		  }
+		| undefined,
 ) {
 	const testWith = config?.testWith || "sqlite";
 
-	const postgres = new Kysely({
-		dialect: new PostgresDialect({
-			pool: new Pool({
-				connectionString: "postgres://user:password@localhost:5432/better_auth",
+	async function getPostgres() {
+		const { Kysely, PostgresDialect } = await import("kysely");
+		const { Pool } = await import("pg");
+		return new Kysely({
+			dialect: new PostgresDialect({
+				pool: new Pool({
+					connectionString:
+						"postgres://user:password@localhost:5432/better_auth",
+				}),
 			}),
-		}),
-	});
+		});
+	}
 
-	const sqlite = new Database(":memory:");
+	async function getSqlite() {
+		const { default: Database } = await import("better-sqlite3");
+		return new Database(":memory:");
+	}
 
-	const mysql = new Kysely({
-		dialect: new MysqlDialect(
-			createPool("mysql://user:password@localhost:3306/better_auth"),
-		),
-	});
+	async function getMysql() {
+		const { Kysely, MysqlDialect } = await import("kysely");
+		const { createPool } = await import("mysql2/promise");
+		return new Kysely({
+			dialect: new MysqlDialect(
+				createPool("mysql://user:password@localhost:3306/better_auth"),
+			),
+		});
+	}
 
 	async function mongodbClient() {
+		const { MongoClient } = await import("mongodb");
 		const dbClient = async (connectionString: string, dbName: string) => {
 			const client = new MongoClient(connectionString);
 			await client.connect();
@@ -83,15 +98,18 @@ export async function getTestInstance<
 				clientSecret: "test",
 			},
 		},
-		secret: "better-auth.secret",
+		secret: "better-auth-secret-that-is-long-enough-for-validation-test",
 		database:
 			testWith === "postgres"
-				? { db: postgres, type: "postgres" }
+				? { db: await getPostgres(), type: "postgres" }
 				: testWith === "mongodb"
-					? mongodbAdapter(await mongodbClient())
+					? await Promise.all([
+							mongodbClient(),
+							await import("../adapters/mongodb-adapter"),
+						]).then(([db, { mongodbAdapter }]) => mongodbAdapter(db))
 					: testWith === "mysql"
-						? { db: mysql, type: "mysql" }
-						: sqlite,
+						? { db: await getMysql(), type: "mysql" }
+						: await getSqlite(),
 		emailAndPassword: {
 			enabled: true,
 		},
@@ -110,10 +128,6 @@ export async function getTestInstance<
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
-		advanced: {
-			disableCSRFCheck: true,
-			...options?.advanced,
-		},
 		plugins: [bearer(), ...(options?.plugins || [])],
 	} as unknown as O);
 
@@ -150,6 +164,7 @@ export async function getTestInstance<
 			return;
 		}
 		if (testWith === "postgres") {
+			const postgres = await getPostgres();
 			await sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public;`.execute(
 				postgres,
 			);
@@ -158,6 +173,7 @@ export async function getTestInstance<
 		}
 
 		if (testWith === "mysql") {
+			const mysql = await getMysql();
 			await sql`SET FOREIGN_KEY_CHECKS = 0;`.execute(mysql);
 			const tables = await mysql.introspection.getTables();
 			for (const table of tables) {
@@ -168,6 +184,7 @@ export async function getTestInstance<
 			return;
 		}
 		if (testWith === "sqlite") {
+			const sqlite = await getSqlite();
 			sqlite.close();
 			return;
 		}
@@ -176,7 +193,7 @@ export async function getTestInstance<
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
-		init?: RequestInit,
+		init?: RequestInit | undefined,
 	) => {
 		const headers = init?.headers || {};
 		const storageHeaders = currentUserContextStorage.getStore()?.headers;
@@ -219,13 +236,13 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
 		}
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
 		};
 		//@ts-expect-error
-		const { data, error } = await client.signIn.email({
+		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
@@ -243,7 +260,7 @@ export async function getTestInstance<
 			user: data.user as User,
 			headers,
 			setCookie,
-			runWithDefaultUser: async (fn: (headers: Headers) => Promise<void>) => {
+			runWithUser: async (fn: (headers: Headers) => Promise<void>) => {
 				return currentUserContextStorage.run({ headers }, async () => {
 					await fn(headers);
 				});
@@ -299,7 +316,7 @@ export async function getTestInstance<
 		runWithUser: async (
 			email: string,
 			password: string,
-			fn: (headers: Headers) => Promise<void>,
+			fn: (headers: Headers) => Awaitable<void>,
 		) => {
 			const { headers } = await signInWithUser(email, password);
 			return currentUserContextStorage.run({ headers }, async () => {

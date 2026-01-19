@@ -1,39 +1,55 @@
-import { APIError } from "better-call";
-import { TRUST_DEVICE_COOKIE_NAME, TWO_FACTOR_COOKIE_NAME } from "./constant";
-import { setSessionCookie } from "../../cookies";
-import { getSessionFromCtx } from "../../api";
-import type { UserWithTwoFactor } from "./types";
+import type { GenericEndpointContext } from "@better-auth/core";
+import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
-import type { GenericEndpointContext } from "../../types";
+import { getSessionFromCtx } from "../../api";
+import { expireCookie, setSessionCookie } from "../../cookies";
+import { parseUserOutput } from "../../db/schema";
+import {
+	TRUST_DEVICE_COOKIE_MAX_AGE,
+	TRUST_DEVICE_COOKIE_NAME,
+	TWO_FACTOR_COOKIE_NAME,
+} from "./constant";
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+import type { UserWithTwoFactor } from "./types";
 
 export async function verifyTwoFactor(ctx: GenericEndpointContext) {
+	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
+		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
+	};
+
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
-		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
-		const twoFactorCookie = await ctx.getSignedCookie(
-			cookieName.name,
+		const twoFactorCookie = ctx.context.createAuthCookie(
+			TWO_FACTOR_COOKIE_NAME,
+		);
+		const signedTwoFactorCookie = await ctx.getSignedCookie(
+			twoFactorCookie.name,
 			ctx.context.secret,
 		);
-		if (!twoFactorCookie) {
-			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+		if (!signedTwoFactorCookie) {
+			throw APIError.from(
+				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			);
 		}
 		const verificationToken =
-			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
+			await ctx.context.internalAdapter.findVerificationValue(
+				signedTwoFactorCookie,
+			);
 		if (!verificationToken) {
-			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+			throw APIError.from(
+				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			);
 		}
 		const user = (await ctx.context.internalAdapter.findUserById(
 			verificationToken.value,
 		)) as UserWithTwoFactor;
 		if (!user) {
-			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
+			throw APIError.from(
+				"UNAUTHORIZED",
+				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			);
 		}
 		const dontRememberMe = await ctx.getSignedCookie(
 			ctx.context.authCookies.dontRememberToken.name,
@@ -43,23 +59,29 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 			valid: async (ctx: GenericEndpointContext) => {
 				const session = await ctx.context.internalAdapter.createSession(
 					verificationToken.value,
-					ctx,
 					!!dontRememberMe,
 				);
 				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
+					throw APIError.from("INTERNAL_SERVER_ERROR", {
 						message: "failed to create session",
+						code: "FAILED_TO_CREATE_SESSION",
 					});
 				}
+				// Delete the verification token from the database after successful verification
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationToken.id,
+				);
 				await setSessionCookie(ctx, {
 					session,
 					user,
 				});
+				// Always clear the two factor cookie after successful verification
+				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
-							maxAge: 30 * 24 * 60 * 60, // 30 days, it'll be refreshed on sign in requests
+							maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
 						},
 					);
 					/**
@@ -77,59 +99,29 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 						trustDeviceCookie.attributes,
 					);
 					// delete the dont remember me cookie
-					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-						maxAge: 0,
-					});
-					// delete the two factor cookie
-					ctx.setCookie(cookieName.name, "", {
-						maxAge: 0,
-					});
+					expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 				}
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			},
-			invalid: async (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
-				throw new APIError("UNAUTHORIZED", {
-					message: TWO_FACTOR_ERROR_CODES[errorKey],
-				});
-			},
+			invalid,
 			session: {
 				session: null,
 				user,
 			},
-			key: twoFactorCookie,
+			key: signedTwoFactorCookie,
 		};
 	}
 	return {
 		valid: async (ctx: GenericEndpointContext) => {
 			return ctx.json({
 				token: session.session.token,
-				user: {
-					id: session.user.id,
-					email: session.user.email,
-					emailVerified: session.user.emailVerified,
-					name: session.user.name,
-					image: session.user.image,
-					createdAt: session.user.createdAt,
-					updatedAt: session.user.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, session.user),
 			});
 		},
-		invalid: async () => {
-			throw new APIError("UNAUTHORIZED", {
-				message: TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
-			});
-		},
+		invalid,
 		session,
 		key: `${session.user.id}!${session.session.id}`,
 	};

@@ -1,105 +1,38 @@
-import { describe, beforeAll, it, expect } from "vitest";
+import { MongoClient, ObjectId } from "mongodb";
+import { testAdapter } from "../test-adapter";
+import {
+	authFlowTestSuite,
+	joinsTestSuite,
+	normalTestSuite,
+	transactionsTestSuite,
+} from "../tests";
+import { mongodbAdapter } from "./mongodb-adapter";
 
-import { MongoClient } from "mongodb";
-import { runAdapterTest } from "../test";
-import { mongodbAdapter } from ".";
-import { getTestInstance } from "../../test-utils/test-instance";
-describe("adapter test", async () => {
-	const dbClient = async (connectionString: string, dbName: string) => {
-		const client = new MongoClient(connectionString);
-		await client.connect();
-		const db = client.db(dbName);
-		return { db, client };
-	};
+const dbClient = async (connectionString: string, dbName: string) => {
+	const client = new MongoClient(connectionString);
+	await client.connect();
+	const db = client.db(dbName);
+	return { db, client };
+};
 
-	const user = "user";
-	const { db, client } = await dbClient(
-		"mongodb://127.0.0.1:27017",
-		"better-auth",
-	);
-	async function clearDb() {
-		await db.collection(user).deleteMany({});
-		await db.collection("session").deleteMany({});
-	}
+const { db } = await dbClient("mongodb://127.0.0.1:27017", "better-auth");
 
-	beforeAll(async () => {
-		await clearDb();
-	});
-
-	const adapter = mongodbAdapter(db, {
-		// MongoDB transactions require a replica set or a sharded cluster
-		// client,
-	});
-	runAdapterTest({
-		getAdapter: async (customOptions = {}) => {
-			return adapter({
-				user: {
-					fields: {
-						email: "email_address",
-					},
-					additionalFields: {
-						test: {
-							type: "string",
-							defaultValue: "test",
-						},
-					},
-				},
-				session: {
-					modelName: "sessions",
-				},
-				...customOptions,
-			});
-		},
-		disableTests: {
-			SHOULD_PREFER_GENERATE_ID_IF_PROVIDED: true,
-			SHOULD_RETURN_TRANSACTION_RESULT: true,
-			SHOULD_ROLLBACK_FAILING_TRANSACTION: true,
-		},
-	});
+const { execute } = await testAdapter({
+	adapter: (options) => {
+		return mongodbAdapter(db, {
+			transaction: false,
+		});
+	},
+	runMigrations: async (betterAuthOptions) => {},
+	tests: [
+		normalTestSuite(),
+		authFlowTestSuite(),
+		transactionsTestSuite(),
+		joinsTestSuite(),
+		// numberIdTestSuite(), // no support
+		// uuidTestSuite() // no support
+	],
+	customIdGenerator: () => new ObjectId().toHexString(),
 });
 
-describe("simple-flow", async () => {
-	const { auth, client, sessionSetter, db } = await getTestInstance(
-		{},
-		{
-			disableTestUser: true,
-			testWith: "mongodb",
-		},
-	);
-	const testUser = {
-		email: "test-eamil@email.com",
-		password: "password",
-		name: "Test Name",
-	};
-
-	it("should sign up", async () => {
-		const user = await auth.api.signUpEmail({
-			body: testUser,
-		});
-		expect(user).toBeDefined();
-	});
-
-	it("should sign in", async () => {
-		const user = await auth.api.signInEmail({
-			body: testUser,
-		});
-		expect(user).toBeDefined();
-	});
-
-	it("should get session", async () => {
-		const headers = new Headers();
-		await client.signIn.email(
-			{
-				email: testUser.email,
-				password: testUser.password,
-			},
-			{
-				onSuccess: sessionSetter(headers),
-			},
-		);
-		const { data: session } = await client.getSession({
-			fetchOptions: { headers },
-		});
-		expect(session?.user).toBeDefined();
-	});
-});
+execute();

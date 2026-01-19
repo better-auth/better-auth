@@ -1,4 +1,4 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	walletAddress: {
@@ -10,6 +10,7 @@ export const schema = {
 					field: "id",
 				},
 				required: true,
+				index: true,
 			},
 			address: {
 				type: "string",
@@ -29,4 +30,4 @@ export const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;

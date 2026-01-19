@@ -5,9 +5,13 @@ description: Learn how to use a database with Better Auth.
 
 ## Adapters
 
-Better Auth requires a database connection to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
+Better Auth connects to a database to store data. The database will be used to store data such as users, sessions, and more. Plugins can also define their own database tables to store data.
 
 You can pass a database connection to Better Auth by passing a supported database instance in the database options. You can learn more about supported database adapters in the [Other relational databases](/docs/adapters/other-relational-databases) documentation.
+
+<Callout type="info">
+Better Auth also works without any database. For more details, see [Stateless Session Management](/docs/concepts/session-management#stateless-session-management).
+</Callout>
 
 ## CLI
 
@@ -20,6 +24,10 @@ The cli checks your database and prompts you to add missing tables or update exi
 ```bash
 npx @better-auth/cli migrate
 ```
+
+<Callout type="info">
+For PostgreSQL users: The migrate command supports non-default schemas. It automatically detects your `search_path` configuration and creates tables in the correct schema. See [PostgreSQL adapter](/docs/adapters/postgresql#use-a-non-default-schema) for details.
+</Callout>
 
 ### Generating Schema
 
@@ -37,6 +45,154 @@ See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
   required by plugins in the plugin documentation.
 </Callout>
 
+### Programmatic Migrations
+
+In some environments (like Cloudflare Workers, serverless functions, or custom deployment setups), running the CLI may not be possible or practical. In these cases, you can run migrations programmatically from within your application code.
+
+Better Auth provides a `getMigrations` function that you can use to generate and run migrations programmatically. This is particularly useful when:
+
+- You're deploying to edge environments (Cloudflare Workers, Deno Deploy, etc.)
+- Your environment variables are only available at runtime (not at build time)
+- You need to run migrations as part of your application startup or through a custom endpoint
+
+#### Using `getMigrations`
+
+The `getMigrations` function is available from `better-auth/db` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
+
+```typescript
+import { getMigrations } from "better-auth/db";
+
+const { toBeCreated, toBeAdded, runMigrations, compileMigrations } = await getMigrations(authConfig);
+
+// Check what migrations are needed
+console.log("Tables to create:", toBeCreated);
+console.log("Fields to add:", toBeAdded);
+
+// Run migrations
+await runMigrations();
+
+// Or get the SQL to run manually
+const sql = await compileMigrations();
+console.log(sql);
+```
+
+#### Example: Cloudflare Workers Migration Endpoint
+
+For Cloudflare Workers using D1 (SQLite), you can create a migration endpoint that runs when your worker starts or through a manual trigger:
+
+```typescript title="src/index.ts"
+import { Hono } from "hono";
+import { auth } from "./auth"; // your auth instance
+import { getMigrations } from "better-auth/db";
+
+const app = new Hono<{ Bindings: Env }>();
+
+// Migration endpoint - call this once to set up your database
+app.post("/migrate", async (c) => {
+  const env = c.env;
+
+  // Create auth config with runtime environment
+  const authConfig = {
+    database: env.DB, // D1 database binding
+    // ... rest of your auth config
+  };
+
+  try {
+    const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(authConfig);
+
+    if (toBeCreated.length === 0 && toBeAdded.length === 0) {
+      return c.json({ message: "No migrations needed" });
+    }
+
+    await runMigrations();
+
+    return c.json({
+      message: "Migrations completed successfully",
+      created: toBeCreated.map(t => t.table),
+      added: toBeAdded.map(t => t.table)
+    });
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
+  }
+});
+
+// Your normal auth endpoints
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  return auth.handler(c.req.raw);
+});
+
+export default app;
+```
+
+<Callout type="warn">
+**Important Limitations**
+
+Programmatic migrations currently work **only** with:
+- Built-in database adapters (SQLite/D1, PostgreSQL, MySQL, MSSQL) using the Kysely adapter
+- Does **not** work with Prisma or Drizzle ORM adapters
+
+For Prisma or Drizzle in Cloudflare Workers, see the [Cloudflare Workers](#cloudflare-workers-with-prisma-drizzle) section below.
+</Callout>
+
+#### Cloudflare Workers with Prisma/Drizzle
+
+If you're using Prisma or Drizzle with Cloudflare Workers, you have a few options:
+
+1. **Use `cloudflare:workers` import** (Recommended for newer Cloudflare projects):
+
+   Cloudflare now supports importing environment variables from `cloudflare:workers`, which allows you to access `env` at the top level:
+
+   ```typescript title="auth.ts"
+   import { env } from "cloudflare:workers";
+   import { drizzle } from "drizzle-orm/d1";
+
+   export const auth = betterAuth({
+     database: drizzle(env.DB),
+     // ... rest of config
+   });
+   ```
+
+   With this approach, you can run the standard CLI commands:
+
+   ```bash
+   npx @better-auth/cli migrate
+   # or
+   npx @better-auth/cli generate
+   ```
+
+2. **Use `process.env` with compatibility flag**:
+
+   Add the `nodejs_compat_populate_process_env` compatibility flag to your `wrangler.toml`:
+
+   ```toml title="wrangler.toml"
+   compatibility_flags = ["nodejs_compat_populate_process_env"]
+   ```
+
+   Then use `process.env` in your auth config:
+
+   ```typescript title="auth.ts"
+   import { drizzle } from "drizzle-orm/d1";
+
+   export const auth = betterAuth({
+     database: drizzle(process.env.DB as any),
+     // ... rest of config
+   });
+   ```
+
+   After setting this up, run the CLI commands as normal:
+
+   ```bash
+   npx @better-auth/cli generate
+   ```
+
+3. **Generate schema locally and push manually**:
+
+   Run the generate command locally with a mock configuration, then use your ORM's push/migrate commands to apply the schema.
+
+<Callout type="info">
+See the [Hono integration documentation](/docs/integrations/hono#cloudflare-workers) for a complete example of using Better Auth with Cloudflare Workers.
+</Callout>
+
 ## Secondary Storage
 
 Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
@@ -47,7 +203,7 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 
 ```typescript
 interface SecondaryStorage {
-  get: (key: string) => Promise<unknown>; 
+  get: (key: string) => Promise<unknown>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -398,7 +554,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: "string",
+        type: ["user", "admin"],
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role
@@ -418,10 +574,12 @@ Now you can access the additional fields in your application logic.
 ```ts
 //on signup
 const res = await auth.api.signUpEmail({
-  email: "test@example.com",
-  password: "password",
-  name: "John Doe",
-  lang: "fr",
+	body: {
+		email: 'test@example.com',
+		password: 'password',
+		name: 'John Doe',
+		lang: 'fr',
+	},
 });
 
 //user object
@@ -471,31 +629,161 @@ export const auth = betterAuth({
 
 ### ID Generation
 
-Better Auth by default will generate unique IDs for users, sessions, and other entities. If you want to customize how IDs are generated, you can configure this in the `advanced.database.generateId` option in your auth config.
+Better Auth by default will generate unique IDs for users, sessions, and other entities.
+You can customize ID generation behavior using the `advanced.database.generateId` option.
 
-You can also disable ID generation by setting the `advanced.database.generateId` option to `false`. This will assume your database will generate the ID automatically.
+#### Option 1: Let Database Generate IDs
 
-**Example: Automatic Database IDs**
+Setting `generateId` to `false` allows your database handle all ID generation: (outside of `generateId` being `serial` and some cases of `generateId` being `uuid`)
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
 export const auth = betterAuth({
-  database: {
-    db: db,
-  },
+  database: db,
   advanced: {
     database: {
-      generateId: false,
+      generateId: false, // "serial" for auto-incrementing numeric IDs
     },
   },
 });
 ```
 
+#### Option 2: Custom ID Generation Function
+
+Use a function to generate IDs. You can return `false` or `undefined` from the function to let the database generate the ID for specific models:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: (options) => {
+        // Let database auto-generate for specific models
+        if (options.model === "user" || options.model === "users") {
+          return false; // Let database generate ID
+        }
+        // Generate UUIDs for other tables
+        return crypto.randomUUID();
+      },
+    },
+  },
+});
+```
+
+<Callout type="info">
+  **Important**: Returning `false` or `undefined` from the `generateId` function lets the database handle ID generation for that specific model. Setting `generateId: false` (without a function) disables ID generation for **all** tables.
+</Callout>
+
+#### Option 3: Consistent Custom ID Generator
+
+Generate the same type of ID for all tables:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: () => crypto.randomUUID(),
+    },
+  },
+});
+```
+
+### Numeric IDs
+
+If you prefer auto-incrementing numeric IDs, you can set the `advanced.database.generateId` option to `"serial"`.
+Doing this will disable Better-Auth from generating IDs for any table, and will assume your
+database will generate the numeric ID automatically.
+
+When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
+with auto-incrementing attributes associated with it.
+
+```ts
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  advanced: {
+    database: {
+      generateId: "serial",
+    },
+  },
+});
+```
+
+<Callout type="info">
+  Better-Auth will continue to infer the type of the `id` field as a `string` for the database, but will
+  automatically convert it to a numeric type when fetching or inserting data from the database.
+
+  It's likely when grabbing `id` values returned from Better-Auth that you'll receive a string version of a number,
+  this is normal. It's also expected that all id values passed to Better-Auth (eg via an endpoint body) is expected to be a string.
+</Callout>
+
+### UUIDs
+
+If you prefer UUIDs for the `id` field, you can set the `advanced.database.generateId` option to `"uuid"`.
+By default, Better-Auth will generate UUIDs for the `id` field for all tables, except adapters that use `PostgreSQL` where we allow the
+database to generate the UUID automatically.
+
+By enabling this option, the Better-Auth CLI will generate or migrate the schema with the `id` field as a UUID type for your database.
+If the `uuid` type is not supported, we will generate a normal `string` type for the `id` field.
+
+### Mixed ID Types
+
+If you need different ID types across tables (e.g., integer IDs for users, UUID strings for sessions/accounts/verification), use a `generateId` callback function.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { db } from "./db";
+
+export const auth = betterAuth({
+  database: db,
+  user: {
+    modelName: "users", // PostgreSQL: id serial primary key
+  },
+  session: {
+    modelName: "session", // PostgreSQL: id text primary key
+  },
+  advanced: {
+    database: {
+      // Do NOT set useNumberId - it's global and affects all tables
+      generateId: (options) => {
+        if (options.model === "user" || options.model === "users") {
+          return false; // Let PostgreSQL serial generate it
+        }
+        return crypto.randomUUID(); // UUIDs for session, account, verification
+      },
+    },
+  },
+});
+```
+
+This configuration allows you to:
+- Use database auto-increment (serial, auto_increment, etc.) for the users table
+- Generate UUIDs for all other tables (session, account, verification)
+- Maintain compatibility with existing schemas that use different ID types
+
+<Callout type="info">
+  **Use Case**: This is particularly useful when migrating from other authentication providers (like Clerk) where you have existing users with integer IDs but want UUID strings for new tables.
+</Callout>
+
 ### Database Hooks
 
 Database hooks allow you to define custom logic that can be executed during the lifecycle of core database operations in Better Auth. You can create hooks for the following models: **user**, **session**, and **account**.
+
+<Callout type="warn">
+  Additional fields are supported, however full type inference for these fields isn't yet supported.
+  Improved type support is planned.
+</Callout>
 
 There are two types of hooks you can define:
 
@@ -522,6 +810,7 @@ export const auth = betterAuth({
           // Modify the user object before it is created
           return {
             data: {
+              // Ensure to return Better-Auth named fields, not the original field names in your database.
               ...user,
               firstName: user.name.split(" ")[0],
               lastName: user.name.split(" ")[1],
@@ -538,7 +827,7 @@ export const auth = betterAuth({
           if (user.email.includes("admin")) {
             return false; // Abort deletion
           }
-          
+
           return true; // Allow deletion
         },
         after: async (user) => {
@@ -563,6 +852,7 @@ export const auth = betterAuth({
   },
 });
 ```
+
 
 #### Throwing Errors
 
@@ -634,3 +924,34 @@ To add new tables and columns to your database, you have two options:
 `Manual Method`: Follow the instructions in the plugin documentation to manually add tables and columns.
 
 Both methods ensure your database schema stays up to date with your plugins' requirements.
+
+
+## Experimental Joins
+
+Since Better-Auth version `1.4` we've introduced experimental database joins support.
+This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
+Over 50 endpoints support joins, and we're constantly adding more.
+
+Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
+it will still fallback to making multiple database queries and combining the results.
+
+To enable joins, update your auth config with the following:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  experimental: { joins: true }
+});
+```
+
+The Better-Auth `1.4` CLI will generate DrizzleORM and PrismaORM relationships for you so if you do not have those already
+be sure to update your schema by running our migrate or generate CLI commands to be up-to-date with the latest required schema.
+
+It's very important to read the documentation regarding experimental joins for your given adapter:
+
+- [DrizzleORM](/docs/adapters/drizzle#joins-experimental)
+- [PrismaORM](/docs/adapters/prisma#joins-experimental)
+- [SQLite](/docs/adapters/sqlite#joins-experimental)
+- [MySQL](/docs/adapters/mysql#joins-experimental)
+- [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
+- [MSSQL](/docs/adapters/mssql#joins-experimental)
+- [MongoDB](/docs/adapters/mongo#joins-experimental)

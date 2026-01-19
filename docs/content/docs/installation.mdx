@@ -26,7 +26,7 @@ Create a `.env` file in the root of your project and add the following environme
 
 1. **Secret Key**
 
-Random value used by the library for encryption and generating hashes. **You can generate one using the button below** or you can use something like openssl.
+A secret value used for encryption and hashing. It must be at least 32 characters and generated with high entropy. Click the button below to generate one. You can also use `openssl rand -base64 32` to generate one.
 
 ```txt title=".env"
 BETTER_AUTH_SECRET=
@@ -70,6 +70,10 @@ export const auth = betterAuth({
 
 Better Auth requires a database to store user data.
 You can easily configure Better Auth to use SQLite, PostgreSQL, or MySQL, and more!
+
+<Callout>
+    You can also configure Better Auth to work in a stateless mode if you don't configure a database. See [Stateless Session Management](/docs/concepts/session-management#stateless-session-management) for more information. Note that most plugins will require a database.
+</Callout>
 
 <Tabs items={["sqlite", "postgres", "mysql"]}>
     <Tab value="sqlite">
@@ -131,7 +135,7 @@ Alternatively, if you prefer to use an ORM, you can use one of the built-in adap
         import { betterAuth } from "better-auth";
         import { prismaAdapter } from "better-auth/adapters/prisma";
         // If your Prisma file is located elsewhere, you can change the path
-        import { PrismaClient } from "@/generated/prisma";
+        import { PrismaClient } from "@/generated/prisma/client";
 
         const prisma = new PrismaClient();
         export const auth = betterAuth({
@@ -231,13 +235,23 @@ Create a new file or route in your framework's designated catch-all route handle
   objects and offers helper functions for popular frameworks.
 </Callout>
 
-<Tabs items={["next-js", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js">
-    <Tab value="next-js">
+<Tabs items={["next-js-app-router", "next-js-pages-router", "nuxt", "svelte-kit", "remix", "solid-start", "hono", "cloudflare-workers", "express", "elysia", "tanstack-start", "expo"]} defaultValue="next-js-app-router">
+    <Tab value="next-js-app-router">
         ```ts title="/app/api/auth/[...all]/route.ts"
         import { auth } from "@/lib/auth"; // path to your auth file
         import { toNextJsHandler } from "better-auth/next-js";
 
         export const { POST, GET } = toNextJsHandler(auth);
+        ```
+    </Tab>
+    <Tab value="next-js-pages-router">
+        ```ts title="/pages/api/auth/[...all].ts"
+        import { auth } from "@/lib/auth"; // path to your auth file
+        import { toNodeHandler } from "better-auth/node";
+
+        // Disallow body parsing, we will parse it manually
+        export const config = { api: { bodyParser: false } };
+        export default toNodeHandler(auth.handler);
         ```
     </Tab>
     <Tab value="nuxt">
@@ -403,18 +417,52 @@ Create a new file or route in your framework's designated catch-all route handle
     </Tab>
     <Tab value="tanstack-start">
     ```ts title="src/routes/api/auth/$.ts"
-    import { auth } from '~/lib/server/auth'
-    import { createServerFileRoute } from '@tanstack/react-start/server'
+    import { auth } from '@/lib/auth'
+    import { createFileRoute } from '@tanstack/react-router'
 
-    export const ServerRoute = createServerFileRoute('/api/auth/$').methods({
-    GET: ({ request }) => {
-        return auth.handler(request)
-    },
-    POST: ({ request }) => {
-        return auth.handler(request)
-    },
-    });
+    export const Route = createFileRoute('/api/auth/$')({
+        server: {
+            handlers: {
+                GET: async ({ request }:{ request: Request }) => {
+                    return await auth.handler(request)
+                },
+                POST: async ({ request }:{ request: Request }) => {
+                    return await auth.handler(request)
+                },
+            },
+        },
+    })
     ```
+
+    <Callout type="info">
+    When you call functions that need to set cookies (like `signInEmail` or `signUpEmail`), you'll need to handle cookie setting for TanStack Start. Better Auth provides a `tanstackStartCookies` plugin to automatically handle this for you.
+
+    For React (TanStack Start with React):
+
+    ```ts title="src/lib/auth.ts"
+    import { betterAuth } from "better-auth";
+    import { tanstackStartCookies } from "better-auth/tanstack-start";
+
+    export const auth = betterAuth({
+        //...your config
+        plugins: [tanstackStartCookies()] // make sure this is the last plugin in the array
+    })
+    ```
+
+    For Solid.js (TanStack Start with Solid):
+
+    ```ts title="src/lib/auth.ts"
+    import { betterAuth } from "better-auth";
+    import { tanstackStartCookies } from "better-auth/tanstack-start/solid";
+
+    export const auth = betterAuth({
+        //...your config
+        plugins: [tanstackStartCookies()] // make sure this is the last plugin in the array
+    })
+    ```
+
+    Now, when you call functions that set cookies, they will be automatically set using TanStack Start's cookie handling system.
+    </Callout>
     </Tab>
     <Tab value="expo">
     ```ts title="app/api/auth/[...all]+api.ts"

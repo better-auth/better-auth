@@ -1,19 +1,24 @@
+import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { createOTP } from "@better-auth/utils/otp";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
+import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -149,6 +154,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_data")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
@@ -193,14 +199,65 @@ describe("two factor", async () => {
 	});
 
 	it("should fail if two factor cookie is missing", async () => {
+		const headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					// 2FA Cookie is in response, but we are not setting it in headers
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		await client.twoFactor.sendOtp({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const verifyRes = await client.twoFactor.verifyOtp({
+			code: OTP,
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					// Session should not be defined when two factor cookie is missing
+					expect(
+						parsed.get("better-auth.session_token")?.value,
+					).not.toBeDefined();
+				},
+			},
+		});
+		expect(verifyRes.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+
+	it("should fail when passing invalid TOTP code with expected error code", async () => {
 		const res = await client.twoFactor.verifyTotp({
-			code: "123456",
+			code: "invalid-code",
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(res.error?.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
 		);
 	});
 
@@ -267,10 +324,30 @@ describe("two factor", async () => {
 		expect(currentBackupCodes.backupCodes).toBeDefined();
 		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
 
+		// Start a new 2FA session to test invalid backup code
+		const headers2 = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers2.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
 		const res = await client.twoFactor.verifyBackupCode({
 			code: "invalid-code",
 			fetchOptions: {
-				headers,
+				headers: headers2,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -303,7 +380,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		const otpRes = await client.twoFactor.sendOtp({
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -329,6 +406,7 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
 					newHeaders.set(
 						"cookie",
 						`better-auth.trust_device=${
@@ -339,14 +417,47 @@ describe("two factor", async () => {
 			},
 		});
 
+		const updatedHeaders = new Headers();
 		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: newHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					updatedHeaders.set(
+						"cookie",
+						`better-auth.trust_device=${
+							parsed.get("better-auth.trust_device")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect(signInRes.data?.user).toBeDefined();
+
+		// Should still work with original headers
+		const signIn2Res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
 				headers: newHeaders,
 			},
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expect(signIn2Res.data?.user).toBeDefined();
+
+		// Should work with updated headers
+		const signIn3Res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: updatedHeaders,
+			},
+		});
+		expect(signIn3Res.data?.user).toBeDefined();
 	});
 
 	it("should limit OTP verification attempts", async () => {
@@ -536,5 +647,205 @@ describe("two factor auth API", async () => {
 			headers,
 		});
 		expect(session?.user.twoFactorEnabled).toBe(false);
+	});
+});
+
+describe("view backup codes", async () => {
+	const sendOTP = vi.fn();
+	const { auth, signInWithTestUser, testUser, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							sendOTP(otp);
+						},
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+	let { headers } = await signInWithTestUser();
+
+	const session = await auth.api.getSession({ headers });
+	const userId = session?.user.id!;
+
+	const client = createAuthClient({
+		plugins: [twoFactorClient()],
+		fetchOptions: {
+			customFetchImpl,
+			baseURL: "http://localhost:3000/api/auth",
+		},
+	});
+
+	it("should return parsed array of backup codes, not JSON string", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const enableJson = (await enableRes.json()) as {
+			backupCodes: string[];
+		};
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(enableJson.backupCodes);
+		expect(viewResult.status).toBe(true);
+	});
+
+	it("should return array after generating new backup codes", async () => {
+		const generateResult = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		expect(generateResult.backupCodes).toBeDefined();
+		expect(generateResult.backupCodes.length).toBe(10);
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(viewResult.status).toBe(true);
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
+	});
+
+	it("should successfully regenerate backup codes multiple times", async () => {
+		// First generation
+		const firstGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(firstGeneration.backupCodes).toBeDefined();
+		expect(firstGeneration.backupCodes.length).toBe(10);
+		expect(firstGeneration.status).toBe(true);
+
+		// Second generation - this should update the existing record using id
+		const secondGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(secondGeneration.backupCodes).toBeDefined();
+		expect(secondGeneration.backupCodes.length).toBe(10);
+		expect(secondGeneration.status).toBe(true);
+
+		// Verify the codes are different
+		expect(secondGeneration.backupCodes).not.toEqual(
+			firstGeneration.backupCodes,
+		);
+
+		// Third generation - ensure it still works
+		const thirdGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(thirdGeneration.backupCodes).toBeDefined();
+		expect(thirdGeneration.backupCodes.length).toBe(10);
+		expect(thirdGeneration.status).toBe(true);
+
+		// Verify the latest codes are in the database
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+		expect(viewResult.backupCodes).toEqual(thirdGeneration.backupCodes);
+	});
+
+	it("should correctly update backup codes after verification", async () => {
+		// Generate fresh backup codes for this test
+		const generation = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		const backupCodes = generation.backupCodes;
+		expect(backupCodes.length).toBe(10);
+
+		// Sign in to get the two-factor cookie (similar to existing test pattern)
+		const verifyHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					verifyHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
+		// Use the first backup code
+		const usedBackupCode = backupCodes[0]!;
+		let sessionToken = "";
+		await client.twoFactor.verifyBackupCode({
+			code: usedBackupCode,
+			fetchOptions: {
+				headers: verifyHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					sessionToken = parsed.get("better-auth.session_token")?.value || "";
+				},
+			},
+		});
+
+		// Verify we got a session token
+		expect(sessionToken.length).toBeGreaterThan(0);
+
+		// Verify the used backup code was removed from the database
+		const updatedCodes = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(updatedCodes.backupCodes).toBeDefined();
+		expect(updatedCodes.backupCodes.length).toBe(9); // One code was used
+		expect(updatedCodes.backupCodes).not.toContain(usedBackupCode);
+
+		// Verify remaining codes are still valid
+		backupCodes.slice(1).forEach((code) => {
+			expect(updatedCodes.backupCodes).toContain(code);
+		});
+	});
+
+	it("should not expose viewBackupCodes to client", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/two-factor/view-backup-codes",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ userId }),
+			},
+		);
+		expect(response.status).toBe(404);
 	});
 });

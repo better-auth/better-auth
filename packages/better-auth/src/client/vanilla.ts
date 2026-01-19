@@ -1,42 +1,47 @@
-import { getClientConfig } from "./config";
-import { capitalizeFirstLetter } from "../utils/misc";
 import type {
+	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
-	ClientOptions,
-	InferActions,
-	InferClientAPI,
-	InferErrorCodes,
-	IsSignal,
-} from "./types";
-import { createDynamicPathProxy } from "./proxy";
-import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
-import type { Atom } from "nanostores";
+} from "@better-auth/core";
+import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { BASE_ERROR_CODES } from "../error/codes";
+import type { Atom } from "nanostores";
+import type { PrettifyDeep, UnionToIntersection } from "../types/helper";
+import { getClientConfig } from "./config";
+import { createDynamicPathProxy } from "./proxy";
+import type {
+	InferActions,
+	InferClientAPI,
+	InferErrorCodes,
+	IsSignal,
+	SessionQueryParams,
+} from "./types";
 
-type InferResolvedHooks<O extends ClientOptions> = O["plugins"] extends Array<
-	infer Plugin
->
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
-			? Atoms extends Record<string, any>
-				? {
-						[key in keyof Atoms as IsSignal<key> extends true
-							? never
-							: key extends string
-								? `use${Capitalize<key>}`
-								: never]: Atoms[key];
-					}
+type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
+	plugins: Array<infer Plugin>;
+}
+	? UnionToIntersection<
+			Plugin extends BetterAuthClientPlugin
+				? Plugin["getAtoms"] extends (fetch: any) => infer Atoms
+					? Atoms extends Record<string, any>
+						? {
+								[key in keyof Atoms as IsSignal<key> extends true
+									? never
+									: key extends string
+										? `use${Capitalize<key>}`
+										: never]: Atoms[key];
+							}
+						: {}
+					: {}
 				: {}
-			: {}
-		: {}
+		>
 	: {};
 
-export function createAuthClient<Option extends ClientOptions>(
-	options?: Option,
+export function createAuthClient<Option extends BetterAuthClientOptions>(
+	options?: Option | undefined,
 ) {
 	const {
 		pluginPathMethods,
@@ -46,7 +51,7 @@ export function createAuthClient<Option extends ClientOptions>(
 		atomListeners,
 		$store,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = value;
 	}
@@ -80,6 +85,10 @@ export function createAuthClient<Option extends ClientOptions>(
 				data: Session;
 				error: BetterFetchError | null;
 				isPending: boolean;
+				isRefetching: boolean;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;
@@ -91,3 +100,7 @@ export function createAuthClient<Option extends ClientOptions>(
 			>;
 		};
 }
+
+export type AuthClient<Option extends BetterAuthClientOptions> = ReturnType<
+	typeof createAuthClient<Option>
+>;

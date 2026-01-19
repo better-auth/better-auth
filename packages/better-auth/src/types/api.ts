@@ -6,21 +6,12 @@ export type FilteredAPI<API> = Omit<
 	API extends { [key in infer K]: Endpoint }
 		? K extends string
 			? K extends "getSession"
-				? K
-				: API[K]["options"]["metadata"] extends { isAction: false }
+				? never
+				: API[K]["options"]["metadata"] extends
+							| { isAction: false }
+							| { scope: "http" }
 					? K
 					: never
-			: never
-		: never
->;
-
-export type FilterActions<API> = Omit<
-	API,
-	API extends { [key in infer K]: Endpoint }
-		? K extends string
-			? API[K]["options"]["metadata"] extends { isAction: false }
-				? K
-				: never
 			: never
 		: never
 >;
@@ -37,25 +28,21 @@ export type InferSessionAPI<API> = API extends {
 								H extends boolean = false,
 							>(context: {
 								headers: Headers;
-								query?: {
-									disableCookieCache?: boolean;
-									disableRefresh?: boolean;
-								};
-								asResponse?: R;
-								returnHeaders?: H;
+								query?:
+									| {
+											disableCookieCache?: boolean;
+											disableRefresh?: boolean;
+									  }
+									| undefined;
+								asResponse?: R | undefined;
+								returnHeaders?: H | undefined;
 							}) => false extends R
 								? H extends true
 									? Promise<{
 											headers: Headers;
 											response: PrettifyDeep<Awaited<ReturnType<E>>> | null;
 										}>
-									: Promise<
-											| (PrettifyDeep<Awaited<ReturnType<E>>> & {
-													options: E["options"];
-													path: E["path"];
-											  })
-											| null
-										>
+									: Promise<PrettifyDeep<Awaited<ReturnType<E>>> | null>
 								: Promise<Response>;
 						}
 					: never
@@ -63,4 +50,4 @@ export type InferSessionAPI<API> = API extends {
 		>
 	: never;
 
-export type InferAPI<API> = InferSessionAPI<API> & API;
+export type InferAPI<API> = InferSessionAPI<API> & FilteredAPI<API>;

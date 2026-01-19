@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "../../utils/error-codes";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const USERNAME_ERROR_CODES = defineErrorCodes({
 	INVALID_USERNAME_OR_PASSWORD: "Invalid username or password",

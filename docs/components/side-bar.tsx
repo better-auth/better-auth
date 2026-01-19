@@ -1,12 +1,12 @@
 "use client";
 
-import { AsideLink } from "@/components/ui/aside-link";
-import { cn } from "@/lib/utils";
-import { AnimatePresence, motion, MotionConfig } from "framer-motion";
-import { useSearchContext } from "fumadocs-ui/provider";
+import { AnimatePresence, MotionConfig, motion } from "framer-motion";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { AsideLink } from "@/components/ui/aside-link";
+import { cn } from "@/lib/utils";
 import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
@@ -38,8 +38,8 @@ export default function ArticleLayout() {
 		<div className={cn("fixed start-0 top-0")}>
 			<aside
 				className={cn(
-					"md:transition-all",
-					"border-r border-lines top-[55px] md:flex hidden md:w-[268px] lg:w-[286px] overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
+					"navbar:transition-all",
+					"border-r border-lines top-[55px] navbar:flex hidden navbar:w-[268px] lg:w-[286px]! overflow-y-auto absolute h-[calc(100dvh-55px)] pb-2 flex-col justify-between w-[var(--fd-sidebar-width)]",
 				)}
 			>
 				<div>
@@ -94,8 +94,32 @@ export default function ArticleLayout() {
 												<motion.div className="text-sm">
 													{item.list.map((listItem, j) => (
 														<div key={listItem.title}>
-															<Suspense fallback={<>Loading...</>}>
-																{listItem.group ? (
+															<Suspense
+																fallback={
+																	<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
+																		<div
+																			className="size-4 shrink-0 bg-muted rounded-full"
+																			aria-hidden="true"
+																		/>
+																		<div
+																			className="h-3 bg-muted rounded-md"
+																			style={{
+																				width: `${Math.random() * (70 - 30) + 30}%`,
+																			}}
+																			aria-hidden="true"
+																		/>
+																		<span className="sr-only">Loading...</span>
+																	</div>
+																}
+															>
+																{listItem.separator ? (
+																	<div className="flex flex-row items-center gap-2 mx-5 my-2">
+																		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+																			{listItem.title}
+																		</p>
+																		<div className="flex-grow h-px bg-border" />
+																	</div>
+																) : listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
 																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}

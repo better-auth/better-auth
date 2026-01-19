@@ -1,4 +1,6 @@
-export const TWO_FACTOR_ERROR_CODES = {
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
+
+export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	OTP_NOT_ENABLED: "OTP not enabled",
 	OTP_HAS_EXPIRED: "OTP has expired",
 	TOTP_NOT_ENABLED: "TOTP not enabled",
@@ -9,4 +11,4 @@ export const TWO_FACTOR_ERROR_CODES = {
 	TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE:
 		"Too many attempts. Please request a new code.",
 	INVALID_TWO_FACTOR_COOKIE: "Invalid two factor cookie",
-} as const;
+});

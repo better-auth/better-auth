@@ -29,7 +29,7 @@ import { sendEmail } from './email'; // your email sending function
 export const auth = betterAuth({
     emailVerification: {
         sendVerificationEmail: async ({ user, url, token }, request) => {
-            await sendEmail({
+            void sendEmail({
                 to: user.email,
                 subject: 'Verify your email address',
                 text: `Click the link to verify your email: ${url}`
@@ -38,6 +38,11 @@ export const auth = betterAuth({
     }
 })
 ```
+
+<Callout type="warn">
+  Avoid awaiting the email sending to prevent 
+  timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+</Callout>
 
 ### Triggering Email Verification
 
@@ -68,18 +73,28 @@ This sends a verification email when a user signs up. For social logins, email v
 If you enable require email verification, users must verify their email before they can log in. And every time a user tries to sign in, `sendVerificationEmail` is called.
 
 <Callout>
-    This only works if you have `sendVerificationEmail` implemented and if the user is trying to sign in with email and password.
+    This only works if you have `sendVerificationEmail` implemented, if `sendOnSignIn` is set to true and if the user is trying to sign in with email and password.
 </Callout>
 
 ```ts title="auth.ts"
 export const auth = betterAuth({
-    emailAndPassword: {
-        requireEmailVerification: true
-    }
-})
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      void sendEmail({
+        to: user.email,
+        subject: "Verify your email address",
+        text: `Click the link to verify your email: ${url}`,
+      });
+    },
+    sendOnSignIn: true,
+  },
+  emailAndPassword: {
+    requireEmailVerification: true,
+  },
+});
 ```
 
-if a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
+If a user tries to sign in without verifying their email, you can handle the error and show a message to the user.
 
 ```ts title="auth-client.ts"
 await authClient.signIn.email({
@@ -170,7 +185,7 @@ export const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
         sendResetPassword: async ({ user, url, token }, request) => {
-            await sendEmail({
+            void sendEmail({
                 to: user.email,
                 subject: 'Reset your password',
                 text: `Click the link to reset your password: ${url}`
@@ -180,5 +195,10 @@ export const auth = betterAuth({
 })
 ```
 
-Check out the [Email and Password](/docs/authentication/email-password#forget-password) guide for more details on how to implement password reset in your app.
-Also you can check out the [Otp verification](/docs/plugins/email-otp#reset-password) guide for how to implement password reset with OTP in your app.
+<Callout type="warn">
+  Avoid awaiting the email sending to prevent 
+  timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+</Callout>
+
+Check out the [Email and Password](/docs/authentication/email-password#request-password-reset) guide for more details on how to implement password reset in your app.
+Also you can check out the [Otp verification](/docs/plugins/email-otp#reset-password-with-otp) guide for how to implement password reset with OTP in your app.

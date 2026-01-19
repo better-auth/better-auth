@@ -31,19 +31,27 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```package-install
         better-auth @better-auth/expo
         ```
-
+        <Callout type="info">
+            If you're using Expo's API Routes, you can follow the step below instead.
+        </Callout>
     </Step>
 
     <Step>
         ## Install Client Dependencies
 
-        You also need to install both the Better Auth package and Expo plugin into your Expo application.
+        - You also need to install both the Better Auth package and Expo plugin into your Expo application.
 
         ```package-install
-        better-auth @better-auth/expo 
+        better-auth @better-auth/expo
         ```
 
-        If you plan on using our social integrations (Google, Apple etc.) then there are a few more dependencies that are required in your Expo app. In the default Expo template these are already installed so you may be able to skip this step if you have these dependencies already.
+        - And you need to install `expo-network` for network state detection.
+
+        ```package-install
+        expo-network
+        ```
+
+        - <small className='text-xs'>(Optional)</small> If you're using the default Expo template, these dependencies are already included, so you can skip this step. Otherwise, if you plan to use our social providers (e.g. Google, Apple), your Expo app requires a few additional dependencies.
 
         ```package-install
         expo-linking expo-web-browser expo-constants
@@ -149,8 +157,29 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         })
         ```
 
-        <Callout>
-          The wildcard pattern can be particularly useful if your app uses different URL formats for deep linking based on features or screens.
+        ### Development Mode
+
+        During development, Expo uses the `exp://` scheme with your device's local IP address. To support this, you can use wildcards to match common local IP ranges:
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            trustedOrigins: [
+                "myapp://",
+                
+                // Development mode - Expo's exp:// scheme with local IP ranges
+                ...(process.env.NODE_ENV === "development" ? [
+                    "exp://",                      // Trust all Expo URLs (prefix matching)
+                    "exp://**",                    // Trust all Expo URLs (wildcard matching)
+                    "exp://192.168.*.*:*/**",      // Trust 192.168.x.x IP range with any port and path
+                ] : [])
+            ]
+        })
+        ```
+
+        For more information about trusted origins, see [here](/docs/reference/options#trustedorigins).
+
+        <Callout type="warn">
+          The wildcard patterns for `exp://` should only be used in development. In production, use your app's specific scheme (e.g., `myapp://`).
         </Callout>
     </Step>
  
@@ -183,9 +212,9 @@ Expo is a popular framework for building cross-platform apps with React Native. 
                         "module-resolver",
                         {
                             alias: {
-                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.cjs",
-                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.cjs",
-                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.cjs",
+                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.mjs",
+                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.mjs",
+                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.mjs",
                             },
                         },
                     ],
@@ -419,11 +448,17 @@ export function TRPCProvider(props: { children: React.ReactNode }) {
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 import SecureStorage from "expo-secure-store";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    storage: SecureStorage
+    plugins: [
+        expoClient({
+            storage: SecureStorage,
+            // ...
+        })
+    ],
 });
 ```
 
@@ -431,10 +466,16 @@ const authClient = createAuthClient({
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    scheme: "myapp"
+    plugins: [
+        expoClient({
+            scheme: "myapp",
+            // ...
+        }),
+    ],
 });
 ```
 
@@ -442,16 +483,60 @@ const authClient = createAuthClient({
 
 ```ts title="lib/auth-client.ts"
 import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
 
 const authClient = createAuthClient({
     baseURL: "http://localhost:8081",
-    disableCache: true
+    plugins: [
+        expoClient({
+            disableCache: true,
+            // ...
+        }),
+    ],
 });
 ```
+
+**cookiePrefix**: Prefix(es) for server cookie names to identify which cookies belong to better-auth. This prevents infinite refetching when third-party cookies are set. Can be a single string or an array of strings to match multiple prefixes. Defaults to `"better-auth"`.
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { expoClient } from "@better-auth/expo/client";
+import * as SecureStore from "expo-secure-store";
+
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Single prefix
+            cookiePrefix: "better-auth"
+        })
+    ]
+});
+```
+
+You can also provide multiple prefixes to match cookies from different authentication systems:
+
+```ts title="lib/auth-client.ts"
+const authClient = createAuthClient({
+    baseURL: "http://localhost:8081",
+    plugins: [
+        expoClient({
+            storage: SecureStore,
+            // Multiple prefixes
+            cookiePrefix: ["better-auth", "my-app", "custom-auth"]
+        })
+    ]
+});
+```
+
+<Callout type="info">
+  **Important:** If you're using plugins like passkey with a custom `webAuthnChallengeCookie` option, make sure to include the cookie prefix in the `cookiePrefix` array. For example, if you set `webAuthnChallengeCookie: "my-app-passkey"`, include `"my-app"` in your `cookiePrefix`. See the [Passkey plugin documentation](/docs/plugins/passkey#expo-integration) for more details.
+</Callout>
 
 
 ### Expo Servers
 
 Server plugin options:
 
-**overrideOrigin**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.
+**disableOriginOverride**: Override the origin for Expo API routes (default: false). Enable this if you're facing cors origin issues with Expo API routes.

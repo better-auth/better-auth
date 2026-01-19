@@ -1,81 +1,34 @@
 import type {
-	BetterFetch,
-	BetterFetchOption,
-	BetterFetchPlugin,
-} from "@better-fetch/fetch";
-import type { BetterAuthPlugin } from "../types/plugins";
-import type { Atom, WritableAtom } from "nanostores";
-import type {
-	LiteralString,
-	StripEmptyObjects,
-	UnionToIntersection,
-} from "../types/helper";
-import type { Auth } from "../auth";
-import type { InferRoutes } from "./path-to-object";
-import type { BetterAuthOptions, Session, User } from "../types";
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
+	ClientAtomListener,
+	ClientStore,
+} from "@better-auth/core";
 import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
-
-export type AtomListener = {
-	matcher: (path: string) => boolean;
-	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
+import type { Auth, Session, User } from "../types";
+import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
+import type { InferRoutes } from "./path-to-object";
+export type {
+	ClientStore,
+	ClientAtomListener,
+	BetterAuthClientOptions,
+	BetterAuthClientPlugin,
 };
 
-export interface Store {
-	notify: (signal: string) => void;
-	listen: (signal: string, listener: () => void) => void;
-	atoms: Record<string, WritableAtom<any>>;
-}
+/**
+ * @deprecated use type `ClientStore` instead.
+ */
+export type Store = ClientStore;
+/**
+ * @deprecated use type `ClientAtomListener` instead.
+ */
+export type AtomListener = ClientAtomListener;
+/**
+ * @deprecated use type `BetterAuthClientOptions` instead.
+ */
+export type ClientOptions = BetterAuthClientOptions;
 
-export interface BetterAuthClientPlugin {
-	id: LiteralString;
-	/**
-	 * only used for type inference. don't pass the
-	 * actual plugin
-	 */
-	$InferServerPlugin?: BetterAuthPlugin;
-	/**
-	 * Custom actions
-	 */
-	getActions?: (
-		$fetch: BetterFetch,
-		$store: Store,
-		/**
-		 * better-auth client options
-		 */
-		options: ClientOptions | undefined,
-	) => Record<string, any>;
-	/**
-	 * State atoms that'll be resolved by each framework
-	 * auth store.
-	 */
-	getAtoms?: ($fetch: BetterFetch) => Record<string, Atom<any>>;
-	/**
-	 * specify path methods for server plugin inferred
-	 * endpoints to force a specific method.
-	 */
-	pathMethods?: Record<string, "POST" | "GET">;
-	/**
-	 * Better fetch plugins
-	 */
-	fetchPlugins?: BetterFetchPlugin[];
-	/**
-	 * a list of recaller based on a matcher function.
-	 * The signal name needs to match a signal in this
-	 * plugin or any plugin the user might have added.
-	 */
-	atomListeners?: AtomListener[];
-}
-
-export interface ClientOptions {
-	fetchOptions?: BetterFetchOption;
-	plugins?: BetterAuthClientPlugin[];
-	baseURL?: string;
-	basePath?: string;
-	disableDefaultFetchPlugins?: boolean;
-	$InferAuth?: BetterAuthOptions;
-}
-
-export type InferClientAPI<O extends ClientOptions> = InferRoutes<
+export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
 		? Auth["api"] &
 				(O["plugins"] extends Array<infer Pl>
@@ -95,39 +48,46 @@ export type InferClientAPI<O extends ClientOptions> = InferRoutes<
 	O
 >;
 
-export type InferActions<O extends ClientOptions> = (O["plugins"] extends Array<
-	infer Plugin
->
-	? UnionToIntersection<
-			Plugin extends BetterAuthClientPlugin
-				? Plugin["getActions"] extends (...args: any) => infer Actions
-					? Actions
+export type InferActions<O extends BetterAuthClientOptions> =
+	(O["plugins"] extends Array<infer Plugin>
+		? UnionToIntersection<
+				Plugin extends BetterAuthClientPlugin
+					? Plugin["getActions"] extends (...args: any) => infer Actions
+						? Actions
+						: {}
 					: {}
-				: {}
-		>
-	: {}) &
-	//infer routes from auth config
-	InferRoutes<
-		O["$InferAuth"] extends {
-			plugins: infer Plugins;
-		}
-			? Plugins extends Array<infer Plugin>
-				? Plugin extends {
-						endpoints: infer Endpoints;
-					}
-					? Endpoints
+			>
+		: {}) &
+		//infer routes from auth config
+		InferRoutes<
+			O["$InferAuth"] extends {
+				plugins: infer Plugins;
+			}
+				? Plugins extends Array<infer Plugin>
+					? Plugin extends {
+							endpoints: infer Endpoints;
+						}
+						? Endpoints
+						: {}
 					: {}
-				: {}
-			: {},
-		O
-	>;
+				: {},
+			O
+		>;
 
-export type InferErrorCodes<O extends ClientOptions> =
+export type InferErrorCodes<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<infer Plugin>
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
-					? Plugin["$InferServerPlugin"] extends BetterAuthPlugin
-						? Plugin["$InferServerPlugin"]["$ERROR_CODES"]
+					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
+						? E extends Record<
+								string,
+								{
+									code: string;
+									message: string;
+								}
+							>
+							? E
+							: {}
 						: {}
 					: {}
 			>
@@ -138,21 +98,23 @@ export type InferErrorCodes<O extends ClientOptions> =
  */
 export type IsSignal<T> = T extends `$${infer _}` ? true : false;
 
-export type InferPluginsFromClient<O extends ClientOptions> =
+export type InferPluginsFromClient<O extends BetterAuthClientOptions> =
 	O["plugins"] extends Array<BetterAuthClientPlugin>
 		? Array<O["plugins"][number]["$InferServerPlugin"]>
 		: undefined;
 
-export type InferSessionFromClient<O extends ClientOptions> = StripEmptyObjects<
-	Session &
-		UnionToIntersection<InferAdditionalFromClient<O, "session", "output">>
->;
-export type InferUserFromClient<O extends ClientOptions> = StripEmptyObjects<
-	User & UnionToIntersection<InferAdditionalFromClient<O, "user", "output">>
->;
+export type InferSessionFromClient<O extends BetterAuthClientOptions> =
+	StripEmptyObjects<
+		Session &
+			UnionToIntersection<InferAdditionalFromClient<O, "session", "output">>
+	>;
+export type InferUserFromClient<O extends BetterAuthClientOptions> =
+	StripEmptyObjects<
+		User & UnionToIntersection<InferAdditionalFromClient<O, "user", "output">>
+	>;
 
 export type InferAdditionalFromClient<
-	Options extends ClientOptions,
+	Options extends BetterAuthClientOptions,
 	Key extends string,
 	Format extends "input" | "output" = "output",
 > = Options["plugins"] extends Array<infer T>
@@ -172,6 +134,6 @@ export type InferAdditionalFromClient<
 	: {};
 
 export type SessionQueryParams = {
-	disableCookieCache?: boolean;
-	disableRefresh?: boolean;
+	disableCookieCache?: boolean | undefined;
+	disableRefresh?: boolean | undefined;
 };

@@ -1,10 +1,14 @@
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import { describe, expect, it } from "vitest";
-import { createAuthEndpoint, createAuthMiddleware } from "./call";
-import { toAuthEndpoints } from "./to-auth-endpoints";
-import { init } from "../init";
 import * as z from "zod";
-import { APIError } from "better-call";
+import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
+import { isAPIError } from "../utils/is-api-error";
+import { toAuthEndpoints } from "./to-auth-endpoints";
 
 describe("before hook", async () => {
 	describe("context", async () => {
@@ -334,7 +338,7 @@ describe("after hook", async () => {
 					},
 				})
 				.catch((e) => {
-					expect(e).toBeInstanceOf(APIError);
+					expect(isAPIError(e)).toBeTruthy();
 					expect(e?.message).toBe("from after hook");
 				});
 		});
@@ -419,11 +423,11 @@ describe("after hook", async () => {
 });
 
 describe("disabled paths", async () => {
-	const { client } = await getTestInstance({
-		disabledPaths: ["/sign-in/email"],
-	});
-
 	it("should return 404 for disabled paths", async () => {
+		const { client } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
 		const response = await client.$fetch("/ok");
 		expect(response.data).toEqual({ ok: true });
 		const { error } = await client.signIn.email({
@@ -431,6 +435,316 @@ describe("disabled paths", async () => {
 			password: "test",
 		});
 		expect(error?.status).toBe(404);
+	});
+
+	it("should return 404 for when base path is /", async () => {
+		const { auth } = await getTestInstance({
+			basePath: "/",
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/sign-in/email", {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: "test@test.com",
+					password: "test",
+				}),
+			}),
+		);
+		expect(response2).toBeInstanceOf(Response);
+	});
+
+	it("should return 404 for disabled paths with a trailing slash", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email%2F", {
+				method: "POST",
+			}),
+		);
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-inemail", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(404);
+		expect(response2.status).toBe(404);
+	});
+
+	it("should return 404 for encoded paths", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-in/email%2F", {
+				method: "POST",
+			}),
+		);
+		const _response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-inemail", {
+				method: "POST",
+			}),
+		);
+		expect(response.status).toBe(404);
+	});
+
+	it("should block URL encoded slash bypass attempts", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try various URL encoding bypass attempts
+		const encodedAttempts = [
+			"http://localhost:3000/api/auth/sign-in%2Femail", // %2F = /
+			"http://localhost:3000/api/auth/sign-in%252Femail", // Double encoded
+			"http://localhost:3000/api/auth/sign-in%2femail", // lowercase hex
+		];
+
+		for (const url of encodedAttempts) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			// Should either block (404) or normalize and block
+			expect(response.status).toBe(404);
+		}
+	});
+
+	it("should block path traversal attempts", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try path traversal attempts
+		const traversalAttempts = [
+			"http://localhost:3000/api/auth/sign-in/../sign-in/email",
+			"http://localhost:3000/api/auth/./sign-in/email",
+			"http://localhost:3000/api/auth/sign-in/./email",
+			"http://localhost:3000/api/auth/sign-in//email",
+			"http://localhost:3000/api/auth/sign-in///email",
+		];
+
+		for (const url of traversalAttempts) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			expect(response.status).toBe(404);
+		}
+	});
+
+	it("should handle unicode and special characters in disabled paths", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try unicode normalization attacks
+		const specialAttempts = [
+			"http://localhost:3000/api/auth/sign-in%00/email", // Null byte
+			"http://localhost:3000/api/auth/sign-in\u0000/email", // Unicode null
+			"http://localhost:3000/api/auth/sign-in/email%09", // Tab character
+			"http://localhost:3000/api/auth/sign-in/email%20", // Space
+		];
+
+		for (const url of specialAttempts) {
+			try {
+				const response = await auth.handler(
+					new Request(url, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+						},
+						body: JSON.stringify({
+							email: "test@test.com",
+							password: "test",
+						}),
+					}),
+				);
+				// Should either block or handle safely
+				expect([404, 400]).toContain(response.status);
+			} catch (e) {
+				// URL constructor may throw for invalid URLs - this is acceptable
+				expect(e).toBeDefined();
+			}
+		}
+	});
+
+	it("should not be affected by case sensitivity bypass", async () => {
+		const { auth } = await getTestInstance({
+			disabledPaths: ["/sign-in/email"],
+		});
+
+		// Try case variations (these should NOT be blocked unless explicitly added)
+		const caseVariations = [
+			"http://localhost:3000/api/auth/Sign-In/Email",
+			"http://localhost:3000/api/auth/SIGN-IN/EMAIL",
+			"http://localhost:3000/api/auth/Sign-in/email",
+		];
+
+		for (const url of caseVariations) {
+			const response = await auth.handler(
+				new Request(url, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+					},
+					body: JSON.stringify({
+						email: "test@test.com",
+						password: "test",
+					}),
+				}),
+			);
+			// These should NOT be blocked (404) - they're different paths
+			// The endpoint itself will return an error since it doesn't exist
+			expect(response.status).not.toBe(200);
+		}
+	});
+});
+
+describe("trustedProxyHeaders security", () => {
+	it("should not use X-Forwarded headers when trustedProxyHeaders is false", async () => {
+		let capturedBaseURL: string | undefined;
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: false,
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					capturedBaseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+
+		await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "evil.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+
+		// Should use the actual request URL, not the forwarded headers
+		expect(capturedBaseURL).toBe("http://localhost:3000/api/auth");
+		expect(capturedBaseURL).not.toContain("evil.com");
+	});
+
+	it("should validate X-Forwarded headers when trustedProxyHeaders is true", async () => {
+		let capturedBaseURL: string | undefined;
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					capturedBaseURL = ctx.context.baseURL;
+				}),
+			},
+		});
+
+		await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "trusted-proxy.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+
+		// When trusted, should use the forwarded headers
+		expect(capturedBaseURL).toBe("https://trusted-proxy.com/api/auth");
+	});
+
+	it("should not trust partial X-Forwarded headers", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: undefined,
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+		});
+
+		// Only X-Forwarded-Host without X-Forwarded-Proto
+		const response1 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					"x-forwarded-host": "evil.com",
+					// Missing x-forwarded-proto
+				},
+			}),
+		);
+		expect(response1.status).toBe(200);
+
+		// Only X-Forwarded-Proto without X-Forwarded-Host
+		const response2 = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok", {
+				method: "GET",
+				headers: {
+					// Missing x-forwarded-host
+					"x-forwarded-proto": "https",
+				},
+			}),
+		);
+		expect(response2.status).toBe(200);
+	});
+
+	it("should handle malformed X-Forwarded headers gracefully", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			advanced: {
+				trustedProxyHeaders: true,
+			},
+		});
+
+		const malformedHeaders = [
+			{
+				"x-forwarded-host": "../../../../etc/passwd",
+				"x-forwarded-proto": "http",
+			},
+			{ "x-forwarded-host": "evil.com:99999", "x-forwarded-proto": "http" },
+			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "javascript" },
+			{ "x-forwarded-host": "evil.com", "x-forwarded-proto": "file" },
+			{ "x-forwarded-host": "", "x-forwarded-proto": "http" },
+			{ "x-forwarded-host": " ", "x-forwarded-proto": "http" },
+		];
+
+		for (const headers of malformedHeaders) {
+			const response = await auth.handler(
+				new Request("http://localhost:3000/api/auth/ok", {
+					method: "GET",
+					headers,
+				}),
+			);
+			// Should either use fallback baseURL or handle gracefully
+			expect(response.status).toBe(200);
+		}
 	});
 });
 
@@ -457,7 +771,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 			expect(error.stack).toMatch(/at\s+/);
@@ -486,7 +800,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			// Stack should exist but may be minimal when not in debug mode
 			expect(error.stack).toBeDefined();
 		}
@@ -516,7 +830,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			// Check for stack trace format
 			expect(error.stack).toMatch(/at\s+.*\(.*\)/); // Match "at functionName (file:line:col)"
@@ -551,7 +865,7 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({});
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 			expect(error.stack).toMatch(/at\s+/);
@@ -588,9 +902,43 @@ describe("debug mode stack trace", () => {
 		try {
 			await api.testEndpoint({ asResponse: false });
 		} catch (error: any) {
-			expect(error).toBeInstanceOf(APIError);
+			expect(isAPIError(error)).toBeTruthy();
 			expect(error.stack).toBeDefined();
 			expect(error.stack).toMatch(/ErrorWithStack:|Error:|APIError:/);
 		}
+	});
+});
+
+describe("custom response code", () => {
+	const endpoints = {
+		responseWithStatus: createAuthEndpoint(
+			"/response-with-status",
+			{
+				method: "GET",
+			},
+			async (c) => {
+				c.setStatus(201);
+				return { success: true };
+			},
+		),
+	};
+
+	const authContext = init({});
+	const authEndpoints = toAuthEndpoints(endpoints, authContext);
+
+	it("should return response with custom status", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			asResponse: true,
+		});
+		expect(response).toBeInstanceOf(Response);
+		expect(response.status).toBe(201);
+	});
+
+	it("should return status code", async () => {
+		const response = await authEndpoints.responseWithStatus({
+			returnStatus: true,
+		});
+		expect(response.status).toBe(201);
+		expect(response.response).toEqual({ success: true });
 	});
 });

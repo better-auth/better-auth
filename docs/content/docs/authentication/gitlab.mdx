@@ -28,6 +28,32 @@ description: GitLab provider setup and usage.
             },
         })
         ```
+
+        #### Configuration Options
+
+        - `clientId`: Your GitLab application's Client ID
+        - `clientSecret`: Your GitLab application's Client Secret  
+        - `issuer`: (Optional) The URL of your GitLab instance. Use this for self-hosted GitLab servers.
+            - Default: `"https://gitlab.com"` (GitLab.com)
+            - Example: `"https://gitlab.company.com"`
+
+        <Callout type="info">
+            The `issuer` option is useful when using a self-hosted GitLab instance. If you're using GitLab.com, you can omit this option as it defaults to `https://gitlab.com`.
+        </Callout>
+
+        #### Example with self-hosted GitLab
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            socialProviders: {
+                gitlab: {
+                    clientId: process.env.GITLAB_CLIENT_ID as string,
+                    clientSecret: process.env.GITLAB_CLIENT_SECRET as string,
+                    issuer: "https://gitlab.company.com", // Your self-hosted GitLab URL // [!code highlight]
+                },
+            },
+        })
+        ```
     </Step>
        <Step>
         ### Sign In with GitLab

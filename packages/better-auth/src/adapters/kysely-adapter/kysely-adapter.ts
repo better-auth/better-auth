@@ -1,50 +1,97 @@
-import {
-	createAdapterFactory,
-	type AdapterDebugLogs,
-	type AdapterFactoryCustomizeAdapterCreator,
-	type AdapterFactoryOptions,
-} from "../adapter-factory";
-import type { Adapter, BetterAuthOptions, Where } from "../../types";
+import type { BetterAuthOptions } from "@better-auth/core";
+import type {
+	AdapterFactoryCustomizeAdapterCreator,
+	AdapterFactoryOptions,
+	DBAdapter,
+	DBAdapterDebugLogOption,
+	JoinConfig,
+	Where,
+} from "@better-auth/core/db/adapter";
+import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import type {
+	InsertQueryBuilder,
+	Kysely,
+	RawBuilder,
+	UpdateQueryBuilder,
+} from "kysely";
+import { sql } from "kysely";
 import type { KyselyDatabaseType } from "./types";
-import type { InsertQueryBuilder, Kysely, UpdateQueryBuilder } from "kysely";
-import { ensureUTC } from "../../utils/ensure-utc";
 
 interface KyselyAdapterConfig {
 	/**
 	 * Database type.
 	 */
-	type?: KyselyDatabaseType;
+	type?: KyselyDatabaseType | undefined;
 	/**
 	 * Enable debug logs for the adapter
 	 *
 	 * @default false
 	 */
-	debugLogs?: AdapterDebugLogs;
+	debugLogs?: DBAdapterDebugLogOption | undefined;
 	/**
 	 * Use plural for table names.
 	 *
 	 * @default false
 	 */
-	usePlural?: boolean;
+	usePlural?: boolean | undefined;
 	/**
 	 * Whether to execute multiple operations in a transaction.
 	 *
 	 * If the database doesn't support transactions,
 	 * set this to `false` and operations will be executed sequentially.
-	 * @default true
+	 * @default false
 	 */
-	transaction?: boolean;
+	transaction?: boolean | undefined;
 }
 
 export const kyselyAdapter = (
 	db: Kysely<any>,
-	config?: KyselyAdapterConfig,
+	config?: KyselyAdapterConfig | undefined,
 ) => {
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter = (
 		db: Kysely<any>,
 	): AdapterFactoryCustomizeAdapterCreator => {
-		return ({ getFieldName, schema }) => {
+		return ({
+			getFieldName,
+			schema,
+			getDefaultFieldName,
+			getDefaultModelName,
+			getFieldAttributes,
+			getModelName,
+		}) => {
+			const selectAllJoins = (join: JoinConfig | undefined) => {
+				// Use selectAll which will handle column naming appropriately
+				const allSelects: RawBuilder<unknown>[] = [];
+				const allSelectsStr: {
+					joinModel: string;
+					joinModelRef: string;
+					fieldName: string;
+				}[] = [];
+				if (join) {
+					for (const [joinModel, _] of Object.entries(join)) {
+						const fields = schema[getDefaultModelName(joinModel)]?.fields;
+						const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+							? joinModel.split(".")
+							: [undefined, joinModel];
+
+						if (!fields) continue;
+						fields.id = { type: "string" }; // make sure there is at least an id field
+						for (const [field, fieldAttr] of Object.entries(fields)) {
+							allSelects.push(
+								sql`${sql.ref(`join_${joinModelName}`)}.${sql.ref(fieldAttr.fieldName || field)} as ${sql.ref(`_joined_${joinModelName}_${fieldAttr.fieldName || field}`)}`,
+							);
+							allSelectsStr.push({
+								joinModel: joinModel,
+								joinModelRef: joinModelName,
+								fieldName: fieldAttr.fieldName || field,
+							});
+						}
+					}
+				}
+				return { allSelectsStr, allSelects };
+			};
+
 			const withReturning = async (
 				values: Record<string, any>,
 				builder:
@@ -91,60 +138,7 @@ export const kyselyAdapter = (
 				res = await builder.returningAll().executeTakeFirst();
 				return res;
 			};
-			function transformValueToDB(value: any, model: string, field: string) {
-				if (field === "id") {
-					return value;
-				}
-				const { type = "sqlite" } = config || {};
-				let f = schema[model]?.fields[field];
-				if (!f) {
-					//@ts-expect-error - The model name can be a sanitized, thus using the custom model name, not one of the default ones.
-					f = Object.values(schema).find((f) => f.modelName === model)!;
-				}
-				if (
-					f!.type === "boolean" &&
-					(type === "sqlite" || type === "mssql") &&
-					value !== null &&
-					value !== undefined
-				) {
-					return value ? 1 : 0;
-				}
-				if (f!.type === "date" && value && value instanceof Date) {
-					return type === "sqlite" ? value.toISOString() : value;
-				}
-				return value;
-			}
-
-			function transformValueFromDB(value: any) {
-				function transformObject(obj: any) {
-					for (const key in obj) {
-						if (!Object.prototype.hasOwnProperty.call(obj, key)) continue;
-
-						const field = obj[key];
-
-						if (field instanceof Date && config?.type === "mysql") {
-							obj[key] = ensureUTC(field);
-						} else if (typeof field === "object" && field !== null) {
-							transformObject(field);
-						}
-					}
-				}
-
-				if (Array.isArray(value)) {
-					for (let i = 0; i < value.length; i++) {
-						const item = value[i];
-						if (typeof item === "object" && item !== null) {
-							transformObject(item);
-						}
-					}
-				} else if (typeof value === "object" && value !== null) {
-					transformObject(value);
-				}
-
-				return value;
-			}
-
-			function convertWhereClause(model: string, w?: Where[]) {
+			function convertWhereClause(model: string, w?: Where[] | undefined) {
 				if (!w)
 					return {
 						and: null,
@@ -157,64 +151,65 @@ export const kyselyAdapter = (
 				};
 
 				w.forEach((condition) => {
-					let {
+					const {
 						field: _field,
-						value,
+						value: _value,
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					const field = getFieldName({ model, field: _field });
-					value = transformValueToDB(value, model, _field);
+					const value: any = _value;
+					const field: string | any = getFieldName({
+						model,
+						field: _field,
+					});
+
 					const expr = (eb: any) => {
+						const f = `${model}.${field}`;
 						if (operator.toLowerCase() === "in") {
-							return eb(field, "in", Array.isArray(value) ? value : [value]);
+							return eb(f, "in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator.toLowerCase() === "not_in") {
-							return eb(
-								field,
-								"not in",
-								Array.isArray(value) ? value : [value],
-							);
+							return eb(f, "not in", Array.isArray(value) ? value : [value]);
 						}
 
 						if (operator === "contains") {
-							return eb(field, "like", `%${value}%`);
+							return eb(f, "like", `%${value}%`);
 						}
 
 						if (operator === "starts_with") {
-							return eb(field, "like", `${value}%`);
+							return eb(f, "like", `${value}%`);
 						}
 
 						if (operator === "ends_with") {
-							return eb(field, "like", `%${value}`);
+							return eb(f, "like", `%${value}`);
 						}
 
 						if (operator === "eq") {
-							return eb(field, "=", value);
+							return eb(f, "=", value);
 						}
 
 						if (operator === "ne") {
-							return eb(field, "<>", value);
+							return eb(f, "<>", value);
 						}
 
 						if (operator === "gt") {
-							return eb(field, ">", value);
+							return eb(f, ">", value);
 						}
 
 						if (operator === "gte") {
-							return eb(field, ">=", value);
+							return eb(f, ">=", value);
 						}
 
 						if (operator === "lt") {
-							return eb(field, "<", value);
+							return eb(f, "<", value);
 						}
 
 						if (operator === "lte") {
-							return eb(field, "<=", value);
+							return eb(f, "<=", value);
 						}
 
-						return eb(field, operator, value);
+						return eb(f, operator, value);
 					};
 
 					if (connector === "OR") {
@@ -229,63 +224,296 @@ export const kyselyAdapter = (
 					or: conditions.or.length ? conditions.or : null,
 				};
 			}
+
+			function processJoinedResults(
+				rows: any[],
+				joinConfig: JoinConfig | undefined,
+				allSelectsStr: {
+					joinModel: string;
+					joinModelRef: string;
+					fieldName: string;
+				}[],
+			) {
+				if (!joinConfig || !rows.length) {
+					return rows;
+				}
+
+				// Group rows by main model ID
+				const groupedByMainId = new Map<string, any>();
+
+				for (const currentRow of rows) {
+					// Separate main model columns from joined columns
+					const mainModelFields: Record<string, any> = {};
+					const joinedModelFields: Record<string, Record<string, any>> = {};
+
+					// Initialize joined model fields map
+					for (const [joinModel] of Object.entries(joinConfig)) {
+						joinedModelFields[getModelName(joinModel)] = {};
+					}
+
+					// Distribute all columns - collect complete objects per model
+					for (const [key, value] of Object.entries(currentRow)) {
+						const keyStr = String(key);
+						let assigned = false;
+
+						// Check if this is a joined column
+						for (const {
+							joinModel,
+							fieldName,
+							joinModelRef,
+						} of allSelectsStr) {
+							if (keyStr === `_joined_${joinModelRef}_${fieldName}`) {
+								joinedModelFields[getModelName(joinModel)]![
+									getFieldName({
+										model: joinModel,
+										field: fieldName,
+									})
+								] = value;
+								assigned = true;
+								break;
+							}
+						}
+
+						if (!assigned) {
+							mainModelFields[key] = value;
+						}
+					}
+
+					const mainId = mainModelFields.id;
+					if (!mainId) continue;
+
+					// Initialize or get existing entry for this main model
+					if (!groupedByMainId.has(mainId)) {
+						const entry: Record<string, any> = { ...mainModelFields };
+
+						// Initialize joined models based on uniqueness
+						for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+							entry[getModelName(joinModel)] =
+								joinAttr.relation === "one-to-one" ? null : [];
+						}
+
+						groupedByMainId.set(mainId, entry);
+					}
+
+					const entry = groupedByMainId.get(mainId)!;
+
+					// Add joined records to the entry
+					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+						const isUnique = joinAttr.relation === "one-to-one";
+						const limit = joinAttr.limit ?? 100;
+
+						const joinedObj = joinedModelFields[getModelName(joinModel)];
+
+						const hasData =
+							joinedObj &&
+							Object.keys(joinedObj).length > 0 &&
+							Object.values(joinedObj).some(
+								(value) => value !== null && value !== undefined,
+							);
+
+						if (isUnique) {
+							entry[getModelName(joinModel)] = hasData ? joinedObj : null;
+						} else {
+							// For arrays, append if not already there (deduplicate by id) and respect limit
+							const joinModelName = getModelName(joinModel);
+							if (Array.isArray(entry[joinModelName]) && hasData) {
+								// Check if we've reached the limit before processing
+								if (entry[joinModelName].length >= limit) {
+									continue;
+								}
+
+								// Get the id field name using getFieldName to ensure correct transformation
+								const idFieldName = getFieldName({
+									model: joinModel,
+									field: "id",
+								});
+								const joinedId = joinedObj[idFieldName];
+
+								// Only deduplicate if we have an id field
+								if (joinedId) {
+									const exists = entry[joinModelName].some(
+										(item: any) => item[idFieldName] === joinedId,
+									);
+									if (!exists && entry[joinModelName].length < limit) {
+										entry[joinModelName].push(joinedObj);
+									}
+								} else {
+									// If no id field, still add the object if it has data and limit not reached
+									if (entry[joinModelName].length < limit) {
+										entry[joinModelName].push(joinedObj);
+									}
+								}
+							}
+						}
+					}
+				}
+
+				const result = Array.from(groupedByMainId.values());
+
+				// Apply final limit to non-unique join arrays as a safety measure
+				for (const entry of result) {
+					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
+						if (joinAttr.relation !== "one-to-one") {
+							const joinModelName = getModelName(joinModel);
+							if (Array.isArray(entry[joinModelName])) {
+								const limit = joinAttr.limit ?? 100;
+								if (entry[joinModelName].length > limit) {
+									entry[joinModelName] = entry[joinModelName].slice(0, limit);
+								}
+							}
+						}
+					}
+				}
+
+				return result;
+			}
+
 			return {
 				async create({ data, model }) {
 					const builder = db.insertInto(model).values(data);
+					const returned = await withReturning(data, builder, model, []);
+					return returned;
+				},
+				async findOne({ model, where, select, join }) {
+					const { and, or } = convertWhereClause(model, where);
+					let query: any = db
+						.selectFrom((eb) => {
+							let b = eb.selectFrom(model);
+							if (and) {
+								b = b.where((eb: any) =>
+									eb.and(and.map((expr: any) => expr(eb))),
+								);
+							}
+							if (or) {
+								b = b.where((eb: any) =>
+									eb.or(or.map((expr: any) => expr(eb))),
+								);
+							}
+							return b.selectAll().as("primary");
+						})
+						.selectAll("primary");
 
-					return transformValueFromDB(
-						await withReturning(data, builder, model, []),
-					) as any;
-				},
-				async findOne({ model, where, select }) {
-					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model).selectAll();
-					if (and) {
-						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
-					}
-					if (or) {
-						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
-					}
-					const res = await query.executeTakeFirst();
-					if (!res) return null;
-					return transformValueFromDB(res) as any;
-				},
-				async findMany({ model, where, limit, offset, sortBy }) {
-					const { and, or } = convertWhereClause(model, where);
-					let query = db.selectFrom(model);
-					if (and) {
-						query = query.where((eb) => eb.and(and.map((expr) => expr(eb))));
-					}
-					if (or) {
-						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
-					}
-					if (config?.type === "mssql") {
-						if (!offset) {
-							query = query.top(limit || 100);
+					if (join) {
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+								? joinModel.split(".")
+								: [undefined, joinModel];
+
+							query = query.leftJoin(
+								`${joinModel} as join_${joinModelName}`,
+								(join: any) =>
+									join.onRef(
+										`join_${joinModelName}.${joinAttr.on.to}`,
+										"=",
+										`primary.${joinAttr.on.from}`,
+									),
+							);
 						}
-					} else {
-						query = query.limit(limit || 100);
 					}
-					if (sortBy) {
+
+					const { allSelectsStr, allSelects } = selectAllJoins(join);
+					query = query.select(allSelects);
+
+					const res = await query.execute();
+					if (!res || !Array.isArray(res) || res.length === 0) return null;
+
+					// Get the first row from the result array
+					const row = res[0];
+
+					if (join) {
+						const processedRows = processJoinedResults(
+							res,
+							join,
+							allSelectsStr,
+						);
+
+						return processedRows[0] as any;
+					}
+
+					return row as any;
+				},
+				async findMany({ model, where, limit, offset, sortBy, join }) {
+					const { and, or } = convertWhereClause(model, where);
+					let query: any = db
+						.selectFrom((eb) => {
+							let b = eb.selectFrom(model);
+
+							if (config?.type === "mssql") {
+								if (offset !== undefined) {
+									if (!sortBy) {
+										b = b.orderBy(getFieldName({ model, field: "id" }));
+									}
+									b = b.offset(offset).fetch(limit || 100);
+								} else if (limit !== undefined) {
+									b = b.top(limit);
+								}
+							} else {
+								if (limit !== undefined) {
+									b = b.limit(limit);
+								}
+								if (offset !== undefined) {
+									b = b.offset(offset);
+								}
+							}
+
+							if (sortBy?.field) {
+								b = b.orderBy(
+									`${getFieldName({ model, field: sortBy.field })}`,
+									sortBy.direction,
+								);
+							}
+
+							if (and) {
+								b = b.where((eb: any) =>
+									eb.and(and.map((expr: any) => expr(eb))),
+								);
+							}
+
+							if (or) {
+								b = b.where((eb: any) =>
+									eb.or(or.map((expr: any) => expr(eb))),
+								);
+							}
+
+							return b.selectAll().as("primary");
+						})
+						.selectAll("primary");
+
+					if (join) {
+						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							// it's possible users provide a schema name in the model name (`<schema>.<model>`)
+							const [_joinModelSchema, joinModelName] = joinModel.includes(".")
+								? joinModel.split(".")
+								: [undefined, joinModel];
+
+							query = query.leftJoin(
+								`${joinModel} as join_${joinModelName}`,
+								(join: any) =>
+									join.onRef(
+										`join_${joinModelName}.${joinAttr.on.to}`,
+										"=",
+										`primary.${joinAttr.on.from}`,
+									),
+							);
+						}
+					}
+
+					const { allSelectsStr, allSelects } = selectAllJoins(join);
+
+					query = query.select(allSelects);
+
+					if (sortBy?.field) {
 						query = query.orderBy(
-							getFieldName({ model, field: sortBy.field }),
+							`${getFieldName({ model, field: sortBy.field })}`,
 							sortBy.direction,
 						);
 					}
-					if (offset) {
-						if (config?.type === "mssql") {
-							if (!sortBy) {
-								query = query.orderBy(getFieldName({ model, field: "id" }));
-							}
-							query = query.offset(offset).fetch(limit || 100);
-						} else {
-							query = query.offset(offset);
-						}
-					}
 
-					const res = await query.selectAll().execute();
+					const res = await query.execute();
+
 					if (!res) return [];
-					return transformValueFromDB(res) as any;
+					if (join) return processJoinedResults(res, join, allSelectsStr);
+					return res;
 				},
 				async update({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -297,9 +525,7 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return transformValueFromDB(
-						await withReturning(values as any, query, model, where),
-					);
+					return await withReturning(values as any, query, model, where);
 				},
 				async updateMany({ model, where, update: values }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -310,8 +536,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					const res = await query.execute();
-					return res.length;
+					const res = (await query.executeTakeFirst()).numUpdatedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				async count({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -326,7 +554,13 @@ export const kyselyAdapter = (
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
 					const res = await query.execute();
-					return res[0]!.count as number;
+					if (typeof res[0]!.count === "number") {
+						return res[0]!.count;
+					}
+					if (typeof res[0]!.count === "bigint") {
+						return Number(res[0]!.count);
+					}
+					return parseInt(res[0]!.count);
 				},
 				async delete({ model, where }) {
 					const { and, or } = convertWhereClause(model, where);
@@ -349,7 +583,10 @@ export const kyselyAdapter = (
 					if (or) {
 						query = query.where((eb) => eb.or(or.map((expr) => expr(eb))));
 					}
-					return (await query.execute()).length;
+					const res = (await query.executeTakeFirst()).numDeletedRows;
+					return res > Number.MAX_SAFE_INTEGER
+						? Number.MAX_SAFE_INTEGER
+						: Number(res);
 				},
 				options: config,
 			};
@@ -363,32 +600,39 @@ export const kyselyAdapter = (
 			usePlural: config?.usePlural,
 			debugLogs: config?.debugLogs,
 			supportsBooleans:
-				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
+				config?.type === "sqlite" ||
+				config?.type === "mssql" ||
+				config?.type === "mysql" ||
+				!config?.type
 					? false
 					: true,
 			supportsDates:
 				config?.type === "sqlite" || config?.type === "mssql" || !config?.type
 					? false
 					: true,
-			supportsJSON: false,
-			transaction:
-				(config?.transaction ?? false)
-					? (cb) =>
-							db.transaction().execute((trx) => {
-								const adapter = createAdapterFactory({
-									config: adapterOptions!.config,
-									adapter: createCustomAdapter(trx),
-								})(lazyOptions!);
-								return cb(adapter);
-							})
+			supportsJSON:
+				config?.type === "postgres"
+					? true // even if there is JSON support, only pg supports passing direct json, all others must stringify
 					: false,
+			supportsArrays: false, // Even if field supports JSON, we must pass stringified arrays to the database.
+			supportsUUIDs: config?.type === "postgres" ? true : false,
+			transaction: config?.transaction
+				? (cb) =>
+						db.transaction().execute((trx) => {
+							const adapter = createAdapterFactory({
+								config: adapterOptions!.config,
+								adapter: createCustomAdapter(trx),
+							})(lazyOptions!);
+							return cb(adapter);
+						})
+				: false,
 		},
 		adapter: createCustomAdapter(db),
 	};
 
 	const adapter = createAdapterFactory(adapterOptions);
 
-	return (options: BetterAuthOptions): Adapter => {
+	return (options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
 		lazyOptions = options;
 		return adapter(options);
 	};

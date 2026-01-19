@@ -1,9 +1,9 @@
-import { Command } from "commander";
-import os from "os";
-import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import path from "path";
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import chalk from "chalk";
+import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
 import { getPackageInfo } from "../utils/get-package-info";
 
@@ -328,7 +328,7 @@ async function getBetterAuthInfo(
 			const config = await getConfig({
 				cwd: projectRoot,
 				configPath,
-				shouldThrowOnError: false,
+				shouldThrowOnError: true,
 			});
 			const packageInfo = await getPackageInfo();
 			const betterAuthVersion =

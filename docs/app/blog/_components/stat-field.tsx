@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
 import clsx from "clsx";
-import { animate, Segment } from "motion/react";
+import type { Segment } from "motion/react";
+import { animate } from "motion/react";
+import { useEffect, useId, useRef } from "react";
 
 type Star = [x: number, y: number, dim?: boolean, blur?: boolean];
 
@@ -74,17 +75,17 @@ function Star({
 	blurId: string;
 	point: Star;
 }) {
-	let groupRef = useRef<React.ElementRef<"g">>(null);
-	let ref = useRef<React.ElementRef<"circle">>(null);
+	const groupRef = useRef<React.ElementRef<"g">>(null);
+	const ref = useRef<React.ElementRef<"circle">>(null);
 
 	useEffect(() => {
 		if (!groupRef.current || !ref.current) {
 			return;
 		}
 
-		let delay = Math.random() * 2;
+		const delay = Math.random() * 2;
 
-		let animations = [
+		const animations = [
 			animate(groupRef.current, { opacity: 1 }, { duration: 4, delay }),
 			animate(
 				ref.current,
@@ -100,7 +101,7 @@ function Star({
 		];
 
 		return () => {
-			for (let animation of animations) {
+			for (const animation of animations) {
 				animation.cancel();
 			}
 		};
@@ -131,22 +132,22 @@ function Constellation({
 	points: Array<Star>;
 	blurId: string;
 }) {
-	let ref = useRef<React.ElementRef<"path">>(null);
-	let uniquePoints = points.filter(
+	const ref = useRef<React.ElementRef<"path">>(null);
+	const uniquePoints = points.filter(
 		(point, pointIndex) =>
 			points.findIndex((p) => String(p) === String(point)) === pointIndex,
 	);
-	let isFilled = uniquePoints.length !== points.length;
+	const isFilled = uniquePoints.length !== points.length;
 
 	useEffect(() => {
 		if (!ref.current) {
 			return;
 		}
 
-		let sequence: Array<Segment> = [
+		const sequence: Array<Segment> = [
 			[
 				ref.current,
-				{ strokeDashoffset: 0, visibility: "visible" },
+				{ strokeDashoffset: 0, opacity: 1 },
 				{ duration: 5, delay: Math.random() * 3 + 2 },
 			],
 		];
@@ -159,7 +160,7 @@ function Constellation({
 			]);
 		}
 
-		let animation = animate(sequence);
+		const animation = animate(sequence);
 
 		return () => {
 			animation.cancel();
@@ -177,7 +178,7 @@ function Constellation({
 				pathLength={1}
 				fill="transparent"
 				d={`M ${points.join("L")}`}
-				className="invisible"
+				style={{ opacity: 0 }}
 			/>
 			{uniquePoints.map((point, pointIndex) => (
 				<Star key={pointIndex} point={point} blurId={blurId} />
@@ -187,7 +188,7 @@ function Constellation({
 }
 
 export function StarField({ className }: { className?: string }) {
-	let blurId = useId();
+	const blurId = useId();
 
 	return (
 		<svg
@@ -195,7 +196,7 @@ export function StarField({ className }: { className?: string }) {
 			fill="white"
 			aria-hidden="true"
 			className={clsx(
-				"pointer-events-none absolute w-[55.0625rem] origin-top-right rotate-[30deg] overflow-visible opacity-70",
+				"pointer-events-none absolute w-[55.0625rem] max-w-[100vw] origin-top-right rotate-[30deg] overflow-visible opacity-70",
 				className,
 			)}
 		>

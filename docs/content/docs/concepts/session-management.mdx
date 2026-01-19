@@ -9,7 +9,8 @@ Better Auth manages session using a traditional cookie-based session management.
 
 The session table stores the session data. The session table has the following fields:
 
-- `id`: The session token. Which is also used as the session cookie.
+- `id`: Unique identifier for the session.
+- `token`: The session token. Which is also used as the session cookie.
 - `userId`: The user ID of the user.
 - `expiresAt`: The expiration date of the session.
 - `ipAddress`: The IP address of the user.
@@ -157,7 +158,7 @@ await authClient.changePassword({
 
 ### Cookie Cache
 
-Calling your database every time `useSession` or `getSession` invoked isn’t ideal, especially if sessions don’t change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
+Calling your database every time `useSession` or `getSession` is invoked isn't ideal, especially if sessions don't change frequently. Cookie caching handles this by storing session data in a short-lived, signed cookie—similar to how JWT access tokens are used with refresh tokens.
 
 When cookie caching is enabled, the server can check session validity from the cookie itself instead of hitting the database each time. The cookie is signed to prevent tampering, and a short `maxAge` ensures that the session data gets refreshed regularly. If a session is revoked or expires, the cookie will be invalidated automatically.
 
@@ -170,11 +171,62 @@ export const auth = betterAuth({
     session: {
         cookieCache: {
             enabled: true,
-            maxAge: 5 * 60 // Cache duration in seconds
+            maxAge: 5 * 60 // Cache duration in seconds (5 minutes)
         }
     }
 });
 ```
+
+<Callout type="info">
+**Notes**
+
+When `cookieCache` is enabled, revoked sessions may remain active on other devices until the cookie cache expires (`maxAge`). This is because:
+
+- Cookie cache stores session data in the client's browser
+- The server cannot directly delete cookies from other devices
+- Sessions are only revalidated when the cache expires or `disableCookieCache: true` is used
+
+**If immediate session revocation is critical:**
+- Disable `cookieCache` entirely, or
+- Set a shorter `maxAge` (e.g. 60 seconds), or
+- Use `disableCookieCache: true` for sensitive operations
+</Callout>
+
+#### Cookie Cache Strategies
+
+Better Auth supports three different encoding strategies for cookie cache:
+
+- **`compact`** (default): Uses base64url encoding with HMAC-SHA256 signature. Most compact format with no JWT spec overhead. Best for performance and size.
+- **`jwt`**: Standard JWT with HMAC-SHA256 signature (HS256). Signed but not encrypted - readable by anyone but tamper-proof. Follows JWT spec for interoperability.
+- **`jwe`**: Uses JWE (JSON Web Encryption) with A256CBC-HS512 and HKDF key derivation. Fully encrypted tokens - neither readable nor tamperable. Most secure but largest size.
+
+**Comparison:**
+
+| Strategy | Size | Security | Readable | Interoperable | Use Case |
+|----------|------|----------|----------|---------------|----------|
+| `compact` | Smallest | Good (signed) | Yes | No | Performance-critical, internal use |
+| `jwt` | Medium | Good (signed) | Yes | Yes | Need JWT compatibility, external integrations |
+| `jwe` | Largest | Best (encrypted) | No | Yes | Sensitive data, maximum security |
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 5 * 60,
+            strategy: "compact" // or "jwt" or "jwe"
+        }
+    }
+});
+```
+
+**Note:** All strategies are cryptographically secure and prevent tampering. The main differences are size, readability, and JWT spec compliance.
+
+**When to use each:**
+
+- **Use `compact`** when you need maximum performance and smallest cookie size. Best for most applications where cookies are only used internally by Better Auth.
+- **Use `jwt`** when you need JWT compatibility for external systems, or when you want standard JWT tokens that can be verified by third-party tools. The tokens are readable (base64-encoded JSON) but tamper-proof.
+- **Use `jwe`** when you need maximum security and want to hide session data from the client. The tokens are fully encrypted and cannot be read without the secret key. Use this for sensitive data or compliance requirements.
 
 If you want to disable returning from the cookie cache when fetching the session, you can pass `disableCookieCache:true` this will force the server to fetch the session from the database and also refresh the cookie cache.
 
@@ -195,6 +247,168 @@ await auth.api.getSession({
 });
 ```
 
+## Sessions in Secondary Storage
+
+By default, if you provide a [secondary storage](/docs/concepts/database#secondary-storage) in your auth configuration, the session will be stored in the secondary storage.
+
+```ts
+betterAuth({
+  // ... other options
+  secondaryStorage: {
+    // Your implementation here
+  },
+});
+```
+
+### Storing Sessions in the Database
+
+By default, Better Auth already stores sessions in the database, however if you provide a secondary storage,
+Better Auth will store sessions in the secondary storage instead of the database.
+
+You can choose to store sessions in the database instead of secondary storage by passing
+`storeSessionInDatabase: true` in the session configuration.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    secondaryStorage: { /** your secondary storage implementation here */ },
+    session: { // [!code highlight]
+        storeSessionInDatabase: true, // [!code highlight]
+    } // [!code highlight]
+});
+```
+
+### Preserving Sessions
+
+When a session is revoked, it will be removed from the secondary storage, however if you enable `preserveSessionInDatabase`,
+the session will be preserved in the database and not be deleted.
+
+This is useful if you want to keep track of the sessions that have been revoked.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    secondaryStorage: { /** your secondary storage implementation here */ },
+    session: { // [!code highlight]
+        preserveSessionInDatabase: true, // [!code highlight]
+    } // [!code highlight]
+});
+```
+
+
+## Stateless Session Management
+
+Better Auth supports stateless session management without any database. This means that the session data is stored in a signed/encrypted cookie and the server never queries a database to validate sessions - it simply verifies the cookie signature and checks expiration.
+
+### Basic Stateless Setup
+
+If you don't pass a database configuration, Better Auth will automatically enable stateless mode.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    // No database configuration
+    socialProviders: {
+        google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        },
+    },
+});
+```
+
+To manually enable stateless mode, you need to configure `cookieCache` and `account` with the following options:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 7 * 24 * 60 * 60, // 7 days cache duration
+            strategy: "jwe", // can be "jwt" or "compact"
+            refreshCache: true, // Enable stateless refresh
+        },
+    },
+    account: {
+        storeStateStrategy: "cookie",
+        storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
+    }
+});
+```
+
+<Callout type="info">
+If you don't provide a database, by default we provide the above configuration for you.
+</Callout>
+
+### Understanding `refreshCache`
+
+The `refreshCache` option controls automatic cookie refresh **before expiry** without querying any database:
+
+- **`false`** (default): No automatic refresh. When the cookie cache expires (reaches `maxAge`), it will attempt to fetch from the database if available.
+- **`true`**: Enable automatic refresh with default settings. Refreshes when 80% of `maxAge` is reached (20% time remaining).
+- **`object`**: Custom refresh configuration with `updateAge` property.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            enabled: true,
+            maxAge: 300, // 5 minutes
+            refreshCache: {
+                updateAge: 60 // Refresh when 60 seconds remain before expiry
+            }
+        }
+    }
+});
+```
+
+### Versioning Stateless Sessions
+
+One of the biggest drawbacks of stateless sessions is that you can't invalidate session easily. To solve this with better auth, if you would like to invalidate all sessions, you can change the version of the cookie cache and re-deploy your application.
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    session: {
+        cookieCache: {
+            version: "2", // [!code highlight] Change the version to invalidate all sessions
+        }
+    }
+});
+```
+
+<Callout type="warning">
+This will invalidate all sessions that don't match the new version.
+</Callout>
+
+### Stateless with Secondary Storage
+
+You can combine stateless sessions with secondary storage (Redis, etc.) for the best of both worlds:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { redis } from "./redis"
+
+export const auth = betterAuth({
+    // No primary database needed
+    secondaryStorage: {
+        get: async (key) => await redis.get(key),
+        set: async (key, value, ttl) => await redis.set(key, value, "EX", ttl),
+        delete: async (key) => await redis.del(key)
+    },
+    session: {
+        cookieCache: {
+            maxAge: 5 * 60, // [!code highlight] 5 minutes (short-lived cookie)
+            refreshCache: false // [!code highlight] Disable stateless refresh
+        }
+    }
+});
+```
+
+This setup:
+- Uses cookies for session validation (no DB queries)
+- Uses Redis for storing session data and refreshing the cookie cache before expiry
+- You can revoke sessions from the secondary storage and the cookie cache will be invalidated on refresh
 
 ## Customizing Session Response
 

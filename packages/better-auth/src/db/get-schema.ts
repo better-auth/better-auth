@@ -1,10 +1,10 @@
-import { getAuthTables } from ".";
-import type { BetterAuthOptions } from "../types";
+import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
 
 export function getSchema(config: BetterAuthOptions) {
 	const tables = getAuthTables(config);
-	let schema: Record<
+	const schema: Record<
 		string,
 		{
 			fields: Record<string, DBFieldAttribute>;
@@ -14,13 +14,14 @@ export function getSchema(config: BetterAuthOptions) {
 	for (const key in tables) {
 		const table = tables[key]!;
 		const fields = table.fields;
-		let actualFields: Record<string, DBFieldAttribute> = {};
+		const actualFields: Record<string, DBFieldAttribute> = {};
 		Object.entries(fields).forEach(([key, field]) => {
 			actualFields[field.fieldName || key] = field;
 			if (field.references) {
 				const refTable = tables[field.references.model];
 				if (refTable) {
 					actualFields[field.fieldName || key]!.references = {
+						...field.references,
 						model: refTable.modelName,
 						field: field.references.field,
 					};

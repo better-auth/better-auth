@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-
-export async function POST(request: NextRequest) {
+import { NextResponse } from "next/server";
+export const maxDuration = 300;
+export async function POST(request: Request) {
 	try {
 		const body = await request.json();
 		const gurubasePayload = {
@@ -23,6 +23,7 @@ export async function POST(request: NextRequest) {
 		);
 		if (!response.ok) {
 			const errorText = await response.text();
+			console.error("Gurubase API error:", response.status, errorText);
 			if (response.status === 400) {
 				return NextResponse.json(
 					{

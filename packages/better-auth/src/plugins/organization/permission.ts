@@ -32,14 +32,14 @@ export type PermissionExclusive =
 			 * @deprecated Use `permissions` instead
 			 */
 			permission: { [key: string]: string[] };
-			permissions?: never;
+			permissions?: never | undefined;
 	  }
 	| {
 			permissions: { [key: string]: string[] };
-			permission?: never;
+			permission?: never | undefined;
 	  };
 
-export let cacheAllRoles = new Map<
+export const cacheAllRoles = new Map<
 	string,
 	{
 		[x: string]: Role<any> | undefined;
@@ -49,5 +49,5 @@ export let cacheAllRoles = new Map<
 export type HasPermissionBaseInput = {
 	role: string;
 	options: OrganizationOptions;
-	allowCreatorAllPermissions?: boolean;
+	allowCreatorAllPermissions?: boolean | undefined;
 } & PermissionExclusive;

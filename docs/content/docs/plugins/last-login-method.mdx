@@ -344,7 +344,7 @@ export const auth = betterAuth({
                 }
                 
                 // Track magic link authentication
-                if (ctx.path === "/verify-magic-link") {
+                if (ctx.path === "/magic-link/verify") {
                     return "magic-link"
                 }
                 
@@ -361,4 +361,31 @@ export const auth = betterAuth({
 })
 ```
 
+### Usage with Expo
 
+When using Better Auth with Expo, make sure to import the client plugin from `@better-auth/expo/plugins` rather than from `better-auth/plugins/client`. This ensures the last login method is stored correctly using the configured storage.
+
+```ts
+import { createAuthClient } from "better-auth/react"
+import { expoClient } from "@better-auth/expo"
+import { lastLoginMethodClient } from "@better-auth/expo/plugins" // [!code highlight]
+import * as SecureStore from "expo-secure-store"
+
+export const authClient = createAuthClient({
+  plugins: [
+    expoClient({
+      scheme: "myapp",
+      storagePrefix: "myapp",
+      storage: SecureStore,
+    }),
+    lastLoginMethodClient({
+      storagePrefix: "myapp",
+      storage: SecureStorage,
+    })
+  ]
+})
+```
+
+<Callout type="info">
+    In Expo only apps, where browser support isn’t needed, you can omit the server plugin and rely solely on the client plugin.
+</Callout>

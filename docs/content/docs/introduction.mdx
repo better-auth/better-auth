@@ -21,11 +21,50 @@ Better Auth aims to be the most comprehensive auth library. It provides a wide r
 
 Better Auth exposes an `LLMs.txt` that helps AI models understand how to integrate and interact with your authentication system. See it at [https://better-auth.com/llms.txt](https://better-auth.com/llms.txt).
 
+### Skills
+
+Better Auth provides skills that can be added to your AI coding assistant to help it understand Better Auth best practices and implementation patterns.
+
+```bash title="terminal"
+npx skills add better-auth/skills
+```
+
 ### MCP
 
 Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
 
 <AddToCursor />
+
+#### CLI Options
+
+Use the Better Auth CLI to easily add the MCP server to your preferred client:
+
+<Tabs items={["Cursor", "Claude Code", "Open Code", "Manual"]}>
+    <Tab value="Cursor">
+      ```bash title="terminal"
+      npx @better-auth/cli mcp --cursor
+      ```
+    </Tab>
+    <Tab value="Claude Code">
+      ```bash title="terminal"
+      npx @better-auth/cli mcp --claude-code
+      ```
+    </Tab>
+    <Tab value="Open Code">
+      ```bash title="terminal"
+      npx @better-auth/cli mcp --open-code
+      ```
+    </Tab>
+    <Tab value="Manual">
+      ```bash title="terminal"
+      npx @better-auth/cli mcp --manual
+      ```
+    </Tab>
+</Tabs>
+
+#### Manual Configuration
+
+Alternatively, you can manually configure the MCP server for each client:
 
 <Tabs items={["Claude Code", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
@@ -38,7 +77,7 @@ Better Auth provides an MCP server so you can use it with any AI model that supp
         {
             "$schema": "https://opencode.ai/config.json",
             "mcp": {
-                "Better Auth": {
+                "better-auth": {
                     "type": "remote",
                     "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp",
                     "enabled": true,
@@ -50,7 +89,7 @@ Better Auth provides an MCP server so you can use it with any AI model that supp
     <Tab value="Manual">
      ```json title="mcp.json"
     {
-        "Better Auth": {
+        "better-auth": {
             "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp"
         }
     }
@@ -61,3 +100,4 @@ Better Auth provides an MCP server so you can use it with any AI model that supp
 <Callout>
 We provide a first‑party MCP, powered by [Chonkie](https://chonkie.ai). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
 </Callout>
+

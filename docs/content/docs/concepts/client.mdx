@@ -137,21 +137,21 @@ In addition to the standard methods, the client provides hooks to easily access 
         <Tab value="Svelte">
             ```svelte title="user.svelte"
             <script lang="ts">
-            import { client } from "$lib/client";
-            const session = client.useSession();
+            import { authClient } from "$lib/auth-client";
+            const session = authClient.useSession();
             </script>
 
             <div
                 style="display: flex; flex-direction: column; gap: 10px; border-radius: 10px; border: 1px solid #4B453F; padding: 20px; margin-top: 10px;"
             >
                 <div>
-                {#if $session}
+                {#if $session.data}
                     <div>
                     <p>
-                        {$session?.data?.user.name}
+                        {$session.data.user.name}
                     </p>
                     <p>
-                        {$session?.data?.user.email}
+                        {$session.data.user.email}
                     </p>
                     <button
                         onclick={async () => {
@@ -179,11 +179,11 @@ In addition to the standard methods, the client provides hooks to easily access 
 
         <Tab value="Solid">
             ```tsx title="user.tsx"
-            import { client } from "~/lib/client";
+            import { authClient } from "~/lib/auth-client";
             import { Show } from 'solid-js';
 
             export default function Home() {
-                const session = client.useSession()
+                const session = authClient.useSession()
                 return (
                     <Show
                         when={session()}
@@ -240,6 +240,49 @@ await authClient.signIn.email({
 })
 ```
 
+### Disabling Hook Rerenders
+
+Certain endpoints, upon successful response, will trigger atom signals and cause hooks like `useSession` to rerender.
+This is useful for keeping your UI in sync with authentication state changes.
+
+However, there are cases where you might want to make an endpoint call without triggering hook rerenders.
+For example, when updating user preferences that don't affect the session, or when you want to manually control when hooks update.
+
+You can disable hook rerenders for a specific endpoint call by setting `disableSignal: true` in the fetch options:
+
+```ts title="auth-client.ts"
+// As the second argument
+await authClient.updateUser({
+    name: "New Name"
+}, {
+    disableSignal: true
+})
+
+// Or within fetchOptions
+await authClient.updateUser({
+    name: "New Name",
+    fetchOptions: {
+        disableSignal: true
+    }
+})
+```
+
+When `disableSignal` is set to `true`, the endpoint call will complete successfully,
+but hooks like `useSession` won't automatically rerender. You can manually trigger a refetch if needed:
+
+```ts title="auth-client.ts"
+const { refetch } = authClient.useSession()
+
+await authClient.updateUser({
+    name: "New Name"
+}, {
+    disableSignal: true,
+    onSuccess() {
+        // Manually refetch session if needed
+        refetch()
+    }
+})
+```
 
 ### Handling Errors
 
@@ -316,7 +359,7 @@ type ErrorTypes = Partial<
 const errorCodes = {
 	USER_ALREADY_EXISTS: {
 		en: "user already registered",
-		es: "usuario ya registrada",
+		es: "usuario ya registrado",
 	},
 } satisfies ErrorTypes;
 

@@ -22,7 +22,7 @@ Install the NestJS integration library:
 ## Basic Setup
 
 <Callout type="warn">
-Currently, Better Auth's NestJS integration **only supports Express** and does not work with Fastify.
+Currently the library has beta support for Fastify, if you experience any issues with it, please open an issue at [nestjs-better-auth](https://github.com/ThallesP/nestjs-better-auth).
 </Callout>
 
 ### 1. Disable Body Parser
@@ -53,26 +53,39 @@ import { auth } from "./auth"; // Your Better Auth instance
 
 @Module({
   imports: [
-    AuthModule.forRoot(auth),
+    AuthModule.forRoot({ auth }),
   ],
 })
 export class AppModule {}
 ```
 
-### 3. Protect Routes
+### 3. Route Protection
 
-Use the `AuthGuard` to protect your routes:
+**Global by default**: An `AuthGuard` is registered globally by this module. All routes are protected unless you explicitly allow access.
+
+Use the `Session` decorator to access the user session:
 
 ```ts title="user.controller.ts"
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { AuthGuard, Session, UserSession } from '@thallesp/nestjs-better-auth';
+import { Controller, Get } from '@nestjs/common';
+import { Session, UserSession, AllowAnonymous, OptionalAuth } from '@thallesp/nestjs-better-auth';
 
 @Controller('users')
-@UseGuards(AuthGuard)
 export class UserController {
   @Get('me')
   async getProfile(@Session() session: UserSession) {
     return { user: session.user };
+  }
+
+  @Get('public')
+  @AllowAnonymous() // Allow anonymous access
+  async getPublic() {
+    return { message: 'Public route' };
+  }
+
+  @Get('optional')
+  @OptionalAuth() // Authentication is optional
+  async getOptional(@Session() session: UserSession) {
+    return { authenticated: !!session };
   }
 }
 ```

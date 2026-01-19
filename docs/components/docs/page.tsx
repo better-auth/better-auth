@@ -1,33 +1,28 @@
-import type { TableOfContents } from "fumadocs-core/server";
-import {
-	type AnchorHTMLAttributes,
-	forwardRef,
-	type HTMLAttributes,
-	type ReactNode,
-} from "react";
-import { type AnchorProviderProps, AnchorProvider } from "fumadocs-core/toc";
-import { replaceOrDefault } from "./shared";
+import type { AnchorProviderProps, TableOfContents } from "fumadocs-core/toc";
+import { AnchorProvider } from "fumadocs-core/toc";
+import { I18nLabel } from "fumadocs-ui/contexts/i18n";
+import { Edit, Text } from "lucide-react";
+import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
 import { cn } from "../../lib/utils";
+import type { TOCProps } from "./layout/toc";
+import {
+	TOCItems,
+	TOCScrollArea,
+	Toc,
+	TocPopoverContent,
+	TocPopoverTrigger,
+} from "./layout/toc";
+import type { BreadcrumbProps, FooterProps } from "./page.client";
 import {
 	Footer,
-	type FooterProps,
 	LastUpdate,
-	TocPopoverHeader,
-	type BreadcrumbProps,
-	PageBody,
 	PageArticle,
+	PageBody,
+	TocPopoverHeader,
 } from "./page.client";
-import {
-	Toc,
-	TOCItems,
-	TocPopoverTrigger,
-	TocPopoverContent,
-	type TOCProps,
-	TOCScrollArea,
-} from "./layout/toc";
+import { replaceOrDefault } from "./shared";
 import { buttonVariants } from "./ui/button";
-import { Edit, Text } from "lucide-react";
-import { I18nLabel } from "fumadocs-ui/provider";
 
 type TableOfContentOptions = Omit<TOCProps, "items" | "children"> &
 	Pick<AnchorProviderProps, "single"> & {
@@ -43,11 +38,11 @@ interface EditOnGitHubOptions
 	repo: string;
 
 	/**
-	 * SHA or ref (branch or tag) name.
+	 * Branch name.
 	 *
-	 * @defaultValue main
+	 * @defaultValue canary
 	 */
-	sha?: string;
+	branch?: string;
 
 	/**
 	 * File path in the repo
@@ -209,11 +204,11 @@ export function DocsPage({
 function EditOnGitHub({
 	owner,
 	repo,
-	sha,
+	branch = "canary",
 	path,
 	...props
 }: EditOnGitHubOptions) {
-	const href = `https://github.com/${owner}/${repo}/blob/${sha}/${path.startsWith("/") ? path.slice(1) : path}`;
+	const href = `https://github.com/${owner}/${repo}/blob/${branch}/${path.startsWith("/") ? path.slice(1) : path}`;
 
 	return (
 		<a

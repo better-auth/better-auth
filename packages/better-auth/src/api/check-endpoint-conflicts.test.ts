@@ -1,11 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { checkEndpointConflicts } from "./index";
-import type { BetterAuthOptions, BetterAuthPlugin } from "../types";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
+import type { InternalLogger, LogLevel } from "@better-auth/core/env";
 import { createEndpoint } from "better-call";
-import type { InternalLogger, LogLevel } from "../utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { checkEndpointConflicts, createAuthEndpoint } from "./index";
 
-export let mockLoggerLevel: LogLevel = "debug";
-export const mockLogger = {
+let mockLoggerLevel: LogLevel = "debug";
+const mockLogger = {
 	error: vi.fn(),
 	warn: vi.fn(),
 	info: vi.fn(),
@@ -439,6 +439,27 @@ describe("checkEndpointConflicts", () => {
 	it("should handle options with empty plugins array", () => {
 		const options: BetterAuthOptions = {
 			plugins: [],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should handle plugins with endpoints that don't have a path", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: createAuthEndpoint({ method: "GET" }, async () => ({
+					ok: true,
+				})),
+				endpoint2: createAuthEndpoint({ method: "GET" }, async () => ({
+					ok: true,
+				})),
+			},
+		};
+		const options: BetterAuthOptions = {
+			plugins: [plugin1],
 		};
 
 		checkEndpointConflicts(options, mockLogger);

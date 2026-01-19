@@ -1,45 +1,41 @@
-import { source } from "@/lib/source";
-import { DocsPage, DocsBody, DocsTitle } from "@/components/docs/page";
-import { notFound } from "next/navigation";
-import { absoluteUrl } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { cn } from "@/lib/utils";
-import { Step, Steps } from "fumadocs-ui/components/steps";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { TypeTable } from "fumadocs-ui/components/type-table";
-import { Features } from "@/components/blocks/features";
-import { ForkButton } from "@/components/fork-button";
-import Link from "next/link";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import {
-	CodeBlock,
-	Pre,
-	CodeBlockTab,
-	CodeBlockTabsList,
-	CodeBlockTabs,
-} from "@/components/ui/code-block";
-import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { AutoTypeTable } from "fumadocs-typescript/ui";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
-import { Endpoint } from "@/components/endpoint";
-import { DividerText } from "@/components/divider-text";
+import { File, Files, Folder } from "fumadocs-ui/components/files";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import Link from "next/link";
+import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
-import { LLMCopyButton, ViewOptions } from "./page.client";
+import { Features } from "@/components/blocks/features";
+import { DividerText } from "@/components/divider-text";
+import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
+import { Endpoint } from "@/components/endpoint";
+import { ForkButton } from "@/components/fork-button";
 import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
-import { Callout } from "@/components/ui/callout";
+import { GenerateSecret } from "@/components/generate-secret";
 import { AddToCursor } from "@/components/mdx/add-to-cursor";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { Callout } from "@/components/ui/callout";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { source } from "@/lib/source";
+import { absoluteUrl, cn } from "@/lib/utils";
+import { LLMCopyButton, ViewOptions } from "./page.client";
 export default async function Page({
 	params,
 }: {
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
+	let page = source.getPage(slug);
 
 	if (!page) {
-		notFound();
+		if (slug?.[0] === "errors") {
+			page = source.getPage(["errors", "unknown"])!;
+		} else {
+			return notFound();
+		}
 	}
 
 	const MDX = page.data.body;
@@ -51,7 +47,7 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: "main",
+				branch: "canary",
 				path: `/docs/content/docs/${page.path}`,
 			}}
 			tableOfContent={{
@@ -64,7 +60,7 @@ export default async function Page({
 					<LLMCopyButton />
 					<ViewOptions
 						markdownUrl={`${page.url}.mdx`}
-						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.file.path}`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/main/docs/content/docs/${page.path}`}
 					/>
 				</div>
 			)}
@@ -72,38 +68,6 @@ export default async function Page({
 				<MDX
 					components={{
 						...defaultMdxComponents,
-						CodeBlockTabs: (props) => {
-							return (
-								<CodeBlockTabs
-									{...props}
-									className="p-0 border-0 rounded-lg bg-fd-secondary"
-								>
-									<div {...props}>{props.children}</div>
-								</CodeBlockTabs>
-							);
-						},
-						CodeBlockTabsList: (props) => {
-							return (
-								<CodeBlockTabsList
-									{...props}
-									className="pb-0 my-0 rounded-lg bg-fd-secondary"
-								/>
-							);
-						},
-						CodeBlockTab: (props) => {
-							return <CodeBlockTab {...props} className="p-0 m-0 rounded-lg" />;
-						},
-						pre: (props) => {
-							return (
-								<CodeBlock className="rounded-xl bg-fd-muted" {...props}>
-									<div style={{ minWidth: "100%", display: "table" }}>
-										<Pre className="px-0 py-3 bg-fd-muted focus-visible:outline-none">
-											{props.children}
-										</Pre>
-									</div>
-								</CodeBlock>
-							);
-						},
 						Link: ({
 							className,
 							...props
@@ -170,12 +134,17 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
-	const page = source.getPage(slug);
-	if (page == null) notFound();
+	let page = source.getPage(slug);
+	if (page == null) {
+		if (slug?.[0] === "errors") {
+			page = source.getPage(["errors", "unknown"])!;
+		} else {
+			return notFound();
+		}
+	}
 	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(`${baseUrl}/api/og`);
 	const { title, description } = page.data;
-	const pageSlug = page.file.path;
 	url.searchParams.set("type", "Documentation");
 	url.searchParams.set("mode", "dark");
 	url.searchParams.set("heading", `${title}`);
@@ -187,7 +156,7 @@ export async function generateMetadata({
 			title,
 			description,
 			type: "website",
-			url: absoluteUrl(`docs/${pageSlug}`),
+			url: absoluteUrl(page.url),
 			images: [
 				{
 					url: url.toString(),

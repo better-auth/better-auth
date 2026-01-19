@@ -1,11 +1,13 @@
-import { expect, test, describe, beforeAll } from "vitest";
-import type { Adapter, BetterAuthOptions, User } from "../types";
-import { generateId } from "../utils";
+import type { Awaitable, BetterAuthOptions } from "@better-auth/core";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { generateId } from "@better-auth/core/utils/id";
+import { beforeAll, describe, expect, test } from "vitest";
+import type { User } from "../types";
 
 interface AdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Awaitable<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof adapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -13,7 +15,7 @@ interface AdapterTestOptions {
 interface NumberIdAdapterTestOptions {
 	getAdapter: (
 		customOptions?: Omit<BetterAuthOptions, "database">,
-	) => Promise<Adapter>;
+	) => Promise<DBAdapter<BetterAuthOptions>>;
 	disableTests?: Partial<Record<keyof typeof numberIdAdapterTests, boolean>>;
 	testPrefix?: string;
 }
@@ -65,12 +67,18 @@ const numberIdAdapterTests = {
 // biome-ignore lint/performance/noDelete: testing propose
 delete numberIdAdapterTests.SHOULD_NOT_THROW_ON_DELETE_RECORD_NOT_FOUND;
 
+/**
+ * @deprecated Use `testAdapter` instead.
+ */
 function adapterTest(
 	{ getAdapter, disableTests: disabledTests, testPrefix }: AdapterTestOptions,
 	internalOptions?: {
 		predefinedOptions: Omit<BetterAuthOptions, "database">;
 	},
 ) {
+	console.warn(
+		"This test function is deprecated and will be removed in the future. Use `testAdapter` instead.",
+	);
 	const adapter = async () =>
 		await getAdapter(internalOptions?.predefinedOptions);
 
@@ -90,7 +98,7 @@ function adapterTest(
 	const getUniqueEmail = (base: string) => `${testRunId}_${base}`;
 
 	//@ts-expect-error - intentionally omitting id
-	let user: {
+	const user: {
 		name: string;
 		email: string;
 		emailVerified: boolean;
@@ -1061,7 +1069,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 		await opts.getAdapter({
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 		});
@@ -1143,7 +1151,7 @@ export function runNumberIdAdapterTest(opts: NumberIdAdapterTestOptions) {
 				predefinedOptions: {
 					advanced: {
 						database: {
-							useNumberId: true,
+							generateId: "serial",
 						},
 					},
 				},

@@ -1,81 +1,102 @@
-import { describe, expect, it, vi } from "vitest";
-import { anonymous } from ".";
+import type { GoogleProfile } from "@better-auth/core/social-providers";
+import { HttpResponse, http } from "msw";
+import { setupServer } from "msw/node";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
+import * as apiModule from "../../api";
+import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { createAuthClient } from "../../client";
-import { anonymousClient } from "./client";
-import type { GoogleProfile } from "../../social-providers";
 import { DEFAULT_SECRET } from "../../utils/constants";
-import { getOAuth2Tokens } from "../../oauth2";
-import { signJWT } from "../../crypto/jwt";
+import { anonymous } from ".";
+import { anonymousClient } from "./client";
 
-vi.mock("../../oauth2", async (importOriginal) => {
-	const original = (await importOriginal()) as any;
-	return {
-		...original,
-		validateAuthorizationCode: vi
-			.fn()
-			.mockImplementation(async (...args: any) => {
-				const data: GoogleProfile = {
-					email: "user@email.com",
-					email_verified: true,
-					name: "First Last",
-					picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
-					exp: 1234567890,
-					sub: "1234567890",
-					iat: 1234567890,
-					aud: "test",
-					azp: "test",
-					nbf: 1234567890,
-					iss: "test",
-					locale: "en",
-					jti: "test",
-					given_name: "First",
-					family_name: "Last",
-				};
-				const testIdToken = await signJWT(data, DEFAULT_SECRET);
-				const tokens = getOAuth2Tokens({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				});
-				return tokens;
-			}),
+let testIdToken: string;
+let handlers: ReturnType<typeof http.post>[];
+
+const server = setupServer();
+
+beforeAll(async () => {
+	const data: GoogleProfile = {
+		email: "user@email.com",
+		email_verified: true,
+		name: "First Last",
+		picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+		exp: 1234567890,
+		sub: "1234567890",
+		iat: 1234567890,
+		aud: "test",
+		azp: "test",
+		nbf: 1234567890,
+		iss: "test",
+		locale: "en",
+		jti: "test",
+		given_name: "First",
+		family_name: "Last",
 	};
+	testIdToken = await signJWT(data, DEFAULT_SECRET);
+
+	handlers = [
+		http.post("https://oauth2.googleapis.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
+	];
+
+	server.listen({ onUnhandledRequest: "bypass" });
+	server.use(...handlers);
 });
+
+afterEach(() => {
+	server.resetHandlers();
+	server.use(...handlers);
+	vi.restoreAllMocks();
+});
+
+afterAll(() => server.close());
 
 describe("anonymous", async () => {
 	const linkAccountFn = vi.fn();
-	const { customFetchImpl, auth, sessionSetter, testUser } =
-		await getTestInstance({
-			plugins: [
-				anonymous({
-					async onLinkAccount(data) {
-						linkAccountFn(data);
-					},
-					schema: {
-						user: {
-							fields: {
-								isAnonymous: "is_anon",
+	const { client, sessionSetter, testUser, cookieSetter } =
+		await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async onLinkAccount(data) {
+							linkAccountFn(data);
+						},
+						schema: {
+							user: {
+								fields: {
+									isAnonymous: "is_anon",
+								},
 							},
 						},
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
 					},
-				}),
-			],
-			socialProviders: {
-				google: {
-					clientId: "test",
-					clientSecret: "test",
 				},
 			},
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 	const headers = new Headers();
-	const client = createAuthClient({
-		plugins: [anonymousClient()],
-		fetchOptions: {
-			customFetchImpl,
-		},
-		baseURL: "http://localhost:3000",
-	});
 
 	it("should sign in anonymously", async () => {
 		await client.signIn.anonymous({
@@ -94,7 +115,7 @@ describe("anonymous", async () => {
 
 	it("link anonymous user account", async () => {
 		expect(linkAccountFn).toHaveBeenCalledTimes(0);
-		const res = await client.signIn.email(testUser, {
+		await client.signIn.email(testUser, {
 			headers,
 		});
 		expect(linkAccountFn).toHaveBeenCalledWith(expect.any(Object));
@@ -114,9 +135,13 @@ describe("anonymous", async () => {
 				headers,
 			},
 		});
+
 		const singInRes = await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
 		});
 		const state = new URL(singInRes.data?.url || "").searchParams.get("state");
 		await client.$fetch("/callback/google", {
@@ -130,22 +155,22 @@ describe("anonymous", async () => {
 	});
 
 	it("should work with generateName", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [
-				anonymous({
-					generateName() {
-						return "i-am-anonymous";
-					},
-				}),
-			],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateName() {
+							return "i-am-anonymous";
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const res = await client.signIn.anonymous({
 			fetchOptions: {
 				onSuccess: sessionSetter(headers),
@@ -154,17 +179,135 @@ describe("anonymous", async () => {
 		expect(res.data?.user.name).toBe("i-am-anonymous");
 	});
 
-	it("should not reject first-time anonymous sign-in", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [anonymous()],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+	it("should work with generateRandomEmail", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateRandomEmail() {
+							const id = crypto.randomUUID();
+							return `custom-${id}@example.com`;
+						},
+					}),
+				],
 			},
-			baseURL: "http://localhost:3000",
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
 		});
+		expect(res.data?.user.email).toMatch(/^custom-[a-f0-9-]+@example\.com$/);
+	});
+
+	it("should work with async generateRandomEmail", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async generateRandomEmail() {
+							const id = crypto.randomUUID();
+							return `async-${id}@example.com`;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.email).toMatch(/^async-[a-f0-9-]+@example\.com$/);
+	});
+
+	it("should throw error if generateRandomEmail returns invalid email", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateRandomEmail() {
+							return "not-an-email";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.data).toBeNull();
+		expect(res.error?.message).toBe(
+			"Email was not generated in a valid format",
+		);
+	});
+
+	it("should throw error if async generateRandomEmail returns invalid email", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						async generateRandomEmail() {
+							return "still-not-an-email";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+
+		const res = await client.signIn.anonymous({
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+
+		expect(res.error).toBeDefined();
+		expect(res.data).toBeNull();
+		expect(res.error?.message).toBe(
+			"Email was not generated in a valid format",
+		);
+	});
+
+	it("should not reject first-time anonymous sign-in", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const freshHeaders = new Headers();
 
 		// First-time anonymous sign-in should succeed without 400 error
@@ -188,16 +331,16 @@ describe("anonymous", async () => {
 	});
 
 	it("should reject subsequent anonymous sign-in attempts once signed in", async () => {
-		const { customFetchImpl, sessionSetter } = await getTestInstance({
-			plugins: [anonymous()],
-		});
-		const client = createAuthClient({
-			plugins: [anonymousClient()],
-			fetchOptions: {
-				customFetchImpl,
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
 			},
-			baseURL: "http://localhost:3000",
-		});
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
 		const persistentHeaders = new Headers();
 
 		// First sign-in should succeed
@@ -229,5 +372,112 @@ describe("anonymous", async () => {
 		expect(secondAttempt.error?.message).toBe(
 			"Anonymous users cannot sign in again anonymously",
 		);
+	});
+
+	describe("anonymous cleanup safeguards", () => {
+		function createMiddlewareContext({
+			newSessionUser,
+			deleteUser,
+		}: {
+			newSessionUser: Record<string, any>;
+			deleteUser: ReturnType<typeof vi.fn>;
+		}) {
+			return {
+				path: "/sign-in/anonymous",
+				context: {
+					responseHeaders: new Headers({
+						"set-cookie":
+							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
+					}),
+					authCookies: {
+						sessionToken: {
+							name: "better-auth.session_token",
+							options: {},
+						},
+						sessionData: {
+							name: "better-auth.session_data",
+							options: {},
+						},
+						dontRememberToken: {
+							name: "better-auth.dont_remember",
+							options: {},
+						},
+					},
+					newSession: {
+						user: newSessionUser,
+						session: {
+							token: "new-token",
+						},
+					},
+					internalAdapter: {
+						deleteUser,
+					},
+					options: {},
+					secret: "secret",
+					setNewSession: vi.fn(),
+				},
+				headers: new Headers(),
+				query: {},
+				error: vi.fn(),
+				json: vi.fn(),
+				getSignedCookie: vi.fn(),
+				setCookie: vi.fn(),
+				setSignedCookie: vi.fn(),
+			} as any;
+		}
+
+		it("does not delete when the new session is still anonymous", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const deleteUser = vi.fn();
+			const ctx = createMiddlewareContext({
+				newSessionUser: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				deleteUser,
+			});
+
+			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
+				user: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				session: {
+					token: "old-token",
+				},
+			} as any);
+
+			await handler?.(ctx);
+
+			expect(deleteUser).not.toHaveBeenCalled();
+		});
+
+		it("deletes the previous anonymous user when linking a new account", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const deleteUser = vi.fn();
+			const ctx = createMiddlewareContext({
+				newSessionUser: {
+					id: "linked-user",
+					isAnonymous: false,
+				},
+				deleteUser,
+			});
+
+			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
+				user: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				session: {
+					token: "old-token",
+				},
+			} as any);
+
+			await handler?.(ctx);
+
+			expect(deleteUser).toHaveBeenCalledWith("anon-user");
+		});
 	});
 });
