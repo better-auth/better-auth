@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import { toNodeHandler } from "better-auth/node";
 import Database from "better-sqlite3";
 

@@ -2,7 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, MssqlDialect } from "kysely";
 import * as Tarn from "tarn";
 import * as Tedious from "tedious";
-import { getMigrations } from "../../../db";
+import { getMigrations } from "../../../db/get-migration";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
