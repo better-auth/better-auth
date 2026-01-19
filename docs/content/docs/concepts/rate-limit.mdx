@@ -219,10 +219,6 @@ export const auth = betterAuth({
 })
 ```
 
-<Callout type="warning">
-**Key Format Update**: Rate limit keys now use the format `{ip}|{path}` (with a pipe separator) instead of `{ip}{path}`. This prevents potential collision attacks where different IP/path combinations could create the same key. If you have custom storage with existing keys, they will be recreated with the new format automatically.
-</Callout>
-
 ## Handling Rate Limit Errors
 
 When a request exceeds the rate limit, Better Auth returns the following header:
