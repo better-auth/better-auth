@@ -4,6 +4,17 @@ Categorized from 339 open issues, sorted by score (reactions + comments + recenc
 
 ---
 
+## Identified Duplicates
+
+After reviewing issues in detail, these exact duplicates were found:
+
+| Duplicate | Original | Description |
+|-----------|----------|-------------|
+| #7383 | #5830 | Admin Dashboard UI - both request built-in dashboard for user management |
+| #4498 | #1495 | Multiple Google Client IDs - both request support for iOS/Android/Web client IDs |
+
+---
+
 ## Organization Plugin
 Core organization features, teams, roles, and invitations.
 
