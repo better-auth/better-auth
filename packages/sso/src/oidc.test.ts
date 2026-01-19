@@ -576,22 +576,7 @@ describe("provisioning", async (ctx) => {
 
 	it("should normalize email to lowercase in OIDC authentication to prevent duplicate creation", async () => {
 		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
-		await auth.api.signUpEmail({
-			body: {
-				email: "admin@example.com",
-				password: "password123",
-				name: "Admin User",
-			},
-		});
-
-		const adminSession = await auth.api.signInEmail({
-			body: {
-				email: "admin@example.com",
-				password: "password123",
-			},
-		});
-
-		const sessionCookie = adminSession.headers?.get("set-cookie") || "";
+		const { headers } = await signInWithTestUser();
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -605,9 +590,7 @@ describe("provisioning", async (ctx) => {
 					pkce: false,
 				},
 			},
-			headers: {
-				cookie: sessionCookie,
-			},
+			headers,
 		});
 
 		const mixedCaseEmail = "OIDCUser@Example.com";

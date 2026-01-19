@@ -4005,26 +4005,11 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
 		// First login with "TestUser@Example.com" should create user and second login
 		// with same email should find existing user and not create duplicate
-		const { auth } = await getTestInstance({
+		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [sso()],
 		});
 
-		await auth.api.signUpEmail({
-			body: {
-				email: "admin@example.com",
-				password: "password123",
-				name: "Admin User",
-			},
-		});
-
-		const adminSession = await auth.api.signInEmail({
-			body: {
-				email: "admin@example.com",
-				password: "password123",
-			},
-		});
-
-		const sessionCookie = adminSession.headers?.get("set-cookie") || "";
+		const { headers } = await signInWithTestUser();
 
 		await auth.api.registerSSOProvider({
 			body: {
@@ -4048,9 +4033,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
 				},
 			},
-			headers: {
-				cookie: sessionCookie,
-			},
+			headers,
 		});
 
 		// First SAML login with mixed case email, creates user with email stored as lowercase
