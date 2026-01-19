@@ -447,7 +447,7 @@ export function createApiKey({
 				const generatedId = ctx.context.generateId({
 					model: API_KEY_TABLE_NAME,
 				});
-				const id = generatedId !== false ? generatedId : generateId();
+				const id = generatedId || generateId();
 				apiKey = {
 					...data,
 					id,
