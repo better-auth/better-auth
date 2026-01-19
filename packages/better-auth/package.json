@@ -160,6 +160,21 @@
       "types": "./dist/integrations/node.d.mts",
       "default": "./dist/integrations/node.mjs"
     },
+    "./db/adapter": {
+      "dev-source": "./src/db/adapter-kysely.ts",
+      "types": "./dist/db/adapter-kysely.d.mts",
+      "default": "./dist/db/adapter-kysely.mjs"
+    },
+    "./db/adapter/minimal": {
+      "dev-source": "./src/db/adapter-base.ts",
+      "types": "./dist/db/adapter-base.d.mts",
+      "default": "./dist/db/adapter-base.mjs"
+    },
+    "./db/migration": {
+      "dev-source": "./src/db/get-migration.ts",
+      "types": "./dist/db/get-migration.d.mts",
+      "default": "./dist/db/get-migration.mjs"
+    },
     "./adapters/prisma": {
       "dev-source": "./src/adapters/prisma-adapter/index.ts",
       "types": "./dist/adapters/prisma-adapter/index.d.mts",
@@ -353,6 +368,15 @@
       ],
       "db": [
         "./dist/db/index.d.mts"
+      ],
+      "db/adapter": [
+        "./dist/db/adapter-kysely.d.mts"
+      ],
+      "db/adapter/minimal": [
+        "./dist/db/adapter-base.d.mts"
+      ],
+      "db/migration": [
+        "./dist/db/get-migration.d.mts"
       ],
       "svelte-kit": [
         "./dist/integrations/svelte-kit.d.mts"

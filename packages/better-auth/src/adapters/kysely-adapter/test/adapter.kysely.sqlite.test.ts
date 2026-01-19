@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
-import { getMigrations } from "../../../db";
+import { getMigrations } from "../../../db/get-migration";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
