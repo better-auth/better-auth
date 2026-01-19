@@ -4119,7 +4119,23 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			"error",
 		);
 
-		// Test same scenario with ACS endpoint
+		// Test same scenario with ACS endpoint using a fresh SAML response
+		let samlResponse3:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse3 = context.data as {
+					samlResponse: string;
+					entityEndpoint?: string;
+				};
+			},
+		});
+
+		if (!samlResponse3?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
 		const thirdAcsResponse = await auth.handler(
 			new Request(
 				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
@@ -4129,7 +4145,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 						"Content-Type": "application/x-www-form-urlencoded",
 					},
 					body: new URLSearchParams({
-						SAMLResponse: samlResponse2.samlResponse,
+						SAMLResponse: samlResponse3.samlResponse,
 						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
