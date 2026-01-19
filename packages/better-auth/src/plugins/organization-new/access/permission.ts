@@ -1,5 +1,5 @@
-import type { Role } from "../../../access";
-import type { OrganizationOptions } from "../../types";
+import type { Role } from "../../access";
+import type { OrganizationOptions } from "../types";
 
 export const hasPermissionFn = (
 	input: HasPermissionBaseInput,
@@ -39,7 +39,7 @@ export type PermissionExclusive =
 			permission?: never | undefined;
 	  };
 
-export let cacheAllRoles = new Map<
+export const cacheAllRoles = new Map<
 	string,
 	{
 		[x: string]: Role<any> | undefined;

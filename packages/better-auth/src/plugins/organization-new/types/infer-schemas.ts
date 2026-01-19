@@ -40,7 +40,19 @@ export type InferMember<
 						image?: string | undefined;
 					};
 				}
-		: {}) &
+		: {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
+			}) &
 		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
 >;
 
@@ -82,7 +94,16 @@ export type InferInvitation<
 					expiresAt: Date;
 					createdAt: Date;
 				}
-		: {}) &
+		: {
+				id: string;
+				organizationId: string;
+				email: string;
+				role: InferOrganizationRolesFromOption<O>;
+				status: InvitationStatus;
+				inviterId: string;
+				expiresAt: Date;
+				createdAt: Date;
+			}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
 >;
 

@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "../../../api";
+import type { Organization } from "../schema";
 import type { OrganizationOptions } from "../types";
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { getOrgAdapter } from "./get-org-adapter";
@@ -20,9 +21,13 @@ import { getOrgAdapter } from "./get-org-adapter";
  * @throws {APIError} `BAD_REQUEST` with `ORGANIZATION_NOT_FOUND` - If the provided organization ID is invalid
  * @throws {APIError} `BAD_REQUEST` with `NO_ACTIVE_ORGANIZATION` - If no organization ID could be resolved
  */
-export const getOrganizationId = async (
+export const getOrganizationId = async <
+	InferOrganization extends Organization,
+	ShouldGetOrganization extends boolean = false,
+>(
 	ctx: GenericEndpointContext,
-): Promise<string> => {
+	shouldGetOrganization: ShouldGetOrganization = false as ShouldGetOrganization,
+): Promise<ShouldGetOrganization extends true ? InferOrganization : string> => {
 	const options = ctx.context.orgOptions as OrganizationOptions;
 	const adapter = getOrgAdapter(ctx.context, options);
 
@@ -33,22 +38,41 @@ export const getOrganizationId = async (
 
 	const paramProvidedId: string | undefined = ctx.body.organizationId;
 	if (paramProvidedId) {
+		if (shouldGetOrganization) {
+			const organization = await adapter.findOrganizationById(paramProvidedId);
+			if (!organization) {
+				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
+			return organization as any;
+		}
+
 		const isValid = await adapter.isOrganizationIdValid(paramProvidedId);
 		if (!isValid) {
 			const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 			throw APIError.from("BAD_REQUEST", msg);
 		}
-		return paramProvidedId;
+		return paramProvidedId as any;
 	}
 
 	const activeOrganizationId = session?.session?.activeOrganizationId;
 	if (activeOrganizationId) {
+		if (shouldGetOrganization) {
+			const organization =
+				await adapter.findOrganizationById(activeOrganizationId);
+			if (!organization) {
+				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
+			return organization as any;
+		}
+
 		const isValid = await adapter.isOrganizationIdValid(activeOrganizationId);
 		if (!isValid) {
 			const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 			throw APIError.from("BAD_REQUEST", msg);
 		}
-		return activeOrganizationId;
+		return activeOrganizationId as any;
 	}
 
 	const msg = ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION;

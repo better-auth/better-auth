@@ -1,9 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type {
-	AddonContext,
-	OrganizationHooks,
-	ResolvedOrganizationOptions,
-} from "../types";
+import type { OrganizationHooks, ResolvedOrganizationOptions } from "../types";
 
 type HookOptions =
 	| "CreateOrganization"
