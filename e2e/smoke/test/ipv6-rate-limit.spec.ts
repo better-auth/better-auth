@@ -19,8 +19,7 @@ describe("IPv6 rate limiting", () => {
 		});
 		const port = await new Promise<number>((resolve) => {
 			cp.stdout.once("data", (data) => {
-				// Bun outputs colored string, we need to remove it
-				const port = +data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				const port = +data.toString();
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
@@ -73,7 +72,7 @@ describe("IPv6 rate limiting", () => {
 	});
 
 	it("should not group IPv6 addresses from different /64 subnets", async (t) => {
-		const cp = spawn("bun", [join(fixturesDir, "ipv6-rate-limit.ts")], {
+		const cp = spawn("node", [join(fixturesDir, "ipv6-rate-limit.ts")], {
 			stdio: "pipe",
 		});
 		t.after(() => {
@@ -84,7 +83,7 @@ describe("IPv6 rate limiting", () => {
 		});
 		const port = await new Promise<number>((resolve) => {
 			cp.stdout.once("data", (data) => {
-				const port = +data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				const port = +data.toString();
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
@@ -127,7 +126,7 @@ describe("IPv6 rate limiting", () => {
 	});
 
 	it("should normalize different IPv6 representations", async (t) => {
-		const cp = spawn("bun", [join(fixturesDir, "ipv6-rate-limit.ts")], {
+		const cp = spawn("node", [join(fixturesDir, "ipv6-rate-limit.ts")], {
 			stdio: "pipe",
 		});
 		t.after(() => {
@@ -138,7 +137,7 @@ describe("IPv6 rate limiting", () => {
 		});
 		const port = await new Promise<number>((resolve) => {
 			cp.stdout.once("data", (data) => {
-				const port = +data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				const port = +data.toString();
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
