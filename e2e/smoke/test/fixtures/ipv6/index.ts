@@ -1,8 +1,10 @@
-import Database from "bun:sqlite";
+import { DatabaseSync } from "node:sqlite";
+import { serve } from "@hono/node-server";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
+import { Hono } from "hono";
 
-const database = new Database(":memory:");
+const database = new DatabaseSync(":memory:");
 
 export const auth = betterAuth({
 	baseURL: "http://localhost:3000",
@@ -25,9 +27,16 @@ const { runMigrations } = await getMigrations(auth.options);
 
 await runMigrations();
 
-const server = Bun.serve({
-	fetch: auth.handler,
-	port: 0,
-});
+const app = new Hono();
 
-console.log(server.port);
+app.on(["POST", "GET"], "/api/auth/*", (c) => auth.handler(c.req.raw));
+
+serve(
+	{
+		fetch: app.fetch,
+		port: 0,
+	},
+	(info) => {
+		console.log(info.port);
+	},
+);

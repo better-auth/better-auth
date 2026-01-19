@@ -6,9 +6,12 @@ import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
+const nodejsWarnings = ["ExperimentalWarning"];
+
 describe("IPv6 rate limiting", () => {
+	const entryFile = join(fixturesDir, "ipv6", "index.ts");
 	it("should group IPv6 addresses from same /64 subnet", async (t) => {
-		const cp = spawn("node", [join(fixturesDir, "ipv6-rate-limit.ts")], {
+		const cp = spawn("node", [entryFile], {
 			stdio: "pipe",
 		});
 		t.after(() => {
@@ -18,8 +21,12 @@ describe("IPv6 rate limiting", () => {
 			console.error(data.toString());
 		});
 		const port = await new Promise<number>((resolve) => {
-			cp.stdout.once("data", (data) => {
-				const port = +data.toString();
+			cp.stdout.on("data", (data) => {
+				const output = data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				if (nodejsWarnings.some((warning) => output.includes(warning))) {
+					return;
+				}
+				const port = +output;
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
@@ -72,7 +79,7 @@ describe("IPv6 rate limiting", () => {
 	});
 
 	it("should not group IPv6 addresses from different /64 subnets", async (t) => {
-		const cp = spawn("node", [join(fixturesDir, "ipv6-rate-limit.ts")], {
+		const cp = spawn("node", [entryFile], {
 			stdio: "pipe",
 		});
 		t.after(() => {
@@ -82,8 +89,12 @@ describe("IPv6 rate limiting", () => {
 			console.error(data.toString());
 		});
 		const port = await new Promise<number>((resolve) => {
-			cp.stdout.once("data", (data) => {
-				const port = +data.toString();
+			cp.stdout.on("data", (data) => {
+				const output = data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				if (nodejsWarnings.some((warning) => output.includes(warning))) {
+					return;
+				}
+				const port = +output;
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
@@ -126,7 +137,7 @@ describe("IPv6 rate limiting", () => {
 	});
 
 	it("should normalize different IPv6 representations", async (t) => {
-		const cp = spawn("node", [join(fixturesDir, "ipv6-rate-limit.ts")], {
+		const cp = spawn("node", [entryFile], {
 			stdio: "pipe",
 		});
 		t.after(() => {
@@ -136,8 +147,12 @@ describe("IPv6 rate limiting", () => {
 			console.error(data.toString());
 		});
 		const port = await new Promise<number>((resolve) => {
-			cp.stdout.once("data", (data) => {
-				const port = +data.toString();
+			cp.stdout.on("data", (data) => {
+				const output = data.toString().replace(/\u001b\[[0-9;]*m/g, "");
+				if (nodejsWarnings.some((warning) => output.includes(warning))) {
+					return;
+				}
+				const port = +output;
 				assert.ok(port > 0);
 				assert.ok(!Number.isNaN(port));
 				assert.ok(Number.isFinite(port));
