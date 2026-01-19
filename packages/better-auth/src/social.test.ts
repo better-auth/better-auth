@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createAuthMiddleware, getOAuthState } from "./api";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
-import { getMigrations } from "./db";
+import { getMigrations } from "./db/get-migration";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 

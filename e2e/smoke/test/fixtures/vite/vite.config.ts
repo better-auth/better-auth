@@ -8,12 +8,13 @@ export default defineConfig({
 				client: resolve(__dirname, "src", "client.ts"),
 			},
 			output: {
+				chunkFileNames: "chunks/[name].js",
 				entryFileNames: "[name].js",
 				format: "es",
 			},
 			treeshake: false,
 		},
 		minify: false,
-		sourcemap: "inline",
+		sourcemap: false,
 	},
 });

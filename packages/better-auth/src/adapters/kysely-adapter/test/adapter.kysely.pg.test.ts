@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { getMigrations } from "../../../db";
+import { getMigrations } from "../../../db/get-migration";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
