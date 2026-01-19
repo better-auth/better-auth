@@ -20,6 +20,8 @@ export default defineConfig({
 		"./src/adapters/test.ts",
 		"./src/adapters/index.ts",
 		"./src/db/index.ts",
+		"./src/db/adapter-kysely.ts",
+		"./src/db/adapter-base.ts",
 		"./src/db/get-migration.ts",
 		"./src/oauth2/index.ts",
 		"./src/client/react/index.ts",
