@@ -399,7 +399,10 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const email =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = { emailAddress: email, famName: "hello world" };
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -4040,14 +4043,17 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		let samlResponse1:
 			| { samlResponse: string; entityEndpoint?: string }
 			| undefined;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse1 = context.data as {
-					samlResponse: string;
-					entityEndpoint?: string;
-				};
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse1 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
 			},
-		});
+		);
 
 		if (!samlResponse1?.samlResponse) {
 			throw new Error("Failed to get SAML response from mock IdP");
@@ -4081,14 +4087,17 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		let samlResponse2:
 			| { samlResponse: string; entityEndpoint?: string }
 			| undefined;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse2 = context.data as {
-					samlResponse: string;
-					entityEndpoint?: string;
-				};
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse2 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
 			},
-		});
+		);
 
 		if (!samlResponse2?.samlResponse) {
 			throw new Error("Failed to get SAML response from mock IdP");
@@ -4123,14 +4132,17 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		let samlResponse3:
 			| { samlResponse: string; entityEndpoint?: string }
 			| undefined;
-		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
-			onSuccess: async (context) => {
-				samlResponse3 = context.data as {
-					samlResponse: string;
-					entityEndpoint?: string;
-				};
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse3 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
 			},
-		});
+		);
 
 		if (!samlResponse3?.samlResponse) {
 			throw new Error("Failed to get SAML response from mock IdP");

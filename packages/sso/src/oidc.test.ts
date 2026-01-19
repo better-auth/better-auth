@@ -253,6 +253,52 @@ describe("SSO", async () => {
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
+
+	it("should normalize email to lowercase in OIDC authentication to prevent duplicate creation", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const mixedCaseEmail = "OIDCUser@Example.com";
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.on("beforeUserinfo", (userInfoResponse, req) => {
+			userInfoResponse.body = {
+				email: mixedCaseEmail,
+				name: "OIDC Test User",
+				sub: "oidc-test-user",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				providerId: "oidc-email-case-provider",
+				issuer: server.issuer.url!,
+				domain: "example.com",
+				oidcConfig: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		expect(provider.providerId).toBe("oidc-email-case-provider");
+		expect(provider.issuer).toBe(server.issuer.url!);
+
+		const loginRes = await auth.api.signInSSO({
+			body: {
+				providerId: "oidc-email-case-provider",
+				callbackURL: "/dashboard",
+			},
+		});
+
+		expect(loginRes.url).toBeTruthy();
+		expect(loginRes.url).toContain(server.issuer.url!);
+		expect(loginRes.url).toContain("response_type=code");
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {
@@ -572,54 +618,5 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
-	});
-
-	it("should normalize email to lowercase in OIDC authentication to prevent duplicate creation", async () => {
-		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
-		const { headers } = await signInWithTestUser();
-
-		const provider = await auth.api.registerSSOProvider({
-			body: {
-				providerId: "oidc-email-case-provider",
-				issuer: server.issuer.url!,
-				domain: "example.com",
-				oidcConfig: {
-					clientId: "test-client-id",
-					clientSecret: "test-client-secret",
-					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
-					pkce: false,
-				},
-			},
-			headers,
-		});
-
-		expect(provider.providerId).toBe("oidc-email-case-provider");
-		expect(provider.issuer).toBe(server.issuer.url!);
-
-		// Test that mixed case email would be handled consistently
-		const mixedCaseEmail = "OIDCUser@Example.com";
-		server.service.removeAllListeners("beforeUserinfo");
-		server.service.on("beforeUserinfo", (userInfoResponse, req) => {
-			userInfoResponse.body = {
-				email: mixedCaseEmail,
-				name: "OIDC Test User",
-				sub: "oidc-test-user",
-				picture: "https://test.com/picture.png",
-				email_verified: true,
-			};
-			userInfoResponse.statusCode = 200;
-		});
-
-		// Test SSO initiation
-		const loginRes = await auth.api.signInSSO({
-			body: {
-				providerId: "oidc-email-case-provider",
-				callbackURL: "/dashboard",
-			},
-		});
-
-		expect(loginRes.url).toBeTruthy();
-		expect(loginRes.url).toContain(server.issuer.url!);
-		expect(loginRes.url).toContain("response_type=code");
 	});
 });
