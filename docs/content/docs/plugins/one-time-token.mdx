@@ -135,6 +135,10 @@ oneTimeToken({
 ```
 * **`generateToken`**: A custom token generator function that takes `session` object and a `ctx` as parameters.
 
+* **`setOttHeaderOnNewSession`** (boolean): Optional. If `true`, automatically adds the `set-ott` header to the `access-control-expose-headers` response header when a new session is created, allowing clients to read the token from response headers in cross-origin scenarios. Default: `false`.
+
+* **`disableSetSessionCookie`** (boolean): Optional. If `true`, disables setting the session cookie when the token is verified. Default: `false`.
+
 * **`storeToken`**: Optional. This option allows you to configure how the token is stored in your database.
 
     * **`plain`**: The token is stored in plain text. (Default)
