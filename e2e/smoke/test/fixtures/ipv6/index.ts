@@ -19,7 +19,11 @@ export const auth = betterAuth({
 		enabled: true,
 		window: 60,
 		max: 3,
-		ipv6Subnet: 64, // Group IPv6 addresses by /64 subnet
+	},
+	advanced: {
+		ipAddress: {
+			ipv6Subnet: 64, // Group IPv6 addresses by /64 subnet
+		},
 	},
 });
 

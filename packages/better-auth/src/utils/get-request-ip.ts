@@ -26,7 +26,7 @@ export function getIp(
 			const ip = value.split(",")[0]!.trim();
 			if (isValidIP(ip)) {
 				return normalizeIP(ip, {
-					ipv6Subnet: options.rateLimit?.ipv6Subnet,
+					ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
 				});
 			}
 		}

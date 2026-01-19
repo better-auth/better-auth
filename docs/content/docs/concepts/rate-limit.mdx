@@ -83,11 +83,15 @@ To prevent this, you can configure rate limiting to apply to IPv6 subnets instea
 ```ts title="auth.ts"
 export const auth = betterAuth({
     //...other options
+    advanced: {
+        ipAddress: {
+            ipv6Subnet: 64, // Rate limit by /64 subnet instead of individual addresses
+        },
+    },
     rateLimit: {
         enabled: true,
         window: 60,
         max: 100,
-        ipv6Subnet: 64, // Rate limit by /64 subnet instead of individual addresses
     },
 })
 ```
