@@ -1,6 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import type { Session } from "@better-auth/core/db";
+import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import type { Member, MemberInput, OrganizationInput } from "../schema";
 import type {
@@ -133,6 +134,42 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [{ field, value }],
 			});
 			return organization;
+		},
+		updateOrganization: async (
+			organizationId: string,
+			data: Partial<OrganizationInput>,
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const organization = await adapter.update<InferOrganization<O, false>>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: organizationId,
+					},
+				],
+				update: {
+					...data,
+					metadata:
+						typeof data.metadata === "object"
+							? JSON.stringify(data.metadata)
+							: data.metadata,
+				},
+			});
+			if (!organization) return null;
+
+			const metadata = (() => {
+				const m = organization.metadata;
+				if (m && typeof m === "string") {
+					return parseJSON<Record<string, any>>(m);
+				}
+				return m;
+			})();
+
+			return {
+				...organization,
+				metadata,
+			};
 		},
 	};
 };

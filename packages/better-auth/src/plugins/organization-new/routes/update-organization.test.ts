@@ -46,11 +46,11 @@ describe("update organization", async (it) => {
 		});
 
 		expect(updatedOrg).toBeDefined();
-		expect(updatedOrg.id).toBe(org.id);
-		expect(updatedOrg.name).toBe("updated-name");
-		expect(updatedOrg.slug).toBe("updated-slug");
-		expect(updatedOrg.logo).toBe("https://example.co/logo.png");
-		expect(updatedOrg.metadata).toStrictEqual({
+		expect(updatedOrg?.id).toBe(org.id);
+		expect(updatedOrg?.name).toBe("updated-name");
+		expect(updatedOrg?.slug).toBe("updated-slug");
+		expect(updatedOrg?.logo).toBe("https://example.co/logo.png");
+		expect(updatedOrg?.metadata).toStrictEqual({
 			test: "organization-metadata-updated",
 		});
 	});

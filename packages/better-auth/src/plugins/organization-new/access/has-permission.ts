@@ -1,9 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import type { Role } from "../../../access";
-import { defaultRoles } from "../../access";
-import type { OrganizationRole } from "../dynamic-access-control/schema";
+import type { Role } from "../../access";
+import type { OrganizationRole } from "../addons/dynamic-access-control/schema";
+import { defaultRoles } from ".";
 import type { HasPermissionBaseInput } from "./permission";
 import { cacheAllRoles, hasPermissionFn } from "./permission";
 
