@@ -3,9 +3,8 @@ import { organization } from "../organization";
 import { defineInstance, getOrganizationData } from "../test/utils";
 
 describe("create organization", async (it) => {
-	const { auth, signInWithTestUser, client } = await defineInstance([
-		organization(),
-	]);
+	const plugin = organization();
+	const { auth, signInWithTestUser, client } = await defineInstance([plugin]);
 	const { headers, user } = await signInWithTestUser();
 
 	it("should create an organization", async () => {
