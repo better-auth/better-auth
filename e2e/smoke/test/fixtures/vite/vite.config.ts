@@ -5,8 +5,6 @@ export default defineConfig({
 	build: {
 		rollupOptions: {
 			input: {
-				server: resolve(__dirname, "src", "server.ts"),
-				minimal: resolve(__dirname, "src", "minimal.ts"),
 				client: resolve(__dirname, "src", "client.ts"),
 			},
 			output: {
@@ -17,6 +15,6 @@ export default defineConfig({
 			treeshake: false,
 		},
 		minify: false,
-		sourcemap: "inline",
+		sourcemap: false,
 	},
 });
