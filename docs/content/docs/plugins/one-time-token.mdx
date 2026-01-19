@@ -80,6 +80,47 @@ type verifyOneTimeToken = {
 
 This will return the session that was attached to the token.
 
+## CORS Configuration
+
+When `setOttHeaderOnNewSession` is enabled, the One-Time Token plugin automatically adds the `set-ott` header to the `access-control-expose-headers` response header when a new session is created, allowing clients to read the token from response headers in cross-origin scenarios.
+
+<Callout type="warning">
+**CORS `exposeHeaders` Configuration**: If you're using CORS middleware (such as Hono's `cors`, Express's `cors`, or similar) and need to configure the `exposeHeaders` option, you **must** include `set-ott` in the list. Otherwise, the One-Time Token plugin's automatic header exposure will be overridden and clients won't be able to read the token.
+
+**Example with Hono:**
+
+```ts
+import { cors } from "hono/cors";
+
+app.use(
+	"/api/auth/*",
+	cors({
+		origin: "http://localhost:3001",
+		allowHeaders: ["Content-Type", "Authorization"],
+		allowMethods: ["POST", "GET", "OPTIONS"],
+		exposeHeaders: ["set-ott"], // Required for One-Time Token plugin
+		credentials: true,
+	}),
+);
+```
+
+**Example with Express:**
+
+```ts
+import cors from "cors";
+
+app.use(
+	cors({
+		origin: "http://localhost:3001",
+		credentials: true,
+		exposedHeaders: ["set-ott"], // Required for One-Time Token plugin
+	}),
+);
+```
+
+If you omit `exposeHeaders` from your CORS configuration, Better Auth will automatically handle exposing the `set-ott` header.
+</Callout>
+
 ## Options
 
 These options can be configured when adding the `oneTimeToken` plugin:
