@@ -90,6 +90,7 @@ describe("IP Normalization", () => {
 
 	describe("IPv6 Subnet Support", () => {
 		it("should extract /64 subnet", () => {
+			/* cspell:disable-next-line */
 			const ip1 = normalizeIP("2001:db8:0:0:1234:5678:90ab:cdef", {
 				ipv6Subnet: 64,
 			});
@@ -103,6 +104,7 @@ describe("IP Normalization", () => {
 		});
 
 		it("should extract /48 subnet", () => {
+			/* cspell:disable-next-line */
 			const ip1 = normalizeIP("2001:db8:1234:5678:90ab:cdef:1234:5678", {
 				ipv6Subnet: 48,
 			});
@@ -116,6 +118,7 @@ describe("IP Normalization", () => {
 		});
 
 		it("should extract /32 subnet", () => {
+			/* cspell:disable-next-line */
 			const ip1 = normalizeIP("2001:db8:1234:5678:90ab:cdef:1234:5678", {
 				ipv6Subnet: 32,
 			});
