@@ -126,7 +126,7 @@ function normalizeIPv6(
 	if (subnetPrefix && subnetPrefix < 128) {
 		// Apply subnet mask
 		const prefix = subnetPrefix;
-		let bitsRemaining: 128 | 64 | 48 | 32 | 0 = prefix;
+		let bitsRemaining: number = prefix;
 
 		const maskedGroups = groups.map((group) => {
 			if (bitsRemaining <= 0) {
