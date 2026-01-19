@@ -2,6 +2,8 @@ import type { AuthContext, Prettify } from "@better-auth/core";
 import type { Endpoint } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import { shimContext } from "../../../utils/shim";
+import type { CheckOrganizationSlug } from "../routes/check-organization-slug";
+import { checkOrganizationSlug } from "../routes/check-organization-slug";
 import type { CreateOrganization } from "../routes/create-organizations";
 import { createOrganization } from "../routes/create-organizations";
 import type { Addon, OrganizationOptions } from "../types";
@@ -26,11 +28,6 @@ type UnionToIntersection<U> = (
 type MergedAddonEndpoints<Addons extends readonly Addon[]> =
 	UnionToIntersection<ExtractAddonEndpoints<Addons[number]>>;
 
-/** Base endpoints provided by the organization plugin */
-type BaseEndpoints<O extends OrganizationOptions> = {
-	createOrganization: CreateOrganization<O>;
-};
-
 /** Inferred endpoints type from options */
 export type InferOrganizationEndpoints<O extends OrganizationOptions> =
 	Prettify<
@@ -39,6 +36,12 @@ export type InferOrganizationEndpoints<O extends OrganizationOptions> =
 				O extends { use: readonly Addon[] } ? O["use"] : Addon[]
 			>
 	>;
+
+/** Base endpoints provided by the organization plugin */
+type BaseEndpoints<O extends OrganizationOptions> = {
+	createOrganization: CreateOrganization<O>;
+	checkOrganizationSlug: CheckOrganizationSlug<O>;
+};
 
 export const getEndpoints = <O extends OrganizationOptions>(
 	options: O,
@@ -55,6 +58,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 
 	const endpoints = {
 		createOrganization: createOrganization(options),
+		checkOrganizationSlug: checkOrganizationSlug(options),
 		...(addonEndpoints || {}),
 	};
 

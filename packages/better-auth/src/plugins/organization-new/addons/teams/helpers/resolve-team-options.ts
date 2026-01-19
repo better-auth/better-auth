@@ -1,4 +1,4 @@
-import type { ResolvedTeamsOptions, TeamsOptions } from "./types";
+import type { ResolvedTeamsOptions, TeamsOptions } from "../types";
 
 const DEFAULT_MAXIMUM_MEMBERS_PER_TEAM = 100;
 const DEFAULT_MAXIMUM_TEAMS = 100;

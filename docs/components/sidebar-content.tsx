@@ -36,14 +36,6 @@ interface Content {
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
 	list: ContentListItem[];
-<!-- 	list: {
-		title: string;
-		href: string;
-		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
-		group?: boolean;
-		separator?: boolean;
-		isNew?: boolean;
-	}[]; -->
 }
 
 export function getPageTree(): Root {
@@ -114,20 +106,20 @@ function contentToPageTree(content: Content): Folder {
 		children: content.list
 			.filter((item) => !item.group && item.href)
 			.map((item) => contentListItemToPageTreeNode(item)),
-<!-- 			.filter((item) => !item.group && (item.href || item.separator))
-			.map((item) =>
-				item.separator
-					? ({
-							type: "separator",
-							name: item.title,
-						} as const)
-					: ({
-							type: "page",
-							url: item.href,
-							name: item.title,
-							icon: <item.icon />,
-						} as const),
-			), -->
+		// <!-- 			.filter((item) => !item.group && (item.href || item.separator))
+		// 			.map((item) =>
+		// 				item.separator
+		// 					? ({
+		// 							type: "separator",
+		// 							name: item.title,
+		// 						} as const)
+		// 					: ({
+		// 							type: "page",
+		// 							url: item.href,
+		// 							name: item.title,
+		// 							icon: <item.icon />,
+		// 						} as const),
+		// 			), -->
 	};
 }
 

@@ -1,43 +1,11 @@
 import { describe, expect, expectTypeOf } from "vitest";
-import type { BetterAuthPlugin } from "../../../..";
-import { getTestInstance } from "../../../../test-utils/test-instance";
-import { organization } from "../../organization";
-import { teams } from ".";
-import { getTeamAdapter } from "./get-team-adapter";
-import type { OrganizationOptions } from "../../types";
-import type { TeamsOptions } from "./types";
-
-const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
-	plugins: Plugins,
-) => {
-	const instance = await getTestInstance({
-		plugins: plugins,
-	});
-
-	return instance;
-};
-
-const getOrganizationData = (options?: { name?: string; slug?: string }) => {
-	const random = Math.random().toString(36).substring(2, 15);
-	return {
-		name: options?.name || `${random}-test-organization`,
-		slug: options?.slug || `${random}-test-organization`,
-	};
-};
-
-const getTeamData = async (options: {
-	organizationId: string;
-	name?: string;
-	slug?: string;
-}) => {
-	const random = Math.random().toString(36).substring(2, 15);
-
-	return {
-		name: options?.name || `${random}-test-team`,
-		slug: options?.slug || undefined,
-		organizationId: options.organizationId,
-	};
-};
+import { organization } from "../../../organization";
+import { getOrganizationData } from "../../../test/utils";
+import type { OrganizationOptions } from "../../../types";
+import { teams } from "..";
+import { getTeamAdapter } from "../helpers/get-team-adapter";
+import { defineInstance, getTeamData } from "../tests/utils";
+import type { TeamsOptions } from "../types";
 
 describe("teams", async (it) => {
 	const { signInWithTestUser, auth } = await defineInstance([

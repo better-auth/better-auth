@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type * as z from "zod";
+import * as z from "zod/v4";
 import type {
 	DBFieldAttribute,
 	InferAdditionalFieldsFromPluginOptions,
@@ -105,6 +105,7 @@ export const buildEndpointSchema = <
 	},
 	BaseSchema extends z.ZodObject<any>,
 	AllPartial extends boolean = false,
+	AdditionalFieldsNestedAs extends string | undefined = undefined,
 	OptionalSchema extends readonly {
 		condition: boolean;
 		schema: z.ZodObject<any>;
@@ -124,6 +125,7 @@ export const buildEndpointSchema = <
 	additionalFields?: {
 		schema: S | undefined;
 		model: SchemaName;
+		nestedAs?: AdditionalFieldsNestedAs;
 	};
 	/**
 	 * The optional schemas to add to the schema based on a condition.
@@ -141,6 +143,7 @@ export const buildEndpointSchema = <
 	// Process additional fields from Better Auth schema
 	const { model: schemaName, schema: schemaConfig } = _additionalFields || {};
 	const additionalFields = schemaConfig?.[schemaName]?.additionalFields || {};
+	const additionalFieldsNestedAs = _additionalFields?.nestedAs;
 
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
@@ -158,8 +161,15 @@ export const buildEndpointSchema = <
 		? optionalSchema.filter((f) => f.condition).map((f) => f.schema)
 		: [];
 
+	const additionalFieldsShape = additionalFieldsNestedAs
+		? (z.object({ [additionalFieldsNestedAs]: additionalFieldsSchema.shape })
+				.shape as unknown as {
+				[x: string]: z.ZodOptional<z.ZodAny>;
+			})
+		: additionalFieldsSchema.shape;
+
 	// Build the final schema by extending base schema with additional and optional fields
-	let schema = baseSchema.safeExtend(additionalFieldsSchema.shape);
+	let schema = baseSchema.safeExtend(additionalFieldsShape);
 	for (const optionalSchemaItem of optionalSchemas) {
 		schema = schema.safeExtend(optionalSchemaItem.shape);
 	}
@@ -177,7 +187,11 @@ export const buildEndpointSchema = <
 
 	const $Infer = {
 		body: {} as PrettifyDeep<
-			AdditionalFields &
+			(AdditionalFieldsNestedAs extends string
+				? {
+						[K in AdditionalFieldsNestedAs]: AdditionalFields;
+					}
+				: AdditionalFields) &
 				z.infer<BaseSchema> &
 				InferOptionalSchemaType<OptionalSchema>
 		>,

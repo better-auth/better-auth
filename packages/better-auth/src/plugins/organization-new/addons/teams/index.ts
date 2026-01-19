@@ -1,7 +1,7 @@
 import type { Addon } from "../../types";
 import { createDefaultTeam } from "./create-default-team";
-import { TEAMS_ERROR_CODES } from "./errors";
-import { resolveTeamOptions } from "./resolve-team-options";
+import { TEAMS_ERROR_CODES } from "./helpers/errors";
+import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { createTeam } from "./routes/create-team";
 import type { InferTeam, TeamsOptions } from "./types";
 

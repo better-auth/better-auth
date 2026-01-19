@@ -8,10 +8,10 @@ import { getOrgAdapter } from "../../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../../helpers/get-organization-id";
 import { orgMiddleware } from "../../../middleware/org-middleware";
 import { hasPermission } from "../../access-control";
-import { TEAMS_ERROR_CODES } from "../errors";
-import { getTeamAdapter } from "../get-team-adapter";
-import { getHook } from "../get-team-hook";
-import { resolveTeamOptions } from "../resolve-team-options";
+import { TEAMS_ERROR_CODES } from "../helpers/errors";
+import { getTeamAdapter } from "../helpers/get-team-adapter";
+import { getHook } from "../helpers/get-team-hook";
+import { resolveTeamOptions } from "../helpers/resolve-team-options";
 import type { InferTeam, TeamsOptions } from "../types";
 
 const baseTeamSchema = z.object({
