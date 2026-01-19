@@ -29,7 +29,7 @@ test("infer user type correctly", async () => {
 		onboardingCompleted: boolean | null | undefined;
 	};
 	expectTypeOf<User>().toEqualTypeOf<Res>();
-	let { api } = {
+	const { api } = {
 		api:
 			// use proxy to avoid runtime error
 			new Proxy(

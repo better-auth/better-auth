@@ -244,14 +244,14 @@ export const kyselyAdapter = (
 				};
 
 				w.forEach((condition) => {
-					let {
+					const {
 						field: _field,
 						value: _value,
 						operator = "=",
 						connector = "AND",
 					} = condition;
-					let value: any = _value;
-					let field: string | any = getFieldName({
+					const value: any = _value;
+					const field: string | any = getFieldName({
 						model,
 						field: _field,
 					});
@@ -441,7 +441,7 @@ export const kyselyAdapter = (
 					}
 				}
 
-				let result = Array.from(groupedByMainId.values());
+				const result = Array.from(groupedByMainId.values());
 
 				// Apply final limit to non-unique join arrays as a safety measure
 				for (const entry of result) {

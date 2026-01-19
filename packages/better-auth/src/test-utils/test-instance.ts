@@ -7,7 +7,7 @@ import type {
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { getAdapter, getMigrations } from "../db";
@@ -235,7 +235,7 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			throw new Error("Test user is disabled");
 		}
-		let headers = new Headers();
+		const headers = new Headers();
 		const setCookie = (name: string, value: string) => {
 			const current = headers.get("cookie");
 			headers.set("cookie", `${current || ""}; ${name}=${value}`);
