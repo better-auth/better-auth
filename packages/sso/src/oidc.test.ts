@@ -573,4 +573,112 @@ describe("provisioning", async (ctx) => {
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
 	});
+
+	it("should normalize email to lowercase in OIDC authentication to prevent duplicate creation", async () => {
+		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
+		await auth.api.signUpEmail({
+			body: {
+				email: "admin@example.com",
+				password: "password123",
+				name: "Admin User",
+			},
+		});
+
+		const adminSession = await auth.api.signInEmail({
+			body: {
+				email: "admin@example.com",
+				password: "password123",
+			},
+		});
+
+		const sessionCookie = adminSession.headers?.get("set-cookie") || "";
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "oidc-email-case-provider",
+				issuer: server.issuer.url,
+				domain: "example.com",
+				oidcConfig: {
+					clientId: "test-client-id",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers: {
+				cookie: sessionCookie,
+			},
+		});
+
+		const mixedCaseEmail = "OIDCUser@Example.com";
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.on("beforeUserinfo", (userInfoResponse, req) => {
+			userInfoResponse.body = {
+				email: mixedCaseEmail,
+				name: "OIDC Test User",
+				sub: "oidc-test-user",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		const firstLoginRes = await auth.api.signInSSO({
+			body: {
+				providerId: "oidc-email-case-provider",
+				callbackURL: "/dashboard",
+			},
+		});
+
+		expect(firstLoginRes.url).toBeTruthy();
+		const firstAuthUrl = new URL(firstLoginRes.url);
+
+		const firstCallbackResponse = await betterFetch(
+			"/sso/callback/oidc-email-case-provider",
+			{
+				method: "GET",
+				query: {
+					code: "test-auth-code-1",
+					state: firstAuthUrl.searchParams.get("state") || "",
+				},
+				baseURL: "http://localhost:3000",
+				onRequest: customFetchImpl.onRequest,
+			},
+		);
+
+		expect(firstCallbackResponse.error).toBeFalsy();
+		expect(firstCallbackResponse.response?.status).toBe(302);
+		expect(firstCallbackResponse.response?.headers.get("location")).toContain(
+			"dashboard",
+		);
+
+		const secondLoginRes = await auth.api.signInSSO({
+			body: {
+				providerId: "oidc-email-case-provider",
+				callbackURL: "/dashboard",
+			},
+		});
+
+		expect(secondLoginRes.url).toBeTruthy();
+		const secondAuthUrl = new URL(secondLoginRes.url);
+
+		const secondCallbackResponse = await betterFetch(
+			"/sso/callback/oidc-email-case-provider",
+			{
+				method: "GET",
+				query: {
+					code: "test-auth-code-2",
+					state: secondAuthUrl.searchParams.get("state") || "",
+				},
+				baseURL: "http://localhost:3000",
+				onRequest: customFetchImpl.onRequest,
+			},
+		);
+
+		expect(secondCallbackResponse.error).toBeFalsy();
+		expect(secondCallbackResponse.response?.status).toBe(302);
+		expect(secondCallbackResponse.response?.headers.get("location")).toContain(
+			"dashboard",
+		);
+	});
 });
