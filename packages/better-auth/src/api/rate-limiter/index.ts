@@ -1,5 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { createRateLimitKey, safeJSONParse } from "@better-auth/core/utils";
 import type { RateLimit } from "../../types";
 import { getIp } from "../../utils/get-request-ip";
 import { wildcardMatch } from "../../utils/wildcard";
@@ -164,7 +164,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	if (!ip) {
 		return;
 	}
-	const key = ip + path;
+	const key = createRateLimitKey(ip, path);
 	const specialRules = getDefaultSpecialRules();
 	const specialRule = specialRules.find((rule) => rule.pathMatcher(path));
 
