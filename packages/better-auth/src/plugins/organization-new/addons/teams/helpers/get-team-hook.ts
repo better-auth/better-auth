@@ -1,4 +1,4 @@
-import type { ResolvedTeamsOptions, TeamHooks } from "./types";
+import type { ResolvedTeamsOptions, TeamHooks } from "../types";
 
 type HookOptions =
 	| "CreateTeam"

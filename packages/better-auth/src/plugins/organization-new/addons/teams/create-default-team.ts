@@ -2,9 +2,9 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import type { Organization } from "../../schema";
-import { TEAMS_ERROR_CODES } from "./errors";
-import { getTeamAdapter } from "./get-team-adapter";
-import { getHook } from "./get-team-hook";
+import { TEAMS_ERROR_CODES } from "./helpers/errors";
+import { getTeamAdapter } from "./helpers/get-team-adapter";
+import { getHook } from "./helpers/get-team-hook";
 import type { Team } from "./schema";
 import type { ResolvedTeamsOptions } from "./types";
 

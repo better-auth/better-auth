@@ -30,7 +30,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [{ field: "slug", value: slug }],
 				select: ["id"],
 			});
-			return organization !== null;
+			return organization ? true : false;
 		},
 		/**
 		 * Checks if an organization id is valid.
