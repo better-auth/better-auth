@@ -207,7 +207,7 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					if (w.operator === "ne" && w.value === null) {
 						const fieldAttributes = getFieldAttributes({
 							model,
-							field: w.field
+							field: w.field,
 						});
 						const isNullable = fieldAttributes?.required !== true;
 						return isNullable ? { [fieldName]: { not: null } } : {};
