@@ -100,7 +100,7 @@ export interface OpenAPIOptions {
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
-	const path = (options?.path ?? "/reference") as "/reference";
+	const path = options?.path ?? "/reference";
 	return {
 		id: "open-api",
 		endpoints: {
