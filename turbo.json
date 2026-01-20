@@ -29,17 +29,131 @@
       "dependsOn": ["build"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "coverage/**", "test-results/**"],
+      "cache": true
+    },
+    "test:drizzle": {
+      "dependsOn": ["@better-auth/drizzle-adapter#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "test/drizzle-adapter/**",
+        "test/test-adapter.ts",
+        "test/tests/**",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "test-results/**"],
+      "cache": true
+    },
+    "test:kysely": {
+      "dependsOn": ["@better-auth/kysely-adapter#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "test/kysely-adapter/**",
+        "test/test-adapter.ts",
+        "test/tests/**",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "test-results/**"],
+      "cache": true
+    },
+    "test:prisma": {
+      "dependsOn": ["@better-auth/prisma-adapter#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "test/prisma-adapter/**",
+        "test/test-adapter.ts",
+        "test/tests/**",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "test-results/**"],
+      "cache": true
+    },
+    "test:mongodb": {
+      "dependsOn": ["@better-auth/mongo-adapter#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "test/mongodb-adapter/**",
+        "test/test-adapter.ts",
+        "test/tests/**",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "test-results/**"],
+      "cache": true
+    },
+    "test:memory": {
+      "dependsOn": ["@better-auth/memory-adapter#build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "test/adapter.memory.test.ts",
+        "test/test-adapter.ts",
+        "test/tests/**",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "test-results/**"],
+      "cache": true
     },
     "coverage": {
       "dependsOn": ["build"],
-      "outputs": ["coverage"]
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"],
+      "cache": true
     },
     "e2e:smoke": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "cache": true
     },
     "e2e:integration": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "cache": true
     },
     "deploy": {
       "cache": false

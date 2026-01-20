@@ -2,6 +2,11 @@
   "name": "adapter",
   "scripts": {
     "test": "vitest",
+    "test:drizzle": "vitest run test/drizzle-adapter/**/*.test.ts",
+    "test:kysely": "vitest run test/kysely-adapter/**/*.test.ts",
+    "test:prisma": "vitest run test/prisma-adapter/**/*.test.ts",
+    "test:mongodb": "vitest run test/mongodb-adapter/**/*.test.ts",
+    "test:memory": "vitest run test/adapter.memory.test.ts",
     "prepare": "prisma generate --schema ./test/prisma-adapter/base.prisma"
   },
   "private": true,
