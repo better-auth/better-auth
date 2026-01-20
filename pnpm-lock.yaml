@@ -472,7 +472,7 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       zod:
-        specifier: ^4.3.4
+        specifier: ^4.3.5
         version: 4.3.5
     devDependencies:
       '@tailwindcss/postcss':
@@ -608,10 +608,10 @@ importers:
     dependencies:
       '@ai-sdk/openai-compatible':
         specifier: ^2.0.1
-        version: 2.0.1(zod@4.3.4)
+        version: 2.0.1(zod@4.3.5)
       '@ai-sdk/react':
         specifier: ^3.0.3
-        version: 3.0.3(react@19.2.3)(zod@4.3.4)
+        version: 3.0.3(react@19.2.3)(zod@4.3.5)
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.3.0
@@ -722,7 +722,7 @@ importers:
         version: 0.8.5
       ai:
         specifier: ^6.0.3
-        version: 6.0.3(zod@4.3.4)
+        version: 6.0.3(zod@4.3.5)
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -752,16 +752,16 @@ importers:
         version: 12.23.12(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       fumadocs-core:
         specifier: 16.4.3
-        version: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4)
+        version: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5)
       fumadocs-mdx:
         specifier: 14.2.4
-        version: 14.2.4(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react@19.2.3)(vite@7.3.1(@types/node@25.0.6)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+        version: 14.2.4(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react@19.2.3)(vite@7.3.1(@types/node@25.0.6)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       fumadocs-typescript:
         specifier: ^5.0.1
-        version: 5.0.1(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4))(fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4))(react@19.2.3)(typescript@5.9.3)
+        version: 5.0.1(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5))(fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5))(react@19.2.3)(typescript@5.9.3)
       fumadocs-ui:
         specifier: 16.4.3
-        version: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4)
+        version: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5)
       geist:
         specifier: ^1.4.2
         version: 1.4.2(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))
@@ -871,8 +871,8 @@ importers:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@tailwindcss/postcss':
         specifier: catalog:tailwind
@@ -1097,7 +1097,7 @@ importers:
         version: 2.0.0
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1114,8 +1114,8 @@ importers:
         specifier: ^4.0.0 || ^5.0.0
         version: 5.46.1
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@lynx-js/react':
         specifier: ^0.114.0
@@ -1286,8 +1286,8 @@ importers:
         specifier: ^0.2.3
         version: 0.2.3
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/passkey':
         specifier: workspace:*
@@ -1323,8 +1323,8 @@ importers:
         specifier: ^1.0.0
         version: 1.1.0
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/utils':
         specifier: 'catalog:'
@@ -1334,7 +1334,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       jose:
         specifier: ^6.1.0
         version: 6.1.3
@@ -1355,10 +1355,10 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1389,10 +1389,10 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.8.0
-        version: 1.25.2(hono@4.11.4)(zod@3.25.76)
+        version: 1.25.2(hono@4.11.4)(zod@4.3.5)
       zod:
-        specifier: ^3.24.2
-        version: 3.25.76
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       tsdown:
         specifier: 'catalog:'
@@ -1416,15 +1416,15 @@ importers:
         specifier: ^6.1.0
         version: 6.1.3
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.2
-        version: 1.25.2(hono@4.11.4)(zod@4.3.4)
+        version: 1.25.2(hono@4.11.4)(zod@4.3.5)
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1456,8 +1456,8 @@ importers:
         specifier: ^1.0.1
         version: 1.0.1
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1479,10 +1479,10 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       zod:
-        specifier: ^4.1.5
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/sso':
         specifier: workspace:*
@@ -1509,8 +1509,8 @@ importers:
         specifier: ^2.10.1
         version: 2.10.1
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@types/body-parser':
         specifier: ^1.19.6
@@ -1523,7 +1523,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       body-parser:
         specifier: ^2.2.1
         version: 2.2.1
@@ -1543,8 +1543,8 @@ importers:
         specifier: ^6.1.4
         version: 6.1.4
       zod:
-        specifier: ^4.1.12
-        version: 4.3.4
+        specifier: ^4.3.5
+        version: 4.3.5
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1554,7 +1554,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       stripe:
         specifier: ^20.0.0
         version: 20.0.0(@types/node@25.0.6)
@@ -13933,6 +13933,11 @@ packages:
     engines: {node: '>=20.16.0'}
     hasBin: true
 
+  srvx@0.10.1:
+    resolution: {integrity: sha512-A//xtfak4eESMWWydSRFUVvCTQbSwivnGCEf8YGPe2eHU0+Z6znfUTCPF0a7oV3sObSOcrXHlL6Bs9vVctfXdg==}
+    engines: {node: '>=20.16.0'}
+    hasBin: true
+
   stack-trace@0.0.10:
     resolution: {integrity: sha512-KGzahc7puUKkzyMt+IqAep+TVNbKP+k2Lmwhub39m1AsTSkaDutx56aDCo+HLDzf/D26BIHTJWNiTG1KAJiQCg==}
 
@@ -15349,34 +15354,34 @@ snapshots:
     optionalDependencies:
       graphql: 16.12.0
 
-  '@ai-sdk/gateway@3.0.2(zod@4.3.4)':
+  '@ai-sdk/gateway@3.0.2(zod@4.3.5)':
     dependencies:
       '@ai-sdk/provider': 3.0.0
-      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.4)
+      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.5)
       '@vercel/oidc': 3.0.5
-      zod: 4.3.4
+      zod: 4.3.5
 
-  '@ai-sdk/openai-compatible@2.0.1(zod@4.3.4)':
+  '@ai-sdk/openai-compatible@2.0.1(zod@4.3.5)':
     dependencies:
       '@ai-sdk/provider': 3.0.0
-      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.4)
-      zod: 4.3.4
+      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.5)
+      zod: 4.3.5
 
-  '@ai-sdk/provider-utils@4.0.1(zod@4.3.4)':
+  '@ai-sdk/provider-utils@4.0.1(zod@4.3.5)':
     dependencies:
       '@ai-sdk/provider': 3.0.0
       '@standard-schema/spec': 1.1.0
       eventsource-parser: 3.0.6
-      zod: 4.3.4
+      zod: 4.3.5
 
   '@ai-sdk/provider@3.0.0':
     dependencies:
       json-schema: 0.4.0
 
-  '@ai-sdk/react@3.0.3(react@19.2.3)(zod@4.3.4)':
+  '@ai-sdk/react@3.0.3(react@19.2.3)(zod@4.3.5)':
     dependencies:
-      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.4)
-      ai: 6.0.3(zod@4.3.4)
+      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.5)
+      ai: 6.0.3(zod@4.3.5)
       react: 19.2.3
       swr: 2.3.6(react@19.2.3)
       throttleit: 2.1.0
@@ -18093,9 +18098,9 @@ snapshots:
       '@formatjs/fast-memoize': 3.0.2
       tslib: 2.8.1
 
-  '@fumadocs/ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4)':
+  '@fumadocs/ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5)':
     dependencies:
-      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4)
+      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5)
       next-themes: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       postcss-selector-parser: 7.1.1
       react: 19.2.3
@@ -18665,50 +18670,6 @@ snapshots:
       unist-util-visit: 5.0.0
       vfile: 6.0.3
     transitivePeerDependencies:
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@3.25.76)':
-    dependencies:
-      '@hono/node-server': 1.19.7(hono@4.11.4)
-      ajv: 8.17.1
-      ajv-formats: 3.0.1(ajv@8.17.1)
-      content-type: 1.0.5
-      cors: 2.8.5
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.0.6
-      express: 5.2.1
-      express-rate-limit: 7.5.1(express@5.2.1)
-      jose: 6.1.3
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 3.25.76
-      zod-to-json-schema: 3.25.1(zod@3.25.76)
-    transitivePeerDependencies:
-      - hono
-      - supports-color
-
-  '@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@4.3.4)':
-    dependencies:
-      '@hono/node-server': 1.19.7(hono@4.11.4)
-      ajv: 8.17.1
-      ajv-formats: 3.0.1(ajv@8.17.1)
-      content-type: 1.0.5
-      cors: 2.8.5
-      cross-spawn: 7.0.6
-      eventsource: 3.0.7
-      eventsource-parser: 3.0.6
-      express: 5.2.1
-      express-rate-limit: 7.5.1(express@5.2.1)
-      jose: 6.1.3
-      json-schema-typed: 8.0.2
-      pkce-challenge: 5.0.1
-      raw-body: 3.0.2
-      zod: 4.3.4
-      zod-to-json-schema: 3.25.1(zod@4.3.4)
-    transitivePeerDependencies:
-      - hono
       - supports-color
 
   '@modelcontextprotocol/sdk@1.25.2(hono@4.11.4)(zod@4.3.5)':
@@ -22452,7 +22413,7 @@ snapshots:
 
   '@vue/compiler-core@3.5.26':
     dependencies:
-      '@babel/parser': 7.28.6
+      '@babel/parser': 7.28.5
       '@vue/shared': 3.5.26
       entities: 7.0.0
       estree-walker: 2.0.2
@@ -22598,13 +22559,13 @@ snapshots:
       clean-stack: 2.2.0
       indent-string: 4.0.0
 
-  ai@6.0.3(zod@4.3.4):
+  ai@6.0.3(zod@4.3.5):
     dependencies:
-      '@ai-sdk/gateway': 3.0.2(zod@4.3.4)
+      '@ai-sdk/gateway': 3.0.2(zod@4.3.5)
       '@ai-sdk/provider': 3.0.0
-      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.4)
+      '@ai-sdk/provider-utils': 4.0.1(zod@4.3.5)
       '@opentelemetry/api': 1.9.0
-      zod: 4.3.4
+      zod: 4.3.5
 
   ajv-formats@3.0.1(ajv@8.17.1):
     optionalDependencies:
@@ -25315,7 +25276,7 @@ snapshots:
   fsevents@2.3.3:
     optional: true
 
-  fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4):
+  fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5):
     dependencies:
       '@formatjs/intl-localematcher': 0.7.4
       '@orama/orama': 3.1.18
@@ -25345,11 +25306,11 @@ snapshots:
       next: 16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1)
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      zod: 4.3.4
+      zod: 4.3.5
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4):
+  fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5):
     dependencies:
       '@formatjs/intl-localematcher': 0.7.4
       '@orama/orama': 3.1.18
@@ -25379,18 +25340,18 @@ snapshots:
       next: 16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1)
       react: 19.2.3
       react-dom: 19.2.3(react@19.2.3)
-      zod: 4.3.4
+      zod: 4.3.5
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-mdx@14.2.4(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react@19.2.3)(vite@7.3.1(@types/node@25.0.6)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
+  fumadocs-mdx@14.2.4(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react@19.2.3)(vite@7.3.1(@types/node@25.0.6)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@mdx-js/mdx': 3.1.1
       '@standard-schema/spec': 1.1.0
       chokidar: 5.0.0
       esbuild: 0.27.2
       estree-util-value-to-estree: 3.5.0
-      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4)
+      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5)
       js-yaml: 4.1.1
       mdast-util-to-markdown: 2.1.2
       picocolors: 1.1.1
@@ -25411,10 +25372,10 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-typescript@5.0.1(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4))(fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4))(react@19.2.3)(typescript@5.9.3):
+  fumadocs-typescript@5.0.1(@types/react@19.2.7)(fumadocs-core@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5))(fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5))(react@19.2.3)(typescript@5.9.3):
     dependencies:
       estree-util-value-to-estree: 3.5.0
-      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4)
+      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.542.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5)
       hast-util-to-estree: 3.1.3
       hast-util-to-jsx-runtime: 2.3.6
       react: 19.2.3
@@ -25426,13 +25387,13 @@ snapshots:
       unist-util-visit: 5.0.0
     optionalDependencies:
       '@types/react': 19.2.7
-      fumadocs-ui: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4)
+      fumadocs-ui: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5)
     transitivePeerDependencies:
       - supports-color
 
-  fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4):
+  fumadocs-ui@16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(algoliasearch@5.46.2)(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5):
     dependencies:
-      '@fumadocs/ui': 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.4)
+      '@fumadocs/ui': 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(tailwindcss@4.1.18)(zod@4.3.5)
       '@radix-ui/react-accordion': 1.2.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-collapsible': 1.1.12(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       '@radix-ui/react-dialog': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
@@ -25444,7 +25405,7 @@ snapshots:
       '@radix-ui/react-slot': 1.2.4(@types/react@19.2.7)(react@19.2.3)
       '@radix-ui/react-tabs': 1.1.13(@types/react-dom@19.2.3(@types/react@19.2.7))(@types/react@19.2.7)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       class-variance-authority: 0.7.1
-      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.4)
+      fumadocs-core: 16.4.3(@oramacloud/client@2.1.4)(@tanstack/react-router@1.151.2(react-dom@19.2.3(react@19.2.3))(react@19.2.3))(@types/react@19.2.7)(algoliasearch@5.46.2)(lucide-react@0.562.0(react@19.2.3))(next@16.1.1(@babel/core@7.28.5)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(sass@1.97.1))(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(zod@4.3.5)
       lucide-react: 0.562.0(react@19.2.3)
       next-themes: 0.4.6(react-dom@19.2.3(react@19.2.3))(react@19.2.3)
       react: 19.2.3
@@ -25646,7 +25607,7 @@ snapshots:
   h3@2.0.1-rc.7:
     dependencies:
       rou3: 0.7.12
-      srvx: 0.10.0
+      srvx: 0.10.1
 
   happy-dom@20.0.11:
     dependencies:
@@ -30241,6 +30202,8 @@ snapshots:
 
   srvx@0.10.0: {}
 
+  srvx@0.10.1: {}
+
   stack-trace@0.0.10: {}
 
   stack-utils@2.0.6:
@@ -31711,14 +31674,6 @@ snapshots:
       compress-commons: 6.0.2
       readable-stream: 4.7.0
 
-  zod-to-json-schema@3.25.1(zod@3.25.76):
-    dependencies:
-      zod: 3.25.76
-
-  zod-to-json-schema@3.25.1(zod@4.3.4):
-    dependencies:
-      zod: 4.3.4
-
   zod-to-json-schema@3.25.1(zod@4.3.5):
     dependencies:
       zod: 4.3.5
@@ -31729,7 +31684,8 @@ snapshots:
 
   zod@3.25.76: {}
 
-  zod@4.3.4: {}
+  zod@4.3.4:
+    optional: true
 
   zod@4.3.5: {}
 
