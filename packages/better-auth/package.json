@@ -30,7 +30,6 @@
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "files": [
@@ -194,11 +193,6 @@
       "dev-source": "./src/adapters/memory-adapter/index.ts",
       "types": "./dist/adapters/memory-adapter/index.d.mts",
       "default": "./dist/adapters/memory-adapter/index.mjs"
-    },
-    "./adapters/test": {
-      "dev-source": "./src/adapters/test.ts",
-      "types": "./dist/adapters/test.d.mts",
-      "default": "./dist/adapters/test.mjs"
     },
     "./adapters": {
       "dev-source": "./src/adapters/index.ts",
@@ -478,6 +472,11 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/memory-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
@@ -492,7 +491,6 @@
   },
   "devDependencies": {
     "@lynx-js/react": "^0.115.4",
-    "@prisma/client": "^5.22.0",
     "@sveltejs/kit": "^2.49.5",
     "@tanstack/react-start": "^1.151.2",
     "@tanstack/solid-start": "^1.151.2",
@@ -502,17 +500,11 @@
     "@types/react": "catalog:react19",
     "better-sqlite3": "^12.4.1",
     "deepmerge": "^4.3.1",
-    "drizzle-kit": "^0.31.4",
-    "drizzle-orm": "^0.41.0",
     "happy-dom": "^20.0.10",
     "listhen": "^1.9.0",
-    "mongodb": "^6.18.0",
     "msw": "^2.12.4",
-    "mysql2": "^3.14.4",
     "next": "^16.1.1",
     "oauth2-mock-server": "^7.2.1",
-    "pg": "^8.16.3",
-    "prisma": "^5.22.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "solid-js": "^1.9.8",

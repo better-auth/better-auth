@@ -1,1 +1,1 @@
-export * from "./prisma-adapter";
+export * from "@better-auth/prisma-adapter";
