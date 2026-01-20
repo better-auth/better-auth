@@ -42,9 +42,7 @@ const hooksSourceWeakMap = new WeakMap<
 
 type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
-> & {
-	_flag?: string;
-};
+>;
 
 export function toAuthEndpoints<
 	const E extends Record<
@@ -167,10 +165,15 @@ export function toAuthEndpoints<
 						throw result.response;
 					}
 
-					// For HTTP requests from router, always return Response objects
-					// For API calls, respect the original asResponse/returnHeaders settings
-					const isFromRouter = context?._flag === "router";
-					const shouldReturnResponse = isFromRouter || context?.asResponse;
+					// For OAuth/OIDC HTTP requests, return Response objects for spec compliance
+					// For other API calls, respect the original asResponse/returnHeaders settings
+					const isOAuthOIDCEndpoint =
+						context?.path &&
+						(context.path.startsWith("/oauth2/") ||
+							context.path.startsWith("/.well-known/openid-configuration") ||
+							context.path === "/.well-known/openid-configuration");
+					const shouldReturnResponse =
+						(isOAuthOIDCEndpoint && context?.request) || context?.asResponse;
 
 					const response = shouldReturnResponse
 						? toResponse(result.response, {
