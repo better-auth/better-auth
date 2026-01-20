@@ -90,7 +90,7 @@ describe("update organization", async (it) => {
 
 			expect(updatedOrg).toBeDefined();
 			//@ts-expect-error - intentional, should be undefined.
-			expect(updatedOrg?.slug).toBe(orgData.slug);
+			expect(updatedOrg?.slug).toBeUndefined();
 		});
 	});
 
