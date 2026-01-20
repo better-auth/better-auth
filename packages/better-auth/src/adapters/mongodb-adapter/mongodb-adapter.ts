@@ -160,6 +160,18 @@ export const mongodbAdapter = (
 								}),
 							};
 							break;
+						case "is_not_null":
+							condition = {
+								[field]: {
+									$ne: null,
+								},
+							};
+							break;
+						case "is_null":
+							condition = {
+								[field]: null,
+							};
+							break;
 						case "in":
 							condition = {
 								[field]: {

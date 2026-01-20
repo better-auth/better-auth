@@ -165,6 +165,14 @@ export const kyselyAdapter = (
 
 					const expr = (eb: any) => {
 						const f = `${model}.${field}`;
+						if (operator.toLowerCase() === "is_null") {
+							return eb(f, "is", null);
+						}
+
+						if (operator.toLowerCase() === "is_not_null") {
+							return eb(f, "is not", null);
+						}
+
 						if (operator.toLowerCase() === "in") {
 							return eb(f, "in", Array.isArray(value) ? value : [value]);
 						}

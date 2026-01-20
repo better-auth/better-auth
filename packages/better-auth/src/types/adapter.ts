@@ -1,4 +1,5 @@
 import type {
+	CleanedWhere,
 	DBAdapter,
 	DBAdapterInstance,
 	DBAdapterSchemaCreation,
@@ -15,7 +16,7 @@ export type {
 	JoinOption,
 } from "@better-auth/core/db/adapter";
 
-export type { Where };
+export type { CleanedWhere, Where };
 
 /**
  * Adapter Interface

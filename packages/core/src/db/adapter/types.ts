@@ -1,11 +1,11 @@
 import type { BetterAuthOptions } from "../../types";
-import type { Prettify } from "../../types/helper";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
 	DBAdapterSchemaCreation as AdapterSchemaCreation,
 	CustomAdapter as CoreCustomAdapter,
 	DBAdapterFactoryConfig,
 	JoinConfig,
+	CleanedWhere as NewCleanedWhere,
 	DBTransactionAdapter as TransactionAdapter,
 	Where,
 } from "./index";
@@ -124,7 +124,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 			| "delete"
 			| "deleteMany"
 			| "count";
-	}) => W extends undefined ? undefined : CleanedWhere[];
+	}) => W extends undefined ? undefined : NewCleanedWhere[];
 }) => CustomAdapter;
 
 /**
@@ -148,7 +148,7 @@ export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
 /**
  * @deprecated Use `CleanedWhere` from `@better-auth/core/db/adapter` instead.
  */
-export type CleanedWhere = Prettify<Required<Where>>;
+export type CleanedWhere = NewCleanedWhere;
 
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
