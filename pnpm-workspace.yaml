@@ -27,4 +27,5 @@ catalogs:
     '@vitest/coverage-istanbul': ^4.0.15
     vitest: ^4.0.15
 
-neverBuiltDependencies: []
+dangerouslyAllowAllBuilds: true
+linkWorkspacePackages: true
