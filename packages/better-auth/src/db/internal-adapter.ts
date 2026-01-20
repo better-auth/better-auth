@@ -286,8 +286,7 @@ export const createInternalAdapter = (
 			} else if (secondaryStorage && storeInDb === false) {
 				// no database to auto-generate id
 				sessionId = generateId();
-			}
-			// otherwise database will generate the id
+			} // otherwise database will generate the id
 
 			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = parseSessionInput(
