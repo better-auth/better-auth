@@ -496,6 +496,11 @@ describe("internal adapter test", async () => {
 			email: "test@email.com",
 		});
 		const session = await internalAdapter.createSession(user.id);
+
+		// Session should have an id
+		expect(session.id).toBeDefined();
+		expect(typeof session.id).toBe("string");
+
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
 		);

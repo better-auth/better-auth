@@ -12,7 +12,7 @@ import type {
 	EndpointOptions,
 	InputContext,
 } from "better-call";
-import { toResponse } from "better-call";
+import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 
@@ -286,13 +286,20 @@ async function runAfterHooks(
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (isAPIError(e)) {
+					const headers = (e as any)[kAPIErrorHeaderSymbol] as
+						| Headers
+						| undefined;
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
 						// inherit stack from errorStack if debug mode is enabled
 						e.stack = e.errorStack;
 					}
 					return {
 						response: e,
-						headers: e.headers ? new Headers(e.headers) : null,
+						headers: headers
+							? headers
+							: e.headers
+								? new Headers(e.headers)
+								: null,
 					};
 				}
 				throw e;
