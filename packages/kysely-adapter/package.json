@@ -32,7 +32,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
-    "kysely": "^0.28.5",
+    "kysely": "^0.28.10",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
