@@ -29,6 +29,9 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		usePlural: false,
 	});
 
+	const skipGeneratorAndDatasource =
+		adapter.options?.skipGeneratorAndDatasource ?? false;
+
 	let schemaPrisma = "";
 	if (schemaPrismaExist) {
 		schemaPrisma = await fs.readFile(
@@ -36,25 +39,31 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 			"utf-8",
 		);
 	} else {
-		schemaPrisma = getNewPrisma(provider, process.cwd());
+		schemaPrisma = skipGeneratorAndDatasource
+			? ""
+			: getNewPrisma(provider, process.cwd());
 	}
 
 	// Update generator block for Prisma v7+ in existing schemas
-	const prismaVersion = getPrismaVersion(process.cwd());
-	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
-		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
-			const generator: any = builder.findByType("generator", {
-				name: "client",
-			});
-			if (generator && generator.properties) {
-				const providerProp = generator.properties.find(
-					(prop: any) => prop.type === "assignment" && prop.key === "provider",
-				);
-				if (providerProp && providerProp.value === '"prisma-client-js"') {
-					providerProp.value = '"prisma-client"';
+	// Skip if user wants to manage generator/datasource blocks manually
+	if (!skipGeneratorAndDatasource) {
+		const prismaVersion = getPrismaVersion(process.cwd());
+		if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
+			schemaPrisma = produceSchema(schemaPrisma, (builder) => {
+				const generator: any = builder.findByType("generator", {
+					name: "client",
+				});
+				if (generator && generator.properties) {
+					const providerProp = generator.properties.find(
+						(prop: any) =>
+							prop.type === "assignment" && prop.key === "provider",
+					);
+					if (providerProp && providerProp.value === '"prisma-client-js"') {
+						providerProp.value = '"prisma-client"';
+					}
 				}
-			}
-		});
+			});
+		}
 	}
 
 	const manyToManyRelations = new Map();

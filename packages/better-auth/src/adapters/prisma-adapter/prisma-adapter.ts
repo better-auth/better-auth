@@ -44,6 +44,15 @@ export interface PrismaConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+
+	/**
+	 * Whether to skip generating `generator` and `datasource` blocks in the Prisma schema.
+	 *
+	 * When set to `true`, the Better Auth CLI will not generate these blocks during schema generation,
+	 * allowing you to manage them manually or for cases where those blocks are defined elsewhere.
+	 * @default false
+	 */
+	skipGeneratorAndDatasource?: boolean | undefined;
 }
 
 interface PrismaClient {}

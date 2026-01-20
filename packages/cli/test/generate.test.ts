@@ -978,3 +978,90 @@ describe("Prisma v7 compatibility", () => {
 		}
 	});
 });
+
+describe("skipGeneratorAndDatasource config", () => {
+	it("should generate prisma schema without generator and datasource blocks when skipGeneratorAndDatasource is true", async () => {
+		const schema = await generatePrismaSchema({
+			file: "test.prisma",
+			adapter: prismaAdapter(
+				{},
+				{
+					provider: "postgresql",
+					skipGeneratorAndDatasource: true,
+				},
+			)({} as BetterAuthOptions),
+			options: {
+				database: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+						skipGeneratorAndDatasource: true,
+					},
+				),
+				plugins: [twoFactor(), username()],
+			},
+		});
+		// Should not contain generator or datasource blocks
+		expect(schema.code).not.toContain("generator");
+		expect(schema.code).not.toContain("datasource");
+		// Should still contain model definitions
+		expect(schema.code).toContain("model");
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/schema-skip-generator-datasource.prisma",
+		);
+	});
+
+	it("should generate generator and datasource blocks when skipGeneratorAndDatasource is false", async () => {
+		const originalCwd = process.cwd();
+		const tmpDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "prisma-normal-test-"),
+		);
+
+		try {
+			const packageJson = {
+				dependencies: {
+					prisma: "^5.0.0",
+				},
+			};
+			fs.writeFileSync(
+				path.join(tmpDir, "package.json"),
+				JSON.stringify(packageJson),
+			);
+
+			process.chdir(tmpDir);
+
+			const schema = await generatePrismaSchema({
+				file: "test.prisma",
+				adapter: prismaAdapter(
+					{},
+					{
+						provider: "postgresql",
+						skipGeneratorAndDatasource: false,
+					},
+				)({} as BetterAuthOptions),
+				options: {
+					database: prismaAdapter(
+						{},
+						{
+							provider: "postgresql",
+							skipGeneratorAndDatasource: false,
+						},
+					),
+					plugins: [twoFactor(), username()],
+				},
+			});
+
+			// Should contain generator block
+			expect(schema.code).toContain("generator");
+			expect(schema.code).toContain('provider = "prisma-client-js"');
+			// Should contain datasource block
+			expect(schema.code).toContain("datasource");
+			expect(schema.code).toContain('provider = "postgresql"');
+			// Should contain model definitions
+			expect(schema.code).toContain("model");
+		} finally {
+			process.chdir(originalCwd);
+			fs.rmSync(tmpDir, { recursive: true });
+		}
+	});
+});
