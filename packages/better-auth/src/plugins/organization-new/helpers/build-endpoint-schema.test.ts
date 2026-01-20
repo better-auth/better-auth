@@ -454,6 +454,258 @@ describe("buildEndpointSchema", () => {
 		});
 	});
 
+	describe("additionalFieldsNestedAs edge cases", () => {
+		it("should merge nested additional fields with existing base schema property instead of overwriting", () => {
+			// This test demonstrates the bug: when the base schema already has a "data" property,
+			// and we use additionalFieldsNestedAs: "data", it should MERGE the additional fields
+			// into the existing "data" property, not overwrite it entirely.
+			const { schema, $Infer } = buildEndpointSchema({
+				baseSchema: z.object({
+					name: z.string(),
+					data: z.object({
+						existingField: z.string(),
+					}),
+				}),
+				additionalFieldsSchema: {
+					organization: {
+						additionalFields: {
+							customField: { type: "string", required: true, input: true },
+						},
+					},
+				},
+				additionalFieldsModel: "organization",
+				additionalFieldsNestedAs: "data",
+			});
+
+			// Runtime: Should accept both existingField AND customField in data
+			const validResult = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing value",
+					customField: "custom value",
+				},
+			});
+			expect(validResult.success).toBe(true);
+
+			// Runtime: Should fail if existingField is missing (from base schema's data)
+			const missingExisting = schema.safeParse({
+				name: "Test",
+				data: {
+					customField: "custom value",
+				},
+			});
+			expect(missingExisting.success).toBe(false);
+
+			// Runtime: Should fail if customField is missing (from additional fields)
+			const missingCustom = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing value",
+				},
+			});
+			expect(missingCustom.success).toBe(false);
+
+			// Type: Should include both fields in the data property
+			expectTypeOf($Infer.body).toMatchTypeOf<{
+				name: string;
+				data: {
+					existingField: string;
+					customField: string;
+				};
+			}>();
+		});
+
+		it("should handle nested additional fields when base schema property is optional", () => {
+			const { schema } = buildEndpointSchema({
+				baseSchema: z.object({
+					name: z.string(),
+					data: z
+						.object({
+							existingField: z.string(),
+						})
+						.optional(),
+				}),
+				additionalFieldsSchema: {
+					organization: {
+						additionalFields: {
+							customField: { type: "string", required: true, input: true },
+						},
+					},
+				},
+				additionalFieldsModel: "organization",
+				additionalFieldsNestedAs: "data",
+			});
+
+			// Should merge the schemas properly
+			const validResult = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing",
+					customField: "custom",
+				},
+			});
+			expect(validResult.success).toBe(true);
+		});
+
+		it("should merge optional schema with existing base schema property instead of overwriting", () => {
+			// This test demonstrates that optional schemas should also merge with existing properties
+			const enableData = true as const;
+
+			const { schema, $Infer } = buildEndpointSchema({
+				baseSchema: z.object({
+					name: z.string(),
+					data: z.object({
+						existingField: z.string(),
+					}),
+				}),
+				additionalFieldsModel: "test",
+				optionalSchema: [
+					{
+						condition: enableData,
+						schema: z.object({
+							data: z.object({
+								optionalField: z.number(),
+							}),
+						}),
+					},
+				] as const,
+			});
+
+			// Runtime: Should require both existingField AND optionalField in data
+			const validResult = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing value",
+					optionalField: 42,
+				},
+			});
+			expect(validResult.success).toBe(true);
+
+			// Runtime: Should fail if existingField is missing
+			const missingExisting = schema.safeParse({
+				name: "Test",
+				data: {
+					optionalField: 42,
+				},
+			});
+			expect(missingExisting.success).toBe(false);
+
+			// Runtime: Should fail if optionalField is missing
+			const missingOptional = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing value",
+				},
+			});
+			expect(missingOptional.success).toBe(false);
+
+			// Type: Should include both fields in the data property
+			expectTypeOf($Infer.body).toMatchTypeOf<{
+				name: string;
+				data: {
+					existingField: string;
+					optionalField: number;
+				};
+			}>();
+		});
+
+		it("should merge multiple optional schemas with the same nested property", () => {
+			const enableFeature1 = true as const;
+			const enableFeature2 = true as const;
+
+			const { schema } = buildEndpointSchema({
+				baseSchema: z.object({
+					name: z.string(),
+					settings: z.object({
+						baseOption: z.boolean(),
+					}),
+				}),
+				additionalFieldsModel: "test",
+				optionalSchema: [
+					{
+						condition: enableFeature1,
+						schema: z.object({
+							settings: z.object({
+								feature1Option: z.string(),
+							}),
+						}),
+					},
+					{
+						condition: enableFeature2,
+						schema: z.object({
+							settings: z.object({
+								feature2Option: z.number(),
+							}),
+						}),
+					},
+				] as const,
+			});
+
+			// Should require all settings fields
+			const validResult = schema.safeParse({
+				name: "Test",
+				settings: {
+					baseOption: true,
+					feature1Option: "value",
+					feature2Option: 123,
+				},
+			});
+			expect(validResult.success).toBe(true);
+
+			// Should fail if any settings field is missing
+			const missingFeature1 = schema.safeParse({
+				name: "Test",
+				settings: {
+					baseOption: true,
+					feature2Option: 123,
+				},
+			});
+			expect(missingFeature1.success).toBe(false);
+		});
+
+		it("should handle optional schema merging with optional base property", () => {
+			const enableData = true as const;
+
+			const { schema } = buildEndpointSchema({
+				baseSchema: z.object({
+					name: z.string(),
+					data: z
+						.object({
+							existingField: z.string(),
+						})
+						.optional(),
+				}),
+				additionalFieldsModel: "test",
+				optionalSchema: [
+					{
+						condition: enableData,
+						schema: z.object({
+							data: z.object({
+								optionalField: z.number(),
+							}),
+						}),
+					},
+				] as const,
+			});
+
+			// Should merge and preserve optionality
+			const validWithData = schema.safeParse({
+				name: "Test",
+				data: {
+					existingField: "existing",
+					optionalField: 42,
+				},
+			});
+			expect(validWithData.success).toBe(true);
+
+			// Should allow omitting the entire data property since base was optional
+			const validWithoutData = schema.safeParse({
+				name: "Test",
+			});
+			expect(validWithoutData.success).toBe(true);
+		});
+	});
+
 	describe("combined runtime and type tests", () => {
 		it("should work with complex schema configuration", () => {
 			const enableSlug = true as const;

@@ -71,12 +71,16 @@ type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
  */
 export type FieldAttributeToObject<
 	Fields extends Record<string, DBFieldAttribute>,
-> = AddOptionalFields<
-	{
-		[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
-	},
-	Fields
->;
+> = [keyof Fields] extends [never]
+	? {}
+	: string extends keyof Fields
+		? {}
+		: AddOptionalFields<
+				{
+					[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
+				},
+				Fields
+			>;
 
 type AddOptionalFields<
 	T extends Record<string, any>,

@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { describe, expect, expectTypeOf } from "vitest";
 import { organization } from "../organization";
 import { defineInstance, getOrganizationData } from "../test/utils";
 
@@ -36,28 +36,104 @@ describe("update organization", async (it) => {
 				organizationId: org.id,
 				data: {
 					logo: "https://example.co/logo.png",
+					name: "updated-name",
+					slug: "updated-slug",
 					metadata: {
 						test: "organization-metadata-updated",
 					},
-					name: "updated-name",
-					slug: "updated-slug",
 				},
 			},
 		});
 
 		expect(updatedOrg).toBeDefined();
-		expect(updatedOrg?.id).toBe(org.id);
-		expect(updatedOrg?.name).toBe("updated-name");
-		expect(updatedOrg?.slug).toBe("updated-slug");
-		expect(updatedOrg?.logo).toBe("https://example.co/logo.png");
-		expect(updatedOrg?.metadata).toStrictEqual({
+		expect(updatedOrg.id).toBe(org.id);
+		expect(updatedOrg.name).toBe("updated-name");
+		expect(updatedOrg.slug).toBe("updated-slug");
+		expect(updatedOrg.logo).toBe("https://example.co/logo.png");
+		expect(updatedOrg.metadata).toStrictEqual({
 			test: "organization-metadata-updated",
 		});
+
+		expectTypeOf<typeof updatedOrg.slug>().toEqualTypeOf<string>();
 	});
 
 	describe("disable slugs", async (it) => {
 		const plugin = organization({ disableSlugs: true });
 		const { auth, signInWithTestUser } = await defineInstance([plugin]);
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
+
+		it("should not update the slug", async () => {
+			const orgData = getOrganizationData();
+			const org = await auth.api.createOrganization({
+				headers,
+				body: {
+					name: orgData.name,
+					//@ts-expect-error - intentional, should be ignored.
+					slug: orgData.slug,
+					logo: "https://example.com/logo.png",
+					metadata: {
+						test: "organization-metadata",
+					},
+				},
+			});
+
+			const updatedOrg = await auth.api.updateOrganization({
+				headers,
+				body: {
+					organizationId: org.id,
+					data: {
+						//@ts-expect-error - intentional, should be ignored.
+						slug: "updated-slug",
+					},
+				},
+			});
+
+			expect(updatedOrg).toBeDefined();
+			//@ts-expect-error - intentional, should be undefined.
+			expect(updatedOrg?.slug).toBe(orgData.slug);
+		});
+	});
+
+	describe("update with additional fields", async (it) => {
+		const plugin = organization({
+			schema: {
+				organization: {
+					additionalFields: {
+						test: {
+							type: "string",
+							required: true,
+						},
+					},
+				},
+			},
+		});
+		const { auth, signInWithTestUser } = await defineInstance([plugin]);
+		const { headers } = await signInWithTestUser();
+		it("should update the organization with additional fields", async () => {
+			const orgData = getOrganizationData();
+			const org = await auth.api.createOrganization({
+				headers,
+				body: {
+					name: orgData.name,
+					slug: orgData.slug,
+					test: "test-value",
+					logo: "https://example.com/logo.png",
+					metadata: {
+						test: "organization-metadata",
+					},
+				},
+			});
+			const updatedOrg = await auth.api.updateOrganization({
+				headers,
+				body: {
+					organizationId: org.id,
+					data: {
+						test: "updated-test-value",
+					},
+				},
+			});
+			expect(updatedOrg).toBeDefined();
+			expect(updatedOrg.test).toBe("updated-test-value");
+		});
 	});
 });

@@ -2,12 +2,12 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
 import { getSessionFromCtx } from "../../../../../api";
+import { hasPermission } from "../../../access";
 import { buildEndpointSchema } from "../../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../../helpers/error-codes";
 import { getOrgAdapter } from "../../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../../helpers/get-organization-id";
 import { orgMiddleware } from "../../../middleware/org-middleware";
-import { hasPermission } from "../../access-control";
 import { TEAMS_ERROR_CODES } from "../helpers/errors";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import { getHook } from "../helpers/get-team-hook";
@@ -33,10 +33,8 @@ export const createTeam = <O extends TeamsOptions>(
 
 	const { $Infer, schema, getBody } = buildEndpointSchema({
 		baseSchema: baseTeamSchema,
-		additionalFields: {
-			schema: options?.schema,
-			model: "team",
-		},
+		additionalFieldsSchema: options?.schema as O["schema"],
+		additionalFieldsModel: "team",
 		optionalSchema: [
 			{
 				condition: enableSlugs,

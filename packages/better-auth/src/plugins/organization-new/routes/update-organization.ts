@@ -9,7 +9,7 @@ import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { getOrganizationId } from "../helpers/get-organization-id";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import { orgMiddleware } from "../middleware/org-middleware";
-import type { OrganizationOptions } from "../types";
+import type { InferOrganization, OrganizationOptions } from "../types";
 
 const baseUpdateOrganizationSchema = z.object({
 	data: z.object({
@@ -51,11 +51,11 @@ export const updateOrganization = <O extends OrganizationOptions>(
 ) => {
 	const resolvedOptions = resolveOrgOptions(options);
 	type EnableSlugs = O["disableSlugs"] extends true ? false : true;
-	const enableSlugs = (options?.disableSlugs ?? false) as EnableSlugs;
+	const enableSlugs = !resolvedOptions.disableSlugs as EnableSlugs;
 
 	const { $Infer, schema, getBody } = buildEndpointSchema({
 		baseSchema: baseUpdateOrganizationSchema,
-		additionalFieldsSchema: options?.schema,
+		additionalFieldsSchema: options?.schema as O["schema"],
 		additionalFieldsModel: "organization",
 		additionalFieldsNestedAs: "data",
 		optionalSchema: [
@@ -173,12 +173,20 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				return data;
 			})();
 
+			type ReturnType = InferOrganization<O, false>;
+
+			// No data to update
+			if (Object.keys(updateData).length === 0) {
+				await orgHooks.after({ member, organization: null, user }, ctx);
+				return ctx.json(organization as ReturnType);
+			}
+
 			const updatedOrg = await adapter.updateOrganization(
 				organizationId,
 				updateData,
 			);
 			await orgHooks.after({ member, organization: updatedOrg, user }, ctx);
-			return ctx.json(updatedOrg);
+			return ctx.json(updatedOrg as ReturnType);
 		},
 	);
 };

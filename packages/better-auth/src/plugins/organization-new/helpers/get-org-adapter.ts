@@ -74,17 +74,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 
 			const metadata = (() => {
-				const m = organization.metadata;
-				if (m && typeof m === "string") {
-					return JSON.parse(m);
+				const meta = organization.metadata;
+				if (meta && typeof meta === "string") {
+					return parseJSON<Record<string, any>>(meta);
 				}
-				return m;
+				return meta;
 			})();
 
-			return {
+			const res: InferOrganization<O, false> = {
 				...organization,
 				metadata,
-			} as Result;
+			};
+
+			return res;
 		},
 		createMember: async (
 			data: Omit<MemberInput, "id"> & Record<string, any>,
@@ -156,20 +158,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 							: data.metadata,
 				},
 			});
+
 			if (!organization) return null;
 
 			const metadata = (() => {
-				const m = organization.metadata;
-				if (m && typeof m === "string") {
-					return parseJSON<Record<string, any>>(m);
+				const meta = organization.metadata;
+				if (meta && typeof meta === "string") {
+					return parseJSON<Record<string, any>>(meta);
 				}
-				return m;
+				return meta;
 			})();
 
-			return {
+			const res: InferOrganization<O, false> = {
 				...organization,
 				metadata,
 			};
+
+			return res;
 		},
 	};
 };

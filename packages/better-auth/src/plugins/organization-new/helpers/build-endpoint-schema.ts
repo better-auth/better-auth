@@ -7,6 +7,66 @@ import type {
 import { toZodSchema } from "../../../db";
 import type { UnionToIntersection } from "../../../types/helper";
 
+/**
+ * Safely extends a ZodObject with another schema's shape, merging nested ZodObjects
+ * instead of overwriting them. This is useful when you want to add fields to a
+ * nested object without losing the existing fields.
+ *
+ * @param baseSchema - The base ZodObject schema to extend
+ * @param extensionSchema - The ZodObject schema containing fields to add
+ * @returns A new ZodObject with merged properties
+ */
+const safeExtendSchema = (
+	baseSchema: z.ZodObject<any>,
+	extensionSchema: z.ZodObject<any>,
+): z.ZodObject<any> => {
+	const extensionShape = extensionSchema.shape;
+	const baseShape = baseSchema.shape;
+	const mergedShape: Record<string, z.ZodType<any>> = {};
+
+	// Process each key in the extension schema
+	for (const key of Object.keys(extensionShape)) {
+		const extensionValue = extensionShape[key];
+		const existingValue = baseShape[key];
+
+		if (existingValue) {
+			// Unwrap optionals to get the inner schemas
+			let innerExisting = existingValue;
+			let innerExtension = extensionValue;
+			let existingIsOptional = false;
+
+			if (innerExisting instanceof z.ZodOptional) {
+				existingIsOptional = true;
+				innerExisting = innerExisting.unwrap();
+			}
+
+			if (innerExtension instanceof z.ZodOptional) {
+				innerExtension = innerExtension.unwrap();
+			}
+
+			// If both are ZodObjects, merge them recursively
+			if (
+				innerExisting instanceof z.ZodObject &&
+				innerExtension instanceof z.ZodObject
+			) {
+				const mergedInner = safeExtendSchema(innerExisting, innerExtension);
+				// Preserve optionality: only make optional if base was optional
+				mergedShape[key] = existingIsOptional
+					? mergedInner.optional()
+					: mergedInner;
+			} else {
+				// Can't merge, overwrite with extension value
+				mergedShape[key] = extensionValue;
+			}
+		} else {
+			// No existing property, just add the extension value
+			mergedShape[key] = extensionValue;
+		}
+	}
+
+	return baseSchema.safeExtend(mergedShape);
+};
+
 type InferOptionalSchemaType<
 	Fields extends readonly {
 		condition: boolean;
@@ -169,17 +229,20 @@ export const buildEndpointSchema = <
 		? optionalSchema.filter((f) => f.condition).map((f) => f.schema)
 		: [];
 
-	const additionalFieldsShape = additionalFieldsNestedAs
-		? (z.object({ [additionalFieldsNestedAs]: additionalFieldsSchema.shape })
-				.shape as unknown as {
-				[x: string]: z.ZodOptional<z.ZodAny>;
-			})
-		: additionalFieldsSchema.shape;
-
 	// Build the final schema by extending base schema with additional and optional fields
-	let schema = baseSchema.safeExtend(additionalFieldsShape);
+	let schema: z.ZodObject<any>;
+
+	// Create the schema to extend with (either nested or flat additional fields)
+	const additionalFieldsExtension = additionalFieldsNestedAs
+		? z.object({ [additionalFieldsNestedAs]: additionalFieldsSchema })
+		: additionalFieldsSchema;
+
+	// Start with base schema extended with additional fields (safely merging nested objects)
+	schema = safeExtendSchema(baseSchema, additionalFieldsExtension);
+
+	// Apply optional schemas (safely merging nested objects)
 	for (const optionalSchemaItem of optionalSchemas) {
-		schema = schema.safeExtend(optionalSchemaItem.shape);
+		schema = safeExtendSchema(schema, optionalSchemaItem);
 	}
 
 	// Type inference helpers
