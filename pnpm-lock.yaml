@@ -1017,9 +1017,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.2.0
-        version: 12.5.0
       solid-js:
         specifier: ^1.9.7
         version: 1.9.9
@@ -1029,7 +1026,7 @@ importers:
     devDependencies:
       '@better-auth-test/test-utils':
         specifier: workspace:*
-        version: link:../../../packages/test-utils
+        version: link:../test-utils
 
   e2e/integration/test-utils:
     devDependencies:
@@ -1042,9 +1039,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.2.0
-        version: 12.5.0
       kysely:
         specifier: ^0.28.5
         version: 0.28.9
@@ -1057,7 +1051,7 @@ importers:
     devDependencies:
       '@better-auth-test/test-utils':
         specifier: workspace:*
-        version: link:../../../packages/test-utils
+        version: link:../test-utils
       vite:
         specifier: ^7.3.1
         version: 7.3.1(@types/node@25.0.9)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)

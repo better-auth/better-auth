@@ -2,12 +2,12 @@ import { createServer } from "node:http";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { toNodeHandler } from "better-auth/node";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 
 export async function createAuthServer(
 	baseURL: string = "http://localhost:3000",
 ) {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	const auth = betterAuth({
 		database,
