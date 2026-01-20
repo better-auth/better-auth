@@ -14,10 +14,13 @@ description: Kakao provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
-        <Callout type="warn">
-          Kakao login requests `account_email` scope by default. However, retrieving an email address is only possible if your app is switched to **Biz App** status in the Kakao Developers Console.
-
-          If you are using a Test App or have not switched to Biz App yet, you will encounter an "Invalid Scope" error. To resolve this, you must set `disableDefaultScope: true` and manually specify the allowed scopes (e.g., `profile_nickname`, `profile_image`).
+        <Callout type="info">
+            The default scopes are `account_email`, `profile_image`, and `profile_nickname`. 
+            
+            Please note that retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). 
+            If you are not using a Biz App, you must disable the default scope.
+            
+            For more details, refer to the [Kakao Login scopes documentation](https://developers.kakao.com/docs/latest/kakaologin/utilize#scope-user).
         </Callout>
 
         ```ts title="auth.ts"
