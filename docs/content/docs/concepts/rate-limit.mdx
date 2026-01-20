@@ -72,6 +72,44 @@ export const auth = betterAuth({
 })
 ```
 
+#### IPv6 Address Support
+
+Better Auth automatically normalizes IPv6 addresses to prevent bypass attacks where attackers use different representations of the same IPv6 address (e.g., `2001:db8::1` vs `2001:0db8:0000:0000:0000:0000:0000:0001`). This ensures that all representations of the same IPv6 address are treated as the same for rate limiting purposes.
+
+Additionally, IPv4-mapped IPv6 addresses (e.g., `::ffff:192.0.2.1`) are automatically converted to their IPv4 form (`192.0.2.1`) to prevent attackers from bypassing rate limits by switching between IPv4 and IPv6 representations.
+
+#### IPv6 Subnet Rate Limiting
+
+By default, IPv6 addresses are rate limited individually (using the full /128 address). However, since IPv6 typically allocates large address blocks to single users, attackers could potentially bypass rate limits by rotating through multiple IPv6 addresses from their allocation.
+
+To prevent this, you can configure rate limiting to apply to IPv6 subnets instead of individual addresses:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    //...other options
+    advanced: {
+        ipAddress: {
+            ipv6Subnet: 64, // Rate limit by /64 subnet instead of individual addresses
+        },
+    },
+    rateLimit: {
+        enabled: true,
+        window: 60,
+        max: 100,
+    },
+})
+```
+
+Common IPv6 subnet prefix lengths:
+- `128` (default): Individual IPv6 address - most restrictive
+- `64`: /64 subnet - typical home/business allocation
+- `48`: /48 subnet - larger network allocation
+- `32`: /32 subnet - ISP-level allocation
+
+<Callout type="info">
+IPv6 subnet configuration only affects IPv6 addresses. IPv4 addresses are always rate limited individually.
+</Callout>
+
 ### Rate Limit Window
 
 ```ts title="auth.ts"
