@@ -1,5 +1,5 @@
 {
-  "name": "better-auth-solid-vinxi-e2e",
+  "name": "@better-auth-test/fixtures-solid-vinxi",
   "private": true,
   "type": "module",
   "scripts": {
@@ -16,6 +16,6 @@
     "vinxi": "^0.5.8"
   },
   "devDependencies": {
-    "@better-auth/test-utils": "workspace:*"
+    "@better-auth-test/test-utils": "workspace:*"
   }
 }
