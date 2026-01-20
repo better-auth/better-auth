@@ -2148,7 +2148,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					]),
 				),
 				id: attributes[mapping.id || "nameID"] || extract.nameID,
-				email: attributes[mapping.email || "email"] || extract.nameID,
+				email: (
+					attributes[mapping.email || "email"] || extract.nameID
+				).toLowerCase(),
 				name:
 					[
 						attributes[mapping.firstName || "givenName"],
@@ -2613,7 +2615,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					]),
 				),
 				id: attributes[mapping.id || "nameID"] || extract.nameID,
-				email: attributes[mapping.email || "email"] || extract.nameID,
+				email: (
+					attributes[mapping.email || "email"] || extract.nameID
+				).toLowerCase(),
 				name:
 					[
 						attributes[mapping.firstName || "givenName"],

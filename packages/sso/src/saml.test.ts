@@ -399,7 +399,10 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const email =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = { emailAddress: email, famName: "hello world" };
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -3999,5 +4002,170 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		expect(response.status).toBe(302);
 		expect(response.headers.get("location")).not.toContain("error");
+	});
+
+	it("should normalize email to lowercase in SAML authentication to prevent duplicate creation", async () => {
+		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
+		// First login with "TestUser@Example.com" should create user and second login
+		// with same email should find existing user and not create duplicate
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "email-case-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// First SAML login with mixed case email, creates user with email stored as lowercase
+
+		let samlResponse1:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse1 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
+			},
+		);
+
+		if (!samlResponse1?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		const firstCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse1.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(firstCallbackResponse.status).toBe(302);
+		expect(firstCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(firstCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		// Second SAML login with same mixed case email
+		let samlResponse2:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse2 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
+			},
+		);
+
+		if (!samlResponse2?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		const secondCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse2.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		// Should successfully authenticate without duplicate creation/constraint violation
+		expect(secondCallbackResponse.status).toBe(302);
+		expect(secondCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(secondCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		// Test same scenario with ACS endpoint using a fresh SAML response
+		let samlResponse3:
+			| { samlResponse: string; entityEndpoint?: string }
+			| undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse3 = context.data as {
+						samlResponse: string;
+						entityEndpoint?: string;
+					};
+				},
+			},
+		);
+
+		if (!samlResponse3?.samlResponse) {
+			throw new Error("Failed to get SAML response from mock IdP");
+		}
+
+		const thirdAcsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse3.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(thirdAcsResponse.status).toBe(302);
+		expect(thirdAcsResponse.headers.get("location")).toContain("dashboard");
+		expect(thirdAcsResponse.headers.get("location")).not.toContain("error");
 	});
 });
