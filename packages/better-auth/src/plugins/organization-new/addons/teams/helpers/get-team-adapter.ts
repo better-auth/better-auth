@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { TeamMember } from "./schema";
-import type { InferTeam, TeamsOptions } from "./types";
+import type { TeamMember } from "../schema";
+import type { InferTeam, TeamsOptions } from "../types";
 
 export const getTeamAdapter = <O extends TeamsOptions>(
 	context: AuthContext,
