@@ -1,5 +1,5 @@
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { DatabaseSync } from "node:sqlite";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { Auth } from "../types";
 import { betterAuth } from "./minimal";

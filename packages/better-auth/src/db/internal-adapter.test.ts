@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -11,7 +12,6 @@ import type {
 	User,
 } from "../types";
 import { getMigrations } from "./get-migration";
-import { DatabaseSync } from 'node:sqlite'
 
 describe("internal adapter test", async () => {
 	const map = new Map();
@@ -263,7 +263,7 @@ describe("internal adapter test", async () => {
 		};
 		const hookUserCreateAfter = vi.fn();
 
-		const database = new DatabaseSync(":memory:")
+		const database = new DatabaseSync(":memory:");
 
 		const opts = {
 			database,
@@ -274,8 +274,8 @@ describe("internal adapter test", async () => {
 							hookUserCreateAfter(user, context);
 
 							const userFromDb = database
-							.prepare('SELECT * FROM user WHERE id = ?')
-							.get(user.id)!;
+								.prepare("SELECT * FROM user WHERE id = ?")
+								.get(user.id)!;
 
 							expect(user.id).toBe(userFromDb.id);
 							expect(user.name).toBe(userFromDb.name);
