@@ -583,7 +583,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
 					? true
 					: false,
-			supportsArrays: config.provider === "pg" ? true : false,
+			supportsArrays: true, // Drizzle handles array serialization via column modes for all providers
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
