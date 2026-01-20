@@ -6,7 +6,7 @@ import type {
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -614,7 +614,7 @@ describe("Disable signup", async () => {
 });
 
 describe("signin", async () => {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	beforeAll(async () => {
 		const migrations = await getMigrations({

@@ -1,5 +1,5 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { Auth } from "../types";
 import { betterAuth } from "./minimal";
@@ -55,7 +55,7 @@ describe("auth-minimal", () => {
 	});
 
 	it("should throw error with direct database connection (Kysely required)", async () => {
-		const sqliteDB = new Database(":memory:");
+		const sqliteDB = new DatabaseSync(":memory:");
 
 		const auth = betterAuth({
 			baseURL: "http://localhost:3000",

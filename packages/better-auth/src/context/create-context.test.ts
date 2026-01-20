@@ -1,4 +1,4 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { getAdapter } from "../db/adapter-kysely";
@@ -286,7 +286,7 @@ describe("base context creation", () => {
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
 			const res = await initBase({
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
 		});
@@ -329,7 +329,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
@@ -1298,7 +1298,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
