@@ -6,7 +6,7 @@ import type {
 } from "@better-auth/core";
 import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
-import { afterAll } from "vitest";
+import { onTestFinished } from "vitest";
 import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
@@ -16,19 +16,10 @@ import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
 
-const cleanupSet = new Set<Function>();
-
 type CurrentUserContext = {
 	headers: Headers;
 };
 const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
-
-afterAll(async () => {
-	for (const cleanup of cleanupSet) {
-		await cleanup();
-		cleanupSet.delete(cleanup);
-	}
-});
 
 export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
@@ -189,7 +180,7 @@ export async function getTestInstance<
 			return;
 		}
 	};
-	cleanupSet.add(cleanup);
+	onTestFinished(cleanup);
 
 	const customFetchImpl = async (
 		url: string | URL | Request,
