@@ -584,6 +584,20 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? true
 					: false,
 			supportsArrays: config.provider === "pg" ? true : false,
+			customTransformInput: ({ data, field, model }) => {
+				// Handle Drizzle timestamp columns with { mode: "string" }
+				// These columns expect string values, not Date objects
+				if (data instanceof Date) {
+					const schema = config.schema || db._.fullSchema;
+					const schemaModel = schema?.[model];
+					const column = schemaModel?.[field];
+					// Check if the Drizzle column's dataType is 'string' (mode: "string")
+					if (column?.dataType === "string") {
+						return data.toISOString();
+					}
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
