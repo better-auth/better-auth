@@ -1,10 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { getMigrations } from "better-auth/db/migration";
 import Database from "better-sqlite3";
 import { Kysely, SqliteDialect } from "kysely";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
