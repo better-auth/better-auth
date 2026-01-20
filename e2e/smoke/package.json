@@ -1,5 +1,5 @@
 {
-  "name": "smoke",
+  "name": "@better-auth-test/smoke",
   "type": "module",
   "dependencies": {
     "better-auth": "workspace:*"

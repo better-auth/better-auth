@@ -1,5 +1,5 @@
 {
-  "name": "cloudflare",
+  "name": "@better-auth-test/fixtures-cloudflare",
   "private": true,
   "dependencies": {
     "@better-auth/sso": "workspace:*",

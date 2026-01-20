@@ -1,5 +1,5 @@
 {
-  "name": "fixtures-ipv6",
+  "name": "@better-auth-test/fixtures-ipv6",
   "private": true,
   "type": "module",
   "dependencies": {
