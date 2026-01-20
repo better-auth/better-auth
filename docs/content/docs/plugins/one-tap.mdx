@@ -67,49 +67,52 @@ await authClient.oneTap();
 
 To render a "Sign In with Google" button instead of showing the automatic prompt, use the `button` option:
 
-```tsx
-// In your component
-<div id="google-signin-button"></div>
+<Tabs items={["CSS Selector", "React Ref"]}>
+  <Tab value="CSS Selector">
+    ```tsx
+    // In your component
+    <div id="google-signin-button"></div>
 
-// Call oneTap with button configuration
-await authClient.oneTap({
-  button: {
-    container: "#google-signin-button", // CSS selector or HTMLElement
-    config: {
-      theme: "outline",
-      size: "large",
-      type: "standard",
-      text: "signin_with"
-    }
-  }
-});
-```
-
-Or with a React ref:
-
-```tsx
-import { useEffect, useRef } from "react";
-
-function SignInButton() {
-  const buttonRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (buttonRef.current) {
-      authClient.oneTap({
-        button: {
-          container: buttonRef.current,
-          config: {
-            theme: "filled_blue",
-            size: "large"
-          }
+    // Call oneTap with button configuration
+    await authClient.oneTap({
+      button: {
+        container: "#google-signin-button", // CSS selector or HTMLElement
+        config: {
+          theme: "outline",
+          size: "large",
+          type: "standard",
+          text: "signin_with"
         }
-      });
-    }
-  }, []);
+      }
+    });
+    ```
+  </Tab>
+  <Tab value="React Ref">
+    ```tsx
+    import { useEffect, useRef } from "react";
 
-  return <div ref={buttonRef}></div>;
-}
-```
+    function SignInButton() {
+      const buttonRef = useRef<HTMLDivElement>(null);
+
+      useEffect(() => {
+        if (buttonRef.current) {
+          authClient.oneTap({
+            button: {
+              container: buttonRef.current,
+              config: {
+                theme: "filled_blue",
+                size: "large"
+              }
+            }
+          });
+        }
+      }, []);
+
+      return <div ref={buttonRef}></div>;
+    }
+    ```
+  </Tab>
+</Tabs>
 
 ### Customizing Redirect Behavior
 
