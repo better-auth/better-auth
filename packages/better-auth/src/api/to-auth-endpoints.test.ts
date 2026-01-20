@@ -301,6 +301,10 @@ describe("after hook", async () => {
 						};
 					}
 					if (c.query?.throwHook) {
+						c.setHeader(
+							"Set-Cookie",
+							"auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+						);
 						throw c.error("BAD_REQUEST", {
 							message: "from after hook",
 						});
@@ -341,6 +345,16 @@ describe("after hook", async () => {
 					expect(isAPIError(e)).toBeTruthy();
 					expect(e?.message).toBe("from after hook");
 				});
+
+			const response = await api.throwError({
+				query: {
+					throwHook: true,
+				},
+				asResponse: true,
+			});
+			expect(response.headers.get("Set-Cookie")).toBe(
+				"auth=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+			);
 		});
 	});
 
