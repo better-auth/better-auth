@@ -86,7 +86,7 @@
     "prompts": "^2.4.2",
     "semver": "^7.7.2",
     "yocto-spinner": "^0.2.3",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "files": [
     "dist"
