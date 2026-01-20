@@ -1138,6 +1138,9 @@ importers:
       '@types/bun':
         specifier: ^1.3.3
         version: 1.3.5
+      '@types/google.accounts':
+        specifier: ^0.0.18
+        version: 0.0.18
       '@types/pg':
         specifier: ^8.15.5
         version: 8.16.0
@@ -1385,22 +1388,6 @@ importers:
         specifier: 'catalog:'
         version: 0.17.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.2)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
 
-  packages/mcp:
-    dependencies:
-      '@modelcontextprotocol/sdk':
-        specifier: ^1.8.0
-        version: 1.25.2(hono@4.11.4)(zod@4.3.5)
-      zod:
-        specifier: ^4.3.5
-        version: 4.3.5
-    devDependencies:
-      tsdown:
-        specifier: 'catalog:'
-        version: 0.17.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.2)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-
   packages/oauth-provider:
     dependencies:
       '@better-auth/utils':
@@ -1411,7 +1398,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       jose:
         specifier: ^6.1.0
         version: 6.1.3
@@ -1451,7 +1438,7 @@ importers:
         version: 13.1.2
       better-call:
         specifier: 'catalog:'
-        version: 1.1.8(zod@4.3.4)
+        version: 1.1.8(zod@4.3.5)
       nanostores:
         specifier: ^1.0.1
         version: 1.0.1
@@ -7441,6 +7428,9 @@ packages:
 
   '@types/express@5.0.5':
     resolution: {integrity: sha512-LuIQOcb6UmnF7C1PCFmEU1u2hmiHL43fgFQX67sN3H4Z+0Yk0Neo++mFsBjhOAuLzvlQeqAAkeDOZrJs9rzumQ==}
+
+  '@types/google.accounts@0.0.18':
+    resolution: {integrity: sha512-yHaPznll97ZnMJlPABHyeiIlLn3u6gQaUjA5k/O9lrrpgFB9VT10CKPLuKM0qTHMl50uXpW5sIcG+utm8jMOHw==}
 
   '@types/graceful-fs@4.1.9':
     resolution: {integrity: sha512-olP3sd1qOEe5dXTSaFvQG+02VdRXcdytWLAZsAq1PecU8uqQAhkrnbli7DagjtXKW/Bl7YJbUsa8MPcuc8LHEQ==}
@@ -15339,9 +15329,6 @@ packages:
   zod@3.25.76:
     resolution: {integrity: sha512-gzUt/qt81nXsFGKIFcC3YnfEAx5NkunCfnDlvuBSSFS02bcXu4Lmea0AFIUwbLWxWPx3d9p8S5QoaujKcNQxcQ==}
 
-  zod@4.3.4:
-    resolution: {integrity: sha512-Zw/uYiiyF6pUT1qmKbZziChgNPRu+ZRneAsMUDU6IwmXdWt5JwcUfy2bvLOCUtz5UniaN/Zx5aFttZYbYc7O/A==}
-
   zod@4.3.5:
     resolution: {integrity: sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g==}
 
@@ -22011,6 +21998,8 @@ snapshots:
       '@types/express-serve-static-core': 5.1.0
       '@types/serve-static': 1.15.10
 
+  '@types/google.accounts@0.0.18': {}
+
   '@types/graceful-fs@4.1.9':
     dependencies:
       '@types/node': 24.10.1
@@ -22937,15 +22926,6 @@ snapshots:
       libphonenumber-js: 1.12.24
       mailchecker: 6.0.18
       validator: 13.15.15
-
-  better-call@1.1.8(zod@4.3.4):
-    dependencies:
-      '@better-auth/utils': 0.3.0
-      '@better-fetch/fetch': 1.1.21
-      rou3: 0.7.10
-      set-cookie-parser: 2.7.2
-    optionalDependencies:
-      zod: 4.3.4
 
   better-call@1.1.8(zod@4.3.5):
     dependencies:
@@ -31683,9 +31663,6 @@ snapshots:
   zod@3.24.1: {}
 
   zod@3.25.76: {}
-
-  zod@4.3.4:
-    optional: true
 
   zod@4.3.5: {}
 

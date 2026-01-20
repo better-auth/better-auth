@@ -474,6 +474,7 @@
     "@tanstack/solid-start": "^1.151.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.3",
+    "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
     "better-sqlite3": "^12.4.1",
