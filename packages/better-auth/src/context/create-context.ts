@@ -159,8 +159,15 @@ export async function createAuthContext(
 		if (typeof (options.advanced as any)?.generateId === "function") {
 			return (options.advanced as any).generateId({ model, size });
 		}
-		if (typeof options?.advanced?.database?.generateId === "function") {
-			return options.advanced.database.generateId({ model, size });
+		const dbGenerateId = options?.advanced?.database?.generateId;
+		if (typeof dbGenerateId === "function") {
+			return dbGenerateId({ model, size });
+		}
+		if (dbGenerateId === "uuid") {
+			return crypto.randomUUID();
+		}
+		if (dbGenerateId === "serial" || dbGenerateId === false) {
+			return false;
 		}
 		return generateId(size);
 	};
