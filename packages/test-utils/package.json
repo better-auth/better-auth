@@ -8,7 +8,7 @@
   },
   "exports": {
     "./adapter": {
-      "dev-source": "./src/adapter.ts",
+      "dev-source": "./src/adapter/index.ts",
       "default": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
     }
