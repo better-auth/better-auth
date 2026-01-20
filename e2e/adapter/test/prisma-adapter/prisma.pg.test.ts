@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { Pool } from "pg";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,

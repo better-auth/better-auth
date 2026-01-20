@@ -1,6 +1,6 @@
+import { createTestSuite } from "@better-auth/test-utils/adapter";
+import type { User } from "better-auth/db";
 import { expect } from "vitest";
-import type { User } from "../../types";
-import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests the transaction functionality of the adapter.

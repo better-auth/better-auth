@@ -1,6 +1,6 @@
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { MongoClient, ObjectId } from "mongodb";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
