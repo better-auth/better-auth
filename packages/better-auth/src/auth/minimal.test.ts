@@ -1,6 +1,6 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import Database from "better-sqlite3";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { memoryAdapter } from "../adapters/memory-adapter/memory-adapter";
 import type { Auth } from "../types";
 import { betterAuth } from "./minimal";
 
