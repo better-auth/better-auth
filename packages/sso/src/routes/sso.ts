@@ -2127,10 +2127,6 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 	);
 };
 
-const acsEndpointParamsSchema = z.object({
-	providerId: z.string().optional(),
-});
-
 const acsEndpointBodySchema = z.object({
 	SAMLResponse: z.string(),
 	RelayState: z.string().optional(),
@@ -2141,7 +2137,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		"/sso/saml2/sp/acs/:providerId",
 		{
 			method: "POST",
-			params: acsEndpointParamsSchema,
 			body: acsEndpointBodySchema,
 			metadata: {
 				...HIDE_METADATA,
@@ -2205,7 +2200,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						where: [
 							{
 								field: "providerId",
-								value: providerId ?? "sso",
+								value: providerId,
 							},
 						],
 					})
