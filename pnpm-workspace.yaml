@@ -28,4 +28,5 @@ catalogs:
     '@vitest/ui': ^4.0.17
     vitest: ^4.0.17
 
-neverBuiltDependencies: []
+dangerouslyAllowAllBuilds: true
+linkWorkspacePackages: true
