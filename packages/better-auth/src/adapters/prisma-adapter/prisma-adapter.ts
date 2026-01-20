@@ -205,7 +205,12 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					const fieldName = getFieldName({ model, field: w.field });
 					// Special handling for Prisma null semantics, for non-nullable fields this is a tautology. Skip condition.
 					if (w.operator === "ne" && w.value === null) {
-						return {};
+						const fieldAttributes = getFieldAttributes({
+							model,
+							field: w.field,
+						});
+						const isNullable = fieldAttributes?.required !== true;
+						return isNullable ? { [fieldName]: { not: null } } : {};
 					}
 					if (
 						(w.operator === "in" || w.operator === "not_in") &&
