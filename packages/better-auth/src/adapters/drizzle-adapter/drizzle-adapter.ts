@@ -68,6 +68,13 @@ export interface DrizzleAdapterConfig {
 	 * @default false
 	 */
 	transaction?: boolean | undefined;
+	/**
+	 * Whether to enable Row Level Security (RLS) for the database.
+	 *
+	 * This is only supported for PostgreSQL.
+	 * @default false
+	 */
+	enableRLS?: boolean;
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
