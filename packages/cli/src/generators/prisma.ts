@@ -347,11 +347,24 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						action = "SetDefault";
 					else if (attr.references.onDelete === "restrict") action = "Restrict";
 
+					const defaultRelationName = referencedCustomModelName.toLowerCase();
+					const modelConfigKey = Object.keys(options).find(
+						(key) =>
+							(options[key as keyof typeof options] as any)?.modelName ===
+								originalTableName || key === originalTableName,
+					);
+					const modelConfig = options[
+						modelConfigKey as keyof typeof options
+					] as any;
+					const relationName =
+						modelConfig?.relations?.[defaultRelationName] ||
+						defaultRelationName;
+
 					const relationField = `relation(fields: [${getFieldName({ model: originalTableName, field: fieldName })}], references: [${getFieldName({ model: attr.references.model, field: attr.references.field })}], onDelete: ${action})`;
 					builder
 						.model(modelName)
 						.field(
-							referencedCustomModelName.toLowerCase(),
+							relationName,
 							`${capitalizeFirstLetter(referencedCustomModelName)}${
 								!attr.required ? "?" : ""
 							}`,
@@ -389,10 +402,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					const [_fieldKey, fkFieldAttr] = fkField || [];
 					const isUnique = fkFieldAttr?.unique === true;
 
-					const fieldName =
+					const defaultFieldName =
 						isUnique || adapter.options?.usePlural === true
 							? `${relatedModel.toLowerCase()}`
 							: `${relatedModel.toLowerCase()}s`;
+
+					const configKey = Object.keys(options).find(
+						(key) =>
+							(options[key as keyof typeof options] as any)?.modelName ===
+								originalTableName || key === originalTableName,
+					);
+					const config = options[configKey as keyof typeof options] as any;
+					const fieldName =
+						config?.relations?.[defaultFieldName] || defaultFieldName;
+
 					const existingField = builder.findByType("field", {
 						name: fieldName,
 						within: prismaModel?.properties,
