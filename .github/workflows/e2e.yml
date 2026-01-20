@@ -108,14 +108,6 @@ jobs:
         run: pnpm exec playwright install --with-deps
         working-directory:  e2e/integration
 
-      - name: Build
-        if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
-        run: pnpm build
-
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
         run: |

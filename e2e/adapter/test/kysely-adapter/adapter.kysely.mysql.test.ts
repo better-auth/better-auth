@@ -11,7 +11,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 const mysqlDB = createPool({
 	uri: "mysql://user:password@localhost:3307/better_auth",

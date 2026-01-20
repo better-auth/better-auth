@@ -12,7 +12,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 const dbPath = path.join(__dirname, "test.db");
 let database = new Database(dbPath);
