@@ -57,10 +57,10 @@ Better Auth provides a `getMigrations` function that you can use to generate and
 
 #### Using `getMigrations`
 
-The `getMigrations` function is available from `better-auth/db` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
+The `getMigrations` function is available from `better-auth/db/migration` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
 
 ```typescript
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 
 const { toBeCreated, toBeAdded, runMigrations, compileMigrations } = await getMigrations(authConfig);
 
@@ -83,7 +83,7 @@ For Cloudflare Workers using D1 (SQLite), you can create a migration endpoint th
 ```typescript title="src/index.ts"
 import { Hono } from "hono";
 import { auth } from "./auth"; // your auth instance
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 
 const app = new Hono<{ Bindings: Env }>();
 
