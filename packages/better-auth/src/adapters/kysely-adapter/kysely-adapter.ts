@@ -15,6 +15,7 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
+import { capitalizeFirstLetter } from "../..";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
@@ -262,7 +263,13 @@ export const kyselyAdapter = (
 							fieldName,
 							joinModelRef,
 						} of allSelectsStr) {
-							if (keyStr === `_joined_${joinModelRef}_${fieldName}`) {
+							if (
+								keyStr === `_joined_${joinModelRef}_${fieldName}` ||
+								// Edge case to catch capitalized results that derive from snake_case table names
+								// If anyone can identify the cause behind this, please note it here.
+								keyStr ===
+									`_Joined${capitalizeFirstLetter(joinModelRef)}${capitalizeFirstLetter(fieldName)}`
+							) {
 								joinedModelFields[getModelName(joinModel)]![
 									getFieldName({
 										model: joinModel,
