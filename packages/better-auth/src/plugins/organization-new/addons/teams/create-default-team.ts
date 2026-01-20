@@ -6,7 +6,7 @@ import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { getTeamAdapter } from "./helpers/get-team-adapter";
 import { getHook } from "./helpers/get-team-hook";
 import type { Team } from "./schema";
-import type { ResolvedTeamsOptions } from "./types";
+import type { InferTeam, ResolvedTeamsOptions } from "./types";
 
 export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 	{ user, organization }: { user: User; organization: Organization },
@@ -17,7 +17,7 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 	const { customCreateDefaultTeam, enabled } = options.defaultTeam;
 	if (!enabled) return;
 
-	const teamData: Omit<Team, "id"> = {
+	const teamData: Omit<Team, "id"> & Record<string, any> = {
 		organizationId: organization.id,
 		name: `${organization.name}`,
 		createdAt: new Date(),
@@ -36,7 +36,10 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 				user,
 				organization,
 			});
-			return await adapter.createTeam({ ...teamData, ...(mutate ?? {}) });
+			return await adapter.createTeam({
+				...teamData,
+				...(mutate ?? {}),
+			} as Omit<InferTeam<O>, "id"> & Record<string, any>);
 		} catch (error) {
 			ctx.context.logger.error("Failed to create default team:", error);
 			const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM;
