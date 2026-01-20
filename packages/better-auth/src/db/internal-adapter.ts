@@ -269,18 +269,38 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext().catch(() => null);
-			const headers = ctx?.headers || ctx?.request?.headers;
-			const { id: _, ...rest } = override || {};
-			//we're parsing default values for session additional fields
+			const authCtx = await getCurrentAuthContext().catch(() => null);
+			const headers = authCtx?.headers || authCtx?.request?.headers;
+			const storeInDb = options.session?.storeSessionInDatabase;
+			const {
+				// always ignore override id - new sessions must have new ids
+				id: _,
+				...rest
+			} = override || {};
+
+			// determine session id
+			let sessionId: string | undefined;
+			const generatedId = ctx.generateId({ model: "session" });
+			if (generatedId !== false) {
+				sessionId = generatedId;
+			} else if (secondaryStorage && storeInDb === false) {
+				// no database to auto-generate id
+				sessionId = generateId();
+			} // otherwise database will generate the id
+
+			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = parseSessionInput(
-				ctx?.context.options ?? options,
+				authCtx?.context.options ?? options,
 				{},
 			);
-			const data: Omit<Session, "id"> = {
+			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress:
-					ctx?.request || ctx?.headers
-						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
+					authCtx?.request || authCtx?.headers
+						? getIp(
+								authCtx?.request || authCtx?.headers!,
+								authCtx?.context.options,
+							) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -299,7 +319,7 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
-			};
+			} satisfies Partial<Session>;
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -369,7 +389,7 @@ export const createInternalAdapter = (
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
+							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
