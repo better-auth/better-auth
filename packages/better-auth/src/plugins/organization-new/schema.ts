@@ -1,12 +1,12 @@
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod/v4";
 
-export const roleSchema = z.string();
-export const invitationStatus = z
+const roleSchema = z.string();
+const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
 
-export const organizationSchema = z.object({
+const organizationSchema = z.object({
 	id: z.string().default(generateId),
 	name: z.string(),
 	logo: z.string().nullish().optional(),
@@ -17,7 +17,7 @@ export const organizationSchema = z.object({
 	createdAt: z.date(),
 });
 
-export const memberSchema = z.object({
+const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	userId: z.coerce.string(),
@@ -25,7 +25,7 @@ export const memberSchema = z.object({
 	createdAt: z.date().default(() => new Date()),
 });
 
-export const invitationSchema = z.object({
+const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	email: z.string(),
@@ -42,4 +42,4 @@ export type OrganizationInput = z.input<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
-export type InvitationInput = z.input<typeof invitationSchema>;
+// export type InvitationInput = z.input<typeof invitationSchema>; // TODO: when needed uncomment

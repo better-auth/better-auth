@@ -3,7 +3,7 @@ import * as z from "zod/v4";
 import { APIError, requestOnlySessionMiddleware } from "../../../api";
 import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
 import { getOrgAdapter } from "../helpers/get-org-adapter";
-import { orgMiddleware } from "../middleware/org-middleware";
+import { orgMiddleware } from "../middleware";
 import type { OrganizationOptions } from "../types";
 
 const checkOrganizationSlugBodySchema = z.object({

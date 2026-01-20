@@ -55,6 +55,7 @@ export default defineConfig({
 		"./src/plugins/oidc-provider/index.ts",
 		"./src/plugins/oauth-proxy/index.ts",
 		"./src/plugins/organization/index.ts",
+		"./src/plugins/organization-new/index.ts",
 		"./src/plugins/organization/access/index.ts",
 		"./src/plugins/phone-number/index.ts",
 		"./src/plugins/two-factor/index.ts",

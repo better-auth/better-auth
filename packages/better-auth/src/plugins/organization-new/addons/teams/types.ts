@@ -8,8 +8,6 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../../db";
 import type { Organization } from "../../schema";
 import type { Team, TeamMember } from "./schema";
 
-export type TeamId = `id:${string}` | `slug:${string}`;
-
 export interface TeamsOptions {
 	hooks?: TeamHooks;
 	/**
