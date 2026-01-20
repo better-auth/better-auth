@@ -566,6 +566,45 @@ describe("base context creation", () => {
 				expect(id.length).toBeGreaterThan(0);
 			}
 		});
+
+		it("should return uuid when generateId is 'uuid'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(typeof id).toBe("string");
+			expect(id).toMatch(
+				/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+			);
+		});
+
+		it("should return false when generateId is 'serial'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "serial",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
+		});
+
+		it("should return false when generateId is false", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: false,
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
+		});
 	});
 
 	describe("password configuration", () => {

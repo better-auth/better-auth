@@ -51,11 +51,10 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	) {
 		const prefix = options.advanced?.cookiePrefix || "better-auth";
 		const name =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
+			options.advanced?.cookies?.[cookieName]?.name ||
 			`${prefix}.${cookieName}`;
-
 		const attributes =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
+			options.advanced?.cookies?.[cookieName]?.attributes ?? {};
 
 		return {
 			name: `${secureCookiePrefix}${name}`,
