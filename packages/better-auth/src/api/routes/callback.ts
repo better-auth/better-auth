@@ -172,9 +172,7 @@ export const callbackOAuth = createAuthEndpoint(
 		if (link) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				provider.id as "apple",
-			);
+			const isTrustedProvider = trustedProviders?.includes(provider.id);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false

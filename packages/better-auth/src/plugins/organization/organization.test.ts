@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
 import { describe, expect, expectTypeOf, it } from "vitest";
-import { memoryAdapter } from "../../adapters/memory-adapter";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -368,7 +368,7 @@ describe("organization", async (it) => {
 
 	it.each([
 		{
-			role: "owner",
+			role: "owner" as const,
 			newUser: {
 				email: "test2@test.com",
 				password: "test123456",
@@ -376,7 +376,7 @@ describe("organization", async (it) => {
 			},
 		},
 		{
-			role: "admin",
+			role: "admin" as const,
 			newUser: {
 				email: "test3@test.com",
 				password: "test123456",
@@ -384,7 +384,7 @@ describe("organization", async (it) => {
 			},
 		},
 		{
-			role: "member",
+			role: "member" as const,
 			newUser: {
 				email: "test4@test.com",
 				password: "test123456",
@@ -396,7 +396,7 @@ describe("organization", async (it) => {
 		const invite = await client.organization.inviteMember({
 			organizationId: organizationId,
 			email: newUser.email,
-			role: role as "owner",
+			role,
 			fetchOptions: {
 				headers,
 			},
