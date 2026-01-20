@@ -5,7 +5,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
-import { setCookieToHeader } from "better-auth/cookies";
+import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
@@ -400,9 +400,13 @@ const createMockSAMLIdP = (port: number) => {
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
 			const emailCase = req.query.emailCase as string;
-			const email =
+			const emailValue =
 				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
-			const user = { emailAddress: email, famName: "hello world" };
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -416,7 +420,14 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/redirect",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const emailValue =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -4005,12 +4016,10 @@ describe("SAML SSO - Single Assertion Validation", () => {
 	});
 
 	it("should normalize email to lowercase in SAML authentication to prevent duplicate creation", async () => {
-		// Tests repeated logins with mixed-case emails to prevent duplicate user creation
-		// First login with "TestUser@Example.com" should create user and second login
-		// with same email should find existing user and not create duplicate
-		const { auth, signInWithTestUser } = await getTestInstance({
+		const { auth, client, signInWithTestUser, db } = await getTestInstance({
 			plugins: [sso()],
 		});
+
 		const { headers } = await signInWithTestUser();
 
 		await auth.api.registerSSOProvider({
@@ -4033,31 +4042,27 @@ describe("SAML SSO - Single Assertion Validation", () => {
 					},
 					identifierFormat:
 						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					mapping: {
+						id: "nameID",
+						email: "nameID",
+						name: "displayName",
+					},
 				},
 			},
 			headers,
 		});
 
-		// First SAML login with mixed case email, creates user with email stored as lowercase
-
-		let samlResponse1:
-			| { samlResponse: string; entityEndpoint?: string }
-			| undefined;
+		let samlResponse1: { samlResponse: string } | undefined;
 		await betterFetch(
 			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
 			{
 				onSuccess: async (context) => {
-					samlResponse1 = context.data as {
-						samlResponse: string;
-						entityEndpoint?: string;
-					};
+					samlResponse1 = context.data as { samlResponse: string };
 				},
 			},
 		);
 
-		if (!samlResponse1?.samlResponse) {
-			throw new Error("Failed to get SAML response from mock IdP");
-		}
+		expect(samlResponse1?.samlResponse).toBeDefined();
 
 		const firstCallbackResponse = await auth.handler(
 			new Request(
@@ -4068,7 +4073,7 @@ describe("SAML SSO - Single Assertion Validation", () => {
 						"Content-Type": "application/x-www-form-urlencoded",
 					},
 					body: new URLSearchParams({
-						SAMLResponse: samlResponse1.samlResponse,
+						SAMLResponse: samlResponse1!.samlResponse,
 						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
@@ -4083,25 +4088,35 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			"error",
 		);
 
-		// Second SAML login with same mixed case email
-		let samlResponse2:
-			| { samlResponse: string; entityEndpoint?: string }
-			| undefined;
+		const firstCookies = parseSetCookieHeader(
+			firstCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const firstSessionToken = firstCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(firstSessionToken).toBeDefined();
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${firstSessionToken}`,
+				},
+			},
+		});
+
+		expect(firstSession.data?.user.email).toBe("testuser@example.com");
+		const firstUserId = firstSession.data?.user.id;
+		expect(firstUserId).toBeDefined();
+
+		let samlResponse2: { samlResponse: string } | undefined;
 		await betterFetch(
 			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
 			{
 				onSuccess: async (context) => {
-					samlResponse2 = context.data as {
-						samlResponse: string;
-						entityEndpoint?: string;
-					};
+					samlResponse2 = context.data as { samlResponse: string };
 				},
 			},
 		);
-
-		if (!samlResponse2?.samlResponse) {
-			throw new Error("Failed to get SAML response from mock IdP");
-		}
 
 		const secondCallbackResponse = await auth.handler(
 			new Request(
@@ -4112,14 +4127,13 @@ describe("SAML SSO - Single Assertion Validation", () => {
 						"Content-Type": "application/x-www-form-urlencoded",
 					},
 					body: new URLSearchParams({
-						SAMLResponse: samlResponse2.samlResponse,
+						SAMLResponse: samlResponse2!.samlResponse,
 						RelayState: "http://localhost:3000/dashboard",
 					}),
 				},
 			),
 		);
 
-		// Should successfully authenticate without duplicate creation/constraint violation
 		expect(secondCallbackResponse.status).toBe(302);
 		expect(secondCallbackResponse.headers.get("location")).toContain(
 			"dashboard",
@@ -4128,44 +4142,29 @@ describe("SAML SSO - Single Assertion Validation", () => {
 			"error",
 		);
 
-		// Test same scenario with ACS endpoint using a fresh SAML response
-		let samlResponse3:
-			| { samlResponse: string; entityEndpoint?: string }
-			| undefined;
-		await betterFetch(
-			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
-			{
-				onSuccess: async (context) => {
-					samlResponse3 = context.data as {
-						samlResponse: string;
-						entityEndpoint?: string;
-					};
+		const secondCookies = parseSetCookieHeader(
+			secondCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const secondSessionToken = secondCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(secondSessionToken).toBeDefined();
+
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${secondSessionToken}`,
 				},
 			},
-		);
+		});
 
-		if (!samlResponse3?.samlResponse) {
-			throw new Error("Failed to get SAML response from mock IdP");
-		}
+		expect(secondSession.data?.user.id).toBe(firstUserId);
+		expect(secondSession.data?.user.email).toBe("testuser@example.com");
 
-		const thirdAcsResponse = await auth.handler(
-			new Request(
-				"http://localhost:3000/api/auth/sso/saml2/sp/acs/email-case-provider",
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						SAMLResponse: samlResponse3.samlResponse,
-						RelayState: "http://localhost:3000/dashboard",
-					}),
-				},
-			),
-		);
-
-		expect(thirdAcsResponse.status).toBe(302);
-		expect(thirdAcsResponse.headers.get("location")).toContain("dashboard");
-		expect(thirdAcsResponse.headers.get("location")).not.toContain("error");
+		const users = (await db.findMany({ model: "user" })) as {
+			email: string;
+		}[];
+		const samlUsers = users.filter((u) => u.email === "testuser@example.com");
+		expect(samlUsers).toHaveLength(1);
 	});
 });
