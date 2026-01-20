@@ -10,6 +10,49 @@ declare global {
 	}
 }
 
+export interface GsiButtonConfiguration {
+	/**
+	 * Button type: standard (default) or icon-only
+	 * @default "standard"
+	 */
+	type?: ("standard" | "icon") | undefined;
+	/**
+	 * Button theme
+	 * @default "outline"
+	 */
+	theme?: ("outline" | "filled_blue" | "filled_black") | undefined;
+	/**
+	 * Button size
+	 * @default "large"
+	 */
+	size?: ("large" | "medium" | "small") | undefined;
+	/**
+	 * Button text
+	 * @default "signin_with"
+	 */
+	text?:
+		| ("signin_with" | "signup_with" | "continue_with" | "signin")
+		| undefined;
+	/**
+	 * Button shape
+	 * @default "rectangular"
+	 */
+	shape?: ("rectangular" | "pill" | "circle" | "square") | undefined;
+	/**
+	 * Google logo alignment (standard button only)
+	 * @default "left"
+	 */
+	logo_alignment?: ("left" | "center") | undefined;
+	/**
+	 * Minimum button width in pixels (max 400)
+	 */
+	width?: number | undefined;
+	/**
+	 * Button locale (e.g., "en" or "zh_CN")
+	 */
+	locale?: string | undefined;
+}
+
 export interface GoogleOneTapOptions {
 	/**
 	 * Google client ID
@@ -84,6 +127,23 @@ export interface GoogleOneTapActionOptions
 	 */
 	onPromptNotification?: ((notification?: any | undefined) => void) | undefined;
 	nonce?: string | undefined;
+	/**
+	 * Button mode configuration. When provided, renders a "Sign In with Google" button
+	 * instead of showing the One Tap prompt.
+	 */
+	button?:
+		| {
+				/**
+				 * The HTML element or CSS selector where the button should be rendered.
+				 * If a string is provided, it will be used as a CSS selector.
+				 */
+				container: HTMLElement | string;
+				/**
+				 * Button configuration options
+				 */
+				config?: GsiButtonConfiguration | undefined;
+		  }
+		| undefined;
 }
 
 interface IdentityCredential {
@@ -144,6 +204,65 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 						console.warn(
 							"Google One Tap is only available in browser environments",
 						);
+						return;
+					}
+
+					// Button mode: render a button instead of showing the prompt
+					if (opts?.button) {
+						await loadGoogleScript();
+
+						const container =
+							typeof opts.button.container === "string"
+								? document.querySelector<HTMLElement>(opts.button.container)
+								: opts.button.container;
+
+						if (!container) {
+							console.error(
+								"Google One Tap: Button container not found",
+								opts.button.container,
+							);
+							return;
+						}
+
+						async function callback(idToken: string) {
+							await $fetch("/one-tap/callback", {
+								method: "POST",
+								body: { idToken },
+								...opts?.fetchOptions,
+								...fetchOptions,
+							});
+
+							if ((!opts?.fetchOptions && !fetchOptions) || opts?.callbackURL) {
+								window.location.href = opts?.callbackURL ?? "/";
+							}
+						}
+
+						const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
+						const contextValue = context ?? options.context ?? "signin";
+
+						window.google?.accounts.id.initialize({
+							client_id: options.clientId,
+							callback: async (response: { credential: string }) => {
+								try {
+									await callback(response.credential);
+								} catch (error) {
+									console.error("Error during button callback:", error);
+								}
+							},
+							auto_select: autoSelect,
+							cancel_on_tap_outside: cancelOnTapOutside,
+							context: contextValue,
+							ux_mode: opts?.uxMode || "popup",
+							nonce: opts?.nonce,
+							itp_support: true,
+							...options.additionalOptions,
+						});
+
+						window.google?.accounts.id.renderButton(
+							container,
+							opts.button.config ?? {},
+						);
+
 						return;
 					}
 

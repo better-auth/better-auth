@@ -55,10 +55,60 @@ export const authClient = createAuthClient({
 
 ### Usage
 
+#### Prompt Mode (Default)
+
 To display the One Tap popup, simply call the oneTap method on your auth client:
 
 ```ts
 await authClient.oneTap();
+```
+
+#### Button Mode
+
+To render a "Sign In with Google" button instead of showing the automatic prompt, use the `button` option:
+
+```tsx
+// In your component
+<div id="google-signin-button"></div>
+
+// Call oneTap with button configuration
+await authClient.oneTap({
+  button: {
+    container: "#google-signin-button", // CSS selector or HTMLElement
+    config: {
+      theme: "outline",
+      size: "large",
+      type: "standard",
+      text: "signin_with"
+    }
+  }
+});
+```
+
+Or with a React ref:
+
+```tsx
+import { useEffect, useRef } from "react";
+
+function SignInButton() {
+  const buttonRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (buttonRef.current) {
+      authClient.oneTap({
+        button: {
+          container: buttonRef.current,
+          config: {
+            theme: "filled_blue",
+            size: "large"
+          }
+        }
+      });
+    }
+  }, []);
+
+  return <div ref={buttonRef}></div>;
+}
 ```
 
 ### Customizing Redirect Behavior
@@ -117,6 +167,21 @@ await authClient.oneTap({
   - `baseDelay`: Base delay in milliseconds for retries. Default is 1000.
   - `maxAttempts`: Maximum number of prompt attempts before invoking the `onPromptNotification` callback. Default is 5.
   - `fedCM`: Whether to enable [Federated Credential Management](https://developer.mozilla.org/en-US/docs/Web/API/FedCM_API) (FedCM) support. Default is true.
+
+### Button Mode Options
+
+When using button mode, pass a `button` object to the `oneTap` action with the following properties:
+
+- `container`: The HTML element or CSS selector where the button should be rendered (required)
+- `config`: Button configuration options (optional):
+  - `type`: Button type - `"standard"` (default) or `"icon"` (icon-only)
+  - `theme`: Button theme - `"outline"` (default), `"filled_blue"`, or `"filled_black"`
+  - `size`: Button size - `"large"` (default), `"medium"`, or `"small"`
+  - `text`: Button text - `"signin_with"` (default), `"signup_with"`, `"continue_with"`, or `"signin"`
+  - `shape`: Button shape - `"rectangular"` (default), `"pill"`, `"circle"`, or `"square"`
+  - `logo_alignment`: Google logo alignment - `"left"` (default) or `"center"` (for standard button only)
+  - `width`: Minimum button width in pixels (max 400)
+  - `locale`: Display button using specified language code (e.g., `"zh_CN"`)
 
 ### Server Options
 
