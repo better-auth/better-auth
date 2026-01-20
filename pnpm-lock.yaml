@@ -1809,7 +1809,7 @@ importers:
         specifier: 'catalog:'
         version: 0.19.0(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.3)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
       vitest:
-        specifier: ^4.0.17
+        specifier: catalog:vitest
         version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.9)(@vitest/ui@4.0.17)(happy-dom@20.0.11)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   test:

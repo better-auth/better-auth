@@ -21,11 +21,11 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "tsdown": "catalog:",
-    "vitest": "^4.0.17"
+    "vitest": "catalog:vitest"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "vitest": "^4.0.17"
+    "vitest": "catalog:vitest"
   }
 }
