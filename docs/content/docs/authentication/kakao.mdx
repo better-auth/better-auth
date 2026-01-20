@@ -15,12 +15,8 @@ description: Kakao provider setup and usage.
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
         <Callout type="info">
-            The default scopes are `account_email`, `profile_image`, and `profile_nickname`. 
-            
-            Please note that retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). 
-            If you are not using a Biz App, you must disable the default scope.
-            
-            For more details, refer to the [Kakao Login scopes documentation](https://developers.kakao.com/docs/latest/kakaologin/utilize#scope-user).
+            - The default scopes are `account_email`, `profile_image`, and `profile_nickname`. 
+            - Note that retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). For more details, refer to the [Kakao Login scopes documentation](https://developers.kakao.com/docs/latest/kakaologin/utilize#scope-user).
         </Callout>
 
         ```ts title="auth.ts"
@@ -31,9 +27,6 @@ description: Kakao provider setup and usage.
                 kakao: { // [!code highlight]
                     clientId: process.env.KAKAO_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.KAKAO_CLIENT_SECRET as string, // [!code highlight]
-                    // If your app is not a Biz App, you must disable the default scope
-                    // disableDefaultScope: true,
-                    // scope: ["profile_nickname", "profile_image"]
                 }, // [!code highlight]
             }
         })
@@ -55,5 +48,4 @@ description: Kakao provider setup and usage.
         }
         ```
     </Step>
-
 </Steps>
