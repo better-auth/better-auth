@@ -425,3 +425,57 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 	}
 	return Object.fromEntries(query);
 }
+
+/**
+ * Determines if a client is a public client based on its configuration.
+ *
+ * Public clients include:
+ * - Clients with explicit `public: true`
+ * - Native applications (type: "native")
+ * - User-agent-based applications (type: "user-agent-based")
+ *
+ * @param client - The OAuth client to check
+ * @returns true if the client is public, false if confidential
+ *
+ * @internal
+ */
+export function isPublicClient<T extends Scope[]>(
+	client: SchemaClient<T>,
+): boolean {
+	// Explicit public flag takes precedence
+	if (client.public === true) return true;
+	if (client.public === false) return false;
+
+	// Check client type (OAuth 2.0 spec)
+	if (client.type === "native" || client.type === "user-agent-based") {
+		return true;
+	}
+
+	// Default: treat as confidential (web application)
+	return false;
+}
+
+/**
+ * Determines if PKCE is required for a given client based on
+ * client type and server configuration.
+ *
+ * PKCE requirements:
+ * - Public clients ALWAYS require PKCE (OAuth 2.1 compliance)
+ * - Confidential clients respect the `requirePKCE` option
+ *
+ * @param client - The OAuth client
+ * @param options - OAuth provider options
+ * @returns true if PKCE is required for this client
+ *
+ * @internal
+ */
+export function requiresPKCEForClient<T extends Scope[]>(
+	client: SchemaClient<T>,
+	options: OAuthOptions<T>,
+): boolean {
+	// Public clients ALWAYS require PKCE
+	if (isPublicClient(client)) return true;
+
+	// Confidential clients respect global setting (default: true)
+	return options.requirePKCE !== false;
+}

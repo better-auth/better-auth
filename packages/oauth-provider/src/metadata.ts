@@ -17,6 +17,7 @@ export function authServerMetadata(
 		public_client_supported?: boolean;
 		grant_types_supported?: GrantType[];
 		jwt_disabled?: boolean;
+		allowPlainCodeChallengeMethod?: boolean;
 	},
 ) {
 	const baseURL = ctx.context.baseURL;
@@ -58,7 +59,9 @@ export function authServerMetadata(
 			"client_secret_basic",
 			"client_secret_post",
 		],
-		code_challenge_methods_supported: ["S256"],
+		code_challenge_methods_supported: overrides?.allowPlainCodeChallengeMethod
+			? ["S256", "plain"]
+			: ["S256"],
 	};
 	return metadata;
 }
@@ -76,6 +79,7 @@ export function oidcServerMetadata(
 		public_client_supported: opts.allowUnauthenticatedClientRegistration,
 		grant_types_supported: opts.grantTypes,
 		jwt_disabled: opts.disableJwtPlugin,
+		allowPlainCodeChallengeMethod: opts.allowPlainCodeChallengeMethod,
 	});
 	const metadata: Omit<
 		OIDCMetadata,

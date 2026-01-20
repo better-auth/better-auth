@@ -10,7 +10,13 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, parsePrompt, storeToken } from "./utils";
+import {
+	getClient,
+	isPublicClient,
+	parsePrompt,
+	requiresPKCEForClient,
+	storeToken,
+} from "./utils";
 
 /**
  * Formats an error url
@@ -142,9 +148,12 @@ export async function authorizeEndpoint(
 		const invalidScopes = requestedScopes.filter((scope) => {
 			return (
 				!validScopes?.has(scope) ||
-				// offline access must be requested through PKCE
+				// offline access ALWAYS requires PKCE (OAuth 2.1)
 				(scope === "offline_access" &&
-					(query.code_challenge_method !== "S256" || !query.code_challenge))
+					(!query.code_challenge ||
+						!query.code_challenge_method ||
+						(query.code_challenge_method !== "S256" &&
+							query.code_challenge_method !== "plain")))
 			);
 		});
 		if (invalidScopes.length) {
@@ -164,28 +173,40 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	if (!query.code_challenge || !query.code_challenge_method) {
+	// Determine if PKCE is required for this client
+	const pkceProvided = !!(query.code_challenge && query.code_challenge_method);
+	const pkceRequired = requiresPKCEForClient(client, opts);
+
+	if (pkceRequired && !pkceProvided) {
+		const isPublic = isPublicClient(client);
+		const reason = isPublic
+			? "pkce is required for public clients (OAuth 2.1)"
+			: "pkce is required";
 		throw ctx.redirect(
 			formatErrorURL(
 				query.redirect_uri,
 				"invalid_request",
-				"pkce is required",
+				reason,
 				query.state,
 			),
 		);
 	}
 
-	// Check code challenges
-	const codeChallengesSupported = ["S256"];
-	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-				query.state,
-			),
-		);
+	// If PKCE is provided, validate the code challenge method
+	if (pkceProvided) {
+		const allowedMethods = opts.allowPlainCodeChallengeMethod
+			? ["S256", "plain"]
+			: ["S256"];
+		if (!allowedMethods.includes(query.code_challenge_method!)) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method",
+					query.state,
+				),
+			);
+		}
 	}
 
 	// Check for session

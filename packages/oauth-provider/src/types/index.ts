@@ -614,6 +614,24 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	disableJwtPlugin?: boolean;
+	/**
+	 * Whether to require PKCE for confidential clients.
+	 *
+	 * OAuth 2.1 compliance:
+	 * - Public clients ALWAYS require PKCE (non-negotiable)
+	 * - Confidential clients can use client_secret when set to false
+	 * - The `offline_access` scope ALWAYS requires PKCE
+	 *
+	 * @default true
+	 */
+	requirePKCE?: boolean;
+	/**
+	 * Allow "plain" code challenge method in addition to "S256".
+	 * OAuth 2.1 recommends S256 only.
+	 *
+	 * @default false
+	 */
+	allowPlainCodeChallengeMethod?: boolean;
 }
 
 export interface OAuthAuthorizationQuery {
@@ -714,7 +732,7 @@ export interface OAuthAuthorizationQuery {
 	/**
 	 * Code challenge method used
 	 */
-	code_challenge_method?: "S256";
+	code_challenge_method?: "S256" | "plain";
 	/**
 	 * String value used to associate a Client session with an ID Token, and to mitigate replay
 	 * attacks. The value is passed through unmodified from the Authentication Request to the ID Token.

@@ -20,6 +20,7 @@ import {
 	decryptStoredClientSecret,
 	getJwtPlugin,
 	getStoredToken,
+	isPublicClient,
 	parseClientMetadata,
 	storeToken,
 	validateClientCredentials,
@@ -642,31 +643,53 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 	);
 
-	/** Check challenge */
-	const challenge =
-		code_verifier && verificationValue.query?.code_challenge_method === "S256"
-			? await generateCodeChallenge(code_verifier)
-			: undefined;
-	if (
-		// AuthCodeWithSecret - Required if sent
-		isAuthCodeWithSecret &&
-		(challenge || verificationValue?.query?.code_challenge) &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+	// Validate authentication method based on client type
+	const clientIsPublic = isPublicClient(client);
+	const challengeInAuth = verificationValue.query?.code_challenge;
+	const challengeMethodInAuth = verificationValue.query?.code_challenge_method;
+
+	if (clientIsPublic) {
+		// Public clients MUST use PKCE
+		if (!isAuthCodeWithPkce) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "Public clients must use PKCE",
+				error: "invalid_request",
+			});
+		}
+	} else {
+		// Confidential clients need either PKCE or secret
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"Missing authentication: PKCE or client_secret required",
+				error: "invalid_request",
+			});
+		}
 	}
-	if (
-		// AuthCodeWithPkce - Always required
-		isAuthCodeWithPkce &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+
+	// Validate code_verifier if PKCE was used in authorization
+	if (challengeInAuth) {
+		if (!code_verifier) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code_verifier required",
+				error: "invalid_request",
+			});
+		}
+
+		// Compute challenge based on method used
+		let computedChallenge: string | undefined;
+		if (challengeMethodInAuth === "S256") {
+			computedChallenge = await generateCodeChallenge(code_verifier);
+		} else if (challengeMethodInAuth === "plain") {
+			computedChallenge = code_verifier;
+		}
+
+		if (computedChallenge !== challengeInAuth) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code verification failed",
+				error: "invalid_request",
+			});
+		}
 	}
 
 	/** Get user */

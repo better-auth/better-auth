@@ -169,7 +169,7 @@ export interface AuthServerMetadata {
 	 *
 	 * @default ["S256"]
 	 */
-	code_challenge_methods_supported: "S256"[];
+	code_challenge_methods_supported: ("S256" | "plain")[];
 }
 
 /**
