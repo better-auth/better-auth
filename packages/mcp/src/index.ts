@@ -7,7 +7,7 @@ const server = new McpServer({
 	name: "better-auth",
 	description:
 		"Better Auth MCP server for AI-powered auth setup and diagnostics",
-	version: "0.0.1",
+	version: process.env.BETTER_AUTH_VERSION!,
 });
 
 registerSetupAuth(server);

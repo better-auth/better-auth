@@ -39,6 +39,9 @@
   "bin": {
     "better-auth-mcp": "./dist/index.mjs"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
     "tsdown": "catalog:",
     "typescript": "catalog:"
