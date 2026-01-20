@@ -1,4 +1,4 @@
-import { generateId } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod/v4";
 
 export const organizationRoleSchema = z.object({

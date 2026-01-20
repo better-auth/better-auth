@@ -1,4 +1,4 @@
-import type { OrganizationAddons } from "../../types";
+import type { Addon } from "../../types";
 import type { DynamicAccessControlOptions } from "./types";
 
 export const dynamicAccessControl = <O extends DynamicAccessControlOptions>(
@@ -6,5 +6,5 @@ export const dynamicAccessControl = <O extends DynamicAccessControlOptions>(
 ) => {
 	return {
 		id: "dynamic-access-control",
-	} satisfies OrganizationAddons;
+	} satisfies Addon<O>;
 };
