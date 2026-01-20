@@ -12,9 +12,11 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@better-auth/dash": "^0.1.6",
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
+    "@better-auth/scim": "workspace:^",
     "@better-auth/stripe": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.8.1",
@@ -50,8 +52,8 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-email/components": "^1.0.1",
-    "@tanstack/react-query": "^5.85.9",
-    "@tanstack/react-query-devtools": "^5.91.1",
+    "@tanstack/react-query": "^5.90.19",
+    "@tanstack/react-query-devtools": "^5.91.2",
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.2.0",
@@ -83,7 +85,7 @@
     "tailwind-merge": "^3.3.1",
     "ua-parser-js": "^2.0.4",
     "vaul": "^1.1.2",
-    "zod": "^4.1.12"
+    "zod": "^4.3.4"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "catalog:tailwind",

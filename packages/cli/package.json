@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.5.0-beta.6",
+  "version": "1.5.0-beta.8",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -59,7 +59,7 @@
     "jiti": "^2.6.0",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
-    "type-fest": "^5.2.0",
+    "type-fest": "^5.4.1",
     "typescript": "catalog:"
   },
   "dependencies": {

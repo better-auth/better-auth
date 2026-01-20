@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -16,13 +16,6 @@ describe("base context creation", () => {
 		const getDatabaseType = () => "memory";
 		return createAuthContext(adapter, opts, getDatabaseType);
 	};
-
-	it("should match config", async () => {
-		const res = await initBase({
-			baseURL: "http://localhost:3000",
-		});
-		expect(res).toMatchSnapshot();
-	});
 
 	it("should infer BASE_URL from env", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5147");

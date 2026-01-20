@@ -162,7 +162,20 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Success URL to redirect back after successful subscription
+	 * The IETF language tag of the locale Checkout is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
+	locale: z
+		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The locale to display Checkout in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
+		})
+		.optional(),
+	/**
+	 * The URL to which Stripe should send customers when payment or setup is complete.
 	 */
 	successUrl: z
 		.string()
@@ -172,7 +185,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Cancel URL
+	 * If set, checkout shows a back button and customers will be directed here if they cancel payment.
 	 */
 	cancelUrl: z
 		.string()
@@ -182,7 +195,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Return URL
+	 * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
 	 */
 	returnUrl: z
 		.string()
@@ -702,6 +715,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							: {
 									customer_email: user.email,
 								}),
+						locale: ctx.body.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -1429,9 +1443,17 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 };
 
 const createBillingPortalBodySchema = z.object({
+	/**
+	 * The IETF language tag of the locale Customer Portal is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
 	locale: z
 		.custom<StripeType.Checkout.Session.Locale>((localization) => {
 			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The IETF language tag of the locale Customer Portal is displayed in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
 		})
 		.optional(),
 	referenceId: z.string().optional(),

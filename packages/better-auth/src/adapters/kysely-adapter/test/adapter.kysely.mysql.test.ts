@@ -1,7 +1,7 @@
 import { Kysely, MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { assert } from "vitest";
-import { getMigrations } from "../../../db";
+import { getMigrations } from "../../../db/get-migration";
 import { testAdapter } from "../../test-adapter";
 import {
 	authFlowTestSuite,
@@ -18,7 +18,7 @@ const mysqlDB = createPool({
 	timezone: "Z",
 });
 
-let kyselyDB = new Kysely({
+const kyselyDB = new Kysely({
 	dialect: new MysqlDialect(mysqlDB),
 });
 

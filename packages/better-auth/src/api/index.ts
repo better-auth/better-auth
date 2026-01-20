@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types/helper";
@@ -272,17 +273,11 @@ export const router = <Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		allowedMediaTypes: ["application/json"],
+		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
-
-			const normalizedPath =
-				basePath === "/"
-					? pathname
-					: pathname.startsWith(basePath)
-						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
-						: pathname;
+			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}

@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 
-let server = new OAuth2Server();
+const server = new OAuth2Server();
 
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
@@ -252,6 +252,61 @@ describe("SSO", async () => {
 
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should normalize email to lowercase in OIDC authentication to prevent duplicate creation", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const mixedCaseEmail = "OIDCUser@Example.com";
+		const originalListeners = server.service.listeners("beforeUserinfo");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.on("beforeUserinfo", (userInfoResponse, req) => {
+			userInfoResponse.body = {
+				email: mixedCaseEmail,
+				name: "OIDC Test User",
+				sub: "oidc-test-user",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		try {
+			const provider = await auth.api.registerSSOProvider({
+				body: {
+					providerId: "oidc-email-case-provider",
+					issuer: server.issuer.url!,
+					domain: "example.com",
+					oidcConfig: {
+						clientId: "test-client-id",
+						clientSecret: "test-client-secret",
+						discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+						pkce: false,
+					},
+				},
+				headers,
+			});
+
+			expect(provider.providerId).toBe("oidc-email-case-provider");
+			expect(provider.issuer).toBe(server.issuer.url!);
+
+			const loginRes = await auth.api.signInSSO({
+				body: {
+					providerId: "oidc-email-case-provider",
+					callbackURL: "/dashboard",
+				},
+			});
+
+			expect(loginRes.url).toBeTruthy();
+			expect(loginRes.url).toContain(server.issuer.url!);
+			expect(loginRes.url).toContain("response_type=code");
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			for (const listener of originalListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+		}
 	});
 });
 
