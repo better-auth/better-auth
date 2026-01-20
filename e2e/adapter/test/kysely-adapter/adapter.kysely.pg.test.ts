@@ -1,9 +1,9 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { kyselyAdapter } from "@better-auth/kysely-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { getMigrations } from "better-auth/db/migration";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,

@@ -1,5 +1,6 @@
 {
-  "name": "adapter",
+  "name": "@better-auth-test/adapter",
+  "type": "module",
   "scripts": {
     "test": "vitest",
     "prepare": "prisma generate --schema ./test/prisma-adapter/base.prisma"
@@ -12,6 +13,7 @@
     "@better-auth/memory-adapter": "workspace:*",
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
     "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.15.5",
@@ -24,7 +26,8 @@
     "pg": "^8.16.3",
     "prisma": "^5.22.0",
     "tarn": "^3.0.2",
-    "tedious": "^18.6.1"
+    "tedious": "^18.6.1",
+    "vitest": "^4.0.17"
   },
   "dependencies": {
     "deepmerge": "^4.3.1",

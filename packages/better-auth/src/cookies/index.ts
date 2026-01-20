@@ -28,7 +28,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
+			: options.baseURL
 				? options.baseURL.startsWith("https://")
 					? true
 					: false

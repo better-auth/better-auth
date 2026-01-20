@@ -1,8 +1,8 @@
 import { execSync } from "node:child_process";
 import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
