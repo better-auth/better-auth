@@ -5,8 +5,7 @@ import type {
 	InferAdditionalFieldsFromPluginOptions,
 } from "../../../db";
 import { toZodSchema } from "../../../db";
-import type { PrettifyDeep, UnionToIntersection } from "../../../types/helper";
-import type { OrganizationSchema } from "../../organization/schema";
+import type { UnionToIntersection } from "../../../types/helper";
 
 type InferOptionalSchemaType<
 	Fields extends readonly {

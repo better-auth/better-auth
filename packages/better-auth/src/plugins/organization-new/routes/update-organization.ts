@@ -9,7 +9,7 @@ import { getOrgAdapter } from "../helpers/get-org-adapter";
 import { getOrganizationId } from "../helpers/get-organization-id";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import { orgMiddleware } from "../middleware/org-middleware";
-import type { InferOrganization, OrganizationOptions } from "../types";
+import type { OrganizationOptions } from "../types";
 
 const baseUpdateOrganizationSchema = z.object({
 	data: z.object({
