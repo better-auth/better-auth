@@ -272,22 +272,22 @@ export const createInternalAdapter = (
 			const authCtx = await getCurrentAuthContext().catch(() => null);
 			const headers = authCtx?.headers || authCtx?.request?.headers;
 			const storeInDb = options.session?.storeSessionInDatabase;
-			const { id: overrideId, ...rest } = override || {};
+			const {
+				// always ignore override id - new sessions must have new ids
+				id: _,
+				...rest
+			} = override || {};
 
 			// determine session id
 			let sessionId: string | undefined;
-			if (overrideId) {
-				sessionId = overrideId;
-			} else {
-				const generatedId = ctx.generateId({ model: "session" });
-				if (generatedId !== false) {
-					sessionId = generatedId;
-				} else if (secondaryStorage && !storeInDb) {
-					// no database to auto-generate id
-					sessionId = generateId();
-				}
-				// database will generate the id
+			const generatedId = ctx.generateId({ model: "session" });
+			if (generatedId !== false) {
+				sessionId = generatedId;
+			} else if (secondaryStorage && storeInDb === false) {
+				// no database to auto-generate id
+				sessionId = generateId();
 			}
+			// otherwise database will generate the id
 
 			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = parseSessionInput(
