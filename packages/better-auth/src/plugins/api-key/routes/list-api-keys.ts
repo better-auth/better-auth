@@ -11,6 +11,39 @@ import {
 import type { apiKeySchema } from "../schema";
 import type { PredefinedApiKeyOptions } from ".";
 
+const listApiKeysQuerySchema = z
+	.object({
+		limit: z.coerce
+			.number()
+			.int()
+			.nonnegative()
+			.meta({
+				description: "The number of API keys to return",
+			})
+			.optional(),
+		offset: z.coerce
+			.number()
+			.int()
+			.nonnegative()
+			.meta({
+				description: "The offset to start from",
+			})
+			.optional(),
+		sortBy: z
+			.string()
+			.meta({
+				description: "The field to sort by (e.g., createdAt, name, expiresAt)",
+			})
+			.optional(),
+		sortDirection: z
+			.enum(["asc", "desc"])
+			.meta({
+				description: "The direction to sort by",
+			})
+			.optional(),
+	})
+	.optional();
+
 export function listApiKeys({
 	opts,
 	schema,
@@ -28,39 +61,7 @@ export function listApiKeys({
 		{
 			method: "GET",
 			use: [sessionMiddleware],
-			query: z
-				.object({
-					limit: z.coerce
-						.number()
-						.int()
-						.nonnegative()
-						.meta({
-							description: "The number of API keys to return",
-						})
-						.optional(),
-					offset: z.coerce
-						.number()
-						.int()
-						.nonnegative()
-						.meta({
-							description: "The offset to start from",
-						})
-						.optional(),
-					sortBy: z
-						.string()
-						.meta({
-							description:
-								"The field to sort by (e.g., createdAt, name, expiresAt)",
-						})
-						.optional(),
-					sortDirection: z
-						.enum(["asc", "desc"])
-						.meta({
-							description: "The direction to sort by",
-						})
-						.optional(),
-				})
-				.optional(),
+			query: listApiKeysQuerySchema,
 			metadata: {
 				openapi: {
 					description: "List all API keys for the authenticated user",
