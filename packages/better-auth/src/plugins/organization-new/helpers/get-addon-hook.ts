@@ -19,7 +19,7 @@ const DEFAULT_ADDON_PRIORITY = 50;
 /**
  * Creates an addon context for inter-addon communication
  */
-export const createAddonContext = (
+const createAddonContext = (
 	options: ResolvedOrganizationOptions,
 ): AddonContext => {
 	const addonMap = new Map<string, Addon>();
@@ -28,7 +28,7 @@ export const createAddonContext = (
 	for (const addon of options.use ?? []) {
 		addonMap.set(addon.id, addon);
 	}
-	``;
+
 	return {
 		options,
 		getAddon: <T extends Addon = Addon>(id: string): T | undefined => {
