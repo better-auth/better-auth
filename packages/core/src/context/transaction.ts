@@ -44,11 +44,28 @@ export const runWithAdapter = async <R>(
 	adapter: DBAdapter,
 	fn: () => R,
 ): Promise<R> => {
-	let called = true;
+	let called = false;
 	return ensureAsyncStorage()
-		.then((als) => {
+		.then(async (als) => {
 			called = true;
-			return als.run({ adapter, pendingHooks: [] }, fn);
+			const pendingHooks: Array<() => Promise<void>> = [];
+			let result: Awaited<R>;
+			let error: unknown;
+			let hasError = false;
+			try {
+				result = await als.run({ adapter, pendingHooks }, fn);
+			} catch (err) {
+				error = err;
+				hasError = true;
+			}
+			// Execute pending hooks after the function completes (even if it threw)
+			for (const hook of pendingHooks) {
+				await hook();
+			}
+			if (hasError) {
+				throw error;
+			}
+			return result!;
 		})
 		.catch((err) => {
 			if (!called) {
@@ -67,13 +84,24 @@ export const runWithTransaction = async <R>(
 		.then(async (als) => {
 			called = true;
 			const pendingHooks: Array<() => Promise<void>> = [];
-			const result = await adapter.transaction(async (trx) => {
-				return als.run({ adapter: trx, pendingHooks }, fn);
-			});
+			let result: Awaited<R>;
+			let error: unknown;
+			let hasError = false;
+			try {
+				result = await adapter.transaction(async (trx) => {
+					return als.run({ adapter: trx, pendingHooks }, fn);
+				});
+			} catch (e) {
+				hasError = true;
+				error = e;
+			}
 			for (const hook of pendingHooks) {
 				await hook();
 			}
-			return result;
+			if (hasError) {
+				throw error;
+			}
+			return result!;
 		})
 		.catch((err) => {
 			if (!called) {
