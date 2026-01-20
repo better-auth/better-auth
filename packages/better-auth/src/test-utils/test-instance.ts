@@ -61,8 +61,8 @@ export async function getTestInstance<
 	}
 
 	async function getSqlite() {
-		const { default: Database } = await import("better-sqlite3");
-		return new Database(":memory:");
+		const { DatabaseSync } = await import("node:sqlite");
+		return new DatabaseSync(":memory:");
 	}
 
 	async function getMysql() {
