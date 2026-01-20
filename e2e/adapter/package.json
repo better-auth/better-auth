@@ -1,5 +1,6 @@
 {
-  "name": "adapter",
+  "name": "@better-auth-test/adapter",
+  "type": "module",
   "scripts": {
     "test": "vitest",
     "prepare": "prisma generate --schema ./test/prisma-adapter/base.prisma"
