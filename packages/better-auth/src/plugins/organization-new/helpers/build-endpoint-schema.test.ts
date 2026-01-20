@@ -1,7 +1,7 @@
-import { describe, it, expect, expectTypeOf } from "vitest";
-import { buildEndpointSchema } from "./build-endpoint-schema";
-import * as z from "zod/v4";
 import type { GenericEndpointContext } from "@better-auth/core";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import * as z from "zod/v4";
+import { buildEndpointSchema } from "./build-endpoint-schema";
 
 describe("buildEndpointSchema", () => {
 	describe("runtime schema building", () => {

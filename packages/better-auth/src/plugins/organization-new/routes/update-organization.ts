@@ -108,10 +108,11 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			const body = getBody(ctx);
 			const session = await ctx.context.getSession(ctx);
 			if (!session) throw APIError.fromStatus("UNAUTHORIZED");
-			const user = session.user;
-			const organization = await getOrganizationId(ctx, true);
-			const adapter = getOrgAdapter<O>(ctx.context, options);
 
+			const adapter = getOrgAdapter<O>(ctx.context, options);
+			const organization = await getOrganizationId(ctx, true);
+
+			const user = session.user;
 			const userId = user.id;
 			const organizationId = organization.id;
 
@@ -162,22 +163,22 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			const orgHooks = getHook("UpdateOrganization", resolvedOptions);
 
 			const updateData = await (async () => {
+				const organization = ctx.body.data;
 				const modify = await orgHooks.before(
-					{ member, organization: ctx.body.data, user },
+					{ member, organization, user },
 					ctx,
 				);
-				const data = {
-					...ctx.body.data,
+				return {
+					...organization,
 					...(modify || {}),
 				};
-				return data;
 			})();
 
 			type ReturnType = InferOrganization<O, false>;
 
-			// No data to update
+			// No data to update, return org as-is.
 			if (Object.keys(updateData).length === 0) {
-				await orgHooks.after({ member, organization: null, user }, ctx);
+				await orgHooks.after({ member, organization, user }, ctx);
 				return ctx.json(organization as ReturnType);
 			}
 
