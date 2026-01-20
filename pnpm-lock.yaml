@@ -950,6 +950,9 @@ importers:
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../packages/prisma-adapter
+      '@better-auth/test-utils':
+        specifier: workspace:*
+        version: link:../../packages/test-utils
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -989,6 +992,9 @@ importers:
       tedious:
         specifier: ^18.6.1
         version: 18.6.1
+      vitest:
+        specifier: ^4.0.17
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.9)(@vitest/ui@4.0.17)(happy-dom@20.0.11)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   e2e/integration:
     dependencies:
@@ -1011,9 +1017,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.2.0
-        version: 12.5.0
       solid-js:
         specifier: ^1.9.7
         version: 1.9.9
@@ -1036,9 +1039,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../../../packages/better-auth
-      better-sqlite3:
-        specifier: ^12.2.0
-        version: 12.5.0
       kysely:
         specifier: ^0.28.5
         version: 0.28.9
@@ -1790,6 +1790,21 @@ importers:
       type-fest:
         specifier: ^5.4.1
         version: 5.4.1
+
+  packages/test-utils:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.19.0(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.3)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
+      vitest:
+        specifier: catalog:vitest
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.9)(@vitest/ui@4.0.17)(happy-dom@20.0.11)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   test:
     devDependencies:

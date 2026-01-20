@@ -93,6 +93,9 @@
 				"@better-auth/core",
 				"better-call"
 			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
 		}
 	},
 	"vitest": {

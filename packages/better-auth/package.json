@@ -25,6 +25,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",

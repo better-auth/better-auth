@@ -1,5 +1,5 @@
+import { createTestSuite } from "@better-auth/test-utils/adapter";
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
 import { getNormalTestSuiteTests } from "./basic";
 
 export const joinsTestSuite = createTestSuite(

@@ -46,6 +46,9 @@
       "path": "./packages/kysely-adapter/tsconfig.json"
     },
     {
+      "path": "./packages/test-utils/tsconfig.json"
+    },
+    {
       "path": "./test/tsconfig.json"
     }
   ]

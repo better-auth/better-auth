@@ -1,7 +1,7 @@
 import type { Session, User } from "@better-auth/core/db";
+import { createTestSuite } from "@better-auth/test-utils/adapter";
 import { setCookieToHeader } from "better-auth/cookies";
 import { expect } from "vitest";
-import { createTestSuite } from "../create-test-suite";
 
 /**
  * This test suite tests basic authentication flow using the adapter.
