@@ -9,6 +9,7 @@ import {
 	getAccountCookie,
 	setAccountCookie,
 } from "../../cookies/session-store";
+import { parseAccountOutput } from "../../db/schema";
 import { generateState } from "../../oauth2/state";
 import { decryptOAuthToken, setTokenUtil } from "../../oauth2/utils";
 import {
@@ -87,15 +88,13 @@ export const listUserAccounts = createAuthEndpoint(
 			session.user.id,
 		);
 		return c.json(
-			accounts.map((a) => ({
-				id: a.id,
-				providerId: a.providerId,
-				createdAt: a.createdAt,
-				updatedAt: a.updatedAt,
-				accountId: a.accountId,
-				userId: a.userId,
-				scopes: a.scope?.split(",") || [],
-			})),
+			accounts.map((a) => {
+				const { scope, ...parsed } = parseAccountOutput(c.context.options, a);
+				return {
+					...parsed,
+					scopes: scope?.split(",") || [],
+				};
+			}),
 		);
 	},
 );
