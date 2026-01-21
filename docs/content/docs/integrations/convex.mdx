@@ -349,3 +349,184 @@ export default async function RootLayout({
 ```
 </Step>
 </Steps>
+
+## Done 🎉
+
+You're now ready to start using Better Auth with Convex.
+
+---
+
+## Usage
+
+### Create your functions
+
+Better Auth's `auth.api` methods would normally run in your server, but with Convex being your backend, these methods need to run in a Convex function. The Convex function can then be called from the client via hooks like `useMutation` or in server functions and other server code using one of the auth-server utilities like `fetchAuthMutation`.
+
+Convex has a convention of creating functions in the `convex/` directory. For example, you can create auth-related functions in the `convex/auth.ts` file like this:
+
+```ts title="convex/auth.ts"
+import { query } from "./_generated/server";
+
+export const getCurrentUser = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    return identity;
+  },
+});
+
+// ... other functions
+```
+
+### Using the Better Auth client
+
+You can use the `authClient` like the Better Auth client normally.
+
+```tsx title="app/sign-in/page.tsx"
+"use client";
+
+import { Button } from "@/components/ui/button";
+import { authClient } from "@/lib/auth-client";
+
+const Page = () => {
+  return (
+    <div className="flex flex-col items-center justify-center h-screen">
+      <Button
+        onClick={async () => {
+          await authClient.signIn.social({
+            provider: "github",
+            callbackURL: "/dashboard",
+          });
+        }}
+      >
+        Sign in with GitHub
+      </Button>
+    </div>
+  );
+};
+
+export default Page;
+```
+
+### Using the Convex React hooks
+
+If you've created Convex functions, you can use the Convex React hooks to query or mutate data in the client side like the usual way.
+
+```tsx title="app/dashboard/page.tsx"
+"use client";
+
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+
+const Page = () => {
+  const user = useQuery(api.auth.getCurrentUser);
+
+  if (user === undefined) {
+    return <div>Loading...</div>;
+  }
+
+  if (user === null) {
+    return <div>Unauthorized</div>;
+  }
+
+  return (
+    <div>
+      <pre>{JSON.stringify(user, null, 2)}</pre>
+    </div>
+  );
+};
+
+export default Page;
+```
+
+### Using the server helpers
+
+You can use the server helpers to perform authentication related operations in the server side.
+
+```ts title="app/protected/page.tsx"
+import { isAuthenticated } from "@/lib/auth-server";
+
+const Page = async () => {
+  const hasToken = await isAuthenticated();
+  if (!hasToken) {
+    return <div>Unauthorized</div>;
+  }
+
+  return (
+    <div>
+      <p>Hello</p>
+    </div>
+  );
+};
+
+export default Page;
+```
+
+### SSR with server components
+
+Convex queries can be preloaded in server components and rendered in client components via `preloadAuthQuery` and `usePreloadedAuthQuery`.
+
+<Callout type="info">
+`preloadAuthQuery` is recommended for use when you want to handle different UI based on the data state, rather than for protecting resources.
+</Callout>
+
+*Preloading in a server component:*
+
+```tsx title="app/landing/page.tsx"
+import { api } from "@/convex/_generated/api";
+import { preloadAuthQuery } from "@/lib/auth-server";
+import Header from "./header";
+
+const Page = async () => {
+  const preloadedUserQuery = await preloadAuthQuery(api.auth.getCurrentUser);
+
+  return (
+    <div>
+      <Header preloadedUserQuery={preloadedUserQuery} />
+    </div>
+  );
+};
+
+export default Page;
+```
+
+*Rendering preloaded data in a client component:*
+
+```tsx title="app/landing/header.tsx"
+"use client";
+
+import { usePreloadedAuthQuery } from "@convex-dev/better-auth/nextjs/client";
+import type { Preloaded } from "convex/react";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import type { api } from "@/convex/_generated/api";
+
+export const Header = ({
+  preloadedUserQuery,
+}: {
+  preloadedUserQuery: Preloaded<typeof api.auth.getCurrentUser>;
+}) => {
+  const user = usePreloadedAuthQuery(preloadedUserQuery);
+  return (
+    <div>
+      {user ? (
+        <Button asChild>
+          <Link href="/dashboard">Dashboard</Link>
+        </Button>
+      ) : (
+        <Button asChild>
+          <Link href="/sign-in">Sign in</Link>
+        </Button>
+      )}
+    </div>
+  );
+};
+
+export default Header;
+```
+
+## Additional Resources
+
+- [Convex Documentation](https://docs.convex.dev/home)
+- [`@convex-dev/better-auth` Documentation](https://labs.convex.dev/better-auth)
+- [`@convex-dev/better-auth` GitHub Repository](https://github.com/get-convex/better-auth)
