@@ -78,7 +78,7 @@ export function toAuthEndpoints<
 				const hasRequest =
 					typeof (context as { request?: { url?: string } } | undefined)
 						?.request?.url === "string";
-				const wantsResponse = Boolean(context?.asResponse) || hasRequest;
+				const shouldReturnResponse = Boolean(context?.asResponse) || hasRequest;
 				return runWithEndpointContext(internalContext, async () => {
 					const { beforeHooks, afterHooks } = getHooks(authContext);
 					const before = await runBeforeHooks(internalContext, beforeHooks);
@@ -107,7 +107,7 @@ export function toAuthEndpoints<
 						internalContext = defuReplaceArrays(rest, internalContext);
 					} else if (before) {
 						/* Return before hook response if it's anything other than a context return */
-						return wantsResponse
+						return shouldReturnResponse
 							? toResponse(before, {
 									headers: context?.headers,
 								})
@@ -165,11 +165,11 @@ export function toAuthEndpoints<
 						result.response.stack = result.response.errorStack;
 					}
 
-					if (isAPIError(result.response) && !wantsResponse) {
+					if (isAPIError(result.response) && !shouldReturnResponse) {
 						throw result.response;
 					}
 
-					const response = wantsResponse
+					const response = shouldReturnResponse
 						? toResponse(result.response, {
 								headers: result.headers,
 								status: result.status,
