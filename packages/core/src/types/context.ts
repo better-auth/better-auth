@@ -50,10 +50,19 @@ type InferPluginOptions<
  *
  * @example
  * ```ts
+ * interface MyPluginOptions {
+ *   useFeature: boolean
+ * }
+ *
+ * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
+ *   id: 'my-plugin',
+ *   options,
+ * } satisfies BetterAuthPlugin);
+ *
  * declare module "@better-auth/core" {
  *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
- *    'jwt': {
- *      creator: typeof jwt
+ *    'my-plugin': {
+ *      creator: Options extends MyPluginOptions ? typeof createMyPlugin<Options>: typeof createMyPlugin
  *    }
  *  }
  * }
