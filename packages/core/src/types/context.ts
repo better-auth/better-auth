@@ -12,7 +12,7 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
-import type { LiteralString, UnionToIntersection } from "./helper";
+import type { LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -24,16 +24,30 @@ import type { BetterAuthPlugin } from "./plugin";
  */
 type InferPluginID<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
-		? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
+		? P extends BetterAuthPlugin
+			? P["id"]
+			: never
 		: never;
 
+type InferPluginOptions<
+	O extends BetterAuthOptions,
+	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+> = O["plugins"] extends Array<infer P>
+	? P extends BetterAuthPlugin
+		? P["id"] extends ID
+			? P extends { options: infer O }
+				? O
+				: never
+			: never
+		: never
+	: never;
 /**
  * Mutators are defined in each plugin
  *
  * @example
  * ```ts
  * declare module "@better-auth/core" {
- *  interface BetterAuthPluginRegistry<Options> {
+ *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
  *    'jwt': {
  *      creator: typeof jwt
  *    }
@@ -42,9 +56,11 @@ type InferPluginID<O extends BetterAuthOptions> =
  * ```
  */
 // biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
-export interface BetterAuthPluginRegistry<Options> {}
-export type BetterAuthPluginRegistryIdentifier =
-	keyof BetterAuthPluginRegistry<unknown>;
+export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
+export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
+	unknown,
+	unknown
+>;
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -190,11 +206,16 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 ) => Promise<boolean>;
 
 export type PluginContext<Options extends BetterAuthOptions> = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+	getPlugin: <
+		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+		PluginOptions extends InferPluginOptions<Options, ID>,
+	>(
 		pluginId: ID,
 	) =>
 		| (ID extends BetterAuthPluginRegistryIdentifier
-				? ReturnType<BetterAuthPluginRegistry<Options>[ID]["creator"]>
+				? ReturnType<
+						BetterAuthPluginRegistry<Options, PluginOptions>[ID]["creator"]
+					>
 				: BetterAuthPlugin)
 		| null;
 	/**
