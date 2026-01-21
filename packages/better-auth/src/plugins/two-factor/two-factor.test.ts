@@ -847,3 +847,84 @@ describe("view backup codes", async () => {
 		expect(response.status).toBe(404);
 	});
 });
+
+describe("twoFactorCookieMaxAge", async () => {
+	const customMaxAge = 15 * 60; // 15 minutes
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				twoFactorCookieMaxAge: customMaxAge,
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should use custom twoFactorCookieMaxAge for the two-factor cookie", async () => {
+		// Enable 2FA
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		expect(twoFactorCookie?.["max-age"]).toBe(String(customMaxAge));
+	});
+
+	it("should use default 10 minutes when twoFactorCookieMaxAge is not specified", async () => {
+		const { auth: authDefault, signInWithTestUser: signInDefault } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						skipVerificationOnEnable: true,
+					}),
+				],
+			});
+
+		const { headers: defaultHeaders } = await signInDefault();
+
+		// Enable 2FA
+		const enableRes = await authDefault.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: defaultHeaders,
+			asResponse: true,
+		});
+		const updatedHeaders = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await authDefault.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		// Default is 10 minutes = 600 seconds
+		expect(twoFactorCookie?.["max-age"]).toBe("600");
+	});
+});
