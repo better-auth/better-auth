@@ -12,45 +12,73 @@ declare global {
 
 export interface GsiButtonConfiguration {
 	/**
-	 * Button type: standard (default) or icon-only
-	 * @default "standard"
+	 * The button type: icon, or standard button.
 	 */
-	type?: ("standard" | "icon") | undefined;
+	type: "standard" | "icon";
+
 	/**
-	 * Button theme
-	 * @default "outline"
+	 * The button theme. For example, filled_blue or filled_black.
+	 * outline  A standard button theme:
+	 * filled_blue  A blue-filled button theme:
+	 * filled_black  A black-filled button theme:
 	 */
-	theme?: ("outline" | "filled_blue" | "filled_black") | undefined;
+	theme?: "outline" | "filled_blue" | "filled_black";
+
 	/**
-	 * Button size
-	 * @default "large"
+	 * The button size. For example, small or large.
 	 */
-	size?: ("large" | "medium" | "small") | undefined;
+	size?: "small" | "medium" | "large";
+
 	/**
-	 * Button text
-	 * @default "signin_with"
+	 * The button text. The default value is signin_with.
+	 * There are no visual differences for the text of icon buttons that
+	 * have different text attributes. The only exception is when the
+	 * text is read for screen accessibility.
+	 *
+	 * signin_with  The button text is “Sign in with Google”:
+	 * signup_with  The button text is “Sign up with Google”:
+	 * continue_with  The button text is “Continue with Google”:
+	 * signup_with  The button text is “Sign in”:
 	 */
-	text?:
-		| ("signin_with" | "signup_with" | "continue_with" | "signin")
-		| undefined;
+	text?: "signin_with" | "signup_with" | "continue_with" | "signin";
+
 	/**
-	 * Button shape
-	 * @default "rectangular"
+	 * The button shape. The default value is rectangular.
 	 */
-	shape?: ("rectangular" | "pill" | "circle" | "square") | undefined;
+	shape?: "rectangular" | "pill" | "circle" | "square";
+
 	/**
-	 * Google logo alignment (standard button only)
-	 * @default "left"
+	 * The alignment of the Google logo. The default value is left.
+	 * This attribute only applies to the standard button type.
 	 */
-	logo_alignment?: ("left" | "center") | undefined;
+	logo_alignment?: "left" | "center";
+
 	/**
-	 * Minimum button width in pixels (max 400)
+	 * The minimum button width, in pixels. The maximum width is 400
+	 * pixels.
 	 */
-	width?: number | undefined;
+	width?: number;
+
 	/**
-	 * Button locale (e.g., "en" or "zh_CN")
+	 * The pre-set locale of the button text. If it's not set, the
+	 * browser's default locale or the Google session user’s preference
+	 * is used.
 	 */
-	locale?: string | undefined;
+	locale?: string;
+
+	/**
+	 * You can define a JavaScript function to be called when the
+	 * Sign in with Google button is clicked.
+	 */
+	click_listener?: () => void;
+
+	/**
+	 * Optional, as multiple Sign in with Google buttons can be
+	 * rendered on the same page, you can assign each button with a
+	 * unique string. The same string would return along with the ID
+	 * token, so you can identify which button user clicked to sign in.
+	 */
+	state?: string;
 }
 
 export interface GoogleOneTapOptions {
@@ -260,7 +288,9 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 						window.google?.accounts.id.renderButton(
 							container,
-							opts.button.config ?? {},
+							opts.button.config ?? {
+								type: "icon",
+							},
 						);
 
 						return;
