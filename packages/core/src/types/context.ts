@@ -29,6 +29,9 @@ type InferPluginID<O extends BetterAuthOptions> =
 			: never
 		: never;
 
+/**
+ * @internal
+ */
 type InferPluginOptions<
 	O extends BetterAuthOptions,
 	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
