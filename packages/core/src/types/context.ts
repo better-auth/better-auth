@@ -12,7 +12,7 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
-import type { LiteralString } from "./helper";
+import type { Awaitable, LiteralString } from './helper'
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -350,5 +350,5 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * to avoid blocking the response when possible (for timing attack
 			 * mitigation), but still ensure the operation completes.
 			 */
-			runInBackgroundOrAwait: (promise: Promise<unknown>) => Promise<unknown>;
+			runInBackgroundOrAwait: (promise: Promise<unknown>) => Awaitable<unknown>;
 		};
