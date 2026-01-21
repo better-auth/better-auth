@@ -1,12 +1,12 @@
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { MongoClient, ObjectId } from "mongodb";
-import { testAdapter } from "../test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);

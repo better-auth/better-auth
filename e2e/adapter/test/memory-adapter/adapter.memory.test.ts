@@ -1,6 +1,6 @@
 import { memoryAdapter } from "@better-auth/memory-adapter";
+import { testAdapter } from "@better-auth/test-utils/adapter";
 import { getAuthTables } from "better-auth/db";
-import { testAdapter } from "./test-adapter";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
@@ -8,7 +8,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "./tests";
+} from "../adapter-factory";
 
 let db: Record<string, any[]> = {};
 
