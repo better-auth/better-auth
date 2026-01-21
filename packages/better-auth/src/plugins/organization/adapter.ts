@@ -26,6 +26,14 @@ import type { OrganizationOptions } from "./types";
  * This ensures sensitive fields are not exposed in API responses.
  */
 function filterOutputFields<T extends Record<string, any>>(
+	data: T,
+	additionalFields: Record<string, DBFieldAttribute> | undefined,
+): T;
+function filterOutputFields<T extends Record<string, any>>(
+	data: T | null,
+	additionalFields: Record<string, DBFieldAttribute> | undefined,
+): T | null;
+function filterOutputFields<T extends Record<string, any>>(
 	data: T | null,
 	additionalFields: Record<string, DBFieldAttribute> | undefined,
 ): T | null {
