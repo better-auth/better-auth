@@ -37,7 +37,10 @@ export function getStorageOption(
 	identifier: string,
 	config:
 		| StoreIdentifierOption
-		| { default: StoreIdentifierOption; overrides?: Record<string, StoreIdentifierOption> }
+		| {
+				default: StoreIdentifierOption;
+				overrides?: Record<string, StoreIdentifierOption>;
+		  }
 		| undefined,
 ): StoreIdentifierOption | undefined {
 	if (!config) {

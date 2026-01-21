@@ -146,25 +146,6 @@ export type BetterAuthAdvancedOptions = {
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
 				 */
 				disableIpTracking?: boolean;
-				/**
-				 * IPv6 subnet prefix length for rate limiting.
-				 *
-				 * IPv6 addresses can be grouped by subnet to prevent attackers from
-				 * bypassing rate limits by rotating through multiple addresses in
-				 * their allocation.
-				 *
-				 * Common values:
-				 * - 128 (default): Individual IPv6 address
-				 * - 64: /64 subnet (typical home/business allocation)
-				 * - 48: /48 subnet (larger network allocation)
-				 * - 32: /32 subnet (ISP allocation)
-				 *
-				 * Note: This only affects IPv6 addresses. IPv4 addresses are always
-				 * rate limited individually.
-				 *
-				 * @default 64 (/64 subnet)
-				 */
-				ipv6Subnet?: 128 | 64 | 48 | 32 | undefined;
 		  }
 		| undefined;
 	/**
@@ -334,12 +315,6 @@ export type BetterAuthAdvancedOptions = {
 	backgroundTasks?: {
 		handler: (promise: Promise<void>) => void;
 	};
-	/**
-	 * Skip trailing slash validation in route matching
-	 *
-	 * @default false
-	 */
-	skipTrailingSlashes?: boolean | undefined;
 };
 
 export type BetterAuthOptions = {
@@ -1054,7 +1029,10 @@ export type BetterAuthOptions = {
 				 */
 				storeIdentifier?:
 					| StoreIdentifierOption
-					| { default: StoreIdentifierOption; overrides?: Record<string, StoreIdentifierOption> };
+					| {
+							default: StoreIdentifierOption;
+							overrides?: Record<string, StoreIdentifierOption>;
+					  };
 		  }
 		| undefined;
 	/**
