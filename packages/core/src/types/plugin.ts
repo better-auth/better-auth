@@ -48,6 +48,15 @@ export type BetterAuthPlugin = {
 				[key: string]: Endpoint;
 		  }
 		| undefined;
+	/**
+	 * Public endpoints that should be mounted at the root base path.
+	 * Useful for well-known endpoints that must live at `/.well-known/...`.
+	 */
+	publicEndpoints?:
+		| {
+				[key: string]: Endpoint;
+		  }
+		| undefined;
 	middlewares?:
 		| {
 				path: string;

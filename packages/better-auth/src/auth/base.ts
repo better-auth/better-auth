@@ -1,7 +1,7 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
-import { getEndpoints, router } from "../api";
+import { getEndpoints, publicRouter, router } from "../api";
 import { getTrustedOrigins } from "../context/helpers";
 import type { Auth } from "../types";
 import { getBaseURL, getOrigin } from "../utils/url";
@@ -11,7 +11,13 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);
-	const { api } = getEndpoints(authContext, options);
+	const { api, publicApi } = getEndpoints(authContext, options);
+	const hasPublicEndpoints =
+		options.plugins?.some(
+			(plugin) =>
+				plugin.publicEndpoints &&
+				Object.keys(plugin.publicEndpoints).length > 0,
+		) ?? false;
 	const errorCodes = options.plugins?.reduce((acc, plugin) => {
 		if (plugin.$ERROR_CODES) {
 			return {
@@ -21,32 +27,53 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 		}
 		return acc;
 	}, {});
+	const resolveContext = async (request: Request) => {
+		const ctx = await authContext;
+		const basePath = ctx.options.basePath || "/api/auth";
+		if (!ctx.options.baseURL) {
+			const baseURL = getBaseURL(
+				undefined,
+				basePath,
+				request,
+				undefined,
+				ctx.options.advanced?.trustedProxyHeaders,
+			);
+			if (baseURL) {
+				ctx.baseURL = baseURL;
+				ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+			} else {
+				throw new BetterAuthError(
+					"Could not get base URL from request. Please provide a valid base URL.",
+				);
+			}
+		}
+		ctx.trustedOrigins = await getTrustedOrigins(ctx.options, request);
+		return ctx;
+	};
 	return {
 		handler: async (request: Request) => {
-			const ctx = await authContext;
-			const basePath = ctx.options.basePath || "/api/auth";
-			if (!ctx.options.baseURL) {
-				const baseURL = getBaseURL(
-					undefined,
-					basePath,
-					request,
-					undefined,
-					ctx.options.advanced?.trustedProxyHeaders,
-				);
-				if (baseURL) {
-					ctx.baseURL = baseURL;
-					ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
-				} else {
-					throw new BetterAuthError(
-						"Could not get base URL from request. Please provide a valid base URL.",
-					);
+			const ctx = await resolveContext(request);
+			const { handler } = router(ctx, options);
+			const publicHandler = hasPublicEndpoints
+				? publicRouter(ctx, options).handler
+				: undefined;
+			if (publicHandler) {
+				const pathname = new URL(request.url).pathname;
+				if (pathname.startsWith("/.well-known/")) {
+					return runWithAdapter(ctx.adapter, () => publicHandler(request));
 				}
 			}
-			ctx.trustedOrigins = await getTrustedOrigins(ctx.options, request);
-			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
+		publicHandler: hasPublicEndpoints
+			? async (request: Request) => {
+					const ctx = await resolveContext(request);
+					const { handler } = publicRouter(ctx, options);
+					return runWithAdapter(ctx.adapter, () => handler(request));
+				}
+			: undefined,
 		api,
+		publicApi: hasPublicEndpoints ? publicApi : undefined,
 		options: options,
 		$context: authContext,
 		$ERROR_CODES: {
