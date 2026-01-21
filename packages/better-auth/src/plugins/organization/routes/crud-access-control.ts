@@ -284,7 +284,16 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						if (hookRes.data.permission)
 							permission = hookRes.data.permission as Record<string, string[]>;
 						const { role, permission: p, ...rest } = hookRes.data;
-						additionalFields = { ...additionalFields, ...rest };
+						// Filter to only declared additional fields
+						const validAdditionalFieldKeys = Object.keys(
+							additionalFieldsSchema.shape,
+						);
+						const filteredRest = Object.fromEntries(
+							Object.entries(rest).filter(([key]) =>
+								validAdditionalFieldKeys.includes(key),
+							),
+						);
+						additionalFields = { ...additionalFields, ...filteredRest };
 					}
 				}
 			}
@@ -1135,7 +1144,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							...additionalFields,
 							...(updateData.role ? { role: updateData.role } : {}),
 							...(updateData.permission
-								? { permission: updateData.permission as Record<string, string[]> }
+								? {
+										permission: updateData.permission as Record<
+											string,
+											string[]
+										>,
+									}
 								: {}),
 						},
 						organization,
@@ -1143,12 +1157,25 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					});
 
 					if (hookRes?.data) {
-						if (hookRes.data.role) updateData.role = hookRes.data.role as string;
+						if (hookRes.data.role)
+							updateData.role = hookRes.data.role as string;
 						if (hookRes.data.permission) {
-							updateData.permission = hookRes.data.permission as Record<string, string[]>;
+							updateData.permission = hookRes.data.permission as Record<
+								string,
+								string[]
+							>;
 						}
 						const { role: r, permission: p, ...rest } = hookRes.data;
-						Object.assign(updateData, rest);
+						// Filter to only declared additional fields
+						const validAdditionalFieldKeys = Object.keys(
+							additionalFieldsSchema.shape,
+						);
+						const filteredRest = Object.fromEntries(
+							Object.entries(rest).filter(([key]) =>
+								validAdditionalFieldKeys.includes(key),
+							),
+						);
+						Object.assign(updateData, filteredRest);
 					}
 				}
 			}
