@@ -6,6 +6,7 @@ import * as z from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
+import { deepEqual } from "../../../utils";
 import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
@@ -280,7 +281,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				}
 			}
 
-			const originalPermissionForCreate = JSON.stringify(permission);
+			const originalPermissionForCreate = permission;
 			const originalRoleName = roleName;
 			if (options.organizationHooks?.beforeCreateRole) {
 				const hookRes = await options.organizationHooks.beforeCreateRole({
@@ -311,7 +312,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			// Re-validate permissions only if the beforeCreateRole hook actually modified them
-			if (JSON.stringify(permission) !== originalPermissionForCreate) {
+			if (!deepEqual(permission, originalPermissionForCreate)) {
 				await checkForInvalidResources({ ac, ctx, permission });
 				await checkIfMemberHasPermission({
 					ctx,
@@ -1196,7 +1197,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			const originalPermissionForUpdate = updateData.permission
-				? JSON.stringify(updateData.permission)
+				? updateData.permission
 				: undefined;
 			const originalRoleName = updateData.role;
 			if (options.organizationHooks?.beforeUpdateRole) {
@@ -1216,14 +1217,15 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 
 				if (hookRes?.data) {
-					if (hookRes.data.role) updateData.role = hookRes.data.role as string;
+					if (hookRes.data.role) updateData.role = hookRes.data.role;
 					if (hookRes.data.permission) {
-						updateData.permission = hookRes.data.permission as Record<
-							string,
-							string[]
-						>;
+						updateData.permission = hookRes.data.permission;
 					}
-					const { role: _role, permission: _permission, ...rest } = hookRes.data;
+					const {
+						role: _role,
+						permission: _permission,
+						...rest
+					} = hookRes.data;
 					// Filter to only declared additional fields
 					const validAdditionalFieldKeys = Object.keys(
 						additionalFieldsSchema.shape,
@@ -1240,7 +1242,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			// Re-validate permissions only if the beforeUpdateRole hook actually modified them
 			if (
 				updateData.permission &&
-				JSON.stringify(updateData.permission) !== originalPermissionForUpdate
+				!deepEqual(updateData.permission, originalPermissionForUpdate)
 			) {
 				await checkForInvalidResources({
 					ac,
