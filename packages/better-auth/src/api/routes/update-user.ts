@@ -4,7 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
@@ -307,15 +307,7 @@ export const changePassword = createAuthEndpoint(
 
 		return ctx.json({
 			token,
-			user: {
-				id: session.user.id,
-				email: session.user.email,
-				name: session.user.name,
-				image: session.user.image,
-				emailVerified: session.user.emailVerified,
-				createdAt: session.user.createdAt,
-				updatedAt: session.user.updatedAt,
-			},
+			user: parseUserOutput(ctx.context.options, session.user),
 		});
 	},
 );

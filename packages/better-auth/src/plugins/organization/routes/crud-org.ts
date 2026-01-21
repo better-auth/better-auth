@@ -884,7 +884,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
 			let organizationId = ctx.body.organizationId;
-			let organizationSlug = ctx.body.organizationSlug;
+			const organizationSlug = ctx.body.organizationSlug;
 
 			if (organizationId === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
@@ -942,7 +942,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			let organization = await adapter.findOrganizationById(organizationId);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",

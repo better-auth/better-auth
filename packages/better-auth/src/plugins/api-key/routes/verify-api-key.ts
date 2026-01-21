@@ -1,7 +1,7 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { isAPIError } from "../../../utils/is-api-error";
 import { role } from "../../access";
@@ -126,10 +126,10 @@ export async function validateApiKey({
 
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	} else if (remaining !== null) {
-		let now = Date.now();
+		const now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.

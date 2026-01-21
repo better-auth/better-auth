@@ -1,7 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import { getMigrations } from "./get-migration";
 
 const CONNECTION_STRING = "postgres://user:password@localhost:5433/better_auth";

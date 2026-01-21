@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/test",
+  "name": "@better-auth-test/test",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,6 +14,7 @@
     "better-auth": "workspace:*",
     "msw": "^2.12.4",
     "openid-client": "^6.8.1",
+    "undici": "^7.0.0",
     "vitest": "catalog:vitest"
   }
 }
