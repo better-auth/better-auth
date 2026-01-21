@@ -296,7 +296,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					if (hookRes.data.role) roleName = hookRes.data.role as string;
 					if (hookRes.data.permission)
 						permission = hookRes.data.permission as Record<string, string[]>;
-					const { role, permission: p, ...rest } = hookRes.data;
+					const { role, permission: _permission, ...rest } = hookRes.data;
 					// Filter to only declared additional fields
 					const validAdditionalFieldKeys = Object.keys(
 						additionalFieldsSchema.shape,
