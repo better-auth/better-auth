@@ -11,6 +11,9 @@
 			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": ["@better-auth/core"]
 		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
@@ -35,7 +38,8 @@
 				// implicit integrations dependencies
 				"@lynx-js/react",
 				"@sveltejs/kit",
-				"@tanstack/start-server-core",
+				"@tanstack/react-start",
+				"@tanstack/solid-start",
 				"next",
 				"react",
 				"react-dom",
@@ -89,6 +93,9 @@
 				"@better-auth/core",
 				"better-call"
 			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
 		}
 	},
 	"vitest": {

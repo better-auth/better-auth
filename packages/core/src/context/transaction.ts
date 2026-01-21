@@ -1,16 +1,21 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
 import { getAsyncLocalStorage } from "@better-auth/core/async_hooks";
 import type { DBAdapter, DBTransactionAdapter } from "../db/adapter";
-import { getBetterAuthGlobal } from "./global";
+import { __getBetterAuthGlobal } from "./global";
+
+type HookContext = {
+	adapter: DBTransactionAdapter;
+	pendingHooks: Array<() => Promise<void>>;
+};
 
 const ensureAsyncStorage = async () => {
-	const betterAuthGlobal = getBetterAuthGlobal();
+	const betterAuthGlobal = __getBetterAuthGlobal();
 	if (!betterAuthGlobal.context.adapterAsyncStorage) {
 		const AsyncLocalStorage = await getAsyncLocalStorage();
 		betterAuthGlobal.context.adapterAsyncStorage = new AsyncLocalStorage();
 	}
 	return betterAuthGlobal.context
-		.adapterAsyncStorage as AsyncLocalStorage<DBTransactionAdapter>;
+		.adapterAsyncStorage as AsyncLocalStorage<HookContext>;
 };
 
 /**
@@ -27,7 +32,8 @@ export const getCurrentAdapter = async (
 ): Promise<DBTransactionAdapter> => {
 	return ensureAsyncStorage()
 		.then((als) => {
-			return als.getStore() || fallback;
+			const store = als.getStore();
+			return store?.adapter || fallback;
 		})
 		.catch(() => {
 			return fallback;
@@ -38,11 +44,28 @@ export const runWithAdapter = async <R>(
 	adapter: DBAdapter,
 	fn: () => R,
 ): Promise<R> => {
-	let called = true;
+	let called = false;
 	return ensureAsyncStorage()
-		.then((als) => {
+		.then(async (als) => {
 			called = true;
-			return als.run(adapter, fn);
+			const pendingHooks: Array<() => Promise<void>> = [];
+			let result: Awaited<R>;
+			let error: unknown;
+			let hasError = false;
+			try {
+				result = await als.run({ adapter, pendingHooks }, fn);
+			} catch (err) {
+				error = err;
+				hasError = true;
+			}
+			// Execute pending hooks after the function completes (even if it threw)
+			for (const hook of pendingHooks) {
+				await hook();
+			}
+			if (hasError) {
+				throw error;
+			}
+			return result!;
 		})
 		.catch((err) => {
 			if (!called) {
@@ -58,16 +81,56 @@ export const runWithTransaction = async <R>(
 ): Promise<R> => {
 	let called = true;
 	return ensureAsyncStorage()
-		.then((als) => {
+		.then(async (als) => {
 			called = true;
-			return adapter.transaction(async (trx) => {
-				return als.run(trx, fn);
-			});
+			const pendingHooks: Array<() => Promise<void>> = [];
+			let result: Awaited<R>;
+			let error: unknown;
+			let hasError = false;
+			try {
+				result = await adapter.transaction(async (trx) => {
+					return als.run({ adapter: trx, pendingHooks }, fn);
+				});
+			} catch (e) {
+				hasError = true;
+				error = e;
+			}
+			for (const hook of pendingHooks) {
+				await hook();
+			}
+			if (hasError) {
+				throw error;
+			}
+			return result!;
 		})
 		.catch((err) => {
 			if (!called) {
 				return fn();
 			}
 			throw err;
+		});
+};
+
+/**
+ * Queue a hook to be executed after the current transaction commits.
+ * If not in a transaction, the hook will execute immediately.
+ */
+export const queueAfterTransactionHook = async (
+	hook: () => Promise<void>,
+): Promise<void> => {
+	return ensureAsyncStorage()
+		.then((als) => {
+			const store = als.getStore();
+			if (store) {
+				// We're in a transaction context, queue the hook
+				store.pendingHooks.push(hook);
+			} else {
+				// Not in a transaction, execute immediately
+				return hook();
+			}
+		})
+		.catch(() => {
+			// No async storage available, execute immediately
+			return hook();
 		});
 };
