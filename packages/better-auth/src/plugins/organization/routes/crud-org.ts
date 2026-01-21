@@ -945,6 +945,24 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 			const organizations = await adapter.listOrganizations(
 				ctx.context.session.user.id,
 			);
-			return ctx.json(organizations);
+
+			const updatedOrganizations = await Promise.all(
+				organizations.map(async (org) => {
+					const member = await adapter.findMemberByOrgId({
+						userId: ctx.context.session.user.id,
+						organizationId: org.id,
+					});
+					return {
+						...org,
+						role: member?.role,
+					};
+				}),
+			);
+
+			return ctx.json(
+				updatedOrganizations as (InferOrganization<O, false> & {
+					role?: string;
+				})[],
+			);
 		},
 	);
