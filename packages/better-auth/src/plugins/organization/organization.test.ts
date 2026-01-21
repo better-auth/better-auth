@@ -3099,7 +3099,11 @@ describe("organization additionalFields with returned: false", async () => {
 	const { headers } = await signInWithTestUser();
 
 	const client = createAuthClient({
-		plugins: [organizationClient()],
+		plugins: [
+			organizationClient({
+				schema: inferOrgAdditionalFields(orgOptions.schema),
+			}),
+		],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
@@ -3253,12 +3257,12 @@ describe("organization additionalFields with returned: false", async () => {
 
 		// Update organization
 		const updated = await client.organization.update({
+			organizationId: org.data!.id,
 			data: {
 				name: "Updated Test Org",
 				publicField: "updated-public",
 				secretField: "updated-secret",
 			},
-			query: { organizationId: org.data!.id },
 		});
 
 		expect(updated.data).toBeDefined();
