@@ -25,28 +25,19 @@ import type { OrganizationOptions } from "./types";
  * Filters output data by removing fields with `returned: false` attribute.
  * This ensures sensitive fields are not exposed in API responses.
  */
-function filterOutputFields<T extends Record<string, any>>(
+function filterOutputFields<T extends Record<string, unknown> | null>(
 	data: T,
 	additionalFields: Record<string, DBFieldAttribute> | undefined,
-): T;
-function filterOutputFields<T extends Record<string, any>>(
-	data: T | null,
-	additionalFields: Record<string, DBFieldAttribute> | undefined,
-): T | null;
-function filterOutputFields<T extends Record<string, any>>(
-	data: T | null,
-	additionalFields: Record<string, DBFieldAttribute> | undefined,
-): T | null {
+): T {
 	if (!data || !additionalFields) {
 		return data;
 	}
-	const filtered = { ...data };
-	for (const [key, fieldConfig] of Object.entries(additionalFields)) {
-		if (fieldConfig.returned === false && key in filtered) {
-			delete filtered[key];
-		}
-	}
-	return filtered as T;
+	const returnFiltered = Object.entries(additionalFields)
+		.filter(([, { returned }]) => returned)
+		.map(([key]) => key);
+	return Object.entries(structuredClone(data))
+		.filter(([key]) => !returnFiltered.includes(key))
+		.reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {} as T);
 }
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
