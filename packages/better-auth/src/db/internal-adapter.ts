@@ -1012,7 +1012,6 @@ export const createInternalAdapter = (
 			const storedIdentifier = await processIdentifier(
 				data.identifier,
 				storageOption,
-				options.secret!,
 			);
 			const verification = await createWithHooks(
 				{
@@ -1046,11 +1045,7 @@ export const createInternalAdapter = (
 			let verification: Verification[] = [];
 
 			if (storageOption && storageOption !== "plain") {
-				const processedId = await processIdentifier(
-					identifier,
-					storageOption,
-					options.secret!,
-				);
+				const processedId = await processIdentifier(identifier, storageOption);
 				verification = await findByIdentifier(processedId);
 
 				if (!verification.length) {
@@ -1091,7 +1086,6 @@ export const createInternalAdapter = (
 			const storedIdentifier = await processIdentifier(
 				identifier,
 				storageOption,
-				options.secret!,
 			);
 			await deleteWithHooks(
 				[{ field: "identifier", value: storedIdentifier }],
