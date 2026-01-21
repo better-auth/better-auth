@@ -2532,6 +2532,14 @@ await client.organization.create({
 
 **invitationExpiresIn** : `number` - How long the invitation link is valid for in seconds. By default, it's 48 hours (2 days).
 
+**globalOrganizationAccess**: `boolean` | `string[]` | `((data: { user, organizationId, session }) => Promise<boolean> | boolean)` - Allow certain users to manage all organizations without being a member. If `true`, users with `'admin'` role can update and delete any organization. If an array, users with any of those roles can manage all organizations. If a function, custom logic determines access. By default, it's `false`. Requires the [Admin plugin](/docs/plugins/admin) for role-based access.
+
+```ts
+organization({
+  globalOrganizationAccess: true
+})
+```
+
 **cancelPendingInvitationsOnReInvite**: `boolean` - Whether to cancel pending invitations if the user is already invited to the organization. By default, it's `false`.
 
 **invitationLimit**: `number` | `((user: User) => Promise<boolean> | boolean)` - The maximum number of invitations allowed for a user. By default, it's `100`. You can set it to any number you want or a function that returns a boolean.
