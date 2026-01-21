@@ -11,7 +11,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 import {
 	DEFAULT_SCHEMA_REFERENCE,
 	schemaRefJoinTestSuite,
