@@ -3014,3 +3014,145 @@ describe("organization hooks", async (it) => {
 		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });
+
+describe("listUserTeams with userId parameter", async () => {
+	const { auth, signInWithUser } = await getTestInstance({
+		plugins: [
+			organization({
+				teams: {
+					enabled: true,
+				},
+				async sendInvitationEmail() {},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [
+			organizationClient({
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+		},
+	});
+
+	let organizationId: string;
+	let team1Id: string;
+	let ownerUserId: string;
+	let memberUserId: string;
+
+	const ownerUser = {
+		email: "owner@test.com",
+		password: "password123",
+		name: "Owner User",
+	};
+
+	const memberUser = {
+		email: "member@test.com",
+		password: "password123",
+		name: "Member User",
+	};
+
+	it("should setup organization and teams", async () => {
+		await client.signUp.email(ownerUser);
+		const { headers: ownerHeaders } = await signInWithUser(
+			ownerUser.email,
+			ownerUser.password,
+		);
+		const ownerSession = await client.getSession({
+			fetchOptions: { headers: ownerHeaders },
+		});
+		ownerUserId = ownerSession.data!.user.id;
+
+		const org = await client.organization.create({
+			name: "Test Teams Org",
+			slug: "test-teams-org",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		organizationId = org.data!.id;
+
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: { headers: ownerHeaders },
+		});
+
+		const team1 = await client.organization.createTeam({
+			name: "Team Alpha",
+			fetchOptions: { headers: ownerHeaders },
+		});
+		team1Id = team1.data!.id;
+
+		await client.signUp.email(memberUser);
+		const { headers: memberHeaders } = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+		const memberSession = await client.getSession({
+			fetchOptions: { headers: memberHeaders },
+		});
+		memberUserId = memberSession.data!.user.id;
+
+		await auth.api.addMember({
+			body: {
+				organizationId,
+				userId: memberUserId,
+				role: "member",
+			},
+		});
+
+		await client.organization.addTeamMember({
+			teamId: team1Id,
+			userId: memberUserId,
+			fetchOptions: { headers: ownerHeaders },
+		});
+	});
+
+	it("should allow a user to list their own teams using the userId parameter", async () => {
+		const { headers: memberHeaders } = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: { headers: memberHeaders },
+		});
+
+		const teams = await client.organization.listUserTeams({
+			query: { userId: memberUserId },
+			fetchOptions: { headers: memberHeaders },
+		});
+
+		expect(teams.error).toBeNull();
+		expect(teams.data).toBeDefined();
+		expect(teams.data?.length).toBe(1);
+		expect(teams.data?.[0]?.id).toBe(team1Id);
+	});
+
+	it("should not allow a member to list teams of another user", async () => {
+		const { headers: memberHeaders } = await signInWithUser(
+			memberUser.email,
+			memberUser.password,
+		);
+
+		await client.organization.setActive({
+			organizationId,
+			fetchOptions: { headers: memberHeaders },
+		});
+
+		const teams = await client.organization.listUserTeams({
+			query: { userId: ownerUserId },
+			fetchOptions: { headers: memberHeaders },
+		});
+
+		expect(teams.error).toBeDefined();
+		expect(teams.error?.status).toBe(403);
+	});
+});
