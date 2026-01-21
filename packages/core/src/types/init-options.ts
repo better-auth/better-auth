@@ -1049,6 +1049,11 @@ export type BetterAuthOptions = {
 							default: StoreIdentifierOption;
 							overrides?: Record<string, StoreIdentifierOption>;
 					  };
+				/**
+				 * Store verification data in database even when secondary storage is configured.
+				 * @default false
+				 */
+				storeInDatabase?: boolean;
 		  }
 		| undefined;
 	/**
