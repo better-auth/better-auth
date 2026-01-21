@@ -146,6 +146,13 @@ export type BetterAuthAdvancedOptions = {
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
 				 */
 				disableIpTracking?: boolean;
+				/**
+				 * IPv6 subnet prefix length for rate limiting.
+				 * IPv6 addresses will be normalized to this subnet.
+				 *
+				 * @default 64
+				 */
+				ipv6Subnet?: 128 | 64 | 48 | 32;
 		  }
 		| undefined;
 	/**
@@ -315,6 +322,15 @@ export type BetterAuthAdvancedOptions = {
 	backgroundTasks?: {
 		handler: (promise: Promise<void>) => void;
 	};
+	/**
+	 * Skip trailing slashes in API routes.
+	 *
+	 * When enabled, requests with trailing slashes (e.g., `/api/auth/session/`)
+	 * will be handled the same as requests without (e.g., `/api/auth/session`).
+	 *
+	 * @default false
+	 */
+	skipTrailingSlashes?: boolean;
 };
 
 export type BetterAuthOptions = {
