@@ -6,6 +6,8 @@ description: Better Auth Plugin for Openfort Web3 Wallet Infrastructure
 [Openfort](https://www.openfort.io/) is an infrastructure provider for integrating blockchain wallets into applications. 
 It enables seamless wallet creation, management, and blockchain interactions with embedded wallets.
 
+This plugin is maintained by the Openfort team. For bugs, issues or feature requests, please visit the [Openofrt Adapters GitHub repo](https://github.com/openfort-xyz/openfort-adapters).
+
 <Card href="https://t.me/openfort" title="Get help on Openfort's Telegram">
   Join the Openfort community for support and questions.
 </Card>
@@ -69,7 +71,7 @@ It enables seamless wallet creation, management, and blockchain interactions wit
     OPENFORT_SECRET_KEY=sk_test_...
 
     # Shield Encryption (for embedded wallets)
-    SHIELD_API_KEY=your-shield-api-key
+    SHIELD_PUBLISHABLE_KEY=your-shield-api-key
     SHIELD_ENCRYPTION_SHARE=your-shield-encryption-share
     SHIELD_SECRET_KEY=your-shield-secret-key
 
@@ -130,7 +132,7 @@ It enables seamless wallet creation, management, and blockchain interactions wit
           use: [
             encryptionSession({
               config: {
-                apiKey: process.env.SHIELD_API_KEY,
+                apiKey: process.env.SHIELD_PUBLISHABLE_KEY,
                 secretKey: process.env.SHIELD_SECRET_KEY,
                 encryptionPart: process.env.SHIELD_ENCRYPTION_SHARE,
               },
@@ -533,7 +535,7 @@ export default function TokenBalance() {
 If you encounter errors retrieving the encryption session:
 
 1. Ensure the Bearer plugin is enabled in your Better Auth config
-2. Verify that `SHIELD_API_KEY`, `SHIELD_SECRET_KEY`, and `SHIELD_ENCRYPTION_SHARE` are set correctly
+2. Verify that `SHIELD_PUBLISHABLE_KEY`, `SHIELD_SECRET_KEY`, and `SHIELD_ENCRYPTION_SHARE` are set correctly
 3. Confirm that the Better Auth session is active before calling `getEncryptionSession()`
 
 ### CORS Issues
