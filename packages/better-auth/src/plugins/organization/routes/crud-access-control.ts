@@ -10,7 +10,7 @@ import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import type { Member, Organization, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -103,8 +103,8 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 			let roleName = ctx.body.role;
-			const permission = ctx.body.permission;
-			const additionalFields = ctx.body.additionalFields;
+			let permission = ctx.body.permission;
+			let additionalFields = ctx.body.additionalFields;
 
 			const ac = options.ac;
 			if (!ac) {
@@ -252,6 +252,43 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				role: roleName,
 			});
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeCreateRole ||
+				options.organizationHooks?.afterCreateRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+			}
+
+			if (options.organizationHooks?.beforeCreateRole) {
+				if (organization) {
+					const hookRes = await options.organizationHooks.beforeCreateRole({
+						role: {
+							role: roleName,
+							permission,
+							...additionalFields,
+						},
+						organization,
+						user,
+					});
+					if (hookRes?.data) {
+						if (hookRes.data.role) roleName = hookRes.data.role as string;
+						if (hookRes.data.permission)
+							permission = hookRes.data.permission as Record<string, string[]>;
+						const { role, permission: p, ...rest } = hookRes.data;
+						additionalFields = { ...additionalFields, ...rest };
+					}
+				}
+			}
+
 			const newRole = ac.newRole(permission);
 
 			const newRoleInDB = await ctx.context.adapter.create<
@@ -271,6 +308,17 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				...newRoleInDB,
 				permission,
 			} as OrganizationRole & ReturnAdditionalFields;
+
+			if (options.organizationHooks?.afterCreateRole) {
+				if (organization) {
+					await options.organizationHooks.afterCreateRole({
+						role: data,
+						organization,
+						user,
+					});
+				}
+			}
+
 			return ctx.json({
 				success: true,
 				roleData: data,
@@ -472,6 +520,32 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				existingRoleInDB.permission as never as string,
 			);
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeDeleteRole ||
+				options.organizationHooks?.afterDeleteRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+			}
+
+			if (options.organizationHooks?.beforeDeleteRole) {
+				if (organization) {
+					await options.organizationHooks.beforeDeleteRole({
+						role: existingRoleInDB,
+						organization,
+						user,
+					});
+				}
+			}
+
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
 				where: [
@@ -484,6 +558,16 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					condition,
 				],
 			});
+
+			if (options.organizationHooks?.afterDeleteRole) {
+				if (organization) {
+					await options.organizationHooks.afterDeleteRole({
+						role: existingRoleInDB,
+						organization,
+						user,
+					});
+				}
+			}
 
 			return ctx.json({
 				success: true,
@@ -1027,6 +1111,48 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				updateData.role = newRoleName;
 			}
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeUpdateRole ||
+				options.organizationHooks?.afterUpdateRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+			}
+
+			if (options.organizationHooks?.beforeUpdateRole) {
+				if (organization) {
+					const hookRes = await options.organizationHooks.beforeUpdateRole({
+						role: role as OrganizationRole,
+						updates: {
+							...additionalFields,
+							...(updateData.role ? { role: updateData.role } : {}),
+							...(updateData.permission
+								? { permission: updateData.permission as Record<string, string[]> }
+								: {}),
+						},
+						organization,
+						user,
+					});
+
+					if (hookRes?.data) {
+						if (hookRes.data.role) updateData.role = hookRes.data.role as string;
+						if (hookRes.data.permission) {
+							updateData.permission = hookRes.data.permission as Record<string, string[]>;
+						}
+						const { role: r, permission: p, ...rest } = hookRes.data;
+						Object.assign(updateData, rest);
+					}
+				}
+			}
+
 			// -----
 			// Apply the updates
 			const update = {
@@ -1049,15 +1175,27 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				update,
 			});
 
+			const updatedRole = {
+				...role,
+				...update,
+				permission: updateData.permission || role.permission || null,
+			} as OrganizationRole & ReturnAdditionalFields;
+
+			if (options.organizationHooks?.afterUpdateRole) {
+				if (organization) {
+					await options.organizationHooks.afterUpdateRole({
+						role: updatedRole,
+						organization,
+						user,
+					});
+				}
+			}
+
 			// -----
 			// Return the updated role
 			return ctx.json({
 				success: true,
-				roleData: {
-					...role,
-					...update,
-					permission: updateData.permission || role.permission || null,
-				} as OrganizationRole & ReturnAdditionalFields,
+				roleData: updatedRole,
 			});
 		},
 	);

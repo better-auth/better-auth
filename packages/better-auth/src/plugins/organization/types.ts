@@ -834,6 +834,81 @@ export interface OrganizationOptions {
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void>;
+
+				/**
+				 * Role hooks
+				 */
+
+				/**
+				 * A callback that runs before a role is created
+				 *
+				 * You can return a `data` object to override the default data.
+				 */
+				beforeCreateRole?: (data: {
+					role: {
+						role: string;
+						permission: Record<string, string[]>;
+						[key: string]: any;
+					};
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void | {
+					data: Record<string, any>;
+				}>;
+
+				/**
+				 * A callback that runs after a role is created
+				 */
+				afterCreateRole?: (data: {
+					role: OrganizationRole & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs before a role is updated
+				 *
+				 * You can return a `data` object to override the default data.
+				 */
+				beforeUpdateRole?: (data: {
+					role: OrganizationRole & Record<string, any>;
+					updates: {
+						role?: string;
+						permission?: Record<string, string[]>;
+						[key: string]: any;
+					};
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void | {
+					data: Record<string, any>;
+				}>;
+
+				/**
+				 * A callback that runs after a role is updated
+				 */
+				afterUpdateRole?: (data: {
+					role: (OrganizationRole & Record<string, any>) | null;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs before a role is deleted
+				 */
+				beforeDeleteRole?: (data: {
+					role: OrganizationRole & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
+
+				/**
+				 * A callback that runs after a role is deleted
+				 */
+				afterDeleteRole?: (data: {
+					role: OrganizationRole & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				}) => Promise<void>;
 		  }
 		| undefined;
 }
