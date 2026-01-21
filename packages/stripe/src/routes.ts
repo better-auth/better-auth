@@ -1,12 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import type { GenericEndpointContext } from "better-auth";
+import type { GenericEndpointContext, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
-import {
-	getSessionFromCtx,
-	originCheck,
-	sessionMiddleware,
-} from "better-auth/api";
+import { getSessionFromCtx, originCheck } from "better-auth/api";
+import type { Organization } from "better-auth/plugins/organization";
+import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
 import * as z from "zod/v4";
@@ -17,14 +15,17 @@ import {
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
-import { referenceMiddleware } from "./middleware";
+import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
-	InputSubscription,
+	CustomerType,
+	StripeCtxSession,
 	StripeOptions,
 	Subscription,
 	SubscriptionOptions,
+	WithStripeCustomerId,
 } from "./types";
 import {
+	escapeStripeSearchValue,
 	getPlanByName,
 	getPlanByPriceInfo,
 	getPlans,
@@ -32,6 +33,70 @@ import {
 	isPendingCancel,
 	isStripePendingCancel,
 } from "./utils";
+
+/**
+ * Converts a relative URL to an absolute URL using baseURL.
+ * @internal
+ */
+function getUrl(ctx: GenericEndpointContext, url: string) {
+	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
+		return url;
+	}
+	return `${ctx.context.options.baseURL}${
+		url.startsWith("/") ? url : `/${url}`
+	}`;
+}
+
+/**
+ * Resolves a Stripe price ID from a lookup key.
+ * @internal
+ */
+async function resolvePriceIdFromLookupKey(
+	stripeClient: Stripe,
+	lookupKey: string,
+): Promise<string | undefined> {
+	if (!lookupKey) return undefined;
+	const prices = await stripeClient.prices.list({
+		lookup_keys: [lookupKey],
+		active: true,
+		limit: 1,
+	});
+	return prices.data[0]?.id;
+}
+
+/**
+ * Determines the reference ID based on customer type.
+ * - `user` (default): uses userId
+ * - `organization`: uses activeOrganizationId from session
+ * @internal
+ */
+function getReferenceId(
+	ctxSession: StripeCtxSession,
+	customerType: CustomerType | undefined,
+	options: StripeOptions,
+): string {
+	const { user, session } = ctxSession;
+	const type = customerType || "user";
+
+	if (type === "organization") {
+		if (!options.organization?.enabled) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+			);
+		}
+
+		if (!session.activeOrganizationId) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+			);
+		}
+		return session.activeOrganizationId;
+	}
+
+	return user.id;
+}
 
 const upgradeSubscriptionBodySchema = z.object({
 	/**
@@ -50,14 +115,14 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Reference id of the subscription to upgrade
-	 * This is used to identify the subscription to upgrade
-	 * If not provided, the user's id will be used
+	 * Reference ID for the subscription based on customerType:
+	 * - `user`: defaults to `user.id`
+	 * - `organization`: defaults to `session.activeOrganizationId`
 	 */
 	referenceId: z
 		.string()
 		.meta({
-			description: 'Reference id of the subscription to upgrade. Eg: "123"',
+			description: 'Reference ID for the subscription. Eg: "org_123"',
 		})
 		.optional(),
 	/**
@@ -72,12 +137,23 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Any additional data you want to store in your database
-	 * subscriptions
+	 * Customer type for the subscription.
+	 * - `user`: User owns the subscription (default)
+	 * - `organization`: Organization owns the subscription (requires referenceId)
+	 */
+	customerType: z
+		.enum(["user", "organization"])
+		.meta({
+			description:
+				'Customer type for the subscription. Eg: "user" or "organization"',
+		})
+		.optional(),
+	/**
+	 * Additional metadata to store with the subscription.
 	 */
 	metadata: z.record(z.string(), z.any()).optional(),
 	/**
-	 * If a subscription
+	 * Number of seats for subscriptions.
 	 */
 	seats: z
 		.number()
@@ -86,7 +162,20 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Success URL to redirect back after successful subscription
+	 * The IETF language tag of the locale Checkout is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
+	locale: z
+		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The locale to display Checkout in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
+		})
+		.optional(),
+	/**
+	 * The URL to which Stripe should send customers when payment or setup is complete.
 	 */
 	successUrl: z
 		.string()
@@ -96,7 +185,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Cancel URL
+	 * If set, checkout shows a back button and customers will be directed here if they cancel payment.
 	 */
 	cancelUrl: z
 		.string()
@@ -106,7 +195,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Return URL
+	 * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
 	 */
 	returnUrl: z
 		.string()
@@ -156,22 +245,27 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				},
 			},
 			use: [
-				sessionMiddleware,
+				stripeSessionMiddleware,
+				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
 				originCheck((c) => {
 					return [c.body.successUrl as string, c.body.cancelUrl as string];
 				}),
-				referenceMiddleware(subscriptionOptions, "upgrade-subscription"),
 			],
 		},
 		async (ctx) => {
 			const { user, session } = ctx.context.session;
+			const customerType = ctx.body.customerType || "user";
+			const referenceId =
+				ctx.body.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
+
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
 				);
 			}
-			const referenceId = ctx.body.referenceId || user.id;
+
 			const plan = await getPlanByName(options, ctx.body.plan);
 			if (!plan) {
 				throw APIError.from(
@@ -179,6 +273,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
 				);
 			}
+
+			// Find existing subscription by Stripe ID or reference ID
 			let subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
@@ -192,7 +288,12 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				: referenceId
 					? await ctx.context.adapter.findOne<Subscription>({
 							model: "subscription",
-							where: [{ field: "referenceId", value: referenceId }],
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+							],
 						})
 					: null;
 
@@ -203,7 +304,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			) {
 				subscriptionToUpdate = null;
 			}
-
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -211,51 +311,154 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			let customerId =
-				subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
-
-			if (!customerId) {
-				try {
-					// Try to find existing Stripe customer by email
-					const existingCustomers = await client.customers.list({
-						email: user.email,
-						limit: 1,
-					});
-
-					let stripeCustomer = existingCustomers.data[0];
-
-					if (!stripeCustomer) {
-						stripeCustomer = await client.customers.create({
-							email: user.email,
-							name: user.name,
-							metadata: {
-								...ctx.body.metadata,
-								userId: user.id,
-							},
-						});
-					}
-
-					// Update local DB with Stripe customer ID
-					await ctx.context.adapter.update({
-						model: "user",
-						update: {
-							stripeCustomerId: stripeCustomer.id,
-						},
+			// Determine customer id
+			let customerId: string | undefined;
+			if (customerType === "organization") {
+				// Organization subscription - get customer ID from organization
+				customerId = subscriptionToUpdate?.stripeCustomerId;
+				if (!customerId) {
+					const org = await ctx.context.adapter.findOne<
+						Organization & WithStripeCustomerId
+					>({
+						model: "organization",
 						where: [
 							{
 								field: "id",
-								value: user.id,
+								value: referenceId,
 							},
 						],
 					});
+					if (!org) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						);
+					}
+					customerId = org.stripeCustomerId;
 
-					customerId = stripeCustomer.id;
-				} catch (e: any) {
-					ctx.context.logger.error(e);
-					throw APIError.from(
-						"BAD_REQUEST",
-						STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
-					);
+					// If org doesn't have a customer ID, create one
+					if (!customerId) {
+						try {
+							// First, search for existing organization customer by organizationId
+							const existingOrgCustomers = await client.customers.search({
+								query: `metadata["organizationId"]:"${org.id}"`,
+								limit: 1,
+							});
+
+							let stripeCustomer = existingOrgCustomers.data[0];
+
+							if (!stripeCustomer) {
+								// Get custom params if provided
+								let extraCreateParams: Partial<StripeType.CustomerCreateParams> =
+									{};
+								if (options.organization?.getCustomerCreateParams) {
+									extraCreateParams =
+										await options.organization.getCustomerCreateParams(
+											org,
+											ctx,
+										);
+								}
+
+								// Create Stripe customer for organization
+								// Email can be set via getCustomerCreateParams or updated in billing portal
+								// Use defu to ensure internal metadata fields are preserved
+								const customerParams: StripeType.CustomerCreateParams = defu(
+									{
+										name: org.name,
+										metadata: {
+											...ctx.body.metadata,
+											organizationId: org.id,
+											customerType: "organization",
+										},
+									},
+									extraCreateParams,
+								);
+								stripeCustomer = await client.customers.create(customerParams);
+
+								// Call onCustomerCreate callback only for newly created customers
+								await options.organization?.onCustomerCreate?.(
+									{
+										stripeCustomer,
+										organization: {
+											...org,
+											stripeCustomerId: stripeCustomer.id,
+										},
+									},
+									ctx,
+								);
+							}
+
+							await ctx.context.adapter.update({
+								model: "organization",
+								update: {
+									stripeCustomerId: stripeCustomer.id,
+								},
+								where: [
+									{
+										field: "id",
+										value: org.id,
+									},
+								],
+							});
+
+							customerId = stripeCustomer.id;
+						} catch (e: any) {
+							ctx.context.logger.error(e);
+							throw APIError.from(
+								"BAD_REQUEST",
+								STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+							);
+						}
+					}
+				}
+			} else {
+				// User subscription - get customer ID from user
+				customerId =
+					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
+				if (!customerId) {
+					try {
+						// Try to find existing user Stripe customer by email
+						const existingCustomers = await client.customers.search({
+							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
+							limit: 1,
+						});
+
+						let stripeCustomer = existingCustomers.data[0];
+
+						if (!stripeCustomer) {
+							stripeCustomer = await client.customers.create({
+								email: user.email,
+								name: user.name,
+								metadata: {
+									...ctx.body.metadata,
+									userId: user.id,
+									customerType: "user",
+								},
+							});
+						}
+
+						// Update local DB with Stripe customer ID
+						await ctx.context.adapter.update({
+							model: "user",
+							update: {
+								stripeCustomerId: stripeCustomer.id,
+							},
+							where: [
+								{
+									field: "id",
+									value: user.id,
+								},
+							],
+						});
+
+						customerId = stripeCustomer.id;
+					} catch (e: any) {
+						ctx.context.logger.error(e);
+						throw APIError.from(
+							"BAD_REQUEST",
+							STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+						);
+					}
 				}
 			}
 
@@ -266,7 +469,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						where: [
 							{
 								field: "referenceId",
-								value: ctx.body.referenceId || user.id,
+								value: referenceId,
 							},
 						],
 					});
@@ -308,7 +511,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription &&
 				activeOrTrialingSubscription.status === "active" &&
 				activeOrTrialingSubscription.plan === ctx.body.plan &&
-				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
+				activeOrTrialingSubscription.seats === (ctx.body.seats || 1) &&
+				// Skip if periodEnd has passed, in case status is stale
+				(!activeOrTrialingSubscription.periodEnd ||
+					activeOrTrialingSubscription.periodEnd > new Date())
 			) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -330,7 +536,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 				// If no database record exists for this Stripe subscription, update the existing one
 				if (!dbSubscription && activeOrTrialingSubscription) {
-					await ctx.context.adapter.update<InputSubscription>({
+					await ctx.context.adapter.update<Subscription>({
 						model: "subscription",
 						update: {
 							stripeSubscriptionId: activeSubscription.id,
@@ -412,7 +618,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription || incompleteSubscription;
 
 			if (incompleteSubscription && !activeOrTrialingSubscription) {
-				const updated = await ctx.context.adapter.update<InputSubscription>({
+				const updated = await ctx.context.adapter.update<Subscription>({
 					model: "subscription",
 					update: {
 						plan: plan.name.toLowerCase(),
@@ -430,10 +636,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			}
 
 			if (!subscription) {
-				subscription = await ctx.context.adapter.create<
-					InputSubscription,
-					Subscription
-				>({
+				subscription = await ctx.context.adapter.create<Subscription>({
 					model: "subscription",
 					data: {
 						plan: plan.name.toLowerCase(),
@@ -507,14 +710,15 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						...(customerId
 							? {
 									customer: customerId,
-									customer_update: {
-										name: "auto",
-										address: "auto",
-									},
+									customer_update:
+										customerType !== "user"
+											? ({ address: "auto" } as const)
+											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
 								}
 							: {
-									customer_email: session.user.email,
+									customer_email: user.email,
 								}),
+						locale: ctx.body.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -590,9 +794,7 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 			if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
-				ctx,
-			);
+			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
@@ -684,6 +886,18 @@ const cancelSubscriptionBodySchema = z.object({
 				"The Stripe subscription ID to cancel. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
+	/**
+	 * Customer type for the subscription.
+	 * - `user`: User owns the subscription (default)
+	 * - `organization`: Organization owns the subscription
+	 */
+	customerType: z
+		.enum(["user", "organization"])
+		.meta({
+			description:
+				'Customer type for the subscription. Eg: "user" or "organization"',
+		})
+		.optional(),
 	returnUrl: z.string().meta({
 		description:
 			'URL to take customers to when they click on the billing portal\'s link to return to your website. Eg: "/account"',
@@ -729,13 +943,17 @@ export const cancelSubscription = (options: StripeOptions) => {
 				},
 			},
 			use: [
-				sessionMiddleware,
-				originCheck((ctx) => ctx.body.returnUrl),
+				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "cancel-subscription"),
+				originCheck((ctx) => ctx.body.returnUrl),
 			],
 		},
 		async (ctx) => {
-			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+			const customerType = ctx.body.customerType || "user";
+			const referenceId =
+				ctx.body.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
+
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
@@ -874,6 +1092,18 @@ const restoreSubscriptionBodySchema = z.object({
 				"The Stripe subscription ID to restore. Eg: 'sub_1ABC2DEF3GHI4JKL'",
 		})
 		.optional(),
+	/**
+	 * Customer type for the subscription.
+	 * - `user`: User owns the subscription (default)
+	 * - `organization`: Organization owns the subscription
+	 */
+	customerType: z
+		.enum(["user", "organization"])
+		.meta({
+			description:
+				'Customer type for the subscription. Eg: "user" or "organization"',
+		})
+		.optional(),
 });
 
 export const restoreSubscription = (options: StripeOptions) => {
@@ -890,12 +1120,15 @@ export const restoreSubscription = (options: StripeOptions) => {
 				},
 			},
 			use: [
-				sessionMiddleware,
+				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "restore-subscription"),
 			],
 		},
 		async (ctx) => {
-			const referenceId = ctx.body?.referenceId || ctx.context.session.user.id;
+			const customerType = ctx.body.customerType || "user";
+			const referenceId =
+				ctx.body.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
 
 			let subscription = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
@@ -1003,6 +1236,18 @@ const listActiveSubscriptionsQuerySchema = z.optional(
 				description: "Reference id of the subscription to list. Eg: '123'",
 			})
 			.optional(),
+		/**
+		 * Customer type for the subscription.
+		 * - `user`: User owns the subscription (default)
+		 * - `organization`: Organization owns the subscription
+		 */
+		customerType: z
+			.enum(["user", "organization"])
+			.meta({
+				description:
+					'Customer type for the subscription. Eg: "user" or "organization"',
+			})
+			.optional(),
 	}),
 );
 /**
@@ -1033,17 +1278,22 @@ export const listActiveSubscriptions = (options: StripeOptions) => {
 				},
 			},
 			use: [
-				sessionMiddleware,
+				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "list-subscription"),
 			],
 		},
 		async (ctx) => {
+			const customerType = ctx.query?.customerType || "user";
+			const referenceId =
+				ctx.query?.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
+
 			const subscriptions = await ctx.context.adapter.findMany<Subscription>({
 				model: "subscription",
 				where: [
 					{
 						field: "referenceId",
-						value: ctx.query?.referenceId || ctx.context.session.user.id,
+						value: referenceId,
 					},
 				],
 			});
@@ -1093,9 +1343,7 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			}
 			const { callbackURL, subscriptionId } = ctx.query;
 
-			const session = await getSessionFromCtx<{ stripeCustomerId: string }>(
-				ctx,
-			);
+			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
@@ -1198,12 +1446,32 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 };
 
 const createBillingPortalBodySchema = z.object({
+	/**
+	 * The IETF language tag of the locale Customer Portal is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
 	locale: z
 		.custom<StripeType.Checkout.Session.Locale>((localization) => {
 			return typeof localization === "string";
 		})
+		.meta({
+			description:
+				"The IETF language tag of the locale Customer Portal is displayed in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
+		})
 		.optional(),
 	referenceId: z.string().optional(),
+	/**
+	 * Customer type for the subscription.
+	 * - `user`: User owns the subscription (default)
+	 * - `organization`: Organization owns the subscription
+	 */
+	customerType: z
+		.enum(["user", "organization"])
+		.meta({
+			description:
+				'Customer type for the subscription. Eg: "user" or "organization"',
+		})
+		.optional(),
 	returnUrl: z.string().default("/"),
 	/**
 	 * Disable Redirect
@@ -1231,33 +1499,59 @@ export const createBillingPortal = (options: StripeOptions) => {
 				},
 			},
 			use: [
-				sessionMiddleware,
-				originCheck((ctx) => ctx.body.returnUrl),
+				stripeSessionMiddleware,
 				referenceMiddleware(subscriptionOptions, "billing-portal"),
+				originCheck((ctx) => ctx.body.returnUrl),
 			],
 		},
 		async (ctx) => {
 			const { user } = ctx.context.session;
-			const referenceId = ctx.body.referenceId || user.id;
+			const customerType = ctx.body.customerType || "user";
+			const referenceId =
+				ctx.body.referenceId ||
+				getReferenceId(ctx.context.session, customerType, options);
 
-			let customerId = user.stripeCustomerId;
+			let customerId: string | undefined;
 
-			if (!customerId) {
-				const subscription = await ctx.context.adapter
-					.findMany<Subscription>({
-						model: "subscription",
-						where: [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						],
-					})
-					.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+			if (customerType === "organization") {
+				// Organization billing portal - get customer ID from organization
+				const org = await ctx.context.adapter.findOne<
+					Organization & WithStripeCustomerId
+				>({
+					model: "organization",
+					where: [{ field: "id", value: referenceId }],
+				});
+				customerId = org?.stripeCustomerId;
 
-				customerId = subscription?.stripeCustomerId;
+				if (!customerId) {
+					// Fallback to subscription's stripeCustomerId
+					const subscription = await ctx.context.adapter
+						.findMany<Subscription>({
+							model: "subscription",
+							where: [{ field: "referenceId", value: referenceId }],
+						})
+						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+					customerId = subscription?.stripeCustomerId;
+				}
+			} else {
+				// User billing portal
+				customerId = user.stripeCustomerId;
+				if (!customerId) {
+					const subscription = await ctx.context.adapter
+						.findMany<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: referenceId,
+								},
+							],
+						})
+						.then((subs) => subs.find((sub) => isActiveOrTrialing(sub)));
+
+					customerId = subscription?.stripeCustomerId;
+				}
 			}
-
 			if (!customerId) {
 				throw APIError.from("NOT_FOUND", STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND);
 			}
@@ -1388,25 +1682,3 @@ export const stripeWebhook = (options: StripeOptions) => {
 		},
 	);
 };
-
-const getUrl = (ctx: GenericEndpointContext, url: string) => {
-	if (/^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(url)) {
-		return url;
-	}
-	return `${ctx.context.options.baseURL}${
-		url.startsWith("/") ? url : `/${url}`
-	}`;
-};
-
-async function resolvePriceIdFromLookupKey(
-	stripeClient: Stripe,
-	lookupKey: string,
-): Promise<string | undefined> {
-	if (!lookupKey) return undefined;
-	const prices = await stripeClient.prices.list({
-		lookup_keys: [lookupKey],
-		active: true,
-		limit: 1,
-	});
-	return prices.data[0]?.id;
-}

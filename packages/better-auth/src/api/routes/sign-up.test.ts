@@ -80,6 +80,23 @@ describe("sign-up with custom fields", async (it) => {
 		);
 	});
 
+	it("should succeed when passing empty name", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "noname@test.com",
+				password: "password",
+				name: "",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBe("");
+	});
+
 	it("should get the ipAddress and userAgent from headers", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -147,6 +164,23 @@ describe("sign-up with custom fields", async (it) => {
 		).rejects.toThrow("role is not allowed to be set");
 	});
 
+	it("should return additionalFields in signUpEmail response", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "additional-fields@test.com",
+				password: "password",
+				name: "Additional Fields Test",
+				newField: "custom-value",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("custom-value");
+		// defaultValue should also be applied and returned
+		expect(res.user.isAdmin).toBe(true);
+	});
+
 	it("should throw status code 400 when passing invalid body", async () => {
 		await expect(
 			auth.api.signUpEmail({
@@ -171,6 +205,9 @@ describe("sign-up CSRF protection", async (it) => {
 			trustedOrigins: ["http://localhost:3000"],
 			emailAndPassword: {
 				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
 			},
 		},
 		{
@@ -286,6 +323,9 @@ describe("sign-up with form data", async (it) => {
 			trustedOrigins: ["http://localhost:3000"],
 			emailAndPassword: {
 				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
 			},
 		},
 		{

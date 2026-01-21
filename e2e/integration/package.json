@@ -1,5 +1,5 @@
 {
-  "name": "integration",
+  "name": "@better-auth-test/integration",
   "scripts": {
     "e2e:integration": "playwright test"
   },

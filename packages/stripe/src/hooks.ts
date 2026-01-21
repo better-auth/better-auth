@@ -1,13 +1,40 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
+import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { InputSubscription, StripeOptions, Subscription } from "./types";
+import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
 	getPlanByPriceInfo,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
 } from "./utils";
+
+/**
+ * Find organization or user by stripeCustomerId.
+ * @internal
+ */
+async function findReferenceByStripeCustomerId(
+	ctx: GenericEndpointContext,
+	options: StripeOptions,
+	stripeCustomerId: string,
+): Promise<{ customerType: CustomerType; referenceId: string } | null> {
+	if (options.organization?.enabled) {
+		const org = await ctx.context.adapter.findOne<Organization>({
+			model: "organization",
+			where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+		});
+		if (org) return { customerType: "organization", referenceId: org.id };
+	}
+
+	const user = await ctx.context.adapter.findOne<User>({
+		model: "user",
+		where: [{ field: "stripeCustomerId", value: stripeCustomerId }],
+	});
+	if (user) return { customerType: "user", referenceId: user.id };
+
+	return null;
+}
 
 export async function onCheckoutSessionCompleted(
 	ctx: GenericEndpointContext,
@@ -53,38 +80,35 @@ export async function onCheckoutSessionCompleted(
 							}
 						: {};
 
-				let dbSubscription =
-					await ctx.context.adapter.update<InputSubscription>({
-						model: "subscription",
-						update: {
-							plan: plan.name.toLowerCase(),
-							status: subscription.status,
-							updatedAt: new Date(),
-							periodStart: new Date(
-								subscriptionItem.current_period_start * 1000,
-							),
-							periodEnd: new Date(subscriptionItem.current_period_end * 1000),
-							stripeSubscriptionId: checkoutSession.subscription as string,
-							cancelAtPeriodEnd: subscription.cancel_at_period_end,
-							cancelAt: subscription.cancel_at
-								? new Date(subscription.cancel_at * 1000)
-								: null,
-							canceledAt: subscription.canceled_at
-								? new Date(subscription.canceled_at * 1000)
-								: null,
-							endedAt: subscription.ended_at
-								? new Date(subscription.ended_at * 1000)
-								: null,
-							seats: seats,
-							...trial,
+				let dbSubscription = await ctx.context.adapter.update<Subscription>({
+					model: "subscription",
+					update: {
+						plan: plan.name.toLowerCase(),
+						status: subscription.status,
+						updatedAt: new Date(),
+						periodStart: new Date(subscriptionItem.current_period_start * 1000),
+						periodEnd: new Date(subscriptionItem.current_period_end * 1000),
+						stripeSubscriptionId: checkoutSession.subscription as string,
+						cancelAtPeriodEnd: subscription.cancel_at_period_end,
+						cancelAt: subscription.cancel_at
+							? new Date(subscription.cancel_at * 1000)
+							: null,
+						canceledAt: subscription.canceled_at
+							? new Date(subscription.canceled_at * 1000)
+							: null,
+						endedAt: subscription.ended_at
+							? new Date(subscription.ended_at * 1000)
+							: null,
+						seats: seats,
+						...trial,
+					},
+					where: [
+						{
+							field: "id",
+							value: subscriptionId,
 						},
-						where: [
-							{
-								field: "id",
-								value: subscriptionId,
-							},
-						],
-					});
+					],
+				});
 
 				if (trial.trialStart && plan.freeTrial?.onTrialStart) {
 					await plan.freeTrial.onTrialStart(dbSubscription as Subscription);
@@ -138,39 +162,34 @@ export async function onSubscriptionCreated(
 		}
 
 		// Check if subscription already exists in database
+		const subscriptionId = subscriptionCreated.metadata?.subscriptionId;
 		const existingSubscription =
 			await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
-				where: [
-					{
-						field: "stripeSubscriptionId",
-						value: subscriptionCreated.id,
-					},
-				],
+				where: subscriptionId
+					? [{ field: "id", value: subscriptionId }]
+					: [{ field: "stripeSubscriptionId", value: subscriptionCreated.id }], // Probably won't match since it's not set yet
 			});
 		if (existingSubscription) {
 			ctx.context.logger.info(
-				`Stripe webhook: Subscription ${subscriptionCreated.id} already exists in database, skipping creation`,
+				`Stripe webhook: Subscription already exists in database (id: ${existingSubscription.id}), skipping creation`,
 			);
 			return;
 		}
 
-		// Find user by stripeCustomerId
-		const user = await ctx.context.adapter.findOne<User>({
-			model: "user",
-			where: [
-				{
-					field: "stripeCustomerId",
-					value: stripeCustomerId,
-				},
-			],
-		});
-		if (!user) {
+		// Find reference
+		const reference = await findReferenceByStripeCustomerId(
+			ctx,
+			options,
+			stripeCustomerId,
+		);
+		if (!reference) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: No user found with stripeCustomerId: ${stripeCustomerId}`,
+				`Stripe webhook warning: No user or organization found with stripeCustomerId: ${stripeCustomerId}`,
 			);
 			return;
 		}
+		const { referenceId, customerType } = reference;
 
 		const subscriptionItem = subscriptionCreated.items.data[0];
 		if (!subscriptionItem) {
@@ -206,8 +225,8 @@ export async function onSubscriptionCreated(
 		const newSubscription = await ctx.context.adapter.create<Subscription>({
 			model: "subscription",
 			data: {
-				referenceId: user.id,
-				stripeCustomerId: stripeCustomerId,
+				referenceId,
+				stripeCustomerId,
 				stripeSubscriptionId: subscriptionCreated.id,
 				status: subscriptionCreated.status,
 				plan: plan.name.toLowerCase(),
@@ -220,10 +239,10 @@ export async function onSubscriptionCreated(
 		});
 
 		ctx.context.logger.info(
-			`Stripe webhook: Created subscription ${subscriptionCreated.id} for user ${user.id} from dashboard`,
+			`Stripe webhook: Created subscription ${subscriptionCreated.id} for ${customerType} ${referenceId} from dashboard`,
 		);
 
-		await options.subscription?.onSubscriptionCreated?.({
+		await options.subscription.onSubscriptionCreated?.({
 			event,
 			subscription: newSubscription,
 			stripeSubscription: subscriptionCreated,

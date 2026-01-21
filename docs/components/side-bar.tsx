@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
-import { useSearchContext } from "fumadocs-ui/provider";
+import { useSearchContext } from "fumadocs-ui/contexts/search";
 import { ChevronDownIcon, Search } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
@@ -112,7 +112,14 @@ export default function ArticleLayout() {
 																	</div>
 																}
 															>
-																{listItem.group ? (
+																{listItem.separator ? (
+																	<div className="flex flex-row items-center gap-2 mx-5 my-2">
+																		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+																			{listItem.title}
+																		</p>
+																		<div className="flex-grow h-px bg-border" />
+																	</div>
+																) : listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
 																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}

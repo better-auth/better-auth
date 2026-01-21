@@ -210,6 +210,41 @@ describe("oauth register", async () => {
 
 		expect(response.data?.disabled).toBeFalsy();
 	});
+
+	it("should register client with metadata field", async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				metadata: {
+					foo: "bar",
+					nested: { key: "value" },
+				},
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		// Metadata should be spread at the top level of the response
+		expect(response?.foo).toBe("bar");
+		expect(response?.nested).toEqual({ key: "value" });
+	});
+
+	it("should register client with metadata and strip extra fields not in schema", async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				metadata: {
+					fromMetadata: "value1",
+				},
+				customField: "value2",
+			} as any,
+		});
+		expect(response?.client_id).toBeDefined();
+		// metadata contents should be spread at the top level, extra fields not in schema should be stripped
+		expect(response?.fromMetadata).toBe("value1");
+		expect(response?.customField).toBe(undefined);
+	});
 });
 
 describe("oauth register - unauthenticated", async () => {
