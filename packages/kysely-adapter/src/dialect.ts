@@ -49,7 +49,7 @@ export function getKyselyDatabaseType(
 		return "sqlite";
 	}
 	// Cloudflare D1
-	if ("batch" in db && "exec" in db && "dump" in db) {
+	if ("batch" in db && "exec" in db && "prepare" in db) {
 		return "sqlite";
 	}
 	return null;
@@ -145,7 +145,7 @@ export const createKyselyAdapter = async (config: BetterAuthOptions) => {
 	}
 
 	// Cloudflare D1
-	if ("batch" in db && "exec" in db && "dump" in db) {
+	if ("batch" in db && "exec" in db && "prepare" in db) {
 		const { D1SqliteDialect } = await import("./d1-sqlite-dialect");
 		dialect = new D1SqliteDialect({
 			database: db,
