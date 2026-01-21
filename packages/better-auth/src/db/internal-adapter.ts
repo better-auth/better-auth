@@ -1009,7 +1009,6 @@ export const createInternalAdapter = (
 			const storedIdentifier = await processIdentifier(
 				data.identifier,
 				storageOption,
-				options.secret!,
 			);
 
 			const verification = await createWithHooks(
@@ -1048,7 +1047,6 @@ export const createInternalAdapter = (
 			const storedIdentifier = await processIdentifier(
 				identifier,
 				storageOption,
-				options.secret!,
 			);
 
 			if (secondaryStorage) {
@@ -1131,7 +1129,6 @@ export const createInternalAdapter = (
 			const storedIdentifier = await processIdentifier(
 				identifier,
 				storageOption,
-				options.secret!,
 			);
 
 			if (secondaryStorage) {

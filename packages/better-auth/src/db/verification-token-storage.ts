@@ -1,6 +1,5 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { symmetricEncrypt } from "../crypto";
 import type { StoreIdentifierOption } from "../types";
 
 const defaultKeyHasher = async (identifier: string) => {
@@ -13,7 +12,6 @@ const defaultKeyHasher = async (identifier: string) => {
 export async function processIdentifier(
 	identifier: string,
 	option: StoreIdentifierOption | undefined,
-	secret: string,
 ): Promise<string> {
 	if (!option || option === "plain") {
 		return identifier;
@@ -21,14 +19,8 @@ export async function processIdentifier(
 	if (option === "hashed") {
 		return defaultKeyHasher(identifier);
 	}
-	if (option === "encrypted") {
-		return symmetricEncrypt({ key: secret, data: identifier });
-	}
 	if (typeof option === "object" && "hash" in option) {
 		return option.hash(identifier);
-	}
-	if (typeof option === "object" && "encrypt" in option) {
-		return option.encrypt(identifier);
 	}
 	return identifier;
 }
