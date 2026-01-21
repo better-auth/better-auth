@@ -81,7 +81,7 @@ type createOrganization = {
   /**
   * The organization slug.
   */
-  slug: string = "my-org"
+  slug?: string = "my-org"
   /**
   * The organization logo.
   */
@@ -2146,6 +2146,7 @@ Table Name: `organization`
       name: "slug",
       type: "string",
       description: "The slug of the organization",
+      isOptional: true,
     },
     {
       name: "logo",

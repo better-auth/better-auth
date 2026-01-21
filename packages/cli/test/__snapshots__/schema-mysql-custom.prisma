@@ -94,7 +94,7 @@ model TwoFactor {
 model Workspace {
   id                   String                @id
   name                 String                @db.Text
-  slug                 String
+  slug                 String?
   logo                 String?               @db.Text
   createdAt            DateTime
   metadata             String?               @db.Text
