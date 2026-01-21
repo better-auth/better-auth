@@ -1223,7 +1223,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							string[]
 						>;
 					}
-					const { role: r, permission: p, ...rest } = hookRes.data;
+					const { role: _role, permission: _permission, ...rest } = hookRes.data;
 					// Filter to only declared additional fields
 					const validAdditionalFieldKeys = Object.keys(
 						additionalFieldsSchema.shape,
