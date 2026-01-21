@@ -10,7 +10,6 @@
   },
   "scripts": {
     "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
