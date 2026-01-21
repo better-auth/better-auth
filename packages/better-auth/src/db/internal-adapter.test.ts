@@ -258,10 +258,7 @@ describe("internal adapter test", async () => {
 	describe("verification token storage", () => {
 		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
 			const hashedOpts = {
-				database: {
-					dialect: new SqliteDialect({ database: new Database(":memory:") }),
-					type: "sqlite",
-				},
+				database: new DatabaseSync(":memory:"),
 				verification: {
 					storeIdentifier: "hashed" as const,
 				},
@@ -299,10 +296,7 @@ describe("internal adapter test", async () => {
 
 		it("should use overrides for specific prefixes", async () => {
 			const overrideOpts = {
-				database: {
-					dialect: new SqliteDialect({ database: new Database(":memory:") }),
-					type: "sqlite",
-				},
+				database: new DatabaseSync(":memory:"),
 				verification: {
 					storeIdentifier: {
 						default: "plain" as const,
@@ -337,12 +331,11 @@ describe("internal adapter test", async () => {
 		});
 
 		it("should fallback to plain lookup for old tokens", async () => {
-			const db = new Database(":memory:");
-			const dialect = new SqliteDialect({ database: db });
+			const database = new DatabaseSync(":memory:");
 
 			// First create with plain storage
 			const plainOpts = {
-				database: { dialect, type: "sqlite" },
+				database,
 				verification: { storeIdentifier: "plain" as const },
 			} satisfies BetterAuthOptions;
 
@@ -356,7 +349,7 @@ describe("internal adapter test", async () => {
 
 			// Now switch to hashed storage (simulating config change)
 			const hashedOpts = {
-				database: { dialect, type: "sqlite" },
+				database,
 				verification: { storeIdentifier: "hashed" as const },
 			} satisfies BetterAuthOptions;
 
