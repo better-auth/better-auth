@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mcp",
-  "version": "1.4.16",
+  "version": "1.4.17",
   "type": "module",
   "description": "Better Auth MCP server for AI-powered auth setup and diagnostics",
   "module": "dist/index.mjs",
