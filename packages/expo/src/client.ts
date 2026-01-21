@@ -28,6 +28,7 @@ interface CookieAttributes {
 	secure?: boolean | undefined;
 	httpOnly?: boolean | undefined;
 	sameSite?: ("Strict" | "Lax" | "None") | undefined;
+	[key: string]: unknown;
 }
 
 export function parseSetCookieHeader(
@@ -53,7 +54,7 @@ export function parseSetCookieHeader(
 			}
 			const attrValue = attrValueParts.join("=");
 			const normalizedAttrName = attrName.trim().toLowerCase();
-			attrObj[normalizedAttrName as "value"] = attrValue;
+			attrObj[normalizedAttrName] = attrValue;
 		});
 		cookieMap.set(name, attrObj);
 	});

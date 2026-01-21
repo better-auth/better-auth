@@ -1,0 +1,38 @@
+{
+  "name": "@better-auth/prisma-adapter",
+  "version": "1.5.0-beta.8",
+  "description": "Prisma adapter for Better Auth",
+  "type": "module",
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.0.0"
+  },
+  "peerDependencies": {
+    "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "^0.3.0",
+    "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "^0.3.0",
+    "prisma": "^5.0.0",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

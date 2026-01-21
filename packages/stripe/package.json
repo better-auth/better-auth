@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/stripe",
   "author": "Bereket Engida",
-  "version": "1.5.0-beta.6",
+  "version": "1.5.0-beta.8",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -55,7 +55,7 @@
   },
   "dependencies": {
     "defu": "^6.1.4",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",

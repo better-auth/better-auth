@@ -173,6 +173,39 @@ describe("Admin plugin", async () => {
 		expect(newUser?.role).toBe("user");
 	});
 
+	it("should allow admin to create users without password", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Passwordless User",
+				email: "passwordless@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.email).toBe("passwordless@email.com");
+		expect(res.data?.user?.name).toBe("Passwordless User");
+		expect(res.data?.user?.role).toBe("user");
+
+		// User should not be able to sign in with password since no credential account exists
+		const signInRes = await client.signIn.email({
+			email: "passwordless@email.com",
+			password: "anypassword",
+		});
+		expect(signInRes.error).toBeDefined();
+
+		// Clean up
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user?.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+	});
+
 	it("should allow admin to create user with multiple roles", async () => {
 		const res = await client.admin.createUser(
 			{
