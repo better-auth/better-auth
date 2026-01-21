@@ -28,8 +28,5 @@ catalogs:
     '@vitest/ui': ^4.0.17
     vitest: ^4.0.17
 
-overrides:
-  '@hookform/resolvers>zod': ^4.0.0
-
 dangerouslyAllowAllBuilds: true
 linkWorkspacePackages: true

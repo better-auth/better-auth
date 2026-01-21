@@ -58,9 +58,6 @@ catalogs:
       specifier: ^4.0.17
       version: 4.0.17
 
-overrides:
-  '@hookform/resolvers>zod': ^4.0.0
-
 importers:
 
   .:
@@ -22325,9 +22322,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
