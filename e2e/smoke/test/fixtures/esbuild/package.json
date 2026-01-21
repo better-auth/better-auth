@@ -1,5 +1,5 @@
 {
-  "name": "fixture-esbuild",
+  "name": "@better-auth-test/fixtures-esbuild",
   "private": true,
   "dependencies": {
     "better-auth": "workspace:*"
