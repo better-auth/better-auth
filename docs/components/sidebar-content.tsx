@@ -31,6 +31,7 @@ interface Content {
 		href: string;
 		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 		group?: boolean;
+		separator?: boolean;
 		isNew?: boolean;
 	}[];
 }
@@ -72,13 +73,20 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => ({
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			})),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
@@ -1826,6 +1834,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "i18n",
+				href: "/docs/plugins/i18n",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="m12.87 15.07l-2.54-2.51l.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35C8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5l3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7l1.62-4.33L19.12 17z"
+						/>
+					</svg>
+				),
 			},
 			{
 				title: "Last Login Method",

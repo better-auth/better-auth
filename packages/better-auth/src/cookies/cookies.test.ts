@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	expireCookie,
 	getCookieCache,
 	getCookies,
 	getSessionCookie,
@@ -97,6 +98,43 @@ describe("cookies", async () => {
 			},
 		);
 	});
+
+	describe("production environment", () => {
+		afterEach(() => {
+			vi.unstubAllEnvs();
+			vi.resetModules();
+		});
+
+		it("should use secure cookies when baseURL is not configured", async () => {
+			// Set NODE_ENV to production
+			vi.stubEnv("NODE_ENV", "production");
+
+			// Reset modules to reload with new NODE_ENV
+			vi.resetModules();
+
+			// Re-import modules after NODE_ENV change
+			const { getTestInstance: getTestInstanceReloaded } = await import(
+				"../test-utils/test-instance"
+			);
+
+			const { client, testUser } = await getTestInstanceReloaded({
+				baseURL: undefined,
+			});
+
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onResponse(context) {
+						const setCookie = context.response.headers.get("set-cookie");
+						expect(setCookie).toContain("Secure");
+					},
+				},
+			);
+		});
+	});
 });
 
 describe("crossSubdomainCookies", () => {
@@ -167,10 +205,10 @@ describe("cookie configuration", () => {
 
 		const cookies = getCookies(options);
 
-		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionToken.attributes.secure).toBe(true);
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
-		expect(cookies.sessionData.options.sameSite).toBe("lax");
-		expect(cookies.sessionData.options.domain).toBe("example.com");
+		expect(cookies.sessionData.attributes.sameSite).toBe("lax");
+		expect(cookies.sessionData.attributes.domain).toBe("example.com");
 	});
 });
 
@@ -1202,5 +1240,23 @@ describe("parse cookies", () => {
 		expect(parsedCookies.get("better-auth.session_data")).toBe(
 			"session-data.signature=",
 		);
+	});
+});
+
+describe("expireCookie", () => {
+	it("preserves attributes", () => {
+		const setCookie = vi.fn();
+		expireCookie({ setCookie } as any, {
+			name: "test",
+			attributes: {
+				path: "/custom",
+				httpOnly: true,
+			},
+		});
+		expect(setCookie).toHaveBeenCalledWith("test", "", {
+			path: "/custom",
+			httpOnly: true,
+			maxAge: 0,
+		});
 	});
 });

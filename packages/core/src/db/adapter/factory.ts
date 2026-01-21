@@ -200,7 +200,7 @@ export const createAdapterFactory =
 				let value = data[field];
 				const fieldAttributes = fields[field];
 
-				let newFieldName: string =
+				const newFieldName: string =
 					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
@@ -335,7 +335,7 @@ export const createAdapterFactory =
 							newValue = await field.transform.output(newValue);
 						}
 
-						let newFieldName: string = newMappedKeys[key] || key;
+						const newFieldName: string = newMappedKeys[key] || key;
 
 						if (originalKey === "id" || field.references?.field === "id") {
 							// Even if `useNumberId` is true, we must always return a string `id` output.
@@ -392,7 +392,7 @@ export const createAdapterFactory =
 			unsafe_model = getDefaultModelName(unsafe_model);
 			// for now we just transform the base model
 			// later we append the joined models to this object.
-			let transformedData: Record<string, any> = await transformSingleOutput(
+			const transformedData: Record<string, any> = await transformSingleOutput(
 				data,
 				unsafe_model,
 				select,
@@ -443,7 +443,7 @@ export const createAdapterFactory =
 					joinedData = [joinedData];
 				}
 
-				let transformed = [];
+				const transformed = [];
 
 				if (Array.isArray(joinedData)) {
 					for (const item of joinedData) {
@@ -822,7 +822,7 @@ export const createAdapterFactory =
 				forceAllowId?: boolean;
 			}): Promise<R> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				unsafeModel = getDefaultModelName(unsafeModel);
 				if (
@@ -903,7 +903,7 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}): Promise<T | null> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
@@ -965,7 +965,7 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1021,7 +1021,7 @@ export const createAdapterFactory =
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1095,7 +1095,7 @@ export const createAdapterFactory =
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const limit =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
@@ -1173,7 +1173,7 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1206,7 +1206,7 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1240,7 +1240,7 @@ export const createAdapterFactory =
 				where?: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
@@ -1350,7 +1350,7 @@ export const createAdapterFactory =
 								}
 
 								//`${colors.fg.blue}|${colors.reset} `,
-								let log: any[] = logs
+								const log: any[] = logs
 									.reverse()
 									.map((log) => {
 										log.args[0] = `\n${log.args[0]}`;
