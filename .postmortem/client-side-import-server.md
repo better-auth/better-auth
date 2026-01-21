@@ -86,7 +86,7 @@ import type { Session, User } from "better-auth/types"
    incorrect imports
 3. **Documentation** - Make the distinction crystal clear
 
-## Changes in PR [#7532](https://github.com/better-auth/better-auth/issues/7532)
+## Changes in PR [#7532](https://github.com/better-auth/better-auth/pull/7532)
 
 While fixing test infrastructure, the real issue was revealed:
 
