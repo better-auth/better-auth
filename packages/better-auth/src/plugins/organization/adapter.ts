@@ -33,7 +33,7 @@ function filterOutputFields<T extends Record<string, unknown> | null>(
 		return data;
 	}
 	const returnFiltered = Object.entries(additionalFields)
-		.filter(([, { returned }]) => returned)
+		.filter(([, { returned }]) => returned === false)
 		.map(([key]) => key);
 	return Object.entries(structuredClone(data))
 		.filter(([key]) => !returnFiltered.includes(key))
