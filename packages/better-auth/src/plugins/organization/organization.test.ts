@@ -2797,11 +2797,12 @@ describe("Additional Fields", async () => {
 				id: string;
 				organizationId: string;
 				userId: string;
-				role: string;
+				role: "member" | "admin" | "owner";
 				createdAt: Date;
 				memberRequiredField: string;
 				memberOptionalField?: string | undefined;
 				memberHiddenField?: string | undefined;
+				teamId?: string | undefined;
 			};
 		} | null;
 		if (!acceptedInvitation) throw new Error("Accepted invitation is null");

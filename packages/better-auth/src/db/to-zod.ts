@@ -2,25 +2,23 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { ZodType } from "zod";
 import * as z from "zod";
 
+/**
+ * Converts a better-auth schema object into a Zod schema.
+ *
+ * Note: Built from the client's perspective, so any `input: false` fields will be removed from the schema to prevent user input.
+ *
+ * @returns
+ */
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
 	IsClientSide extends boolean,
->({
-	fields,
-	isClientSide,
-}: {
-	fields: Fields;
-	/**
-	 * If true, then any fields that have `input: false` will be removed from the schema to prevent user input.
-	 */
-	isClientSide: IsClientSide;
-}) {
+>({ fields }: { fields: Fields }) {
 	const zodFields = Object.keys(fields).reduce((acc, key) => {
 		const field = fields[key];
 		if (!field) {
 			return acc;
 		}
-		if (isClientSide && field.input === false) {
+		if (field.input === false) {
 			return acc;
 		}
 
@@ -38,9 +36,7 @@ export function toZodSchema<
 		if (field?.required === false) {
 			schema = schema.optional();
 		}
-		if (!isClientSide && field?.returned === false) {
-			return acc;
-		}
+
 		return {
 			...acc,
 			[key]: schema,

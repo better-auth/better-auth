@@ -380,7 +380,7 @@ export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
 export type InferMember<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
 	(O["teams"] extends {
 		enabled: true;
@@ -412,27 +412,40 @@ export type InferMember<
 					image?: string | undefined;
 				};
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
+		InferAdditionalFieldsFromPluginOptions<
+			"member",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
 	Organization &
-		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
+		InferAdditionalFieldsFromPluginOptions<
+			"organization",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;
 
 export type InferTeam<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", O, isClientSide>
+	Team &
+		InferAdditionalFieldsFromPluginOptions<
+			"team",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;
 
 export type InferInvitation<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
 	(O["teams"] extends {
 		enabled: true;
@@ -458,5 +471,9 @@ export type InferInvitation<
 				expiresAt: Date;
 				createdAt: Date;
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
+		InferAdditionalFieldsFromPluginOptions<
+			"invitation",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;

@@ -89,14 +89,14 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : any;
 		ActiveOrganization: Options["teams"] extends { enabled: true }
 			? {
-					members: InferMember<Options, false>[];
-					invitations: InferInvitation<Options, false>[];
-					teams: InferTeam<Options, false>[];
-				} & InferOrganization<Options, false>
+					members: InferMember<Options>[];
+					invitations: InferInvitation<Options>[];
+					teams: InferTeam<Options>[];
+				} & InferOrganization<Options>
 			: {
-					members: InferMember<Options, false>[];
-					invitations: InferInvitation<Options, false>[];
-				} & InferOrganization<Options, false>;
+					members: InferMember<Options>[];
+					invitations: InferInvitation<Options>[];
+				} & InferOrganization<Options>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<Options>;
@@ -313,14 +313,14 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: InferTeam<O>[];
+				} & InferOrganization<O>
 			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & InferOrganization<O>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
@@ -364,14 +364,14 @@ export function organization<
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : unknown;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: InferTeam<O>[];
+				} & InferOrganization<O>
 			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & InferOrganization<O>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
@@ -397,14 +397,14 @@ export function organization<
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: InferTeam<O>[];
+				} & InferOrganization<O>
 			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & InferOrganization<O>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
@@ -428,14 +428,14 @@ export function organization<
 		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+					teams: InferTeam<O>[];
+				} & InferOrganization<O>
 			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
+					members: InferMember<O>[];
+					invitations: InferInvitation<O>[];
+				} & InferOrganization<O>;
 	};
 	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
 	options: NoInfer<O>;
@@ -1262,14 +1262,14 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
 			ActiveOrganization: {} as O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>,
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: opts as NoInfer<O>,
