@@ -17,7 +17,7 @@ import { getSchema } from "./schema";
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		username: {
 			creator: typeof username;
