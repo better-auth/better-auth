@@ -2,7 +2,7 @@
 
 ## Issue Reference
 
-* [PR #7532](https://github.com/better-auth/better-auth/pull/7532)
+* [PR #7532][pr-7532]
 * [Issue #7529](https://github.com/better-auth/better-auth/issues/7529)
 * [Incorrectly blamed PR #4360](https://github.com/better-auth/better-auth/pull/4360)
 
@@ -86,7 +86,7 @@ import type { Session, User } from "better-auth/types"
    incorrect imports
 3. **Documentation** - Make the distinction crystal clear
 
-## Changes in PR [#7532](https://github.com/better-auth/better-auth/pull/7532)
+## Changes in PR [#7532][pr-7532]
 
 While fixing test infrastructure, the real issue was revealed:
 
@@ -137,3 +137,5 @@ If you are seeing build errors with `node:*` modules:
 3. **Never import server packages in client code**
 
 This is not a bug in Better Auth - it is incorrect usage.
+
+[pr-7532]: https://github.com/better-auth/better-auth/pull/7532
