@@ -38,6 +38,10 @@ describe("general types", async (it) => {
 		type TwoFactorPlugin = ReturnType<typeof twoFactor>;
 		const id = "two-factor";
 		const twoFactorPlugin = context.getPlugin(id)!;
+		const hasTwoFactorPlugin = context.hasPlugin(id);
+		const nonExistPlugin = context.hasPlugin("non-exist-plugin");
+		expectTypeOf(hasTwoFactorPlugin).toEqualTypeOf<true>();
+		expectTypeOf(nonExistPlugin).toEqualTypeOf<boolean>();
 		expect(twoFactorPlugin).toBeDefined();
 		expect(twoFactorPlugin.id).toBe(id);
 		type TwoFactorPluginFromContext = typeof twoFactorPlugin;
