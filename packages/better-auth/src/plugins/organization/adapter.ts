@@ -1,5 +1,6 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
@@ -20,11 +21,36 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+/**
+ * Filters output data by removing fields with `returned: false` attribute.
+ * This ensures sensitive fields are not exposed in API responses.
+ */
+function filterOutputFields<T extends Record<string, any>>(
+	data: T | null,
+	additionalFields: Record<string, DBFieldAttribute> | undefined,
+): T | null {
+	if (!data || !additionalFields) {
+		return data;
+	}
+	const filtered = { ...data };
+	for (const [key, fieldConfig] of Object.entries(additionalFields)) {
+		if (fieldConfig.returned === false && key in filtered) {
+			delete filtered[key];
+		}
+	}
+	return filtered as T;
+}
+
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
 	options?: O | undefined,
 ) => {
 	const baseAdapter = context.adapter;
+	const orgAdditionalFields = options?.schema?.organization?.additionalFields;
+	const memberAdditionalFields = options?.schema?.member?.additionalFields;
+	const invitationAdditionalFields =
+		options?.schema?.invitation?.additionalFields;
+	const teamAdditionalFields = options?.schema?.team?.additionalFields;
 	return {
 		findOrganizationBySlug: async (slug: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -37,7 +63,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return organization;
+			return filterOutputFields(organization, orgAdditionalFields);
 		},
 		createOrganization: async (data: {
 			organization: OrganizationInput &
@@ -59,13 +85,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				forceAllowId: true,
 			});
 
-			return {
+			const result = {
 				...organization,
 				metadata:
 					organization.metadata && typeof organization.metadata === "string"
 						? JSON.parse(organization.metadata)
 						: undefined,
-			} as typeof organization;
+			};
+			return filterOutputFields(result, orgAdditionalFields) as typeof result;
 		},
 		findMemberByEmail: async (data: {
 			email: string;
@@ -379,12 +406,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			if (!organization) {
 				return null;
 			}
-			return {
+			const result = {
 				...organization,
 				metadata: organization.metadata
 					? parseJSON<Record<string, any>>(organization.metadata)
 					: undefined,
 			};
+			return filterOutputFields(result, orgAdditionalFields);
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -441,7 +469,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return organization;
+			return filterOutputFields(organization, orgAdditionalFields);
 		},
 		checkMembership: async ({
 			userId,
@@ -527,8 +555,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						"Unexpected error: User not found for member",
 					);
 				}
+				const filteredMember = filterOutputFields(
+					member,
+					memberAdditionalFields,
+				);
 				return {
-					...member,
+					...filteredMember,
 					user: {
 						id: user.id,
 						name: user.name,
@@ -538,11 +570,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			});
 
+			const filteredOrg = filterOutputFields(org, orgAdditionalFields);
+			const filteredInvitations = invitations.map((inv) =>
+				filterOutputFields(inv, invitationAdditionalFields),
+			);
+			const filteredTeams = teams?.map((team) =>
+				filterOutputFields(team, teamAdditionalFields),
+			);
+
 			return {
-				...org,
-				invitations,
+				...filteredOrg,
+				invitations: filteredInvitations,
 				members: membersWithUsers,
-				teams,
+				teams: filteredTeams,
 			};
 		},
 		listOrganizations: async (userId: string) => {
@@ -566,7 +606,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return [];
 			}
 
-			const organizations = result.map((member) => member.organization);
+			const organizations = result.map((member) =>
+				filterOutputFields(member.organization, orgAdditionalFields),
+			);
 
 			return organizations;
 		},

@@ -3014,3 +3014,259 @@ describe("organization hooks", async (it) => {
 		expect(hooksCalled).toContain("afterCreateInvitation");
 	});
 });
+
+describe("organization additionalFields with returned: false", async () => {
+	const db = {
+		user: [] as { id: string }[],
+		session: [] as { id: string }[],
+		account: [] as { id: string }[],
+		verification: [] as { id: string }[],
+		organization: [] as {
+			id: string;
+			publicField: string;
+			secretField: string;
+		}[],
+		member: [] as {
+			id: string;
+			memberPublicField: string;
+			memberSecretField: string;
+		}[],
+		invitation: [] as {
+			id: string;
+			invitationPublicField: string;
+			invitationSecretField: string;
+		}[],
+	};
+
+	const orgOptions = {
+		schema: {
+			organization: {
+				additionalFields: {
+					publicField: {
+						type: "string",
+						required: true,
+					},
+					secretField: {
+						type: "string",
+						required: false,
+						returned: false,
+						input: true,
+					},
+				},
+			},
+			member: {
+				additionalFields: {
+					memberPublicField: {
+						type: "string",
+						required: true,
+					},
+					memberSecretField: {
+						type: "string",
+						required: false,
+						returned: false,
+						input: true,
+					},
+				},
+			},
+			invitation: {
+				additionalFields: {
+					invitationPublicField: {
+						type: "string",
+						required: true,
+					},
+					invitationSecretField: {
+						type: "string",
+						required: false,
+						returned: false,
+						input: true,
+					},
+				},
+			},
+		},
+		invitationLimit: 3,
+	} satisfies OrganizationOptions;
+
+	const { auth, signInWithTestUser } = await getTestInstance({
+		database: memoryAdapter(db, {
+			debugLogs: false,
+		}),
+		plugins: [organization(orgOptions)],
+		logger: {
+			level: "error",
+		},
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	const client = createAuthClient({
+		plugins: [organizationClient()],
+		baseURL: "http://localhost:3000/api/auth",
+		fetchOptions: {
+			customFetchImpl: async (url, init) => {
+				return auth.handler(new Request(url, init));
+			},
+			headers,
+		},
+	});
+
+	it("should save field with returned: false but not return it in response", async () => {
+		// Create organization with both public and secret fields
+		const org = await client.organization.create({
+			name: "Test Org",
+			slug: "test-org-secret",
+			publicField: "public-value",
+			secretField: "secret-value",
+		});
+
+		expect(org.data).toBeDefined();
+		// Public field should be returned
+		expect((org.data as any).publicField).toBe("public-value");
+		// Secret field should NOT be returned
+		expect((org.data as any).secretField).toBeUndefined();
+
+		// Verify the secret field was actually saved in the database
+		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
+		expect(dbOrg).toBeDefined();
+		expect(dbOrg?.secretField).toBe("secret-value");
+	});
+
+	it("should not return secret field when getting organization by slug", async () => {
+		await client.organization.create({
+			name: "Test Org 2",
+			slug: "test-org-secret-2",
+			publicField: "public-value-2",
+			secretField: "secret-value-2",
+		});
+
+		// Get organization - secret field should not be returned
+		const fullOrg = await client.organization.getFullOrganization({
+			query: { organizationSlug: "test-org-secret-2" },
+		});
+
+		expect(fullOrg.data).toBeDefined();
+		expect((fullOrg.data as any).publicField).toBe("public-value-2");
+		expect((fullOrg.data as any).secretField).toBeUndefined();
+	});
+
+	it("should not return secret field when listing organizations", async () => {
+		const orgs = await client.organization.list();
+
+		expect(orgs.data).toBeDefined();
+		expect(orgs.data!.length).toBeGreaterThan(0);
+
+		// None of the organizations should have the secret field
+		for (const org of orgs.data!) {
+			expect((org as any).secretField).toBeUndefined();
+			// But they should have the public field
+			expect((org as any).publicField).toBeDefined();
+		}
+	});
+
+	it("should not return member secret field in full organization response", async () => {
+		// Create organization first
+		const org = await client.organization.create({
+			name: "Member Test Org",
+			slug: "member-test-org",
+			publicField: "public",
+		});
+
+		// Create a new user using auth API directly
+		const signUpRes = await auth.api.signUpEmail({
+			body: {
+				email: "member-test@example.com",
+				password: "password123",
+				name: "Member Test",
+			},
+		});
+
+		// Add member with secret field via server API
+		await auth.api.addMember({
+			body: {
+				userId: signUpRes.user.id,
+				role: "member",
+				organizationId: org.data!.id,
+				memberPublicField: "member-public",
+				memberSecretField: "member-secret",
+			},
+			headers,
+		});
+
+		// Get full organization - member secret field should not be returned
+		const fullOrg = await client.organization.getFullOrganization({
+			query: { organizationId: org.data!.id },
+		});
+
+		expect(fullOrg.data?.members).toBeDefined();
+		const addedMember = fullOrg.data?.members?.find(
+			(m) => m.userId === signUpRes.user.id,
+		);
+		expect(addedMember).toBeDefined();
+		expect((addedMember as any).memberPublicField).toBe("member-public");
+		expect((addedMember as any).memberSecretField).toBeUndefined();
+
+		// Verify secret field was saved in database
+		const dbMember = db.member.find((m) => m.id === addedMember?.id);
+		expect(dbMember?.memberSecretField).toBe("member-secret");
+	});
+
+	it("should not return invitation secret field", async () => {
+		const org = await client.organization.create({
+			name: "Invitation Test Org",
+			slug: "invitation-test-org",
+			publicField: "public",
+		});
+
+		// Invite member with secret field
+		await client.organization.inviteMember({
+			email: "invite-test@example.com",
+			role: "member",
+			organizationId: org.data!.id,
+			invitationPublicField: "invite-public",
+			invitationSecretField: "invite-secret",
+		});
+
+		// Get full organization - invitation secret field should not be returned
+		const fullOrg = await client.organization.getFullOrganization({
+			query: { organizationId: org.data!.id },
+		});
+
+		expect(fullOrg.data?.invitations).toBeDefined();
+		const invitation = fullOrg.data?.invitations?.find(
+			(i) => i.email === "invite-test@example.com",
+		);
+		expect(invitation).toBeDefined();
+		expect((invitation as any).invitationPublicField).toBe("invite-public");
+		expect((invitation as any).invitationSecretField).toBeUndefined();
+
+		// Verify secret field was saved in database
+		const dbInvitation = db.invitation.find((i) => i.id === invitation?.id);
+		expect(dbInvitation?.invitationSecretField).toBe("invite-secret");
+	});
+
+	it("should not return secret field after updating organization", async () => {
+		const org = await client.organization.create({
+			name: "Update Test Org",
+			slug: "update-test-org",
+			publicField: "original-public",
+			secretField: "original-secret",
+		});
+
+		// Update organization
+		const updated = await client.organization.update({
+			data: {
+				name: "Updated Test Org",
+				publicField: "updated-public",
+				secretField: "updated-secret",
+			},
+			query: { organizationId: org.data!.id },
+		});
+
+		expect(updated.data).toBeDefined();
+		expect((updated.data as any).publicField).toBe("updated-public");
+		expect((updated.data as any).secretField).toBeUndefined();
+
+		// Verify secret field was updated in database
+		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
+		expect(dbOrg?.secretField).toBe("updated-secret");
+	});
+});
