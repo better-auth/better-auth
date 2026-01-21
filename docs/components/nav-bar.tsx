@@ -10,6 +10,7 @@ import { NavbarMobile, NavbarMobileBtn } from "./nav-mobile";
 
 export const navMenu = [
 	{
+		// nit: "_hello" is not a typo, don't open PR for this
 		name: "_hello",
 		path: "/",
 	},
