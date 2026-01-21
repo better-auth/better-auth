@@ -1,4 +1,5 @@
 import type {
+	BetterAuthCookie,
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
@@ -27,7 +28,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL !== undefined
+			: options.baseURL
 				? options.baseURL.startsWith("https://")
 					? true
 					: false
@@ -50,11 +51,10 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	) {
 		const prefix = options.advanced?.cookiePrefix || "better-auth";
 		const name =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
+			options.advanced?.cookies?.[cookieName]?.name ||
 			`${prefix}.${cookieName}`;
-
 		const attributes =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
+			options.advanced?.cookies?.[cookieName]?.attributes ?? {};
 
 		return {
 			name: `${secureCookiePrefix}${name}`,
@@ -67,8 +67,8 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				...options.advanced?.defaultCookieAttributes,
 				...overrideAttributes,
 				...attributes,
-			} as CookieOptions,
-		};
+			},
+		} satisfies BetterAuthCookie;
 	}
 	return createCookie;
 }
@@ -89,7 +89,7 @@ export function getCookies(options: BetterAuthOptions) {
 	return {
 		sessionToken: {
 			name: sessionToken.name,
-			options: sessionToken.attributes,
+			attributes: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -97,15 +97,15 @@ export function getCookies(options: BetterAuthOptions) {
 		 */
 		sessionData: {
 			name: sessionData.name,
-			options: sessionData.attributes,
+			attributes: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
-			options: dontRememberToken.attributes,
+			attributes: dontRememberToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
-			options: accountData.attributes,
+			attributes: accountData.attributes,
 		},
 	};
 }
@@ -157,10 +157,10 @@ export async function setCookieCache(
 		};
 
 		const options = {
-			...ctx.context.authCookies.sessionData.options,
+			...ctx.context.authCookies.sessionData.attributes,
 			maxAge: dontRememberMe
 				? undefined
-				: ctx.context.authCookies.sessionData.options.maxAge,
+				: ctx.context.authCookies.sessionData.attributes.maxAge,
 		};
 
 		const expiresAtDate = getDate(options.maxAge || 60, "sec").getTime();
@@ -249,7 +249,7 @@ export async function setSessionCookie(
 	dontRememberMe =
 		dontRememberMe !== undefined ? dontRememberMe : !!dontRememberMeCookie;
 
-	const options = ctx.context.authCookies.sessionToken.options;
+	const options = ctx.context.authCookies.sessionToken.attributes;
 	const maxAge = dontRememberMe
 		? undefined
 		: ctx.context.sessionConfig.expiresIn;
@@ -269,7 +269,7 @@ export async function setSessionCookie(
 			ctx.context.authCookies.dontRememberToken.name,
 			"true",
 			ctx.context.secret,
-			ctx.context.authCookies.dontRememberToken.options,
+			ctx.context.authCookies.dontRememberToken.attributes,
 		);
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
@@ -293,30 +293,33 @@ export async function setSessionCookie(
 	}
 }
 
+/**
+ * Expires a cookie by setting `maxAge: 0` while preserving its attributes
+ */
+export function expireCookie(
+	ctx: GenericEndpointContext,
+	cookie: BetterAuthCookie,
+) {
+	ctx.setCookie(cookie.name, "", {
+		...cookie.attributes,
+		maxAge: 0,
+	});
+}
+
 export function deleteSessionCookie(
 	ctx: GenericEndpointContext,
 	skipDontRememberMe?: boolean | undefined,
 ) {
-	ctx.setCookie(ctx.context.authCookies.sessionToken.name, "", {
-		...ctx.context.authCookies.sessionToken.options,
-		maxAge: 0,
-	});
-
-	ctx.setCookie(ctx.context.authCookies.sessionData.name, "", {
-		...ctx.context.authCookies.sessionData.options,
-		maxAge: 0,
-	});
+	expireCookie(ctx, ctx.context.authCookies.sessionToken);
+	expireCookie(ctx, ctx.context.authCookies.sessionData);
 
 	if (ctx.context.options.account?.storeAccountCookie) {
-		ctx.setCookie(ctx.context.authCookies.accountData.name, "", {
-			...ctx.context.authCookies.accountData.options,
-			maxAge: 0,
-		});
+		expireCookie(ctx, ctx.context.authCookies.accountData);
 
 		//clean up the account data chunks
 		const accountStore = createAccountStore(
 			ctx.context.authCookies.accountData.name,
-			ctx.context.authCookies.accountData.options,
+			ctx.context.authCookies.accountData.attributes,
 			ctx,
 		);
 		const cleanCookies = accountStore.clean();
@@ -324,27 +327,20 @@ export function deleteSessionCookie(
 	}
 
 	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
-		const stateCookie = ctx.context.createAuthCookie("oauth_state");
-		ctx.setCookie(stateCookie.name, "", {
-			...stateCookie.attributes,
-			maxAge: 0,
-		});
+		expireCookie(ctx, ctx.context.createAuthCookie("oauth_state"));
 	}
 
 	// Use createSessionStore to clean up all session data chunks
 	const sessionStore = createSessionStore(
 		ctx.context.authCookies.sessionData.name,
-		ctx.context.authCookies.sessionData.options,
+		ctx.context.authCookies.sessionData.attributes,
 		ctx,
 	);
 	const cleanCookies = sessionStore.clean();
 	sessionStore.setCookies(cleanCookies);
 
 	if (!skipDontRememberMe) {
-		ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-			...ctx.context.authCookies.dontRememberToken.options,
-			maxAge: 0,
-		});
+		expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 	}
 }
 
