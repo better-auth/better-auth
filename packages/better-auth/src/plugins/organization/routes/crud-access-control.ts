@@ -281,6 +281,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 			}
 
 			const originalPermissionForCreate = JSON.stringify(permission);
+			const originalRoleName = roleName;
 			if (options.organizationHooks?.beforeCreateRole) {
 				const hookRes = await options.organizationHooks.beforeCreateRole({
 					role: {
@@ -320,6 +321,21 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					permissionRequired: permission,
 					user,
 					action: "create",
+				});
+			}
+
+			// Re-validate role name only if the beforeCreateRole hook actually modified it
+			if (roleName !== originalRoleName) {
+				await checkIfRoleNameIsTakenByPreDefinedRole({
+					role: roleName,
+					organizationId,
+					options,
+					ctx,
+				});
+				await checkIfRoleNameIsTakenByRoleInDB({
+					ctx,
+					organizationId,
+					role: roleName,
 				});
 			}
 
@@ -1182,6 +1198,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			const originalPermissionForUpdate = updateData.permission
 				? JSON.stringify(updateData.permission)
 				: undefined;
+			const originalRoleName = updateData.role;
 			if (options.organizationHooks?.beforeUpdateRole) {
 				const hookRes = await options.organizationHooks.beforeUpdateRole({
 					role: role as OrganizationRole,
@@ -1238,6 +1255,21 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					permissionRequired: updateData.permission,
 					user,
 					action: "update",
+				});
+			}
+
+			// Re-validate role name only if the beforeUpdateRole hook actually modified it
+			if (updateData.role && updateData.role !== originalRoleName) {
+				await checkIfRoleNameIsTakenByPreDefinedRole({
+					role: updateData.role,
+					organizationId,
+					options,
+					ctx,
+				});
+				await checkIfRoleNameIsTakenByRoleInDB({
+					role: updateData.role,
+					organizationId,
+					ctx,
 				});
 			}
 
