@@ -16,6 +16,11 @@
       "dev-source": "./src/node-sqlite-dialect.ts",
       "types": "./dist/node-sqlite-dialect.d.mts",
       "default": "./dist/node-sqlite-dialect.mjs"
+    },
+    "./d1-sqlite-dialect": {
+      "dev-source": "./src/d1-sqlite-dialect.ts",
+      "types": "./dist/d1-sqlite-dialect.d.mts",
+      "default": "./dist/d1-sqlite-dialect.mjs"
     }
   },
   "scripts": {
@@ -32,6 +37,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
+    "@cloudflare/workers-types": "^4.20250121.0",
     "kysely": "^0.28.5",
     "tsdown": "catalog:",
     "typescript": "catalog:"
