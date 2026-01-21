@@ -49,8 +49,9 @@ export type BetterAuthPlugin = {
 		  }
 		| undefined;
 	/**
-	 * Public endpoints that should be mounted at the root base path.
-	 * Useful for well-known endpoints that must live at `/.well-known/...`.
+	 * Public endpoints that should be mounted at the origin root path (/).
+	 * The main handler auto-routes `/.well-known/*` to these endpoints; other
+	 * public paths require using `publicHandler` directly.
 	 */
 	publicEndpoints?:
 		| {

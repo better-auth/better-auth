@@ -53,16 +53,14 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 	return {
 		handler: async (request: Request) => {
 			const ctx = await resolveContext(request);
-			const { handler } = router(ctx, options);
-			const publicHandler = hasPublicEndpoints
-				? publicRouter(ctx, options).handler
-				: undefined;
-			if (publicHandler) {
+			if (hasPublicEndpoints) {
 				const pathname = new URL(request.url).pathname;
 				if (pathname.startsWith("/.well-known/")) {
-					return runWithAdapter(ctx.adapter, () => publicHandler(request));
+					const { handler } = publicRouter(ctx, options);
+					return runWithAdapter(ctx.adapter, () => handler(request));
 				}
 			}
+			const { handler } = router(ctx, options);
 			return runWithAdapter(ctx.adapter, () => handler(request));
 		},
 		publicHandler: hasPublicEndpoints

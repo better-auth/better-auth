@@ -301,6 +301,7 @@ async function runAfterHooks(
 				response: any;
 				headers: Headers;
 			};
+			// Hooks can return void/null/undefined to indicate "no-op".
 			if (!result) {
 				continue;
 			}
