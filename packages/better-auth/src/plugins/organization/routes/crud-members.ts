@@ -10,6 +10,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
+import { parseOutputData } from "../parse-output-data";
 import type {
 	InferMember,
 	InferOrganizationRolesFromOption,
@@ -210,7 +211,13 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				});
 			}
 
-			return ctx.json(createdMember);
+			const parsedMember = parseOutputData(
+				createdMember,
+				ctx.context.orgOptions,
+				"member",
+			);
+
+			return ctx.json(parsedMember);
 		},
 	);
 };
@@ -416,8 +423,14 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				});
 			}
 
+			const parsedMember = parseOutputData(
+				toBeRemovedMember,
+				ctx.context.orgOptions,
+				"member",
+			);
+
 			return ctx.json({
-				member: toBeRemovedMember,
+				member: parsedMember,
 			});
 		},
 	);
@@ -701,7 +714,13 @@ export const updateMemberRole = <O extends OrganizationOptions>(option: O) =>
 				});
 			}
 
-			return ctx.json(updatedMember);
+			const parsedMember = parseOutputData(
+				updatedMember,
+				ctx.context.orgOptions,
+				"member",
+			);
+
+			return ctx.json(parsedMember);
 		},
 	);
 
@@ -765,7 +784,13 @@ export const getActiveMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				);
 			}
-			return ctx.json(member);
+			const parsedMember = parseOutputData(
+				member,
+				ctx.context.orgOptions,
+				"member",
+			);
+
+			return ctx.json(parsedMember);
 		},
 	);
 
@@ -829,7 +854,12 @@ export const leaveOrganization = <O extends OrganizationOptions>(options: O) =>
 			if (session.session.activeOrganizationId === ctx.body.organizationId) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 			}
-			return ctx.json(member);
+			const parsedMember = parseOutputData(
+				member,
+				ctx.context.orgOptions,
+				"member",
+			);
+			return ctx.json(parsedMember);
 		},
 	);
 
@@ -953,8 +983,13 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 						}
 					: undefined,
 			});
-			return ctx.json({
+			const parsedMembers = parseOutputData(
 				members,
+				ctx.context.orgOptions,
+				"member",
+			);
+			return ctx.json({
+				members: parsedMembers,
 				total,
 			});
 		},

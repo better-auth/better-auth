@@ -460,3 +460,14 @@ export type InferInvitation<
 			}) &
 		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
 >;
+
+export const schemaTables = [
+	"organization",
+	"member",
+	"invitation",
+	"team",
+	"teamMember",
+	"organizationRole",
+] as const;
+
+export type SchemaTable = (typeof schemaTables)[number];

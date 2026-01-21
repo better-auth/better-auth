@@ -12,6 +12,7 @@ import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import { parseRoles } from "../organization";
+import { parseOutputData } from "../parse-output-data";
 import type {
 	InferInvitation,
 	InferOrganizationRolesFromOption,
@@ -349,7 +350,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					);
 				}
 
-				return ctx.json(updatedInvitation as InferInvitation<O, false>);
+				const parsedUpdatedInvitation = parseOutputData(
+					updatedInvitation,
+					ctx.context.orgOptions,
+					"invitation",
+				);
+				return ctx.json(parsedUpdatedInvitation as InferInvitation<O, false>);
 			}
 
 			if (
@@ -506,8 +512,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					organization,
 				});
 			}
-
-			return ctx.json(invitation);
+			const parsedInvitation = parseOutputData(
+				invitation,
+				ctx.context.orgOptions,
+				"invitation",
+			);
+			return ctx.json(parsedInvitation);
 		},
 	);
 };
@@ -716,8 +726,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
+			const parsedAcceptedInvitation = parseOutputData(
+				acceptedI,
+				ctx.context.orgOptions,
+				"invitation",
+			);
 			return ctx.json({
-				invitation: acceptedI,
+				invitation: parsedAcceptedInvitation,
 				member,
 			});
 		},
@@ -825,9 +840,11 @@ export const rejectInvitation = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
+			const parsedRejectedInvitation = rejectedI
+				? parseOutputData(rejectedI, ctx.context.orgOptions, "invitation")
+				: null;
 			return ctx.json({
-				invitation: rejectedI,
+				invitation: parsedRejectedInvitation,
 				member: null,
 			});
 		},
@@ -942,8 +959,10 @@ export const cancelInvitation = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			return ctx.json(canceledI);
+			const parsedCanceledInvitation = canceledI
+				? parseOutputData(canceledI, ctx.context.orgOptions, "invitation")
+				: null;
+			return ctx.json(parsedCanceledInvitation);
 		},
 	);
 
@@ -1066,9 +1085,13 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.INVITER_IS_NO_LONGER_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
-
+			const parsedInvitation = parseOutputData(
+				invitation,
+				ctx.context.orgOptions,
+				"invitation",
+			);
 			return ctx.json({
-				...invitation,
+				...parsedInvitation,
 				organizationName: organization.name,
 				organizationSlug: organization.slug,
 				inviterEmail: member.user.email,
@@ -1123,7 +1146,12 @@ export const listInvitations = <O extends OrganizationOptions>(options: O) =>
 			const invitations = await adapter.listInvitations({
 				organizationId: orgId,
 			});
-			return ctx.json(invitations);
+			const parsedInvitations = parseOutputData(
+				invitations,
+				ctx.context.orgOptions,
+				"invitation",
+			);
+			return ctx.json(parsedInvitations);
 		},
 	);
 
@@ -1239,6 +1267,11 @@ export const listUserInvitations = <O extends OrganizationOptions>(
 			const pendingInvitations = invitations.filter(
 				(inv) => inv.status === "pending",
 			);
-			return ctx.json(pendingInvitations);
+			const parsedInvitations = parseOutputData(
+				pendingInvitations,
+				ctx.context.orgOptions,
+				"invitation",
+			);
+			return ctx.json(parsedInvitations);
 		},
 	);

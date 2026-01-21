@@ -10,6 +10,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import { parseOutputData } from "../parse-output-data";
 import { teamSchema } from "../schema";
 import type { OrganizationOptions } from "../types";
 
@@ -207,7 +208,12 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
-			return ctx.json(createdTeam);
+			const parsedTeam = parseOutputData(
+				createdTeam,
+				ctx.context.orgOptions,
+				"team",
+			);
+			return ctx.json(parsedTeam);
 		},
 	);
 };
@@ -549,8 +555,10 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 					organization,
 				});
 			}
-
-			return ctx.json(updatedTeam);
+			const parsedTeam = updatedTeam
+				? parseOutputData(updatedTeam, ctx.context.orgOptions, "team")
+				: null;
+			return ctx.json(parsedTeam);
 		},
 	);
 };
@@ -654,7 +662,12 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 				);
 			}
 			const teams = await adapter.listTeams(organizationId);
-			return ctx.json(teams);
+			const parsedTeams = parseOutputData(
+				teams,
+				ctx.context.orgOptions,
+				"team",
+			);
+			return ctx.json(parsedTeams);
 		},
 	);
 
@@ -766,7 +779,8 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 				user: session.user,
 			});
 
-			return ctx.json(team);
+			const parsedTeam = parseOutputData(team, ctx.context.orgOptions, "team");
+			return ctx.json(parsedTeam);
 		},
 	);
 
@@ -809,7 +823,12 @@ export const listUserTeams = <O extends OrganizationOptions>(options: O) =>
 				userId: session.user.id,
 			});
 
-			return ctx.json(teams);
+			const parsedTeams = parseOutputData(
+				teams,
+				ctx.context.orgOptions,
+				"team",
+			);
+			return ctx.json(parsedTeams);
 		},
 	);
 
@@ -899,7 +918,12 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			const members = await adapter.listTeamMembers({
 				teamId,
 			});
-			return ctx.json(members);
+			const parsedMembers = parseOutputData(
+				members,
+				ctx.context.orgOptions,
+				"teamMember",
+			);
+			return ctx.json(parsedMembers);
 		},
 	);
 
@@ -1078,8 +1102,12 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 					organization,
 				});
 			}
-
-			return ctx.json(teamMember);
+			const parsedTeamMember = parseOutputData(
+				teamMember,
+				ctx.context.orgOptions,
+				"teamMember",
+			);
+			return ctx.json(parsedTeamMember);
 		},
 	);
 

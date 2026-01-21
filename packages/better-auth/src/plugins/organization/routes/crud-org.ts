@@ -9,6 +9,7 @@ import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
+import { parseOutputData } from "../parse-output-data";
 import type {
 	InferInvitation,
 	InferMember,
@@ -322,8 +323,13 @@ export const createOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
+			const parsedOrganization = parseOutputData(
+				organization,
+				ctx.context.orgOptions,
+			);
+
 			return ctx.json({
-				...organization,
+				...parsedOrganization,
 				metadata:
 					organization.metadata && typeof organization.metadata === "string"
 						? JSON.parse(organization.metadata)
@@ -536,7 +542,12 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					member,
 				});
 			}
-			return ctx.json(updatedOrg);
+
+			const parsedOrg = updatedOrg
+				? parseOutputData(updatedOrg, ctx.context.orgOptions)
+				: null;
+
+			return ctx.json(parsedOrg);
 		},
 	);
 };
@@ -657,7 +668,8 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					user: session.user,
 				});
 			}
-			return ctx.json(org);
+			const parsedOrg = parseOutputData(org, ctx.context.orgOptions);
+			return ctx.json(parsedOrg);
 		},
 	);
 };
@@ -766,7 +778,11 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 						members: InferMember<O, false>[];
 						invitations: InferInvitation<O, false>[];
 					} & InferOrganization<O, false>;
-			return ctx.json(organization as unknown as OrganizationReturn);
+			const parsedOrganization = parseOutputData(
+				organization,
+				ctx.context.orgOptions,
+			);
+			return ctx.json(parsedOrganization as unknown as OrganizationReturn);
 		},
 	);
 
@@ -907,7 +923,11 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 						members: InferMember<O, false>[];
 						invitations: InferInvitation<O, false>[];
 					} & InferOrganization<O, false>;
-			return ctx.json(organization as unknown as OrganizationReturn);
+			const parsedOrganization = parseOutputData(
+				organization,
+				ctx.context.orgOptions,
+			);
+			return ctx.json(parsedOrganization as unknown as OrganizationReturn);
 		},
 	);
 };
@@ -945,6 +965,10 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 			const organizations = await adapter.listOrganizations(
 				ctx.context.session.user.id,
 			);
-			return ctx.json(organizations);
+			const parsedOrganizations = parseOutputData(
+				organizations,
+				ctx.context.orgOptions,
+			);
+			return ctx.json(parsedOrganizations);
 		},
 	);
