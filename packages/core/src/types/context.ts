@@ -44,6 +44,7 @@ type InferPluginOptions<
 			: never
 		: never
 	: never;
+
 /**
  * Mutators are defined in each plugin
  *
