@@ -192,7 +192,7 @@ export function normalizeIP(
 	}
 
 	// Normalize IPv6
-	const subnetPrefix = options.ipv6Subnet || 128;
+	const subnetPrefix = options.ipv6Subnet || 64;
 	return normalizeIPv6(ip, subnetPrefix);
 }
 
