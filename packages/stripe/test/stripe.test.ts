@@ -2668,7 +2668,7 @@ describe("stripe", () => {
 		// Update the user's email using internal adapter (which triggers hooks)
 		await runWithEndpointContext(
 			{
-				context: ctx,
+				context: ctx as never,
 			},
 			() =>
 				ctx.internalAdapter.updateUserByEmail(testUser.email, {
