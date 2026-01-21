@@ -127,6 +127,7 @@
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
+    "@cloudflare/workers-types": "^4.20250121.0",
     "jose": "^6.1.0",
     "kysely": "^0.28.10",
     "nanostores": "^1.1.0",

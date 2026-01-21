@@ -1,5 +1,6 @@
 import type { Database as BunDatabase } from "bun:sqlite";
 import type { DatabaseSync } from "node:sqlite";
+import type { D1Database } from "@cloudflare/workers-types";
 import type { CookieOptions } from "better-call";
 import type {
 	Dialect,
@@ -394,6 +395,7 @@ export type BetterAuthOptions = {
 				| DBAdapterInstance
 				| BunDatabase
 				| DatabaseSync
+				| D1Database
 				| {
 						dialect: Dialect;
 						type: KyselyDatabaseType;
