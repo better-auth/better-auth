@@ -229,7 +229,7 @@ If you're using the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL), you 
 
 ```typescript title="src/index.ts"
 import { Hono } from "hono";
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import { betterAuth } from "better-auth";
 
 type Env = {

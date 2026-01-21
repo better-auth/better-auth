@@ -253,6 +253,118 @@ describe("SSO", async () => {
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
+
+	it("should normalize email to lowercase in OIDC authentication", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Register a new provider for this test
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "email-case-oidc-provider",
+				issuer: server.issuer.url!,
+				domain: "email-case-test.com",
+				oidcConfig: {
+					clientId: "email-case-test-client",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		// Store original listeners and set up mixed-case email
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const mixedCaseEmail = "OIDCUser@Example.COM";
+
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: mixedCaseEmail,
+				name: "OIDC Test User",
+				sub: "oidc-email-case-test-user",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.email = mixedCaseEmail;
+			token.payload.email_verified = true;
+			token.payload.name = "OIDC Test User";
+			token.payload.sub = "oidc-email-case-test-user";
+		});
+
+		try {
+			// First sign in - should create user with lowercase email
+			const signInHeaders1 = new Headers();
+			const res1 = await authClient.signIn.sso({
+				email: `user@email-case-test.com`,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders1),
+				},
+			});
+
+			const { callbackURL: callbackURL1, headers: sessionHeaders1 } =
+				await simulateOAuthFlow(res1.url, signInHeaders1);
+			expect(callbackURL1).toContain("/dashboard");
+
+			// Get session and verify email is lowercase
+			const session1 = await authClient.getSession({
+				fetchOptions: {
+					headers: sessionHeaders1,
+				},
+			});
+
+			expect(session1.data?.user.email).toBe("oidcuser@example.com");
+			const firstUserId = session1.data?.user.id;
+			expect(firstUserId).toBeDefined();
+
+			// Second sign in with same mixed-case email - should find existing user
+			const signInHeaders2 = new Headers();
+			const res2 = await authClient.signIn.sso({
+				email: `user@email-case-test.com`,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders2),
+				},
+			});
+
+			const { callbackURL: callbackURL2, headers: sessionHeaders2 } =
+				await simulateOAuthFlow(res2.url, signInHeaders2);
+			expect(callbackURL2).toContain("/dashboard");
+
+			// Verify same user is returned
+			const session2 = await authClient.getSession({
+				fetchOptions: {
+					headers: sessionHeaders2,
+				},
+			});
+
+			expect(session2.data?.user.id).toBe(firstUserId);
+			expect(session2.data?.user.email).toBe("oidcuser@example.com");
+		} finally {
+			// Restore original listeners
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {
