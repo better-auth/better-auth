@@ -1,8 +1,10 @@
 import { createOTP } from "@better-auth/utils/otp";
-import { describe, expect, it, vi } from "vitest";
+import Database from "better-sqlite3";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { symmetricDecrypt } from "../../crypto";
+import { getMigrations } from "../../db";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -847,5 +849,293 @@ describe("view backup codes", async () => {
 			},
 		);
 		expect(response.status).toBe(404);
+	});
+});
+
+describe("backup codes storage configurations", async () => {
+	let database: Database.Database;
+
+	// Helper function to create auth config with different storage options
+	const createAuthConfig = (storeBackupCodes: any) => ({
+		secret: DEFAULT_SECRET,
+		database,
+		emailAndPassword: {
+			enabled: true,
+			requireEmailVerification: false,
+		},
+		plugins: [
+			twoFactor({
+				backupCodeOptions: {
+					storeBackupCodes,
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	beforeEach(() => {
+		database = new Database(":memory:");
+	});
+
+	it("should handle plain storage: generate, verify, and check remaining codes", async () => {
+		// Step 1: Plain storage mode
+		const authConfig = createAuthConfig("plain");
+		const migrations = await getMigrations(authConfig);
+		await migrations.runMigrations();
+		const { testUser, db, customFetchImpl, sessionSetter } =
+			await getTestInstance(authConfig);
+
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		let headers = new Headers();
+		const session = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		// Enable 2FA and generate initial backup codes
+		const enableRes = await client.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: { headers },
+		});
+
+		expect(enableRes.data?.backupCodes).toBeDefined();
+		const initialCodes = enableRes.data?.backupCodes || [];
+		expect(initialCodes.length).toBe(10);
+
+		// Verify codes stored in plain format
+		const twoFactorBefore = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		const storedCodesPlain = JSON.parse(twoFactorBefore!.backupCodes);
+		expect(storedCodesPlain).toEqual(initialCodes);
+
+		// Verify with the first backup code
+		const signInHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					signInHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
+					);
+				},
+			},
+		});
+
+		const usedCode = initialCodes[0]!;
+		await client.twoFactor.verifyBackupCode({
+			code: usedCode,
+			fetchOptions: { headers: signInHeaders },
+		});
+
+		// Verify remaining codes don't include the used one
+		const twoFactorAfter = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		const remainingCodes = JSON.parse(twoFactorAfter!.backupCodes);
+		expect(remainingCodes).not.toContain(usedCode);
+		expect(remainingCodes.length).toBe(9);
+		expect(remainingCodes).toEqual(
+			initialCodes.filter((code) => code !== usedCode),
+		);
+	});
+
+	it("should handle encrypted storage: generate, verify, and check remaining codes", async () => {
+		// Step 2: Encrypted storage mode
+		const authConfig = createAuthConfig("encrypted");
+		const migrations = await getMigrations(authConfig);
+		await migrations.runMigrations();
+		const { testUser, db, customFetchImpl, sessionSetter } =
+			await getTestInstance(authConfig);
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		let headers = new Headers();
+		const session = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		// Enable 2FA and generate initial backup codes
+		const enableRes = await client.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: { headers },
+		});
+
+		expect(enableRes.data?.backupCodes).toBeDefined();
+		const initialCodes = enableRes.data?.backupCodes || [];
+		expect(initialCodes.length).toBe(10);
+
+		// Verify codes stored in encrypted format
+		const twoFactorBefore = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		expect(() => JSON.parse(twoFactorBefore!.backupCodes)).toThrow();
+		const decryptedBefore = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorBefore!.backupCodes,
+		});
+		const storedCodesEncrypted = JSON.parse(decryptedBefore);
+		expect(storedCodesEncrypted).toEqual(initialCodes);
+
+		// Verify with the first backup code
+		const signInHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					signInHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
+					);
+				},
+			},
+		});
+
+		const usedCode = initialCodes[0]!;
+		await client.twoFactor.verifyBackupCode({
+			code: usedCode,
+			fetchOptions: { headers: signInHeaders },
+		});
+
+		// Verify remaining codes are encrypted and don't include the used one
+		const twoFactorAfter = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		const decryptedAfter = await symmetricDecrypt({
+			key: DEFAULT_SECRET,
+			data: twoFactorAfter!.backupCodes,
+		});
+		const remainingCodes = JSON.parse(decryptedAfter);
+		expect(remainingCodes).not.toContain(usedCode);
+		expect(remainingCodes.length).toBe(9);
+		expect(remainingCodes).toEqual(
+			initialCodes.filter((code) => code !== usedCode),
+		);
+	});
+
+	it("should handle custom encryption: generate, verify, and check remaining codes", async () => {
+		// Step 3: Custom encryption object
+		const customEncrypt = async (data: string) => {
+			return Buffer.from(data).toString("base64") + ":custom";
+		};
+		const customDecrypt = async (data: string) => {
+			const [encoded] = data.split(":custom");
+			return Buffer.from(encoded!, "base64").toString("utf-8");
+		};
+
+		const authConfig = createAuthConfig({
+			encrypt: customEncrypt,
+			decrypt: customDecrypt,
+		});
+		const migrations = await getMigrations(authConfig);
+		await migrations.runMigrations();
+		const { testUser, db, customFetchImpl, sessionSetter } =
+			await getTestInstance(authConfig);
+		const client = createAuthClient({
+			plugins: [twoFactorClient()],
+			fetchOptions: {
+				customFetchImpl,
+				baseURL: "http://localhost:3000/api/auth",
+			},
+		});
+
+		let headers = new Headers();
+		const session = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		// Enable 2FA and generate initial backup codes
+		const enableRes = await client.twoFactor.enable({
+			password: testUser.password,
+			fetchOptions: { headers },
+		});
+
+		expect(enableRes.data?.backupCodes).toBeDefined();
+		const initialCodes = enableRes.data?.backupCodes || [];
+		expect(initialCodes.length).toBe(10);
+
+		// Verify codes stored with custom encryption
+		const twoFactorBefore = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		expect(twoFactorBefore!.backupCodes).toContain(":custom");
+		const decryptedBefore = await customDecrypt(twoFactorBefore!.backupCodes);
+		const storedCodesCustom = JSON.parse(decryptedBefore);
+		expect(storedCodesCustom).toEqual(initialCodes);
+
+		// Verify with the first backup code
+		const signInHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					signInHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${parsed.get("better-auth.two_factor")?.value}`,
+					);
+				},
+			},
+		});
+
+		const usedCode = initialCodes[0]!;
+		await client.twoFactor.verifyBackupCode({
+			code: usedCode,
+			fetchOptions: { headers: signInHeaders },
+		});
+
+		// Verify remaining codes are encrypted with custom method and don't include the used one
+		const twoFactorAfter = await db.findOne<TwoFactorTable>({
+			model: "twoFactor",
+			where: [{ field: "userId", value: session.data?.user.id as string }],
+		});
+		expect(twoFactorAfter!.backupCodes).toContain(":custom");
+		const decryptedAfter = await customDecrypt(twoFactorAfter!.backupCodes);
+		const remainingCodes = JSON.parse(decryptedAfter);
+		expect(remainingCodes).not.toContain(usedCode);
+		expect(remainingCodes.length).toBe(9);
+		expect(remainingCodes).toEqual(
+			initialCodes.filter((code) => code !== usedCode),
+		);
 	});
 });
