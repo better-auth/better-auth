@@ -35,15 +35,25 @@ export async function processIdentifier(
 
 export function getStorageOption(
 	identifier: string,
-	storeIdentifier: StoreIdentifierOption | undefined,
-	overrides: Record<string, StoreIdentifierOption> | undefined,
+	config:
+		| StoreIdentifierOption
+		| { default: StoreIdentifierOption; overrides?: Record<string, StoreIdentifierOption> }
+		| undefined,
 ): StoreIdentifierOption | undefined {
-	if (overrides) {
-		for (const [prefix, option] of Object.entries(overrides)) {
-			if (identifier.startsWith(prefix)) {
-				return option;
+	if (!config) {
+		return undefined;
+	}
+
+	if (typeof config === "object" && "default" in config) {
+		if (config.overrides) {
+			for (const [prefix, option] of Object.entries(config.overrides)) {
+				if (identifier.startsWith(prefix)) {
+					return option;
+				}
 			}
 		}
+		return config.default;
 	}
-	return storeIdentifier;
+
+	return config;
 }

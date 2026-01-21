@@ -311,9 +311,11 @@ describe("internal adapter test", async () => {
 					type: "sqlite",
 				},
 				verification: {
-					storeIdentifier: "plain" as const,
-					overrides: {
-						"reset-password": "hashed" as const,
+					storeIdentifier: {
+						default: "plain" as const,
+						overrides: {
+							"reset-password": "hashed" as const,
+						},
 					},
 				},
 			} satisfies BetterAuthOptions;

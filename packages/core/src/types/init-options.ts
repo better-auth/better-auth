@@ -1021,14 +1021,15 @@ export type BetterAuthOptions = {
 				disableCleanup?: boolean;
 				/**
 				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 *
+				 * @example "hashed"
+				 * @example { default: "hashed", overrides: { "reset-password": "encrypted" } }
+				 *
 				 * @default "plain"
 				 */
-				storeIdentifier?: StoreIdentifierOption;
-				/**
-				 * Per-prefix overrides for identifier storage.
-				 * Keys are identifier prefixes (e.g. "reset-password", "email-otp")
-				 */
-				overrides?: Record<string, StoreIdentifierOption>;
+				storeIdentifier?:
+					| StoreIdentifierOption
+					| { default: StoreIdentifierOption; overrides?: Record<string, StoreIdentifierOption> };
 		  }
 		| undefined;
 	/**

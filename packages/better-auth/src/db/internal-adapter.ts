@@ -983,7 +983,6 @@ export const createInternalAdapter = (
 			const storageOption = getStorageOption(
 				data.identifier,
 				options.verification?.storeIdentifier,
-				options.verification?.overrides,
 			);
 			const storedIdentifier = await processIdentifier(
 				data.identifier,
@@ -1008,7 +1007,6 @@ export const createInternalAdapter = (
 			const storageOption = getStorageOption(
 				identifier,
 				options.verification?.storeIdentifier,
-				options.verification?.overrides,
 			);
 
 			async function findByIdentifier(id: string) {
@@ -1064,7 +1062,6 @@ export const createInternalAdapter = (
 			const storageOption = getStorageOption(
 				identifier,
 				options.verification?.storeIdentifier,
-				options.verification?.overrides,
 			);
 			const storedIdentifier = await processIdentifier(
 				identifier,
