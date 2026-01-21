@@ -268,6 +268,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
+			const originalPermissionForCreate = JSON.stringify(permission);
 			if (options.organizationHooks?.beforeCreateRole) {
 				if (organization) {
 					const hookRes = await options.organizationHooks.beforeCreateRole({
@@ -296,6 +297,20 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						additionalFields = { ...additionalFields, ...filteredRest };
 					}
 				}
+			}
+
+			// Re-validate permissions only if the beforeCreateRole hook actually modified them
+			if (JSON.stringify(permission) !== originalPermissionForCreate) {
+				await checkForInvalidResources({ ac, ctx, permission });
+				await checkIfMemberHasPermission({
+					ctx,
+					member,
+					options,
+					organizationId,
+					permissionRequired: permission,
+					user,
+					action: "create",
+				});
 			}
 
 			const newRole = ac.newRole(permission);
@@ -1136,6 +1151,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				});
 			}
 
+			const originalPermissionForUpdate = updateData.permission
+				? JSON.stringify(updateData.permission)
+				: undefined;
 			if (options.organizationHooks?.beforeUpdateRole) {
 				if (organization) {
 					const hookRes = await options.organizationHooks.beforeUpdateRole({
@@ -1178,6 +1196,27 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						Object.assign(updateData, filteredRest);
 					}
 				}
+			}
+
+			// Re-validate permissions only if the beforeUpdateRole hook actually modified them
+			if (
+				updateData.permission &&
+				JSON.stringify(updateData.permission) !== originalPermissionForUpdate
+			) {
+				await checkForInvalidResources({
+					ac,
+					ctx,
+					permission: updateData.permission,
+				});
+				await checkIfMemberHasPermission({
+					ctx,
+					member,
+					options,
+					organizationId,
+					permissionRequired: updateData.permission,
+					user,
+					action: "update",
+				});
 			}
 
 			// -----
