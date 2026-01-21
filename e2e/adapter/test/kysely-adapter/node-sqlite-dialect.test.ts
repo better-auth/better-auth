@@ -11,7 +11,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 let db = new DatabaseSync(":memory:");
 let betterAuthKysely = new Kysely({

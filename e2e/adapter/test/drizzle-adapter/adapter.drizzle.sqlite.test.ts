@@ -12,7 +12,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 import {
 	clearSchemaCache,
 	generateDrizzleSchema,

@@ -8,7 +8,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "./tests";
+} from "../adapter-factory";
 
 let db: Record<string, any[]> = {};
 
