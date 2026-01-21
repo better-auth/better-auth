@@ -158,7 +158,7 @@ export type BetterAuthAdvancedOptions = {
 				 * Note: This only affects IPv6 addresses. IPv4 addresses are always
 				 * rate limited individually.
 				 *
-				 * @default 128 (individual address)
+				 * @default 64 (/64 subnet)
 				 */
 				ipv6Subnet?: 128 | 64 | 48 | 32 | undefined;
 		  }

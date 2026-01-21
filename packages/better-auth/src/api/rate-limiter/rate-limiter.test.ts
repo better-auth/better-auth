@@ -336,7 +336,7 @@ describe("IPv6 address normalization and rate limiting", () => {
 
 		// All should normalize to the same value
 		expect(uniqueValues.size).toBe(1);
-		expect(normalized[0]).toBe("2001:0db8:0000:0000:0000:0000:0000:0001");
+		expect(normalized[0]).toBe("2001:0db8:0000:0000:0000:0000:0000:0000");
 	});
 
 	it("should convert IPv4-mapped IPv6 to IPv4", () => {
@@ -393,12 +393,12 @@ describe("IPv6 address normalization and rate limiting", () => {
 	});
 
 	it("should handle localhost IPv6 addresses", () => {
-		expect(normalizeIP("::1")).toBe("0000:0000:0000:0000:0000:0000:0000:0001");
+		expect(normalizeIP("::1")).toBe("0000:0000:0000:0000:0000:0000:0000:0000");
 	});
 
 	it("should handle link-local IPv6 addresses", () => {
 		const linkLocal = normalizeIP("fe80::1");
-		expect(linkLocal).toBe("fe80:0000:0000:0000:0000:0000:0000:0001");
+		expect(linkLocal).toBe("fe80:0000:0000:0000:0000:0000:0000:0000");
 	});
 
 	it("IPv6 subnet should not affect IPv4 addresses", () => {
