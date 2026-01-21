@@ -199,10 +199,9 @@ export async function validateApiKey({
 
 	if (opts.deferUpdates) {
 		ctx.context.runInBackground(
-			performUpdate()
-				.catch((error) => {
-					ctx.context.logger.error("Failed to update API key:", error);
-				}),
+			performUpdate().catch((error) => {
+				ctx.context.logger.error("Failed to update API key:", error);
+			}),
 		);
 		newApiKey = updated;
 	} else {
