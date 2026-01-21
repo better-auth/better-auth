@@ -33,7 +33,7 @@ import { authorizeMCPOAuth } from "./authorize";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		mcp: {
 			creator: typeof mcp;
 		};

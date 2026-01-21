@@ -30,7 +30,7 @@ export * from "./error-code";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		"two-factor": {
 			creator: typeof twoFactor;
 		};

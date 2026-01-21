@@ -14,7 +14,7 @@ import type { ApiKeyOptions } from "./types";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		"api-key": {
 			creator: typeof apiKey;
 		};

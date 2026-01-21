@@ -26,7 +26,7 @@ import { escapeStripeSearchValue } from "./utils";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		stripe: {
 			creator: typeof stripe;
 		};

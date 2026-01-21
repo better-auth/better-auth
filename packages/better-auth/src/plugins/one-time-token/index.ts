@@ -15,7 +15,7 @@ import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		"one-time-token": {
 			creator: typeof oneTimeToken;
 		};

@@ -8,7 +8,7 @@ import { isAPIError } from "../../utils/is-api-error";
 
 declare module "@better-auth/core" {
 	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<Options> {
 		"have-i-been-pwned": {
 			creator: typeof haveIBeenPwned;
 		};
