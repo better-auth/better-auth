@@ -1,24 +1,14 @@
 {
-  "name": "@better-auth/stripe",
-  "author": "Bereket Engida",
-  "version": "1.5.0-beta.9",
+  "name": "@better-auth/i18n",
+  "version": "1.5.0-beta.7",
   "type": "module",
+  "description": "i18n plugin for Better Auth - translate error messages",
   "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
-  "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/better-auth/better-auth.git",
-    "directory": "packages/stripe"
-  },
-  "keywords": [
-    "stripe",
-    "auth",
-    "stripe"
-  ],
   "module": "dist/index.mjs",
-  "description": "Stripe plugin for Better Auth",
+  "types": "dist/index.d.mts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
@@ -27,9 +17,6 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "exports": {
     ".": {
@@ -53,20 +40,30 @@
       ]
     }
   },
-  "dependencies": {
-    "defu": "^6.1.4",
-    "zod": "^4.3.5"
-  },
-  "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "stripe": "^18 || ^19 || ^20"
-  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^20.0.0",
     "tsdown": "catalog:"
-  }
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/i18n"
+  },
+  "homepage": "https://www.better-auth.com/docs/plugins/i18n",
+  "keywords": [
+    "auth",
+    "i18n",
+    "internationalization",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
 }

@@ -31,6 +31,14 @@ export interface TwoFactorOptions {
 	 * Custom schema for the two factor plugin
 	 */
 	schema?: InferOptionSchema<typeof schema> | undefined;
+	/**
+	 * Maximum age (in seconds) for the two-factor verification cookie.
+	 * This controls how long users have to complete the 2FA flow
+	 * after signing in.
+	 *
+	 * @default 600 (10 minutes)
+	 */
+	twoFactorCookieMaxAge?: number | undefined;
 }
 
 export interface UserWithTwoFactor extends User {
