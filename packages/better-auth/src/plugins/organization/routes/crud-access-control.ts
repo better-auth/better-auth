@@ -558,6 +558,18 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						},
 					],
 				});
+				if (!organization) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The organization associated with the role to be deleted does not exist in the database.`,
+						{
+							organizationId,
+						},
+					);
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
+				}
 			}
 
 			if (options.organizationHooks?.beforeDeleteRole) {
