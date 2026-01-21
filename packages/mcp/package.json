@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/mcp",
-  "version": "1.5.0-beta.7",
+  "version": "1.5.0-beta.8",
   "type": "module",
   "description": "Better Auth MCP server for AI-powered auth setup and diagnostics",
   "module": "dist/index.mjs",
@@ -39,13 +39,16 @@
   "bin": {
     "better-auth-mcp": "./dist/index.mjs"
   },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "devDependencies": {
     "tsdown": "catalog:",
     "typescript": "catalog:"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
-    "zod": "^3.24.2"
+    "zod": "^4.3.5"
   },
   "files": [
     "dist"

@@ -5,7 +5,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
-import { setCookieToHeader } from "better-auth/cookies";
+import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
@@ -399,7 +399,14 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const emailValue =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -413,7 +420,14 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/redirect",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const emailValue =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -3999,5 +4013,158 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		expect(response.status).toBe(302);
 		expect(response.headers.get("location")).not.toContain("error");
+	});
+
+	it("should normalize email to lowercase in SAML authentication to prevent duplicate creation", async () => {
+		const { auth, client, signInWithTestUser, db } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "email-case-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					mapping: {
+						id: "nameID",
+						email: "nameID",
+						name: "displayName",
+					},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse1: { samlResponse: string } | undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse1 = context.data as { samlResponse: string };
+				},
+			},
+		);
+
+		expect(samlResponse1?.samlResponse).toBeDefined();
+
+		const firstCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse1!.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(firstCallbackResponse.status).toBe(302);
+		expect(firstCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(firstCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		const firstCookies = parseSetCookieHeader(
+			firstCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const firstSessionToken = firstCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(firstSessionToken).toBeDefined();
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${firstSessionToken}`,
+				},
+			},
+		});
+
+		expect(firstSession.data?.user.email).toBe("testuser@example.com");
+		const firstUserId = firstSession.data?.user.id;
+		expect(firstUserId).toBeDefined();
+
+		let samlResponse2: { samlResponse: string } | undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse2 = context.data as { samlResponse: string };
+				},
+			},
+		);
+
+		const secondCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse2!.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(secondCallbackResponse.status).toBe(302);
+		expect(secondCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(secondCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		const secondCookies = parseSetCookieHeader(
+			secondCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const secondSessionToken = secondCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(secondSessionToken).toBeDefined();
+
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${secondSessionToken}`,
+				},
+			},
+		});
+
+		expect(secondSession.data?.user.id).toBe(firstUserId);
+		expect(secondSession.data?.user.email).toBe("testuser@example.com");
+
+		const users = (await db.findMany({ model: "user" })) as {
+			email: string;
+		}[];
+		const samlUsers = users.filter((u) => u.email === "testuser@example.com");
+		expect(samlUsers).toHaveLength(1);
 	});
 });

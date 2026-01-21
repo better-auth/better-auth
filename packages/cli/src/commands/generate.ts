@@ -6,7 +6,7 @@ import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
-import { getAdapter } from "better-auth/db";
+import { getAdapter } from "better-auth/db/adapter";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
