@@ -160,7 +160,7 @@ function normalizeIPv6(
  *
  * @example
  * normalizeIP("2001:DB8::1")
- * // -> "2001:0db8:0000:0000:0000:0000:0000:0001"
+ * // -> "2001:0db8:0000:0000:0000:0000:0000:0000"
  *
  * @example
  * normalizeIP("::ffff:192.0.2.1")
@@ -192,7 +192,7 @@ export function normalizeIP(
 	}
 
 	// Normalize IPv6
-	const subnetPrefix = options.ipv6Subnet || 128;
+	const subnetPrefix = options.ipv6Subnet || 64;
 	return normalizeIPv6(ip, subnetPrefix);
 }
 
