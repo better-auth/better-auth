@@ -35,12 +35,7 @@ type Optional<T> = {
 export type StoreIdentifierOption =
 	| "plain"
 	| "hashed"
-	| "encrypted"
-	| { hash: (identifier: string) => Promise<string> }
-	| {
-			encrypt: (identifier: string) => Promise<string>;
-			decrypt: (identifier: string) => Promise<string>;
-	  };
+	| { hash: (identifier: string) => Promise<string> };
 
 export type GenerateIdFn = (options: {
 	model: ModelNames;
@@ -1039,7 +1034,6 @@ export type BetterAuthOptions = {
 				 * How to store verification identifiers (tokens, OTPs, etc.)
 				 *
 				 * @example "hashed"
-				 * @example { default: "hashed", overrides: { "reset-password": "encrypted" } }
 				 *
 				 * @default "plain"
 				 */
