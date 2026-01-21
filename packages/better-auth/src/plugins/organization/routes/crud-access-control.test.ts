@@ -894,6 +894,8 @@ describe("dynamic access control", async (it) => {
 										project: ["read", "update"],
 									},
 									color: "#modified",
+									// Intentionally return an undeclared field that should be filtered out
+									undeclaredField: "should-not-persist",
 								},
 							};
 						},
@@ -933,6 +935,22 @@ describe("dynamic access control", async (it) => {
 		expect(result.roleData.role).toBe("modified-role");
 		expect(result.roleData.permission).toEqual({ project: ["read", "update"] });
 		expect(result.roleData.color).toBe("#modified");
+
+		// The undeclared field returned by the hook must NOT be persisted or returned
+		expect(
+			Object.getOwnPropertyDescriptor(result.roleData, "undeclaredField"),
+		).toBeUndefined();
+
+		// Also fetch the role from the API to ensure the undeclared field wasn't persisted
+		const persisted = await hookAuth.api.getOrgRole({
+			query: { roleId: result.roleData.id },
+			headers: hookHeaders,
+		});
+		expect(persisted).toBeDefined();
+		expect(persisted.id).toBe(result.roleData.id);
+		expect(
+			Object.getOwnPropertyDescriptor(persisted, "undeclaredField"),
+		).toBeUndefined();
 	});
 
 	it("should call afterCreateRole hook", async () => {
@@ -1015,6 +1033,8 @@ describe("dynamic access control", async (it) => {
 										project: ["delete"],
 									},
 									color: "#hookupdated",
+									// Intentionally return an undeclared field that should be filtered out
+									undeclaredField: "should-not-persist",
 								},
 							};
 						},
@@ -1066,6 +1086,22 @@ describe("dynamic access control", async (it) => {
 		expect(updateResult.roleData.role).toBe("hook-updated-role");
 		expect(updateResult.roleData.permission).toEqual({ project: ["delete"] });
 		expect(updateResult.roleData.color).toBe("#hookupdated");
+
+		// The undeclared field returned by the hook must NOT be persisted or returned
+		expect(
+			Object.getOwnPropertyDescriptor(updateResult.roleData, "undeclaredField"),
+		).toBeUndefined();
+
+		// Also fetch the role from the API to ensure the undeclared field wasn't persisted
+		const persistedUpdate = await hookAuth.api.getOrgRole({
+			query: { roleId: updateResult.roleData.id },
+			headers: hookHeaders,
+		});
+		expect(persistedUpdate).toBeDefined();
+		expect(persistedUpdate.id).toBe(updateResult.roleData.id);
+		expect(
+			Object.getOwnPropertyDescriptor(persistedUpdate, "undeclaredField"),
+		).toBeUndefined();
 	});
 
 	it("should call afterUpdateRole hook", async () => {
