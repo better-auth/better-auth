@@ -1,5 +1,5 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, vi } from "vitest";
 import { createAuthClient } from "../../../client";
 import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -868,5 +868,395 @@ describe("dynamic access control", async (it) => {
 				headers: freshMemberHeaders,
 			},
 		});
+	});
+
+	it("should call beforeCreateRole hook", async () => {
+		const beforeCreateRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeCreateRole: async (data) => {
+							beforeCreateRole();
+							return {
+								data: {
+									role: "modified-role",
+									permission: {
+										project: ["read", "update"],
+									},
+									color: "#modified",
+								},
+							};
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		const result = await hookAuth.api.createOrgRole({
+			body: {
+				role: "original-role",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#original" },
+			},
+			headers: hookHeaders,
+		});
+
+		expect(beforeCreateRole).toHaveBeenCalled();
+		expect(result.roleData.role).toBe("modified-role");
+		expect(result.roleData.permission).toEqual({ project: ["read", "update"] });
+		expect(result.roleData.color).toBe("#modified");
+	});
+
+	it("should call afterCreateRole hook", async () => {
+		const afterCreateRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						afterCreateRole: async (data) => {
+							afterCreateRole();
+							expect(data.role).toBeDefined();
+							expect(data.organization).toBeDefined();
+							expect(data.user).toBeDefined();
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		await hookAuth.api.createOrgRole({
+			body: {
+				role: `test-role-${crypto.randomUUID()}`,
+				permission: { project: ["create"] },
+				additionalFields: { color: "#test" },
+			},
+			headers: hookHeaders,
+		});
+
+		expect(afterCreateRole).toHaveBeenCalled();
+	});
+
+	it("should call beforeUpdateRole hook", async () => {
+		const beforeUpdateRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeUpdateRole: async (data) => {
+							beforeUpdateRole();
+							return {
+								data: {
+									role: "hook-updated-role",
+									permission: {
+										project: ["delete"],
+									},
+									color: "#hookupdated",
+								},
+							};
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		const createResult = await hookAuth.api.createOrgRole({
+			body: {
+				role: `test-role-${crypto.randomUUID()}`,
+				permission: { project: ["create"] },
+				additionalFields: { color: "#original" },
+			},
+			headers: hookHeaders,
+		});
+
+		const updateResult = await hookAuth.api.updateOrgRole({
+			body: {
+				roleId: createResult.roleData.id,
+				data: {
+					roleName: "user-update",
+					permission: { project: ["read"] },
+					color: "#userupdated",
+				},
+			},
+			headers: hookHeaders,
+		});
+
+		expect(beforeUpdateRole).toHaveBeenCalled();
+		expect(updateResult.roleData.role).toBe("hook-updated-role");
+		expect(updateResult.roleData.permission).toEqual({ project: ["delete"] });
+		expect(updateResult.roleData.color).toBe("#hookupdated");
+	});
+
+	it("should call afterUpdateRole hook", async () => {
+		const afterUpdateRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						afterUpdateRole: async (data) => {
+							afterUpdateRole();
+							expect(data.role).toBeDefined();
+							expect(data.organization).toBeDefined();
+							expect(data.user).toBeDefined();
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		const createResult = await hookAuth.api.createOrgRole({
+			body: {
+				role: `test-role-${crypto.randomUUID()}`,
+				permission: { project: ["create"] },
+				additionalFields: { color: "#original" },
+			},
+			headers: hookHeaders,
+		});
+
+		await hookAuth.api.updateOrgRole({
+			body: {
+				roleId: createResult.roleData.id,
+				data: {
+					permission: { project: ["read"] },
+				},
+			},
+			headers: hookHeaders,
+		});
+
+		expect(afterUpdateRole).toHaveBeenCalled();
+	});
+
+	it("should call beforeDeleteRole hook", async () => {
+		const beforeDeleteRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeDeleteRole: async (data) => {
+							beforeDeleteRole();
+							expect(data.role).toBeDefined();
+							expect(data.organization).toBeDefined();
+							expect(data.user).toBeDefined();
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		const createResult = await hookAuth.api.createOrgRole({
+			body: {
+				role: `test-role-${crypto.randomUUID()}`,
+				permission: { project: ["create"] },
+				additionalFields: { color: "#original" },
+			},
+			headers: hookHeaders,
+		});
+
+		await hookAuth.api.deleteOrgRole({
+			body: {
+				roleId: createResult.roleData.id,
+			},
+			headers: hookHeaders,
+		});
+
+		expect(beforeDeleteRole).toHaveBeenCalled();
+	});
+
+	it("should call afterDeleteRole hook", async () => {
+		const afterDeleteRole = vi.fn();
+		const { auth: hookAuth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					ac,
+					roles: {
+						admin,
+						member,
+						owner,
+					},
+					dynamicAccessControl: {
+						enabled: true,
+					},
+					organizationHooks: {
+						afterDeleteRole: async (data) => {
+							afterDeleteRole();
+							expect(data.role).toBeDefined();
+							expect(data.organization).toBeDefined();
+							expect(data.user).toBeDefined();
+						},
+					},
+					schema: {
+						organization: {
+							modelName: "organization",
+						},
+						organizationRole: {
+							modelName: "organizationRole",
+							additionalFields,
+						},
+					},
+				}),
+			],
+		});
+
+		const { headers: hookHeaders } = await signInWithTestUser();
+		await hookAuth.api.createOrganization({
+			body: {
+				name: "hook-test-org",
+				slug: `hook-test-${crypto.randomUUID()}`,
+			},
+			headers: hookHeaders,
+		});
+
+		const createResult = await hookAuth.api.createOrgRole({
+			body: {
+				role: `test-role-${crypto.randomUUID()}`,
+				permission: { project: ["create"] },
+				additionalFields: { color: "#original" },
+			},
+			headers: hookHeaders,
+		});
+
+		await hookAuth.api.deleteOrgRole({
+			body: {
+				roleId: createResult.roleData.id,
+			},
+			headers: hookHeaders,
+		});
+
+		expect(afterDeleteRole).toHaveBeenCalled();
 	});
 });
