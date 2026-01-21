@@ -40,7 +40,9 @@ describe("IP Normalization", () => {
 			expect(normalizeIP("::1", { ipv6Subnet: 128 })).toBe(
 				"0000:0000:0000:0000:0000:0000:0000:0001",
 			);
-			expect(normalizeIP("::", { ipv6Subnet: 128 })).toBe("0000:0000:0000:0000:0000:0000:0000:0000");
+			expect(normalizeIP("::", { ipv6Subnet: 128 })).toBe(
+				"0000:0000:0000:0000:0000:0000:0000:0000",
+			);
 		});
 
 		it("should normalize uppercase to lowercase", () => {
@@ -56,15 +58,21 @@ describe("IP Normalization", () => {
 			// All these represent the same address
 			const normalized = "2001:0db8:0000:0000:0000:0000:0000:0001";
 			expect(normalizeIP("2001:db8::1", { ipv6Subnet: 128 })).toBe(normalized);
-			expect(normalizeIP("2001:0db8:0:0:0:0:0:1", { ipv6Subnet: 128 })).toBe(normalized);
-			expect(normalizeIP("2001:db8:0::1", { ipv6Subnet: 128 })).toBe(normalized);
-			expect(normalizeIP("2001:0db8::0:0:0:1", { ipv6Subnet: 128 })).toBe(normalized);
+			expect(normalizeIP("2001:0db8:0:0:0:0:0:1", { ipv6Subnet: 128 })).toBe(
+				normalized,
+			);
+			expect(normalizeIP("2001:db8:0::1", { ipv6Subnet: 128 })).toBe(
+				normalized,
+			);
+			expect(normalizeIP("2001:0db8::0:0:0:1", { ipv6Subnet: 128 })).toBe(
+				normalized,
+			);
 		});
 
 		it("should handle IPv6 with :: at different positions", () => {
-			expect(normalizeIP("2001:db8:85a3::8a2e:370:7334", { ipv6Subnet: 128 })).toBe(
-				"2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-			);
+			expect(
+				normalizeIP("2001:db8:85a3::8a2e:370:7334", { ipv6Subnet: 128 }),
+			).toBe("2001:0db8:85a3:0000:0000:8a2e:0370:7334");
 			expect(normalizeIP("::ffff:192.0.2.1")).not.toContain("::");
 		});
 	});
@@ -179,7 +187,9 @@ describe("IP Normalization", () => {
 				"2001:db8::0:1",
 			];
 
-			const normalized = representations.map((ip) => normalizeIP(ip, { ipv6Subnet: 128 }));
+			const normalized = representations.map((ip) =>
+				normalizeIP(ip, { ipv6Subnet: 128 }),
+			);
 			// All should normalize to the same value
 			const uniqueValues = new Set(normalized);
 			expect(uniqueValues.size).toBe(1);
@@ -230,7 +240,9 @@ describe("IP Normalization", () => {
 
 		it("should handle all-zeros address", () => {
 			expect(normalizeIP("0.0.0.0")).toBe("0.0.0.0");
-			expect(normalizeIP("::", { ipv6Subnet: 128 })).toBe("0000:0000:0000:0000:0000:0000:0000:0000");
+			expect(normalizeIP("::", { ipv6Subnet: 128 })).toBe(
+				"0000:0000:0000:0000:0000:0000:0000:0000",
+			);
 		});
 
 		it("should handle link-local addresses", () => {
