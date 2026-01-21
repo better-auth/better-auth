@@ -1051,7 +1051,6 @@ export const createInternalAdapter = (
 				options.secret!,
 			);
 
-			// Check secondary storage first
 			if (secondaryStorage) {
 				const cached = await secondaryStorage.get(
 					`verification:${storedIdentifier}`,
@@ -1062,7 +1061,6 @@ export const createInternalAdapter = (
 						return parsed;
 					}
 				}
-				// Fallback to plain identifier for migration
 				if (storageOption && storageOption !== "plain") {
 					const plainCached = await secondaryStorage.get(
 						`verification:${identifier}`,
@@ -1074,13 +1072,11 @@ export const createInternalAdapter = (
 						}
 					}
 				}
-				// If storeInDatabase is false, don't check database
 				if (!options.verification?.storeInDatabase) {
 					return null;
 				}
 			}
 
-			// Database lookup (fallback when storeInDatabase is true, or no secondary storage)
 			const currentAdapter = await getCurrentAdapter(adapter);
 
 			async function findByIdentifier(id: string) {
@@ -1094,7 +1090,6 @@ export const createInternalAdapter = (
 
 			let verification = await findByIdentifier(storedIdentifier);
 
-			// Fallback to plain identifier for migration
 			if (!verification.length && storageOption && storageOption !== "plain") {
 				verification = await findByIdentifier(identifier);
 			}
@@ -1116,8 +1111,6 @@ export const createInternalAdapter = (
 			return (verification[0] as Verification) || null;
 		},
 		deleteVerificationValue: async (id: string) => {
-			// Note: Secondary storage keys by identifier, not id
-			// So we can only delete from database here
 			if (!secondaryStorage || options.verification?.storeInDatabase) {
 				await deleteWithHooks(
 					[{ field: "id", value: id }],
@@ -1137,12 +1130,10 @@ export const createInternalAdapter = (
 				options.secret!,
 			);
 
-			// Delete from secondary storage
 			if (secondaryStorage) {
 				await secondaryStorage.delete(`verification:${storedIdentifier}`);
 			}
 
-			// Also delete from database when storeInDatabase is true (or no secondary storage)
 			if (!secondaryStorage || options.verification?.storeInDatabase) {
 				await deleteWithHooks(
 					[{ field: "identifier", value: storedIdentifier }],

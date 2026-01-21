@@ -972,7 +972,6 @@ describe("internal adapter test", async () => {
 			const secondaryOnlyOpts = {
 				database: new DatabaseSync(":memory:"),
 				secondaryStorage: storage,
-				// storeInDatabase defaults to false
 			} satisfies BetterAuthOptions;
 
 			(await getMigrations(secondaryOnlyOpts)).runMigrations();
@@ -984,10 +983,8 @@ describe("internal adapter test", async () => {
 				expiresAt: new Date(Date.now() + 60000),
 			});
 
-			// Verify it's in secondary storage
 			expect(dataMap.has("verification:secondary-only-test")).toBe(true);
 
-			// Clear secondary storage - should NOT find from database
 			dataMap.clear();
 			const found = await ctx.internalAdapter.findVerificationValue(
 				"secondary-only-test",
@@ -1039,10 +1036,8 @@ describe("internal adapter test", async () => {
 				expiresAt: new Date(Date.now() + 60000),
 			});
 
-			// Should be in secondary storage
 			expect(dataMap.has("verification:both-test")).toBe(true);
 
-			// Should also be in database - verify by clearing secondary and finding from db
 			dataMap.clear();
 			const found =
 				await ctx.internalAdapter.findVerificationValue("both-test");
@@ -1070,10 +1065,8 @@ describe("internal adapter test", async () => {
 				expiresAt: new Date(Date.now() + 60000),
 			});
 
-			// Clear secondary storage to simulate cache miss/expiration
 			dataMap.clear();
 
-			// Should still find from database
 			const found =
 				await ctx.internalAdapter.findVerificationValue("fallback-test");
 			expect(found).not.toBeNull();
@@ -1102,7 +1095,6 @@ describe("internal adapter test", async () => {
 
 			const ttl = ttlMap.get("verification:ttl-test");
 			expect(ttl).toBeDefined();
-			// TTL should be approximately 300 seconds (5 minutes), allow 2 second variance
 			expect(ttl).toBeGreaterThanOrEqual(298);
 			expect(ttl).toBeLessThanOrEqual(300);
 		});
