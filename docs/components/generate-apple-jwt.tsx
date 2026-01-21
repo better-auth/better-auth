@@ -1,6 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+
 import { KJUR } from "jsrsasign";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -47,7 +48,7 @@ export const GenerateAppleJwt = () => {
 	const [isLoading, startTransition] = useTransition();
 
 	const form = useForm<AppleJwtFormValues>({
-		resolver: zodResolver(appleJwtSchema),
+		resolver: standardSchemaResolver(appleJwtSchema),
 		defaultValues: {
 			teamId: "",
 			clientId: "",
