@@ -16,7 +16,7 @@
     "@ai-sdk/react": "^3.0.3",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@hookform/resolvers": "^5.2.2",
+    "@hookform/resolvers": "^5.2.1",
     "@oramacloud/client": "^2.1.4",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
