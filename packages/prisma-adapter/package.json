@@ -22,6 +22,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
