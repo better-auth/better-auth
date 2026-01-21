@@ -12,7 +12,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 // We are not allowed to handle the mssql connection
 // we must let kysely handle it. This is because if kysely is already

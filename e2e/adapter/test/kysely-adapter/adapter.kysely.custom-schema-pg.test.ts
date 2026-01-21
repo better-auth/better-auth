@@ -11,7 +11,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 /**
  * Test suite for PostgreSQL with custom (non-default) schema

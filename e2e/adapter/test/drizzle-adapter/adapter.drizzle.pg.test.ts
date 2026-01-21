@@ -10,7 +10,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const pgDB = new Pool({

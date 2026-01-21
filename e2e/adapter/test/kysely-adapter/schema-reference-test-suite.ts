@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createTestSuite } from "@better-auth/test-utils/adapter";
-import { getNormalTestSuiteTests } from "../tests";
+import { getNormalTestSuiteTests } from "../adapter-factory";
 
 export const DEFAULT_SCHEMA_REFERENCE = "internal";
 
