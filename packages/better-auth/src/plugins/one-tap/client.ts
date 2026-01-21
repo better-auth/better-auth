@@ -1,3 +1,4 @@
+/// <reference types="@types/google.accounts" />
 import type {
 	BetterAuthClientPlugin,
 	ClientFetchOption,
@@ -5,16 +6,6 @@ import type {
 
 declare global {
 	interface Window {
-		google?:
-			| {
-					accounts: {
-						id: {
-							initialize: (config: any) => void;
-							prompt: (callback?: (notification: any) => void) => void;
-						};
-					};
-			  }
-			| undefined;
 		googleScriptInitialized?: boolean | undefined;
 	}
 }

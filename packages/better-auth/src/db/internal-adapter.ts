@@ -281,18 +281,38 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext().catch(() => null);
-			const headers = ctx?.headers || ctx?.request?.headers;
-			const { id: _, ...rest } = override || {};
-			//we're parsing default values for session additional fields
+			const authCtx = await getCurrentAuthContext().catch(() => null);
+			const headers = authCtx?.headers || authCtx?.request?.headers;
+			const storeInDb = options.session?.storeSessionInDatabase;
+			const {
+				// always ignore override id - new sessions must have new ids
+				id: _,
+				...rest
+			} = override || {};
+
+			// determine session id
+			let sessionId: string | undefined;
+			const generatedId = ctx.generateId({ model: "session" });
+			if (generatedId !== false) {
+				sessionId = generatedId;
+			} else if (secondaryStorage && storeInDb === false) {
+				// no database to auto-generate id
+				sessionId = generateId();
+			} // otherwise database will generate the id
+
+			// we're parsing default values for session additional fields
 			const defaultAdditionalFields = parseSessionInput(
-				ctx?.context.options ?? options,
+				authCtx?.context.options ?? options,
 				{},
 			);
-			const data: Omit<Session, "id"> = {
+			const data = {
+				...(sessionId ? { id: sessionId } : {}),
 				ipAddress:
-					ctx?.request || ctx?.headers
-						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
+					authCtx?.request || authCtx?.headers
+						? getIp(
+								authCtx?.request || authCtx?.headers!,
+								authCtx?.context.options,
+							) || ""
 						: "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
@@ -311,7 +331,7 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
-			};
+			} satisfies Partial<Session>;
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -381,7 +401,7 @@ export const createInternalAdapter = (
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
+							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
@@ -754,26 +774,29 @@ export const createInternalAdapter = (
 			providerId: string,
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter))
-				.findMany<Account & { user: User | null }>({
-					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-					],
-					join: {
-						user: true,
+			const account = await (await getCurrentAdapter(adapter)).findOne<
+				Account & { user: User | null }
+			>({
+				model: "account",
+				where: [
+					{
+						value: accountId,
+						field: "accountId",
 					},
-				})
-				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
-				});
+					{
+						value: providerId,
+						field: "providerId",
+					},
+				],
+				join: {
+					user: true,
+				},
+			});
 			if (account) {
 				if (account.user) {
 					return {
 						user: account.user,
+						linkedAccount: account,
 						accounts: [account],
 					};
 				} else {
@@ -789,6 +812,7 @@ export const createInternalAdapter = (
 					if (user) {
 						return {
 							user,
+							linkedAccount: account,
 							accounts: [account],
 						};
 					}
@@ -818,6 +842,7 @@ export const createInternalAdapter = (
 					});
 					return {
 						user,
+						linkedAccount: null,
 						accounts: accounts || [],
 					};
 				} else {

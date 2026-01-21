@@ -59,7 +59,7 @@
     "jiti": "^2.6.0",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
-    "type-fest": "^5.2.0",
+    "type-fest": "^5.4.1",
     "typescript": "catalog:"
   },
   "dependencies": {
@@ -73,8 +73,8 @@
     "@mrleebo/prisma-ast": "^0.13.0",
     "@prisma/client": "^5.22.0",
     "@types/pg": "^8.15.5",
-    "better-auth": "workspace:^",
-    "better-sqlite3": "^12.2.0",
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.6.2",
     "c12": "^3.2.0",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
@@ -86,7 +86,7 @@
     "prompts": "^2.4.2",
     "semver": "^7.7.2",
     "yocto-spinner": "^0.2.3",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "files": [
     "dist"

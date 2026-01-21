@@ -1,0 +1,31 @@
+{
+  "name": "@better-auth/test-utils",
+  "version": "1.5.0-beta.8",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth.git"
+  },
+  "exports": {
+    "./adapter": {
+      "dev-source": "./src/adapter.ts",
+      "default": "./dist/adapter.mjs",
+      "types": "./dist/adapter.d.mts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "tsdown": "catalog:",
+    "vitest": "catalog:vitest"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "vitest": "catalog:vitest"
+  }
+}

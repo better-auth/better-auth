@@ -1,3 +1,4 @@
+import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
@@ -6,7 +7,6 @@ import type {
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
-import Database from "better-sqlite3";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -14,7 +14,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { createAuthMiddleware, getOAuthState } from "./api";
 import { parseSetCookieHeader } from "./cookies";
 import { signJWT } from "./crypto";
-import { getMigrations } from "./db";
+import { getMigrations } from "./db/get-migration";
 import { getTestInstance } from "./test-utils/test-instance";
 import { DEFAULT_SECRET } from "./utils/constants";
 
@@ -614,7 +614,7 @@ describe("Disable signup", async () => {
 });
 
 describe("signin", async () => {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	beforeAll(async () => {
 		const migrations = await getMigrations({
