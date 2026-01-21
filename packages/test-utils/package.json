@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.5.0-beta.8",
+  "version": "1.5.0-beta.9",
   "type": "module",
   "repository": {
     "type": "git",
@@ -8,7 +8,7 @@
   },
   "exports": {
     "./adapter": {
-      "dev-source": "./src/adapter/index.ts",
+      "dev-source": "./src/adapter.ts",
       "default": "./dist/adapter.mjs",
       "types": "./dist/adapter.d.mts"
     }

@@ -9,7 +9,7 @@ import {
 	numberIdTestSuite,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 import { generateAuthConfigFile } from "./generate-auth-config";
 import { generatePrismaSchema } from "./generate-prisma-schema";
 import {

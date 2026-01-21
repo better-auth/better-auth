@@ -16,7 +16,7 @@
     "@ai-sdk/react": "^3.0.3",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@hookform/resolvers": "^5.2.1",
+    "@hookform/resolvers": "^5.2.2",
     "@oramacloud/client": "^2.1.4",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
@@ -100,7 +100,7 @@
     "tailwindcss-animate": "catalog:tailwind",
     "unist-util-visit": "^5.0.0",
     "vaul": "^1.1.2",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "catalog:tailwind",

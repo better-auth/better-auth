@@ -6,7 +6,7 @@ import {
 	joinsTestSuite,
 	normalTestSuite,
 	transactionsTestSuite,
-} from "../tests";
+} from "../adapter-factory";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);
