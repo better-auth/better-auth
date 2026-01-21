@@ -125,7 +125,7 @@ type oAuth2LinkAccount = {
 
 The plugin mounts a route to handle the OAuth callback `/oauth2/callback/:providerId`. This means by default `${baseURL}/api/auth/oauth2/callback/:providerId` will be used as the callback URL. Make sure your OAuth provider is configured to use this URL.
 
-The `:providerId` parameter identifies which provider configuration to use, unlike built-in providers that have fixed redirect URLs.
+Unlike built-in providers, the `:providerId` parameter is required and must match your configured provider ID.
 
 ## Pre-configured Provider Helpers
 
@@ -283,8 +283,7 @@ interface GenericOAuthConfig {
 
 **scopes**: (Optional) An array of scopes to request from the provider (e.g., `["openid", "email", "profile"]`).
 
-**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL.  
-The redirect URI must include `:providerId` which is used to identify provider configuration. For example, if your providerId is "my-provider", the full redirect URI would be `https://example.com/api/auth/oauth2/callback/my-provider`.
+**redirectURI**: (Optional) The redirect URI to use for the OAuth flow. If not set, a default is constructed based on your app's base URL. Must include `:providerId` placeholder (e.g., `https://example.com/api/auth/oauth2/callback/my-provider`).
 
 **responseType**: (Optional) The OAuth response type. Defaults to `"code"` for authorization code flow.
 
