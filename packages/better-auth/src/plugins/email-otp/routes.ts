@@ -126,17 +126,19 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
-					ctx.body.type === "email-verification" && user
+					((ctx.body.type === "email-verification" ||
+						ctx.body.type === "forget-password") &&
+						user)
 						? {
 								email,
 								otp,
-								type: "email-verification" as const,
+								type: ctx.body.type,
 								user: user.user,
 							}
 						: {
 								email,
 								otp,
-								type: ctx.body.type as "sign-in",
+								type: "sign-in" as const,
 							},
 					ctx,
 				),
