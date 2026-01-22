@@ -53,7 +53,7 @@ import {
 	validateSingleAssertion,
 } from "../saml";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
-import { safeJsonParse, validateEmailDomain } from "../utils";
+import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 
 export interface TimestampValidationOptions {
 	clockSkew?: number;
@@ -247,7 +247,8 @@ const ssoProviderBodySchema = z.object({
 		description: "The issuer of the provider",
 	}),
 	domain: z.string({}).meta({
-		description: "The domain of the provider. This is used for email matching",
+		description:
+			"The domain(s) of the provider. For enterprise multi-domain SSO where a single IdP serves multiple email domains, use comma-separated values (e.g., 'company.com,subsidiary.com,acquired-company.com')",
 	}),
 	oidcConfig: z
 		.object({
@@ -1121,38 +1122,58 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 			// Try to find provider in database
 			if (!provider) {
-				provider = await ctx.context.adapter
-					.findOne<SSOProvider<SSOOptions>>({
-						model: "ssoProvider",
-						where: [
-							{
-								field: providerId
-									? "providerId"
-									: orgId
-										? "organizationId"
-										: "domain",
-								value: providerId || orgId || domain!,
-							},
-						],
-					})
-					.then((res) => {
-						if (!res) {
-							return null;
-						}
-						return {
-							...res,
-							oidcConfig: res.oidcConfig
-								? safeJsonParse<OIDCConfig>(
-										res.oidcConfig as unknown as string,
-									) || undefined
-								: undefined,
-							samlConfig: res.samlConfig
-								? safeJsonParse<SAMLConfig>(
-										res.samlConfig as unknown as string,
-									) || undefined
-								: undefined,
-						};
-					});
+				const parseProvider = (res: SSOProvider<SSOOptions> | null) => {
+					if (!res) return null;
+					return {
+						...res,
+						oidcConfig: res.oidcConfig
+							? safeJsonParse<OIDCConfig>(
+									res.oidcConfig as unknown as string,
+								) || undefined
+							: undefined,
+						samlConfig: res.samlConfig
+							? safeJsonParse<SAMLConfig>(
+									res.samlConfig as unknown as string,
+								) || undefined
+							: undefined,
+					};
+				};
+
+				if (providerId || orgId) {
+					// Exact match for providerId or orgId
+					provider = parseProvider(
+						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
+							model: "ssoProvider",
+							where: [
+								{
+									field: providerId ? "providerId" : "organizationId",
+									value: providerId || orgId!,
+								},
+							],
+						}),
+					);
+				} else if (domain) {
+					// For domain lookup, support comma-separated domains
+					// First try exact match (fast path)
+					provider = parseProvider(
+						await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
+							model: "ssoProvider",
+							where: [{ field: "domain", value: domain }],
+						}),
+					);
+					// If not found, search all providers for comma-separated domain match
+					if (!provider) {
+						const allProviders = await ctx.context.adapter.findMany<
+							SSOProvider<SSOOptions>
+						>({
+							model: "ssoProvider",
+						});
+						const matchingProvider = allProviders.find((p) =>
+							domainMatches(domain, p.domain),
+						);
+						provider = parseProvider(matchingProvider ?? null);
+					}
+				}
 			}
 
 			if (!provider) {
