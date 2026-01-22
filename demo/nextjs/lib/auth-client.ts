@@ -1,3 +1,4 @@
+import { dashClient } from "@better-auth/dash/client";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
@@ -17,6 +18,7 @@ import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
 	plugins: [
+		dashClient(),
 		organizationClient(),
 		twoFactorClient({
 			onTwoFactorRedirect() {

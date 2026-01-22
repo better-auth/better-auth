@@ -4,6 +4,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
+import { parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
@@ -86,11 +87,11 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
-			let otp =
+			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
 
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 
 			await ctx.context.internalAdapter
 				.createVerificationValue({
@@ -188,7 +189,7 @@ export const createVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: `${ctx.body.type}-otp-${email}`,
@@ -273,7 +274,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			let [storedOtp, _attempts] = splitAtLastColon(verificationValue.value);
+			const [storedOtp, _attempts] = splitAtLastColon(verificationValue.value);
 			let otp = storedOtp;
 			if (opts.storeOTP === "encrypted") {
 				otp = await symmetricDecrypt({
@@ -546,15 +547,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.token,
-					user: {
-						id: updatedUser.id,
-						email: updatedUser.email,
-						emailVerified: updatedUser.emailVerified,
-						name: updatedUser.name,
-						image: updatedUser.image,
-						createdAt: updatedUser.createdAt,
-						updatedAt: updatedUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, updatedUser),
 				});
 			}
 			const currentSession = await getSessionFromCtx(ctx);
@@ -578,15 +571,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			return ctx.json({
 				status: true,
 				token: null,
-				user: {
-					id: updatedUser.id,
-					email: updatedUser.email,
-					emailVerified: updatedUser.emailVerified,
-					name: updatedUser.name,
-					image: updatedUser.image,
-					createdAt: updatedUser.createdAt,
-					updatedAt: updatedUser.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, updatedUser),
 			});
 		},
 	);
@@ -704,15 +689,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: newUser.id,
-						email: newUser.email,
-						emailVerified: newUser.emailVerified,
-						name: newUser.name,
-						image: newUser.image,
-						createdAt: newUser.createdAt,
-						updatedAt: newUser.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, newUser),
 				});
 			}
 
@@ -731,15 +708,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			});
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: user.user.id,
-					email: user.user.email,
-					emailVerified: user.user.emailVerified,
-					name: user.user.name,
-					image: user.user.image,
-					createdAt: user.user.createdAt,
-					updatedAt: user.user.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, user.user),
 			});
 		},
 	);
@@ -802,7 +771,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const otp =
 				opts.generateOTP({ email, type: "forget-password" }, ctx) ||
 				defaultOTPGenerator(opts);
-			let storedOTP = await storeOTP(ctx, opts, otp);
+			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
 				identifier: `forget-password-otp-${email}`,
@@ -942,7 +911,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
-			let account = user.accounts?.find(
+			const account = user.accounts?.find(
 				(account) => account.providerId === "credential",
 			);
 			if (!account) {

@@ -58,6 +58,45 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["upgradeSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["createBillingPortal"]>().toBeFunction();
 	});
+
+	it("should infer plugin schema fields on user type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
+
+	it("should infer plugin schema fields alongside additional user fields", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+			user: {
+				additionalFields: {
+					customField: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["customField"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
 });
 
 describe("stripe", () => {
@@ -1874,6 +1913,72 @@ describe("stripe", () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	it.each([
+		{
+			name: "past",
+			periodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000),
+			shouldAllow: true,
+		},
+		{
+			name: "future",
+			periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			shouldAllow: false,
+		},
+	])("should handle re-subscribing when periodEnd is in the $name", async ({
+		periodEnd,
+		shouldAllow,
+	}) => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: { status: "active", seats: 1, periodEnd },
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		if (shouldAllow) {
+			expect(upgradeRes.error).toBeNull();
+			expect(upgradeRes.data?.url).toBeDefined();
+		} else {
+			expect(upgradeRes.error?.message).toContain("already subscribed");
+		}
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {

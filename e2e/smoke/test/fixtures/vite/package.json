@@ -1,5 +1,5 @@
 {
-  "name": "fixture-vite",
+  "name": "@better-auth-test/fixtures-vite",
   "private": true,
   "scripts": {
     "build": "vite build"
@@ -8,6 +8,6 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "vite": "^7.2.4"
+    "vite": "^7.3.1"
   }
 }

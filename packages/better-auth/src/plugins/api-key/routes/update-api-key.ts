@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
 import { getDate } from "../../../utils/date";
@@ -309,7 +309,7 @@ export function updateApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			let newValues: Partial<ApiKey> = {};
+			const newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {

@@ -252,14 +252,24 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "better-auth-sequenzy",
-		url: "https://www.npmjs.com/package/better-auth-sequenzy",
+		name: "@sequenzy/better-auth",
+		url: "https://github.com/Sequenzy/sequenzy-better-auth",
 		description:
 			"Automatically add users to Sequenzy mailing lists on signup for seamless email marketing integration.",
 		author: {
 			name: "Sequenzy",
 			github: "sequenzy",
 			avatar: "https://sequenzy.com/logo.png",
+		},
+	},
+	{
+		name: "better-auth-nostr",
+		url: "https://github.com/leon-wbr/better-auth-nostr",
+		description: "Nostr authentication plugin for Better Auth (NIP-98).",
+		author: {
+			name: "leon-wbr",
+			github: "leon-wbr",
+			avatar: "https://github.com/leon-wbr.png",
 		},
 	},
 ];
