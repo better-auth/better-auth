@@ -28,6 +28,9 @@
 				"prettier"
 			]
 		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
@@ -107,6 +110,9 @@
 				"@better-auth/core",
 				"better-call"
 			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
 		}
 	},
 	"vitest": {

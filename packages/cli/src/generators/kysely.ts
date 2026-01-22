@@ -1,4 +1,4 @@
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import type { SchemaGenerator } from "./types";
 
 export const generateKyselySchema: SchemaGenerator = async ({

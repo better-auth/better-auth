@@ -10,7 +10,8 @@ import { afterAll } from "vitest";
 import { betterAuth } from "../auth/full";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
-import { getAdapter, getMigrations } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
+import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
@@ -60,8 +61,8 @@ export async function getTestInstance<
 	}
 
 	async function getSqlite() {
-		const { default: Database } = await import("better-sqlite3");
-		return new Database(":memory:");
+		const { DatabaseSync } = await import("node:sqlite");
+		return new DatabaseSync(":memory:");
 	}
 
 	async function getMysql() {

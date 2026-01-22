@@ -849,3 +849,292 @@ describe("view backup codes", async () => {
 		expect(response.status).toBe(404);
 	});
 });
+
+describe("twoFactorCookieMaxAge", async () => {
+	const customMaxAge = 15 * 60; // 15 minutes
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				twoFactorCookieMaxAge: customMaxAge,
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should use custom twoFactorCookieMaxAge for the two-factor cookie", async () => {
+		// Enable 2FA
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		expect(Number(twoFactorCookie?.["max-age"])).toBe(customMaxAge);
+	});
+
+	it("should use default 10 minutes when twoFactorCookieMaxAge is not specified", async () => {
+		const { auth: authDefault, signInWithTestUser: signInDefault } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						skipVerificationOnEnable: true,
+					}),
+				],
+			});
+
+		const { headers: defaultHeaders } = await signInDefault();
+
+		// Enable 2FA
+		const enableRes = await authDefault.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: defaultHeaders,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+
+		// Sign in to trigger 2FA
+		const signInRes = await authDefault.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		// Default is 10 minutes = 600 seconds
+		expect(Number(twoFactorCookie?.["max-age"])).toBe(600);
+	});
+});
+
+describe("OTP storage modes", async () => {
+	describe("hashed OTP storage", async () => {
+		let OTP = "";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: "hashed",
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP when stored as hashed", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed with the correct code
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
+
+		it("should reject invalid OTP when stored as hashed", async () => {
+			// Sign in to trigger 2FA again
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			const newHeaders = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers: newHeaders,
+				body: {},
+			});
+
+			// Verify with wrong OTP should fail
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers: newHeaders,
+				body: {
+					code: "000000",
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(401);
+			const json = (await verifyRes.json()) as { message: string };
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		});
+	});
+
+	describe("encrypted OTP storage", async () => {
+		let OTP = "";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: "encrypted",
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP when stored as encrypted", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
+	});
+
+	describe("custom hash function OTP storage", async () => {
+		let OTP = "";
+		const customHashFn = async (token: string) => {
+			// Simple custom hash for testing (just reverse + prefix)
+			return `custom_${token.split("").reverse().join("")}`;
+		};
+
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: { hash: customHashFn },
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP with custom hash function", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
+	});
+});

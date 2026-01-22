@@ -511,7 +511,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				activeOrTrialingSubscription &&
 				activeOrTrialingSubscription.status === "active" &&
 				activeOrTrialingSubscription.plan === ctx.body.plan &&
-				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
+				activeOrTrialingSubscription.seats === (ctx.body.seats || 1) &&
+				// Skip if periodEnd has passed, in case status is stale
+				(!activeOrTrialingSubscription.periodEnd ||
+					activeOrTrialingSubscription.periodEnd > new Date())
 			) {
 				throw APIError.from(
 					"BAD_REQUEST",
