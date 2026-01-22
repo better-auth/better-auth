@@ -20,21 +20,56 @@ import type {
 import type { BetterAuthPlugin } from "./plugin";
 
 /**
+ * @internal
+ */
+type InferPluginID<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"]
+			: never
+		: never;
+
+/**
+ * @internal
+ */
+type InferPluginOptions<
+	O extends BetterAuthOptions,
+	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+> = O["plugins"] extends Array<infer P>
+	? P extends BetterAuthPlugin
+		? P["id"] extends ID
+			? P extends { options: infer O }
+				? O
+				: never
+			: never
+		: never
+	: never;
+
+/**
  * Mutators are defined in each plugin
  *
  * @example
  * ```ts
+ * interface MyPluginOptions {
+ *   useFeature: boolean
+ * }
+ *
+ * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
+ *   id: 'my-plugin',
+ *   options,
+ * } satisfies BetterAuthPlugin);
+ *
  * declare module "@better-auth/core" {
- *  interface BetterAuthPluginRegistry<Auth, Context> {
- *    'jwt': {
- *      creator: typeof jwt
+ *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+ *    'my-plugin': {
+ *      creator: Options extends MyPluginOptions ? typeof createMyPlugin<Options>: typeof createMyPlugin
  *    }
  *  }
  * }
  * ```
  */
 // biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
-export interface BetterAuthPluginRegistry<Auth, Context> {}
+export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
 export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown,
 	unknown
@@ -183,12 +218,17 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
-export type PluginContext = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+export type PluginContext<Options extends BetterAuthOptions> = {
+	getPlugin: <
+		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+		PluginOptions extends InferPluginOptions<Options, ID>,
+	>(
 		pluginId: ID,
 	) =>
 		| (ID extends BetterAuthPluginRegistryIdentifier
-				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				? ReturnType<
+						BetterAuthPluginRegistry<Options, PluginOptions>[ID]["creator"]
+					>
 				: BetterAuthPlugin)
 		| null;
 	/**
@@ -206,7 +246,7 @@ export type PluginContext = {
 	 */
 	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
-	) => boolean;
+	) => ID extends InferPluginID<Options> ? true : boolean;
 };
 
 export type InfoContext = {
@@ -216,7 +256,7 @@ export type InfoContext = {
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	PluginContext &
+	PluginContext<Options> &
 		InfoContext & {
 			options: Options;
 			trustedOrigins: string[];
