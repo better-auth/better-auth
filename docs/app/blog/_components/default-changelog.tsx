@@ -217,7 +217,7 @@ ${message.content}
 export default ChangelogPage;
 
 export function Glow() {
-	let id = useId();
+	const id = useId();
 
 	return (
 		<div className="absolute inset-0 -z-10 overflow-hidden bg-gradient-to-tr from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">

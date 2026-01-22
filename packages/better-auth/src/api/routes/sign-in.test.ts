@@ -107,7 +107,11 @@ describe("sign-in", async (it) => {
 
 describe("url checks", async (it) => {
 	it("should reject untrusted origins", async () => {
-		const { client } = await getTestInstance();
+		const { client } = await getTestInstance({
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
 		const res = await client.signIn.social({
 			provider: "google",
 			callbackURL: "http://malicious.com",
@@ -138,6 +142,9 @@ describe("sign-in CSRF protection", async (it) => {
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
 		},
 	});
 
@@ -239,11 +246,60 @@ describe("sign-in CSRF protection", async (it) => {
 	});
 });
 
+describe("sign-in with additionalFields", async (it) => {
+	const { auth } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					newField: {
+						type: "string",
+						required: false,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: true,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return additionalFields in signInEmail response", async () => {
+		await auth.api.signUpEmail({
+			body: {
+				email: "signin-additional@test.com",
+				password: "password",
+				name: "SignIn Test",
+				newField: "signin-value",
+			},
+		});
+
+		const res = await auth.api.signInEmail({
+			body: {
+				email: "signin-additional@test.com",
+				password: "password",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("signin-value");
+		expect(res.user.isAdmin).toBe(true);
+	});
+});
+
 describe("sign-in with form data", async (it) => {
 	const { auth, testUser } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000"],
 		emailAndPassword: {
 			enabled: true,
+		},
+		advanced: {
+			disableCSRFCheck: false,
 		},
 	});
 

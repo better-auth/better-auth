@@ -52,7 +52,11 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
  * @internal
  */
 export const getJwtPlugin = (ctx: AuthContext) => {
-	return ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
+	if (!plugin) {
+		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+	}
+	return plugin;
 };
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
@@ -370,6 +374,19 @@ export async function validateClientCredentials(
 }
 
 /**
+ * Parse client metadata that may be stored as JSON string or already parsed object.
+ * Handles database adapters that auto-parse JSON columns.
+ *
+ * @internal
+ */
+export function parseClientMetadata(
+	metadata: string | object | undefined,
+): object | undefined {
+	if (!metadata) return undefined;
+	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+}
+
+/**
  * Parse space-separated prompt string into a set of prompts
  *
  * @param prompt
@@ -398,7 +415,7 @@ export function parsePrompt(prompt: string) {
  * @param prompt - the prompt value to delete
  */
 export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	let prompts = query.get("prompt")?.split(" ");
+	const prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);

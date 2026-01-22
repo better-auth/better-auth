@@ -16,7 +16,7 @@ export async function runPluginInit(ctx: AuthContext) {
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
-			let initPromise = plugin.init(context);
+			const initPromise = plugin.init(context);
 			let result: ReturnType<Required<BetterAuthPlugin>["init"]>;
 			if (isPromise(initPromise)) {
 				result = await initPromise;
@@ -64,7 +64,7 @@ export async function getTrustedOrigins(
 	options: BetterAuthOptions,
 	request?: Request,
 ): Promise<string[]> {
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
+	const baseURL = getBaseURL(options.baseURL, options.basePath, request);
 	const trustedOrigins: (string | undefined | null)[] = baseURL
 		? [new URL(baseURL).origin]
 		: [];
