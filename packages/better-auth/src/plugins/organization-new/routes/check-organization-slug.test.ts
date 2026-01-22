@@ -16,7 +16,7 @@ describe("check organization slug", async (it) => {
 			},
 		});
 
-		expect(unusedSlug.data?.status).toBe(true);
+		expect(unusedSlug.data?.isTaken).toBe(false);
 
 		const orgData = getOrganizationData();
 		const organization = await client.organization.create({
@@ -34,9 +34,7 @@ describe("check organization slug", async (it) => {
 				headers,
 			},
 		});
-		expect(existingSlug.error?.status).toBe(400);
-		const err = ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN;
-		expect(existingSlug.error?.message).toBe(err.message);
+		expect(existingSlug.data?.isTaken).toBe(true);
 	});
 
 	it("should not allow checking slug if slugs are disabled", async () => {
