@@ -229,6 +229,7 @@ export const spMetadata = () => {
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						authnRequestsSigned: parsedSamlConfig.authnRequestsSigned || false,
 						nameIDFormat: parsedSamlConfig.identifierFormat
 							? [parsedSamlConfig.identifierFormat]
 							: undefined,
