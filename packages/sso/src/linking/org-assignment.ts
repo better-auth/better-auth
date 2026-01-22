@@ -40,11 +40,11 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	const hasOrganizationPlugin =
+		ctx.context.options.plugins?.some(
+			(plugin) => plugin.id === "organization",
+		) ?? false;
+	if (!hasOrganizationPlugin) {
 		return;
 	}
 
@@ -106,11 +106,11 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	const hasOrganizationPlugin =
+		ctx.context.options.plugins?.some(
+			(plugin) => plugin.id === "organization",
+		) ?? false;
+	if (!hasOrganizationPlugin) {
 		return;
 	}
 
