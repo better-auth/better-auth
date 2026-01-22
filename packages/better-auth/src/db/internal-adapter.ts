@@ -370,6 +370,8 @@ export const createInternalAdapter = (
 					: undefined,
 			);
 
+			// Store session in secondary storage after createWithHooks completes
+			// so we have the final session data (including DB-generated id)
 			if (secondaryStorage && res) {
 				const now = Date.now();
 				const sessionTTL = Math.max(
