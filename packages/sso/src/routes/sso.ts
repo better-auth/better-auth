@@ -1288,6 +1288,8 @@ export const signInSSO = (options?: SSOOptions) => {
 								],
 								wantMessageSigned:
 									parsedSamlConfig.wantAssertionsSigned || false,
+								authnRequestsSigned:
+									parsedSamlConfig.authnRequestsSigned || false,
 								nameIDFormat: parsedSamlConfig.identifierFormat
 									? [parsedSamlConfig.identifierFormat]
 									: undefined,
@@ -1298,6 +1300,10 @@ export const signInSSO = (options?: SSOOptions) => {
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
+					privateKey:
+						parsedSamlConfig.spMetadata?.privateKey ||
+						parsedSamlConfig.privateKey,
+					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 				});
 
 				const idp = saml.IdentityProvider({
