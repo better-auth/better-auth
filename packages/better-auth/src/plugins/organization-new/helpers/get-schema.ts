@@ -299,8 +299,8 @@ export const getSchema = <O extends ResolvedOrganizationOptions>(
 				fieldName: opts.schema?.invitation?.fields?.inviterId,
 				required: true,
 			},
-			...(opts.schema?.invitation?.additionalFields || {}),
 			...(addonSchemas.invitation?.fields || {}),
+			...(opts.schema?.invitation?.additionalFields || {}),
 		},
 	} satisfies BetterAuthPluginDBSchema["invitation"];
 
