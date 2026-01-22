@@ -1845,10 +1845,26 @@ describe("stripe", () => {
 	});
 
 	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+		const starterPriceId = "price_starter_duplicate_test";
+		const subscriptionId = "sub_duplicate_test_123";
+
+		const stripeOptionsWithPrice = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: starterPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
-				plugins: [stripe(stripeOptions)],
+				plugins: [stripe(stripeOptionsWithPrice)],
 			},
 			{
 				disableTestUser: true,
@@ -1894,11 +1910,33 @@ describe("stripe", () => {
 			update: {
 				status: "active",
 				seats: 3,
+				stripeSubscriptionId: subscriptionId,
 			},
 			where: [
 				{
 					field: "referenceId",
 					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe to return the existing subscription with the same price ID
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_duplicate_item",
+								price: {
+									id: starterPriceId,
+								},
+								quantity: 3,
+							},
+						],
+					},
 				},
 			],
 		});
@@ -2040,10 +2078,26 @@ describe("stripe", () => {
 		periodEnd,
 		shouldAllow,
 	}) => {
+		const starterPriceId = "price_starter_periodend_test";
+		const subscriptionId = "sub_periodend_test_123";
+
+		const stripeOptionsWithPrice = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: starterPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
-				plugins: [stripe(stripeOptions)],
+				plugins: [stripe(stripeOptionsWithPrice)],
 			},
 			{
 				disableTestUser: true,
@@ -2073,8 +2127,34 @@ describe("stripe", () => {
 
 		await ctx.adapter.update({
 			model: "subscription",
-			update: { status: "active", seats: 1, periodEnd },
+			update: {
+				status: "active",
+				seats: 1,
+				periodEnd,
+				stripeSubscriptionId: subscriptionId,
+			},
 			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		// Mock Stripe to return the existing subscription with the same price ID
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_periodend_item",
+								price: {
+									id: starterPriceId,
+								},
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
 		});
 
 		const upgradeRes = await client.subscription.upgrade({
