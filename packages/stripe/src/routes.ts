@@ -274,8 +274,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			// Find existing subscription by Stripe ID or reference ID
-			let subscriptionToUpdate = ctx.body.subscriptionId
+			// If subscriptionId is provided, find that specific subscription.
+			// Otherwise, active subscription will be resolved by referenceId later.
+			const subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
@@ -285,26 +286,18 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							},
 						],
 					})
-				: referenceId
-					? await ctx.context.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						})
-					: null;
-
+				: null;
+			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
+			}
 			if (
 				ctx.body.subscriptionId &&
 				subscriptionToUpdate &&
 				subscriptionToUpdate.referenceId !== referenceId
 			) {
-				subscriptionToUpdate = null;
-			}
-			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
