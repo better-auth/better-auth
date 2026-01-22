@@ -715,6 +715,604 @@ describe("siwe", () => {
 		});
 	});
 
+	describe("account linking", () => {
+		it("should link wallet to authenticated user when siwe is trusted provider", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "existing@example.com",
+					name: "Existing User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			const existingUserId = session.data?.user.id!;
+
+			const testWallet = "0x1234567890123456789012345678901234567890";
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+
+			const { data, error } = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+			expect(data?.user.id).toBe(existingUserId);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			expect(walletAddresses.length).toBe(1);
+			expect(walletAddresses[0]?.address).toBe(testWallet);
+			expect(walletAddresses[0]?.isPrimary).toBe(false);
+
+			// Verify account record is also created when linking
+			const accounts = await ctx.adapter.findMany<Account>({
+				model: "account",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			const siweAccount = accounts.find((a) => a.providerId === "siwe");
+			expect(siweAccount).toBeDefined();
+			expect(siweAccount?.accountId).toBe(`${testWallet}:${chainId}`);
+		});
+
+		it("should link wallet when no trustedProviders configured (default allows linking)", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "default-linking@example.com",
+					name: "Default Linking User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			const existingUserId = session.data?.user.id!;
+
+			const testWallet = "0x9234567890123456789012345678901234567890";
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+
+			const { data, error } = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+			expect(data?.user.id).toBe(existingUserId);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			expect(walletAddresses.length).toBe(1);
+
+			// Verify account record is also created when linking
+			const accounts = await ctx.adapter.findMany<Account>({
+				model: "account",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			const siweAccount = accounts.find((a) => a.providerId === "siwe");
+			expect(siweAccount).toBeDefined();
+			expect(siweAccount?.accountId).toBe(`${testWallet}:${chainId}`);
+		});
+
+		it("should NOT link when trustedProviders is set but doesn't include siwe", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["google", "github"], // siwe not included
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "trusted-providers@example.com",
+					name: "Trusted Providers User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			const existingUserId = session.data?.user.id!;
+
+			const testWallet = "0x7234567890123456789012345678901234567890";
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+
+			const { data, error } = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+			expect(data?.user.id).not.toBe(existingUserId);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			expect(walletAddresses.length).toBe(0);
+		});
+
+		it("should NOT link when accountLinking.enabled is false", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: false,
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "linking-disabled@example.com",
+					name: "Linking Disabled User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			const existingUserId = session.data?.user.id!;
+
+			const testWallet = "0x6234567890123456789012345678901234567890";
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+
+			const { data, error } = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+			expect(data?.user.id).not.toBe(existingUserId);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: existingUserId }],
+			});
+			expect(walletAddresses.length).toBe(0);
+		});
+
+		it("should return success if wallet already linked to current user (idempotent)", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "existing2@example.com",
+					name: "Existing User 2",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const testWallet = "0x2234567890123456789012345678901234567890";
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+			const firstLink = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+			expect(firstLink.error).toBeNull();
+			expect(firstLink.data?.success).toBe(true);
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers },
+			);
+			const secondLink = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers },
+			);
+			expect(secondLink.error).toBeNull();
+			expect(secondLink.data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "address", value: testWallet }],
+			});
+			expect(walletAddresses.length).toBe(1);
+		});
+
+		it("should reject if wallet already linked to another user", async () => {
+			const { client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testWallet = "0x3234567890123456789012345678901234567890";
+
+			// First user signs in with wallet (creates ownership)
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const firstUserResult = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+			expect(firstUserResult.error).toBeNull();
+
+			// Second user signs up and tries to link the same wallet
+			const secondUserHeaders = new Headers();
+			await client.signUp.email(
+				{
+					email: "second@example.com",
+					name: "Second User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(secondUserHeaders) },
+			);
+
+			await client.siwe.nonce(
+				{ walletAddress: testWallet, chainId },
+				{ headers: secondUserHeaders },
+			);
+
+			const { error } = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWallet,
+					chainId,
+				},
+				{ headers: secondUserHeaders },
+			);
+
+			expect(error).toBeDefined();
+			expect(error?.status).toBe(400);
+			expect(error?.code).toBe("WALLET_ALREADY_LINKED");
+		});
+
+		it("should create new user when not authenticated (no session)", async () => {
+			const { auth, client } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testWallet = "0xABCD567890123456789012345678901234567890";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "address", value: toChecksumAddress(testWallet) }],
+			});
+			expect(walletAddresses.length).toBe(1);
+			expect(walletAddresses[0]?.isPrimary).toBe(true);
+		});
+
+		it("should allow linking multiple different wallet addresses to the same user", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const headers = new Headers();
+
+			// User signs up with email
+			await client.signUp.email(
+				{
+					email: "multi-wallet@example.com",
+					name: "Multi Wallet User",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headers) },
+			);
+
+			const session = await client.getSession({ fetchOptions: { headers } });
+			const userId = session.data?.user.id!;
+
+			// Link first wallet
+			const wallet1 = "0x1111111111111111111111111111111111111111";
+			await client.siwe.nonce({ walletAddress: wallet1, chainId }, { headers });
+			const result1 = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: wallet1,
+					chainId,
+				},
+				{ headers },
+			);
+			expect(result1.error).toBeNull();
+			expect(result1.data?.success).toBe(true);
+			expect(result1.data?.user.id).toBe(userId);
+
+			// Link second different wallet
+			const wallet2 = "0x2222222222222222222222222222222222222222";
+			await client.siwe.nonce({ walletAddress: wallet2, chainId }, { headers });
+			const result2 = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: wallet2,
+					chainId,
+				},
+				{ headers },
+			);
+			expect(result2.error).toBeNull();
+			expect(result2.data?.success).toBe(true);
+			expect(result2.data?.user.id).toBe(userId);
+
+			// Link third different wallet
+			const wallet3 = "0x3333333333333333333333333333333333333333";
+			await client.siwe.nonce({ walletAddress: wallet3, chainId }, { headers });
+			const result3 = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: wallet3,
+					chainId,
+				},
+				{ headers },
+			);
+			expect(result3.error).toBeNull();
+			expect(result3.data?.success).toBe(true);
+			expect(result3.data?.user.id).toBe(userId);
+
+			// Verify all wallets are linked to the same user
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [{ field: "userId", value: userId }],
+			});
+
+			expect(walletAddresses.length).toBe(3);
+			const addresses = walletAddresses.map((w) => w.address);
+			expect(addresses).toContain(wallet1);
+			expect(addresses).toContain(wallet2);
+			expect(addresses).toContain(wallet3);
+
+			// All linked wallets should not be primary (user was created via email)
+			expect(walletAddresses.every((w) => w.isPrimary === false)).toBe(true);
+
+			// Verify account records are created for each linked wallet
+			const accounts = await ctx.adapter.findMany<Account>({
+				model: "account",
+				where: [{ field: "userId", value: userId }],
+			});
+			const siweAccounts = accounts.filter((a) => a.providerId === "siwe");
+			expect(siweAccounts.length).toBe(3);
+
+			const accountIds = siweAccounts.map((a) => a.accountId);
+			expect(accountIds).toContain(`${wallet1}:${chainId}`);
+			expect(accountIds).toContain(`${wallet2}:${chainId}`);
+			expect(accountIds).toContain(`${wallet3}:${chainId}`);
+		});
+
+		it("should reject linking if wallet address exists on another chain for a different user", async () => {
+			const { auth, client, cookieSetter } = await getTestInstance(
+				{
+					account: {
+						accountLinking: {
+							enabled: true,
+							trustedProviders: ["siwe"],
+						},
+					},
+					plugins: [siwe(createSiweOptions())],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testWalletAddress = "0x1234567890123456789012345678901234567890";
+			const chainId1 = 1;
+			const chainId2 = 2;
+
+			// 1. User A signs in with testWalletAddress on Chain 1 (creates User A)
+			await client.siwe.nonce({
+				walletAddress: testWalletAddress,
+				chainId: chainId1,
+			});
+			const userAResult = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWalletAddress,
+				chainId: chainId1,
+			});
+			expect(userAResult.error).toBeNull();
+			expect(userAResult.data?.success).toBe(true);
+			const userAId = userAResult.data?.user.id!;
+
+			// 2. User B signs up via email
+			const headersB = new Headers();
+			await client.signUp.email(
+				{
+					email: "userB@example.com",
+					name: "User B",
+					password: "password123",
+				},
+				{ onSuccess: cookieSetter(headersB) },
+			);
+			const sessionB = await client.getSession({
+				fetchOptions: { headers: headersB },
+			});
+			const userBId = sessionB.data?.user.id!;
+			expect(userBId).not.toBe(userAId);
+
+			// 3. User B tries to link the SAME wallet address (testWalletAddress) but on Chain 2
+			await client.siwe.nonce(
+				{ walletAddress: testWalletAddress, chainId: chainId2 },
+				{ headers: headersB },
+			);
+
+			const linkResult = await client.siwe.verify(
+				{
+					message: "valid_message",
+					signature: "valid_signature",
+					walletAddress: testWalletAddress,
+					chainId: chainId2,
+				},
+				{ headers: headersB },
+			);
+
+			// Expectation: This should be rejected because the wallet address (even on a different chain)
+			// is already associated with User A, preventing a split identity.
+			expect(linkResult.error).toBeDefined();
+			expect(linkResult.error?.status).toBe(400);
+			expect(linkResult.error?.code).toBe("WALLET_ALREADY_LINKED");
+
+			// Verify that no new walletAddress record was created for User B
+			const ctx = await auth.$context;
+			const walletAddressesForUserB = await ctx.adapter.findMany<WalletAddress>(
+				{
+					model: "walletAddress",
+					where: [{ field: "userId", value: userBId }],
+				},
+			);
+			expect(walletAddressesForUserB.length).toBe(0); // User B should not have linked this wallet
+
+			// Verify that the original walletAddress for User A is still intact
+			const walletAddressesForUserA = await ctx.adapter.findMany<WalletAddress>(
+				{
+					model: "walletAddress",
+					where: [{ field: "userId", value: userAId }],
+				},
+			);
+			expect(walletAddressesForUserA.length).toBe(1);
+			expect(walletAddressesForUserA[0]?.address).toBe(testWalletAddress);
+			expect(walletAddressesForUserA[0]?.chainId).toBe(chainId1);
+		});
+	});
+
 	describe("account record creation", () => {
 		it("should create account record with correct providerId and accountId", async () => {
 			const { client, auth } = await createTestInstance();

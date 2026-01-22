@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 
 import * as z from "zod";
-import { APIError } from "../../api";
+import { APIError, getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { mergeSchema } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
@@ -209,6 +209,64 @@ export const siwe = (options: SIWEPluginOptions) =>
 								{ field: "address", operator: "eq", value: walletAddress },
 							],
 						});
+
+					const currentSession = await getSessionFromCtx(ctx);
+					const accountLinking = ctx.context.options.account?.accountLinking;
+					const trustedProviders = accountLinking?.trustedProviders;
+
+					const shouldLink =
+						currentSession !== null &&
+						accountLinking?.enabled !== false &&
+						(trustedProviders === undefined ||
+							trustedProviders.length === 0 ||
+							trustedProviders.includes("siwe"));
+
+					if (shouldLink) {
+						const sessionUser = currentSession.user;
+
+						if (
+							walletAddressForChain &&
+							walletAddressForChain.userId === sessionUser.id
+						) {
+							return ctx.json({
+								token: currentSession.session.token,
+								success: true,
+								user: { id: sessionUser.id, walletAddress, chainId },
+							});
+						}
+
+						const walletOwner =
+							walletAddressForChain?.userId ?? walletAddressAnyChain?.userId;
+						if (walletOwner && walletOwner !== sessionUser.id) {
+							throw APIError.from(
+								"BAD_REQUEST",
+								SIWE_ERROR_CODES.WALLET_ALREADY_LINKED,
+							);
+						}
+
+						await ctx.context.adapter.create({
+							model: "walletAddress",
+							data: {
+								userId: sessionUser.id,
+								address: walletAddress,
+								chainId,
+								isPrimary: false,
+								createdAt: new Date(),
+							},
+						});
+
+						await ctx.context.internalAdapter.linkAccount({
+							userId: sessionUser.id,
+							providerId: "siwe",
+							accountId: createWalletAccountId(walletAddress, chainId),
+						});
+
+						return ctx.json({
+							token: currentSession.session.token,
+							success: true,
+							user: { id: sessionUser.id, walletAddress, chainId },
+						});
+					}
 
 					const existingUserId =
 						walletAddressForChain?.userId ?? walletAddressAnyChain?.userId;
