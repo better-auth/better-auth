@@ -466,7 +466,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-// Re-export parseSetCookieHeader for backwards compatibility
 export { parseSetCookieHeader } from "better-auth/cookies";
 export * from "./focus-manager";
 export * from "./online-manager";
