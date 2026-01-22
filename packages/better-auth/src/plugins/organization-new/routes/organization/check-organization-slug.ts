@@ -5,7 +5,6 @@ import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
-import type { Endpoint } from "better-call";
 
 const checkOrganizationSlugBodySchema = z.object({
 	slug: z.string().meta({
