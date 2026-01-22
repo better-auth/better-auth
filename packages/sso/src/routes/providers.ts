@@ -387,7 +387,7 @@ function mergeOIDCConfig(
 	};
 }
 
-export const updateSSOProvider = <O extends SSOOptions>(options: O) => {
+export const updateSSOProvider = (options: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/providers/:providerId",
 		{
