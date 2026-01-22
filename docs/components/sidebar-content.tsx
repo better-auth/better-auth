@@ -1,4 +1,4 @@
-import type { PageTree } from "fumadocs-core/server";
+import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
 	Binoculars,
@@ -31,11 +31,12 @@ interface Content {
 		href: string;
 		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 		group?: boolean;
+		separator?: boolean;
 		isNew?: boolean;
 	}[];
 }
 
-export function getPageTree(): PageTree.Root {
+export function getPageTree(): Root {
 	return {
 		$id: "root",
 		name: "docs",
@@ -58,7 +59,7 @@ export function getPageTree(): PageTree.Root {
 	};
 }
 
-function contentToPageTree(content: Content): PageTree.Folder {
+function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
 		icon: <content.Icon />,
@@ -72,13 +73,20 @@ function contentToPageTree(content: Content): PageTree.Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && item.href)
-			.map((item) => ({
-				type: "page",
-				url: item.href,
-				name: item.title,
-				icon: <item.icon />,
-			})),
+			.filter((item) => !item.group && (item.href || item.separator))
+			.map((item) =>
+				item.separator
+					? ({
+							type: "separator",
+							name: item.title,
+						} as const)
+					: ({
+							type: "page",
+							url: item.href,
+							name: item.title,
+							icon: <item.icon />,
+						} as const),
+			),
 	};
 }
 
@@ -1729,10 +1737,10 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 						<path
 							d="M5.58932 10H25.0587M5.58932 15.3333H25.0587M11.3333 3.8V16.6667M19.3333 3.8V16.6667M24.588 16.6667L24.8872 15.819C25.6073 13.7791 25.6074 11.5542 24.8875 9.51427C24.0261 7.07316 22.203 5.09102 19.8423 4.02882L19.5388 3.89227C16.8643 2.68886 13.8024 2.68886 11.1278 3.89227L10.8243 4.02882C8.46365 5.09102 6.64058 7.07316 5.77913 9.51427C5.05924 11.5542 5.05934 13.7791 5.77942 15.819L6.07866 16.6667M27.1926 20.5963C28.096 21.048 28.6667 21.9714 28.6667 22.9814V23.0186C28.6667 24.0286 28.096 24.952 27.1926 25.4037C26.4418 25.7791 25.5582 25.7791 24.8074 25.4037C23.904 24.952 23.3333 24.0286 23.3333 23.0186V22.9814C23.3333 21.9714 23.904 21.048 24.8074 20.5963C25.5582 20.2209 26.4418 20.2209 27.1926 20.5963ZM16.5259 20.5963C17.4293 21.048 18 21.9714 18 22.9814V23.0186C18 24.0286 17.4293 24.952 16.5259 25.4037C15.7752 25.7791 14.8915 25.7791 14.1408 25.4037C13.2373 24.952 12.6667 24.0286 12.6667 23.0186V22.9814C12.6667 21.9714 13.2373 21.048 14.1408 20.5963C14.8915 20.2209 15.7752 20.2209 16.5259 20.5963ZM22 29.7836C22 30.6395 22.6938 31.3333 23.5497 31.3333H28.4503C29.3062 31.3333 30 30.6395 30 29.7836C30 29.1166 29.5732 28.5244 28.9403 28.3135L27.2649 27.755C26.4438 27.4813 25.5561 27.4813 24.7351 27.755L23.0596 28.3135C22.4268 28.5244 22 29.1166 22 29.7836ZM11.3333 29.7836C11.3333 30.6395 12.0271 31.3333 12.883 31.3333H17.7836C18.6395 31.3333 19.3333 30.6395 19.3333 29.7836C19.3333 29.1166 18.9065 28.5244 18.2737 28.3135L16.5982 27.755C15.7772 27.4813 14.8895 27.4813 14.0684 27.755L12.393 28.3135C11.7602 28.5244 11.3333 29.1166 11.3333 29.7836ZM0.666656 29.7836C0.666656 30.6395 1.36048 31.3333 2.21636 31.3333H7.11695C7.97283 31.3333 8.66666 30.6395 8.66666 29.7836C8.66666 29.1166 8.23982 28.5244 7.60701 28.3135L5.93157 27.755C5.1105 27.4813 4.22281 27.4813 3.40174 27.755L1.7263 28.3135C1.09349 28.5244 0.666656 29.1166 0.666656 29.7836ZM3.47409 20.5963C4.22483 20.2209 5.10849 20.2209 5.85923 20.5963C6.76265 21.048 7.33332 21.9714 7.33332 22.9814V23.0186C7.33332 24.0286 6.76265 24.952 5.85923 25.4037C5.10849 25.7791 4.22483 25.7791 3.47409 25.4037C2.57066 24.952 1.99999 24.0286 1.99999 23.0186V22.9814C1.99999 21.9714 2.57066 21.048 3.47409 20.5963Z"
 							stroke="currentColor"
-							stroke-width="1.33333"
-							stroke-miterlimit="10"
-							stroke-linecap="round"
-							stroke-linejoin="round"
+							strokeWidth="1.33333"
+							strokeMiterlimit="10"
+							strokeLinecap="round"
+							strokeLinejoin="round"
 						/>
 					</svg>
 				),
@@ -1826,6 +1834,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "i18n",
+				href: "/docs/plugins/i18n",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="m12.87 15.07l-2.54-2.51l.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35C8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5l3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7l1.62-4.33L19.12 17z"
+						/>
+					</svg>
+				),
 			},
 			{
 				title: "Last Login Method",

@@ -1,13 +1,18 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { isAPIError } from "../../../utils/is-api-error";
 import { role } from "../../access";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
-import { deleteApiKey, getApiKey, setApiKey } from "../adapter";
+import {
+	deleteApiKey,
+	getApiKey,
+	migrateDoubleStringifiedMetadata,
+	setApiKey,
+} from "../adapter";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
@@ -121,10 +126,10 @@ export async function validateApiKey({
 
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	} else if (remaining !== null) {
-		let now = Date.now();
+		const now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
@@ -246,20 +251,6 @@ export function verifyApiKey({
 		async (ctx) => {
 			const { key } = ctx.body;
 
-			if (key.length < opts.defaultKeyLength) {
-				// if the key is shorter than the default key length, than we know the key is invalid.
-				// we can't check if the key is exactly equal to the default key length, because
-				// a prefix may be added to the key.
-				return ctx.json({
-					valid: false,
-					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
-						code: "KEY_NOT_FOUND" as const,
-					},
-					key: null,
-				});
-			}
-
 			if (opts.customAPIKeyValidator) {
 				const isValid = await opts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
@@ -298,6 +289,7 @@ export function verifyApiKey({
 					);
 				}
 			} catch (error) {
+				ctx.context.logger.error("Failed to validate API key:", error);
 				if (isAPIError(error)) {
 					return ctx.json({
 						valid: false,
@@ -323,11 +315,15 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
-			if ("metadata" in returningApiKey) {
-				returningApiKey.metadata =
-					schema.apikey.fields.metadata.transform.output(
-						returningApiKey.metadata as never as string,
-					);
+
+			// Migrate legacy double-stringified metadata if needed
+			let migratedMetadata: Record<string, any> | null = null;
+			if (apiKey) {
+				migratedMetadata = await migrateDoubleStringifiedMetadata(
+					ctx,
+					apiKey,
+					opts,
+				);
 			}
 
 			returningApiKey.permissions = returningApiKey.permissions
@@ -339,7 +335,13 @@ export function verifyApiKey({
 			return ctx.json({
 				valid: true,
 				error: null,
-				key: apiKey === null ? null : (returningApiKey as Omit<ApiKey, "key">),
+				key:
+					apiKey === null
+						? null
+						: ({
+								...returningApiKey,
+								metadata: migratedMetadata,
+							} as Omit<ApiKey, "key">),
 			});
 		},
 	);

@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -6,7 +7,8 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
-import { deprecate } from "@better-auth/core/utils";
+import { deprecate } from "@better-auth/core/utils/deprecate";
+import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -15,7 +17,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -158,8 +159,15 @@ export async function createAuthContext(
 		if (typeof (options.advanced as any)?.generateId === "function") {
 			return (options.advanced as any).generateId({ model, size });
 		}
-		if (typeof options?.advanced?.database?.generateId === "function") {
-			return options.advanced.database.generateId({ model, size });
+		const dbGenerateId = options?.advanced?.database?.generateId;
+		if (typeof dbGenerateId === "function") {
+			return dbGenerateId({ model, size });
+		}
+		if (dbGenerateId === "uuid") {
+			return crypto.randomUUID();
+		}
+		if (dbGenerateId === "serial" || dbGenerateId === false) {
+			return false;
 		}
 		return generateId(size);
 	};
@@ -179,8 +187,12 @@ export async function createAuthContext(
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
+	const trustedOrigins = await getTrustedOrigins(options);
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
+		baseURL: baseURL || "",
+		version: getBetterAuthVersion(),
 		socialProviders: providers,
 		options,
 		oauthConfig: {
@@ -190,7 +202,7 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: await getTrustedOrigins(options),
+		trustedOrigins,
 		isTrustedOrigin(
 			url: string,
 			settings?: {
@@ -201,7 +213,6 @@ export async function createAuthContext(
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
-		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined

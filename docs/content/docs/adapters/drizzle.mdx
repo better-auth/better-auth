@@ -17,8 +17,7 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
-  database: drizzleAdapter(db, {
-    // [!code highlight]
+  database: drizzleAdapter(db, { // [!code highlight]
     provider: "sqlite", // or "pg" or "mysql" // [!code highlight]
   }), // [!code highlight]
   //... the rest of your config
@@ -38,10 +37,18 @@ npx @better-auth/cli@latest generate
 
 To generate and apply the migration, run the following commands:
 
-```package-install title="Schema Migration"
-npx drizzle-kit generate # generate the migration file
-npx drizzle-kit migrate # apply the migration
-```
+   <Tabs items={["generate", "migrate"]}>
+      <Tab value="generate">
+      ```package-install
+      npx drizzle-kit generate # generate the migration file
+      ```
+      </Tab>
+      <Tab value="migrate">
+      ```package-install
+      npx drizzle-kit migrate # apply the migration
+      ```
+      </Tab>
+    </Tabs>
 
 
 ## Joins (Experimental)
@@ -79,10 +86,10 @@ import { schema } from "./schema";
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "sqlite", // or "pg" or "mysql"
-    schema: {
-      ...schema,
-      user: schema.users,
-    },
+    schema: { // [!code highlight]
+      ...schema, // [!code highlight]
+      user: schema.users, // [!code highlight]
+    }, // [!code highlight]
   }),
 });
 ```
