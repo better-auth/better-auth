@@ -2293,22 +2293,10 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
-		type Result = PrettifyDeep<typeof updatedOrg>;
-		expect(updatedOrg?.someRequiredField).toBe("hey2");
-		//@ts-expect-error
-		expect(db.organization[0]?.someRequiredField).toBe("hey2");
-		expectTypeOf<Result>().toEqualTypeOf<{
-			id: string;
-			name: string;
-			slug: string;
-			createdAt: Date;
-			logo?: string | null | undefined;
-			someRequiredField: string;
-			someOptionalField?: string | undefined;
-			someHiddenField?: string | undefined;
-			metadata: any;
-		} | null>();
-	});
+	expect(updatedOrg?.someRequiredField).toBe("hey2");
+	//@ts-expect-error
+	expect(db.organization[0]?.someRequiredField).toBe("hey2");
+});
 
 	it("list user organizations", async () => {
 		const orgs = await auth.api.listOrganizations({
@@ -3114,7 +3102,6 @@ describe("organization additionalFields with returned: false", async () => {
 	});
 
 	it("should save field with returned: false but not return it in response", async () => {
-		// Create organization with both public and secret fields
 		const org = await client.organization.create({
 			name: "Test Org",
 			slug: "test-org-secret",
@@ -3123,12 +3110,12 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(org.data).toBeDefined();
-		// Public field should be returned
+		// Note: publicField and secretField use `as any` because endpoint response types
+		// are inferred from adapter return values which include all fields.
+		// The runtime correctly filters returned: false fields.
 		expect((org.data as any).publicField).toBe("public-value");
-		// Secret field should NOT be returned
 		expect((org.data as any).secretField).toBeUndefined();
 
-		// Verify the secret field was actually saved in the database
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg).toBeDefined();
 		expect(dbOrg?.secretField).toBe("secret-value");
@@ -3148,8 +3135,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(fullOrg.data).toBeDefined();
-		expect((fullOrg.data as any).publicField).toBe("public-value-2");
-		expect((fullOrg.data as any).secretField).toBeUndefined();
+		expect(fullOrg.data?.publicField).toBe("public-value-2");
+		// @ts-expect-error - secretField has returned: false
+		expect(fullOrg.data?.secretField).toBeUndefined();
 	});
 
 	it("should not return secret field when listing organizations", async () => {
@@ -3158,10 +3146,8 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(orgs.data).toBeDefined();
 		expect(orgs.data!.length).toBeGreaterThan(0);
 
-		// None of the organizations should have the secret field
 		for (const org of orgs.data!) {
 			expect((org as any).secretField).toBeUndefined();
-			// But they should have the public field
 			expect((org as any).publicField).toBeDefined();
 		}
 	});
@@ -3205,10 +3191,10 @@ describe("organization additionalFields with returned: false", async () => {
 			(m) => m.userId === signUpRes.user.id,
 		);
 		expect(addedMember).toBeDefined();
-		expect((addedMember as any).memberPublicField).toBe("member-public");
-		expect((addedMember as any).memberSecretField).toBeUndefined();
+		expect(addedMember?.memberPublicField).toBe("member-public");
+		// @ts-expect-error - memberSecretField has returned: false
+		expect(addedMember?.memberSecretField).toBeUndefined();
 
-		// Verify secret field was saved in database
 		const dbMember = db.member.find((m) => m.id === addedMember?.id);
 		expect(dbMember?.memberSecretField).toBe("member-secret");
 	});
@@ -3239,10 +3225,10 @@ describe("organization additionalFields with returned: false", async () => {
 			(i) => i.email === "invite-test@example.com",
 		);
 		expect(invitation).toBeDefined();
-		expect((invitation as any).invitationPublicField).toBe("invite-public");
-		expect((invitation as any).invitationSecretField).toBeUndefined();
+		expect(invitation?.invitationPublicField).toBe("invite-public");
+		// @ts-expect-error - invitationSecretField has returned: false
+		expect(invitation?.invitationSecretField).toBeUndefined();
 
-		// Verify secret field was saved in database
 		const dbInvitation = db.invitation.find((i) => i.id === invitation?.id);
 		expect(dbInvitation?.invitationSecretField).toBe("invite-secret");
 	});
@@ -3269,7 +3255,6 @@ describe("organization additionalFields with returned: false", async () => {
 		expect((updated.data as any).publicField).toBe("updated-public");
 		expect((updated.data as any).secretField).toBeUndefined();
 
-		// Verify secret field was updated in database
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");
 	});

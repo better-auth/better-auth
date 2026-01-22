@@ -51,7 +51,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		options?.schema?.invitation?.additionalFields;
 	const teamAdditionalFields = options?.schema?.team?.additionalFields;
 	return {
-		findOrganizationBySlug: async (slug: string) => {
+		findOrganizationBySlug: async (
+			slug: string,
+		): Promise<InferOrganization<O> | null> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",
@@ -62,13 +64,16 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return filterOutputFields(organization, orgAdditionalFields);
+			return filterOutputFields(
+				organization,
+				orgAdditionalFields,
+			) as InferOrganization<O> | null;
 		},
 		createOrganization: async (data: {
 			organization: OrganizationInput &
 				// This represents the additional fields from the plugin options
 				Record<string, any>;
-		}) => {
+		}): Promise<InferOrganization<O>> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.create<
 				OrganizationInput,
@@ -91,7 +96,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 						? JSON.parse(organization.metadata)
 						: undefined,
 			};
-			return filterOutputFields(result, orgAdditionalFields) as typeof result;
+			return filterOutputFields(
+				result,
+				orgAdditionalFields,
+			) as InferOrganization<O>;
 		},
 		findMemberByEmail: async (data: {
 			email: string;
@@ -384,7 +392,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		updateOrganization: async (
 			organizationId: string,
 			data: Partial<OrganizationInput>,
-		) => {
+		): Promise<InferOrganization<O> | null> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.update<InferOrganization<O, false>>({
 				model: "organization",
@@ -411,7 +419,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					? parseJSON<Record<string, any>>(organization.metadata)
 					: undefined,
 			};
-			return filterOutputFields(result, orgAdditionalFields);
+			return filterOutputFields(
+				result,
+				orgAdditionalFields,
+			) as InferOrganization<O>;
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -457,7 +468,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			);
 			return session as Session;
 		},
-		findOrganizationById: async (organizationId: string) => {
+		findOrganizationById: async (
+			organizationId: string,
+		): Promise<InferOrganization<O> | null> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",
@@ -468,7 +481,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return filterOutputFields(organization, orgAdditionalFields);
+			return filterOutputFields(
+				organization,
+				orgAdditionalFields,
+			) as InferOrganization<O> | null;
 		},
 		checkMembership: async ({
 			userId,
@@ -584,7 +600,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				teams: filteredTeams,
 			};
 		},
-		listOrganizations: async (userId: string) => {
+		listOrganizations: async (userId: string): Promise<InferOrganization<O>[]> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findMany<
 				InferMember<O, false> & { organization: InferOrganization<O, false> }
@@ -605,8 +621,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				return [];
 			}
 
-			const organizations = result.map((member) =>
-				filterOutputFields(member.organization, orgAdditionalFields),
+			const organizations = result.map(
+				(member) =>
+					filterOutputFields(
+						member.organization,
+						orgAdditionalFields,
+					) as InferOrganization<O>,
 			);
 
 			return organizations;
