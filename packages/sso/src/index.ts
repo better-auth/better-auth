@@ -101,7 +101,7 @@ type SSOEndpoints<O extends SSOOptions> = {
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	listSSOProviders: ReturnType<typeof listSSOProviders>;
 	getSSOProvider: ReturnType<typeof getSSOProvider>;
-	updateSSOProvider: ReturnType<typeof updateSSOProvider<O>>;
+	updateSSOProvider: ReturnType<typeof updateSSOProvider>;
 	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
