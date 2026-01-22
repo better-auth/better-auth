@@ -396,7 +396,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = await storage.getItem(cookieName);
+								const prevCookie = storage.getItem(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "",
 									prevCookie ?? undefined,
@@ -408,7 +408,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
@@ -449,7 +449,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const storedCookieJson = await storage.getItem(cookieName);
+							const storedCookieJson = storage.getItem(cookieName);
 							const oauthStateValue = getOAuthStateValue(
 								storedCookieJson,
 								cookiePrefix,
@@ -468,9 +468,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
-							const cookie = String(url.searchParams.get("cookie"));
+							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = await storage.getItem(cookieName);
+							const prevCookie = storage.getItem(cookieName);
 							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
 							storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
@@ -519,7 +519,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						}
 					}
 					if (url.includes("/sign-out")) {
-						await storage.setItem(cookieName, "{}");
+						storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
 							...store.atoms.session.get(),
 							data: null,
