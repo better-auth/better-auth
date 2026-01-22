@@ -26,11 +26,56 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 	return cookieName;
 }
 
+/**
+ * Split a Set-Cookie header string into individual cookie strings.
+ *
+ * This function properly handles commas within cookie values, specifically
+ * for the `Expires` attribute which contains a date string with a comma
+ * (e.g., "Expires=Thu, 01 Jan 2026 00:00:00 GMT").
+ *
+ * The algorithm tracks when we're inside an Expires attribute and waits
+ * until we see "GMT" before considering a comma as a cookie separator.
+ *
+ * @param setCookie - The Set-Cookie header string (may contain multiple cookies)
+ * @returns An array of individual cookie strings
+ */
+export function splitSetCookieHeader(setCookie: string): string[] {
+	const parts: string[] = [];
+	let buffer = "";
+	let i = 0;
+	while (i < setCookie.length) {
+		const char = setCookie[i];
+		if (char === ",") {
+			const recent = buffer.toLowerCase();
+			const hasExpires = recent.includes("expires=");
+			const hasGmt = /gmt/i.test(recent);
+			if (hasExpires && !hasGmt) {
+				buffer += char;
+				i += 1;
+				continue;
+			}
+			if (buffer.trim().length > 0) {
+				parts.push(buffer.trim());
+				buffer = "";
+			}
+			i += 1;
+			if (setCookie[i] === " ") i += 1;
+			continue;
+		}
+		buffer += char;
+		i += 1;
+	}
+	if (buffer.trim().length > 0) {
+		parts.push(buffer.trim());
+	}
+	return parts;
+}
+
 export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
 	const cookies = new Map<string, CookieAttributes>();
-	const cookieArray = setCookie.split(", ");
+	const cookieArray = splitSetCookieHeader(setCookie);
 
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
