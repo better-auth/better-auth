@@ -78,6 +78,7 @@ export default function ArticleLayout() {
 										<item.Icon className="size-5" />
 										<span className="grow">{item.title}</span>
 										{item.isNew && <NewBadge />}
+										{item.isUpdated && <UpdatedBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
 										>
@@ -134,6 +135,22 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 	);
 }
 
+function UpdatedBadge({ isSelected }: { isSelected?: boolean }) {
+	return (
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className={cn(
+					" pointer-events-none !no-underline border-dashed !decoration-transparent",
+					isSelected && "!border-solid",
+				)}
+				variant={isSelected ? "default" : "outline"}
+			>
+				Updated
+			</Badge>
+		</div>
+	);
+}
+
 function SidebarListItem({
 	listItem,
 	pathname,
@@ -174,6 +191,7 @@ function SidebarListItem({
 					</div>
 					{listItem.title}
 					{listItem.isNew && <NewBadge />}
+					{listItem.isUpdated && <UpdatedBadge />}
 				</AsideLink>
 				<AnimatePresence initial={false}>
 					{showChildren && (
@@ -230,6 +248,7 @@ function SidebarListItem({
 												</div>
 												{child.title}
 												{child.isNew && <NewBadge />}
+												{child.isUpdated && <UpdatedBadge />}
 											</AsideLink>
 										</Suspense>
 									),
@@ -273,6 +292,7 @@ function SidebarListItem({
 				</div>
 				{listItem.title}
 				{listItem.isNew && <NewBadge />}
+				{listItem.isUpdated && <UpdatedBadge />}
 			</AsideLink>
 		</Suspense>
 	);

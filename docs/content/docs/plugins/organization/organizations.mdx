@@ -1,0 +1,333 @@
+---
+title: Organizations
+description: Learn how to create, update, and manage organizations.
+---
+
+Organizations are the top-level entity in the organization plugin. They represent a group of users working together.
+
+## Creating an Organization
+
+To create a new organization, use the `organization.create` method:
+
+<APIMethod
+    path="/organization/create"
+    method="POST"
+    requireSession
+    note="Includes any additional fields from the organization schema.">
+```ts
+type createOrganization = {
+    /**
+     * Name of the organization.
+     */
+    name: string = "My Organization"
+    /**
+     * Slug of the organization. Not required if slugs are disabled.
+     */
+    slug: string = "my-org"
+    /**
+     * Organization logo.
+     */
+    logo?: string = "https://example.com/logo.png"
+    /**
+     * Organization metadata.
+     */
+    metadata?: Record<string, any> = { test: "organization-metadata" }
+    /**
+     * Whether to keep the current active organization active after creating a new one.
+     */
+    keepCurrentActiveOrganization?: boolean = true
+    /**
+     * User ID of the organization creator, allows you provide the user id when calling the endpoint without session headers.
+     * @serverOnly
+     */
+    userId?: string = "user-id"
+}
+```
+</APIMethod> 
+
+### Creating an org as an admin
+
+You can create organizations on behalf another user by providing the `userId` parameter.
+This is only available on the `auth.api.createOrganization` method.
+
+```ts
+await auth.api.createOrganization({
+    body: {
+        name: "My Organization",
+        slug: "my-org",
+        userId: "user-id-who-will-be-the-owner", // [!code highlight]
+    },
+})
+```
+
+<Callout type="warn">
+    Note that the `userId` parameter cannot be used alongside session headers.
+    If headers were provided, it will take precedence over the `userId` parameter.
+</Callout>
+
+
+## Updating an Organization
+
+You can update an organization by calling the `organization.update` method.
+
+<APIMethod
+    path="/organization/update"
+    method="POST"
+    requireSession
+    note="Includes any additional fields from the organization schema.">
+```ts
+type updateOrganization = {
+    /**
+     * The organization ID to update.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The data to update the organization with.
+     */
+    data: {
+        /**
+         * The name of the organization.
+         */
+        name?: string = "Updated Organization Name"
+        /**
+         * The logo of the organization.
+         */
+        logo?: string = "https://example.com/logo.png"
+        /**
+         * The slug of the organization.
+         */
+        slug?: string = "updated-slug"
+        /**
+         * The metadata of the organization.
+         */
+        metadata?: Record<string, any> = { test: "organization-metadata" }
+    }
+}
+```
+</APIMethod>
+
+
+## Deleting an Organization
+
+You can delete an organization using the `organization.delete` method.
+
+<APIMethod
+    path="/organization/delete"
+    method="POST"
+    requireSession
+    note="Requires owner or admin permissions.">
+```ts
+type deleteOrganization = {
+    /**
+     * The organization ID to delete.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+    Deleting an organization will also delete all associated members,
+    invitations, and related data.
+</Callout>
+
+<Callout type="info">
+    You can disable organization deletion entirely by setting `disableOrganizationDeletion: true` in the plugin options.
+</Callout>
+
+
+## Check if org slug is taken
+
+You can check if an organization slug is taken using the `organization.checkSlug` method.
+
+<APIMethod
+    path="/organization/check-slug"
+    method="POST"
+    requireSession
+>
+```ts
+type checkSlug = {
+    /**
+     * The slug to check.
+     */
+    slug: string = "my-org"
+}
+```
+</APIMethod>
+
+Returns:
+```ts
+type Result = { isTaken: boolean }
+```
+
+---
+
+## Organization Related Options
+
+You can configure the organization plugin with the following options:
+
+### `allowUserToCreateOrganization`
+
+Controls whether users can create organizations. Can be a boolean or a function that receives the user and returns a boolean.
+
+```ts
+organization({
+    allowUserToCreateOrganization: async (user) => {
+        return user.plan === "pro";
+    }
+})
+```
+
+**Default:** `true`
+
+### `organizationLimit`
+
+The maximum number of organizations a user can create. Can be a number or a function that receives the user and returns a number.
+
+```ts
+organization({
+    organizationLimit: async (user) => {
+        return user.plan === "pro" ? 10 : 5;
+    }
+})
+```
+
+**Default:** `100`
+
+### `creatorRole`
+
+The role that is assigned to the creator of the organization.
+
+```ts
+organization({
+    creatorRole: "owner"
+})
+```
+
+**Default:** `"owner"`
+
+### `membershipLimit`
+
+The maximum number of members allowed in an organization.
+
+```ts
+organization({
+    membershipLimit: 100
+})
+```
+
+**Default:** `100`
+
+### `disableSlugs`
+
+Whether to disable slugs for organizations. When disabled, organizations will only be identified by their ID.
+
+<Callout type="warn">
+    Don't forget to re-run schema generation or migrations after changing this option.
+</Callout>
+
+```ts
+organization({
+    disableSlugs: true
+})
+```
+
+**Default:** `false`
+
+### `defaultOrganizationIdField`
+
+Controls the input & output of organization identifiers. If you set this to `slug`,
+any endpoint parameters for `organizationId` will accept the organization's `slug` instead of its `id`, and vice versa.
+
+This is useful if your client side organization state only knows the organization's `slug`, and not its `id`.
+(E.g., via a query parameter or url parameter)
+
+Learn more about [Organization Identifiers](/docs/plugins/organization-new/organization-identifiers).
+
+```ts
+organization({
+    defaultOrganizationIdField: "slug" // "slug" or "id"
+})
+```
+
+**Default:** `"id"`
+
+### `disableOrganizationDeletion`
+
+Prevents organizations from being deleted.
+
+```ts
+organization({
+    disableOrganizationDeletion: true
+})
+```
+
+**Default:** `false`
+
+### `roles`
+
+Define additional roles for the organization plugin beyond the default `owner`, `admin`, and `member` roles.
+
+```ts
+organization({
+    roles: {
+        moderator: {
+            // role permissions
+        }
+    }
+})
+```
+
+### `ac`
+
+Configure access control for the organization plugin. See the [Access Control](/docs/plugins/organization-new/access-control) documentation for more details.
+
+### `hooks`
+
+Hooks allow you to run custom logic at various points in the organization lifecycle. See the [Hooks](/docs/plugins/organization-new/hooks) documentation for more details.
+
+### `schema`
+
+Customize the database schema for organization-related tables. You can rename fields, change model names, or add additional fields.
+
+```ts
+organization({
+    schema: {
+        organization: {
+            modelName: "teams", // rename the table
+            fields: {
+                name: "teamName" // rename fields
+            },
+            additionalFields: {
+                billingId: {
+                    type: "string",
+                    required: false
+                }
+            }
+        },
+        member: {
+            additionalFields: {
+                department: {
+                    type: "string",
+                    required: false
+                }
+            }
+        }
+    }
+})
+```
+
+
+## Organization Schema
+
+The organization table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Organization name |
+| `slug` | `string` | URL-friendly identifier |
+| `logo` | `string?` | Organization logo URL |
+| `metadata` | `object?` | Custom metadata |
+| `createdAt` | `Date` | Creation timestamp |
+
