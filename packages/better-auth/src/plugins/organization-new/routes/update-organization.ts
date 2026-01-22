@@ -145,7 +145,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-			if (typeof body.data.slug === "string") {
+			if (
+				typeof body.data.slug === "string" &&
+				(organization as unknown as { slug: string }).slug !== body.data.slug
+			) {
 				if (options?.disableSlugs) {
 					const code = "SLUG_IS_NOT_ALLOWED";
 					const msg = ORGANIZATION_ERROR_CODES[code];
