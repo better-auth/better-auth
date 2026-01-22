@@ -843,11 +843,28 @@ When registering a SAML provider, you need to provide Service Provider (SP) meta
 
 - **metadata**: XML metadata for the Service Provider
 - **binding**: The binding method, typically "post" or "redirect"
-- **privateKey**: Private key for signing (optional)
-- **privateKeyPass**: Password for the private key (if encrypted)
+- **authnRequestsSigned**: Whether to sign AuthnRequests
+- **privateKey**: Private key for signing AuthnRequests
+- **privateKeyPass**: Password for the private key
 - **isAssertionEncrypted**: Whether assertions should be encrypted
 - **encPrivateKey**: Private key for decryption (if encryption is enabled)
 - **encPrivateKeyPass**: Password for the encryption private key
+
+### Signed AuthnRequests
+
+Some enterprise IdPs (Okta, Azure AD, ADFS) require signed AuthnRequests. Enable this with:
+
+```ts
+samlConfig: {
+    // ... other config
+    authnRequestsSigned: true,
+    spMetadata: {
+        privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...",
+    }
+}
+```
+
+The SP metadata endpoint will automatically include `AuthnRequestsSigned="true"` when enabled.
 
 ### Identity Provider Configuration
 
