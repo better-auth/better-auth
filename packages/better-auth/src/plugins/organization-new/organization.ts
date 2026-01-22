@@ -5,12 +5,7 @@ import { getEndpoints } from "./helpers/get-endpoints";
 import type { InferOrganizationSchema } from "./helpers/get-schema";
 import { getSchema } from "./helpers/get-schema";
 import { resolveOrgOptions } from "./helpers/resolve-org-options";
-import type {
-	InferInvitation,
-	InferMember,
-	InferOrganization,
-	OrganizationOptions,
-} from "./types";
+import type { InferAllAddons, OrganizationOptions } from "./types";
 
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
@@ -18,12 +13,7 @@ export function organization<O extends OrganizationOptions>(
 	id: "organization";
 	endpoints: InferOrganizationEndpoints<O>;
 	schema: InferOrganizationSchema<ReturnType<typeof resolveOrgOptions<O>>>;
-	$Infer: {
-		Organization: InferOrganization<ReturnType<typeof resolveOrgOptions<O>>>;
-		Invitation: InferInvitation<ReturnType<typeof resolveOrgOptions<O>>>;
-		Member: InferMember<ReturnType<typeof resolveOrgOptions<O>>>;
-		//TODO: infer from addons as well
-	};
+	$Infer: InferAllAddons<O>;
 	$ERROR_CODES: typeof $ERROR_CODES;
 	options: NoInfer<O>;
 };
@@ -41,5 +31,6 @@ export function organization<O extends OrganizationOptions>(
 		schema,
 		$ERROR_CODES,
 		options: opts as NoInfer<O>,
+		$Infer: {} as InferAllAddons<O>,
 	} satisfies BetterAuthPlugin;
 }
