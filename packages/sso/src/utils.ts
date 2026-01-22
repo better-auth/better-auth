@@ -29,13 +29,26 @@ export function safeJsonParse<T>(
 	return null;
 }
 
+/**
+ * Checks if a domain matches any domain in a comma-separated list.
+ */
+export const domainMatches = (searchDomain: string, domainList: string) => {
+	const search = searchDomain.toLowerCase();
+	const domains = domainList
+		.split(",")
+		.map((d) => d.trim().toLowerCase())
+		.filter(Boolean);
+	return domains.some((d) => search === d || search.endsWith(`.${d}`));
+};
+
+/**
+ * Validates email domain against allowed domain(s).
+ * Supports comma-separated domains for multi-domain SSO.
+ */
 export const validateEmailDomain = (email: string, domain: string) => {
 	const emailDomain = email.split("@")[1]?.toLowerCase();
-	const providerDomain = domain.toLowerCase();
-	if (!emailDomain || !providerDomain) {
+	if (!emailDomain || !domain) {
 		return false;
 	}
-	return (
-		emailDomain === providerDomain || emailDomain.endsWith(`.${providerDomain}`)
-	);
+	return domainMatches(emailDomain, domain);
 };
