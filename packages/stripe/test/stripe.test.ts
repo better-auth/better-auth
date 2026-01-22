@@ -1990,6 +1990,10 @@ describe("stripe", () => {
 			],
 		});
 
+		// Clear mocks before the upgrade call
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+
 		const upgradeRes = await client.subscription.upgrade({
 			plan: "starter",
 			seats: 1,
@@ -2001,6 +2005,24 @@ describe("stripe", () => {
 		// Should succeed and return a billing portal URL
 		expect(upgradeRes.error).toBeNull();
 		expect(upgradeRes.data?.url).toBeDefined();
+
+		// Verify billing portal was called with the annual price ID
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				flow_data: expect.objectContaining({
+					type: "subscription_update_confirm",
+					subscription_update_confirm: expect.objectContaining({
+						items: expect.arrayContaining([
+							expect.objectContaining({ price: annualPriceId }),
+						]),
+					}),
+				}),
+			}),
+		);
+
+		// Should use billing portal, not checkout (since user has existing subscription)
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 
 	it.each([
