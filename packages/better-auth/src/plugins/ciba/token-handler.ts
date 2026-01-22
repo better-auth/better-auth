@@ -1,3 +1,11 @@
+/**
+ * CIBA Token Handler
+ *
+ * TODO: Extract token generation logic to shared utility in oidc-provider/utils.ts
+ * The token generation (access token, refresh token, ID token) is duplicated
+ * between OIDC provider and CIBA. Should be refactored before production.
+ */
+
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { SignJWT } from "jose";
