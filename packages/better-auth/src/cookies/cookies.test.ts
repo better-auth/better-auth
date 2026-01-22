@@ -219,6 +219,24 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		const map = parseSetCookieHeader(header);
 		expect(map.get("a")?.value).toBe("1");
 		expect(map.get("b")?.value).toBe("2");
+		expect(map.get("a")?.expires).toEqual(
+			new Date("Wed, 21 Oct 2015 07:28:00 GMT"),
+		);
+		expect(map.get("b")?.expires).toEqual(
+			new Date("Thu, 22 Oct 2015 07:28:00 GMT"),
+		);
+	});
+
+	it("handles cookie with Expires followed by cookie without Expires", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
+		);
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.expires).toEqual(
+			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+		);
+		expect(map.get("token")?.value).toBe("abc");
+		expect(map.get("token")?.expires).toBeUndefined();
 	});
 });
 
