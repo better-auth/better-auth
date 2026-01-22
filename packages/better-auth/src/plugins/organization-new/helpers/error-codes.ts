@@ -1,6 +1,7 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
+	ORGANIZATION_DELETION_DISABLED: "Organization deletion is disabled",
 	SLUG_IS_NOT_ALLOWED: "Slug is not allowed",
 	SLUG_IS_REQUIRED: "Slug is required",
 	NOT_ALLOWED_TO_CREATE_NEW_ORG:

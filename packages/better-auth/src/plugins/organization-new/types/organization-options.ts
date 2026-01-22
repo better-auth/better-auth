@@ -19,6 +19,7 @@ export type ResolvedOrganizationOptions = {
 	disableSlugs: boolean;
 	roles: Record<string, Role>;
 	defaultOrganizationIdField: "id" | "slug";
+	disableOrganizationDeletion: boolean;
 	ac?: AccessControl;
 	schema?: OrganizationOptionsSchema;
 	hooks?: OrganizationHooks;
@@ -93,6 +94,12 @@ export type OrganizationOptions = {
 	 * @default "id"
 	 */
 	defaultOrganizationIdField?: "id" | "slug";
+	/**
+	 * Disable organization deletion
+	 *
+	 * @default false
+	 */
+	disableOrganizationDeletion?: boolean | undefined;
 	/**
 	 * The access control for the organization plugin.
 	 */

@@ -277,7 +277,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.create<
 				typeof data,
-				Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>
+				Member & InferAdditionalFieldsFromPluginOptions<"member", O>
 			>({
 				model: "member",
 				data: {

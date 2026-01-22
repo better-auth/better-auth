@@ -2,6 +2,9 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { getTestInstance } from "../../../test-utils";
 import { organizationClient } from "../../organization/client";
 
+/**
+ * Helper to return random org data for testing.
+ */
 export const getOrganizationData = (options?: {
 	name?: string;
 	slug?: string;
@@ -13,6 +16,9 @@ export const getOrganizationData = (options?: {
 	};
 };
 
+/**
+ * Helper to define `getTestInstance` as a shorter alias, specific to the organization plugin.
+ */
 export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
 	plugins: Plugins,
 ) => {
@@ -30,5 +36,7 @@ export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
 		},
 	);
 
-	return instance;
+	const adapter = (await instance.auth.$context).adapter;
+
+	return { ...instance, adapter };
 };
