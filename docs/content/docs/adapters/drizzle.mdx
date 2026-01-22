@@ -166,11 +166,11 @@ To use Drizzle Relations v2, you need to install the `@better-auth/drizzle-adapt
 npm install @better-auth/drizzle-adapter
 ```
 
-After installing, update your imports:
+After installing, update your imports to use the relations-v2 adapter:
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
-import { drizzleAdapter } from '@better-auth/drizzle-adapter'; // [!code highlight]
+import { drizzleAdapter } from '@better-auth/drizzle-adapter/relations-v2'; // [!code highlight]
 import { db } from './database.ts';
 import * as schema from './schema.ts';
 
