@@ -502,20 +502,49 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				return false;
 			});
 
+			// Get the current price ID from the active Stripe subscription
+			const stripeSubscriptionPriceId =
+				activeSubscription?.items.data[0]?.price.id;
+
 			// Also find any incomplete subscription that we can reuse
 			const incompleteSubscription = subscriptions.find(
 				(sub) => sub.status === "incomplete",
 			);
 
-			if (
-				activeOrTrialingSubscription &&
-				activeOrTrialingSubscription.status === "active" &&
-				activeOrTrialingSubscription.plan === ctx.body.plan &&
-				activeOrTrialingSubscription.seats === (ctx.body.seats || 1) &&
-				// Skip if periodEnd has passed, in case status is stale
-				(!activeOrTrialingSubscription.periodEnd ||
-					activeOrTrialingSubscription.periodEnd > new Date())
-			) {
+			const priceId = ctx.body.annual
+				? plan.annualDiscountPriceId
+				: plan.priceId;
+			const lookupKey = ctx.body.annual
+				? plan.annualDiscountLookupKey
+				: plan.lookupKey;
+			const resolvedPriceId = lookupKey
+				? await resolvePriceIdFromLookupKey(client, lookupKey)
+				: undefined;
+
+			const priceIdToUse = priceId || resolvedPriceId;
+			if (!priceIdToUse) {
+				throw ctx.error("BAD_REQUEST", {
+					message: "Price ID not found for the selected plan",
+				});
+			}
+
+			const isSamePlan = activeOrTrialingSubscription?.plan === ctx.body.plan;
+			const isSameSeats =
+				activeOrTrialingSubscription?.seats === (ctx.body.seats || 1);
+			const isSamePriceId =
+				!stripeSubscriptionPriceId ||
+				stripeSubscriptionPriceId === priceIdToUse;
+			const isSubscriptionStillValid =
+				!activeOrTrialingSubscription?.periodEnd ||
+				activeOrTrialingSubscription.periodEnd > new Date();
+
+			const isAlreadySubscribed =
+				activeOrTrialingSubscription?.status === "active" &&
+				isSamePlan &&
+				isSameSeats &&
+				isSamePriceId &&
+				isSubscriptionStillValid;
+			if (isAlreadySubscribed) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -550,32 +579,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 					});
 					dbSubscription = activeOrTrialingSubscription;
-				}
-
-				// Resolve price ID if using lookup keys
-				let priceIdToUse: string | undefined = undefined;
-				if (ctx.body.annual) {
-					priceIdToUse = plan.annualDiscountPriceId;
-					if (!priceIdToUse && plan.annualDiscountLookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.annualDiscountLookupKey,
-						);
-					}
-				} else {
-					priceIdToUse = plan.priceId;
-					if (!priceIdToUse && plan.lookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.lookupKey,
-						);
-					}
-				}
-
-				if (!priceIdToUse) {
-					throw ctx.error("BAD_REQUEST", {
-						message: "Price ID not found for the selected plan",
-					});
 				}
 
 				const { url } = await client.billingPortal.sessions
@@ -686,24 +689,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
-			let priceIdToUse: string | undefined = undefined;
-			if (ctx.body.annual) {
-				priceIdToUse = plan.annualDiscountPriceId;
-				if (!priceIdToUse && plan.annualDiscountLookupKey) {
-					priceIdToUse = await resolvePriceIdFromLookupKey(
-						client,
-						plan.annualDiscountLookupKey,
-					);
-				}
-			} else {
-				priceIdToUse = plan.priceId;
-				if (!priceIdToUse && plan.lookupKey) {
-					priceIdToUse = await resolvePriceIdFromLookupKey(
-						client,
-						plan.lookupKey,
-					);
-				}
-			}
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{

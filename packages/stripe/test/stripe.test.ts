@@ -1915,6 +1915,94 @@ describe("stripe", () => {
 		expect(upgradeRes.error?.message).toContain("already subscribed");
 	});
 
+	it("should allow upgrade from monthly to annual billing for the same plan", async () => {
+		const monthlyPriceId = "price_monthly_starter_123";
+		const annualPriceId = "price_annual_starter_456";
+		const subscriptionId = "sub_monthly_to_annual_123";
+
+		const stripeOptionsWithAnnual = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: monthlyPriceId,
+						annualDiscountPriceId: annualPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithAnnual)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(testUser, { throw: true });
+
+		const headers = new Headers();
+		await client.signIn.email(testUser, {
+			throw: true,
+			onSuccess: sessionSetter(headers),
+		});
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 1,
+				stripeSubscriptionId: subscriptionId,
+			},
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_monthly_item",
+								price: { id: monthlyPriceId },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			annual: true,
+			subscriptionId,
+			fetchOptions: { headers },
+		});
+
+		// Should succeed and return a billing portal URL
+		expect(upgradeRes.error).toBeNull();
+		expect(upgradeRes.data?.url).toBeDefined();
+	});
+
 	it.each([
 		{
 			name: "past",
