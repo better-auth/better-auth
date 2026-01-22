@@ -349,7 +349,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 					);
 				}
 
-				return ctx.json(updatedInvitation as InferInvitation<O, false>);
+				return ctx.json(updatedInvitation as unknown as InferInvitation<O>);
 			}
 
 			if (
