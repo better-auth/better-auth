@@ -785,20 +785,14 @@ describe("internal adapter test", async () => {
 		expect(sessions.length).toBe(1);
 	});
 
-	it("should store session with id in secondary storage when storeSessionInDatabase is true", async () => {
+	it("should store session with DB-generated id in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
+		const testDb = new DatabaseSync(":memory:");
 
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: testDb,
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -815,31 +809,31 @@ describe("internal adapter test", async () => {
 				},
 			},
 			session: {
-				storeSessionInDatabase: true, // key config for this case
+				storeSessionInDatabase: true,
+			},
+			advanced: {
+				database: {
+					generateId: "serial",
+				},
 			},
 		} satisfies BetterAuthOptions;
 
-		// Run migrations for the new database
 		(await getMigrations(testOpts)).runMigrations();
 
 		const testCtx = await init(testOpts);
 		const testInternalAdapter = testCtx.internalAdapter;
 
-		// Create a user first
 		const user = await testInternalAdapter.createUser({
 			name: "test-user-with-id",
 			email: "test-with-id@email.com",
 		});
 
-		// Create a session
 		const session = await testInternalAdapter.createSession(user.id);
 
-		// The session returned from createSession should have an id
 		expect(session.id).toBeDefined();
 		expect(typeof session.id).toBe("string");
 		expect(session.id.length).toBeGreaterThan(0);
 
-		// Get the session from secondary storage
 		const storedSessionStr = testMap.get(session.token);
 		expect(storedSessionStr).toBeDefined();
 
@@ -852,7 +846,6 @@ describe("internal adapter test", async () => {
 		expect(storedSession?.session).toBeDefined();
 
 		// The session in secondary storage MUST have an id
-		// This is the actual bug: previously id was undefined
 		expect(storedSession?.session.id).toBeDefined();
 		expect(storedSession?.session.id).toBe(session.id);
 
@@ -861,10 +854,8 @@ describe("internal adapter test", async () => {
 			model: "session",
 			where: [{ field: "id", value: session.id }],
 		});
+
 		expect(dbSession).toBeDefined();
 		expect(dbSession?.id).toBe(session.id);
-
-		// Clean up DB
-		testDb.close();
 	});
 });
