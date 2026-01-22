@@ -6,6 +6,7 @@ import { AppState } from "react-native";
 class ExpoFocusManager implements FocusManager {
 	listeners = new Set<FocusListener>();
 	subscription?: ReturnType<typeof AppState.addEventListener>;
+	isFocused: boolean | undefined;
 
 	subscribe(listener: FocusListener) {
 		this.listeners.add(listener);
@@ -15,6 +16,8 @@ class ExpoFocusManager implements FocusManager {
 	}
 
 	setFocused(focused: boolean) {
+		if (this.isFocused === focused) return;
+		this.isFocused = focused;
 		this.listeners.forEach((listener) => listener(focused));
 	}
 
