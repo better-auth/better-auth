@@ -1,9 +1,33 @@
 import type { Prettify } from "@better-auth/core";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import type { UnionToIntersection } from "../../../types";
 import type { InferOrganizationRolesFromOption } from "../access";
 import type { Organization } from "../schema";
 import type { Addon } from "./addon";
 import type { OrganizationOptions } from "./organization-options";
+
+/**
+ * Extracts and merges all `Infer` types from the addons in `O["use"]`
+ */
+export type InferFromAddons<O extends OrganizationOptions> =
+	O["use"] extends readonly Addon[]
+		? UnionToIntersection<
+				{
+					[K in keyof O["use"]]: O["use"][K] extends Addon
+						? O["use"][K]["Infer"] extends Record<string, any>
+							? O["use"][K]["Infer"]
+							: {}
+						: {};
+				}[number]
+			>
+		: {};
+
+export type InferAllAddons<O extends OrganizationOptions> =
+	InferFromAddons<O> & {
+		Organization: InferOrganization<O>;
+		Invitation: InferInvitation<O>;
+		Member: InferMember<O>;
+	};
 
 export type InferMember<
 	O extends OrganizationOptions,
