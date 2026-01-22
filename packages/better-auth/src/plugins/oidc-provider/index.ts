@@ -13,7 +13,7 @@ import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -21,7 +21,6 @@ import {
 } from "../../crypto";
 import { mergeSchema } from "../../db";
 import { HIDE_METADATA } from "../../utils";
-import type { jwt } from "../jwt";
 import { getJwtToken, verifyJWT } from "../jwt";
 import { authorize } from "./authorize";
 import type { OAuthApplication } from "./schema";
@@ -36,9 +35,14 @@ import type {
 import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
-const getJwtPlugin = (ctx: GenericEndpointContext) => {
-	return ctx.context.getPlugin<ReturnType<typeof jwt>>("jwt");
-};
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"oidc-provider": {
+			creator: typeof oidcProvider;
+		};
+	}
+}
 
 /**
  * Get a client by ID, checking trusted clients first, then database
@@ -83,7 +87,7 @@ export const getMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const jwtPlugin = getJwtPlugin(ctx);
+	const jwtPlugin = ctx.context.getPlugin("jwt");
 	const issuer =
 		jwtPlugin && jwtPlugin.options?.jwt && jwtPlugin.options.jwt.issuer
 			? jwtPlugin.options.jwt.issuer
@@ -377,7 +381,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	}
 
 	return {
-		id: "oidc",
+		id: "oidc-provider",
 		hooks: {
 			after: [
 				{
@@ -397,8 +401,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -576,8 +581,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					// Clear the cookie
-					ctx.setCookie("oidc_consent_prompt", "", {
-						maxAge: 0,
+					expireCookie(ctx, {
+						name: "oidc_consent_prompt",
+						attributes: { path: "/" },
 					});
 
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
@@ -989,7 +995,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					// The JWT plugin is enabled, so we use the JWKS keys to sign
 					if (options.useJWTPlugin) {
-						const jwtPlugin = getJwtPlugin(ctx);
+						const jwtPlugin = ctx.context.getPlugin("jwt");
 						if (!jwtPlugin) {
 							ctx.context.logger.error(
 								"OIDC: `useJWTPlugin` is enabled but the JWT plugin is not available. Make sure you have the JWT Plugin in your plugins array or set `useJWTPlugin` to false.",
@@ -1613,7 +1619,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					// Validate id_token_hint if provided
 					if (id_token_hint) {
 						try {
-							const jwtPlugin = getJwtPlugin(ctx);
+							const jwtPlugin = ctx.context.getPlugin("jwt");
 							if (jwtPlugin && jwtPlugin.options && options?.useJWTPlugin) {
 								// For JWT plugin tokens, verify using JWKS
 								const verified = await verifyJWT(
@@ -1721,14 +1727,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						await ctx.context.internalAdapter.deleteSession(
 							session.session.token,
 						);
-						ctx.setSignedCookie(
-							ctx.context.authCookies.sessionToken.name,
-							"",
-							ctx.context.secret,
-							{
-								maxAge: 0,
-							},
-						);
+						expireCookie(ctx, ctx.context.authCookies.sessionToken);
 					}
 
 					if (post_logout_redirect_uri) {

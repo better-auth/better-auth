@@ -28,6 +28,15 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 
 export * from "./error-code";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
+	interface BetterAuthPluginRegistry<Auth, Context> {
+		"two-factor": {
+			creator: typeof twoFactor;
+		};
+	}
+}
+
 const enableTwoFactorBodySchema = z.object({
 	password: z.string().meta({
 		description: "User password",
@@ -356,7 +365,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						 */
 						deleteSessionCookie(ctx, true);
 						await ctx.context.internalAdapter.deleteSession(data.session.token);
-						const maxAge = (options?.otpOptions?.period ?? 3) * 60; // 3 minutes
+						const maxAge = options?.twoFactorCookieMaxAge ?? 10 * 60; // 10 minutes
 						const twoFactorCookie = ctx.context.createAuthCookie(
 							TWO_FACTOR_COOKIE_NAME,
 							{

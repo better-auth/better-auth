@@ -8,9 +8,8 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
-import type { Auth } from "better-auth/types";
 import { APIError } from "better-call";
-import type { oauthProvider } from "..";
+import type { oauthProvider } from "../oauth";
 import type {
 	OAuthOptions,
 	Prompt,
@@ -42,18 +41,18 @@ class TTLCache<K, V extends { expiresAt?: Date }> {
  * Gets the oAuth Provider Plugin
  * @internal
  */
-export const getOAuthProviderPlugin = (ctx: AuthContext | Auth) => {
-	return ctx.options.plugins?.find(
-		(plugin) => plugin.id === "oauthProvider",
-	) as ReturnType<typeof oauthProvider>;
+export const getOAuthProviderPlugin = (ctx: AuthContext) => {
+	return ctx.getPlugin("oauth-provider") satisfies ReturnType<
+		typeof oauthProvider
+	> | null;
 };
 
 /**
  * Gets the JWT Plugin
  * @internal
  */
-export const getJwtPlugin = (ctx: AuthContext): ReturnType<typeof jwt> => {
-	const plugin = ctx.getPlugin<ReturnType<typeof jwt>>("jwt");
+export const getJwtPlugin = (ctx: AuthContext) => {
+	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");
 	}
@@ -375,6 +374,19 @@ export async function validateClientCredentials(
 }
 
 /**
+ * Parse client metadata that may be stored as JSON string or already parsed object.
+ * Handles database adapters that auto-parse JSON columns.
+ *
+ * @internal
+ */
+export function parseClientMetadata(
+	metadata: string | object | undefined,
+): object | undefined {
+	if (!metadata) return undefined;
+	return typeof metadata === "string" ? JSON.parse(metadata) : metadata;
+}
+
+/**
  * Parse space-separated prompt string into a set of prompts
  *
  * @param prompt
@@ -403,7 +415,7 @@ export function parsePrompt(prompt: string) {
  * @param prompt - the prompt value to delete
  */
 export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
-	let prompts = query.get("prompt")?.split(" ");
+	const prompts = query.get("prompt")?.split(" ");
 	const foundPrompt = prompts?.findIndex((v) => v === prompt) ?? -1;
 	if (foundPrompt >= 0) {
 		prompts?.splice(foundPrompt, 1);
