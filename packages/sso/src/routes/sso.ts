@@ -1269,6 +1269,17 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
+				if (
+					parsedSamlConfig.authnRequestsSigned &&
+					!parsedSamlConfig.spMetadata?.privateKey &&
+					!parsedSamlConfig.privateKey
+				) {
+					ctx.context.logger.warn(
+						"authnRequestsSigned is enabled but no privateKey provided - AuthnRequests will not be signed",
+						{ providerId: provider.providerId },
+					);
+				}
+
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
 				if (!metadata) {
