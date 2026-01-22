@@ -32,16 +32,21 @@ export const getAuthTables = (
 			fields: {
 				key: {
 					type: "string",
+					unique: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.key || "key",
 				},
 				count: {
 					type: "number",
+					required: true,
 					fieldName: options.rateLimit?.fields?.count || "count",
 				},
 				lastRequest: {
 					type: "number",
 					bigint: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
+					defaultValue: () => Date.now(),
 				},
 			},
 		},
