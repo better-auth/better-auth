@@ -4,7 +4,6 @@ import type { Prettify } from "better-call";
 import * as z from "zod";
 import type {
 	FieldAttributeToObject,
-	InferAdditionalFieldsFromPluginOptions,
 	RemoveFieldsWithReturnedFalse,
 } from "../../db";
 import type { OrganizationOptions } from "./types";
@@ -445,9 +444,7 @@ export type InferOrganization<
 export type InferTeam<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	Team & InferAdditionalFieldsOutput<"team", O, isClientSide>
->;
+> = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
 
 export type InferInvitation<
 	O extends OrganizationOptions,

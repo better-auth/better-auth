@@ -600,7 +600,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				teams: filteredTeams,
 			};
 		},
-		listOrganizations: async (userId: string): Promise<InferOrganization<O>[]> => {
+		listOrganizations: async (
+			userId: string,
+		): Promise<InferOrganization<O>[]> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findMany<
 				InferMember<O, false> & { organization: InferOrganization<O, false> }

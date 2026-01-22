@@ -2293,10 +2293,10 @@ describe("Additional Fields", async () => {
 			},
 			headers,
 		});
-	expect(updatedOrg?.someRequiredField).toBe("hey2");
-	//@ts-expect-error
-	expect(db.organization[0]?.someRequiredField).toBe("hey2");
-});
+		expect(updatedOrg?.someRequiredField).toBe("hey2");
+		//@ts-expect-error
+		expect(db.organization[0]?.someRequiredField).toBe("hey2");
+	});
 
 	it("list user organizations", async () => {
 		const orgs = await auth.api.listOrganizations({
