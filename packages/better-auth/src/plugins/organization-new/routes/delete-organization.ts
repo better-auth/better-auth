@@ -38,8 +38,38 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 							content: {
 								"application/json": {
 									schema: {
-										type: "string",
-										description: "The organization id that was deleted",
+										type: "object",
+										description: "The deleted organization",
+										properties: {
+											id: {
+												type: "string",
+												description: "The organization id",
+											},
+											name: {
+												type: "string",
+												description: "The organization name",
+											},
+											slug: {
+												type: "string",
+												description: "The organization slug",
+											},
+											logo: {
+												type: "string",
+												nullable: true,
+												description: "The organization logo URL",
+											},
+											createdAt: {
+												type: "string",
+												format: "date-time",
+												description: "When the organization was created",
+											},
+											metadata: {
+												type: "string",
+												nullable: true,
+												description: "Additional metadata",
+											},
+										},
+										required: ["id", "name", "createdAt"],
 									},
 								},
 							},
