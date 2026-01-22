@@ -38,10 +38,7 @@ export const customerMetadata = {
 		internalFields: CustomerInternalMetadata,
 		...userMetadata: (Stripe.Emptyable<Stripe.MetadataParam> | undefined)[]
 	): Stripe.MetadataParam {
-		return defu(
-			internalFields as Stripe.MetadataParam,
-			...userMetadata.filter(Boolean),
-		);
+		return defu(internalFields, ...userMetadata.filter(Boolean));
 	},
 
 	/**
@@ -80,10 +77,7 @@ export const subscriptionMetadata = {
 		internalFields: SubscriptionInternalMetadata,
 		...userMetadata: (Stripe.Emptyable<Stripe.MetadataParam> | undefined)[]
 	): Stripe.MetadataParam {
-		return defu(
-			internalFields as Stripe.MetadataParam,
-			...userMetadata.filter(Boolean),
-		);
+		return defu(internalFields, ...userMetadata.filter(Boolean));
 	},
 
 	/**
