@@ -531,9 +531,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const isSamePlan = activeOrTrialingSubscription?.plan === ctx.body.plan;
 			const isSameSeats =
 				activeOrTrialingSubscription?.seats === (ctx.body.seats || 1);
-			const isSamePriceId =
-				!stripeSubscriptionPriceId ||
-				stripeSubscriptionPriceId === priceIdToUse;
+			const isSamePriceId = stripeSubscriptionPriceId === priceIdToUse;
 			const isSubscriptionStillValid =
 				!activeOrTrialingSubscription?.periodEnd ||
 				activeOrTrialingSubscription.periodEnd > new Date();
