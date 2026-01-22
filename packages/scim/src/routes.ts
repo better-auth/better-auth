@@ -82,12 +82,11 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					message: "Provider id contains forbidden characters",
 				});
 			}
-
-			const isOrgPluginEnabled = ctx.context.options.plugins?.some(
-				(p) => p.id === "organization",
-			);
-
-			if (organizationId && !isOrgPluginEnabled) {
+			const hasOrganizationPlugin =
+				ctx.context.options.plugins?.some(
+					(plugin) => plugin.id === "organization",
+				) ?? false;
+			if (organizationId && !hasOrganizationPlugin) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						"Restricting a token to an organization requires the organization plugin",
