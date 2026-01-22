@@ -256,17 +256,19 @@ export const buildEndpointSchema = <
 		false
 	>;
 
+	type NestedAdditionalFields = AdditionalFieldsNestedAs extends string
+		? {
+				[K in AdditionalFieldsNestedAs]: AdditionalFields;
+			}
+		: AdditionalFields;
+
 	const $Infer = {
-		body: {} as (AdditionalFieldsNestedAs extends string
-			? {
-					[K in AdditionalFieldsNestedAs]: AdditionalFields;
-				}
-			: AdditionalFields) &
+		body: {} as NestedAdditionalFields &
 			z.infer<BaseSchema> &
 			InferOptionalSchemaType<OptionalSchema>,
 	};
 
-	type BodyType = AdditionalFields &
+	type BodyType = NestedAdditionalFields &
 		z.infer<BaseSchema> &
 		InferOptionalSchemaTypeForGetBody<OptionalSchema>;
 
