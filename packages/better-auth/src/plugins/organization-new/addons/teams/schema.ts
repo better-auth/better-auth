@@ -20,4 +20,4 @@ export type TeamMember = z.infer<typeof teamMemberSchema>;
 export type Team = z.infer<typeof teamSchema>;
 
 export type TeamMemberInput = z.input<typeof teamMemberSchema>;
-export type TeamInput = z.infer<typeof teamSchema>;
+export type TeamInput = z.input<typeof teamSchema>;
