@@ -152,7 +152,6 @@ export function setCookieToHeader(headers: Headers) {
 			}
 		});
 
-		// Use splitSetCookieHeader to properly handle commas in Expires dates
 		const cookies = parseSetCookieHeader(setCookieHeader);
 		cookies.forEach((value, name) => {
 			cookieMap.set(name, value.value);
