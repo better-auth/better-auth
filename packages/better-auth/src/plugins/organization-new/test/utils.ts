@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getTestInstance } from "../../../test-utils";
-import { organizationClient } from "../../organization/client";
+import { organizationClient } from "../client";
 
 /**
  * Helper to return random org data for testing.

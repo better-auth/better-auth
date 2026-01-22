@@ -36,12 +36,12 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 									schema: {
 										type: "object",
 										properties: {
-											status: {
+											isTaken: {
 												type: "boolean",
-												description:
-													"Whether the slug is available (true if taken)",
+												description: "Whether the slug is taken",
 											},
 										},
+										required: ["isTaken"],
 									},
 								},
 							},
@@ -57,11 +57,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 			}
 			const orgAdapter = getOrgAdapter<O>(ctx.context, options);
 			const isTaken = await orgAdapter.isSlugTaken(ctx.body.slug);
-			if (isTaken) {
-				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN;
-				throw APIError.from("BAD_REQUEST", msg);
-			}
-			return ctx.json({ status: true });
+			return ctx.json({ isTaken });
 		},
 	);
 };
