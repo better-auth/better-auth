@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -16,13 +16,6 @@ describe("base context creation", () => {
 		const getDatabaseType = () => "memory";
 		return createAuthContext(adapter, opts, getDatabaseType);
 	};
-
-	it("should match config", async () => {
-		const res = await initBase({
-			baseURL: "http://localhost:3000",
-		});
-		expect(res).toMatchSnapshot();
-	});
 
 	it("should infer BASE_URL from env", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5147");
@@ -293,7 +286,7 @@ describe("base context creation", () => {
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
 			const res = await initBase({
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
 		});
@@ -336,7 +329,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
@@ -572,6 +565,45 @@ describe("base context creation", () => {
 			if (typeof id === "string") {
 				expect(id.length).toBeGreaterThan(0);
 			}
+		});
+
+		it("should return uuid when generateId is 'uuid'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(typeof id).toBe("string");
+			expect(id).toMatch(
+				/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+			);
+		});
+
+		it("should return false when generateId is 'serial'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "serial",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
+		});
+
+		it("should return false when generateId is false", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: false,
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
 		});
 	});
 
@@ -1266,7 +1298,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,

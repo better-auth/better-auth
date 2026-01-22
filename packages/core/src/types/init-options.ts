@@ -37,25 +37,37 @@ export type GenerateIdFn = (options: {
 	size?: number | undefined;
 }) => string | false;
 
-export type BetterAuthRateLimitOptions = {
-	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
-	 */
-	enabled?: boolean | undefined;
+export interface BetterAuthRateLimitStorage {
+	get: (key: string) => Promise<RateLimit | null | undefined>;
+	set: (
+		key: string,
+		value: RateLimit,
+		update?: boolean | undefined,
+	) => Promise<void>;
+}
+
+export type BetterAuthRateLimitRule = {
 	/**
 	 * Default window to use for rate limiting. The value
 	 * should be in seconds.
 	 *
 	 * @default 10 seconds
 	 */
-	window?: number | undefined;
+	window: number;
 	/**
 	 * The default maximum number of requests allowed within the window.
 	 *
 	 * @default 100 requests
 	 */
-	max?: number | undefined;
+	max: number;
+};
+
+export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
+	/**
+	 * By default, rate limiting is only
+	 * enabled on production.
+	 */
+	enabled?: boolean | undefined;
 	/**
 	 * Custom rate limit rules to apply to
 	 * specific paths.
@@ -63,27 +75,12 @@ export type BetterAuthRateLimitOptions = {
 	customRules?:
 		| {
 				[key: string]:
-					| {
-							/**
-							 * The window to use for the custom rule.
-							 */
-							window: number;
-							/**
-							 * The maximum number of requests allowed within the window.
-							 */
-							max: number;
-					  }
+					| BetterAuthRateLimitRule
 					| false
-					| ((request: Request) =>
-							| { window: number; max: number }
-							| false
-							| Promise<
-									| {
-											window: number;
-											max: number;
-									  }
-									| false
-							  >);
+					| ((
+							request: Request,
+							currentRule: BetterAuthRateLimitRule,
+					  ) => Awaitable<false | BetterAuthRateLimitRule>);
 		  }
 		| undefined;
 	/**
@@ -113,10 +110,7 @@ export type BetterAuthRateLimitOptions = {
 	 * NOTE: If custom storage is used storage
 	 * is ignored
 	 */
-	customStorage?: {
-		get: (key: string) => Promise<RateLimit | undefined>;
-		set: (key: string, value: RateLimit) => Promise<void>;
-	};
+	customStorage?: BetterAuthRateLimitStorage;
 };
 
 export type BetterAuthAdvancedOptions = {
@@ -142,6 +136,25 @@ export type BetterAuthAdvancedOptions = {
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
 				 */
 				disableIpTracking?: boolean;
+				/**
+				 * IPv6 subnet prefix length for rate limiting.
+				 *
+				 * IPv6 addresses can be grouped by subnet to prevent attackers from
+				 * bypassing rate limits by rotating through multiple addresses in
+				 * their allocation.
+				 *
+				 * Common values:
+				 * - 128 (default): Individual IPv6 address
+				 * - 64: /64 subnet (typical home/business allocation)
+				 * - 48: /48 subnet (larger network allocation)
+				 * - 32: /32 subnet (ISP allocation)
+				 *
+				 * Note: This only affects IPv6 addresses. IPv4 addresses are always
+				 * rate limited individually.
+				 *
+				 * @default 64 (/64 subnet)
+				 */
+				ipv6Subnet?: 128 | 64 | 48 | 32 | undefined;
 		  }
 		| undefined;
 	/**
@@ -151,17 +164,32 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
-	 * Disable trusted origins check
+	 * Disable all CSRF protection.
+	 *
+	 * When enabled, this disables:
+	 * - Origin header validation when cookies are present
+	 * - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+	 * - Cross-site navigation blocking for first-login scenarios
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
+	 *
+	 * @default false
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
-	 * Disable origin check
+	 * Disable URL validation against trustedOrigins.
 	 *
-	 * ⚠︎ This may allow requests from any origin to be processed by
-	 * Better Auth. And could lead to security vulnerabilities.
+	 * When enabled, this disables validation of:
+	 * - callbackURL
+	 * - redirectTo
+	 * - errorCallbackURL
+	 * - newUserCallbackURL
+	 *
+	 * ⚠︎ This may allow open redirects and could lead to security
+	 * vulnerabilities.
+	 *
+	 * @default false
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**
@@ -296,6 +324,12 @@ export type BetterAuthAdvancedOptions = {
 	backgroundTasks?: {
 		handler: (promise: Promise<void>) => void;
 	};
+	/**
+	 * Skip trailing slash validation in route matching
+	 *
+	 * @default false
+	 */
+	skipTrailingSlashes?: boolean | undefined;
 };
 
 export type BetterAuthOptions = {
