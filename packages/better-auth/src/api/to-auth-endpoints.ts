@@ -76,7 +76,7 @@ export function toAuthEndpoints<
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
 
-				const hasRequest = typeof context?.request?.url === "string";
+				const hasRequest = context?.request instanceof Request;
 				const shouldReturnResponse = context?.asResponse ?? hasRequest;
 
 				return runWithEndpointContext(internalContext, async () => {
