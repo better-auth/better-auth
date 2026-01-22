@@ -26,11 +26,55 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 	return cookieName;
 }
 
+/**
+ * Split `Set-Cookie` header, handling commas in `Expires` dates.
+ */
+export function splitSetCookieHeader(setCookie: string): string[] {
+	if (!setCookie) return [];
+
+	const result: string[] = [];
+	let current = "";
+	let i = 0;
+
+	while (i < setCookie.length) {
+		const c = setCookie[i];
+
+		if (c === ",") {
+			const lower = current.toLowerCase();
+			if (lower.includes("expires=") && !lower.includes("gmt")) {
+				current += c;
+				i++;
+			} else {
+				const trimmed = current.trim();
+				if (trimmed) {
+					result.push(trimmed);
+				}
+				current = "";
+				i++;
+				if (i < setCookie.length && setCookie[i] === " ") {
+					i++;
+				}
+			}
+			continue;
+		}
+
+		current += c;
+		i++;
+	}
+
+	const trimmed = current.trim();
+	if (trimmed) {
+		result.push(trimmed);
+	}
+
+	return result;
+}
+
 export function parseSetCookieHeader(
 	setCookie: string,
 ): Map<string, CookieAttributes> {
 	const cookies = new Map<string, CookieAttributes>();
-	const cookieArray = setCookie.split(", ");
+	const cookieArray = splitSetCookieHeader(setCookie);
 
 	cookieArray.forEach((cookieString) => {
 		const parts = cookieString.split(";").map((part) => part.trim());
@@ -107,12 +151,9 @@ export function setCookieToHeader(headers: Headers) {
 			}
 		});
 
-		const setCookieHeaders = setCookieHeader.split(",");
-		setCookieHeaders.forEach((header) => {
-			const cookies = parseSetCookieHeader(header);
-			cookies.forEach((value, name) => {
-				cookieMap.set(name, value.value);
-			});
+		const cookies = parseSetCookieHeader(setCookieHeader);
+		cookies.forEach((value, name) => {
+			cookieMap.set(name, value.value);
 		});
 
 		const updatedCookies = Array.from(cookieMap.entries())
