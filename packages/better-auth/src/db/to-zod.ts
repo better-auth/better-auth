@@ -38,7 +38,7 @@ export function toZodSchema<
 		if (field?.required === false) {
 			schema = schema.optional();
 		}
-		if (field?.returned === false) {
+		if (!isClientSide && field?.returned === false) {
 			return acc;
 		}
 		return {

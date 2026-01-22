@@ -13,7 +13,7 @@ description: Figma provider setup and usage.
         5. Note your Client ID and Client Secret
 
         <Callout type="info">
-            - The default scope is `file_read`. For additional scopes like `file_write`, refer to the [Figma OAuth documentation](https://www.figma.com/developers/api#oauth2).
+            The default scope is `current_user:read`. For additional scopes like `file_content:read`, refer to the [Figma OAuth scopes documentation](https://developers.figma.com/docs/rest-api/scopes).
         </Callout>
 
         Make sure to set the redirect URI to match your application's callback URL. If you change the base path of the auth routes, you should update the redirect URI accordingly.
@@ -31,7 +31,6 @@ description: Figma provider setup and usage.
                 figma: { // [!code highlight]
                     clientId: process.env.FIGMA_CLIENT_ID as string, // [!code highlight]
                     clientSecret: process.env.FIGMA_CLIENT_SECRET as string, // [!code highlight]
-                    clientKey: process.env.FIGMA_CLIENT_KEY as string, // [!code highlight]
                 }, // [!code highlight]
             },
         })

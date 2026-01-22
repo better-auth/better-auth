@@ -19,6 +19,9 @@
       "path": "./packages/expo/tsconfig.json"
     },
     {
+      "path": "./packages/i18n/tsconfig.json"
+    },
+    {
       "path": "./packages/passkey/tsconfig.json"
     },
     {
@@ -29,6 +32,24 @@
     },
     {
       "path": "./packages/telemetry/tsconfig.json"
+    },
+    {
+      "path": "./packages/prisma-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/mongo-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/memory-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/drizzle-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/test-utils/tsconfig.json"
     },
     {
       "path": "./test/tsconfig.json"

@@ -426,7 +426,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			let apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 			ctx.context.logger.info("Querying result with filters: ", apiFilters);
 
@@ -532,7 +532,11 @@ const patchSCIMUserBodySchema = z.object({
 		),
 	Operations: z.array(
 		z.object({
-			op: z.enum(["replace", "add", "remove"]).default("replace"),
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
 			path: z.string().optional(),
 			value: z.any(),
 		}),
@@ -619,7 +623,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "DELETE",
 			metadata: {
 				...HIDE_METADATA,
-				allowedMediaTypes: supportedMediaTypes,
+				allowedMediaTypes: [...supportedMediaTypes, ""],
 				openapi: {
 					summary: "Delete SCIM user",
 					description:

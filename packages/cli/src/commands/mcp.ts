@@ -36,8 +36,14 @@ async function mcpAction(options: MCPOptions) {
 	}
 }
 
-async function installMcpServers(
-	client: "cursor" | "claude-code" | "open-code" | "manual" | string,
+async function _installMcpServers(
+	client:
+		| "cursor"
+		| "claude-code"
+		| "open-code"
+		| "opencode"
+		| "manual"
+		| string,
 	installLocal: boolean = true,
 	installRemote: boolean = true,
 ) {
@@ -49,6 +55,7 @@ async function installMcpServers(
 			handleClaudeCodeAction(installLocal, installRemote);
 			break;
 		case "open-code":
+		case "opencode":
 			handleOpenCodeAction(installLocal, installRemote);
 			break;
 		case "manual":
@@ -207,8 +214,8 @@ function handleOpenCodeAction(installLocal: boolean, installRemote: boolean) {
 
 	if (installLocal) {
 		mcpConfig["better-auth"] = {
-			type: "stdio",
-			command: LOCAL_MCP_COMMAND,
+			type: "local",
+			command: [LOCAL_MCP_COMMAND],
 			enabled: true,
 		};
 	}

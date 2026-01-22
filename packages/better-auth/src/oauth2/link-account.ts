@@ -35,20 +35,22 @@ export async function handleOAuthUserInfo(
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;
-	let isRegister = !user;
+	const isRegister = !user;
 
 	if (dbUser) {
-		const hasBeenLinked = dbUser.accounts.find(
-			(a) =>
-				a.providerId === account.providerId &&
-				a.accountId === account.accountId,
-		);
-		if (!hasBeenLinked) {
+		const linkedAccount =
+			dbUser.linkedAccount ??
+			dbUser.accounts.find(
+				(acc) =>
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
+			);
+		if (!linkedAccount) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId as "apple");
+				trustedProviders?.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -112,14 +114,14 @@ export async function handleOAuthUserInfo(
 
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, {
-					...hasBeenLinked,
+					...linkedAccount,
 					...freshTokens,
 				});
 			}
 
 			if (Object.keys(freshTokens).length > 0) {
 				await c.context.internalAdapter.updateAccount(
-					hasBeenLinked.id,
+					linkedAccount.id,
 					freshTokens,
 				);
 			}

@@ -856,7 +856,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
 
 		it("should create a custom encryptor otp", async () => {
 			const { get } = getTheSentOTP();
@@ -959,7 +959,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
 
 		it("should create a custom hasher otp", async () => {
 			const { get } = getTheSentOTP();

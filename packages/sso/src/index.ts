@@ -106,6 +106,16 @@ export type SSOPlugin<O extends SSOOptions> = {
 			: {});
 };
 
+/**
+ * SAML endpoint paths that should skip origin check validation.
+ * These endpoints receive POST requests from external Identity Providers,
+ * which won't have a matching Origin header.
+ */
+const SAML_SKIP_ORIGIN_CHECK_PATHS = [
+	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
+	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
+];
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -153,6 +163,18 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
+		init(ctx) {
+			const existing = ctx.skipOriginCheck;
+			if (existing === true) {
+				return {};
+			}
+			const existingPaths = Array.isArray(existing) ? existing : [];
+			return {
+				context: {
+					skipOriginCheck: [...existingPaths, ...SAML_SKIP_ORIGIN_CHECK_PATHS],
+				},
+			};
+		},
 		endpoints,
 		hooks: {
 			after: [
