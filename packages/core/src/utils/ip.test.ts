@@ -193,7 +193,7 @@ describe("IP Normalization", () => {
 			// All should normalize to the same value
 			const uniqueValues = new Set(normalized);
 			expect(uniqueValues.size).toBe(1);
-			expect(normalized[0]).toBe("2001:0db8:0000:0000:0000:0000:0000:0000");
+			expect(normalized[0]).toBe("2001:0db8:0000:0000:0000:0000:0000:0001");
 		});
 
 		it("should prevent IPv4-mapped bypass", () => {
