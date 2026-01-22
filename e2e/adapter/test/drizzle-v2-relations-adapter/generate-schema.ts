@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import { join } from "node:path";
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import { drizzleAdapter } from "../drizzle-adapter";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 
 let generationCount = 0;
 
@@ -42,7 +42,10 @@ export const generateDrizzleSchema = async (
 	};
 
 	const { generateSchema } = (await i(
-		join(import.meta.dirname, "./../../cli/src/generators/index"),
+		join(
+			import.meta.dirname,
+			"./../../../../packages/cli/src/generators/index",
+		),
 	)) as {
 		generateSchema: (opts: {
 			adapter: DBAdapter<BetterAuthOptions>;

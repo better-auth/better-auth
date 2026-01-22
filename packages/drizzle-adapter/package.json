@@ -1,0 +1,45 @@
+{
+  "name": "@better-auth/drizzle-adapter",
+  "version": "1.5.0-beta.9",
+  "description": "Drizzle adapter for Better Auth",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/drizzle-adapter"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./relations-v2": {
+      "dev-source": "./src/relations-v2/index.ts",
+      "types": "./dist/relations-v2/index.d.mts",
+      "default": "./dist/relations-v2/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "^0.3.0",
+    "drizzle-orm": "^0.30.0",
+    "prettier": "^3.7.4"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "^0.3.0",
+    "drizzle-orm": "^0.30.0",
+    "tsdown": "catalog:",
+    "typescript": "catalog:"
+  }
+}

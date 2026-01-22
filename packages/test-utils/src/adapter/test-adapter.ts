@@ -6,8 +6,6 @@ import { getAuthTables } from "better-auth/db";
 import { afterAll, beforeAll, describe } from "vitest";
 import type { createTestSuite, TestSuiteStats } from "./create-test-suite";
 
-export * from "./tests";
-
 export type Logger = {
 	info: (...args: any[]) => void;
 	success: (...args: any[]) => void;

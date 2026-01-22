@@ -1,17 +1,17 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
+import { testAdapter } from "@better-auth/test-utils/adapter";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "better-auth/adapters/test-adapter";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
-import { drizzleAdapter } from "../drizzle-adapter";
+} from "../adapter-factory";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const dbName = "better_auth";

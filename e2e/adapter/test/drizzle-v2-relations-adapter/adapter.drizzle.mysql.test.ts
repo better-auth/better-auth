@@ -1,18 +1,18 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
+import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
+import { testAdapter } from "@better-auth/test-utils/adapter";
+import { drizzle } from "drizzle-orm/mysql2";
+import { createPool } from "mysql2/promise";
+import { assert } from "vitest";
 import {
 	authFlowTestSuite,
 	joinsTestSuite,
 	normalTestSuite,
 	numberIdTestSuite,
-	testAdapter,
 	transactionsTestSuite,
 	uuidTestSuite,
-} from "better-auth/adapters/test-adapter";
-import { drizzle } from "drizzle-orm/mysql2";
-import { createPool } from "mysql2/promise";
-import { assert } from "vitest";
-import { drizzleAdapter } from "../drizzle-adapter";
+} from "../adapter-factory";
 import { generateDrizzleSchema, resetGenerationCount } from "./generate-schema";
 
 const dbName = "better_auth";
