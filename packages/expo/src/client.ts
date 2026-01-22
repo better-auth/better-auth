@@ -469,9 +469,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
-							const cookie = String(url.searchParams.get("cookie"));
+							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = await storage.getItem(cookieName);
+							const prevCookie = storage.getItem(cookieName);
 							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
 							storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
