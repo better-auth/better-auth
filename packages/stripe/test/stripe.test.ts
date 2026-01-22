@@ -4870,4 +4870,100 @@ describe("stripe", () => {
 			});
 		});
 	});
+
+	it("should upgrade existing active subscription even when canceled subscription exists for same referenceId", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		// Create a user
+		const userRes = await client.signUp.email({ ...testUser }, { throw: true });
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser },
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// Update the user with the Stripe customer ID
+		await ctx.adapter.update({
+			model: "user",
+			update: {
+				stripeCustomerId: "cus_findone_test",
+			},
+			where: [
+				{
+					field: "id",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Create a CANCELED subscription first (simulating old subscription)
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_findone_test",
+				stripeSubscriptionId: "sub_stripe_canceled",
+				status: "canceled",
+			},
+		});
+
+		// Create an ACTIVE subscription (simulating current subscription)
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_findone_test",
+				stripeSubscriptionId: "sub_stripe_active",
+				status: "active",
+				periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			},
+		});
+
+		// Mock Stripe subscriptions.list to return the active subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_stripe_active",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_test_item",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Try to upgrade to premium (without providing subscriptionId)
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Should use billing portal to upgrade existing subscription (not create new checkout)
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
 });
