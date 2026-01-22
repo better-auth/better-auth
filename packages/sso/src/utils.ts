@@ -1,3 +1,5 @@
+import { X509Certificate } from "node:crypto";
+
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
@@ -52,3 +54,28 @@ export const validateEmailDomain = (email: string, domain: string) => {
 	}
 	return domainMatches(emailDomain, domain);
 };
+
+export function parseCertificate(certPem: string) {
+	// SAML metadata X509Certificate elements contain raw base64 without PEM headers,
+	// but users may also provide full PEM-formatted certificates. Normalize to PEM.
+	const normalized = certPem.includes("-----BEGIN")
+		? certPem
+		: `-----BEGIN CERTIFICATE-----\n${certPem}\n-----END CERTIFICATE-----`;
+
+	const cert = new X509Certificate(normalized);
+
+	return {
+		fingerprintSha256: cert.fingerprint256,
+		notBefore: cert.validFrom,
+		notAfter: cert.validTo,
+		publicKeyAlgorithm:
+			cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
+	};
+}
+
+export function maskClientId(clientId: string): string {
+	if (clientId.length <= 4) {
+		return "****";
+	}
+	return `****${clientId.slice(-4)}`;
+}
