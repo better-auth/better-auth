@@ -1,7 +1,7 @@
 name: E2E
 on:
   push:
-    branches: [ main, canary ]
+    branches: [main, canary]
   merge_group:
   pull_request:
 
@@ -31,8 +31,8 @@ jobs:
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
@@ -95,8 +95,8 @@ jobs:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         if: github.event_name != 'merge_group'
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
@@ -132,8 +132,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
-        node-version: [ 22.x ]
+        packages:
+          [
+            "@better-auth-test/adapter-factory",
+            "@better-auth-test/drizzle-adapter",
+            "@better-auth-test/drizzle-v2-relations-adapter",
+            "@better-auth-test/kysely-prisma-adapter",
+            "@better-auth-test/memory-adapter",
+            "@better-auth-test/mongo-adapter",
+            "@better-auth-test/prisma-adapter",
+          ]
+        node-version: [22.x]
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -159,8 +168,8 @@ jobs:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         if: github.event_name != 'merge_group'
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
