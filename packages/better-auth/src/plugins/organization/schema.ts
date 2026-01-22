@@ -1,7 +1,10 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Prettify } from "better-call";
 import * as z from "zod";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import type {
+	FieldAttributeToObject,
+	RemoveFieldsWithReturnedFalse,
+} from "../../db";
 import { generateId } from "../../utils";
 import type { OrganizationOptions } from "./types";
 
@@ -378,6 +381,22 @@ export type InferOrganizationRolesFromOption<
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
+import type { DBFieldAttribute } from "@better-auth/core/db";
+
+type InferAdditionalFieldsOutput<
+	SchemaName extends string,
+	Options extends OrganizationOptions,
+	isClientSide extends boolean,
+> = Options["schema"] extends {
+	[key in SchemaName]?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? isClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
 export type InferMember<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
@@ -412,23 +431,20 @@ export type InferMember<
 					image?: string | undefined;
 				};
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
+		InferAdditionalFieldsOutput<"member", O, isClientSide>
 >;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
-	Organization &
-		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
+	Organization & InferAdditionalFieldsOutput<"organization", O, isClientSide>
 >;
 
 export type InferTeam<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", O, isClientSide>
->;
+> = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
 
 export type InferInvitation<
 	O extends OrganizationOptions,
@@ -458,5 +474,5 @@ export type InferInvitation<
 				expiresAt: Date;
 				createdAt: Date;
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
+		InferAdditionalFieldsOutput<"invitation", O, isClientSide>
 >;
