@@ -8,6 +8,12 @@ import {
 	verifyDomain,
 } from "./routes/domain-verification";
 import {
+	deleteSSOProvider,
+	getSSOProvider,
+	listSSOProviders,
+	updateSSOProvider,
+} from "./routes/providers";
+import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
@@ -93,6 +99,10 @@ type SSOEndpoints<O extends SSOOptions> = {
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	listSSOProviders: ReturnType<typeof listSSOProviders>;
+	getSSOProvider: ReturnType<typeof getSSOProvider>;
+	updateSSOProvider: ReturnType<typeof updateSSOProvider<O>>;
+	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
@@ -122,7 +132,7 @@ export function sso<
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: any;
+	schema: NonNullable<BetterAuthPlugin["schema"]>;
 	options: O;
 };
 export function sso<O extends SSOOptions>(
@@ -132,7 +142,9 @@ export function sso<O extends SSOOptions>(
 	endpoints: SSOEndpoints<O>;
 };
 
-export function sso<O extends SSOOptions>(options?: O | undefined): any {
+export function sso<O extends SSOOptions>(
+	options?: O | undefined,
+): BetterAuthPlugin {
 	const optionsWithStore = options as O;
 
 	let endpoints = {
@@ -142,6 +154,10 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		listSSOProviders: listSSOProviders(),
+		getSSOProvider: getSSOProvider(),
+		updateSSOProvider: updateSSOProvider(optionsWithStore),
+		deleteSSOProvider: deleteSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {
@@ -183,10 +199,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-							(plugin: { id: string }) => plugin.id === "organization",
-						);
-						if (!isOrgPluginEnabled) {
+						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
 
