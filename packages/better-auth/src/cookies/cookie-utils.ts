@@ -27,48 +27,47 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 }
 
 /**
- * Split a Set-Cookie header string into individual cookie strings.
- *
- * This function properly handles commas within cookie values, specifically
- * for the `Expires` attribute which contains a date string with a comma
- * (e.g., "Expires=Thu, 01 Jan 2026 00:00:00 GMT").
- *
- * The algorithm tracks when we're inside an Expires attribute and waits
- * until we see "GMT" before considering a comma as a cookie separator.
- *
- * @param setCookie - The Set-Cookie header string (may contain multiple cookies)
- * @returns An array of individual cookie strings
+ * Split `Set-Cookie` header, handling commas in `Expires` dates.
  */
 export function splitSetCookieHeader(setCookie: string): string[] {
-	const parts: string[] = [];
-	let buffer = "";
+	if (!setCookie) return [];
+
+	const result: string[] = [];
+	let current = "";
 	let i = 0;
+
 	while (i < setCookie.length) {
-		const char = setCookie[i];
-		if (char === ",") {
-			const recent = buffer.toLowerCase();
-			const hasExpires = recent.includes("expires=");
-			const hasGmt = /gmt/i.test(recent);
-			if (hasExpires && !hasGmt) {
-				buffer += char;
-				i += 1;
-				continue;
+		const c = setCookie[i];
+
+		if (c === ",") {
+			const lower = current.toLowerCase();
+			if (lower.includes("expires=") && !lower.includes("gmt")) {
+				current += c;
+				i++;
+			} else {
+				const trimmed = current.trim();
+				if (trimmed) {
+					result.push(trimmed);
+				}
+				current = "";
+				i++;
+				if (i < setCookie.length && setCookie[i] === " ") {
+					i++;
+				}
 			}
-			if (buffer.trim().length > 0) {
-				parts.push(buffer.trim());
-				buffer = "";
-			}
-			i += 1;
-			if (setCookie[i] === " ") i += 1;
 			continue;
 		}
-		buffer += char;
-		i += 1;
+
+		current += c;
+		i++;
 	}
-	if (buffer.trim().length > 0) {
-		parts.push(buffer.trim());
+
+	const trimmed = current.trim();
+	if (trimmed) {
+		result.push(trimmed);
 	}
-	return parts;
+
+	return result;
 }
 
 export function parseSetCookieHeader(
