@@ -322,7 +322,7 @@ export type BetterAuthAdvancedOptions = {
 	 * }
 	 */
 	backgroundTasks?: {
-		handler: (promise: Promise<void>) => void;
+		handler: (promise: Promise<unknown>) => void;
 	};
 	/**
 	 * Skip trailing slash validation in route matching
