@@ -7,6 +7,8 @@ import type { CheckOrganizationSlug } from "../routes/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/check-organization-slug";
 import type { CreateOrganization } from "../routes/create-organizations";
 import { createOrganization } from "../routes/create-organizations";
+import type { DeleteOrganization } from "../routes/delete-organization";
+import { deleteOrganization } from "../routes/delete-organization";
 import type { UpdateOrganization } from "../routes/update-organization";
 import { updateOrganization } from "../routes/update-organization";
 import type { Addon, OrganizationOptions } from "../types";
@@ -16,6 +18,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	createOrganization: CreateOrganization<O>;
 	checkOrganizationSlug: CheckOrganizationSlug<O>;
 	updateOrganization: UpdateOrganization<O>;
+	deleteOrganization: DeleteOrganization<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -35,6 +38,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		createOrganization: createOrganization(options),
 		checkOrganizationSlug: checkOrganizationSlug(options),
 		updateOrganization: updateOrganization(options),
+		deleteOrganization: deleteOrganization(options),
 		...(addonEndpoints || {}),
 	};
 

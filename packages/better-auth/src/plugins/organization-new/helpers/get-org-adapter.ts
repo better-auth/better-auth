@@ -176,5 +176,36 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return res;
 		},
+		deleteOrganization: async (organizationId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.deleteMany({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			await adapter.deleteMany({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			await adapter.delete<InferOrganization<O, false>>({
+				model: "organization",
+				where: [
+					{
+						field: "id",
+						value: organizationId,
+					},
+				],
+			});
+			return organizationId;
+		},
 	};
 };
