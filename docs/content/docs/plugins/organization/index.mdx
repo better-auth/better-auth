@@ -1,0 +1,102 @@
+---
+title: Organization
+description: The organization plugin allows you to manage your organization's members and teams.
+---
+
+Organizations simplifies user access and permissions management. Assign roles and permissions to streamline project management,
+team coordination, and partnerships.
+
+## Overview
+
+The organization plugin provides:
+
+- [**Organizations**](/docs/plugins/organization/organizations): Create and manage organizations with customizable settings
+- [**Members**](/docs/plugins/organization/members): Add, remove, and manage organization members
+- [**Invitations**](/docs/plugins/organization/invitations): Invite users to join organizations via email or direct links
+- [**Roles & Permissions**](/docs/plugins/organization/roles-permissions): Define custom roles and fine-grained permissions
+
+### Addons
+
+Extend base functionality with additional addons.
+
+- [**Teams**](/docs/plugins/organization/teams): Create and manage teams within organizations
+- [**Dynamic Access Control**](/docs/plugins/organization/dynamic-access-control): Define custom roles and permissions for organizations at runtime
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { organization } from "better-auth/plugins"
+
+    export const auth = betterAuth({
+        plugins: [
+            organization()
+        ]
+    })
+    ```
+  </Step>
+  <Step>
+    ### Migrate the database
+
+    Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+    <Tabs items={["migrate", "generate"]}>
+        <Tab value="migrate">
+        ```bash
+        npx @better-auth/cli migrate
+        ```
+        </Tab>
+        <Tab value="generate">
+        ```bash
+        npx @better-auth/cli generate
+        ```
+        </Tab>
+    </Tabs>
+  </Step>
+  <Step>
+    ### Add the client plugin
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client"
+    import { organizationClient } from "better-auth/client/plugins"
+
+    export const authClient = createAuthClient({
+        plugins: [
+            organizationClient()
+        ]
+    })
+    ```
+  </Step>
+</Steps>
+
+## Quick Links
+
+<Cards>
+  <Card title="Organizations" href="/docs/plugins/organization/organizations">
+    Learn how to create, update, and delete organizations
+  </Card>
+  <Card title="Members" href="/docs/plugins/organization/members">
+    Manage organization members and their roles
+  </Card>
+  <Card title="Invitations" href="/docs/plugins/organization/invitations">
+    Set up the invitation system for your organizations
+  </Card>
+  <Card title="Roles & Permissions" href="/docs/plugins/organization/roles-permissions">
+    Configure roles and permissions for access control
+  </Card>
+</Cards>
+
+### Addons
+
+<Cards>
+  <Card title="Teams" href="/docs/plugins/organization/teams">
+    Create and manage teams within organizations
+  </Card>
+  <Card title="Dynamic Access Control" href="/docs/plugins/organization/dynamic-access-control">
+    Define custom roles and permissions for organizations at runtime
+  </Card>
+</Cards>

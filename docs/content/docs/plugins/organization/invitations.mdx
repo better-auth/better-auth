@@ -3,74 +3,8 @@ title: Invitations
 description: Set up the invitation system for your organizations.
 ---
 
-The invitation system allows organization admins to invite new members via email or shareable links.
-
-## Sending Invitations
-
-Invite a user by email:
-
-```ts
-await authClient.organization.inviteMember({
-    organizationId: "org_123",
-    email: "user@example.com",
-    role: "member"
-})
-```
-
-## Listing Invitations
-
-Get all pending invitations for an organization:
-
-```ts
-const { data: invitations } = await authClient.organization.listInvitations({
-    organizationId: "org_123"
-})
-```
-
-## Accepting Invitations
-
-Accept an invitation (as the invited user):
-
-```ts
-await authClient.organization.acceptInvitation({
-    invitationId: "inv_123"
-})
-```
-
-## Rejecting Invitations
-
-Reject an invitation:
-
-```ts
-await authClient.organization.rejectInvitation({
-    invitationId: "inv_123"
-})
-```
-
-## Canceling Invitations
-
-Cancel a pending invitation (as an admin):
-
-```ts
-await authClient.organization.cancelInvitation({
-    organizationId: "org_123",
-    invitationId: "inv_123"
-})
-```
-
-## Invitation Links
-
-Generate a shareable invitation link:
-
-```ts
-const { data: link } = await authClient.organization.createInvitationLink({
-    organizationId: "org_123",
-    role: "member",
-    expiresIn: 7 * 24 * 60 * 60 // 7 days in seconds
-})
-
-// link.url contains the shareable URL
-```
+The invitation system allows organization admins to invite new members via email
+or shareable links.
 
 ## Invitation Schema
 
