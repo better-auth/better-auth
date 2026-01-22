@@ -12,7 +12,6 @@ const DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION = true;
 const DEFAULT_DISABLE_ORGANIZATION_DELETION = false;
 const DEFAULT_DEFAULT_ORGANIZATION_ID_FIELD = "id";
 
-
 export const resolveOrgOptions = <O extends OrganizationOptions>(
 	opts?: O | undefined,
 ) => {
@@ -23,8 +22,11 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 		creatorRole: opts?.creatorRole ?? DEFAULT_CREATOR_ROLE,
 		membershipLimit: opts?.membershipLimit ?? DEFAULT_MEMBERSHIP_LIMIT,
 		disableSlugs: opts?.disableSlugs ?? DEFAULT_DISABLE_SLUGS,
-		defaultOrganizationIdField: opts?.defaultOrganizationIdField ?? DEFAULT_DEFAULT_ORGANIZATION_ID_FIELD,
-		disableOrganizationDeletion: opts?.disableOrganizationDeletion ?? DEFAULT_DISABLE_ORGANIZATION_DELETION,
+		defaultOrganizationIdField:
+			opts?.defaultOrganizationIdField ?? DEFAULT_DEFAULT_ORGANIZATION_ID_FIELD,
+		disableOrganizationDeletion:
+			opts?.disableOrganizationDeletion ??
+			DEFAULT_DISABLE_ORGANIZATION_DELETION,
 		roles: { ...defaultRoles, ...roles },
 		allowUserToCreateOrganization: async (...args) => {
 			const allowCreateOrg = opts?.allowUserToCreateOrganization;
