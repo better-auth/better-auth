@@ -135,7 +135,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				model: "organization",
 				where: [{ field, value }],
 			});
-			return organization;
+			if (!organization) return null;
+			const metadata = (() => {
+				const meta = organization.metadata;
+				if (meta && typeof meta === "string") {
+					return parseJSON<Record<string, any>>(meta);
+				}
+				return meta;
+			})();
+			const res: InferOrganization<O, false> = {
+				...organization,
+				metadata,
+			};
+			return res;
 		},
 		updateOrganization: async (
 			organizationId: string,
