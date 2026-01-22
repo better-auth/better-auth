@@ -27,3 +27,8 @@ export type InferPluginErrorCodes<O extends BetterAuthOptions> =
 					: {}
 			>
 		: {};
+
+export type InferPluginIDs<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? UnionToIntersection<P extends BetterAuthPlugin ? P["id"] : never>
+		: never;

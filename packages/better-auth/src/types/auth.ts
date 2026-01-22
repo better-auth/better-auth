@@ -11,7 +11,7 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
-	$context: Promise<AuthContext>;
+	$context: Promise<AuthContext<Options>>;
 	/**
 	 * Share types
 	 */

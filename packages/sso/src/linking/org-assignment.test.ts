@@ -56,7 +56,7 @@ describe("assignOrganizationByDomain", () => {
 
 		const createContext = async () => {
 			const context = await auth.$context;
-			return { context } as Partial<GenericEndpointContext>;
+			return { context } as unknown as Partial<GenericEndpointContext>;
 		};
 
 		return { auth, data, createContext };

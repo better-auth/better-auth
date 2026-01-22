@@ -5,8 +5,8 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"last-login-method": {
 			creator: typeof lastLoginMethod;
 		};
