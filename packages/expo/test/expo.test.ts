@@ -876,3 +876,47 @@ describe("expo deep link cookie injection for verify-email", async () => {
 		expect(error).toBeDefined();
 	});
 });
+
+describe("ExpoFocusManager duplicate notification prevention", () => {
+	it("should not notify listeners when setFocused is called with the same value", async () => {
+		const { setupExpoFocusManager } = await import("../src/focus-manager");
+		const focusManager = setupExpoFocusManager();
+
+		const listener = vi.fn();
+		focusManager.subscribe(listener);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("ExpoOnlineManager duplicate notification prevention", () => {
+	it("should not notify listeners when setOnline is called with the same value", async () => {
+		const { setupExpoOnlineManager } = await import("../src/online-manager");
+		const onlineManager = setupExpoOnlineManager();
+
+		const listener = vi.fn();
+		onlineManager.subscribe(listener);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
