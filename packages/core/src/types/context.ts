@@ -12,6 +12,7 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+import type { Awaitable } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -299,7 +300,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
 			 * Defaults to a no-op that just runs the promise.
 			 */
-			runInBackground: (promise: Promise<void>) => void;
+			runInBackground: (promise: Promise<unknown>) => void;
 			/**
 			 * Runs a task in the background if `runInBackground` is configured,
 			 * otherwise awaits the task directly.
@@ -309,6 +310,6 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * mitigation), but still ensure the operation completes.
 			 */
 			runInBackgroundOrAwait: (
-				promise: Promise<unknown> | Promise<void> | void | unknown,
-			) => Promise<unknown>;
+				promise: Promise<unknown> | void,
+			) => Awaitable<unknown>;
 		};
