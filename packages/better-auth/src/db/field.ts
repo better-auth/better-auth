@@ -147,6 +147,9 @@ type AddOptionalFields<
  * ```ts
  * type AdditionalFields = InferAdditionalFieldsFromPluginOptions<"organization", OrganizationOptions>
  * ```
+ *
+ * @param isClientSide - When `true` (default), filters out `input: false` fields (clients can't send these).
+ *   When `false`, includes all fields (for internal/server-side use).
  */
 export type InferAdditionalFieldsFromPluginOptions<
 	SchemaName extends string,
@@ -172,6 +175,12 @@ export type InferAdditionalFieldsFromPluginOptions<
 
 type RemoveFieldsWithInputFalse<T extends Record<string, DBFieldAttribute>> = {
 	[K in keyof T as T[K]["input"] extends false ? never : K]: T[K];
+};
+
+export type RemoveFieldsWithReturnedFalse<
+	T extends Record<string, DBFieldAttribute>,
+> = {
+	[K in keyof T as T[K]["returned"] extends false ? never : K]: T[K];
 };
 
 type InferFieldInput<T extends DBFieldAttribute> = InferValueType<T["type"]>;

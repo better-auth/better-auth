@@ -751,14 +751,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -889,14 +889,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);

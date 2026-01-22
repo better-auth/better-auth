@@ -118,14 +118,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<CO, false>[];
+				members: InferMember<CO>[];
 				invitations: InferInvitation<CO>[];
-				teams: InferTeam<CO, false>[];
-			} & InferOrganization<CO, false>
+				teams: InferTeam<CO>[];
+			} & InferOrganization<CO>
 		: {
-				members: InferMember<CO, false>[];
-				invitations: InferInvitation<CO, false>[];
-			} & InferOrganization<CO, false>;
+				members: InferMember<CO>[];
+				invitations: InferInvitation<CO>[];
+			} & InferOrganization<CO>;
 
 	type Schema = CO["schema"];
 	return {
@@ -154,10 +154,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as InferOrganization<CO, false>,
-				Invitation: {} as InferInvitation<CO, false>,
-				Member: {} as InferMember<CO, false>,
-				Team: {} as InferTeam<CO, false>,
+				Organization: {} as InferOrganization<CO>,
+				Invitation: {} as InferInvitation<CO>,
+				Member: {} as InferMember<CO>,
+				Team: {} as InferTeam<CO>,
 			},
 			organization: {
 				checkRolePermission: <
@@ -182,7 +182,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
+			const listOrganizations = useAuthQuery<InferOrganization<CO>[]>(
 				$listOrg,
 				"/organization/list",
 				$fetch,
@@ -192,9 +192,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 			const activeOrganization = useAuthQuery<
 				Prettify<
-					InferOrganization<CO, false> & {
-						members: InferMember<CO, false>[];
-						invitations: InferInvitation<CO, false>[];
+					InferOrganization<CO> & {
+						members: InferMember<CO>[];
+						invitations: InferInvitation<CO>[];
 					}
 				>
 			>(
