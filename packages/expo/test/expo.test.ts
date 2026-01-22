@@ -427,6 +427,44 @@ describe("expo", async () => {
 		});
 	});
 
+	it("should not corrupt cookies when redirect URL has no cookie param", async () => {
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const storedCookieBefore = storage.get("better-auth_cookie");
+		expect(storedCookieBefore).toBeDefined();
+		const parsedCookieBefore = JSON.parse(storedCookieBefore || "");
+		expect(parsedCookieBefore["better-auth.session_token"]).toBeDefined();
+
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard", // No cookie param
+		});
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		// Cookies should be preserved, not corrupted with "null" key
+		const storedCookieAfter = storage.get("better-auth_cookie");
+		expect(storedCookieAfter).toBeDefined();
+		const parsedCookieAfter = JSON.parse(storedCookieAfter || "");
+
+		// Should NOT have "null" as a cookie key
+		expect(parsedCookieAfter["null"]).toBeUndefined();
+
+		// Original session_token should still exist
+		expect(parsedCookieAfter["better-auth.session_token"]).toBeDefined();
+		expect(parsedCookieAfter["better-auth.session_token"]?.value).toBe(
+			parsedCookieBefore["better-auth.session_token"]?.value,
+		);
+	});
+
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		fn.mockClear();
 
