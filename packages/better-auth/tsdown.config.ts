@@ -18,7 +18,6 @@ export default defineConfig({
 		"./src/adapters/kysely-adapter/index.ts",
 		"./src/adapters/memory-adapter/index.ts",
 		"./src/adapters/index.ts",
-		"./src/adapters/test-adapter.ts",
 		"./src/db/index.ts",
 		"./src/db/adapter-kysely.ts",
 		"./src/db/adapter-base.ts",
