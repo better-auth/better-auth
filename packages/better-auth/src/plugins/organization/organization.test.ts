@@ -1046,16 +1046,7 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!invite.data) throw new Error("Invitation not created");
-		await client.signUp.email({
-			email: userOverLimit.email,
-			password: userOverLimit.password,
-			name: userOverLimit.name,
-		});
-		const { headers: headers2 } = await signInWithUser(
-			userOverLimit2.email,
-			userOverLimit2.password,
-		);
-
+		const headers2 = new Headers();
 		await client.signUp.email(
 			{
 				email: userOverLimit2.email,
