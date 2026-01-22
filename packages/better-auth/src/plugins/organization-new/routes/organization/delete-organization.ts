@@ -1,13 +1,13 @@
 import * as z from "zod/v4";
-import { APIError, createAuthEndpoint } from "../../../api";
-import { hasPermission } from "../access";
-import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
-import { getHook } from "../helpers/get-hook";
-import { getOrgAdapter } from "../helpers/get-org-adapter";
-import { getOrganizationId } from "../helpers/get-organization-id";
-import { resolveOrgOptions } from "../helpers/resolve-org-options";
-import { orgMiddleware } from "../middleware";
-import type { OrganizationOptions } from "../types";
+import { APIError, createAuthEndpoint } from "../../../../api";
+import { hasPermission } from "../../access";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getHook } from "../../helpers/get-hook";
+import { getOrgAdapter } from "../../helpers/get-org-adapter";
+import { getOrganizationId } from "../../helpers/get-organization-id";
+import { resolveOrgOptions } from "../../helpers/resolve-org-options";
+import { orgMiddleware } from "../../middleware";
+import type { OrganizationOptions } from "../../types";
 
 const deleteOrganizationBodySchema = z.object({
 	organizationId: z.string().meta({
@@ -87,7 +87,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const session = await ctx.context.getSession(ctx);
 			if (!session) throw APIError.fromStatus("UNAUTHORIZED");
 
-			const organization = await getOrganizationId(ctx, true);
+			const organization = await getOrganizationId({
+				ctx,
+				shouldGetOrganization: true,
+			});
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,

@@ -1,13 +1,17 @@
 import { describe, expect } from "vitest";
-import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
-import { organization } from "../organization";
-import { defineInstance, getOrganizationData } from "../test/utils";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { organization } from "../../organization";
+import { defineInstance, getOrganizationData } from "../../test/utils";
 
 describe("check organization slug", async (it) => {
-	const { signInWithTestUser, client } = await defineInstance([organization()]);
+	const { signInWithTestUser, client, auth } = await defineInstance([
+		organization(),
+	]);
 
 	it("should check if organization slug is available", async () => {
 		const { headers } = await signInWithTestUser();
+
+		auth.api.checkOrganizationSlug({ body: { slug: "hey" } });
 
 		const unusedSlug = await client.organization.checkSlug({
 			slug: "unused-slug-" + crypto.randomUUID(),

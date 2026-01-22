@@ -1,15 +1,15 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../../api";
-import { buildEndpointSchema } from "../helpers/build-endpoint-schema";
-import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
-import { getAddonHook } from "../helpers/get-addon-hook";
-import { getHook } from "../helpers/get-hook";
-import { getOrgAdapter } from "../helpers/get-org-adapter";
-import { getUserFromSessionOrBody } from "../helpers/get-user-from-session-or-body";
-import { resolveOrgOptions } from "../helpers/resolve-org-options";
-import { orgMiddleware } from "../middleware/org-middleware";
-import type { InferOrganization, OrganizationOptions } from "../types";
+import { APIError, getSessionFromCtx } from "../../../../api";
+import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getAddonHook } from "../../helpers/get-addon-hook";
+import { getHook } from "../../helpers/get-hook";
+import { getOrgAdapter } from "../../helpers/get-org-adapter";
+import { getUserFromSessionOrBody } from "../../helpers/get-user-from-session-or-body";
+import { resolveOrgOptions } from "../../helpers/resolve-org-options";
+import { orgMiddleware } from "../../middleware/org-middleware";
+import type { InferOrganization, OrganizationOptions } from "../../types";
 
 const baseOrganizationSchema = z.object({
 	name: z.string().min(1).meta({

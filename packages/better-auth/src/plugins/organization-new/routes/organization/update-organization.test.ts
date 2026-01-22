@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf } from "vitest";
-import { organization } from "../organization";
-import { defineInstance, getOrganizationData } from "../test/utils";
+import { organization } from "../../organization";
+import { defineInstance, getOrganizationData } from "../../test/utils";
 
 describe("update organization", async (it) => {
 	const plugin = organization();
