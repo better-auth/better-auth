@@ -16,6 +16,7 @@ export * from "./anonymous";
 export * from "./api-key";
 export * from "./bearer";
 export * from "./captcha";
+export * from "./ciba";
 export * from "./custom-session";
 export * from "./device-authorization";
 export * from "./email-otp";
