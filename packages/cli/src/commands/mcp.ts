@@ -15,8 +15,7 @@ interface MCPOptions {
 	remoteOnly?: boolean;
 }
 
-const REMOTE_MCP_URL =
-	"https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
+const REMOTE_MCP_URL = "https://mcp.inkeep.com/better-auth/mcp";
 const LOCAL_MCP_COMMAND = "npx @better-auth/mcp";
 
 async function mcpAction(options: MCPOptions) {
