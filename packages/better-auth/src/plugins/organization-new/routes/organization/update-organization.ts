@@ -1,15 +1,15 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
-import { hasPermission } from "../access";
-import { buildEndpointSchema } from "../helpers/build-endpoint-schema";
-import { ORGANIZATION_ERROR_CODES } from "../helpers/error-codes";
-import { getHook } from "../helpers/get-hook";
-import { getOrgAdapter } from "../helpers/get-org-adapter";
-import { getOrganizationId } from "../helpers/get-organization-id";
-import { resolveOrgOptions } from "../helpers/resolve-org-options";
-import { orgMiddleware } from "../middleware/org-middleware";
-import type { InferOrganization, OrganizationOptions } from "../types";
+import { hasPermission } from "../../access";
+import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getHook } from "../../helpers/get-hook";
+import { getOrgAdapter } from "../../helpers/get-org-adapter";
+import { getOrganizationId } from "../../helpers/get-organization-id";
+import { resolveOrgOptions } from "../../helpers/resolve-org-options";
+import { orgMiddleware } from "../../middleware/org-middleware";
+import type { InferOrganization, OrganizationOptions } from "../../types";
 
 const baseUpdateOrganizationSchema = z.object({
 	data: z.object({
@@ -110,7 +110,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			if (!session) throw APIError.fromStatus("UNAUTHORIZED");
 
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const organization = await getOrganizationId(ctx, true);
+			const organization = await getOrganizationId({
+				ctx,
+				shouldGetOrganization: true,
+			});
 
 			const user = session.user;
 			const userId = user.id;

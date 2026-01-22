@@ -1,10 +1,12 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { Session } from "@better-auth/core/db";
+import type { Session, User } from "@better-auth/core/db";
+import { BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import type { Member, MemberInput, OrganizationInput } from "../schema";
 import type {
+	InferInvitation,
 	InferMember,
 	InferOrganization,
 	OrganizationOptions,
@@ -218,6 +220,115 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 			});
 			return organizationId;
+		},
+		/**
+		 * @requires db
+		 */
+		findFullOrganization: async ({
+			organizationId,
+			membersLimit,
+		}: {
+			organizationId: string;
+			membersLimit?: number | undefined;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const isSlug = options.defaultOrganizationIdField === "slug";
+			const result = await adapter.findOne<
+				InferOrganization<O, false> & {
+					invitation: InferInvitation<O, false>[];
+					member: InferMember<O, false>[];
+				}
+			>({
+				model: "organization",
+				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
+				join: {
+					invitation: true,
+					member: membersLimit ? { limit: membersLimit } : true,
+				},
+			});
+			if (!result) {
+				return null;
+			}
+
+			const { invitation: invitations, member: members, ...org } = result;
+			const userIds = members.map((member) => member.userId);
+			const users =
+				userIds.length > 0
+					? await adapter.findMany<User>({
+							model: "user",
+							where: [{ field: "id", value: userIds, operator: "in" }],
+							limit:
+								(typeof options?.membershipLimit === "number"
+									? options.membershipLimit
+									: 100) || 100,
+						})
+					: [];
+
+			const userMap = new Map(users.map((user) => [user.id, user]));
+			const membersWithUsers = members.map((member) => {
+				const user = userMap.get(member.userId);
+				if (!user) {
+					throw new BetterAuthError(
+						"Unexpected error: User not found for member",
+					);
+				}
+				return {
+					...member,
+					user: {
+						id: user.id,
+						name: user.name,
+						email: user.email,
+						image: user.image,
+					},
+				};
+			});
+
+			return {
+				...org,
+				invitations,
+				members: membersWithUsers,
+			};
+		},
+		getMember: async ({
+			userId,
+			organizationId,
+		}: {
+			userId: string;
+			organizationId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const member = await adapter.findOne<InferMember<O, false>>({
+				model: "member",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+					{
+						field: "organizationId",
+						value: organizationId,
+					},
+				],
+			});
+			return member;
+		},
+		checkMembership: async ({
+			userId,
+			organizationId,
+		}: {
+			userId: string;
+			organizationId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const member = await adapter.findOne({
+				model: "member",
+				where: [
+					{ field: "userId", value: userId },
+					{ field: "organizationId", value: organizationId },
+				],
+				select: ["id"],
+			});
+			return member !== null;
 		},
 	};
 };

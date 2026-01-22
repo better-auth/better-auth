@@ -107,7 +107,7 @@ export const createTeam = <O extends TeamsOptions>(
 		async (ctx) => {
 			const body = getBody(ctx);
 			const session = await getSessionFromCtx(ctx);
-			const organizationId = await getOrganizationId(ctx);
+			const organizationId = await getOrganizationId({ ctx });
 
 			const orgAdapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const teamAdapter = getTeamAdapter(ctx.context, options);

@@ -3,22 +3,27 @@ import type { Endpoint } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
-import type { CheckOrganizationSlug } from "../routes/check-organization-slug";
-import { checkOrganizationSlug } from "../routes/check-organization-slug";
-import type { CreateOrganization } from "../routes/create-organizations";
-import { createOrganization } from "../routes/create-organizations";
-import type { DeleteOrganization } from "../routes/delete-organization";
-import { deleteOrganization } from "../routes/delete-organization";
-import type { UpdateOrganization } from "../routes/update-organization";
-import { updateOrganization } from "../routes/update-organization";
+import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
+import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
+import type { CreateOrganization } from "../routes/organization/create-organizations";
+import { createOrganization } from "../routes/organization/create-organizations";
+import type { DeleteOrganization } from "../routes/organization/delete-organization";
+import { deleteOrganization } from "../routes/organization/delete-organization";
+import type { GetFullOrganization } from "../routes/organization/get-full-organization";
+import { getFullOrganization } from "../routes/organization/get-full-organization";
+import type { GetOrganization } from "../routes/organization/get-organization";
+import { getOrganization } from "../routes/organization/get-organization";
+import type { UpdateOrganization } from "../routes/organization/update-organization";
+import { updateOrganization } from "../routes/organization/update-organization";
 import type { Addon, OrganizationOptions } from "../types";
 
-/** Base endpoints provided by the organization plugin */
 type BaseEndpoints<O extends OrganizationOptions> = {
 	createOrganization: CreateOrganization<O>;
 	checkOrganizationSlug: CheckOrganizationSlug<O>;
 	updateOrganization: UpdateOrganization<O>;
 	deleteOrganization: DeleteOrganization<O>;
+	getFullOrganization: GetFullOrganization<O>;
+	getOrganization: GetOrganization<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -39,6 +44,8 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		checkOrganizationSlug: checkOrganizationSlug(options),
 		updateOrganization: updateOrganization(options),
 		deleteOrganization: deleteOrganization(options),
+		getFullOrganization: getFullOrganization(options),
+		getOrganization: getOrganization(options),
 		...(addonEndpoints || {}),
 	};
 

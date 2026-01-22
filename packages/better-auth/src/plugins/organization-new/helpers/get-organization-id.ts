@@ -24,10 +24,15 @@ import { getOrgAdapter } from "./get-org-adapter";
 export const getOrganizationId = async <
 	InferOrganization extends Organization,
 	ShouldGetOrganization extends boolean = false,
->(
-	ctx: GenericEndpointContext,
-	shouldGetOrganization: ShouldGetOrganization = false as ShouldGetOrganization,
-): Promise<ShouldGetOrganization extends true ? InferOrganization : string> => {
+>({
+	ctx,
+	shouldGetOrganization = false as ShouldGetOrganization,
+}: {
+	ctx: GenericEndpointContext;
+	shouldGetOrganization?: ShouldGetOrganization;
+}): Promise<
+	ShouldGetOrganization extends true ? InferOrganization : string
+> => {
 	const options = ctx.context.orgOptions as OrganizationOptions;
 	const adapter = getOrgAdapter(ctx.context, options);
 
