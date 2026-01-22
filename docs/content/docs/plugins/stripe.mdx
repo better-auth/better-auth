@@ -283,8 +283,10 @@ await authClient.subscription.upgrade({
 
 This will create a Checkout Session and redirect the user to the Stripe Checkout page.
 
-<Callout type="warn">
-If the user already has an active subscription, you *must* provide the `subscriptionId` parameter. Otherwise, the user will be subscribed to (and pay for) both plans.
+<Callout type="info">
+The plugin only supports one active or trialing subscription per reference ID (user or organization) at a time. Multiple concurrent subscriptions for the same reference ID are not supported.
+
+If the user already has an active subscription, you **must** provide the `subscriptionId` parameter when upgrading. Otherwise, a new subscription may be created alongside the existing one, resulting in duplicate billing.
 </Callout>
 
 > **Important:** The `successUrl` parameter will be internally modified to handle race conditions between checkout completion and webhook processing. The plugin creates an intermediate redirect that ensures subscription status is properly updated before redirecting to your success page.
@@ -299,10 +301,6 @@ if(error) {
     alert(error.message);
 }
 ```
-
-<Callout type="warn">
-For each reference ID (user or organization), only one active or trialing subscription is supported at a time. The plugin doesn't currently support multiple concurrent active subscriptions for the same reference ID.
-</Callout>
 
 #### Switching Plans
 
