@@ -306,7 +306,7 @@ ${
             ${
 							!description
 								? "We encountered an unexpected error. Please try again or return to the home page. If you're a developer, you can find more information about the error " +
-									`<a href='https://better-auth.com/docs/errors/${encodeURIComponent(code)}' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>here</a>.`
+									`<a href='https://better-auth.com/docs/reference/errors/${encodeURIComponent(code)}' target='_blank' rel="noopener noreferrer" style='color: var(--foreground); text-decoration: underline;'>here</a>.`
 								: description
 						}
           </p>
@@ -342,7 +342,7 @@ ${
             </div>
           </a>
           <a
-            href="https://better-auth.com/docs/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}"
+            href="https://better-auth.com/docs/reference/errors/${encodeURIComponent(code)}?askai=${encodeURIComponent(`What does the error code ${code} mean?`)}"
             target="_blank"
             rel="noopener noreferrer"
             style="

@@ -8,6 +8,7 @@ import defaultMdxComponents from "fumadocs-ui/mdx";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
+import { BackLink } from "@/components/back-link";
 import { Features } from "@/components/blocks/features";
 import { DividerText } from "@/components/divider-text";
 import { DocsBody, DocsPage, DocsTitle } from "@/components/docs/page";
@@ -20,7 +21,7 @@ import DatabaseTable from "@/components/mdx/database-tables";
 import { Callout } from "@/components/ui/callout";
 import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
-import { absoluteUrl, cn } from "@/lib/utils";
+import { absoluteUrl, cn, isSubpageOf } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 export default async function Page({
 	params,
@@ -40,6 +41,7 @@ export default async function Page({
 
 	const MDX = page.data.body;
 	const avoidLLMHeader = ["Introduction", "Comparison"];
+	const isErrorSubpage = isSubpageOf(slug, ["reference", "errors"]);
 	return (
 		<DocsPage
 			toc={page.data.toc}
@@ -54,6 +56,9 @@ export default async function Page({
 				header: <div className="w-10 h-4"></div>,
 			}}
 		>
+			{isErrorSubpage && (
+				<BackLink href="/docs/reference/errors">Back to Errors</BackLink>
+			)}
 			<DocsTitle>{page.data.title}</DocsTitle>
 			{!avoidLLMHeader.includes(page.data.title) && (
 				<div className="flex flex-row gap-2 items-center pb-3 border-b">
