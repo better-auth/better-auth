@@ -14,7 +14,7 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
@@ -2737,9 +2737,7 @@ interface SAMLSessionRecord {
 	sessionId: string;
 	providerId: string;
 	nameID: string;
-	nameIDFormat?: string;
 	sessionIndex?: string;
-	createdAt: number;
 }
 
 const sloSchema = z.object({
@@ -2804,15 +2802,46 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			}
 
 			const { nameID } = parsed.extract;
+			const sessionIndex = (parsed.extract as { sessionIndex?: string })
+				.sessionIndex;
+
+			// Look up stored SAML session by nameID (and optionally sessionIndex)
 			const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
 			const stored =
 				await ctx.context.internalAdapter.findVerificationValue(key);
 
 			if (stored) {
-				const data = JSON.parse(stored.value) as SAMLSessionRecord;
-				await ctx.context.internalAdapter
-					.deleteSession(data.sessionId)
-					.catch(() => {});
+				try {
+					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+					if (data) {
+						// If SessionIndex is provided in the request, verify it matches
+						if (
+							sessionIndex &&
+							data.sessionIndex &&
+							sessionIndex !== data.sessionIndex
+						) {
+							ctx.context.logger.warn(
+								"SessionIndex mismatch in LogoutRequest",
+								{
+									providerId,
+									requestedSessionIndex: sessionIndex,
+									storedSessionIndex: data.sessionIndex,
+								},
+							);
+						}
+						await ctx.context.internalAdapter
+							.deleteSession(data.sessionId)
+							.catch(() => {});
+					}
+				} catch (error) {
+					ctx.context.logger.warn(
+						"Failed to parse stored SAML session record",
+						{
+							key,
+							error: error instanceof Error ? error.message : String(error),
+						},
+					);
+				}
 				await ctx.context.internalAdapter
 					.deleteVerificationValue(key)
 					.catch(() => {});
@@ -2824,6 +2853,9 @@ export const sloEndpoint = (options?: SSOOptions) => {
 					currentSession.session.id,
 				);
 			}
+
+			// Clear the session cookie
+			deleteSessionCookie(ctx);
 
 			const requestId = parsed.extract.request?.id || "";
 			const res = sp.createLogoutResponse(
