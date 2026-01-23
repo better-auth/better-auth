@@ -353,6 +353,11 @@ export interface SSOOptions {
 		 * @default 102400 (100KB)
 		 */
 		maxMetadataSize?: number;
+		/**
+		 * Enable SAML Single Logout
+		 * @default false
+		 */
+		enableSingleLogout?: boolean;
 	};
 }
 

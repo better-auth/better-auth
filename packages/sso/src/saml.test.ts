@@ -4168,3 +4168,181 @@ describe("SAML SSO - Single Assertion Validation", () => {
 		expect(samlUsers).toHaveLength(1);
 	});
 });
+
+describe("SAML SSO - IdP-Initiated Single Logout (SLO)", () => {
+	describe("SLO disabled", () => {
+		it("should return error when enableSingleLogout is not enabled", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-disabled-test",
+					issuer: "http://localhost:8081",
+					domain: "slo-disabled.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/slo-disabled-test",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(400);
+			const body = await sloRes.json();
+			expect(body.message).toContain("Single Logout is not enabled");
+		});
+	});
+
+	describe("SLO enabled", () => {
+		it("should return error when SAMLRequest is missing", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-missing-request",
+					issuer: "http://localhost:8081",
+					domain: "slo-missing.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/slo-missing-request",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(400);
+			const body = await sloRes.json();
+			expect(body.message).toContain("Missing SAMLRequest");
+		});
+
+		it("should return error when provider not found", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/nonexistent-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(404);
+			const body = await sloRes.json();
+			expect(body.message).toContain("SAML provider not found");
+		});
+	});
+
+	describe("SLO Origin Check Bypass", () => {
+		it("should allow SLO POST from external IdP origin", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-origin-bypass",
+					issuer: "http://localhost:8081",
+					domain: "slo-origin.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/slo-origin-bypass",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://external-idp.example.com",
+							Cookie: headers.get("cookie") || "",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).not.toBe(403);
+		});
+	});
+});

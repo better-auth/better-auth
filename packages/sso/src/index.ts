@@ -19,6 +19,7 @@ import {
 	callbackSSOSAML,
 	registerSSOProvider,
 	signInSSO,
+	sloEndpoint,
 	spMetadata,
 } from "./routes/sso";
 
@@ -99,6 +100,7 @@ type SSOEndpoints<O extends SSOOptions> = {
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	sloEndpoint: ReturnType<typeof sloEndpoint>;
 	listSSOProviders: ReturnType<typeof listSSOProviders>;
 	getSSOProvider: ReturnType<typeof getSSOProvider>;
 	updateSSOProvider: ReturnType<typeof updateSSOProvider>;
@@ -121,6 +123,7 @@ export type SSOPlugin<O extends SSOOptions> = {
 const SAML_SKIP_ORIGIN_CHECK_PATHS = [
 	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
 	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
+	"/sso/saml2/sp/slo", // IdP-initiated SLO (prefix matches /sp/slo/:providerId)
 ];
 
 export function sso<
@@ -154,6 +157,7 @@ export function sso<O extends SSOOptions>(
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		sloEndpoint: sloEndpoint(optionsWithStore),
 		listSSOProviders: listSSOProviders(),
 		getSSOProvider: getSSOProvider(),
 		updateSSOProvider: updateSSOProvider(optionsWithStore),
