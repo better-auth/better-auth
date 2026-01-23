@@ -75,10 +75,13 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				return ctx.json(null);
 			}
 
+			const realOrgId = await adapter.getRealOrganizationId(organizationId);
+
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId,
+				organizationId: realOrgId,
 			});
+
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);
 				const code = "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION";

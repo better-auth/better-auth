@@ -11,6 +11,10 @@ const DEFAULT_DISABLE_SLUGS = false;
 const DEFAULT_ALLOW_USER_TO_CREATE_ORGANIZATION = true;
 const DEFAULT_DISABLE_ORGANIZATION_DELETION = false;
 const DEFAULT_DEFAULT_ORGANIZATION_ID_FIELD = "id";
+const DEFAULT_INVITATION_EXPIRES_IN = 60 * 60 * 48; // 48 hours in seconds
+const DEFAULT_INVITATION_LIMIT = 100;
+const DEFAULT_CANCEL_PENDING_INVITATIONS_ON_RE_INVITE = false;
+const DEFAULT_REQUIRE_EMAIL_VERIFICATION_ON_INVITATION = false;
 
 export const resolveOrgOptions = <O extends OrganizationOptions>(
 	opts?: O | undefined,
@@ -28,6 +32,26 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 			opts?.disableOrganizationDeletion ??
 			DEFAULT_DISABLE_ORGANIZATION_DELETION,
 		roles: { ...defaultRoles, ...roles },
+		invitationExpiresIn:
+			opts?.invitationExpiresIn ?? DEFAULT_INVITATION_EXPIRES_IN,
+
+		cancelPendingInvitationsOnReInvite:
+			opts?.cancelPendingInvitationsOnReInvite ??
+			DEFAULT_CANCEL_PENDING_INVITATIONS_ON_RE_INVITE,
+		requireEmailVerificationOnInvitation:
+			opts?.requireEmailVerificationOnInvitation ??
+			DEFAULT_REQUIRE_EMAIL_VERIFICATION_ON_INVITATION,
+		sendInvitationEmail: async (data, ctx) => {
+			if (typeof opts?.sendInvitationEmail === "function") {
+				await opts?.sendInvitationEmail(data, ctx);
+			}
+		},
+		invitationLimit: (data, ctx) => {
+			if (typeof opts?.invitationLimit === "function") {
+				return opts?.invitationLimit(data, ctx);
+			}
+			return DEFAULT_INVITATION_LIMIT;
+		},
 		allowUserToCreateOrganization: async (...args) => {
 			const allowCreateOrg = opts?.allowUserToCreateOrganization;
 			if (typeof allowCreateOrg === "function") {

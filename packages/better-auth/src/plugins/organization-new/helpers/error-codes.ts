@@ -17,6 +17,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 		"You are not allowed to update this organization",
 	YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION:
 		"You are not allowed to delete this organization",
+	YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION:
+		"You are not allowed to invite users to this organization",
 	NO_ACTIVE_ORGANIZATION: "No active organization",
 	USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION:
 		"User is already a member of this organization",

@@ -5,6 +5,7 @@ import { hasPermission } from "../../access";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
+import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
@@ -116,12 +117,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			});
 
 			const user = session.user;
-			const userId = user.id;
-			const organizationId = organization.id;
 
 			const member = await adapter.findMemberByOrgId({
-				userId,
-				organizationId,
+				userId: user.id,
+				organizationId: organization.id as RealOrganizationId,
 			});
 
 			if (!member) {
@@ -137,7 +136,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 					},
 					role: member.role,
 					options: ctx.context.orgOptions,
-					organizationId: organizationId,
+					organizationId: organization.id as RealOrganizationId,
 				},
 				ctx,
 			);
@@ -189,7 +188,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			}
 
 			const updatedOrg = await adapter.updateOrganization(
-				organizationId,
+				organization.id,
 				updateData,
 			);
 			await orgHooks.after({ member, organization: updatedOrg, user }, ctx);
