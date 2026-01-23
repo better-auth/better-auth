@@ -424,7 +424,7 @@ The Authorization Endpoint is the entry point for initiating an OAuth 2.1 author
 
 Important notes:
 - In OAuth 2.1, only `response_type: "code"` is supported.
-- `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
+- `code_challenge_method: "plain"` is not supported by default, but can be enabled via `allowPlainCodeChallengeMethod: true` configuration option.
 
 **State**
 
@@ -955,6 +955,67 @@ The scopes configuration can contain as many or as few scopes as you wish! Note 
 ```ts title="auth.ts"
 oauthProvider({
   scopes: [ "openid", "profile", "offline_access", "read:post", "write:post" ],
+})
+```
+
+### PKCE Configuration
+
+PKCE (Proof Key for Code Exchange) is an OAuth 2.1 security feature that protects authorization codes from interception. This plugin provides configurable PKCE requirements:
+
+#### requirePKCE
+
+Controls whether PKCE is required for confidential clients. Public clients ALWAYS require PKCE regardless of this setting.
+
+```ts title="auth.ts"
+oauthProvider({
+  requirePKCE: true,  // default: true
+})
+```
+
+**Options:**
+- `true` (default): All clients must use PKCE (OAuth 2.1 compliant, recommended)
+- `false`: Confidential clients can authenticate with `client_secret` only, without PKCE
+
+**Security considerations:**
+- Public clients (native, user-agent-based, or `public: true`) ALWAYS require PKCE
+- The `offline_access` scope ALWAYS requires PKCE, even when `requirePKCE: false`
+- Setting to `false` is only recommended for legacy confidential clients that cannot implement PKCE
+
+**Example for legacy support:**
+
+```ts title="auth.ts"
+oauthProvider({
+  requirePKCE: false,  // Allow legacy confidential clients without PKCE
+  // Public clients still require PKCE (non-negotiable)
+  // offline_access still requires PKCE (non-negotiable)
+})
+```
+
+#### allowPlainCodeChallengeMethod
+
+Controls whether the "plain" code challenge method is allowed in addition to "S256".
+
+```ts title="auth.ts"
+oauthProvider({
+  allowPlainCodeChallengeMethod: false,  // default: false
+})
+```
+
+**Options:**
+- `false` (default): Only S256 method supported (OAuth 2.1 recommended)
+- `true`: Both S256 and plain methods supported
+
+**Security considerations:**
+- OAuth 2.1 recommends S256 only as it provides cryptographic protection
+- Only enable plain method if you have clients that cannot implement S256
+- S256 is more secure and should be preferred when possible
+
+**Example with plain method enabled:**
+
+```ts title="auth.ts"
+oauthProvider({
+  allowPlainCodeChallengeMethod: true,  // Allow both S256 and plain
+  // S256 is still recommended and should be used when possible
 })
 ```
 
@@ -1793,12 +1854,40 @@ To improve lookup performance, database adapters may map the field `client_id` o
 - **`clientRegistrationDefaultScopes`** (previously `defaultScope`) is now in array format instead of a space-separated string
 - **`consentPage`** is now required
 - **`getConsentHTML`** is removed in favor of the `consentPage` as raw html is not a response type supported by the authorize endpoint in OAuth
-- **`requirePKCE`** is removed as PKCE is required in OAuth 2.1
-- **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
+- **`requirePKCE`** is now supported and defaults to `true` for secure-by-default configuration. Set to `false` to allow confidential clients to authenticate with `client_secret` only (without PKCE). **Breaking change**: Public clients (type: "native", "user-agent-based", or `public: true`) now ALWAYS require PKCE regardless of this setting.
+- **`allowPlainCodeChallengeMethod`** is now supported and defaults to `false`. Set to `true` to allow the "plain" code challenge method in addition to "S256". OAuth 2.1 recommends S256 only.
 - **`customUserInfoClaims`** (previously `getAdditionalUserInfoClaim`) passes the jwt payload instead of the client of the access token used in the request.
 - **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJwtPlugin: true` (previously `plain`).
 - JWT plugin now is enabled by default. To disable the plugin, set `disableJwtPlugin: true`.
 - Authorization query `code_challenge_method` "S256" must be in caps as described by OAuth 2.1
+
+#### PKCE Configuration Migration
+
+The oauth-provider now supports configurable PKCE requirements while maintaining OAuth 2.1 compliance:
+
+| oidc-provider Config | oauth-provider Config | Behavior Change |
+|---------------------|----------------------|-----------------|
+| `requirePKCE: true` | `requirePKCE: true` (default) | ✅ Same behavior - all clients must use PKCE |
+| `requirePKCE: false` | `requirePKCE: false` | ⚠️ **Breaking change for public clients** - Public clients (type: "native", "user-agent-based", or `public: true`) now MUST use PKCE. Confidential clients can use `client_secret` without PKCE. |
+| `allowPlainCodeChallengeMethod: true` | `allowPlainCodeChallengeMethod: true` | ✅ Same behavior - both S256 and plain methods supported |
+| `allowPlainCodeChallengeMethod: false` | (default - omit option) | ✅ Same behavior - only S256 method supported |
+
+**Recommended configuration for legacy apps:**
+
+For confidential clients that cannot implement PKCE:
+
+```ts title="auth.ts"
+oauthProvider({
+  requirePKCE: false,  // Allow confidential clients to use client_secret only
+  allowPlainCodeChallengeMethod: false,  // Keep S256 requirement for clients using PKCE
+  // ... other options
+})
+```
+
+**Important security notes:**
+- The `offline_access` scope ALWAYS requires PKCE, even when `requirePKCE: false`
+- Public clients ALWAYS require PKCE as mandated by OAuth 2.1, regardless of `requirePKCE` setting
+- Default configuration (`requirePKCE: true`) is recommended for maximum security
 
 #### Database
 
