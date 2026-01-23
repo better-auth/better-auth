@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Account } from "@better-auth/core/db";
 
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
@@ -69,6 +70,19 @@ const createWalletVerificationIdentifier = (
 	chainId: number,
 ) => `siwe:${createWalletAccountId(walletAddress, chainId)}`;
 
+const parseWalletAccountId = (
+	accountId: string,
+): { address: string; chainId: number } | null => {
+	const [address, chainIdStr] = accountId.split(":");
+	const chainId = parseInt(chainIdStr ?? "", 10);
+
+	if (!address || Number.isNaN(chainId)) {
+		return null;
+	}
+
+	return { address, chainId };
+};
+
 const verifySiweMessageOrThrow = async (
 	options: SIWEPluginOptions,
 	args: {
@@ -116,6 +130,37 @@ export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
 		schema: mergeSchema(schema, options?.schema),
+		init(ctx) {
+			return {
+				options: {
+					databaseHooks: {
+						account: {
+							delete: {
+								async after(account: Account) {
+									if (account.providerId !== "siwe" || !account.accountId) {
+										return;
+									}
+
+									const parsed = parseWalletAccountId(account.accountId);
+									if (!parsed) {
+										return;
+									}
+
+									await ctx.adapter.deleteMany({
+										model: "walletAddress",
+										where: [
+											{ field: "address", value: parsed.address },
+											{ field: "chainId", value: parsed.chainId },
+											{ field: "userId", value: account.userId },
+										],
+									});
+								},
+							},
+						},
+					},
+				},
+			};
+		},
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",
