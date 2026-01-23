@@ -1,4 +1,3 @@
-import type { Prettify } from "@better-auth/core";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import type { UnionToIntersection } from "../../../types";
 import type { InferOrganizationRolesFromOption } from "../access";
