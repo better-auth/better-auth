@@ -57,6 +57,39 @@ describe("update organization", async (it) => {
 		expectTypeOf<typeof updatedOrg.slug>().toEqualTypeOf<string>();
 	});
 
+	it("should update an organization with slug", async () => {
+		const plugin = organization({ defaultOrganizationIdField: "slug" });
+		const { auth, signInWithTestUser } = await defineInstance([plugin]);
+		const { headers } = await signInWithTestUser();
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: orgData,
+		});
+		const updatedOrg = await auth.api.updateOrganization({
+			headers,
+			body: {
+				organizationId: org.slug,
+				data: {
+					name: "updated-name",
+					slug: "updated-slug",
+					logo: "https://example.co/logo.png",
+					metadata: {
+						test: "organization-metadata-updated",
+					},
+				},
+			},
+		});
+		expect(updatedOrg).toBeDefined();
+		expect(updatedOrg.id).toBe(org.id);
+		expect(updatedOrg.name).toBe("updated-name");
+		expect(updatedOrg.slug).toBe("updated-slug");
+		expect(updatedOrg.logo).toBe("https://example.co/logo.png");
+		expect(updatedOrg.metadata).toStrictEqual({
+			test: "organization-metadata-updated",
+		});
+	});
+
 	describe("disable slugs", async (it) => {
 		const plugin = organization({ disableSlugs: true });
 		const { auth, signInWithTestUser } = await defineInstance([plugin]);

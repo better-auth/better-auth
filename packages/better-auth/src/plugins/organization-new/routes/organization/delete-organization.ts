@@ -117,7 +117,6 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}
-			//todo: Fix this to check if `id` type is slug or id
 			if (organization.id === session.session.activeOrganizationId) {
 				await adapter.setActiveOrganization(session.session.token, null);
 			}

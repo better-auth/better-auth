@@ -45,5 +45,12 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 			return orgLimit ?? DEFAULT_ORGANIZATION_LIMIT;
 		},
 	} satisfies ResolvedOrganizationOptions;
+
+	if (options.disableSlugs && options.defaultOrganizationIdField === "slug") {
+		throw new Error(
+			"[Organization Plugin] Cannot use `slug` as the `defaultOrganizationIdField` when slugs are disabled",
+		);
+	}
+
 	return options;
 };
