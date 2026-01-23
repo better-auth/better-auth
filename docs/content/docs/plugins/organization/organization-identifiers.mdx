@@ -3,6 +3,98 @@ title: Organization Identifiers
 description: Learn about the different identifiers you can use to identify an organization.
 ---
 
-## Organization Identifiers
+By default, the organization plugin uses the organization `id` to identify organizations in API calls.
+However, some applications prefer to use the organization `slug` instead, which is especially useful when the slug is already available
+in client-side state or URL parameters.
 
-When working with organizations, you can use the following identifiers to identify an organization:
+## Configuring the Default Identifier
+
+You can configure which field is used as the default organization identifier:
+
+```ts title="auth.ts"
+organization({
+  defaultOrganizationIdField: "slug", // "slug" or "id" (default is "id")
+});
+```
+
+Once configured, any endpoint that accepts an `organizationId` parameter will expect the configured field type:
+
+```ts
+await authClient.organization.update({
+  organizationId: "my-org-slug", // Pass the slug instead of the ID
+  data: {
+    name: "New Name",
+  },
+});
+```
+
+## Automatic Organization Resolution
+
+To avoid passing `organizationId` to every API call, you can configure `getActiveOrg` on the client
+to automatically resolve the active organization.
+
+### Custom Function
+
+Provide a function that returns the current organization identifier:
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      getActiveOrg: () => {
+        // Return the org `id` or `slug` based on your `defaultOrganizationIdField` config
+        return "my-org-slug";
+      },
+    }),
+  ],
+});
+```
+
+With this configured, the `organizationId` parameter becomes optional in most API calls.
+
+### Built-in Helpers
+
+The plugin provides built-in helpers to extract the organization identifier from the URL.
+
+**From query parameters** (e.g., `?org=my-org-slug`):
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      getActiveOrg: "query", // [!code focus]
+    }),
+  ],
+});
+```
+
+**From path segments** (e.g., `/dashboard/my-org-slug/settings`):
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      getActiveOrg: "path:1", // [!code focus]
+      // The number indicates the path segment index (0-based)
+      // For "/dashboard/my-org-slug/settings", index 1 = "my-org-slug"
+    }),
+  ],
+});
+```
+
+**From cookies** (e.g., `active_organization=my-org-slug`):
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+  plugins: [
+    organizationClient({
+      getActiveOrg: "cookie", // [!code focus]
+    }),
+  ],
+});
+```
+
+<Callout type="info">
+    When using `"cookie"`, the plugin reads from the `active_organization` cookie.
+    This enables cross-tab synchronization - all tabs in the same browser will share the active organization.
+</Callout>  
