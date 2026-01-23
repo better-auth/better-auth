@@ -560,10 +560,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
  */
 export const optionalSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
-	
-	return {
-		session,
-	};
+	return { session };
 });
 
 /**
