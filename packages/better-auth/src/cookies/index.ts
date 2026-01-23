@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
@@ -127,15 +128,9 @@ export async function setCookieCache(
 		return;
 	}
 
-	const filteredSession = Object.entries(session.session).reduce(
-		(acc, [key, value]) => {
-			const fieldConfig = ctx.context.options.session?.additionalFields?.[key];
-			if (!fieldConfig || fieldConfig.returned !== false) {
-				acc[key] = value;
-			}
-			return acc;
-		},
-		{} as Record<string, any>,
+	const filteredSession = filterOutputFields(
+		session.session,
+		ctx.context.options.session?.additionalFields,
 	);
 
 	const filteredUser = parseUserOutput(ctx.context.options, session.user);
