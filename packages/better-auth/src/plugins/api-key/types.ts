@@ -2,6 +2,7 @@ import type {
 	Awaitable,
 	GenericEndpointContext,
 	HookEndpointContext,
+	WithEnabled,
 } from "@better-auth/core";
 
 import type { InferOptionSchema } from "../../types";
@@ -160,13 +161,7 @@ export interface ApiKeyOptions {
 	 * Default rate limiting options.
 	 */
 	rateLimit?:
-		| {
-				/**
-				 * Whether to enable rate limiting.
-				 *
-				 * @default true
-				 */
-				enabled?: boolean;
+		| WithEnabled<{
 				/**
 				 * The duration in milliseconds where each request is counted.
 				 *
@@ -183,7 +178,7 @@ export interface ApiKeyOptions {
 				 * @default 10 // 10 requests per day
 				 */
 				maxRequests?: number;
-		  }
+		  }>
 		| undefined;
 	/**
 	 * custom schema for the API key plugin

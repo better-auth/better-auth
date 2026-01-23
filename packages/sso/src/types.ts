@@ -1,4 +1,4 @@
-import type { Awaitable, OAuth2Tokens, User } from "better-auth";
+import type { Awaitable, OAuth2Tokens, User, WithEnabled } from "better-auth";
 import type { AlgorithmValidationOptions } from "./saml/algorithms";
 
 export interface OIDCMapping {
@@ -246,18 +246,14 @@ export interface SSOOptions {
 	 * When this option is enabled, new SSO providers will require the associated domain to be verified by the owner
 	 * prior to allowing sign-ins.
 	 */
-	domainVerification?: {
-		/**
-		 * Enables or disables the domain verification feature
-		 */
-		enabled?: boolean;
+	domainVerification?: WithEnabled<{
 		/**
 		 * Prefix used to generate the domain verification token
 		 *
 		 * @default "better-auth-token-"
 		 */
 		tokenPrefix?: string;
-	};
+	}>;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.

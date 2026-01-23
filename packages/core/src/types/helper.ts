@@ -24,3 +24,7 @@ export type UnionToIntersection<U> = (
 ) extends (k: infer I) => void
 	? I
 	: never;
+
+export type WithEnabled<T extends Record<string, unknown>> = T & {
+	enabled?: boolean | undefined;
+};

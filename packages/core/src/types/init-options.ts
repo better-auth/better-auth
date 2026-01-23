@@ -23,7 +23,7 @@ import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { Awaitable, LiteralUnion } from "./helper";
+import type { Awaitable, LiteralUnion, WithEnabled } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
@@ -62,56 +62,53 @@ export type BetterAuthRateLimitRule = {
 	max: number;
 };
 
-export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
-	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
-	 */
-	enabled?: boolean | undefined;
-	/**
-	 * Custom rate limit rules to apply to
-	 * specific paths.
-	 */
-	customRules?:
-		| {
-				[key: string]:
-					| BetterAuthRateLimitRule
-					| false
-					| ((
-							request: Request,
-							currentRule: BetterAuthRateLimitRule,
-					  ) => Awaitable<false | BetterAuthRateLimitRule>);
-		  }
-		| undefined;
-	/**
-	 * Storage configuration
-	 *
-	 * By default, rate limiting is stored in memory. If you passed a
-	 * secondary storage, rate limiting will be stored in the secondary
-	 * storage.
-	 *
-	 * @default "memory"
-	 */
-	storage?: ("memory" | "database" | "secondary-storage") | undefined;
-	/**
-	 * If database is used as storage, the name of the table to
-	 * use for rate limiting.
-	 *
-	 * @default "rateLimit"
-	 */
-	modelName?: string | undefined;
-	/**
-	 * Custom field names for the rate limit table
-	 */
-	fields?: Partial<Record<keyof RateLimit, string>> | undefined;
-	/**
-	 * custom storage configuration.
-	 *
-	 * NOTE: If custom storage is used storage
-	 * is ignored
-	 */
-	customStorage?: BetterAuthRateLimitStorage;
-};
+export type BetterAuthRateLimitOptions = WithEnabled<
+	Optional<BetterAuthRateLimitRule> & {
+		/**
+		 * Custom rate limit rules to apply to
+		 * specific paths.
+		 */
+		customRules?:
+			| {
+					[key: string]:
+						| BetterAuthRateLimitRule
+						| false
+						| ((
+								request: Request,
+								currentRule: BetterAuthRateLimitRule,
+						  ) => Awaitable<false | BetterAuthRateLimitRule>);
+			  }
+			| undefined;
+		/**
+		 * Storage configuration
+		 *
+		 * By default, rate limiting is stored in memory. If you passed a
+		 * secondary storage, rate limiting will be stored in the secondary
+		 * storage.
+		 *
+		 * @default "memory"
+		 */
+		storage?: ("memory" | "database" | "secondary-storage") | undefined;
+		/**
+		 * If database is used as storage, the name of the table to
+		 * use for rate limiting.
+		 *
+		 * @default "rateLimit"
+		 */
+		modelName?: string | undefined;
+		/**
+		 * Custom field names for the rate limit table
+		 */
+		fields?: Partial<Record<keyof RateLimit, string>> | undefined;
+		/**
+		 * custom storage configuration.
+		 *
+		 * NOTE: If custom storage is used storage
+		 * is ignored
+		 */
+		customStorage?: BetterAuthRateLimitStorage;
+	}
+>;
 
 export type BetterAuthAdvancedOptions = {
 	/**
@@ -712,11 +709,7 @@ export type BetterAuthOptions = {
 				/**
 				 * User deletion configuration
 				 */
-				deleteUser?: {
-					/**
-					 * Enable user deletion
-					 */
-					enabled?: boolean;
+				deleteUser?: WithEnabled<{
 					/**
 					 * Send a verification email when the user deletes their account.
 					 *
@@ -750,7 +743,7 @@ export type BetterAuthOptions = {
 					 * @default 1 day (60 * 60 * 24) in seconds
 					 */
 					deleteTokenExpiresIn?: number;
-				};
+				}>;
 		  }
 		| undefined;
 	session?:
@@ -822,17 +815,12 @@ export type BetterAuthOptions = {
 				/**
 				 * Enable caching session in cookie
 				 */
-				cookieCache?: {
+				cookieCache?: WithEnabled<{
 					/**
 					 * max age of the cookie
 					 * @default 5 minutes (5 * 60)
 					 */
 					maxAge?: number;
-					/**
-					 * Enable caching session in cookie
-					 * @default false
-					 */
-					enabled?: boolean;
 					/**
 					 * Strategy for encoding/decoding cookie cache
 					 *
@@ -891,7 +879,7 @@ export type BetterAuthOptions = {
 								session: Session & Record<string, any>,
 								user: User & Record<string, any>,
 						  ) => Promise<string>);
-				};
+				}>;
 				/**
 				 * The age of the session to consider it fresh.
 				 *
@@ -934,13 +922,7 @@ export type BetterAuthOptions = {
 				/**
 				 * Configuration for account linking.
 				 */
-				accountLinking?: {
-					/**
-					 * Enable account linking
-					 *
-					 * @default true
-					 */
-					enabled?: boolean;
+				accountLinking?: WithEnabled<{
 					/**
 					 * List of trusted providers
 					 */
@@ -967,7 +949,7 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					updateUserInfoOnLink?: boolean;
-				};
+				}>;
 				/**
 				 * Encrypt OAuth tokens
 				 *
@@ -1461,20 +1443,14 @@ export type BetterAuthOptions = {
 	 * Telemetry configuration
 	 */
 	telemetry?:
-		| {
-				/**
-				 * Enable telemetry collection
-				 *
-				 * @default false
-				 */
-				enabled?: boolean;
+		| WithEnabled<{
 				/**
 				 * Enable debug mode
 				 *
 				 * @default false
 				 */
 				debug?: boolean;
-		  }
+		  }>
 		| undefined;
 	/**
 	 * Experimental features

@@ -2,6 +2,7 @@ import type {
 	AuthContext,
 	Awaitable,
 	GenericEndpointContext,
+	WithEnabled,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
@@ -85,13 +86,7 @@ export interface OrganizationOptions {
 	 * Dynamic access control for the organization plugin.
 	 */
 	dynamicAccessControl?:
-		| {
-				/**
-				 * Whether to enable dynamic access control for the organization plugin.
-				 *
-				 * @default false
-				 */
-				enabled?: boolean;
+		| WithEnabled<{
 				/**
 				 * The maximum number of roles that can be created for an organization.
 				 *
@@ -100,7 +95,7 @@ export interface OrganizationOptions {
 				maximumRolesPerOrganization?:
 					| number
 					| ((organizationId: string) => Awaitable<number>);
-		  }
+		  }>
 		| undefined;
 	/**
 	 * Support for team.
