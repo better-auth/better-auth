@@ -14,9 +14,6 @@ export const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
 /** Prefix for used Assertion IDs used in replay protection */
 export const USED_ASSERTION_KEY_PREFIX = "saml-used-assertion:";
 
-/** Prefix for LogoutRequest IDs used in SP-initiated SLO validation */
-export const LOGOUT_REQUEST_KEY_PREFIX = "saml-logout-request:";
-
 /** Prefix for SAML session data (NameID + SessionIndex) for SLO */
 export const SAML_SESSION_KEY_PREFIX = "saml-session:";
 
@@ -35,12 +32,6 @@ export const DEFAULT_AUTHN_REQUEST_TTL_MS = 5 * 60 * 1000;
  * This should match the maximum expected NotOnOrAfter window plus clock skew.
  */
 export const DEFAULT_ASSERTION_TTL_MS = 15 * 60 * 1000;
-
-/**
- * Default TTL for LogoutRequest records (5 minutes).
- * This should be sufficient for the IdP to process and respond to logout requests.
- */
-export const DEFAULT_LOGOUT_REQUEST_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Default clock skew tolerance (5 minutes).
