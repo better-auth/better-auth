@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
+import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
 import { defineInstance, getOrganizationData } from "../../test/utils";
-import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 
 describe("get full organization", async (it) => {
 	const plugin = organization();
