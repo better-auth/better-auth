@@ -3,7 +3,6 @@ import type {
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
-	SessionCookieData,
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";

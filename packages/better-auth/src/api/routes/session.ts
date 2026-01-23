@@ -1,7 +1,6 @@
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
-	SessionCookieData,
 } from "@better-auth/core";
 import {
 	createAuthEndpoint,
