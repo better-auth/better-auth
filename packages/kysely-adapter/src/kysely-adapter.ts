@@ -287,9 +287,9 @@ export const kyselyAdapter = (
 						const entry: Record<string, any> = { ...mainModelFields };
 
 						// Initialize joined models based on uniqueness
+						// Use joinModel (internal model name) for result keys, not getModelName (table name)
 						for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
-							entry[getModelName(joinModel)] =
-								joinAttr.relation === "one-to-one" ? null : [];
+							entry[joinModel] = joinAttr.relation === "one-to-one" ? null : [];
 						}
 
 						groupedByMainId.set(mainId, entry);
@@ -302,6 +302,7 @@ export const kyselyAdapter = (
 						const isUnique = joinAttr.relation === "one-to-one";
 						const limit = joinAttr.limit ?? 100;
 
+						// Use getModelName for retrieving from temporary storage (joinedModelFields)
 						const joinedObj = joinedModelFields[getModelName(joinModel)];
 
 						const hasData =
@@ -312,13 +313,14 @@ export const kyselyAdapter = (
 							);
 
 						if (isUnique) {
-							entry[getModelName(joinModel)] = hasData ? joinedObj : null;
+							// Use joinModel (internal model name) for result keys
+							entry[joinModel] = hasData ? joinedObj : null;
 						} else {
 							// For arrays, append if not already there (deduplicate by id) and respect limit
-							const joinModelName = getModelName(joinModel);
-							if (Array.isArray(entry[joinModelName]) && hasData) {
+							// Use joinModel (internal model name) for result keys
+							if (Array.isArray(entry[joinModel]) && hasData) {
 								// Check if we've reached the limit before processing
-								if (entry[joinModelName].length >= limit) {
+								if (entry[joinModel].length >= limit) {
 									continue;
 								}
 
@@ -331,16 +333,16 @@ export const kyselyAdapter = (
 
 								// Only deduplicate if we have an id field
 								if (joinedId) {
-									const exists = entry[joinModelName].some(
+									const exists = entry[joinModel].some(
 										(item: any) => item[idFieldName] === joinedId,
 									);
-									if (!exists && entry[joinModelName].length < limit) {
-										entry[joinModelName].push(joinedObj);
+									if (!exists && entry[joinModel].length < limit) {
+										entry[joinModel].push(joinedObj);
 									}
 								} else {
 									// If no id field, still add the object if it has data and limit not reached
-									if (entry[joinModelName].length < limit) {
-										entry[joinModelName].push(joinedObj);
+									if (entry[joinModel].length < limit) {
+										entry[joinModel].push(joinedObj);
 									}
 								}
 							}
@@ -354,11 +356,11 @@ export const kyselyAdapter = (
 				for (const entry of result) {
 					for (const [joinModel, joinAttr] of Object.entries(joinConfig)) {
 						if (joinAttr.relation !== "one-to-one") {
-							const joinModelName = getModelName(joinModel);
-							if (Array.isArray(entry[joinModelName])) {
+							// Use joinModel (internal model name) for result keys
+							if (Array.isArray(entry[joinModel])) {
 								const limit = joinAttr.limit ?? 100;
-								if (entry[joinModelName].length > limit) {
-									entry[joinModelName] = entry[joinModelName].slice(0, limit);
+								if (entry[joinModel].length > limit) {
+									entry[joinModel] = entry[joinModel].slice(0, limit);
 								}
 							}
 						}
