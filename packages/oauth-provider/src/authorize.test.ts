@@ -296,7 +296,44 @@ describe("oauth authorize - PKCE requirements", async () => {
 				},
 			});
 			expect(errorRedirectUrl).toContain(redirectUri);
-			expect(errorRedirectUrl).toContain("error=invalid_scope");
+			expect(errorRedirectUrl).toContain("error=invalid_request");
+			expect(errorRedirectUrl).toContain(
+				"error_description=offline_access+scope+requires+PKCE",
+			);
+		});
+
+		it("should allow offline_access with PKCE for confidential clients", async () => {
+			if (
+				!confidentialClient?.client_id ||
+				!confidentialClient?.client_secret
+			) {
+				throw Error("beforeAll not run properly");
+			}
+
+			const codeVerifier = generateRandomString(64);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+				},
+				redirectURI: redirectUri,
+				state: "123",
+				scopes: ["openid", "offline_access"],
+				responseType: "code",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				codeVerifier,
+			});
+
+			let callbackRedirectUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackRedirectUrl = context.response.headers.get("Location") || "";
+				},
+			});
+			expect(callbackRedirectUrl).toContain(redirectUri);
+			expect(callbackRedirectUrl).toContain("code=");
+			expect(callbackRedirectUrl).toContain("state=123");
 		});
 	});
 

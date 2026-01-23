@@ -649,7 +649,7 @@ async function handleAuthorizationCodeGrant(
 	const challengeMethodInAuth = verificationValue.query?.code_challenge_method;
 
 	if (clientIsPublic) {
-		// Public clients MUST use PKCE
+		// OAuth 2.1: Public clients MUST use PKCE (non-negotiable)
 		if (!isAuthCodeWithPkce) {
 			throw new APIError("BAD_REQUEST", {
 				error_description: "Public clients must use PKCE",
@@ -657,7 +657,9 @@ async function handleAuthorizationCodeGrant(
 			});
 		}
 	} else {
-		// Confidential clients need either PKCE or secret
+		// Confidential clients can use either:
+		// 1. PKCE (recommended, OAuth 2.1)
+		// 2. client_secret (legacy support when requirePKCE: false)
 		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
 			throw new APIError("BAD_REQUEST", {
 				error_description:

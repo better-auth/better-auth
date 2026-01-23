@@ -1478,3 +1478,436 @@ describe("oauth token - config", async () => {
 		expect(tokens.data?.access_token).toBeDefined();
 	});
 });
+
+describe("oauth token - PKCE requirements", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+
+	describe("with requirePKCE: false (confidential clients can skip PKCE)", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						requirePKCE: false,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		let confidentialClient: OAuthClient | null;
+		let publicClient: OAuthClient | null;
+		const providerId = "test";
+		const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+		beforeAll(async () => {
+			// Create confidential client (web type)
+			const confidentialResponse = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+					type: "web",
+				},
+			});
+			confidentialClient = confidentialResponse;
+
+			// Create public client (native type)
+			const publicResponse = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+					type: "native",
+				},
+			});
+			publicClient = publicResponse;
+		});
+
+		it("should allow confidential client to exchange code with only client_secret (no PKCE)", async () => {
+			if (
+				!confidentialClient?.client_id ||
+				!confidentialClient?.client_secret
+			) {
+				throw Error("beforeAll not run properly");
+			}
+
+			// Get authorization code WITHOUT PKCE
+			const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+			authUrl.searchParams.set("client_id", confidentialClient.client_id);
+			authUrl.searchParams.set("redirect_uri", redirectUri);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("state", "123");
+			authUrl.searchParams.set("scope", "openid");
+
+			let callbackUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			const code = new URL(callbackUrl).searchParams.get("code");
+			expect(code).toBeDefined();
+
+			// Exchange code with only client_secret (no code_verifier)
+			const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+				code: code!,
+				redirectURI: redirectUri,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+
+			const tokensResult = await client.$fetch<{
+				access_token?: string;
+				id_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: body,
+				headers: tokenHeaders,
+			});
+
+			expect(tokensResult.error).toBeUndefined();
+			expect(tokensResult.data?.access_token).toBeDefined();
+		});
+
+		it("should reject public client trying to exchange with client_secret", async () => {
+			if (!publicClient?.client_id) {
+				throw Error("beforeAll not run properly");
+			}
+
+			// Get authorization code with PKCE (required for public clients)
+			const codeVerifier = generateRandomString(64);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: publicClient.client_id,
+					redirectURI: redirectUri,
+				},
+				redirectURI: redirectUri,
+				state: "123",
+				scopes: ["openid"],
+				responseType: "code",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				codeVerifier,
+			});
+
+			let callbackUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			const code = new URL(callbackUrl).searchParams.get("code");
+			expect(code).toBeDefined();
+
+			// Try to exchange with client_secret instead of PKCE (should fail)
+			const tokenBody = new URLSearchParams({
+				grant_type: "authorization_code",
+				code: code!,
+				redirect_uri: redirectUri,
+				client_id: publicClient.client_id,
+				client_secret: "fake_secret",
+			});
+
+			let error: any;
+			await client.$fetch("/oauth2/token", {
+				method: "POST",
+				body: tokenBody,
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					error = context.response;
+				},
+			});
+
+			expect(error).toBeDefined();
+		});
+	});
+
+	describe("with requirePKCE: true (default - all need PKCE or secret)", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						// requirePKCE defaults to true
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		let confidentialClient: OAuthClient | null;
+		const providerId = "test";
+		const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+		beforeAll(async () => {
+			const response = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+					type: "web",
+				},
+			});
+			confidentialClient = response;
+		});
+
+		it("should allow confidential client to exchange with PKCE", async () => {
+			if (
+				!confidentialClient?.client_id ||
+				!confidentialClient?.client_secret
+			) {
+				throw Error("beforeAll not run properly");
+			}
+
+			const codeVerifier = generateRandomString(64);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+				redirectURI: redirectUri,
+				state: "123",
+				scopes: ["openid"],
+				responseType: "code",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				codeVerifier,
+			});
+
+			let callbackUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			const code = new URL(callbackUrl).searchParams.get("code");
+			expect(code).toBeDefined();
+
+			// Exchange with PKCE
+			const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+
+			const tokensResult = await client.$fetch<{
+				access_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: body,
+				headers: tokenHeaders,
+			});
+
+			expect(tokensResult.error).toBeUndefined();
+			expect(tokensResult.data?.access_token).toBeDefined();
+		});
+
+		it("should allow confidential client to exchange with only client_secret (legacy support)", async () => {
+			if (
+				!confidentialClient?.client_id ||
+				!confidentialClient?.client_secret
+			) {
+				throw Error("beforeAll not run properly");
+			}
+
+			const codeVerifier = generateRandomString(64);
+			const authUrl = await createAuthorizationURL({
+				id: providerId,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+				redirectURI: redirectUri,
+				state: "123",
+				scopes: ["openid"],
+				responseType: "code",
+				authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+				codeVerifier,
+			});
+
+			let callbackUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			const code = new URL(callbackUrl).searchParams.get("code");
+			expect(code).toBeDefined();
+
+			// Exchange with client_secret but provide code_verifier too
+			const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+
+			const tokensResult = await client.$fetch<{
+				access_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: body,
+				headers: tokenHeaders,
+			});
+
+			expect(tokensResult.error).toBeUndefined();
+			expect(tokensResult.data?.access_token).toBeDefined();
+		});
+	});
+
+	describe("with allowPlainCodeChallengeMethod: true", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				baseURL: authServerBaseUrl,
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						allowPlainCodeChallengeMethod: true,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+
+		let confidentialClient: OAuthClient | null;
+		const providerId = "test";
+		const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+		beforeAll(async () => {
+			const response = await auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [redirectUri],
+					skip_consent: true,
+				},
+			});
+			confidentialClient = response;
+		});
+
+		it("should support plain code challenge method in token exchange", async () => {
+			if (
+				!confidentialClient?.client_id ||
+				!confidentialClient?.client_secret
+			) {
+				throw Error("beforeAll not run properly");
+			}
+
+			// Use plain method (code_challenge = code_verifier)
+			const codeVerifier = generateRandomString(64);
+			const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+			authUrl.searchParams.set("client_id", confidentialClient.client_id);
+			authUrl.searchParams.set("redirect_uri", redirectUri);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("state", "123");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("code_challenge", codeVerifier); // plain uses verifier directly
+			authUrl.searchParams.set("code_challenge_method", "plain");
+
+			let callbackUrl = "";
+			await client.$fetch(authUrl.toString(), {
+				onError(context) {
+					callbackUrl = context.response.headers.get("Location") || "";
+				},
+			});
+
+			const code = new URL(callbackUrl).searchParams.get("code");
+			expect(code).toBeDefined();
+
+			// Exchange with plain code_verifier
+			const { body, headers: tokenHeaders } = createAuthorizationCodeRequest({
+				code: code!,
+				codeVerifier,
+				redirectURI: redirectUri,
+				options: {
+					clientId: confidentialClient.client_id,
+					clientSecret: confidentialClient.client_secret,
+					redirectURI: redirectUri,
+				},
+			});
+
+			const tokensResult = await client.$fetch<{
+				access_token?: string;
+				error?: string;
+			}>("/oauth2/token", {
+				method: "POST",
+				body: body,
+				headers: tokenHeaders,
+			});
+
+			expect(tokensResult.error).toBeUndefined();
+			expect(tokensResult.data?.access_token).toBeDefined();
+		});
+	});
+});

@@ -325,15 +325,18 @@ export async function validateClientCredentials(
 		});
 	}
 
+	// Determine if client is public based on all indicators
+	const clientIsPublic = isPublicClient(client);
+
 	// Require secret for confidential clients
-	if (!client.public && !clientSecret) {
+	if (!clientIsPublic && !clientSecret) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "client secret must be provided",
 			error: "invalid_client",
 		});
 	}
 
-	// Secret should not be received
+	// Secret should not be received for public clients
 	if (clientSecret && !client.clientSecret) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "public client, client secret should not be received",

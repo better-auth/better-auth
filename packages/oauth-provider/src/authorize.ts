@@ -146,15 +146,7 @@ export async function authorizeEndpoint(
 	if (requestedScopes) {
 		const validScopes = new Set(client.scopes ?? opts.scopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return (
-				!validScopes?.has(scope) ||
-				// offline access ALWAYS requires PKCE (OAuth 2.1)
-				(scope === "offline_access" &&
-					(!query.code_challenge ||
-						!query.code_challenge_method ||
-						(query.code_challenge_method !== "S256" &&
-							query.code_challenge_method !== "plain")))
-			);
+			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
 			throw ctx.redirect(
@@ -173,7 +165,27 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
+	// offline_access ALWAYS requires PKCE (OAuth 2.1)
+	if (
+		requestedScopes.includes("offline_access") &&
+		(!query.code_challenge ||
+			!query.code_challenge_method ||
+			(query.code_challenge_method !== "S256" &&
+				query.code_challenge_method !== "plain"))
+	) {
+		throw ctx.redirect(
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"offline_access scope requires PKCE",
+				query.state,
+			),
+		);
+	}
+
 	// Determine if PKCE is required for this client
+	// Public clients (native, user-agent-based) ALWAYS require PKCE
+	// Confidential clients respect the requirePKCE configuration (default: true)
 	const pkceProvided = !!(query.code_challenge && query.code_challenge_method);
 	const pkceRequired = requiresPKCEForClient(client, opts);
 

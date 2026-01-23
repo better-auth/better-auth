@@ -617,17 +617,34 @@ export interface OAuthOptions<
 	/**
 	 * Whether to require PKCE for confidential clients.
 	 *
-	 * OAuth 2.1 compliance:
-	 * - Public clients ALWAYS require PKCE (non-negotiable)
-	 * - Confidential clients can use client_secret when set to false
-	 * - The `offline_access` scope ALWAYS requires PKCE
+	 * **OAuth 2.1 Compliance:**
+	 * - Public clients (native, user-agent-based, or `public: true`) ALWAYS require PKCE (non-negotiable)
+	 * - Confidential clients (web applications) can use `client_secret` when set to `false`
+	 * - The `offline_access` scope ALWAYS requires PKCE (even for confidential clients)
+	 *
+	 * **Security Recommendation:**
+	 * Keep this `true` (default) for maximum security. Only set to `false` if you have
+	 * legacy confidential clients that cannot implement PKCE.
+	 *
 	 *
 	 * @default true
 	 */
 	requirePKCE?: boolean;
 	/**
 	 * Allow "plain" code challenge method in addition to "S256".
-	 * OAuth 2.1 recommends S256 only.
+	 *
+	 * **OAuth 2.1 Recommendation:**
+	 * OAuth 2.1 recommends S256 only for security. The plain method is less secure
+	 * as the code_verifier is sent in cleartext as the code_challenge.
+	 *
+	 * **Use Cases:**
+	 * - Legacy clients that don't support SHA-256 hashing
+	 * - Constrained environments without crypto libraries
+	 * - Development/testing (not recommended for production)
+	 *
+	 * **Security Note:**
+	 * Even with plain method, PKCE still provides protection against authorization
+	 * code interception attacks, but offers less security than S256.
 	 *
 	 * @default false
 	 */
