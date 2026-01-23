@@ -4,6 +4,7 @@ import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import { STRIPE_ERROR_CODES } from "./error-codes";
+import { customerMetadata } from "./metadata";
 import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
@@ -180,7 +181,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 									try {
 										// Check if user customer already exists in Stripe by email
 										const existingCustomers = await client.customers.search({
-											query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
+											query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
 											limit: 1,
 										});
 
@@ -217,14 +218,17 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											);
 										}
 
-										const params: Stripe.CustomerCreateParams = defu(
+										const params = defu(
 											{
 												email: user.email,
 												name: user.name,
-												metadata: {
-													userId: user.id,
-													customerType: "user",
-												},
+												metadata: customerMetadata.set(
+													{
+														userId: user.id,
+														customerType: "user",
+													},
+													extraCreateParams?.metadata,
+												),
 											},
 											extraCreateParams,
 										);
