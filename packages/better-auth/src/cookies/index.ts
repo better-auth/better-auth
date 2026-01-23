@@ -19,7 +19,7 @@ import {
 	verifyJWT,
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
-import type { Session, User } from "../types";
+import type { Session, SessionData, User } from "../types";
 import { getDate } from "../utils/date";
 import { sec } from "../utils/time";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
@@ -146,7 +146,7 @@ export async function setCookieCache(
 		}
 	}
 
-	const sessionData = {
+	const sessionData: SessionData = {
 		session: filteredSession,
 		user: filteredUser,
 		updatedAt: Date.now(),
@@ -394,14 +394,7 @@ export const getSessionCookie = (
 	return null;
 };
 
-export const getCookieCache = async <
-	S extends {
-		session: Session & Record<string, any>;
-		user: User & Record<string, any>;
-		updatedAt: number;
-		version?: string;
-	},
->(
+export const getCookieCache = async <S extends SessionData>(
 	request: Request | Headers,
 	config?:
 		| {
