@@ -153,7 +153,7 @@ export function sso<O extends SSOOptions>(
 	const optionsWithStore = options as O;
 
 	let endpoints = {
-		spMetadata: spMetadata(),
+		spMetadata: spMetadata(optionsWithStore),
 		registerSSOProvider: registerSSOProvider(optionsWithStore),
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),

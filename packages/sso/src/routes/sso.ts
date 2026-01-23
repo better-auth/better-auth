@@ -167,7 +167,7 @@ const spMetadataQuerySchema = z.object({
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
-export const spMetadata = () => {
+export const spMetadata = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
 		{
@@ -211,6 +211,21 @@ export const spMetadata = () => {
 					message: "Invalid SAML configuration",
 				});
 			}
+
+			const sloLocation = `${ctx.context.baseURL}/sso/saml2/sp/slo/${ctx.query.providerId}`;
+			const singleLogoutService = options?.saml?.enableSingleLogout
+				? [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: sloLocation,
+						},
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+							Location: sloLocation,
+						},
+					]
+				: undefined;
+
 			const sp = parsedSamlConfig.spMetadata.metadata
 				? saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
@@ -226,6 +241,7 @@ export const spMetadata = () => {
 									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
 							},
 						],
+						singleLogoutService,
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
 						nameIDFormat: parsedSamlConfig.identifierFormat
 							? [parsedSamlConfig.identifierFormat]
