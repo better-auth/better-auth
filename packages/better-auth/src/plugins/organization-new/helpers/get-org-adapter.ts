@@ -1,6 +1,6 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { Session, User } from "@better-auth/core/db";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
@@ -11,6 +11,7 @@ import type {
 	InferOrganization,
 	OrganizationOptions,
 } from "../types";
+import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
@@ -19,6 +20,42 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 ) => {
 	const baseAdapter = context.adapter;
 	const options = resolveOrgOptions(opts);
+	const schema = options.schema || {};
+
+	const filterOrgOutput = <Org extends Record<string, any> | null>(
+		organization: Org,
+	) => {
+		const orgAdditionalFields = schema.organization?.additionalFields;
+		const result = filterOutputFields(organization, orgAdditionalFields);
+		return result;
+	};
+
+	const filterMemberOutput = <Member extends Record<string, any> | null>(
+		member: Member,
+	) => {
+		const memberAdditionalFields = schema.member?.additionalFields;
+		const result = filterOutputFields(member, memberAdditionalFields);
+		return result;
+	};
+
+	const filterInvitationOutput = <
+		Invitation extends Record<string, any> | null,
+	>(
+		invitation: Invitation,
+	) => {
+		const invitationAdditionalFields = schema.invitation?.additionalFields;
+		const result = filterOutputFields(invitation, invitationAdditionalFields);
+		return result;
+	};
+
+	const filterSessionOutput = <Session extends Record<string, any> | null>(
+		session: Session,
+	) => {
+		const sessionAdditionalFields = context.options.session?.additionalFields;
+		const result = filterOutputFields(session, sessionAdditionalFields);
+		return result;
+	};
+
 	return {
 		/**
 		 * This function exists as a more optimized way to check if a slug is already taken.
@@ -65,8 +102,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			data: OrganizationInput & Record<string, any>,
 		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			type Result = InferOrganization<O, false>;
-			const organization = await adapter.create<typeof data, Result>({
+			const organization = await adapter.create<
+				typeof data,
+				InferOrganization<O, false>
+			>({
 				model: "organization",
 				data: {
 					...data,
@@ -88,7 +127,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				metadata,
 			};
 
-			return res;
+			return filterOrgOutput(res);
 		},
 		createMember: async (
 			data: Omit<MemberInput, "id"> & Record<string, any>,
@@ -104,7 +143,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				model: "member",
 				data: update,
 			});
-			return member;
+			return filterMemberOutput(member);
 		},
 		setActiveOrganization: async (
 			sessionToken: string,
@@ -113,7 +152,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const internalAdapter = context.internalAdapter;
 			const update = { activeOrganizationId: organizationId };
 			const session = await internalAdapter.updateSession(sessionToken, update);
-			return session as Session;
+			return filterSessionOutput(session);
 		},
 		findMemberByOrgId: async (data: {
 			userId: string;
@@ -127,7 +166,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					{ field: "organizationId", value: data.organizationId },
 				],
 			});
-			return member;
+			return filterMemberOutput(member);
 		},
 		findOrganizationById: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -149,7 +188,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				...organization,
 				metadata,
 			};
-			return res;
+			return filterOrgOutput(res);
 		},
 		updateOrganization: async (
 			organizationId: string,
@@ -188,7 +227,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				metadata,
 			};
 
-			return res;
+			return filterOrgOutput(res);
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -284,9 +323,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 
 			return {
-				...org,
-				invitations,
-				members: membersWithUsers,
+				...filterOrgOutput(org),
+				invitations: invitations.map(filterInvitationOutput),
+				members: membersWithUsers.map(filterMemberOutput),
 			};
 		},
 		getMember: async ({
@@ -310,7 +349,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return member;
+			return filterMemberOutput(member);
 		},
 		checkMembership: async ({
 			userId,
@@ -328,7 +367,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				],
 				select: ["id"],
 			});
-			return member !== null;
+			return member ? true : false;
 		},
 	};
 };

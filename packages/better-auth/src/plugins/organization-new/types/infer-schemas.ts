@@ -32,38 +32,24 @@ export type InferAllAddons<O extends OrganizationOptions> =
 export type InferMember<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	(O["use"] extends readonly Addon[]
-		? O["use"][number] extends {
-				id: "teams";
+> = (O["use"] extends readonly Addon[]
+	? O["use"][number] extends {
+			id: "teams";
+		}
+		? {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				teamId?: string | undefined;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
 			}
-			? {
-					id: string;
-					organizationId: string;
-					role: InferOrganizationRolesFromOption<O>;
-					createdAt: Date;
-					userId: string;
-					teamId?: string | undefined;
-					user: {
-						id: string;
-						email: string;
-						name: string;
-						image?: string | undefined;
-					};
-				}
-			: {
-					id: string;
-					organizationId: string;
-					role: InferOrganizationRolesFromOption<O>;
-					createdAt: Date;
-					userId: string;
-					user: {
-						id: string;
-						email: string;
-						name: string;
-						image?: string | undefined;
-					};
-				}
 		: {
 				id: string;
 				organizationId: string;
@@ -76,48 +62,47 @@ export type InferMember<
 					name: string;
 					image?: string | undefined;
 				};
-			}) &
-		InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>
->;
+			}
+	: {
+			id: string;
+			organizationId: string;
+			role: InferOrganizationRolesFromOption<O>;
+			createdAt: Date;
+			userId: string;
+			user: {
+				id: string;
+				email: string;
+				name: string;
+				image?: string | undefined;
+			};
+		}) &
+	InferAdditionalFieldsFromPluginOptions<"member", O, isClientSide>;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	Organization &
-		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide> &
-		(O["disableSlugs"] extends true ? {} : { slug: string })
->;
+> = Organization &
+	InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide> &
+	(O["disableSlugs"] extends true ? {} : { slug: string });
 
 export type InferInvitation<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
-> = Prettify<
-	(O["use"] extends readonly Addon[]
-		? O["use"][number] extends {
-				id: "teams";
+> = (O["use"] extends readonly Addon[]
+	? O["use"][number] extends {
+			id: "teams";
+		}
+		? {
+				id: string;
+				organizationId: string;
+				email: string;
+				role: InferOrganizationRolesFromOption<O>;
+				status: InvitationStatus;
+				inviterId: string;
+				expiresAt: Date;
+				createdAt: Date;
+				teamId?: string | undefined;
 			}
-			? {
-					id: string;
-					organizationId: string;
-					email: string;
-					role: InferOrganizationRolesFromOption<O>;
-					status: InvitationStatus;
-					inviterId: string;
-					expiresAt: Date;
-					createdAt: Date;
-					teamId?: string | undefined;
-				}
-			: {
-					id: string;
-					organizationId: string;
-					email: string;
-					role: InferOrganizationRolesFromOption<O>;
-					status: InvitationStatus;
-					inviterId: string;
-					expiresAt: Date;
-					createdAt: Date;
-				}
 		: {
 				id: string;
 				organizationId: string;
@@ -127,8 +112,17 @@ export type InferInvitation<
 				inviterId: string;
 				expiresAt: Date;
 				createdAt: Date;
-			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>
->;
+			}
+	: {
+			id: string;
+			organizationId: string;
+			email: string;
+			role: InferOrganizationRolesFromOption<O>;
+			status: InvitationStatus;
+			inviterId: string;
+			expiresAt: Date;
+			createdAt: Date;
+		}) &
+	InferAdditionalFieldsFromPluginOptions<"invitation", O, isClientSide>;
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
