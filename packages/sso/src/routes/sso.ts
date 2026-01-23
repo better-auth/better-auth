@@ -2995,6 +2995,17 @@ export const initiateSLO = (options?: SSOOptions) => {
 			}
 
 			const config = provider.samlConfig as SAMLConfig;
+
+			const idpHasSLO =
+				config.idpMetadata?.singleLogoutService?.length ||
+				(config.idpMetadata?.metadata &&
+					config.idpMetadata.metadata.includes("SingleLogoutService"));
+			if (!idpHasSLO) {
+				throw new APIError("BAD_REQUEST", {
+					message: "IdP does not support Single Logout Service",
+				});
+			}
+
 			const sp = createSP(config, ctx.context.baseURL, providerId);
 			const idp = createIdP(config);
 
