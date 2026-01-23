@@ -115,10 +115,10 @@ export const ENV = Object.freeze({
 	get PACKAGE_VERSION() {
 		return getEnvVar("PACKAGE_VERSION", "0.0.0");
 	},
-	get BETTER_AUTH_TELEMETRY_ENDPOINT() {
+	get BETTER_AUTH_TELEMETRY_ENDPOINT(): string | undefined {
 		return getEnvVar(
 			"BETTER_AUTH_TELEMETRY_ENDPOINT",
-			"https://telemetry.better-auth.com/v1/track",
+			import.meta.env.BETTER_AUTH_TELEMETRY_ENDPOINT,
 		);
 	},
 });
