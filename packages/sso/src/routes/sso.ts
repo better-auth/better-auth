@@ -2814,14 +2814,18 @@ export const sloEndpoint = (options?: SSOOptions) => {
 				try {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
-						// If SessionIndex is provided in the request, verify it matches
+						// Only delete session if SessionIndex matches (or one side doesn't have it)
 						if (
-							sessionIndex &&
-							data.sessionIndex &&
-							sessionIndex !== data.sessionIndex
+							!sessionIndex ||
+							!data.sessionIndex ||
+							sessionIndex === data.sessionIndex
 						) {
+							await ctx.context.internalAdapter
+								.deleteSession(data.sessionId)
+								.catch(() => {});
+						} else {
 							ctx.context.logger.warn(
-								"SessionIndex mismatch in LogoutRequest",
+								"SessionIndex mismatch in LogoutRequest - skipping session deletion",
 								{
 									providerId,
 									requestedSessionIndex: sessionIndex,
@@ -2829,9 +2833,6 @@ export const sloEndpoint = (options?: SSOOptions) => {
 								},
 							);
 						}
-						await ctx.context.internalAdapter
-							.deleteSession(data.sessionId)
-							.catch(() => {});
 					}
 				} catch (error) {
 					ctx.context.logger.warn(
