@@ -322,13 +322,13 @@ describe("telemetry", () => {
 	it("returns noop publisher when BETTER_AUTH_TELEMETRY_ENDPOINT is undefined", async () => {
 		// Import betterFetch mock to check it's not called
 		const { betterFetch } = await import("@better-fetch/fetch");
-		
+
 		// Clear any previous calls to the mock
 		vi.mocked(betterFetch).mockClear();
-		
+
 		// Ensure the environment variable is not set
-		delete process.env.BETTER_AUTH_TELEMETRY_ENDPOINT;
-		
+		vi.stubEnv("BETTER_AUTH_TELEMETRY_ENDPOINT", undefined);
+
 		// Create telemetry without customTrack to test actual endpoint logic
 		const telemetry = await createTelemetry(
 			{
