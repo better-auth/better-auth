@@ -2306,10 +2306,9 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session record",
-							{ error: e },
-						),
+						ctx.context.logger.warn("Failed to create SAML session record", {
+							error: e,
+						}),
 					);
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -2803,10 +2802,9 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session record",
-							{ error: e },
-						),
+						ctx.context.logger.warn("Failed to create SAML session record", {
+							error: e,
+						}),
 					);
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -2956,15 +2954,15 @@ async function handleLogoutResponse(
 			);
 		}
 
-	await ctx.context.internalAdapter
-		.deleteVerificationValue(key)
-		.catch((e: unknown) =>
-			ctx.context.logger.warn(
-				"Failed to delete logout request verification value",
-				{ error: e },
-			),
-		);
-}
+		await ctx.context.internalAdapter
+			.deleteVerificationValue(key)
+			.catch((e: unknown) =>
+				ctx.context.logger.warn(
+					"Failed to delete logout request verification value",
+					{ error: e },
+				),
+			);
+	}
 
 	deleteSessionCookie(ctx);
 
@@ -3045,17 +3043,17 @@ async function handleLogoutRequest(
 						storedSessionIndex: data.sessionIndex,
 					},
 				);
+			}
 		}
+		await ctx.context.internalAdapter
+			.deleteVerificationValue(key)
+			.catch((e: unknown) =>
+				ctx.context.logger.warn(
+					"Failed to delete SAML session key during SLO",
+					{ error: e },
+				),
+			);
 	}
-	await ctx.context.internalAdapter
-		.deleteVerificationValue(key)
-		.catch((e: unknown) =>
-			ctx.context.logger.warn(
-				"Failed to delete SAML session key during SLO",
-				{ error: e },
-			),
-		);
-}
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
