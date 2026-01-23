@@ -23,7 +23,8 @@ export async function createTelemetry(
 		getBooleanEnvVar("BETTER_AUTH_TELEMETRY_DEBUG", false);
 
 	const telemetryEndpoint = ENV.BETTER_AUTH_TELEMETRY_ENDPOINT;
-	if (!telemetryEndpoint) {
+	// Return noop if no endpoint and no custom track function
+	if (!telemetryEndpoint && !context?.customTrack) {
 		return {
 			publish: noop,
 		};
