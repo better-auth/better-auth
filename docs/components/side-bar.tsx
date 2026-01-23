@@ -22,7 +22,7 @@ export default function ArticleLayout() {
 			item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
-					(listItem.matchPrefix && pathname.startsWith(`${listItem.href}/`)),
+					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)),
 			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
@@ -137,7 +137,7 @@ export default function ArticleLayout() {
 																		title={listItem.title}
 																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
 																		activeClassName="[&>div>div]:!bg-fd-muted"
-																		matchPrefix={listItem.matchPrefix}
+																		hasSubpages={listItem.hasSubpages}
 																	>
 																		<div className="min-w-4">
 																			<listItem.icon className="text-stone-950 dark:text-white" />

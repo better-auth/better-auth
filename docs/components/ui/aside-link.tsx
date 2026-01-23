@@ -12,7 +12,7 @@ type Props = {
 	title?: string | null;
 	className?: ClassValue;
 	activeClassName?: ClassValue;
-	matchPrefix?: boolean;
+	hasSubpages?: boolean;
 } & React.AnchorHTMLAttributes<HTMLAnchorElement>;
 
 export const AsideLink = ({
@@ -22,13 +22,13 @@ export const AsideLink = ({
 	title,
 	className,
 	activeClassName,
-	matchPrefix,
+	hasSubpages,
 	...props
 }: Props) => {
 	const segment = useSelectedLayoutSegment();
 	const path = href.replace("/docs/", "");
 	const isActive =
-		path === segment || (matchPrefix && segment?.startsWith(`${path}/`));
+		path === segment || (hasSubpages && segment?.startsWith(`${path}/`));
 
 	return (
 		<Link
