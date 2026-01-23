@@ -2306,14 +2306,24 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						value: JSON.stringify(samlSessionData),
 						expiresAt: session.expiresAt,
 					})
-					.catch(() => {});
+					.catch((e) =>
+						ctx.context.logger.warn(
+							"Failed to create SAML session record",
+							{ error: e },
+						),
+					);
 				await ctx.context.internalAdapter
 					.createVerificationValue({
 						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
 						value: samlSessionKey,
 						expiresAt: session.expiresAt,
 					})
-					.catch(() => {});
+					.catch((e) =>
+						ctx.context.logger.warn(
+							"Failed to create SAML session lookup record",
+							{ error: e },
+						),
+					);
 			}
 
 			const safeRedirectUrl = getSafeRedirectUrl(
@@ -2793,14 +2803,24 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						value: JSON.stringify(samlSessionData),
 						expiresAt: session.expiresAt,
 					})
-					.catch(() => {});
+					.catch((e) =>
+						ctx.context.logger.warn(
+							"Failed to create SAML session record",
+							{ error: e },
+						),
+					);
 				await ctx.context.internalAdapter
 					.createVerificationValue({
 						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
 						value: samlSessionKey,
 						expiresAt: session.expiresAt,
 					})
-					.catch(() => {});
+					.catch((e) =>
+						ctx.context.logger.warn(
+							"Failed to create SAML session lookup record",
+							{ error: e },
+						),
+					);
 			}
 
 			throw ctx.redirect(callbackUrl);
@@ -2938,10 +2958,15 @@ async function handleLogoutResponse(
 			);
 		}
 
-		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
-			.catch(() => {});
-	}
+	await ctx.context.internalAdapter
+		.deleteVerificationValue(key)
+		.catch((e: unknown) =>
+			ctx.context.logger.warn(
+				"Failed to delete logout request verification value",
+				{ error: e },
+			),
+		);
+}
 
 	deleteSessionCookie(ctx);
 
@@ -2995,12 +3020,21 @@ async function handleLogoutRequest(
 			) {
 				await ctx.context.internalAdapter
 					.deleteSession(data.sessionId)
-					.catch(() => {});
+					.catch((e: unknown) =>
+						ctx.context.logger.warn("Failed to delete session during SLO", {
+							error: e,
+						}),
+					);
 				await ctx.context.internalAdapter
 					.deleteVerificationValue(
 						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
 					)
-					.catch(() => {});
+					.catch((e: unknown) =>
+						ctx.context.logger.warn(
+							"Failed to delete SAML session lookup during SLO",
+							{ error: e },
+						),
+					);
 			} else {
 				ctx.context.logger.warn(
 					"SessionIndex mismatch in LogoutRequest - skipping session deletion",
@@ -3010,12 +3044,17 @@ async function handleLogoutRequest(
 						storedSessionIndex: data.sessionIndex,
 					},
 				);
-			}
 		}
-		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
-			.catch(() => {});
 	}
+	await ctx.context.internalAdapter
+		.deleteVerificationValue(key)
+		.catch((e: unknown) =>
+			ctx.context.logger.warn(
+				"Failed to delete SAML session key during SLO",
+				{ error: e },
+			),
+		);
+}
 
 	const currentSession = await getSessionFromCtx(ctx);
 	if (currentSession?.session) {
@@ -3144,11 +3183,21 @@ export const initiateSLO = (options?: SSOOptions) => {
 			if (samlSessionKey) {
 				await ctx.context.internalAdapter
 					.deleteVerificationValue(samlSessionKey)
-					.catch(() => {});
+					.catch((e) =>
+						ctx.context.logger.warn(
+							"Failed to delete SAML session key during logout",
+							{ error: e },
+						),
+					);
 			}
 			await ctx.context.internalAdapter
 				.deleteVerificationValue(sessionLookupKey)
-				.catch(() => {});
+				.catch((e) =>
+					ctx.context.logger.warn(
+						"Failed to delete session lookup key during logout",
+						{ error: e },
+					),
+				);
 
 			await ctx.context.internalAdapter.deleteSession(session.session.id);
 
