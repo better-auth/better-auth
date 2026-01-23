@@ -2318,10 +2318,10 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session lookup record",
-							{ error: e },
-						),
+					ctx.context.logger.warn(
+						"Failed to create SAML session lookup record",
+						e,
+					),
 					);
 			}
 
@@ -2814,10 +2814,10 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to create SAML session lookup record",
-							{ error: e },
-						),
+					ctx.context.logger.warn(
+						"Failed to create SAML session lookup record",
+						e,
+					),
 					);
 			}
 
@@ -2950,10 +2950,10 @@ async function handleLogoutResponse(
 		await ctx.context.internalAdapter
 			.deleteVerificationValue(key)
 			.catch((e: unknown) =>
-				ctx.context.logger.warn(
-					"Failed to delete logout request verification value",
-					{ error: e },
-				),
+			ctx.context.logger.warn(
+				"Failed to delete logout request verification value",
+				e,
+			),
 			);
 	}
 
@@ -3019,10 +3019,10 @@ async function handleLogoutRequest(
 						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
 					)
 					.catch((e: unknown) =>
-						ctx.context.logger.warn(
-							"Failed to delete SAML session lookup during SLO",
-							{ error: e },
-						),
+					ctx.context.logger.warn(
+						"Failed to delete SAML session lookup during SLO",
+						e,
+					),
 					);
 			} else {
 				ctx.context.logger.warn(
@@ -3038,10 +3038,10 @@ async function handleLogoutRequest(
 		await ctx.context.internalAdapter
 			.deleteVerificationValue(key)
 			.catch((e: unknown) =>
-				ctx.context.logger.warn(
-					"Failed to delete SAML session key during SLO",
-					{ error: e },
-				),
+			ctx.context.logger.warn(
+				"Failed to delete SAML session key during SLO",
+				e,
+			),
 			);
 	}
 
@@ -3164,19 +3164,19 @@ export const initiateSLO = (options?: SSOOptions) => {
 				await ctx.context.internalAdapter
 					.deleteVerificationValue(samlSessionKey)
 					.catch((e) =>
-						ctx.context.logger.warn(
-							"Failed to delete SAML session key during logout",
-							{ error: e },
-						),
+					ctx.context.logger.warn(
+						"Failed to delete SAML session key during logout",
+						e,
+					),
 					);
 			}
 			await ctx.context.internalAdapter
 				.deleteVerificationValue(sessionLookupKey)
 				.catch((e) =>
-					ctx.context.logger.warn(
-						"Failed to delete session lookup key during logout",
-						{ error: e },
-					),
+				ctx.context.logger.warn(
+					"Failed to delete session lookup key during logout",
+					e,
+				),
 				);
 
 			await ctx.context.internalAdapter.deleteSession(session.session.id);
