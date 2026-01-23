@@ -2842,14 +2842,17 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const samlRequest = ctx.body?.SAMLRequest || ctx.query?.SAMLRequest;
 			const samlResponse = ctx.body?.SAMLResponse || ctx.query?.SAMLResponse;
 			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
-			const errorURL =
-				relayState ||
-				ctx.context.options.onAPIError?.errorURL ||
-				ctx.context.baseURL;
+			const appOrigin = new URL(ctx.context.baseURL).origin;
+			const safeErrorURL = getSafeRedirectUrl(
+				relayState,
+				"/sso/saml2/sp/slo",
+				appOrigin,
+				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+			);
 
 			if (!samlRequest && !samlResponse) {
 				throw ctx.redirect(
-					`${errorURL}?error=invalid_request&error_description=missing_logout_data`,
+					`${safeErrorURL}?error=invalid_request&error_description=missing_logout_data`,
 				);
 			}
 

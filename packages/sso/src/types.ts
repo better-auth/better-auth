@@ -100,8 +100,8 @@ export interface SAMLAssertionExtract {
 	sessionIndex?: string;
 	inResponseTo?: string;
 	conditions?: {
-		NotBefore?: string;
-		NotOnOrAfter?: string;
+		notBefore?: string;
+		notOnOrAfter?: string;
 	};
 }
 
