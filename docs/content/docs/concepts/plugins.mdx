@@ -461,7 +461,7 @@ const myPlugin = () => {
 If your endpoints need to be called from the client, you'll also need to create a client plugin. Better Auth clients can infer the endpoints from the server plugins. You can also add additional client-side logic.
 
 ```ts title="client-plugin.ts"
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 
 export const myPluginClient = () => {
     return {

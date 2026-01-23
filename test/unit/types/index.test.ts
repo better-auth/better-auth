@@ -1,6 +1,11 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { Auth, InferUser } from "better-auth";
+import type { AuthClient } from "better-auth/client";
 import { expectTypeOf, test } from "vitest";
+
+test("expect imports", async () => {
+	expectTypeOf<AuthClient<{}>>().not.toBeUndefined();
+});
 
 test("infer user type correctly", async () => {
 	const config = {
