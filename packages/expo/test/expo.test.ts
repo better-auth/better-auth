@@ -427,6 +427,44 @@ describe("expo", async () => {
 		});
 	});
 
+	it("should not corrupt cookies when redirect URL has no cookie param", async () => {
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+
+		const storedCookieBefore = storage.get("better-auth_cookie");
+		expect(storedCookieBefore).toBeDefined();
+		const parsedCookieBefore = JSON.parse(storedCookieBefore || "");
+		expect(parsedCookieBefore["better-auth.session_token"]).toBeDefined();
+
+		const expoWebBrowser = await import("expo-web-browser");
+
+		vi.mocked(expoWebBrowser.openAuthSessionAsync).mockResolvedValueOnce({
+			type: "success",
+			url: "better-auth:///dashboard", // No cookie param
+		});
+
+		await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+		});
+
+		// Cookies should be preserved, not corrupted with "null" key
+		const storedCookieAfter = storage.get("better-auth_cookie");
+		expect(storedCookieAfter).toBeDefined();
+		const parsedCookieAfter = JSON.parse(storedCookieAfter || "");
+
+		// Should NOT have "null" as a cookie key
+		expect(parsedCookieAfter["null"]).toBeUndefined();
+
+		// Original session_token should still exist
+		expect(parsedCookieAfter["better-auth.session_token"]).toBeDefined();
+		expect(parsedCookieAfter["better-auth.session_token"]?.value).toBe(
+			parsedCookieBefore["better-auth.session_token"]?.value,
+		);
+	});
+
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
 		fn.mockClear();
 
@@ -836,5 +874,49 @@ describe("expo deep link cookie injection for verify-email", async () => {
 			},
 		);
 		expect(error).toBeDefined();
+	});
+});
+
+describe("ExpoFocusManager duplicate notification prevention", () => {
+	it("should not notify listeners when setFocused is called with the same value", async () => {
+		const { setupExpoFocusManager } = await import("../src/focus-manager");
+		const focusManager = setupExpoFocusManager();
+
+		const listener = vi.fn();
+		focusManager.subscribe(listener);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(true);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		focusManager.setFocused(false);
+		expect(listener).toHaveBeenCalledTimes(2);
+	});
+});
+
+describe("ExpoOnlineManager duplicate notification prevention", () => {
+	it("should not notify listeners when setOnline is called with the same value", async () => {
+		const { setupExpoOnlineManager } = await import("../src/online-manager");
+		const onlineManager = setupExpoOnlineManager();
+
+		const listener = vi.fn();
+		onlineManager.subscribe(listener);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(false);
+		expect(listener).toHaveBeenCalledTimes(1);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
+
+		onlineManager.setOnline(true);
+		expect(listener).toHaveBeenCalledTimes(2);
 	});
 });

@@ -55,7 +55,7 @@ describe("oauth2", async () => {
 		await runWithEndpointContext(
 			{
 				context,
-			} as GenericEndpointContext,
+			} as unknown as GenericEndpointContext,
 			async () => {
 				await context.internalAdapter.createUser({
 					email: "oauth2@test.com",
