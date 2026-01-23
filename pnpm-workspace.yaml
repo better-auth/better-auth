@@ -28,5 +28,17 @@ catalogs:
     '@vitest/ui': ^4.0.17
     vitest: ^4.0.17
 
-dangerouslyAllowAllBuilds: true
 linkWorkspacePackages: true
+
+onlyBuiltDependencies:
+  - '@parcel/watcher'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@swc/core'
+  - better-sqlite3
+  - esbuild
+  - less
+  - msw
+  - prisma
+  - sharp
+  - workerd
