@@ -9,18 +9,20 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { Account, Session, User } from "../types";
 
+type Mode = "input" | "output";
+
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
 	BetterAuthOptions,
-	Map<string, Record<string, DBFieldAttribute>>
+	Map<`${BaseModelNames}:${Mode}`, Record<string, DBFieldAttribute>>
 >();
 
 function getFields(
 	options: BetterAuthOptions,
 	modelName: BaseModelNames,
-	mode: "input" | "output",
+	mode: Mode,
 ) {
-	const cacheKey = `${modelName}:${mode}`;
+	const cacheKey = `${modelName}:${mode}` as const;
 	if (!cache.has(options)) {
 		cache.set(options, new Map());
 	}
