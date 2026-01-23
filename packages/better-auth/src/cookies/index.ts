@@ -21,6 +21,7 @@ import {
 import { parseUserOutput } from "../db/schema";
 import type { Session, SessionData, User } from "../types";
 import { getDate } from "../utils/date";
+import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
@@ -142,7 +143,7 @@ export async function setCookieCache(
 			version = versionConfig;
 		} else if (typeof versionConfig === "function") {
 			const result = versionConfig(session.session, session.user);
-			version = result instanceof Promise ? await result : result;
+			version = isPromise(result) ? await result : result;
 		}
 	}
 
@@ -483,7 +484,7 @@ export const getCookieCache = async <S extends SessionData>(
 						expectedVersion = config.version;
 					} else if (typeof config.version === "function") {
 						const result = config.version(payload.session, payload.user);
-						expectedVersion = result instanceof Promise ? await result : result;
+						expectedVersion = isPromise(result) ? await result : result;
 					}
 					if (cookieVersion !== expectedVersion) {
 						return null;
@@ -505,7 +506,7 @@ export const getCookieCache = async <S extends SessionData>(
 						expectedVersion = config.version;
 					} else if (typeof config.version === "function") {
 						const result = config.version(payload.session, payload.user);
-						expectedVersion = result instanceof Promise ? await result : result;
+						expectedVersion = isPromise(result) ? await result : result;
 					}
 					if (cookieVersion !== expectedVersion) {
 						return null;
@@ -547,7 +548,7 @@ export const getCookieCache = async <S extends SessionData>(
 						sessionDataPayload.session.session,
 						sessionDataPayload.session.user,
 					);
-					expectedVersion = result instanceof Promise ? await result : result;
+					expectedVersion = isPromise(result) ? await result : result;
 				}
 				if (cookieVersion !== expectedVersion) {
 					return null;
