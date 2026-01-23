@@ -2895,9 +2895,37 @@ async function handleLogoutResponse(
 		});
 	}
 
-	const inResponseTo = (parsed?.extract as any)?.response?.inResponseTo;
+	const extract = parsed?.extract as {
+		response?: { inResponseTo?: string };
+		status?: string;
+		statusCode?: string;
+	};
+
+	const statusCode =
+		extract?.statusCode ||
+		extract?.status ||
+		(parsed as any)?.samlContent?.status?.statusCode;
+	if (statusCode && statusCode !== constants.SAML_STATUS_SUCCESS) {
+		ctx.context.logger.warn("LogoutResponse indicates failure", { statusCode });
+		throw new APIError("BAD_REQUEST", {
+			message: "Logout failed at IdP",
+			details: statusCode,
+		});
+	}
+
+	const inResponseTo = extract?.response?.inResponseTo;
 	if (inResponseTo) {
 		const key = `${constants.LOGOUT_REQUEST_KEY_PREFIX}${inResponseTo}`;
+		const pendingRequest =
+			await ctx.context.internalAdapter.findVerificationValue(key);
+
+		if (!pendingRequest) {
+			ctx.context.logger.warn(
+				"LogoutResponse references unknown or expired request",
+				{ inResponseTo },
+			);
+		}
+
 		await ctx.context.internalAdapter
 			.deleteVerificationValue(key)
 			.catch(() => {});
@@ -2959,6 +2987,11 @@ async function handleLogoutRequest(
 			) {
 				await ctx.context.internalAdapter
 					.deleteSession(data.sessionId)
+					.catch(() => {});
+				await ctx.context.internalAdapter
+					.deleteVerificationValue(
+						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
+					)
 					.catch(() => {});
 			} else {
 				ctx.context.logger.warn(
@@ -3060,9 +3093,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 
 			let nameID = session.user.email;
 			let sessionIndex: string | undefined;
+			let samlSessionKey: string | undefined;
 
 			if (sessionLookup) {
-				const samlSessionKey = sessionLookup.value;
+				samlSessionKey = sessionLookup.value;
 				const stored =
 					await ctx.context.internalAdapter.findVerificationValue(
 						samlSessionKey,
@@ -3090,6 +3124,15 @@ export const initiateSLO = (options?: SSOOptions) => {
 				value: providerId,
 				expiresAt: new Date(Date.now() + ttl),
 			});
+
+			if (samlSessionKey) {
+				await ctx.context.internalAdapter
+					.deleteVerificationValue(samlSessionKey)
+					.catch(() => {});
+			}
+			await ctx.context.internalAdapter
+				.deleteVerificationValue(sessionLookupKey)
+				.catch(() => {});
 
 			await ctx.context.internalAdapter.deleteSession(session.session.id);
 
