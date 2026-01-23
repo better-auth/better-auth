@@ -95,8 +95,19 @@ export function createIdP(config: SAMLConfig) {
 				Location: config.entryPoint,
 			},
 		],
+		singleLogoutService: idpData?.singleLogoutService,
 		signingCert: idpData?.cert || config.cert,
 	});
+}
+
+function escapeHtml(str: string | undefined | null): string {
+	if (!str) return "";
+	return String(str)
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
 }
 
 export function createSAMLPostForm(
@@ -105,6 +116,11 @@ export function createSAMLPostForm(
 	samlValue: string,
 	relayState?: string,
 ): Response {
-	const html = `<!DOCTYPE html><html><body onload="document.forms[0].submit();"><form method="POST" action="${action}"><input type="hidden" name="${samlParam}" value="${samlValue}" />${relayState ? `<input type="hidden" name="RelayState" value="${relayState}" />` : ""}<noscript><input type="submit" value="Continue" /></noscript></form></body></html>`;
+	const safeAction = escapeHtml(action);
+	const safeSamlParam = escapeHtml(samlParam);
+	const safeSamlValue = escapeHtml(samlValue);
+	const safeRelayState = relayState ? escapeHtml(relayState) : undefined;
+
+	const html = `<!DOCTYPE html><html><body onload="document.forms[0].submit();"><form method="POST" action="${safeAction}"><input type="hidden" name="${safeSamlParam}" value="${safeSamlValue}" />${safeRelayState ? `<input type="hidden" name="RelayState" value="${safeRelayState}" />` : ""}<noscript><input type="submit" value="Continue" /></noscript></form></body></html>`;
 	return new Response(html, { headers: { "Content-Type": "text/html" } });
 }

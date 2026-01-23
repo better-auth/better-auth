@@ -60,6 +60,10 @@ export interface SAMLConfig {
 					Binding: string;
 					Location: string;
 				}>;
+				singleLogoutService?: Array<{
+					Binding: string;
+					Location: string;
+				}>;
 		  }
 		| undefined;
 	spMetadata: {

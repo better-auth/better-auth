@@ -4258,9 +4258,10 @@ describe("SAML SSO - IdP-Initiated Single Logout (SLO)", () => {
 				),
 			);
 
-			expect(sloRes.status).toBe(400);
-			const body = await sloRes.json();
-			expect(body.message).toContain("Missing SAMLRequest");
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toContain("error=invalid_request");
+			expect(location).toContain("error_description=missing_logout_data");
 		});
 
 		it("should return error when provider not found", async () => {
