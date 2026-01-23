@@ -117,7 +117,9 @@ When a user with 2FA enabled tries to sign in via email, the response object wil
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
-```ts title="sign-in.tsx"
+```tsx
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.email({
         email: "user@example.com",
         password: "password123",
@@ -134,7 +136,7 @@ await authClient.signIn.email({
 
 Using the `onTwoFactorRedirect` config:
 
-```ts title="sign-in.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 
@@ -157,7 +159,9 @@ const authClient = createAuthClient({
 
 When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
-```ts
+```ts title="sign-in.ts"
+import { auth } from "@/lib/auth"
+
 const response = await auth.api.signInEmail({
 	body: {
 		email: "test@test.com",
@@ -220,11 +224,12 @@ type getTOTPURI = {
 
 Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
 
-```tsx title="user-card.tsx"
+```tsx
+import { authClient } from "@/lib/auth-client"
 import QRCode from "react-qr-code";
 
 export default function UserCard({ password }: { password: string }){
-    const { data: session } = client.useSession();
+    const { data: session } = authClient.useSession();
 	const { data: qr } = useQuery({
 		queryKey: ["two-factor-qr"],
 		queryFn: async () => {
@@ -410,7 +415,7 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        trustDevice: true, // Mark this device as trusted
+        trustDevice: true, // Mark this device as trusted // [!code highlight]
     })
     if (data) {
         // 2FA verified and device trusted
