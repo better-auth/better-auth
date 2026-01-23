@@ -277,6 +277,9 @@ describe("siwe", () => {
 
 			expect(error).toBeDefined();
 			expect(error?.status).toBe(400);
+			expect(error?.message).toBe(
+				"[body.email] Email is required when the anonymous plugin option is disabled.",
+			);
 		});
 
 		it("should accept verification with email when anonymous is false", async () => {
@@ -324,6 +327,9 @@ describe("siwe", () => {
 
 			expect(error).toBeDefined();
 			expect(error?.status).toBe(400);
+			expect(error?.message).toBe(
+				"[body.email] Invalid email address; [body.email] Email is required when the anonymous plugin option is disabled.",
+			);
 		});
 	});
 

@@ -186,7 +186,14 @@ export const siwe = (options: SIWEPluginOptions) =>
 				"/siwe/verify",
 				{
 					method: "POST",
-					body: verifySiweMessageBodyBaseSchema,
+					body: verifySiweMessageBodyBaseSchema.refine(
+						(data) => options.anonymous !== false || !!data.email,
+						{
+							message:
+								"Email is required when the anonymous plugin option is disabled.",
+							path: ["email"],
+						},
+					),
 					requireRequest: true,
 				},
 				async (ctx) => {
@@ -200,13 +207,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 					const walletAddress = toChecksumAddress(rawWalletAddress);
 					const isAnonymous = options.anonymous ?? true;
-
-					if (!isAnonymous && !email) {
-						throw APIError.fromStatus("BAD_REQUEST", {
-							message: "Email is required when anonymous is disabled.",
-							status: 400,
-						});
-					}
 
 					const verificationIdentifier = createWalletVerificationIdentifier(
 						walletAddress,
