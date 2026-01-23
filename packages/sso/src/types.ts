@@ -358,6 +358,11 @@ export interface SSOOptions {
 		 * @default false
 		 */
 		enableSingleLogout?: boolean;
+		/**
+		 * TTL for LogoutRequest records in milliseconds
+		 * @default 300000 (5 minutes)
+		 */
+		logoutRequestTTL?: number;
 	};
 }
 

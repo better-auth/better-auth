@@ -2849,3 +2849,73 @@ export const sloEndpoint = (options?: SSOOptions) => {
 		},
 	);
 };
+
+export const initiateSLO = (options?: SSOOptions) => {
+	return createAuthEndpoint(
+		"/sso/saml2/logout/:providerId",
+		{
+			method: "POST",
+			body: z.object({
+				callbackURL: z.string().optional(),
+			}),
+			use: [sessionMiddleware],
+			metadata: HIDE_METADATA,
+		},
+		async (ctx) => {
+			if (!options?.saml?.enableSingleLogout) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Single Logout is not enabled",
+				});
+			}
+
+			const { providerId } = ctx.params;
+			const callbackURL = ctx.body.callbackURL || ctx.context.baseURL;
+
+			const provider = await findSAMLProvider(
+				providerId,
+				options,
+				ctx.context.adapter,
+			);
+			if (!provider?.samlConfig) {
+				throw new APIError("NOT_FOUND", { message: "SAML provider not found" });
+			}
+
+			const config = provider.samlConfig as SAMLConfig;
+			const sp = createSP(config, ctx.context.baseURL, providerId);
+			const idp = createIdP(config);
+
+			const session = ctx.context.session;
+			const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${session.user.email}`;
+			const stored =
+				await ctx.context.internalAdapter.findVerificationValue(key);
+
+			let nameID = session.user.email;
+			let sessionIndex: string | undefined;
+
+			if (stored) {
+				const data = JSON.parse(stored.value) as SAMLSessionRecord;
+				nameID = data.nameID || nameID;
+				sessionIndex = data.sessionIndex;
+			}
+
+			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
+				logoutNameID: nameID,
+				sessionIndex,
+				relayState: callbackURL,
+			}) as { id: string; context: string };
+
+			const ttl =
+				options?.saml?.logoutRequestTTL ??
+				constants.DEFAULT_LOGOUT_REQUEST_TTL_MS;
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `${constants.LOGOUT_REQUEST_KEY_PREFIX}${logoutRequest.id}`,
+				value: providerId,
+				expiresAt: new Date(Date.now() + ttl),
+			});
+
+			await ctx.context.internalAdapter.deleteSession(session.session.id);
+
+			throw ctx.redirect(logoutRequest.context);
+		},
+	);
+};
