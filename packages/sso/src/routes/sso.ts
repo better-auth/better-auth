@@ -2833,7 +2833,10 @@ export const sloEndpoint = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			if (!options?.saml?.enableSingleLogout) {
-				throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED);
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+				);
 			}
 
 			const { providerId } = ctx.params;
@@ -2861,7 +2864,10 @@ export const sloEndpoint = (options?: SSOOptions) => {
 				ctx.context.adapter,
 			);
 			if (!provider?.samlConfig) {
-				throw APIError.from("NOT_FOUND", SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND);
+				throw APIError.from(
+					"NOT_FOUND",
+					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+				);
 			}
 
 			const config = provider.samlConfig as SAMLConfig;
@@ -2895,7 +2901,10 @@ async function handleLogoutResponse(
 		});
 	} catch (error) {
 		ctx.context.logger.error("LogoutResponse validation failed", { error });
-		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.INVALID_LOGOUT_RESPONSE);
+		throw APIError.from(
+			"BAD_REQUEST",
+			SAML_ERROR_CODES.INVALID_LOGOUT_RESPONSE,
+		);
 	}
 
 	const extract = parsed?.extract as {
@@ -3048,7 +3057,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			if (!options?.saml?.enableSingleLogout) {
-				throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED);
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+				);
 			}
 
 			const { providerId } = ctx.params;
@@ -3060,7 +3072,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 				ctx.context.adapter,
 			);
 			if (!provider?.samlConfig) {
-				throw APIError.from("NOT_FOUND", SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND);
+				throw APIError.from(
+					"NOT_FOUND",
+					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+				);
 			}
 
 			const config = provider.samlConfig as SAMLConfig;
@@ -3070,7 +3085,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 				(config.idpMetadata?.metadata &&
 					config.idpMetadata.metadata.includes("SingleLogoutService"));
 			if (!idpHasSLO) {
-				throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.IDP_SLO_NOT_SUPPORTED);
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.IDP_SLO_NOT_SUPPORTED,
+				);
 			}
 
 			const sp = createSP(config, ctx.context.baseURL, providerId);
