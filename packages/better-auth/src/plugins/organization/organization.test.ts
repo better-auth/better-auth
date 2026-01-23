@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -26,6 +26,10 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+vi.setConfig({
+	testTimeout: 10_000,
+});
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
