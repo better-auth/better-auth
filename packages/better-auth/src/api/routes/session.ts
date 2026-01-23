@@ -1,6 +1,7 @@
 import type {
 	BetterAuthOptions,
 	GenericEndpointContext,
+	SessionCookieData,
 } from "@better-auth/core";
 import {
 	createAuthEndpoint,
@@ -23,13 +24,7 @@ import {
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import type {
-	InferSession,
-	InferUser,
-	Session,
-	SessionData,
-	User,
-} from "../../types";
+import type { InferSession, InferUser, Session, User } from "../../types";
 import type { Prettify } from "../../types/helper";
 import { getDate } from "../../utils/date";
 
@@ -92,7 +87,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 
 				let sessionDataPayload: {
-					session: SessionData;
+					session: SessionCookieData;
 					expiresAt: number;
 				} | null = null;
 
@@ -103,7 +98,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (strategy === "jwe") {
 						// Decode JWE (encrypted)
 						const payload = await symmetricDecodeJWT<
-							SessionData & { exp?: number }
+							SessionCookieData & { exp?: number }
 						>(sessionDataCookie, ctx.context.secret, "better-auth-session");
 
 						if (payload && payload.session && payload.user) {
@@ -117,10 +112,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						}
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
-						const payload = await verifyJWT<SessionData & { exp?: number }>(
-							sessionDataCookie,
-							ctx.context.secret,
-						);
+						const payload = await verifyJWT<
+							SessionCookieData & { exp?: number }
+						>(sessionDataCookie, ctx.context.secret);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
@@ -134,7 +128,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					} else {
 						// Decode compact format (or legacy base64-hmac)
 						const parsed = safeJSONParse<{
-							session: SessionData;
+							session: SessionCookieData;
 							signature: string;
 							expiresAt: number;
 						}>(binary.decode(base64Url.decode(sessionDataCookie)));

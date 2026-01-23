@@ -54,13 +54,6 @@ export type InferPluginTypes<O extends BetterAuthOptions> =
 			>
 		: {};
 
-export type SessionData = {
-	session: Session & Record<string, any>;
-	user: User & Record<string, any>;
-	updatedAt: number;
-	version?: string;
-};
-
 export type {
 	Account,
 	RateLimit,

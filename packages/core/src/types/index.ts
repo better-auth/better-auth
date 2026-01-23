@@ -8,7 +8,11 @@ export type {
 	InternalAdapter,
 	PluginContext,
 } from "./context";
-export type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+export type {
+	BetterAuthCookie,
+	BetterAuthCookies,
+	SessionCookieData,
+} from "./cookie";
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,

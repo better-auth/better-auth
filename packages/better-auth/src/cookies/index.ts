@@ -3,6 +3,7 @@ import type {
 	BetterAuthCookies,
 	BetterAuthOptions,
 	GenericEndpointContext,
+	SessionCookieData,
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
@@ -19,7 +20,7 @@ import {
 	verifyJWT,
 } from "../crypto/jwt";
 import { parseUserOutput } from "../db/schema";
-import type { Session, SessionData, User } from "../types";
+import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
@@ -147,7 +148,7 @@ export async function setCookieCache(
 		}
 	}
 
-	const sessionData: SessionData = {
+	const sessionData: SessionCookieData = {
 		session: filteredSession,
 		user: filteredUser,
 		updatedAt: Date.now(),
@@ -395,7 +396,7 @@ export const getSessionCookie = (
 	return null;
 };
 
-export const getCookieCache = async <S extends SessionData>(
+export const getCookieCache = async <S extends SessionCookieData>(
 	request: Request | Headers,
 	config?:
 		| {
