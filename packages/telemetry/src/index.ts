@@ -32,7 +32,7 @@ export async function createTelemetry(
 	const track = async (event: TelemetryEvent) => {
 		if (context?.customTrack) {
 			await context.customTrack(event).catch(logger.error);
-		} else {
+		} else if (telemetryEndpoint) {
 			if (debugEnabled) {
 				logger.info("telemetry event", JSON.stringify(event, null, 2));
 			} else {
