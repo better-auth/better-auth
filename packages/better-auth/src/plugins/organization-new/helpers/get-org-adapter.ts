@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import type { Member, MemberInput, OrganizationInput } from "../schema";
@@ -11,6 +11,7 @@ import type {
 	InferOrganization,
 	OrganizationOptions,
 } from "../types";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
 
@@ -56,7 +57,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		return result;
 	};
 
-	return {
+	const orgAdapter = {
 		/**
 		 *
 		 * @param organizationIdOrSlug - The organization id or slug to get the real organization id for.
@@ -72,7 +73,11 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				where: [{ field, value }],
 				select: ["id"],
 			});
-			return organization?.id ?? null;
+			if (!organization) {
+				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
+			return organization.id;
 		},
 		/**
 		 * This function exists as a more optimized way to check if a slug is already taken.
@@ -376,15 +381,17 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
+			const realOrgId = await orgAdapter.getRealOrganizationId(organizationId);
 			const member = await adapter.findOne({
 				model: "member",
 				where: [
 					{ field: "userId", value: userId },
-					{ field: "organizationId", value: organizationId },
+					{ field: "organizationId", value: realOrgId },
 				],
 				select: ["id"],
 			});
 			return member ? true : false;
 		},
 	};
+	return orgAdapter;
 };

@@ -119,6 +119,11 @@ type GetAddonExtraTables<AddonSchemas> = Omit<
 	"organization" | "member" | "invitation"
 >;
 
+/** Base session fields */
+type BaseSessionFields = {
+	activeOrganizationId: { type: "string"; required: false };
+};
+
 /** Inferred schema type from options */
 export type InferOrganizationSchema<O extends ResolvedOrganizationOptions> =
 	Prettify<
@@ -152,6 +157,9 @@ export type InferOrganizationSchema<O extends ResolvedOrganizationOptions> =
 						> &
 						GetAdditionalFields<O, "invitation">
 				>;
+			};
+			session: {
+				fields: BaseSessionFields;
 			};
 		}
 	>;
@@ -304,11 +312,22 @@ export const getSchema = <O extends ResolvedOrganizationOptions>(
 		},
 	} satisfies BetterAuthPluginDBSchema["invitation"];
 
+	const session = {
+		fields: {
+			activeOrganizationId: {
+				type: "string",
+				required: false,
+				fieldName: opts.schema?.session?.fields?.activeOrganizationId,
+			},
+		},
+	} satisfies BetterAuthPluginDBSchema["session"];
+
 	const schema = {
 		...(addonSchemas || {}),
 		organization,
 		member,
 		invitation,
+		session,
 	};
 	return schema as InferOrganizationSchema<O>;
 };
