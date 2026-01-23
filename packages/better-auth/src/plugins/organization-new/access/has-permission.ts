@@ -3,13 +3,14 @@ import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import type { Role } from "../../access";
 import type { OrganizationRole } from "../addons/dynamic-access-control/schema";
+import type { RealOrganizationId } from "../helpers/get-org-adapter";
 import { defaultRoles } from ".";
 import type { HasPermissionBaseInput } from "./permission";
 import { cacheAllRoles, hasPermissionFn } from "./permission";
 
 export const hasPermission = async (
 	input: {
-		organizationId: string;
+		organizationId: RealOrganizationId;
 		/**
 		 * If true, will use the in-memory cache of the roles.
 		 * Keep in mind to use this in a stateless mindset, the purpose of this is to avoid unnecessary database calls when running multiple

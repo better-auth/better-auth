@@ -3,6 +3,7 @@ import { APIError, createAuthEndpoint } from "../../../../api";
 import { hasPermission } from "../../access";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
+import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
@@ -94,7 +95,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
 				userId: session.user.id,
-				organizationId: organization.id,
+				organizationId: organization.id as RealOrganizationId,
 			});
 			if (!member) {
 				const code = "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION";
@@ -107,7 +108,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 					permissions: {
 						organization: ["delete"],
 					},
-					organizationId: organization.id,
+					organizationId: organization.id as RealOrganizationId,
 					options: ctx.context.orgOptions,
 				},
 				ctx,
@@ -130,7 +131,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				},
 				ctx,
 			);
-			await adapter.deleteOrganization(organization.id);
+			await adapter.deleteOrganization(organization.id as RealOrganizationId);
 			await orgHook.after(
 				{
 					organization,

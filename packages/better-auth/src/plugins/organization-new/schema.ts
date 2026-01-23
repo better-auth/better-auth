@@ -42,4 +42,4 @@ export type OrganizationInput = z.input<typeof organizationSchema>;
 export type Member = z.infer<typeof memberSchema>;
 export type MemberInput = z.input<typeof memberSchema>;
 export type Invitation = z.infer<typeof invitationSchema>;
-// export type InvitationInput = z.input<typeof invitationSchema>; // TODO: when needed uncomment
+export type InvitationInput = z.input<typeof invitationSchema>;

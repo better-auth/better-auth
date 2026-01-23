@@ -2,6 +2,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgSessionMiddleware } from "../../middleware";
 import { orgMiddleware } from "../../middleware/org-middleware";
@@ -83,7 +84,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
-				organizationId: organization.id,
+				organizationId: organization.id as unknown as RealOrganizationId,
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null);

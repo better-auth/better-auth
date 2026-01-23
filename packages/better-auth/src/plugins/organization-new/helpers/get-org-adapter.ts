@@ -4,7 +4,13 @@ import type { User } from "@better-auth/core/db";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
-import type { Member, MemberInput, OrganizationInput } from "../schema";
+import { getDate } from "../../../utils/date";
+import type {
+	InvitationInput,
+	Member,
+	MemberInput,
+	OrganizationInput,
+} from "../schema";
 import type {
 	InferInvitation,
 	InferMember,
@@ -14,6 +20,12 @@ import type {
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
+
+/**
+ * This branded ID exists as a measure to prevent accidentally providing an un-checked organizationId that could be a slug
+ * when it should be a real organization id value.
+ */
+export type RealOrganizationId = string & { __realOrganizationId: true };
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -58,6 +70,49 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	};
 
 	const orgAdapter = {
+		findMemberByEmail: async (data: {
+			email: string;
+			organizationId: RealOrganizationId;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const user = await adapter.findOne<User>({
+				model: "user",
+				where: [
+					{
+						field: "email",
+						value: data.email.toLowerCase(),
+					},
+				],
+			});
+			if (!user) {
+				return null;
+			}
+			const member = await adapter.findOne<InferMember<O, false>>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "userId",
+						value: user.id,
+					},
+				],
+			});
+			if (!member) {
+				return null;
+			}
+			return {
+				...member,
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+			};
+		},
 		/**
 		 * Lists organizations for a user with optional pagination.
 		 * @param userId - The user id to list organizations for.
@@ -141,10 +196,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		 * @param organizationIdOrSlug - The organization id or slug to get the real organization id for.
 		 * @returns The real organization id.
 		 */
-		getRealOrganizationId: async (organizationIdOrSlug: string) => {
+		getRealOrganizationId: async (
+			organizationIdOrSlug: string,
+		): Promise<RealOrganizationId> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const field = options.defaultOrganizationIdField;
-			if (field === "id") return organizationIdOrSlug;
+			if (field === "id") return organizationIdOrSlug as RealOrganizationId;
 			const value = organizationIdOrSlug;
 			const organization = await adapter.findOne<{ id: string }>({
 				model: "organization",
@@ -155,7 +212,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 				throw APIError.from("BAD_REQUEST", msg);
 			}
-			return organization.id;
+			return organization.id as RealOrganizationId;
 		},
 		/**
 		 * This function exists as a more optimized way to check if a slug is already taken.
@@ -256,7 +313,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findMemberByOrgId: async (data: {
 			userId: string;
-			organizationId: string;
+			organizationId: RealOrganizationId;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.findOne<InferMember<O, false>>({
@@ -329,7 +386,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return filterOrgOutput(res);
 		},
-		deleteOrganization: async (organizationId: string) => {
+		deleteOrganization: async (organizationId: RealOrganizationId) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			await adapter.deleteMany({
 				model: "member",
@@ -433,7 +490,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId,
 		}: {
 			userId: string;
-			organizationId: string;
+			organizationId: RealOrganizationId;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.findOne<InferMember<O, false>>({
@@ -456,19 +513,132 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId,
 		}: {
 			userId: string;
-			organizationId: string;
+			organizationId: RealOrganizationId;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const realOrgId = await orgAdapter.getRealOrganizationId(organizationId);
 			const member = await adapter.findOne({
 				model: "member",
 				where: [
 					{ field: "userId", value: userId },
-					{ field: "organizationId", value: realOrgId },
+					{ field: "organizationId", value: organizationId },
 				],
 				select: ["id"],
 			});
 			return member ? true : false;
+		},
+		findPendingInvitation: async (data: {
+			email: string;
+			organizationId: RealOrganizationId;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitation = await adapter.findMany<InferInvitation<O, false>>({
+				model: "invitation",
+				where: [
+					{
+						field: "email",
+						value: data.email.toLowerCase(),
+					},
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "status",
+						value: "pending",
+					},
+					// Note: This is recently added as part of org-rewrite.
+					// It will filter out expired invitations.
+					// If the causes issues down the line (unlikely), we can remove this - there is still JS based filtering below.
+					{
+						field: "expiresAt",
+						value: new Date(),
+						operator: "gt",
+					},
+				],
+			});
+			return invitation.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
+		},
+		updateInvitation: async (data: {
+			invitationId: string;
+			status: "accepted" | "canceled" | "rejected";
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitation = await adapter.update<InferInvitation<O, false>>({
+				model: "invitation",
+				where: [
+					{
+						field: "id",
+						value: data.invitationId,
+					},
+				],
+				update: {
+					status: data.status,
+				},
+			});
+			return invitation;
+		},
+		findPendingInvitations: async (data: {
+			organizationId: RealOrganizationId;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
+				model: "invitation",
+				where: [
+					{
+						field: "organizationId",
+						value: data.organizationId,
+					},
+					{
+						field: "status",
+						value: "pending",
+					},
+					// Note: This is recently added as part of org-rewrite.
+					// It will filter out expired invitations.
+					// If the causes issues down the line (unlikely), we can remove this - there is still JS based filtering below.
+					{
+						field: "expiresAt",
+						value: new Date(),
+						operator: "gt",
+					},
+				],
+			});
+			return invitations.filter(
+				(invite) => new Date(invite.expiresAt) > new Date(),
+			);
+		},
+		createInvitation: async ({
+			invitation,
+			user,
+		}: {
+			invitation: {
+				email: string;
+				role: string;
+				organizationId: string;
+				teamIds: string[];
+			} & Record<string, any>; // This represents the additionalFields for the invitation
+			user: User;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const expiresAt = getDate(options.invitationExpiresIn, "sec");
+			const teamId = invitation.teamIds.join(",") ?? null;
+			const invite = await adapter.create<
+				Omit<InvitationInput, "id">,
+				InferInvitation<O, false>
+			>({
+				model: "invitation",
+				data: {
+					status: "pending",
+					expiresAt,
+					createdAt: new Date(),
+					inviterId: user.id,
+					...invitation,
+					teamId,
+				},
+			});
+
+			return invite;
 		},
 	};
 	return orgAdapter;
