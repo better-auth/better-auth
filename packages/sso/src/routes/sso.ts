@@ -46,7 +46,13 @@ import {
 	validateSingleAssertion,
 } from "../saml";
 import { generateRelayState, parseRelayState } from "../saml-state";
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
+import type {
+	OIDCConfig,
+	SAMLConfig,
+	SAMLSessionRecord,
+	SSOOptions,
+	SSOProvider,
+} from "../types";
 import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import {
 	createIdP,
@@ -2798,13 +2804,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 	);
 };
 
-interface SAMLSessionRecord {
-	sessionId: string;
-	providerId: string;
-	nameID: string;
-	sessionIndex?: string;
-}
-
 const sloSchema = z.object({
 	SAMLRequest: z.string().optional(),
 	SAMLResponse: z.string().optional(),
@@ -2906,8 +2905,14 @@ async function handleLogoutResponse(
 
 	deleteSessionCookie(ctx);
 
-	const redirectUrl = relayState || ctx.context.baseURL;
-	throw ctx.redirect(redirectUrl);
+	const appOrigin = new URL(ctx.context.baseURL).origin;
+	const safeRedirectUrl = getSafeRedirectUrl(
+		relayState,
+		"/sso/saml2/sp/slo",
+		appOrigin,
+		(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+	);
+	throw ctx.redirect(safeRedirectUrl);
 }
 
 async function handleLogoutRequest(

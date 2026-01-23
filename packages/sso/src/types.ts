@@ -86,6 +86,14 @@ export interface SAMLConfig {
 	mapping?: SAMLMapping | undefined;
 }
 
+/** Session data stored during SAML login for Single Logout */
+export interface SAMLSessionRecord {
+	sessionId: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
 type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;

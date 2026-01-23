@@ -4582,4 +4582,171 @@ describe("SAML Single Logout (SLO)", () => {
 			expect(location).toContain("SAMLResponse=");
 		});
 	});
+
+	describe("LogoutResponse handling (SP-initiated flow completion)", () => {
+		it("should process LogoutResponse and redirect to relayState", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const sloServiceLocation =
+				"http://localhost:3000/api/auth/sso/saml2/sp/slo/logout-response-test";
+			const callbackUrl = "http://localhost:3000/logged-out";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "logout-response-test",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "logout-response-test.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const idp = saml.IdentityProvider({
+				metadata: sloIdpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const sp = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				assertionConsumerService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+						Location: "http://localhost:8081/callback",
+					},
+				],
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloServiceLocation,
+					},
+				],
+			});
+
+			const logoutResponse = idp.createLogoutResponse(
+				sp,
+				null,
+				saml.Constants.wording.binding.redirect,
+				callbackUrl,
+			) as { context: string };
+
+			const url = new URL(logoutResponse.context);
+			const samlResponse = url.searchParams.get("SAMLResponse");
+			const relayState = url.searchParams.get("RelayState");
+
+			const sloRes = await auth.handler(
+				new Request(
+					`${sloServiceLocation}?SAMLResponse=${encodeURIComponent(samlResponse!)}&RelayState=${encodeURIComponent(relayState || "")}`,
+					{
+						method: "GET",
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toBe(callbackUrl);
+
+			const setCookie = sloRes.headers.get("set-cookie");
+			expect(setCookie).toContain("better-auth.session_token=;");
+		});
+
+		it("should redirect to baseURL when relayState is missing", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const sloServiceLocation =
+				"http://localhost:3000/api/auth/sso/saml2/sp/slo/logout-no-relay";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "logout-no-relay",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "logout-no-relay.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const idp = saml.IdentityProvider({
+				metadata: sloIdpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const sp = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				assertionConsumerService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+						Location: "http://localhost:8081/callback",
+					},
+				],
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloServiceLocation,
+					},
+				],
+			});
+
+			const logoutResponse = idp.createLogoutResponse(
+				sp,
+				null,
+				saml.Constants.wording.binding.redirect,
+				"",
+			) as { context: string };
+
+			const url = new URL(logoutResponse.context);
+			const samlResponse = url.searchParams.get("SAMLResponse");
+
+			const sloRes = await auth.handler(
+				new Request(
+					`${sloServiceLocation}?SAMLResponse=${encodeURIComponent(samlResponse!)}`,
+					{
+						method: "GET",
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toBe("http://localhost:3000");
+		});
+	});
 });
