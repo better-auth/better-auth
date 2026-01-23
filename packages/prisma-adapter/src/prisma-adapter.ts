@@ -364,11 +364,10 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 					}
 
 					// transform join keys to use Prisma expected field names
-					// Map from Prisma include key to internal model name (joinModel), not table name
 					const map = new Map<string, string>();
 					for (const joinModel of Object.keys(join ?? {})) {
 						const key = getJoinKeyName(model, joinModel, schema);
-						map.set(key, joinModel);
+						map.set(key, getModelName(joinModel));
 					}
 
 					const selects = convertSelect(select, model, join);
@@ -403,12 +402,11 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 						);
 					}
 					// transform join keys to use Prisma expected field names
-					// Map from Prisma include key to internal model name (joinModel), not table name
 					const map = new Map<string, string>();
 					if (join) {
 						for (const [joinModel, _value] of Object.entries(join)) {
 							const key = getJoinKeyName(model, joinModel, schema);
-							map.set(key, joinModel);
+							map.set(key, getModelName(joinModel));
 						}
 					}
 

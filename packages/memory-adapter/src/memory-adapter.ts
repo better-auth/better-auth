@@ -184,12 +184,12 @@ export const memoryAdapter = (
 						const nested: Record<string, any> = { ...baseRecord };
 
 						// Initialize joined data structures based on isUnique
-						// Use joinModel (internal model name) for result keys, not getModelName (table name)
 						for (const [joinModel, joinAttr] of Object.entries(join)) {
+							const joinModelName = getModelName(joinModel);
 							if (joinAttr.relation === "one-to-one") {
-								nested[joinModel] = null;
+								nested[joinModelName] = null;
 							} else {
-								nested[joinModel] = [];
+								nested[joinModelName] = [];
 								seenIds.set(`${baseId}-${joinModel}`, new Set());
 							}
 						}
@@ -201,15 +201,14 @@ export const memoryAdapter = (
 
 					// Add joined data
 					for (const [joinModel, joinAttr] of Object.entries(join)) {
-						// Use getModelName only for database table access
-						const joinTableName = getModelName(joinModel);
-						const joinTable = db[joinTableName];
+						const joinModelName = getModelName(joinModel);
+						const joinTable = db[joinModelName];
 						if (!joinTable) {
 							logger.error(
-								`[MemoryAdapter] JoinOption model ${joinTableName} not found in the DB`,
+								`[MemoryAdapter] JoinOption model ${joinModelName} not found in the DB`,
 								Object.keys(db),
 							);
-							throw new Error(`JoinOption model ${joinTableName} not found`);
+							throw new Error(`JoinOption model ${joinModelName} not found`);
 						}
 
 						const matchingRecords = joinTable.filter(
@@ -219,8 +218,7 @@ export const memoryAdapter = (
 
 						if (joinAttr.relation === "one-to-one") {
 							// For unique relationships, store a single object (or null)
-							// Use joinModel (internal model name) for result keys
-							nestedEntry[joinModel] = matchingRecords[0] || null;
+							nestedEntry[joinModelName] = matchingRecords[0] || null;
 						} else {
 							// For non-unique relationships, store array with limit
 							const seenSet = seenIds.get(`${baseId}-${joinModel}`)!;
@@ -230,8 +228,7 @@ export const memoryAdapter = (
 							for (const matchingRecord of matchingRecords) {
 								if (count >= limit) break;
 								if (!seenSet.has(matchingRecord.id)) {
-									// Use joinModel (internal model name) for result keys
-									nestedEntry[joinModel].push(matchingRecord);
+									nestedEntry[joinModelName].push(matchingRecord);
 									seenSet.add(matchingRecord.id);
 									count++;
 								}
