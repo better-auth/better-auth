@@ -2871,7 +2871,10 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			}
 
 			const config = provider.samlConfig as SAMLConfig;
-			const sp = createSP(config, ctx.context.baseURL, providerId);
+			const sp = createSP(config, ctx.context.baseURL, providerId, {
+				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
+				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+			});
 			const idp = createIdP(config);
 
 			if (samlResponse) {
@@ -3091,7 +3094,10 @@ export const initiateSLO = (options?: SSOOptions) => {
 				);
 			}
 
-			const sp = createSP(config, ctx.context.baseURL, providerId);
+			const sp = createSP(config, ctx.context.baseURL, providerId, {
+				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
+				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+			});
 			const idp = createIdP(config);
 
 			const session = ctx.context.session;

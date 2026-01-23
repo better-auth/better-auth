@@ -48,6 +48,10 @@ export function createSP(
 	config: SAMLConfig,
 	baseURL: string,
 	providerId: string,
+	sloOptions?: {
+		wantLogoutRequestSigned?: boolean;
+		wantLogoutResponseSigned?: boolean;
+	},
 ) {
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
 	return saml.ServiceProvider({
@@ -70,6 +74,8 @@ export function createSP(
 			},
 		],
 		wantMessageSigned: config.wantAssertionsSigned || false,
+		wantLogoutRequestSigned: sloOptions?.wantLogoutRequestSigned ?? false,
+		wantLogoutResponseSigned: sloOptions?.wantLogoutResponseSigned ?? false,
 		metadata: config.spMetadata?.metadata,
 		privateKey: config.spMetadata?.privateKey || config.privateKey,
 		privateKeyPass: config.spMetadata?.privateKeyPass,

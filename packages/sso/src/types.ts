@@ -386,6 +386,16 @@ export interface SSOOptions {
 		 * @default 300000 (5 minutes)
 		 */
 		logoutRequestTTL?: number;
+		/**
+		 * Require signed LogoutRequests from IdP
+		 * @default false
+		 */
+		wantLogoutRequestSigned?: boolean;
+		/**
+		 * Require signed LogoutResponses from IdP
+		 * @default false
+		 */
+		wantLogoutResponseSigned?: boolean;
 	};
 }
 
