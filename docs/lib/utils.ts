@@ -51,3 +51,19 @@ export function mergeRefs<T>(
 		});
 	};
 }
+
+/**
+ * Check if a slug is a subpage of a given parent path.
+ * @param slug - The slug array
+ * @param parentPath - The parent path segments (e.g. ["reference", "errors"])
+ */
+export function isSubpageOf(
+	slug: string[] | undefined,
+	parentPath: string[],
+): boolean {
+	if (!slug || slug.length <= parentPath.length) return false;
+
+	return parentPath.every(
+		(parentSegment, index) => slug[index] === parentSegment,
+	);
+}
