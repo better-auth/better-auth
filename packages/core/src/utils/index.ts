@@ -1,3 +1,4 @@
+export { filterOutputFields } from "./db";
 export { deprecate } from "./deprecate";
 export { defineErrorCodes } from "./error-codes";
 export { generateId } from "./id";

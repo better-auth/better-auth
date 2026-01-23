@@ -833,4 +833,208 @@ describe("account", async () => {
 		expect(reLoginAccessToken.error).toBeFalsy();
 		expect(reLoginAccessToken.data?.accessToken).toBe("test");
 	});
+
+	it("should refresh account_data cookie when session is refreshed", async () => {
+		const sessionExpiresIn = 60 * 60 * 24 * 7;
+		const sessionUpdateAge = 10;
+
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+			session: {
+				expiresIn: sessionExpiresIn,
+				updateAge: sessionUpdateAge,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+		const sessionDataCookieName = ctx.authCookies.sessionData.name;
+
+		const headers = new Headers();
+		email = "refresh-account-cookie-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		let initialAccountCookieSet = false;
+		let initialSessionCookieSet = false;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				initialAccountCookieSet = !!cookies.get(accountDataCookieName)?.value;
+				initialSessionCookieSet = !!cookies.get(sessionDataCookieName)?.value;
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		expect(initialAccountCookieSet).toBe(true);
+		expect(initialSessionCookieSet).toBe(true);
+
+		const currentSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(currentSession.data).not.toBeNull();
+		const sessionToken = currentSession.data?.session?.token;
+
+		// Make session due for refresh
+		const pastExpiresAt = new Date(
+			Date.now() + sessionExpiresIn * 1000 - sessionUpdateAge * 1000 - 1000,
+		);
+		if (sessionToken) {
+			await ctx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: sessionToken }],
+				update: { expiresAt: pastExpiresAt },
+			});
+		}
+
+		let refreshedAccountCookie = false;
+		let refreshedSessionCookie = false;
+
+		await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie = !!cookies.get(accountDataCookieName)?.value;
+					refreshedSessionCookie = !!cookies.get(sessionDataCookieName)?.value;
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		expect(refreshedSessionCookie).toBe(true);
+		expect(refreshedAccountCookie).toBe(true);
+	});
+
+	it("should refresh account_data cookie in stateless mode", async () => {
+		const refreshUpdateAge = 60;
+
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: { updateAge: refreshUpdateAge },
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+		const sessionDataCookieName = ctx.authCookies.sessionData.name;
+
+		expect(
+			(ctx.options as { account?: { storeAccountCookie?: boolean } }).account
+				?.storeAccountCookie,
+		).toBe(true);
+
+		const headers = new Headers();
+		email = "stateless-refresh-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		let initialAccountCookieSet = false;
+		let initialSessionCookieSet = false;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				initialAccountCookieSet = !!cookies.get(accountDataCookieName)?.value;
+				initialSessionCookieSet = !!cookies.get(sessionDataCookieName)?.value;
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		expect(initialAccountCookieSet).toBe(true);
+		expect(initialSessionCookieSet).toBe(true);
+
+		const firstSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+
+		if (sessionToken) {
+			await ctx.internalAdapter.deleteSession(sessionToken);
+		}
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		let refreshedAccountCookie = false;
+		let refreshedSessionCookie = false;
+
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie = !!cookies.get(accountDataCookieName)?.value;
+					refreshedSessionCookie = !!cookies.get(sessionDataCookieName)?.value;
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		vi.useRealTimers();
+
+		expect(refreshedSessionCookie).toBe(true);
+		expect(refreshedAccountCookie).toBe(true);
+	});
 });
