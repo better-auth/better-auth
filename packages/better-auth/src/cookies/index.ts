@@ -172,6 +172,7 @@ export async function setCookieCache(
 	let data: string;
 
 	if (strategy === "jwe") {
+		// Use JWE strategy (JSON Web Encryption) with A256CBC-HS512 + HKDF
 		data = await symmetricEncodeJWT(
 			sessionData,
 			ctx.context.secret,
@@ -179,12 +180,15 @@ export async function setCookieCache(
 			options.maxAge || 60 * 5,
 		);
 	} else if (strategy === "jwt") {
+		// Use JWT strategy with HMAC-SHA256 signature (HS256), no encryption
 		data = await signJWT(
 			sessionData,
 			ctx.context.secret,
 			options.maxAge || 60 * 5,
 		);
 	} else {
+		// Use compact strategy (base64url + HMAC, no JWT spec overhead)
+		// Also handles legacy "base64-hmac" for backward compatibility
 		data = base64Url.encode(
 			JSON.stringify({
 				session: sessionData,
@@ -203,6 +207,7 @@ export async function setCookieCache(
 		);
 	}
 
+	// Check if we need to chunk the cookie (only if it exceeds 4093 bytes)
 	if (data.length > 4093) {
 		const sessionStore = createSessionStore(
 			ctx.context.authCookies.sessionData.name,
