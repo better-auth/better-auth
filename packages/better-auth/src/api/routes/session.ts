@@ -87,7 +87,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				);
 
 				let sessionDataPayload: {
-					session: SessionCookieData;
+					session: {
+						session: Session;
+						user: User;
+						updatedAt: number;
+						version?: string;
+					};
 					expiresAt: number;
 				} | null = null;
 
@@ -97,13 +102,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 					if (strategy === "jwe") {
 						// Decode JWE (encrypted)
-						const payload = await symmetricDecodeJWT<
-							SessionCookieData & { exp?: number }
-						>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+						const payload = await symmetricDecodeJWT<{
+							session: Session;
+							user: User;
+							updatedAt: number;
+							version?: string;
+							exp?: number;
+						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
-								session: payload,
+								session: {
+									session: payload.session,
+									user: payload.user,
+									updatedAt: payload.updatedAt,
+									version: payload.version,
+								},
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
@@ -112,13 +126,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						}
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
-						const payload = await verifyJWT<
-							SessionCookieData & { exp?: number }
-						>(sessionDataCookie, ctx.context.secret);
+						const payload = await verifyJWT<{
+							session: Session;
+							user: User;
+							updatedAt: number;
+							version?: string;
+							exp?: number;
+						}>(sessionDataCookie, ctx.context.secret);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
-								session: payload,
+								session: {
+									session: payload.session,
+									user: payload.user,
+									updatedAt: payload.updatedAt,
+									version: payload.version,
+								},
 								expiresAt: payload.exp ? payload.exp * 1000 : Date.now(),
 							};
 						} else {
@@ -128,7 +151,12 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					} else {
 						// Decode compact format (or legacy base64-hmac)
 						const parsed = safeJSONParse<{
-							session: SessionCookieData;
+							session: {
+								session: Session;
+								user: User;
+								updatedAt: number;
+								version?: string;
+							};
 							signature: string;
 							expiresAt: number;
 						}>(binary.decode(base64Url.decode(sessionDataCookie)));

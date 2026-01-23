@@ -148,7 +148,7 @@ export async function setCookieCache(
 		}
 	}
 
-	const sessionData: SessionCookieData = {
+	const sessionData = {
 		session: filteredSession,
 		user: filteredUser,
 		updatedAt: Date.now(),
@@ -396,7 +396,14 @@ export const getSessionCookie = (
 	return null;
 };
 
-export const getCookieCache = async <S extends SessionCookieData>(
+export const getCookieCache = async <
+	S extends {
+		session: Session & Record<string, any>;
+		user: User & Record<string, any>;
+		updatedAt: number;
+		version?: string;
+	},
+>(
 	request: Request | Headers,
 	config?:
 		| {
