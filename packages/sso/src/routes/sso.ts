@@ -2845,7 +2845,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 			const safeErrorURL = getSafeRedirectUrl(
 				relayState,
-				"/sso/saml2/sp/slo",
+				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 				appOrigin,
 				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 			);
@@ -2870,7 +2870,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 			const idp = createIdP(config);
 
 			if (samlResponse) {
-				return handleLogoutResponse(ctx, sp, idp, relayState);
+				return handleLogoutResponse(ctx, sp, idp, relayState, providerId);
 			}
 
 			return handleLogoutRequest(ctx, sp, idp, relayState, providerId);
@@ -2883,6 +2883,7 @@ async function handleLogoutResponse(
 	sp: ReturnType<typeof createSP>,
 	idp: ReturnType<typeof createIdP>,
 	relayState: string | undefined,
+	providerId: string,
 ) {
 	const binding =
 		ctx.method === "POST" && ctx.body?.SAMLResponse ? "post" : "redirect";
@@ -2942,7 +2943,7 @@ async function handleLogoutResponse(
 	const appOrigin = new URL(ctx.context.baseURL).origin;
 	const safeRedirectUrl = getSafeRedirectUrl(
 		relayState,
-		"/sso/saml2/sp/slo",
+		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
 		appOrigin,
 		(url, settings) => ctx.context.isTrustedOrigin(url, settings),
 	);
