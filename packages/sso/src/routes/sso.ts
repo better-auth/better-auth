@@ -2934,19 +2934,23 @@ async function handleLogoutRequest(
 		const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 		if (data) {
 			if (
-				sessionIndex &&
-				data.sessionIndex &&
-				sessionIndex !== data.sessionIndex
+				!sessionIndex ||
+				!data.sessionIndex ||
+				sessionIndex === data.sessionIndex
 			) {
-				ctx.context.logger.warn("SessionIndex mismatch in LogoutRequest", {
-					providerId,
-					requestedSessionIndex: sessionIndex,
-					storedSessionIndex: data.sessionIndex,
-				});
+				await ctx.context.internalAdapter
+					.deleteSession(data.sessionId)
+					.catch(() => {});
+			} else {
+				ctx.context.logger.warn(
+					"SessionIndex mismatch in LogoutRequest - skipping session deletion",
+					{
+						providerId,
+						requestedSessionIndex: sessionIndex,
+						storedSessionIndex: data.sessionIndex,
+					},
+				);
 			}
-			await ctx.context.internalAdapter
-				.deleteSession(data.sessionId)
-				.catch(() => {});
 		}
 		await ctx.context.internalAdapter
 			.deleteVerificationValue(key)
