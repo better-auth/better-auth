@@ -515,212 +515,6 @@ describe("siwe", () => {
 		});
 	});
 
-	describe("ENS integration", () => {
-		it("should use ENS lookup for user name and avatar when provided", async () => {
-			const ensName = "better-auth.eth";
-			const ensAvatar = "https://example.com/avatar.png";
-
-			const { client, auth } = await createTestInstance({
-				ensLookup: async () => ({
-					name: ensName,
-					avatar: ensAvatar,
-				}),
-			});
-
-			const testWallet = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
-
-			await client.siwe.nonce({ walletAddress: testWallet, chainId });
-			const { data, error } = await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testWallet,
-				chainId,
-			});
-
-			expect(error).toBeNull();
-			expect(data?.success).toBe(true);
-
-			const ctx = await auth.$context;
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "id", value: data?.user.id! }],
-			});
-
-			expect(user?.name).toBe(ensName);
-			expect(user?.image).toBe(ensAvatar);
-		});
-
-		it("should use wallet address as name when ENS lookup not provided", async () => {
-			const { client, auth } = await createTestInstance();
-
-			const testWallet = "0xE8dA6BF26964aF9D7eEd9e03E53415D37aA96046";
-
-			await client.siwe.nonce({ walletAddress: testWallet, chainId });
-			const { data, error } = await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testWallet,
-				chainId,
-			});
-
-			expect(error).toBeNull();
-			expect(data?.success).toBe(true);
-
-			const ctx = await auth.$context;
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "id", value: data?.user.id! }],
-			});
-
-			// Wallet address is stored in checksum format
-			expect(user?.name).toBe(toChecksumAddress(testWallet));
-		});
-
-		it("should pass wallet address to ENS lookup function", async () => {
-			const ensLookupSpy = vi.fn().mockResolvedValue({
-				name: "test.eth",
-				avatar: "https://example.com/test.png",
-			});
-
-			const { client } = await createTestInstance({
-				ensLookup: ensLookupSpy,
-			});
-
-			const testWallet = "0xF8dA6BF26964aF9D7eEd9e03E53415D37aA96047";
-
-			await client.siwe.nonce({ walletAddress: testWallet, chainId });
-			await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testWallet,
-				chainId,
-			});
-
-			// ENS lookup receives the checksum-formatted address
-			expect(ensLookupSpy).toHaveBeenCalledWith({
-				walletAddress: toChecksumAddress(testWallet),
-			});
-		});
-	});
-
-	describe("emailDomainName option", () => {
-		it("should use custom emailDomainName for anonymous user email", async () => {
-			const customDomain = "custom-wallet.io";
-			const { client, auth } = await createTestInstance({
-				emailDomainName: customDomain,
-			});
-
-			const testWallet = "0xA1dA6BF26964aF9D7eEd9e03E53415D37aA96048";
-
-			await client.siwe.nonce({ walletAddress: testWallet, chainId });
-			const { data, error } = await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testWallet,
-				chainId,
-			});
-
-			expect(error).toBeNull();
-			expect(data?.success).toBe(true);
-
-			const ctx = await auth.$context;
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "id", value: data?.user.id! }],
-			});
-
-			// Email is normalized to lowercase
-			expect(user?.email?.toLowerCase()).toBe(
-				`${testWallet.toLowerCase()}@${customDomain}`,
-			);
-		});
-
-		it("should use baseURL origin when emailDomainName not provided", async () => {
-			const { client, auth } = await createTestInstance();
-
-			const testWallet = "0xB1dA6BF26964aF9D7eEd9e03E53415D37aA96049";
-
-			await client.siwe.nonce({ walletAddress: testWallet, chainId });
-			const { data, error } = await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testWallet,
-				chainId,
-			});
-
-			expect(error).toBeNull();
-			expect(data?.success).toBe(true);
-
-			const ctx = await auth.$context;
-			const user = await ctx.adapter.findOne<User>({
-				model: "user",
-				where: [{ field: "id", value: data?.user.id! }],
-			});
-
-			// Email is normalized to lowercase and uses the default baseURL origin
-			expect(user?.email?.toLowerCase()).toContain(testWallet.toLowerCase());
-			expect(user?.email).toContain("@");
-		});
-	});
-
-	describe("custom schema", () => {
-		it("should support custom schema with mergeSchema", async () => {
-			const { client, auth } = await getTestInstance(
-				{
-					plugins: [
-						siwe({
-							...createSiweOptions(),
-							schema: {
-								walletAddress: {
-									modelName: "wallet_address",
-									fields: {
-										userId: "user_id",
-										address: "wallet_address",
-										chainId: "chain_id",
-										isPrimary: "is_primary",
-										createdAt: "created_at",
-									},
-								},
-							},
-						}),
-					],
-				},
-				{ clientOptions: { plugins: [siweClient()] } },
-			);
-
-			const testAddress = "0x000000000000000000000000000000000000dEaD";
-			const testChainId = 1;
-
-			await client.siwe.nonce({
-				walletAddress: testAddress,
-				chainId: testChainId,
-			});
-			const result = await client.siwe.verify({
-				message: "valid_message",
-				signature: "valid_signature",
-				walletAddress: testAddress,
-				chainId: testChainId,
-			});
-			expect(result.error).toBeNull();
-			expect(result.data?.success).toBe(true);
-
-			const ctx = await auth.$context;
-			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
-				model: "walletAddress",
-				where: [
-					{ field: "address", operator: "eq", value: testAddress },
-					{ field: "chainId", operator: "eq", value: testChainId },
-				],
-			});
-			expect(walletAddresses.length).toBe(1);
-			expect(walletAddresses[0]?.address).toBe(testAddress);
-			expect(walletAddresses[0]?.chainId).toBe(testChainId);
-			expect(walletAddresses[0]?.isPrimary).toBe(true);
-			expect(walletAddresses[0]?.userId).toBeDefined();
-			expect(walletAddresses[0]?.createdAt).toBeDefined();
-		});
-	});
-
 	describe("account linking", () => {
 		it("should link wallet to authenticated user when siwe is trusted provider", async () => {
 			const { auth, client, cookieSetter } = await getTestInstance(
@@ -1316,6 +1110,212 @@ describe("siwe", () => {
 			expect(walletAddressesForUserA.length).toBe(1);
 			expect(walletAddressesForUserA[0]?.address).toBe(testWalletAddress);
 			expect(walletAddressesForUserA[0]?.chainId).toBe(chainId1);
+		});
+	});
+
+	describe("ENS integration", () => {
+		it("should use ENS lookup for user name and avatar when provided", async () => {
+			const ensName = "better-auth.eth";
+			const ensAvatar = "https://example.com/avatar.png";
+
+			const { client, auth } = await createTestInstance({
+				ensLookup: async () => ({
+					name: ensName,
+					avatar: ensAvatar,
+				}),
+			});
+
+			const testWallet = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: data?.user.id! }],
+			});
+
+			expect(user?.name).toBe(ensName);
+			expect(user?.image).toBe(ensAvatar);
+		});
+
+		it("should use wallet address as name when ENS lookup not provided", async () => {
+			const { client, auth } = await createTestInstance();
+
+			const testWallet = "0xE8dA6BF26964aF9D7eEd9e03E53415D37aA96046";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: data?.user.id! }],
+			});
+
+			// Wallet address is stored in checksum format
+			expect(user?.name).toBe(toChecksumAddress(testWallet));
+		});
+
+		it("should pass wallet address to ENS lookup function", async () => {
+			const ensLookupSpy = vi.fn().mockResolvedValue({
+				name: "test.eth",
+				avatar: "https://example.com/test.png",
+			});
+
+			const { client } = await createTestInstance({
+				ensLookup: ensLookupSpy,
+			});
+
+			const testWallet = "0xF8dA6BF26964aF9D7eEd9e03E53415D37aA96047";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			// ENS lookup receives the checksum-formatted address
+			expect(ensLookupSpy).toHaveBeenCalledWith({
+				walletAddress: toChecksumAddress(testWallet),
+			});
+		});
+	});
+
+	describe("emailDomainName option", () => {
+		it("should use custom emailDomainName for anonymous user email", async () => {
+			const customDomain = "custom-wallet.io";
+			const { client, auth } = await createTestInstance({
+				emailDomainName: customDomain,
+			});
+
+			const testWallet = "0xA1dA6BF26964aF9D7eEd9e03E53415D37aA96048";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: data?.user.id! }],
+			});
+
+			// Email is normalized to lowercase
+			expect(user?.email?.toLowerCase()).toBe(
+				`${testWallet.toLowerCase()}@${customDomain}`,
+			);
+		});
+
+		it("should use baseURL origin when emailDomainName not provided", async () => {
+			const { client, auth } = await createTestInstance();
+
+			const testWallet = "0xB1dA6BF26964aF9D7eEd9e03E53415D37aA96049";
+
+			await client.siwe.nonce({ walletAddress: testWallet, chainId });
+			const { data, error } = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testWallet,
+				chainId,
+			});
+
+			expect(error).toBeNull();
+			expect(data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const user = await ctx.adapter.findOne<User>({
+				model: "user",
+				where: [{ field: "id", value: data?.user.id! }],
+			});
+
+			// Email is normalized to lowercase and uses the default baseURL origin
+			expect(user?.email?.toLowerCase()).toContain(testWallet.toLowerCase());
+			expect(user?.email).toContain("@");
+		});
+	});
+
+	describe("custom schema", () => {
+		it("should support custom schema with mergeSchema", async () => {
+			const { client, auth } = await getTestInstance(
+				{
+					plugins: [
+						siwe({
+							...createSiweOptions(),
+							schema: {
+								walletAddress: {
+									modelName: "wallet_address",
+									fields: {
+										userId: "user_id",
+										address: "wallet_address",
+										chainId: "chain_id",
+										isPrimary: "is_primary",
+										createdAt: "created_at",
+									},
+								},
+							},
+						}),
+					],
+				},
+				{ clientOptions: { plugins: [siweClient()] } },
+			);
+
+			const testAddress = "0x000000000000000000000000000000000000dEaD";
+			const testChainId = 1;
+
+			await client.siwe.nonce({
+				walletAddress: testAddress,
+				chainId: testChainId,
+			});
+			const result = await client.siwe.verify({
+				message: "valid_message",
+				signature: "valid_signature",
+				walletAddress: testAddress,
+				chainId: testChainId,
+			});
+			expect(result.error).toBeNull();
+			expect(result.data?.success).toBe(true);
+
+			const ctx = await auth.$context;
+			const walletAddresses = await ctx.adapter.findMany<WalletAddress>({
+				model: "walletAddress",
+				where: [
+					{ field: "address", operator: "eq", value: testAddress },
+					{ field: "chainId", operator: "eq", value: testChainId },
+				],
+			});
+			expect(walletAddresses.length).toBe(1);
+			expect(walletAddresses[0]?.address).toBe(testAddress);
+			expect(walletAddresses[0]?.chainId).toBe(testChainId);
+			expect(walletAddresses[0]?.isPrimary).toBe(true);
+			expect(walletAddresses[0]?.userId).toBeDefined();
+			expect(walletAddresses[0]?.createdAt).toBeDefined();
 		});
 	});
 
