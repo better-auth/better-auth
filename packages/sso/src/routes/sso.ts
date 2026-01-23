@@ -14,7 +14,7 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
@@ -2854,7 +2854,7 @@ export const sloEndpoint = (options?: SSOOptions) => {
 				return handleLogoutResponse(ctx, sp, idp, relayState);
 			}
 
-			return handleLogoutRequest(ctx, sp, idp, relayState, providerId, options);
+			return handleLogoutRequest(ctx, sp, idp, relayState, providerId);
 		},
 	);
 };
@@ -2890,6 +2890,8 @@ async function handleLogoutResponse(
 			.catch(() => {});
 	}
 
+	deleteSessionCookie(ctx);
+
 	const redirectUrl = relayState || ctx.context.baseURL;
 	throw ctx.redirect(redirectUrl);
 }
@@ -2900,7 +2902,6 @@ async function handleLogoutRequest(
 	idp: ReturnType<typeof createIdP>,
 	relayState: string | undefined,
 	providerId: string,
-	options: SSOOptions | undefined,
 ) {
 	const binding =
 		ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
@@ -2923,14 +2924,30 @@ async function handleLogoutRequest(
 	}
 
 	const { nameID } = parsed.extract;
+	const sessionIndex = (parsed.extract as { sessionIndex?: string })
+		.sessionIndex;
+
 	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
 	const stored = await ctx.context.internalAdapter.findVerificationValue(key);
 
 	if (stored) {
-		const data = JSON.parse(stored.value) as SAMLSessionRecord;
-		await ctx.context.internalAdapter
-			.deleteSession(data.sessionId)
-			.catch(() => {});
+		const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+		if (data) {
+			if (
+				sessionIndex &&
+				data.sessionIndex &&
+				sessionIndex !== data.sessionIndex
+			) {
+				ctx.context.logger.warn("SessionIndex mismatch in LogoutRequest", {
+					providerId,
+					requestedSessionIndex: sessionIndex,
+					storedSessionIndex: data.sessionIndex,
+				});
+			}
+			await ctx.context.internalAdapter
+				.deleteSession(data.sessionId)
+				.catch(() => {});
+		}
 		await ctx.context.internalAdapter
 			.deleteVerificationValue(key)
 			.catch(() => {});
@@ -2940,6 +2957,8 @@ async function handleLogoutRequest(
 	if (currentSession?.session) {
 		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
 	}
+
+	deleteSessionCookie(ctx);
 
 	const requestId = parsed.extract.request?.id || "";
 	const res = sp.createLogoutResponse(
@@ -3018,9 +3037,11 @@ export const initiateSLO = (options?: SSOOptions) => {
 			let sessionIndex: string | undefined;
 
 			if (stored) {
-				const data = JSON.parse(stored.value) as SAMLSessionRecord;
-				nameID = data.nameID || nameID;
-				sessionIndex = data.sessionIndex;
+				const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+				if (data) {
+					nameID = data.nameID || nameID;
+					sessionIndex = data.sessionIndex;
+				}
 			}
 
 			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
@@ -3039,6 +3060,8 @@ export const initiateSLO = (options?: SSOOptions) => {
 			});
 
 			await ctx.context.internalAdapter.deleteSession(session.session.id);
+
+			deleteSessionCookie(ctx);
 
 			throw ctx.redirect(logoutRequest.context);
 		},
