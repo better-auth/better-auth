@@ -58,6 +58,23 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 	return {
 		/**
+		 *
+		 * @param organizationIdOrSlug - The organization id or slug to get the real organization id for.
+		 * @returns The real organization id.
+		 */
+		getRealOrganizationId: async (organizationIdOrSlug: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const field = options.defaultOrganizationIdField;
+			if (field === "id") return organizationIdOrSlug;
+			const value = organizationIdOrSlug;
+			const organization = await adapter.findOne<{ id: string }>({
+				model: "organization",
+				where: [{ field, value }],
+				select: ["id"],
+			});
+			return organization?.id ?? null;
+		},
+		/**
 		 * This function exists as a more optimized way to check if a slug is already taken.
 		 * The primary difference lies in the `select` parameter which only grabs `id` to reduce payload size & improve query performance.
 		 *
