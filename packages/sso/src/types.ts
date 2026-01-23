@@ -94,6 +94,17 @@ export interface SAMLSessionRecord {
 	sessionIndex?: string;
 }
 
+/** Parsed SAML assertion extract from samlify */
+export interface SAMLAssertionExtract {
+	nameID?: string;
+	sessionIndex?: string;
+	inResponseTo?: string;
+	conditions?: {
+		NotBefore?: string;
+		NotOnOrAfter?: string;
+	};
+}
+
 type BaseSSOProvider = {
 	issuer: string;
 	oidcConfig?: OIDCConfig | undefined;

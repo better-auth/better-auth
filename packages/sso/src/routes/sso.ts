@@ -48,6 +48,7 @@ import {
 import { generateRelayState, parseRelayState } from "../saml-state";
 import type {
 	OIDCConfig,
+	SAMLAssertionExtract,
 	SAMLConfig,
 	SAMLSessionRecord,
 	SSOOptions,
@@ -2022,13 +2023,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
-			validateSAMLTimestamp((extract as any).conditions, {
+			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,
 			});
 
-			const inResponseTo = (extract as any).inResponseTo as string | undefined;
+			const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
+				| string
+				| undefined;
 			const shouldValidateInResponseTo =
 				options?.saml?.enableInResponseToValidation;
 
@@ -2117,7 +2120,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			if (assertionId) {
 				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as any).conditions as
+				const conditions = (extract as SAMLAssertionExtract).conditions as
 					| SAMLConditions
 					| undefined;
 				const clockSkew =
@@ -2294,7 +2297,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					sessionId: session.id,
 					providerId: provider.providerId,
 					nameID: extract.nameID,
-					sessionIndex: (extract as any).sessionIndex,
+					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
 				};
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -2517,13 +2520,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
-			validateSAMLTimestamp((extract as any).conditions, {
+			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,
 			});
 
-			const inResponseToAcs = (extract as any).inResponseTo as
+			const inResponseToAcs = (extract as SAMLAssertionExtract).inResponseTo as
 				| string
 				| undefined;
 			const shouldValidateInResponseToAcs =
@@ -2607,7 +2610,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			if (assertionIdAcs) {
 				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as any).conditions as
+				const conditions = (extract as SAMLAssertionExtract).conditions as
 					| SAMLConditions
 					| undefined;
 				const clockSkew =
@@ -2781,7 +2784,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					sessionId: session.id,
 					providerId,
 					nameID: extract.nameID,
-					sessionIndex: (extract as any).sessionIndex,
+					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
 				};
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -2971,8 +2974,7 @@ async function handleLogoutRequest(
 	}
 
 	const { nameID } = parsed.extract;
-	const sessionIndex = (parsed.extract as { sessionIndex?: string })
-		.sessionIndex;
+	const sessionIndex = (parsed.extract as SAMLAssertionExtract).sessionIndex;
 
 	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
 	const stored = await ctx.context.internalAdapter.findVerificationValue(key);
