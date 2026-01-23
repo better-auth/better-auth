@@ -1319,7 +1319,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   </Step>
 
   <Step>
-  If you use `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
+  If you use `cimd` or `allowUnauthenticatedClientRegistration`, you must ensure that your API Server is a confidential client itself:
 
   ```ts
   await auth.api.createOAuthClient({
@@ -1333,7 +1333,7 @@ If you are using "openid" and confidential MCP clients, you cannot disable the J
   These values should be used in the verify options `remoteVerify.clientId` and `remoteVerify.clientSecret`. Additionally, `remoteVerify.introspectUrl` would be something like `${BASE_URL}/${AUTH_PATH}/oauth2/introspect`.
 
   <Callout type="info">
-  If you choose to not support `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client_id in their UI or at runtime while chatting with the AI.
+  If you choose to not support `cimd` or `allowUnauthenticatedClientRegistration` (and only `allowDynamicClientRegistration`), the MCP client (ie. ChatGPT, Anthropic, Gemini) would need to allow you to put in a public client_id in their UI or at runtime while chatting with the AI.
   </Callout>
   </Step>
 
