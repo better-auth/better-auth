@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import * as saml from "samlify";
+import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -195,6 +196,35 @@ export function sso<O extends SSOOptions>(
 		},
 		endpoints,
 		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return context.path === "/sign-out";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!options?.saml?.enableSingleLogout) {
+							return;
+						}
+						const session = await getSessionFromCtx(ctx);
+						if (!session?.session?.id) {
+							return;
+						}
+						const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
+						const sessionLookup =
+							await ctx.context.internalAdapter.findVerificationValue(
+								sessionLookupKey,
+							);
+						if (sessionLookup?.value) {
+							await ctx.context.internalAdapter
+								.deleteVerificationValue(sessionLookup.value)
+								.catch(() => {});
+							await ctx.context.internalAdapter
+								.deleteVerificationValue(sessionLookupKey)
+								.catch(() => {});
+						}
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(context) {
