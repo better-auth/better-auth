@@ -99,7 +99,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const body = getBody(ctx);
-			const adapter = getOrgAdapter(ctx.context, _options);
+			const adapter = getOrgAdapter<O>(ctx.context, _options);
 			const session = await getSessionFromCtx(ctx);
 			const isClient = ctx.request || ctx.headers;
 
@@ -159,7 +159,8 @@ export const createOrganization = <O extends OrganizationOptions>(
 			// Create the organization
 			let organization: InferOrganization<O, false>;
 			try {
-				organization = await adapter.createOrganization(organizationData);
+				const res = await adapter.createOrganization(organizationData);
+				organization = res as InferOrganization<O, false>;
 			} catch (error) {
 				ctx.context.logger.error("Failed to create organization:", error);
 				const msg = ORGANIZATION_ERROR_CODES.FAILED_TO_CREATE_ORGANIZATION;

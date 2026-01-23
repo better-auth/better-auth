@@ -157,6 +157,14 @@ export type InferTeam<
 		(TO["enableSlugs"] extends true ? { slug: string } : {})
 >;
 
+export type InferTeamMember<
+	TO extends TeamsOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	TeamMember &
+		InferAdditionalFieldsFromPluginOptions<"teamMember", TO, isClientSide>
+>;
+
 export type TeamHooks =
 	| {
 			/**
