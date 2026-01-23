@@ -186,7 +186,14 @@ export const siwe = (options: SIWEPluginOptions) =>
 				"/siwe/verify",
 				{
 					method: "POST",
-					body: verifySiweMessageBodyBaseSchema,
+					body: verifySiweMessageBodyBaseSchema.refine(
+						(data) => options.anonymous !== false || !!data.email,
+						{
+							message:
+								"Email is required when the anonymous plugin option is disabled.",
+							path: ["email"],
+						},
+					),
 					requireRequest: true,
 				},
 				async (ctx) => {
@@ -198,15 +205,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 						email,
 					} = ctx.body;
 
-					const walletAddress = toChecksumAddress(rawWalletAddress);
-					const isAnonymous = options.anonymous ?? true;
-
-					if (!isAnonymous && !email) {
-						throw APIError.fromStatus("BAD_REQUEST", {
-							message: "Email is required when anonymous is disabled.",
-							status: 400,
-						});
-					}
+						const walletAddress = toChecksumAddress(rawWalletAddress);
+						const isAnonymous = options.anonymous ?? true;
 
 						const verificationIdentifier = createWalletVerificationIdentifier(
 							walletAddress,
@@ -218,12 +218,12 @@ export const siwe = (options: SIWEPluginOptions) =>
 								verificationIdentifier,
 							);
 
-					if (!verification || new Date() > verification.expiresAt) {
-						throw APIError.from(
-							"UNAUTHORIZED",
-							SIWE_ERROR_CODES.INVALID_OR_EXPIRED_NONCE,
-						);
-					}
+						if (!verification || new Date() > verification.expiresAt) {
+							throw APIError.from(
+								"UNAUTHORIZED",
+								SIWE_ERROR_CODES.INVALID_OR_EXPIRED_NONCE,
+							);
+						}
 
 						await verifySiweMessageOrThrow(options, {
 							message,
