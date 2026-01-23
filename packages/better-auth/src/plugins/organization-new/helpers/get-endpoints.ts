@@ -13,6 +13,8 @@ import type { GetFullOrganization } from "../routes/organization/get-full-organi
 import { getFullOrganization } from "../routes/organization/get-full-organization";
 import type { GetOrganization } from "../routes/organization/get-organization";
 import { getOrganization } from "../routes/organization/get-organization";
+import type { ListOrganizations } from "../routes/organization/list-organizations";
+import { listOrganizations } from "../routes/organization/list-organizations";
 import type { SetActiveOrganization } from "../routes/organization/set-active-organization";
 import { setActiveOrganization } from "../routes/organization/set-active-organization";
 import type { UpdateOrganization } from "../routes/organization/update-organization";
@@ -27,6 +29,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	getFullOrganization: GetFullOrganization<O>;
 	getOrganization: GetOrganization<O>;
 	setActiveOrganization: SetActiveOrganization<O>;
+	listOrganizations: ListOrganizations<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -50,6 +53,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		getFullOrganization: getFullOrganization(options),
 		getOrganization: getOrganization(options),
 		setActiveOrganization: setActiveOrganization(options),
+		listOrganizations: listOrganizations(options),
 		...(addonEndpoints || {}),
 	};
 
