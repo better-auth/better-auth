@@ -29,8 +29,8 @@ import type { TwoFactorOptions, UserWithTwoFactor } from "./types";
 export * from "./error-code";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"two-factor": {
 			creator: typeof twoFactor;
 		};
