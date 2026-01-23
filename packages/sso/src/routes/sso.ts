@@ -2297,6 +2297,13 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch(() => {});
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
+						value: samlSessionKey,
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
 			}
 
 			const safeRedirectUrl = getSafeRedirectUrl(
@@ -2777,6 +2784,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						expiresAt: session.expiresAt,
 					})
 					.catch(() => {});
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
+						value: samlSessionKey,
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
 			}
 
 			throw ctx.redirect(callbackUrl);
@@ -3033,18 +3047,27 @@ export const initiateSLO = (options?: SSOOptions) => {
 			const idp = createIdP(config);
 
 			const session = ctx.context.session;
-			const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${session.user.email}`;
-			const stored =
-				await ctx.context.internalAdapter.findVerificationValue(key);
+			const sessionLookupKey = `${constants.SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
+			const sessionLookup =
+				await ctx.context.internalAdapter.findVerificationValue(
+					sessionLookupKey,
+				);
 
 			let nameID = session.user.email;
 			let sessionIndex: string | undefined;
 
-			if (stored) {
-				const data = safeJsonParse<SAMLSessionRecord>(stored.value);
-				if (data) {
-					nameID = data.nameID || nameID;
-					sessionIndex = data.sessionIndex;
+			if (sessionLookup) {
+				const samlSessionKey = sessionLookup.value;
+				const stored =
+					await ctx.context.internalAdapter.findVerificationValue(
+						samlSessionKey,
+					);
+				if (stored) {
+					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+					if (data) {
+						nameID = data.nameID || nameID;
+						sessionIndex = data.sessionIndex;
+					}
 				}
 			}
 
