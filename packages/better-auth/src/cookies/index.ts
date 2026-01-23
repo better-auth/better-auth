@@ -22,7 +22,12 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { sec } from "../utils/time";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
-import { createAccountStore, createSessionStore } from "./session-store";
+import {
+	createAccountStore,
+	createSessionStore,
+	getAccountCookie,
+	setAccountCookie,
+} from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
 	const secure =
@@ -228,6 +233,15 @@ export async function setCookieCache(
 			}
 
 			ctx.setCookie(ctx.context.authCookies.sessionData.name, data, options);
+		}
+	}
+	/**
+	 * If storeAccountCookie is enabled, refresh the account cookie to keep it in sync
+	 */
+	if (ctx.context.options.account?.storeAccountCookie) {
+		const accountData = await getAccountCookie(ctx);
+		if (accountData) {
+			await setAccountCookie(ctx, accountData);
 		}
 	}
 }
