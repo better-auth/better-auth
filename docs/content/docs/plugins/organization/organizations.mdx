@@ -160,6 +160,83 @@ Returns:
 type Result = { isTaken: boolean }
 ```
 
+
+## List Organizations
+
+You can list all organizations the current user is a member of using the `organization.list` method.
+
+<APIMethod
+    path="/organization/list"
+    method="GET"
+    requireSession>
+```ts
+type listOrganizations = {
+    /**
+     * The maximum number of organizations to return.
+     */
+    limit?: number = 10
+    /**
+     * The number of organizations to skip.
+     */
+    offset?: number = 0
+}
+```
+</APIMethod>
+
+Returns:
+```ts
+type Result = {
+    /**
+     * The list of organizations the user is a member of.
+     */
+    organizations: Organization[]
+    /**
+     * Total number of organizations the user is a member of.
+     */
+    total: number
+    /**
+     * The limit used for pagination.
+     */
+    limit: number
+    /**
+     * The offset used for pagination.
+     */
+    offset: number
+}
+```
+
+
+## Set Active Organization
+
+You can set the active organization for the current session using the `organization.setActive` method.
+The active organization is stored in the session and can be used to scope requests to a specific organization.
+
+You can learn more about [Active Organizations](/docs/plugins/organization-new/active-organization).
+
+<APIMethod
+    path="/organization/set-active"
+    method="POST"
+    requireSession
+>
+```ts
+type setActiveOrganization = {
+    /**
+     * The organization ID to set as active.
+     * Pass `null` to unset the active organization.
+     */
+    organizationId: string | null = "org-id"
+}
+```
+</APIMethod>
+
+Returns the organization object if an organization is set,
+or `null` if the active organization is unset.
+
+```ts
+type Result = Organization | null
+```
+
+
 ---
 
 ## Organization Related Options
