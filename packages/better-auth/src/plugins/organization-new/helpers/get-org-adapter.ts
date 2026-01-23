@@ -59,6 +59,84 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 	const orgAdapter = {
 		/**
+		 * Lists organizations for a user with optional pagination.
+		 * @param userId - The user id to list organizations for.
+		 * @param opts - Optional pagination options (limit, offset).
+		 * @returns The organizations and total count.
+		 */
+		listOrganizations: async (
+			userId: string,
+			opts?: {
+				limit?: number;
+				offset?: number;
+			},
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const { limit, offset } = opts || {};
+
+			// First, get member records for this user
+			const members = await adapter.findMany<{ organizationId: string }>({
+				model: "member",
+				where: [{ field: "userId", value: userId }],
+			});
+
+			const orgIds = members.map((m) => m.organizationId);
+
+			if (orgIds.length === 0) {
+				return {
+					organizations: [] as InferOrganization<O, false>[],
+					total: 0,
+				};
+			}
+
+			// Get total count
+			const total = orgIds.length;
+
+			// Apply pagination to org ids if needed
+			let paginatedOrgIds = orgIds;
+			if (offset !== undefined) {
+				paginatedOrgIds = paginatedOrgIds.slice(offset);
+			}
+			if (limit !== undefined) {
+				paginatedOrgIds = paginatedOrgIds.slice(0, limit);
+			}
+
+			if (paginatedOrgIds.length === 0) {
+				return {
+					organizations: [] as InferOrganization<O, false>[],
+					total,
+				};
+			}
+
+			// Fetch organizations by ids
+			const organizations = await adapter.findMany<InferOrganization<O, false>>(
+				{
+					model: "organization",
+					where: [{ field: "id", value: paginatedOrgIds, operator: "in" }],
+				},
+			);
+
+			// Parse metadata for each organization
+			const result = organizations.map((org) => {
+				const metadata = (() => {
+					const meta = org.metadata;
+					if (meta && typeof meta === "string") {
+						return parseJSON<Record<string, any>>(meta);
+					}
+					return meta;
+				})();
+				return filterOrgOutput({
+					...org,
+					metadata,
+				});
+			});
+
+			return {
+				organizations: result,
+				total,
+			};
+		},
+		/**
 		 *
 		 * @param organizationIdOrSlug - The organization id or slug to get the real organization id for.
 		 * @returns The real organization id.
