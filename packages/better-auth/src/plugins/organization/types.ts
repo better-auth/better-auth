@@ -887,7 +887,7 @@ export interface OrganizationOptions {
 				 * A callback that runs after a role is updated
 				 */
 				afterUpdateRole?: (data: {
-					role: (OrganizationRole & Record<string, any>);
+					role: OrganizationRole & Record<string, any>;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void>;
