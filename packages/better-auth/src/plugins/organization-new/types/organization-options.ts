@@ -259,7 +259,7 @@ type OrganizationOptionsSchema =
 			organization?: {
 				modelName?: string;
 				fields?: {
-					[key in keyof Omit<Organization, "id">]?: string;
+					[key in keyof Omit<Organization & { slug?: string }, "id">]?: string;
 				};
 				additionalFields?: {
 					[key in string]: DBFieldAttribute;
