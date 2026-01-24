@@ -71,6 +71,29 @@ await authClient.organization.inviteMember({
 
 ---
 
+## Getting an Invitation
+
+Before accepting or rejecting an invitation, users can retrieve the
+invitation details using the `organization.getInvitation` method.
+
+This returns information about the invitation including the organization name,
+inviter details, and assigned role.
+
+<APIMethod
+    path="/organization/get-invitation"
+    method="GET"
+    requireSession
+    note="The user's email must match the invitation email.">
+```ts
+type getInvitation = {
+    /**
+     * The ID of the invitation to retrieve.
+     */
+    id: string = "invitation-id"
+}
+```
+</APIMethod>
+
 ## Accepting an Invitation
 
 When a user receives an invitation, they can accept it using the `organization.acceptInvitation` method:
@@ -247,52 +270,3 @@ The invitation table includes the following fields:
 | `inviterId` | `string` | User who sent the invitation |
 | `expiresAt` | `Date` | Expiration timestamp |
 | `createdAt` | `Date` | Creation timestamp |
-
----
-
-## Permission Requirements
-
-By default, only members with `admin` or `owner` roles can create invitations.
-Members with the `member` role cannot invite others.
-
-You can customize this behavior using [Access Control](/docs/plugins/organization/access-control).
-
-<Callout type="warn">
-    Non-owners cannot invite users with the `owner` role. Only existing owners
-    can invite new owners to the organization.
-</Callout>
-
----
-
-## Error Handling
-
-Common errors when creating invitations:
-
-| Error Code | Description |
-|------------|-------------|
-| `USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION` | A pending invitation already exists for this email |
-| `USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION` | The user is already a member |
-| `INVITATION_LIMIT_REACHED` | Maximum pending invitations reached |
-| `YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION` | Insufficient permissions |
-| `YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE` | Cannot invite with this role (e.g., non-owner inviting owner) |
-| `MEMBER_NOT_FOUND` | The inviter is not a member of the organization |
-
-```ts
-const { data, error } = await authClient.organization.inviteMember({
-    email: "user@example.com",
-    role: "member",
-})
-
-if (error) {
-    switch (error.code) {
-        case "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION":
-            // Offer to resend
-            break
-        case "INVITATION_LIMIT_REACHED":
-            // Show upgrade prompt
-            break
-        default:
-            console.error(error.message)
-    }
-}
-```

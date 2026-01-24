@@ -316,18 +316,52 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: RealOrganizationId;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<InferMember<O, false>>({
+			const result = await adapter.findOne<
+				Omit<InferMember<O, false>, "user"> & { userId: string }
+			>({
 				model: "member",
 				where: [
 					{ field: "userId", value: data.userId },
 					{ field: "organizationId", value: data.organizationId },
 				],
 			});
-			return filterMemberOutput(member);
+			return result;
 		},
-		findOrganizationById: async (organizationId: string) => {
+		findMemberAndUserByOrgId: async (data: {
+			userId: string;
+			organizationId: RealOrganizationId;
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const field = options.defaultOrganizationIdField;
+			const result = await adapter.findOne<
+				InferMember<O, false> & { user: User }
+			>({
+				model: "member",
+				where: [
+					{ field: "userId", value: data.userId },
+					{ field: "organizationId", value: data.organizationId },
+				],
+				join: {
+					user: true,
+				},
+			});
+			if (!result || !result.user) return null;
+			const { user, ...member } = result;
+			return {
+				...filterMemberOutput(member),
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+			};
+		},
+		findOrganizationById: async (
+			organizationId: string,
+			idType?: "id" | "slug",
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const field = idType ?? options.defaultOrganizationIdField;
 			const value = organizationId;
 			const organization = await adapter.findOne<InferOrganization<O, false>>({
 				model: "organization",

@@ -89,8 +89,10 @@ export const cancelInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
+			const organizationId = invitation.organizationId;
 			const organization = await adapter.findOrganizationById(
-				invitation.organizationId,
+				organizationId,
+				"id",
 			);
 			if (!organization) {
 				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;

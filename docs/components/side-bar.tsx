@@ -180,8 +180,8 @@ function SidebarListItem({
 		const showChildren = isActive || hasActiveChild;
 		return (
 			<div>
-		<AsideLink
-			hasSubpages={listItem.hasSubpages}
+				<AsideLink
+					hasSubpages={listItem.hasSubpages}
 					href={listItem.href}
 					startWith="/docs"
 					title={listItem.title}

@@ -88,8 +88,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				organizationId: invitation.organizationId,
 			});
 
+			const organizationId = invitation.organizationId;
 			const organization = await adapter.findOrganizationById(
-				invitation.organizationId,
+				organizationId,
+				"id",
 			);
 			if (!organization) {
 				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
