@@ -27,10 +27,6 @@ const getOrganizationQuerySchema = z.optional(
 	}),
 );
 
-export type GetOrganization<O extends OrganizationOptions> = ReturnType<
-	typeof getOrganization<O>
->;
-
 export const getOrganization = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/get-organization",

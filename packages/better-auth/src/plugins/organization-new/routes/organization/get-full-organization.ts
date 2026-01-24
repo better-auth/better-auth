@@ -27,10 +27,6 @@ const getFullOrganizationQuerySchema = z.optional(
 	}),
 );
 
-export type GetFullOrganization<O extends OrganizationOptions> = ReturnType<
-	typeof getFullOrganization<O>
->;
-
 export const getFullOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) =>

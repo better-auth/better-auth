@@ -111,6 +111,27 @@ type rejectInvitation = {
 ```
 </APIMethod>
 
+## Canceling an Invitation
+
+Organization members with the appropriate permissions can cancel a pending
+invitation using the `organization.cancelInvitation` method:
+
+<APIMethod
+    path="/organization/cancel-invitation"
+    method="POST"
+    requireSession
+    note="Requires invitation:cancel permission. The caller must be a member of the organization."
+>
+```ts
+type cancelInvitation = {
+    /**
+     * The ID of the invitation to cancel.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
 ## Configuration Options
 
 ### `sendInvitationEmail`

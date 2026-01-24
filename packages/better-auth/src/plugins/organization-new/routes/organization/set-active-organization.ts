@@ -17,10 +17,6 @@ const setActiveOrganizationBodySchema = z.object({
 		.nullable(),
 });
 
-export type SetActiveOrganization<O extends OrganizationOptions> = ReturnType<
-	typeof setActiveOrganization<O>
->;
-
 export const setActiveOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {

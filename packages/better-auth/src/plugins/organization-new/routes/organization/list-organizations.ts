@@ -4,10 +4,6 @@ import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { InferOrganization, OrganizationOptions } from "../../types";
 
-export type ListOrganizations<O extends OrganizationOptions> = ReturnType<
-	typeof listOrganizations<O>
->;
-
 const listOrganizationsQuerySchema = z
 	.object({
 		limit: z.coerce
