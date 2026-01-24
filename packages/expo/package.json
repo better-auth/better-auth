@@ -14,7 +14,7 @@
   "homepage": "https://www.better-auth.com/docs/integrations/expo",
   "scripts": {
     "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "coverage": "vitest run --coverage --coverage.provider=v8",
     "lint:types": "attw --profile esm-only --pack .",
     "lint:package": "publint run --strict",
     "build": "tsdown",

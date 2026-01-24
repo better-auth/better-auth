@@ -18,7 +18,7 @@
     "lint:types": "attw --profile esm-only --pack .",
     "dev": "tsx ./src/index.ts",
     "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "coverage": "vitest run --coverage --coverage.provider=v8",
     "typecheck": "tsc --project tsconfig.json"
   },
   "publishConfig": {

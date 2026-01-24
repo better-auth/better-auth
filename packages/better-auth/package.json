@@ -27,7 +27,7 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "coverage": "vitest run --coverage --coverage.provider=v8",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
