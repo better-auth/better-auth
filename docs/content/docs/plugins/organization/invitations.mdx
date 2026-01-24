@@ -90,6 +90,27 @@ type acceptInvitation = {
 ```
 </APIMethod>
 
+## Rejecting an Invitation
+
+If a user doesn't want to join an organization, they can reject the
+invitation using the `organization.rejectInvitation` method:
+
+<APIMethod
+    path="/organization/reject-invitation"
+    method="POST"
+    requireSession
+    note="The user's email must match the invitation email."
+>
+```ts
+type rejectInvitation = {
+    /**
+     * The ID of the invitation to reject.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
 ## Configuration Options
 
 ### `sendInvitationEmail`

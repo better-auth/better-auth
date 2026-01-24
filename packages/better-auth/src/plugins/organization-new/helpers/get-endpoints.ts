@@ -5,6 +5,7 @@ import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
 import { acceptInvitation } from "../routes/invitations/accept-invitation";
 import { createInvitation } from "../routes/invitations/create-invitation";
+import { rejectInvitation } from "../routes/invitations/reject-invitation";
 import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
 import type { CreateOrganization } from "../routes/organization/create-organizations";
@@ -34,6 +35,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	listOrganizations: ListOrganizations<O>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
+	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -60,6 +62,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		listOrganizations: listOrganizations(options),
 		createInvitation: createInvitation(options),
 		acceptInvitation: acceptInvitation(options),
+		rejectInvitation: rejectInvitation(options),
 		...(addonEndpoints || {}),
 	};
 
