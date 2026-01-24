@@ -293,7 +293,7 @@ describe("get invitation", async (it) => {
 	});
 
 	it("should not get invitation without authentication", async () => {
-		const invitedEmail = `get-noauth-${crypto.randomUUID()}@test.com`;
+		const invitedEmail = `get-no-auth-${crypto.randomUUID()}@test.com`;
 
 		// Sign up the invited user
 		await auth.api.signUpEmail({
