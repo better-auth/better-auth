@@ -12,6 +12,10 @@ const checkOrganizationSlugBodySchema = z.object({
 	}),
 });
 
+export type CheckOrganizationSlug<O extends OrganizationOptions> = ReturnType<
+	typeof checkOrganizationSlug<O>
+>;
+
 export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	options: O,
 ) => {

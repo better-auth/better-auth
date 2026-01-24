@@ -6,6 +6,10 @@ import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgMiddleware } from "../../middleware/org-middleware";
 import type { OrganizationOptions } from "../../types";
 
+export type ListUserInvitations<O extends OrganizationOptions> = ReturnType<
+	typeof listUserInvitations<O>
+>;
+
 /**
  * List all invitations a user has received
  */

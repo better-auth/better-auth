@@ -43,6 +43,10 @@ const baseUpdateOrganizationSchema = z.object({
 		.optional(),
 });
 
+export type UpdateOrganization<O extends OrganizationOptions> = ReturnType<
+	typeof updateOrganization<O>
+>;
+
 export const updateOrganization = <O extends OrganizationOptions>(
 	options?: O | undefined,
 ) => {
