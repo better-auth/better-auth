@@ -590,9 +590,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return invitation.filter(
-				(invite) => new Date(invite.expiresAt) > new Date(),
-			);
+			return invitation
+				.filter((invite) => new Date(invite.expiresAt) > new Date())
+				.map(filterInvitationOutput);
 		},
 		updateInvitation: async (data: {
 			invitationId: string;
@@ -611,7 +611,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					status: data.status,
 				},
 			});
-			return invitation;
+			return filterInvitationOutput(invitation);
 		},
 		findPendingInvitations: async (data: {
 			organizationId: RealOrganizationId;
@@ -638,9 +638,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					},
 				],
 			});
-			return invitations.filter(
-				(invite) => new Date(invite.expiresAt) > new Date(),
-			);
+			return invitations
+				.filter((invite) => new Date(invite.expiresAt) > new Date())
+				.map(filterInvitationOutput);
 		},
 		createInvitation: async ({
 			invitation,
@@ -672,7 +672,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				},
 			});
 
-			return invite;
+			return filterInvitationOutput(invite);
 		},
 		countMembers: async (data: { organizationId: RealOrganizationId }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -695,8 +695,77 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			});
 			if (!invitation) return null;
 			return {
-				...invitation,
+				...filterInvitationOutput(invitation),
 				organizationId: invitation.organizationId as RealOrganizationId,
+			};
+		},
+		/**
+		 * Lists invitations for an organization with optional pagination.
+		 * @param data - Options including organizationId and pagination parameters.
+		 * @returns The invitations and total count.
+		 */
+		listInvitations: async (data: {
+			organizationId: RealOrganizationId;
+			limit?: number;
+			offset?: number;
+			sortBy?: "createdAt" | "expiresAt" | "email" | "status";
+			sortDirection?: "asc" | "desc";
+			/**
+			 * Filter by invitation status. If not provided, returns all invitations.
+			 */
+			status?: "pending" | "accepted" | "rejected" | "canceled";
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const {
+				organizationId,
+				limit,
+				offset,
+				sortBy = "createdAt",
+				sortDirection = "desc",
+				status,
+			} = data;
+
+			// Build where conditions
+			const whereConditions: Array<{
+				field: string;
+				value: string | Date;
+				operator?: "gt" | "eq";
+			}> = [
+				{
+					field: "organizationId",
+					value: organizationId,
+				},
+			];
+
+			// Add status filter if provided
+			if (status) {
+				whereConditions.push({
+					field: "status",
+					value: status,
+				});
+			}
+
+			// Get total count first
+			const total = await adapter.count({
+				model: "invitation",
+				where: whereConditions,
+			});
+
+			// Fetch invitations with pagination and sorting
+			const invitations = await adapter.findMany<InferInvitation<O, false>>({
+				model: "invitation",
+				where: whereConditions,
+				limit,
+				offset,
+				sortBy: {
+					field: sortBy,
+					direction: sortDirection,
+				},
+			});
+
+			return {
+				invitations: invitations.map(filterInvitationOutput),
+				total,
 			};
 		},
 	};

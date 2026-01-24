@@ -41,7 +41,8 @@ export const getOrganizationId = async <
 	const isClient = ctx.request || ctx.headers;
 	if (!session && isClient) throw APIError.fromStatus("UNAUTHORIZED");
 
-	const paramProvidedId: string | undefined = ctx.body.organizationId;
+	const paramProvidedId: string | undefined =
+		ctx.body.organizationId || ctx.query?.organizationId;
 	if (paramProvidedId) {
 		if (shouldGetOrganization) {
 			const organization = await adapter.findOrganizationById(paramProvidedId);

@@ -155,6 +155,59 @@ type cancelInvitation = {
 ```
 </APIMethod>
 
+## Listing Invitations
+
+Organization members can retrieve all invitations for their organization
+using the `organization.listInvitations` method. This endpoint supports
+pagination, sorting, and filtering.
+
+<APIMethod
+    path="/organization/list-invitations"
+    method="GET"
+    requireSession
+    note="The caller must be a member of the organization."
+>
+```ts
+type listInvitations = {
+    /**
+     * The ID of the organization to list invitations for.
+     * If not provided, uses the active organization from the session.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Maximum number of invitations to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of invitations to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt", "expiresAt", "email", "status"
+     */
+    sortBy?: "createdAt" | "expiresAt" | "email" | "status" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * Filter by invitation status.
+     */
+    status?: "pending" | "accepted" | "rejected" | "canceled"
+}
+```
+</APIMethod>
+
+The response includes the list of invitations and the total count for pagination:
+
+```ts
+type ListInvitationsResponse = {
+    invitations: Invitation[]
+    total: number
+}
+```
+
 ## Configuration Options
 
 ### `sendInvitationEmail`
