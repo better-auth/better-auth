@@ -46,7 +46,7 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				data: teamData,
 				forceAllowId: true,
 			});
-			return filterTeamOutput(team);
+			return filterTeamOutput(team) as InferTeam<O, false>;
 		},
 		createTeamMember: async (props: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);

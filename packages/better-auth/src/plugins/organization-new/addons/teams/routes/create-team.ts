@@ -107,14 +107,14 @@ export const createTeam = <O extends TeamsOptions>(
 		async (ctx) => {
 			const body = getBody(ctx);
 			const session = await getSessionFromCtx(ctx);
-			const organizationId = await getOrganizationId({ ctx });
-
 			const orgAdapter = getOrgAdapter(ctx.context, ctx.context.orgOptions);
 			const teamAdapter = getTeamAdapter(ctx.context, options);
+			const orgId = await getOrganizationId({ ctx });
+			const realOrganizationId = await orgAdapter.getRealOrganizationId(orgId);
 
 			if (session) {
 				const userId = session.user.id;
-				const IDs = { userId, organizationId };
+				const IDs = { userId, organizationId: realOrganizationId };
 				const member = await orgAdapter.findMemberByOrgId(IDs);
 
 				if (!member) {
@@ -129,7 +129,7 @@ export const createTeam = <O extends TeamsOptions>(
 						role: member.role,
 						options: ctx.context.orgOptions,
 						permissions,
-						organizationId,
+						organizationId: realOrganizationId,
 					},
 					ctx,
 				);
@@ -141,8 +141,12 @@ export const createTeam = <O extends TeamsOptions>(
 				}
 			}
 
-			const existingTeamCount = await teamAdapter.getTeamCount(organizationId);
-			const maximum = await options.maximumTeams({ organizationId, session });
+			const existingTeamCount =
+				await teamAdapter.getTeamCount(realOrganizationId);
+			const maximum = await options.maximumTeams({
+				organizationId: realOrganizationId,
+				session,
+			});
 
 			const maxTeamsReached = maximum ? existingTeamCount >= maximum : false;
 			if (maxTeamsReached) {
@@ -153,7 +157,7 @@ export const createTeam = <O extends TeamsOptions>(
 
 			const { organizationId: _, name, slug, ...additionalFields } = body;
 
-			const org = await orgAdapter.findOrganizationById(organizationId);
+			const org = await orgAdapter.findOrganizationById(realOrganizationId);
 			if (!org) {
 				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 				throw APIError.from("BAD_REQUEST", msg);
@@ -179,7 +183,7 @@ export const createTeam = <O extends TeamsOptions>(
 			const teamData = await (async () => {
 				const team = {
 					name,
-					organizationId,
+					organizationId: realOrganizationId as string,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					...(enableSlugs ? { slug } : {}),
@@ -195,7 +199,7 @@ export const createTeam = <O extends TeamsOptions>(
 				return { ...team, ...(response || {}) };
 			})();
 
-			let team: InferTeam<O>;
+			let team: InferTeam<O, false>;
 			try {
 				team = await teamAdapter.createTeam(teamData);
 			} catch (error) {
