@@ -595,6 +595,8 @@ describe("base context creation", () => {
 		});
 
 		it("should return false when generateId is false", async () => {
+			const warnFn = vi.fn();
+			vi.spyOn(console, "error").mockImplementation(warnFn);
 			const res = await initBase({
 				advanced: {
 					database: {
@@ -602,6 +604,10 @@ describe("base context creation", () => {
 					},
 				},
 			});
+			expect(warnFn).toHaveBeenCalled();
+			const regex = /Misconfiguration detected/;
+			expect(warnFn).toHaveBeenCalledWith(expect.stringMatching(regex));
+			vi.spyOn(console, "error").mockRestore();
 			const id = res.generateId({ model: "user" });
 			expect(id).toBe(false);
 		});
