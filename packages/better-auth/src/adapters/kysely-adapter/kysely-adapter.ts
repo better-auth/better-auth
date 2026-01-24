@@ -44,8 +44,12 @@ interface KyselyAdapterConfig {
 	transaction?: boolean | undefined;
 }
 
+function escapePostgresArrayValue(value: string) {
+	return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
 function toPostgresArray(value: string[]) {
-	return `{${value.map((v) => `"${v}"`).join(",")}}`;
+	return `{${value.map((v) => `"${escapePostgresArrayValue(v)}"`).join(",")}}`;
 }
 
 export const kyselyAdapter = (
