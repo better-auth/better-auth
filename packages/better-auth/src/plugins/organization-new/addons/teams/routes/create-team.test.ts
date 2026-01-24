@@ -1,11 +1,8 @@
 import { describe, expect, expectTypeOf } from "vitest";
 import { organization } from "../../../organization";
 import { getOrganizationData } from "../../../test/utils";
-import type { OrganizationOptions } from "../../../types";
 import { teams } from "..";
-import { getTeamAdapter } from "../helpers/get-team-adapter";
 import { defineInstance, getTeamData } from "../tests/utils";
-import type { TeamsOptions } from "../types";
 
 describe("teams", async (it) => {
 	const { signInWithTestUser, auth } = await defineInstance([
