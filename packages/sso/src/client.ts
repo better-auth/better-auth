@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { SSOPlugin } from "./index";
 
 interface SSOClientOptions {
