@@ -280,10 +280,7 @@ export const createInvitation = <O extends OrganizationOptions>(
 				const existingInvitation = alreadyInvited[0]!;
 
 				// Update the invitation's expiration date using the same logic as createInvitation
-				const newExpiresAt = getDate(
-					ctx.context.orgOptions.invitationExpiresIn,
-					"sec",
-				);
+				const newExpiresAt = getDate(options.invitationExpiresIn, "sec");
 
 				await ctx.context.adapter.update({
 					model: "invitation",
@@ -320,13 +317,10 @@ export const createInvitation = <O extends OrganizationOptions>(
 					),
 				);
 
-				return ctx.json(updatedInvitation);
+				return ctx.json({ invitation: updatedInvitation, organization });
 			}
 
-			if (
-				alreadyInvited.length &&
-				ctx.context.orgOptions.cancelPendingInvitationsOnReInvite
-			) {
+			if (alreadyInvited.length && options.cancelPendingInvitationsOnReInvite) {
 				const invitation = alreadyInvited[0]!;
 				await adapter.updateInvitation({
 					invitationId: invitation.id,
@@ -449,7 +443,7 @@ export const createInvitation = <O extends OrganizationOptions>(
 			});
 
 			await ctx.context.runInBackgroundOrAwait(
-				ctx.context.orgOptions.sendInvitationEmail(
+				options.sendInvitationEmail(
 					{
 						id: invitation.id,
 						role: invitation.role,
