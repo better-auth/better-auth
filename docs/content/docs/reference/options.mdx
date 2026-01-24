@@ -571,7 +571,7 @@ export const auth = betterAuth({
 	logger: {
 		disabled: false,
 		disableColors: false,
-		level: "error",
+		level: "warn",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
 			console.log(`[${level}] ${message}`, ...args);
