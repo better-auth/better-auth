@@ -115,6 +115,11 @@
       "types": "./dist/db/index.d.mts",
       "default": "./dist/db/index.mjs"
     },
+    "./utils": {
+      "dev-source": "./src/utils/index.ts",
+      "types": "./dist/utils/index.d.mts",
+      "default": "./dist/utils/index.mjs"
+    },
     "./vue": {
       "dev-source": "./src/client/vue/index.ts",
       "types": "./dist/client/vue/index.d.mts",
