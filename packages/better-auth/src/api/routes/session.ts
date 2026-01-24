@@ -556,7 +556,7 @@ export const sessionMiddleware = createAuthMiddleware(async (ctx) => {
 });
 
 /**
- * The middleware attaches the session to the request context if present, without requiring authentication.
+ * The middleware attaches the user session to the request context if present, without requiring authentication.
  */
 export const optionalSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const session = await getSessionFromCtx(ctx);
