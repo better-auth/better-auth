@@ -39,12 +39,12 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 		},
 		createTeam: async (teamData: Omit<Team, "id"> & Record<string, any>) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<Team, InferTeam<O>>({
+			const team = await adapter.create<Team, InferTeam<O, false>>({
 				model: "team",
 				data: teamData,
 				forceAllowId: true,
 			});
-			return filterTeamOutput(team);
+			return filterTeamOutput(team) as InferTeam<O, false>;
 		},
 		createTeamMember: async (props: { teamId: string; userId: string }) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
