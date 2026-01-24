@@ -300,7 +300,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				);
 			}
-			let toBeRemovedMember: InferMember<O> | null = null;
+			let toBeRemovedMember: InferMember<O, false> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
@@ -311,7 +311,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				if (!result) toBeRemovedMember = null;
 				else {
 					const { user: _user, ...member } = result;
-					toBeRemovedMember = member as unknown as InferMember<O>;
+					toBeRemovedMember = member as unknown as InferMember<O, false>;
 				}
 			}
 			if (!toBeRemovedMember) {
