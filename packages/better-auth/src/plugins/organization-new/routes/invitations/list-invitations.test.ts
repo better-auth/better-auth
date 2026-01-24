@@ -6,8 +6,9 @@ describe("list invitations", async (it) => {
 	const plugin = organization({
 		async sendInvitationEmail(data, request) {},
 	});
-	const { auth, signInWithTestUser, signInWithUser } =
-		await defineInstance([plugin]);
+	const { auth, signInWithTestUser, signInWithUser } = await defineInstance([
+		plugin,
+	]);
 	const { headers } = await signInWithTestUser();
 
 	// Create an organization for testing
@@ -467,7 +468,7 @@ describe("list invitations", async (it) => {
 			auth.api.listInvitations({
 				headers: newHeaders,
 			}),
-		).rejects.toThrow("Organization ID is required");
+		).rejects.toThrow("No active organization");
 	});
 
 	describe("disable slugs", async (it) => {
@@ -624,7 +625,9 @@ describe("list invitations", async (it) => {
 			});
 
 			expect(pendingResult.total).toBe(1);
-			expect((pendingResult.invitations[0] as any).organizationSlug).toBeUndefined();
+			expect(
+				(pendingResult.invitations[0] as any).organizationSlug,
+			).toBeUndefined();
 		});
 	});
 });

@@ -208,6 +208,46 @@ type ListInvitationsResponse = {
 }
 ```
 
+## Listing User Invitations
+
+Users can retrieve all pending invitations they have received across all organizations
+using the `organization.listUserInvitations` method.
+
+<APIMethod
+    path="/organization/list-user-invitations"
+    method="GET"
+    requireSession
+    note="Returns only pending invitations. Server-side calls can optionally pass an email query parameter."
+>
+```ts
+type listUserInvitations = {
+    /**
+     * The email of the user to list invitations for.
+     * Only available for server-side API calls.
+     * If not provided, uses the authenticated user's email.
+     */
+    email?: string = "user@example.com"
+}
+```
+</APIMethod>
+
+The response is an array of pending invitations:
+
+```ts
+type ListUserInvitationsResponse = Array<{
+    id: string
+    email: string
+    role: string
+    organizationId: string
+    organizationName: string
+    inviterId: string
+    teamId: string | null
+    status: string
+    expiresAt: string
+    createdAt: string
+}>
+```
+
 ## Configuration Options
 
 ### `sendInvitationEmail`
