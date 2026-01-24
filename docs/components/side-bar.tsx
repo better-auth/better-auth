@@ -23,7 +23,7 @@ export default function ArticleLayout() {
 			item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
-					listItem.children?.some((child) => child.href === pathname),
+					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)),
 			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
