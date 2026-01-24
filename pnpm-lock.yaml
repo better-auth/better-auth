@@ -1118,6 +1118,9 @@ importers:
 
   e2e/smoke:
     devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@better-auth/redis-storage':
         specifier: workspace:*
         version: link:../../packages/redis-storage
@@ -1127,6 +1130,9 @@ importers:
       ioredis:
         specifier: ^5.7.0
         version: 5.7.0
+      msw:
+        specifier: ^2.12.4
+        version: 2.12.7(@types/node@25.0.9)(typescript@5.9.3)
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:

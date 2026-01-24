@@ -2,9 +2,11 @@
   "name": "@better-auth-test/smoke",
   "type": "module",
   "devDependencies": {
+    "@better-auth/core": "workspace:*",
     "@better-auth/redis-storage": "workspace:*",
     "better-auth": "workspace:*",
-    "ioredis": "^5.7.0"
+    "ioredis": "^5.7.0",
+    "msw": "^2.12.4"
   },
   "scripts": {
     "e2e:smoke": "node --test ./test/*.spec.ts"

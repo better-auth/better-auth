@@ -1,5 +1,5 @@
-import type { SecondaryStorage } from '@better-auth/core/db'
-import type Redis from 'ioredis'
+import type { SecondaryStorage } from "@better-auth/core/db";
+import type Redis from "ioredis";
 
 export interface RedisStorageConfig {
 	/**
@@ -61,15 +61,15 @@ export function redisStorage(config: RedisStorageConfig) {
 
 		async listKeys(): Promise<string[]> {
 			const keys = await client.keys(`${keyPrefix}*`);
-			return keys.map((key) => key.replace(keyPrefix, ''));
+			return keys.map((key) => key.replace(keyPrefix, ""));
 		},
 
 		async clear(): Promise<void> {
 			const keys = await client.keys(`${keyPrefix}*`);
 			await client.del(...keys);
-		}
+		},
 	} satisfies SecondaryStorage & {
-		listKeys: () => Promise<string[]>,
-		clear: () => Promise<void>
-	}
+		listKeys: () => Promise<string[]>;
+		clear: () => Promise<void>;
+	};
 }
