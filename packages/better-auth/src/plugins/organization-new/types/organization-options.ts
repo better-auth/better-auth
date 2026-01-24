@@ -13,7 +13,11 @@ export type ResolvedOrganizationOptions = {
 	allowUserToCreateOrganization: (user: User) => Awaitable<boolean>;
 	organizationLimit: (user: User) => Awaitable<number>;
 	creatorRole: string;
-	membershipLimit: number;
+	membershipLimit: (
+		user: User,
+		organization: Organization,
+		ctx: GenericEndpointContext,
+	) => Awaitable<number>;
 	disableSlugs: boolean;
 	roles: Record<string, Role>;
 	defaultOrganizationIdField: "id" | "slug";
@@ -119,7 +123,13 @@ type OrgOptions = {
 	 *
 	 * @default 100
 	 */
-	membershipLimit?: number;
+	membershipLimit?:
+		| number
+		| ((
+				user: User,
+				organization: Organization,
+				ctx: GenericEndpointContext,
+		  ) => Awaitable<number>);
 	/**
 	 * Whether to disable slugs for organizations.
 	 *

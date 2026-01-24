@@ -640,6 +640,31 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 
 			return invite;
 		},
+		countMembers: async (data: { organizationId: RealOrganizationId }) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const count = await adapter.count({
+				model: "member",
+				where: [{ field: "organizationId", value: data.organizationId }],
+			});
+			return count;
+		},
+		findInvitationById: async (id: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitation = await adapter.findOne<InferInvitation<O, false>>({
+				model: "invitation",
+				where: [
+					{
+						field: "id",
+						value: id,
+					},
+				],
+			});
+			if (!invitation) return null;
+			return {
+				...invitation,
+				organizationId: invitation.organizationId as RealOrganizationId,
+			};
+		},
 	};
 	return orgAdapter;
 };
