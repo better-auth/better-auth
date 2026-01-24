@@ -1117,10 +1117,16 @@ importers:
         version: 7.3.1(@types/node@25.0.9)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   e2e/smoke:
-    dependencies:
+    devDependencies:
+      '@better-auth/redis-storage':
+        specifier: workspace:*
+        version: link:../../packages/redis-storage
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
+      ioredis:
+        specifier: ^5.7.0
+        version: 5.7.0
 
   e2e/smoke/test/fixtures/cloudflare:
     dependencies:
@@ -1728,6 +1734,27 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+
+  packages/redis-storage:
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      '@types/node':
+        specifier: ^25.0.9
+        version: 25.0.9
+      ioredis:
+        specifier: ^5.0.0
+        version: 5.7.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.19.0(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.3)(publint@0.3.16)(synckit@0.11.11)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: catalog:vitest
+        version: 4.0.17(@opentelemetry/api@1.9.0)(@types/node@25.0.9)(@vitest/ui@4.0.17)(happy-dom@20.0.11)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.9)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   packages/scim:
     dependencies:
@@ -17923,7 +17950,7 @@ snapshots:
       '@babel/helper-module-imports': 7.27.1
       '@babel/helper-plugin-utils': 7.27.1
       '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.28.5)
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
     transitivePeerDependencies:
       - supports-color
 
@@ -17934,7 +17961,7 @@ snapshots:
       '@babel/helper-module-imports': 7.27.1
       '@babel/helper-plugin-utils': 7.27.1
       '@babel/plugin-syntax-jsx': 7.27.1(@babel/core@7.28.6)
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
     transitivePeerDependencies:
       - supports-color
 
@@ -19522,7 +19549,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.30(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
+      expo: 54.0.30(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.80.2(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -19609,7 +19636,7 @@ snapshots:
       '@expo/json-file': 10.0.8
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3
-      expo: 54.0.30(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
+      expo: 54.0.30(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.80.2(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
       resolve-from: 5.0.0
       semver: 7.7.3
       xml2js: 0.6.0
@@ -22318,7 +22345,9 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -23291,7 +23320,7 @@ snapshots:
       '@babel/code-frame': 7.26.2
       '@babel/core': 7.28.5
       '@babel/traverse': 7.28.5
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
       '@tanstack/router-utils': 1.139.0
       babel-dead-code-elimination: 1.0.10
       tiny-invariant: 1.3.3
@@ -23629,7 +23658,7 @@ snapshots:
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
-      '@types/node': 24.10.1
+      '@types/node': 25.0.9
 
   '@types/braces@3.0.5': {}
 
@@ -23650,7 +23679,7 @@ snapshots:
 
   '@types/connect@3.4.38':
     dependencies:
-      '@types/node': 24.10.1
+      '@types/node': 25.0.9
 
   '@types/cookie@0.6.0': {}
 
@@ -24410,7 +24439,7 @@ snapshots:
       '@babel/core': 7.28.5
       '@babel/parser': 7.28.6
       '@babel/traverse': 7.28.5
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
     transitivePeerDependencies:
       - supports-color
 
@@ -26520,7 +26549,7 @@ snapshots:
 
   expo-keep-awake@15.0.8(expo@54.0.30)(react@19.2.3):
     dependencies:
-      expo: 54.0.30(@babel/core@7.28.5)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.5)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.5))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
+      expo: 54.0.30(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.21)(graphql@16.12.0)(react-native@0.80.2(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3)
       react: 19.2.3
 
   expo-linking@7.1.7(expo@54.0.30)(react-native@0.80.2(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@types/react@19.2.7)(react@19.2.3))(react@19.2.3):
@@ -28570,7 +28599,7 @@ snapshots:
 
   magicast@0.2.11:
     dependencies:
-      '@babel/parser': 7.28.5
+      '@babel/parser': 7.28.6
       '@babel/types': 7.28.6
       recast: 0.23.11
 
@@ -29040,7 +29069,7 @@ snapshots:
     dependencies:
       '@babel/traverse': 7.28.5
       '@babel/traverse--for-generate-function-map': '@babel/traverse@7.28.6'
-      '@babel/types': 7.28.5
+      '@babel/types': 7.28.6
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
       metro-symbolicate: 0.82.5
