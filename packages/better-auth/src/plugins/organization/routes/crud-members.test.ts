@@ -48,7 +48,7 @@ describe("listMembers", async () => {
 		const user = await ctx.adapter.create({
 			model: "user",
 			data: {
-				email: generateEmail(`test${i}`),
+				email: generateEmail({ prefix: `test${i}` }),
 				name: `test${i}`,
 			},
 		});
@@ -407,7 +407,7 @@ describe("activeMemberRole", async () => {
 		const user = await ctx.adapter.create({
 			model: "user",
 			data: {
-				email: generateEmail(`test${i}`),
+				email: generateEmail({ prefix: `test${i}` }),
 				name: `test${i}`,
 			},
 		});

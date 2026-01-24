@@ -2153,7 +2153,7 @@ describe("stripe", () => {
 		);
 		const ctx = await auth.$context;
 
-		const testEmail = generateEmail("periodend");
+		const testEmail = generateEmail({ prefix: "periodend" });
 		const userRes = await client.signUp.email(
 			{ ...testUser, email: testEmail },
 			{ throw: true },

@@ -537,7 +537,7 @@ describe("delete user", async () => {
 				},
 			);
 
-		const uniqueEmail = generateEmail("cache-test");
+		const uniqueEmail = generateEmail({ prefix: "cache-test" });
 		const testPassword = "testPassword123";
 
 		await cacheClient.signUp.email({

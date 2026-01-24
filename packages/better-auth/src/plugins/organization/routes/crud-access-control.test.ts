@@ -102,7 +102,7 @@ describe("dynamic access control", async (it) => {
 
 	async function createUser({ role }: { role: "admin" | "member" | "owner" }) {
 		const normalUserDetails = {
-			email: generateEmail("some-test-user"),
+			email: generateEmail({ prefix: "some-test-user" }),
 			name: `some-test-user`,
 			password: `some-test-user-${crypto.randomUUID()}`,
 		};

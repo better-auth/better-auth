@@ -735,7 +735,7 @@ describe("multi team support", async (it) => {
 	});
 
 	it("should remove a member from the organization and all their teams when calling leaveOrganization", async () => {
-		const testUserEmail = generateEmail("leaveorguser");
+		const testUserEmail = generateEmail({ prefix: "leaveorguser" });
 
 		const userHeaders = new Headers();
 		const response = await auth.api.signUpEmail({

@@ -1332,12 +1332,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should allow rejecting expired invitations", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: generateEmail("admin"),
+			email: generateEmail({ prefix: "admin" }),
 			password: rng,
 			name: `admin-${rng}`,
 		};
 		const invitedUser = {
-			email: generateEmail("invited"),
+			email: generateEmail({ prefix: "invited" }),
 			password: rng,
 			name: `invited-${rng}`,
 		};
@@ -1385,12 +1385,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should only list pending invitations for a user", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: generateEmail("admin2"),
+			email: generateEmail({ prefix: "admin2" }),
 			password: rng,
 			name: `admin2-${rng}`,
 		};
 		const invitedUser = {
-			email: generateEmail("invited2"),
+			email: generateEmail({ prefix: "invited2" }),
 			password: rng,
 			name: `invited2-${rng}`,
 		};
@@ -1453,12 +1453,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should not list rejected invitations", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: generateEmail("admin3"),
+			email: generateEmail({ prefix: "admin3" }),
 			password: rng,
 			name: `admin3-${rng}`,
 		};
 		const invitedUser = {
-			email: generateEmail("invited3"),
+			email: generateEmail({ prefix: "invited3" }),
 			password: rng,
 			name: `invited3-${rng}`,
 		};

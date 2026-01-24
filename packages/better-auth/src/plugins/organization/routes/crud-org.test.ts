@@ -231,7 +231,7 @@ describe("get-full-organization", async () => {
 		for (let i = 3; i <= 5; i++) {
 			const newUser = await auth.api.signUpEmail({
 				body: {
-					email: generateEmail(`test-${i}`),
+					email: generateEmail({ prefix: `test-${i}` }),
 					password: "password",
 					name: `test${i}`,
 				},
