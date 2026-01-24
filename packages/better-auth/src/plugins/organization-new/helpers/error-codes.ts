@@ -93,4 +93,8 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	USER_EMAIL_CANNOT_BE_PASSED_FOR_CLIENT_SIDE_API_CALLS:
+		"User email cannot be passed for client side API calls",
+	MISSING_SESSION_HEADERS_OR_EMAIL_QUERY_PARAMETER:
+		"Missing session headers, or email query parameter",
 });

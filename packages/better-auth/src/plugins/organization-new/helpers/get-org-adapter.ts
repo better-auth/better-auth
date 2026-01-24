@@ -768,6 +768,24 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				total,
 			};
 		},
+		listUserInvitations: async (email: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const invitations = await adapter.findMany<
+				InferInvitation<O, false> & {
+					organization: InferOrganization<O, false>;
+				}
+			>({
+				model: "invitation",
+				where: [{ field: "email", value: email.toLowerCase() }],
+				join: {
+					organization: true,
+				},
+			});
+			return invitations.map(({ organization, ...inv }) => ({
+				...filterInvitationOutput(inv),
+				organizationName: organization.name,
+			}));
+		},
 	};
 	return orgAdapter;
 };
