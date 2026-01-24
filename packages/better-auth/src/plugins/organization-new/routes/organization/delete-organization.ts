@@ -16,10 +16,6 @@ const deleteOrganizationBodySchema = z.object({
 	}),
 });
 
-export type DeleteOrganization<O extends OrganizationOptions> = ReturnType<
-	typeof deleteOrganization<O>
->;
-
 export const deleteOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {

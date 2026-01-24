@@ -4,38 +4,32 @@ import { getSessionFromCtx } from "../../../api";
 import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
 import { acceptInvitation } from "../routes/invitations/accept-invitation";
+import { cancelInvitation } from "../routes/invitations/cancel-invitation";
 import { createInvitation } from "../routes/invitations/create-invitation";
 import { rejectInvitation } from "../routes/invitations/reject-invitation";
-import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
-import type { CreateOrganization } from "../routes/organization/create-organizations";
 import { createOrganization } from "../routes/organization/create-organizations";
-import type { DeleteOrganization } from "../routes/organization/delete-organization";
 import { deleteOrganization } from "../routes/organization/delete-organization";
-import type { GetFullOrganization } from "../routes/organization/get-full-organization";
 import { getFullOrganization } from "../routes/organization/get-full-organization";
-import type { GetOrganization } from "../routes/organization/get-organization";
 import { getOrganization } from "../routes/organization/get-organization";
-import type { ListOrganizations } from "../routes/organization/list-organizations";
 import { listOrganizations } from "../routes/organization/list-organizations";
-import type { SetActiveOrganization } from "../routes/organization/set-active-organization";
 import { setActiveOrganization } from "../routes/organization/set-active-organization";
-import type { UpdateOrganization } from "../routes/organization/update-organization";
 import { updateOrganization } from "../routes/organization/update-organization";
 import type { Addon, OrganizationOptions } from "../types";
 
 type BaseEndpoints<O extends OrganizationOptions> = {
-	createOrganization: CreateOrganization<O>;
-	checkOrganizationSlug: CheckOrganizationSlug<O>;
-	updateOrganization: UpdateOrganization<O>;
-	deleteOrganization: DeleteOrganization<O>;
-	getFullOrganization: GetFullOrganization<O>;
-	getOrganization: GetOrganization<O>;
-	setActiveOrganization: SetActiveOrganization<O>;
-	listOrganizations: ListOrganizations<O>;
+	createOrganization: ReturnType<typeof createOrganization<O>>;
+	checkOrganizationSlug: ReturnType<typeof checkOrganizationSlug<O>>;
+	updateOrganization: ReturnType<typeof updateOrganization<O>>;
+	deleteOrganization: ReturnType<typeof deleteOrganization<O>>;
+	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
+	getOrganization: ReturnType<typeof getOrganization<O>>;
+	setActiveOrganization: ReturnType<typeof setActiveOrganization<O>>;
+	listOrganizations: ReturnType<typeof listOrganizations<O>>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
+	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -63,6 +57,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		createInvitation: createInvitation(options),
 		acceptInvitation: acceptInvitation(options),
 		rejectInvitation: rejectInvitation(options),
+		cancelInvitation: cancelInvitation(options),
 		...(addonEndpoints || {}),
 	};
 
