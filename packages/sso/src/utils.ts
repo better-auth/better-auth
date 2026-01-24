@@ -1,3 +1,5 @@
+import { X509Certificate } from "node:crypto";
+
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
  * This handles cases where ORMs like Drizzle might return already parsed objects
@@ -29,13 +31,51 @@ export function safeJsonParse<T>(
 	return null;
 }
 
+/**
+ * Checks if a domain matches any domain in a comma-separated list.
+ */
+export const domainMatches = (searchDomain: string, domainList: string) => {
+	const search = searchDomain.toLowerCase();
+	const domains = domainList
+		.split(",")
+		.map((d) => d.trim().toLowerCase())
+		.filter(Boolean);
+	return domains.some((d) => search === d || search.endsWith(`.${d}`));
+};
+
+/**
+ * Validates email domain against allowed domain(s).
+ * Supports comma-separated domains for multi-domain SSO.
+ */
 export const validateEmailDomain = (email: string, domain: string) => {
 	const emailDomain = email.split("@")[1]?.toLowerCase();
-	const providerDomain = domain.toLowerCase();
-	if (!emailDomain || !providerDomain) {
+	if (!emailDomain || !domain) {
 		return false;
 	}
-	return (
-		emailDomain === providerDomain || emailDomain.endsWith(`.${providerDomain}`)
-	);
+	return domainMatches(emailDomain, domain);
 };
+
+export function parseCertificate(certPem: string) {
+	// SAML metadata X509Certificate elements contain raw base64 without PEM headers,
+	// but users may also provide full PEM-formatted certificates. Normalize to PEM.
+	const normalized = certPem.includes("-----BEGIN")
+		? certPem
+		: `-----BEGIN CERTIFICATE-----\n${certPem}\n-----END CERTIFICATE-----`;
+
+	const cert = new X509Certificate(normalized);
+
+	return {
+		fingerprintSha256: cert.fingerprint256,
+		notBefore: cert.validFrom,
+		notAfter: cert.validTo,
+		publicKeyAlgorithm:
+			cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
+	};
+}
+
+export function maskClientId(clientId: string): string {
+	if (clientId.length <= 4) {
+		return "****";
+	}
+	return `****${clientId.slice(-4)}`;
+}

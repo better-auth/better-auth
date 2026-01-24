@@ -19,6 +19,9 @@
       "path": "./packages/expo/tsconfig.json"
     },
     {
+      "path": "./packages/i18n/tsconfig.json"
+    },
+    {
       "path": "./packages/passkey/tsconfig.json"
     },
     {
