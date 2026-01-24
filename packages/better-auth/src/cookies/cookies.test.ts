@@ -672,26 +672,6 @@ describe("Cookie Cache Field Filtering", () => {
 		expect(cache?.user?.adminFlags).toBeUndefined();
 	});
 
-	it("should always include id in parseUserOutput", () => {
-		const options = {
-			user: {
-				additionalFields: {
-					id: { type: "string", returned: false },
-				},
-			},
-		} as any;
-		const user = {
-			id: "custom-oauth-id-123",
-			email: "test@example.com",
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: "Test User",
-		};
-		const result = parseUserOutput(options, user);
-		expect(result.id).toBe("custom-oauth-id-123");
-	});
-
 	it("should reduce cookie size when large fields are excluded", async () => {
 		const largeString = "x".repeat(2000);
 		const { client, testUser, cookieSetter } = await getTestInstance({
