@@ -2,7 +2,7 @@ import { listen } from "listhen";
 import { afterAll, describe, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { toNodeHandler } from "../../integrations/node";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import { genericOAuth } from "../generic-oauth";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { jwt } from "../jwt";
@@ -756,7 +756,7 @@ describe("mcp", async () => {
 			expect,
 		}) => {
 			// Use unique email to avoid conflicts with other test runs
-			const uniqueEmail = `test-${Date.now()}@test.com`;
+			const uniqueEmail = generateEmail();
 			const password = "testpassword123";
 
 			// Create a test user

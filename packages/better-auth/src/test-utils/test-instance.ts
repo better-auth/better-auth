@@ -16,6 +16,8 @@ import { bearer } from "../plugins";
 import type { Session, User } from "../types";
 import { getBaseURL } from "../utils/url";
 
+export { generateEmail } from "./email";
+
 const cleanupSet = new Set<Function>();
 
 type CurrentUserContext = {

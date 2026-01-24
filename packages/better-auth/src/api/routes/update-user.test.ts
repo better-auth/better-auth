@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { inferAdditionalFields } from "../../client/plugins";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import type { Account, Session } from "../../types";
 
 describe("updateUser", async () => {
@@ -537,7 +537,7 @@ describe("delete user", async () => {
 				},
 			);
 
-		const uniqueEmail = `cache-test-${Date.now()}@test.com`;
+		const uniqueEmail = generateEmail("cache-test");
 		const testPassword = "testPassword123";
 
 		await cacheClient.signUp.email({

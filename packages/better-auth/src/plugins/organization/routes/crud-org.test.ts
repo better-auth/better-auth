@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import {
+	generateEmail,
+	getTestInstance,
+} from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
@@ -228,7 +231,7 @@ describe("get-full-organization", async () => {
 		for (let i = 3; i <= 5; i++) {
 			const newUser = await auth.api.signUpEmail({
 				body: {
-					email: `test-${i}@test.com`,
+					email: generateEmail(`test-${i}`),
 					password: "password",
 					name: `test${i}`,
 				},

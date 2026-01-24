@@ -9,7 +9,7 @@ import type {
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
 import type { PrettifyDeep } from "../../types/helper";
 import { isAPIError } from "../../utils/is-api-error";
@@ -466,7 +466,7 @@ describe("organization", async (it) => {
 	it("should not allow inviting a user twice regardless of email casing", async () => {
 		const rng = crypto.randomUUID();
 		const user = {
-			email: `${rng}@email.com`,
+			email: generateEmail(),
 			password: rng,
 			name: rng,
 		};
@@ -1224,13 +1224,13 @@ describe("organization", async (it) => {
 	it("should allow listing invitations for a user using authClient", async () => {
 		const rng = crypto.randomUUID();
 		const user = {
-			email: `${rng}@email.com`,
+			email: generateEmail(),
 			password: rng,
 			name: rng,
 		};
 		const rng2 = crypto.randomUUID();
 		const orgAdminUser = {
-			email: `${rng2}@email.com`,
+			email: generateEmail(),
 			password: rng2,
 			name: rng2,
 		};
@@ -1332,12 +1332,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should allow rejecting expired invitations", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: `admin-${rng}@email.com`,
+			email: generateEmail("admin"),
 			password: rng,
 			name: `admin-${rng}`,
 		};
 		const invitedUser = {
-			email: `invited-${rng}@email.com`,
+			email: generateEmail("invited"),
 			password: rng,
 			name: `invited-${rng}`,
 		};
@@ -1385,12 +1385,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should only list pending invitations for a user", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: `admin2-${rng}@email.com`,
+			email: generateEmail("admin2"),
 			password: rng,
 			name: `admin2-${rng}`,
 		};
 		const invitedUser = {
-			email: `invited2-${rng}@email.com`,
+			email: generateEmail("invited2"),
 			password: rng,
 			name: `invited2-${rng}`,
 		};
@@ -1453,12 +1453,12 @@ describe("invitation expiration and filtering", async () => {
 	it("should not list rejected invitations", async () => {
 		const rng = crypto.randomUUID();
 		const adminUser = {
-			email: `admin3-${rng}@email.com`,
+			email: generateEmail("admin3"),
 			password: rng,
 			name: `admin3-${rng}`,
 		};
 		const invitedUser = {
-			email: `invited3-${rng}@email.com`,
+			email: generateEmail("invited3"),
 			password: rng,
 			name: `invited3-${rng}`,
 		};

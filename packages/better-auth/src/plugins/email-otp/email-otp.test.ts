@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { emailOTP } from ".";
 import { emailOTPClient } from "./client";
@@ -647,7 +647,7 @@ describe("custom storeOTP", async () => {
 			},
 		);
 		const authCtx = await auth.$context;
-		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = generateEmail();
 
 		let validOTP = "";
 
@@ -748,7 +748,7 @@ describe("custom storeOTP", async () => {
 			},
 		);
 		const authCtx = await auth.$context;
-		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = generateEmail();
 
 		let validOTP = "";
 
@@ -856,7 +856,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = generateEmail();
 
 		it("should create a custom encryptor otp", async () => {
 			const { get } = getTheSentOTP();
@@ -959,7 +959,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		const userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = generateEmail();
 
 		it("should create a custom hasher otp", async () => {
 			const { get } = getTheSentOTP();

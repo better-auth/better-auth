@@ -2,7 +2,7 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import type { Auth, User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins/organization";
-import { getTestInstance } from "better-auth/test";
+import { generateEmail, getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import {
 	assert,
@@ -2153,14 +2153,15 @@ describe("stripe", () => {
 		);
 		const ctx = await auth.$context;
 
+		const testEmail = generateEmail("periodend");
 		const userRes = await client.signUp.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ ...testUser, email: testEmail },
 			{ throw: true },
 		);
 
 		const headers = new Headers();
 		await client.signIn.email(
-			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ ...testUser, email: testEmail },
 			{ throw: true, onSuccess: sessionSetter(headers) },
 		);
 

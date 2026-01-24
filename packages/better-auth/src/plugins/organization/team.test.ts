@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { generateEmail, getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
 import { organization } from "./organization";
 
@@ -735,7 +735,7 @@ describe("multi team support", async (it) => {
 	});
 
 	it("should remove a member from the organization and all their teams when calling leaveOrganization", async () => {
-		const testUserEmail = `leaveorguser${Date.now()}@email.com`;
+		const testUserEmail = generateEmail("leaveorguser");
 
 		const userHeaders = new Headers();
 		const response = await auth.api.signUpEmail({

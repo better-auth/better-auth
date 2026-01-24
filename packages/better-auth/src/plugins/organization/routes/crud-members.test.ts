@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../../client";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import {
+	generateEmail,
+	getTestInstance,
+} from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
@@ -45,7 +48,7 @@ describe("listMembers", async () => {
 		const user = await ctx.adapter.create({
 			model: "user",
 			data: {
-				email: `test${i}@test.com`,
+				email: generateEmail(`test${i}`),
 				name: `test${i}`,
 			},
 		});
@@ -404,7 +407,7 @@ describe("activeMemberRole", async () => {
 		const user = await ctx.adapter.create({
 			model: "user",
 			data: {
-				email: `test${i}@test.com`,
+				email: generateEmail(`test${i}`),
 				name: `test${i}`,
 			},
 		});

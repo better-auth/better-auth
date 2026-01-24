@@ -2,7 +2,10 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { describe, expect, expectTypeOf } from "vitest";
 import { createAuthClient } from "../../../client";
 import { parseSetCookieHeader } from "../../../cookies";
-import { getTestInstance } from "../../../test-utils/test-instance";
+import {
+	generateEmail,
+	getTestInstance,
+} from "../../../test-utils/test-instance";
 import { createAccessControl } from "../../access";
 import { adminAc, defaultStatements, memberAc, ownerAc } from "../access";
 import { inferOrgAdditionalFields, organizationClient } from "../client";
@@ -99,7 +102,7 @@ describe("dynamic access control", async (it) => {
 
 	async function createUser({ role }: { role: "admin" | "member" | "owner" }) {
 		const normalUserDetails = {
-			email: `some-test-user-${crypto.randomUUID()}@email.com`,
+			email: generateEmail("some-test-user"),
 			name: `some-test-user`,
 			password: `some-test-user-${crypto.randomUUID()}`,
 		};
