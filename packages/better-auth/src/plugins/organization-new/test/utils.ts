@@ -1,6 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { getTestInstance } from "../../../test-utils";
-import { organizationClient } from "../client";
+import { organizationNewClient } from "../client";
 
 /**
  * Helper to return random org data for testing.
@@ -31,7 +31,7 @@ export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
 		},
 		{
 			clientOptions: {
-				plugins: [organizationClient()],
+				plugins: [organizationNewClient()],
 			},
 		},
 	);

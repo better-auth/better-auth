@@ -50,7 +50,7 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 			if (typeof opts?.invitationLimit === "function") {
 				return opts?.invitationLimit(data, ctx);
 			}
-			return DEFAULT_INVITATION_LIMIT;
+			return opts?.invitationLimit ?? DEFAULT_INVITATION_LIMIT;
 		},
 		allowUserToCreateOrganization: async (...args) => {
 			const allowCreateOrg = opts?.allowUserToCreateOrganization;
