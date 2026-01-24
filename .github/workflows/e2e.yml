@@ -5,6 +5,12 @@ on:
   merge_group:
   pull_request:
 
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  TURBO_CACHE: remote:rw
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -39,10 +45,6 @@ jobs:
         run: pnpm install
 
       - name: Build
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
@@ -58,10 +60,6 @@ jobs:
           deno-version: 2.6.4
 
       - name: Smoke
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:smoke
 
       - name: Stop Docker Containers
@@ -117,10 +115,6 @@ jobs:
 
       - name: Integration
         if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration --filter=./e2e/integration
 
       - name: Stop Docker Containers
@@ -190,10 +184,6 @@ jobs:
 
       - name: Adapter Integration
         if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration --filter=${{ matrix.packages }}
 
       - name: Stop Docker Containers
