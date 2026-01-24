@@ -11,8 +11,8 @@ import type {
 import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
-import type { BetterAuthCookies } from "./cookie";
-import type { LiteralString } from "./helper";
+import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -20,21 +20,56 @@ import type {
 import type { BetterAuthPlugin } from "./plugin";
 
 /**
+ * @internal
+ */
+type InferPluginID<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"]
+			: never
+		: never;
+
+/**
+ * @internal
+ */
+type InferPluginOptions<
+	O extends BetterAuthOptions,
+	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+> = O["plugins"] extends Array<infer P>
+	? P extends BetterAuthPlugin
+		? P["id"] extends ID
+			? P extends { options: infer O }
+				? O
+				: never
+			: never
+		: never
+	: never;
+
+/**
  * Mutators are defined in each plugin
  *
  * @example
  * ```ts
+ * interface MyPluginOptions {
+ *   useFeature: boolean
+ * }
+ *
+ * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
+ *   id: 'my-plugin',
+ *   options,
+ * } satisfies BetterAuthPlugin);
+ *
  * declare module "@better-auth/core" {
- *  interface BetterAuthPluginRegistry<Auth, Context> {
- *    'jwt': {
- *      creator: typeof jwt
+ *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+ *    'my-plugin': {
+ *      creator: Options extends MyPluginOptions ? typeof createMyPlugin<Options>: typeof createMyPlugin
  *    }
  *  }
  * }
  * ```
  */
 // biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
-export interface BetterAuthPluginRegistry<Auth, Context> {}
+export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
 export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 	unknown,
 	unknown
@@ -113,7 +148,11 @@ export interface InternalAdapter<
 		email: string,
 		accountId: string,
 		providerId: string,
-	): Promise<{ user: User; accounts: Account[] } | null>;
+	): Promise<{
+		user: User;
+		linkedAccount: Account | null;
+		accounts: Account[];
+	} | null>;
 
 	findUserByEmail(
 		email: string,
@@ -172,22 +211,24 @@ export interface InternalAdapter<
 type CreateCookieGetterFn = (
 	cookieName: string,
 	overrideAttributes?: Partial<CookieOptions> | undefined,
-) => {
-	name: string;
-	attributes: CookieOptions;
-};
+) => BetterAuthCookie;
 
 type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	userId: string,
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
-export type PluginContext = {
-	getPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+export type PluginContext<Options extends BetterAuthOptions> = {
+	getPlugin: <
+		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+		PluginOptions extends InferPluginOptions<Options, ID>,
+	>(
 		pluginId: ID,
 	) =>
 		| (ID extends BetterAuthPluginRegistryIdentifier
-				? ReturnType<BetterAuthPluginRegistry<unknown, unknown>[ID]["creator"]>
+				? ReturnType<
+						BetterAuthPluginRegistry<Options, PluginOptions>[ID]["creator"]
+					>
 				: BetterAuthPlugin)
 		| null;
 	/**
@@ -205,146 +246,151 @@ export type PluginContext = {
 	 */
 	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
 		pluginId: ID,
-	) => boolean;
+	) => ID extends InferPluginID<Options> ? true : boolean;
+};
+
+export type InfoContext = {
+	appName: string;
+	baseURL: string;
+	version: string;
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	PluginContext & {
-		options: Options;
-		appName: string;
-		baseURL: string;
-		trustedOrigins: string[];
-		/**
-		 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
-		 * @param url The url to verify against the "trustedOrigins" configuration
-		 * @param settings Specify supported pattern matching settings
-		 * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
-		 */
-		isTrustedOrigin: (
-			url: string,
-			settings?: { allowRelativePaths: boolean },
-		) => boolean;
-		oauthConfig: {
+	PluginContext<Options> &
+		InfoContext & {
+			options: Options;
+			trustedOrigins: string[];
 			/**
-			 * This is dangerous and should only be used in dev or staging environments.
+			 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
+			 * @param url The url to verify against the "trustedOrigins" configuration
+			 * @param settings Specify supported pattern matching settings
+			 * @returns {boolean} true if the URL matches the origin pattern, false otherwise.
 			 */
-			skipStateCookieCheck?: boolean | undefined;
+			isTrustedOrigin: (
+				url: string,
+				settings?: { allowRelativePaths: boolean },
+			) => boolean;
+			oauthConfig: {
+				/**
+				 * This is dangerous and should only be used in dev or staging environments.
+				 */
+				skipStateCookieCheck?: boolean | undefined;
+				/**
+				 * Strategy for storing OAuth state
+				 *
+				 * - "cookie": Store state in an encrypted cookie (stateless)
+				 * - "database": Store state in the database
+				 *
+				 * @default "cookie"
+				 */
+				storeStateStrategy: "database" | "cookie";
+			};
 			/**
-			 * Strategy for storing OAuth state
-			 *
-			 * - "cookie": Store state in an encrypted cookie (stateless)
-			 * - "database": Store state in the database
-			 *
-			 * @default "cookie"
+			 * New session that will be set after the request
+			 * meaning: there is a `set-cookie` header that will set
+			 * the session cookie. This is the fetched session. And it's set
+			 * by `setNewSession` method.
 			 */
-			storeStateStrategy: "database" | "cookie";
-		};
-		/**
-		 * New session that will be set after the request
-		 * meaning: there is a `set-cookie` header that will set
-		 * the session cookie. This is the fetched session. And it's set
-		 * by `setNewSession` method.
-		 */
-		newSession: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null;
-		session: {
-			session: Session & Record<string, any>;
-			user: User & Record<string, any>;
-		} | null;
-		setNewSession: (
+			newSession: {
+				session: Session & Record<string, any>;
+				user: User & Record<string, any>;
+			} | null;
 			session: {
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
-			} | null,
-		) => void;
-		socialProviders: OAuthProvider[];
-		authCookies: BetterAuthCookies;
-		logger: ReturnType<typeof createLogger>;
-		rateLimit: {
-			enabled: boolean;
-			window: number;
-			max: number;
-			storage: "memory" | "database" | "secondary-storage";
-		} & Omit<
-			BetterAuthRateLimitOptions,
-			"enabled" | "window" | "max" | "storage"
-		>;
-		adapter: DBAdapter<Options>;
-		internalAdapter: InternalAdapter<Options>;
-		createAuthCookie: CreateCookieGetterFn;
-		secret: string;
-		sessionConfig: {
-			updateAge: number;
-			expiresIn: number;
-			freshAge: number;
-			cookieRefreshCache:
-				| false
-				| {
-						enabled: true;
-						updateAge: number;
-				  };
-		};
-		generateId: (options: {
-			model: ModelNames;
-			size?: number | undefined;
-		}) => string | false;
-		secondaryStorage: SecondaryStorage | undefined;
-		password: {
-			hash: (password: string) => Promise<string>;
-			verify: (data: { password: string; hash: string }) => Promise<boolean>;
-			config: {
-				minPasswordLength: number;
-				maxPasswordLength: number;
+			} | null;
+			setNewSession: (
+				session: {
+					session: Session & Record<string, any>;
+					user: User & Record<string, any>;
+				} | null,
+			) => void;
+			socialProviders: OAuthProvider[];
+			authCookies: BetterAuthCookies;
+			logger: ReturnType<typeof createLogger>;
+			rateLimit: {
+				enabled: boolean;
+				window: number;
+				max: number;
+				storage: "memory" | "database" | "secondary-storage";
+			} & Omit<
+				BetterAuthRateLimitOptions,
+				"enabled" | "window" | "max" | "storage"
+			>;
+			adapter: DBAdapter<Options>;
+			internalAdapter: InternalAdapter<Options>;
+			createAuthCookie: CreateCookieGetterFn;
+			secret: string;
+			sessionConfig: {
+				updateAge: number;
+				expiresIn: number;
+				freshAge: number;
+				cookieRefreshCache:
+					| false
+					| {
+							enabled: true;
+							updateAge: number;
+					  };
 			};
-			checkPassword: CheckPasswordFn<Options>;
+			generateId: (options: {
+				model: ModelNames;
+				size?: number | undefined;
+			}) => string | false;
+			secondaryStorage: SecondaryStorage | undefined;
+			password: {
+				hash: (password: string) => Promise<string>;
+				verify: (data: { password: string; hash: string }) => Promise<boolean>;
+				config: {
+					minPasswordLength: number;
+					maxPasswordLength: number;
+				};
+				checkPassword: CheckPasswordFn<Options>;
+			};
+			tables: BetterAuthDBSchema;
+			runMigrations: () => Promise<void>;
+			publishTelemetry: (event: {
+				type: string;
+				anonymousId?: string | undefined;
+				payload: Record<string, any>;
+			}) => Promise<void>;
+			/**
+			 * Skip origin check for requests.
+			 *
+			 * - `true`: Skip for ALL requests (DANGEROUS - disables CSRF protection)
+			 * - `string[]`: Skip only for specific paths (e.g., SAML callbacks)
+			 * - `false`: Enable origin check (default)
+			 *
+			 * Paths support prefix matching (e.g., "/sso/saml2/callback" matches
+			 * "/sso/saml2/callback/provider-name").
+			 *
+			 * @default false (true in test environments)
+			 */
+			skipOriginCheck: boolean | string[];
+			/**
+			 * This skips the CSRF check for all requests.
+			 *
+			 * This is inferred from the `options.advanced?.
+			 * disableCSRFCheck` option.
+			 *
+			 * @default false
+			 */
+			skipCSRFCheck: boolean;
+			/**
+			 * Background task handler for deferred operations.
+			 *
+			 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
+			 * Defaults to a no-op that just runs the promise.
+			 */
+			runInBackground: (promise: Promise<unknown>) => void;
+			/**
+			 * Runs a task in the background if `runInBackground` is configured,
+			 * otherwise awaits the task directly.
+			 *
+			 * This is useful for operations like sending emails where we want
+			 * to avoid blocking the response when possible (for timing attack
+			 * mitigation), but still ensure the operation completes.
+			 */
+			runInBackgroundOrAwait: (
+				promise: Promise<unknown> | void,
+			) => Awaitable<unknown>;
 		};
-		tables: BetterAuthDBSchema;
-		runMigrations: () => Promise<void>;
-		publishTelemetry: (event: {
-			type: string;
-			anonymousId?: string | undefined;
-			payload: Record<string, any>;
-		}) => Promise<void>;
-		/**
-		 * Skip origin check for requests.
-		 *
-		 * - `true`: Skip for ALL requests (DANGEROUS - disables CSRF protection)
-		 * - `string[]`: Skip only for specific paths (e.g., SAML callbacks)
-		 * - `false`: Enable origin check (default)
-		 *
-		 * Paths support prefix matching (e.g., "/sso/saml2/callback" matches
-		 * "/sso/saml2/callback/provider-name").
-		 *
-		 * @default false (true in test environments)
-		 */
-		skipOriginCheck: boolean | string[];
-		/**
-		 * This skips the CSRF check for all requests.
-		 *
-		 * This is inferred from the `options.advanced?.
-		 * disableCSRFCheck` option.
-		 *
-		 * @default false
-		 */
-		skipCSRFCheck: boolean;
-		/**
-		 * Background task handler for deferred operations.
-		 *
-		 * This is inferred from the `options.advanced?.backgroundTasks?.handler` option.
-		 * Defaults to a no-op that just runs the promise.
-		 */
-		runInBackground: (promise: Promise<void>) => void;
-		/**
-		 * Runs a task in the background if `runInBackground` is configured,
-		 * otherwise awaits the task directly.
-		 *
-		 * This is useful for operations like sending emails where we want
-		 * to avoid blocking the response when possible (for timing attack
-		 * mitigation), but still ensure the operation completes.
-		 */
-		runInBackgroundOrAwait: (
-			promise: Promise<unknown> | Promise<void> | void | unknown,
-		) => Promise<unknown>;
-	};

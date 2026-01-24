@@ -1,7 +1,7 @@
 {
   "name": "@better-auth/scim",
   "author": "Jonathan Samines",
-  "version": "1.5.0-beta.6",
+  "version": "1.5.0-beta.9",
   "type": "module",
   "main": "dist/index.mjs",
   "types": "dist/index.d.mts",
@@ -54,7 +54,7 @@
   "dependencies": {
     "@better-auth/utils": "catalog:",
     "better-call": "catalog:",
-    "zod": "^4.1.5"
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",

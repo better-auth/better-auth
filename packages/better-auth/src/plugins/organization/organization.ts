@@ -69,8 +69,8 @@ import type {
 import type { OrganizationOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		organization: {
 			creator: OrganizationCreator;
 		};
@@ -275,7 +275,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			});
 			if (!member) {
 				throw APIError.from(
-					"FORBIDDEN",
+					"UNAUTHORIZED",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
@@ -344,6 +344,11 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 export function organization<
 	O extends OrganizationOptions & {
 		teams: { enabled: true };
+		dynamicAccessControl?:
+			| {
+					enabled?: false | undefined;
+			  }
+			| undefined;
 	},
 >(
 	options?: O | undefined,
@@ -407,6 +412,7 @@ export function organization<
 export function organization<
 	O extends OrganizationOptions & {
 		dynamicAccessControl: { enabled: true };
+		teams?: { enabled?: false | undefined } | undefined;
 	},
 >(
 	options?: O | undefined,
@@ -437,7 +443,7 @@ export function organization<
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
 ): DefaultOrganizationPlugin<O>;
-export function organization<O extends OrganizationOptions>(options?: O): any {
+export function organization<O extends OrganizationOptions>(options?: O) {
 	const opts = (options || {}) as O;
 	let endpoints = {
 		/**

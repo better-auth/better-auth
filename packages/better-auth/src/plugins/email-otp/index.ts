@@ -18,8 +18,8 @@ import {
 import type { EmailOTPOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"email-otp": {
 			creator: typeof emailOTP;
 		};
@@ -97,7 +97,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const otp =
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
-							let storedOTP = await storeOTP(ctx, opts, otp);
+							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: `${storedOTP}:0`,
 								identifier: `email-verification-otp-${email}`,

@@ -183,3 +183,59 @@ describe("onRequest chain", () => {
 		expect(result.error?.status).toBe(403);
 	});
 });
+
+describe("skipTrailingSlashes option", () => {
+	it("should return 404 for trailing slash requests by default", async () => {
+		const { auth } = await getTestInstance({});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok/", {
+				method: "GET",
+			}),
+		);
+
+		expect(response.status).toBe(404);
+	});
+
+	it("should handle trailing slash requests when skipTrailingSlashes is enabled", async () => {
+		const { auth } = await getTestInstance({
+			advanced: {
+				skipTrailingSlashes: true,
+			},
+		});
+
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/ok/", {
+				method: "GET",
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		const body = await response.json();
+		expect(body).toEqual({ ok: true });
+	});
+
+	it("should work with POST requests with trailing slash", async () => {
+		const { auth } = await getTestInstance({
+			advanced: {
+				skipTrailingSlashes: true,
+			},
+		});
+
+		// POST to sign-up endpoint with trailing slash
+		const response = await auth.handler(
+			new Request("http://localhost:3000/api/auth/sign-up/email/", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					email: "test2@example.com",
+					password: "password123",
+					name: "Test User 2",
+				}),
+			}),
+		);
+
+		// Should reach the endpoint (probably fail validation, but not 404)
+		expect(response.status).not.toBe(404);
+	});
+});

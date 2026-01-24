@@ -83,11 +83,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				});
 			}
 
-			const isOrgPluginEnabled = ctx.context.options.plugins?.some(
-				(p) => p.id === "organization",
-			);
-
-			if (organizationId && !isOrgPluginEnabled) {
+			if (organizationId && !ctx.context.hasPlugin("organization")) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						"Restricting a token to an organization requires the organization plugin",
@@ -430,7 +426,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			let apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 			ctx.context.logger.info("Querying result with filters: ", apiFilters);
 
