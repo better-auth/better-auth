@@ -211,7 +211,9 @@ export const buildEndpointSchema = <
 	} = opts;
 
 	// Process additional fields from Better Auth schema
-	const additionalFields = schemaConfig?.[schemaName]?.additionalFields || {};
+	const additionalFields = {
+		...(schemaConfig?.[schemaName]?.additionalFields || {}),
+	};
 
 	if (shouldBePartial) {
 		for (const key in additionalFields) {

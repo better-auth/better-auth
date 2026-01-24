@@ -16,9 +16,8 @@ const getFullOrganizationQuerySchema = z.optional(
 				description: "The organization id to get",
 			})
 			.optional(),
-		membersLimit: z
+		membersLimit: z.coerce
 			.number()
-			.or(z.string().transform((val) => parseInt(val)))
 			.meta({
 				description:
 					"The limit of members to get. By default, it uses the membershipLimit option.",
