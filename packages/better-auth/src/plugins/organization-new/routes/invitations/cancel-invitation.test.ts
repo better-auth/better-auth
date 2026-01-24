@@ -71,7 +71,7 @@ describe("cancel invitation", async (it) => {
 
 	it("should not allow canceling invitation without proper permissions", async () => {
 		// Create invitation
-		const invitedEmail = `cancel-noperm-${crypto.randomUUID()}@test.com`;
+		const invitedEmail = `cancel-no-permission-${crypto.randomUUID()}@test.com`;
 		const invitation = await auth.api.createInvitation({
 			headers,
 			body: {

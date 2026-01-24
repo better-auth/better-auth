@@ -73,18 +73,18 @@ export const rejectInvitation = <O extends OrganizationOptions>(
 				options.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
 			) {
-				const code =
-					"EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION";
-				const msg = ORGANIZATION_ERROR_CODES[code];
+				const msg =
+					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION;
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
+			const organizationId = invitation.organizationId;
 			const organization = await adapter.findOrganizationById(
-				invitation.organizationId,
+				organizationId,
+				"id",
 			);
 			if (!organization) {
-				const code = "ORGANIZATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
+				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
