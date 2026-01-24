@@ -51,10 +51,10 @@ export function getWithHooks(
 				model,
 				data: actualData as any,
 				forceAllowId: true,
-			})
+			});
 		}
-		if (customCreateFn?.fn){
-			created = await customCreateFn.fn(created ?? actualData)
+		if (customCreateFn?.fn) {
+			created = await customCreateFn.fn(created ?? actualData);
 		}
 
 		for (const hook of hooks || []) {
