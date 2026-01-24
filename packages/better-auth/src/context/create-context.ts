@@ -116,6 +116,18 @@ export async function createAuthContext(
 		);
 	}
 
+	if (
+		adapter.id === "memory" &&
+		options.advanced?.database?.generateId === false
+	) {
+		logger.error(
+			`[better-auth] Misconfiguration detected.
+You are using the memory DB with generateId: false.
+This will cause no id to be generated for any model.
+Most of the features of Better Auth will not work correctly.`,
+		);
+	}
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
