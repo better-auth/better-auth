@@ -5,8 +5,8 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"last-login-method": {
 			creator: typeof lastLoginMethod;
 		};
@@ -58,18 +58,19 @@ export interface LastLoginMethodOptions {
 export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 	userConfig?: O | undefined,
 ) => {
-	const paths = [
-		"/callback/:id",
-		"/oauth2/callback/:providerId",
-		"/sign-in/email",
-		"/sign-up/email",
-	];
-
 	const defaultResolveMethod = (ctx: GenericEndpointContext) => {
-		if (paths.includes(ctx.path)) {
+		// Check for OAuth callbacks (/callback/:id or /oauth2/callback/:providerId)
+		if (
+			ctx.path.startsWith("/callback/") ||
+			ctx.path.startsWith("/oauth2/callback/")
+		) {
 			return (
 				ctx.params?.id || ctx.params?.providerId || ctx.path.split("/").pop()
 			);
+		}
+		// Check for email sign-in/sign-up
+		if (ctx.path === "/sign-in/email" || ctx.path === "/sign-up/email") {
+			return "email";
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
 		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
