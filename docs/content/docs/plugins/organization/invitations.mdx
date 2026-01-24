@@ -71,6 +71,25 @@ await authClient.organization.inviteMember({
 
 ---
 
+## Accepting an Invitation
+
+When a user receives an invitation, they can accept it using the `organization.acceptInvitation` method:
+
+<APIMethod
+    path="/organization/accept-invitation"
+    method="POST"
+    requireSession
+    note="The user's email must match the invitation email.">
+```ts
+type acceptInvitation = {
+    /**
+     * The ID of the invitation to accept.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
 ## Configuration Options
 
 ### `sendInvitationEmail`

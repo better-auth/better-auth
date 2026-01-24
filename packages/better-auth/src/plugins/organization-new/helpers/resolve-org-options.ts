@@ -24,7 +24,6 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 		...opts,
 		use: opts?.use ?? [],
 		creatorRole: opts?.creatorRole ?? DEFAULT_CREATOR_ROLE,
-		membershipLimit: opts?.membershipLimit ?? DEFAULT_MEMBERSHIP_LIMIT,
 		disableSlugs: opts?.disableSlugs ?? DEFAULT_DISABLE_SLUGS,
 		defaultOrganizationIdField:
 			opts?.defaultOrganizationIdField ?? DEFAULT_DEFAULT_ORGANIZATION_ID_FIELD,
@@ -41,6 +40,14 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 		requireEmailVerificationOnInvitation:
 			opts?.requireEmailVerificationOnInvitation ??
 			DEFAULT_REQUIRE_EMAIL_VERIFICATION_ON_INVITATION,
+		membershipLimit: async (user, organization, ctx) => {
+			if (typeof opts?.membershipLimit === "function") {
+				return opts?.membershipLimit(user, organization, ctx);
+			} else if (typeof opts?.membershipLimit === "number") {
+				return opts?.membershipLimit;
+			}
+			return DEFAULT_MEMBERSHIP_LIMIT;
+		},
 		sendInvitationEmail: async (data, ctx) => {
 			if (typeof opts?.sendInvitationEmail === "function") {
 				await opts?.sendInvitationEmail(data, ctx);
