@@ -7,7 +7,6 @@ import {
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
-import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
 	HOST_COOKIE_PREFIX,
