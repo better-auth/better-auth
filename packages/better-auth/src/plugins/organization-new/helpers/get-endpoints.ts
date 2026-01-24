@@ -3,6 +3,7 @@ import type { Endpoint } from "better-call";
 import { getSessionFromCtx } from "../../../api";
 import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
+import type { CreateInvitation } from "../routes/invitations/create-invitation";
 import { createInvitation } from "../routes/invitations/create-invitation";
 import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
@@ -31,7 +32,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	getOrganization: GetOrganization<O>;
 	setActiveOrganization: SetActiveOrganization<O>;
 	listOrganizations: ListOrganizations<O>;
-	createInvitation: ReturnType<typeof createInvitation<O>>;
+	createInvitation: CreateInvitation<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(

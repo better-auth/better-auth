@@ -67,6 +67,10 @@ const baseInvitationSchema = z.object({
 	]),
 });
 
+export type CreateInvitation<O extends OrganizationOptions> = ReturnType<
+	typeof createInvitation<O>
+>;
+
 export const createInvitation = <O extends OrganizationOptions>(
 	_options: O,
 ) => {
