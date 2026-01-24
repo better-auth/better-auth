@@ -179,7 +179,8 @@ function SidebarListItem({
 		const showChildren = isActive || hasActiveChild;
 		return (
 			<div>
-				<AsideLink
+		<AsideLink
+			hasSubpages={listItem.hasSubpages}
 					href={listItem.href}
 					startWith="/docs"
 					title={listItem.title}
