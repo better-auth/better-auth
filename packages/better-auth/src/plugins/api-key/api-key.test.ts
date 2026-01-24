@@ -3141,11 +3141,11 @@ describe("api-key", async () => {
 
 	describe("deferUpdates option", () => {
 		it("should defer updates when deferUpdates is enabled with global backgroundTasks", async () => {
-			const deferredPromises: Array<Promise<void>> = [];
+			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
 				advanced: {
 					backgroundTasks: {
-						handler: (p: Promise<void>) => {
+						handler: (p: Promise<unknown>) => {
 							deferredPromises.push(p);
 						},
 					},
@@ -3181,11 +3181,11 @@ describe("api-key", async () => {
 		});
 
 		it("should still validate rate limits correctly with deferred updates", async () => {
-			const deferredPromises: Array<Promise<void>> = [];
+			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
 				advanced: {
 					backgroundTasks: {
-						handler: (p: Promise<void>) => {
+						handler: (p: Promise<unknown>) => {
 							deferredPromises.push(p);
 						},
 					},
@@ -3227,11 +3227,11 @@ describe("api-key", async () => {
 		});
 
 		it("should defer remaining count updates", async () => {
-			const deferredPromises: Array<Promise<void>> = [];
+			const deferredPromises: Array<Promise<unknown>> = [];
 			const { auth, signInWithTestUser } = await getTestInstance({
 				advanced: {
 					backgroundTasks: {
-						handler: (p: Promise<void>) => {
+						handler: (p: Promise<unknown>) => {
 							deferredPromises.push(p);
 						},
 					},

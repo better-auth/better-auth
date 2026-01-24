@@ -2,7 +2,10 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { generateId } from "@better-auth/core/utils/id";
 import type { Prettify } from "better-call";
 import * as z from "zod";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
+import type {
+	FieldAttributeToObject,
+	RemoveFieldsWithReturnedFalse,
+} from "../../db";
 import type { OrganizationOptions } from "./types";
 
 type InferSchema<
@@ -377,6 +380,22 @@ export type InferOrganizationRolesFromOption<
 	: "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
+
+import type { DBFieldAttribute } from "@better-auth/core/db";
+
+type InferAdditionalFieldsOutput<
+	SchemaName extends string,
+	Options extends OrganizationOptions,
+	isClientSide extends boolean,
+> = Options["schema"] extends {
+	[key in SchemaName]?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
+}
+	? isClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
 
 export type InferMember<
 	O extends OrganizationOptions,

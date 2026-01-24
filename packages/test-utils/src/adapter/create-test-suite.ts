@@ -14,6 +14,7 @@ import {
 } from "@better-auth/core/db/adapter";
 import { TTY_COLORS } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
+import type { Auth } from "better-auth";
 import { betterAuth } from "better-auth";
 import { test } from "vitest";
 import type { Logger } from "./test-adapter";
@@ -178,7 +179,7 @@ export const createTestSuite = <
 	},
 	tests: (
 		helpers: {
-			adapter: DBAdapter<BetterAuthOptions>;
+			adapter: DBAdapter;
 			log: Logger;
 			generate: GenerateFn;
 			insertRandom: InsertRandomFn;
@@ -205,7 +206,7 @@ export const createTestSuite = <
 			) => (Record<string, any> & {
 				id: string;
 			})[];
-			getAuth: () => Promise<ReturnType<typeof betterAuth>>;
+			getAuth: () => Promise<Auth>;
 			tryCatch<T, E = Error>(promise: Promise<T>): Promise<Result<T, E>>;
 			customIdGenerator?: () => any | Promise<any> | undefined;
 			transformIdOutput?: (id: any) => string | undefined;
@@ -631,7 +632,7 @@ export const createTestSuite = <
 								const adapter = wrapperAdapter(options);
 								return adapter;
 							},
-						});
+						} as BetterAuthOptions);
 						return auth;
 					},
 					log: helpers.log,
