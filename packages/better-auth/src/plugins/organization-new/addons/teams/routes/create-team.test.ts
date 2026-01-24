@@ -89,8 +89,7 @@ describe("teams", async (it) => {
 			organization(organizationOptions),
 		]);
 
-		const authContext = await auth.$context;
-		const teamAdapter = getTeamAdapter(authContext, teamOptions);
+		const teamAdapter = getTeamAdapter({} as any, teamOptions);
 		const { headers } = await signInWithTestUser();
 
 		it("should create a default team", async () => {

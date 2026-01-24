@@ -54,7 +54,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organization: OrganizationInput &
 				// This represents the additional fields from the plugin options
 				Record<string, any>;
-		}): Promise<InferOrganization<O>> => {
+		}): Promise<InferOrganization<O, false>> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.create<
 				OrganizationInput,
@@ -80,7 +80,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return filterOutputFields(
 				result,
 				orgAdditionalFields,
-			) as InferOrganization<O>;
+			) as InferOrganization<O, false>;
 		},
 		findMemberByEmail: async (data: {
 			email: string;
@@ -373,7 +373,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		updateOrganization: async (
 			organizationId: string,
 			data: Partial<OrganizationInput>,
-		): Promise<InferOrganization<O> | null> => {
+		): Promise<InferOrganization<O, false> | null> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const organization = await adapter.update<InferOrganization<O, false>>({
 				model: "organization",
@@ -403,7 +403,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			return filterOutputFields(
 				result,
 				orgAdditionalFields,
-			) as InferOrganization<O>;
+			) as InferOrganization<O, false>;
 		},
 		deleteOrganization: async (organizationId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -583,7 +583,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		listOrganizations: async (
 			userId: string,
-		): Promise<InferOrganization<O>[]> => {
+		): Promise<InferOrganization<O, false>[]> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findMany<
 				InferMember<O, false> & { organization: InferOrganization<O, false> }
@@ -609,7 +609,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					filterOutputFields(
 						member.organization,
 						orgAdditionalFields,
-					) as InferOrganization<O>,
+					) as InferOrganization<O, false>,
 			);
 
 			return organizations;
