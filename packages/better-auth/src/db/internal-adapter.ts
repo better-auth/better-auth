@@ -8,7 +8,13 @@ import {
 	getCurrentAuthContext,
 	runWithTransaction,
 } from "@better-auth/core/context";
-import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import type {
+	DBAdapter,
+	Where
+} from '@better-auth/core/db/adapter'
+import {initGetDefaultModelName,
+	initGetIdField,
+} from '@better-auth/core/db/adapter'
 import type { InternalLogger } from "@better-auth/core/env";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
@@ -21,6 +27,7 @@ import {
 	parseUserOutput,
 } from "./schema";
 import { getWithHooks } from "./with-hooks";
+import { getAuthTables } from '@better-auth/core/db'
 
 export const createInternalAdapter = (
 	adapter: DBAdapter<BetterAuthOptions>,
