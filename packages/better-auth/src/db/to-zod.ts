@@ -11,7 +11,6 @@ import * as z from "zod";
  */
 export function toZodSchema<
 	Fields extends Record<string, DBFieldAttribute | never>,
-	IsClientSide extends boolean,
 >({ fields }: { fields: Fields }) {
 	const zodFields = Object.keys(fields).reduce((acc, key) => {
 		const field = fields[key];
@@ -45,7 +44,7 @@ export function toZodSchema<
 	const schema = z.object(zodFields);
 	return schema as z.ZodObject<
 		RemoveNeverProps<{
-			[key in keyof Fields]: FieldAttributeToSchema<Fields[key], IsClientSide>;
+			[key in keyof Fields]: FieldAttributeToSchema<Fields[key], true>;
 		}>,
 		z.core.$strip
 	>;
