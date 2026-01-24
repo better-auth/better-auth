@@ -67,6 +67,10 @@ const baseInvitationSchema = z.object({
 	]),
 });
 
+export type CreateInvitation<O extends OrganizationOptions> = ReturnType<
+	typeof createInvitation<O>
+>;
+
 export const createInvitation = <O extends OrganizationOptions>(
 	_options: O,
 ) => {
@@ -295,10 +299,10 @@ export const createInvitation = <O extends OrganizationOptions>(
 					},
 				});
 
-				const updatedInvitation: InferInvitation<O, false> = {
+				const updatedInvitation = {
 					...existingInvitation,
 					expiresAt: newExpiresAt,
-				};
+				} as InferInvitation<O, false>;
 
 				await ctx.context.runInBackgroundOrAwait(
 					options.sendInvitationEmail(

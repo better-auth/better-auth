@@ -1,7 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
 import { filterOutputFields } from "../../../helpers/filter-output-fields";
-import type { TeamMember } from "../schema";
+import type { Team, TeamMember } from "../schema";
 import type { InferTeam, InferTeamMember, TeamsOptions } from "../types";
 import { resolveTeamOptions } from "./resolve-team-options";
 
@@ -37,11 +37,9 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 			});
 			return team ? true : false;
 		},
-		createTeam: async (
-			teamData: Omit<InferTeam<O>, "id"> & Record<string, any>,
-		) => {
+		createTeam: async (teamData: Omit<Team, "id"> & Record<string, any>) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<InferTeam<O>>({
+			const team = await adapter.create<Team, InferTeam<O>>({
 				model: "team",
 				data: teamData,
 				forceAllowId: true,

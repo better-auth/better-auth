@@ -25,6 +25,10 @@ const listOrganizationsQuerySchema = z
 	})
 	.optional();
 
+export type ListOrganizations<O extends OrganizationOptions> = ReturnType<
+	typeof listOrganizations<O>
+>;
+
 export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 	createAuthEndpoint(
 		"/organization/list",

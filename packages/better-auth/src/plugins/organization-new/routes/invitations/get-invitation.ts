@@ -13,6 +13,10 @@ const getInvitationQuerySchema = z.object({
 	}),
 });
 
+export type GetInvitation<O extends OrganizationOptions> = ReturnType<
+	typeof getInvitation<O>
+>;
+
 export const getInvitation = <O extends OrganizationOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/organization/get-invitation",
