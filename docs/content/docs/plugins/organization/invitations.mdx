@@ -3,27 +3,79 @@ title: Invitations
 description: Set up the invitation system for your organizations.
 ---
 
-The invitation system allows organization admins to invite new members via email
-or shareable links.
+The invitation system allows organization admins to invite new members via email.
+When a user is invited, they receive an invitation that they can accept or reject.
 
-## Invitation Schema
+## Creating an Invitation
 
-The invitation table includes the following fields:
+To invite a user to an organization, use the `organization.inviteMember` method:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique identifier |
-| `organizationId` | string | Organization reference |
-| `email` | string | Invitee's email |
-| `role` | string | Role to assign on acceptance |
-| `status` | string | pending, accepted, rejected, expired |
-| `inviterId` | string | User who sent the invitation |
-| `expiresAt` | Date | Expiration timestamp |
-| `createdAt` | Date | Creation timestamp |
+<APIMethod
+    path="/organization/invite-member"
+    method="POST"
+    requireSession
+    note="Requires admin or owner permissions by default.">
+```ts
+type inviteMember = {
+    /**
+     * The email address of the user to invite.
+     */
+    email: string = "user@example.com"
+    /**
+     * The role(s) to assign to the user when they accept.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "member"
+    /**
+     * The organization ID to invite the user to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * If true, resends the invitation email for an existing
+     * pending invitation instead of creating a new one.
+     */
+    resend?: boolean = false
+}
+```
+</APIMethod>
 
-## Email Configuration
 
-To send invitation emails, configure the email provider in your auth config:
+### Inviting with Multiple Roles
+
+You can assign multiple roles to an invited user:
+
+```ts
+await authClient.organization.inviteMember({
+    email: "newmember@example.com",
+    role: ["admin", "moderator"], // Multiple roles
+})
+```
+
+### Resending an Invitation
+
+If a user hasn't responded to an invitation, you can resend it:
+
+```ts
+await authClient.organization.inviteMember({
+    email: "existingInvite@example.com",
+    role: "member",
+    resend: true, // Reuses existing invitation and updates expiration
+})
+```
+
+<Callout type="info">
+    When `resend` is true, the existing invitation is reused and its expiration
+    date is updated. No duplicate invitation is created.
+</Callout>
+
+---
+
+## Configuration Options
+
+### `sendInvitationEmail`
+
+Configure how invitation emails are sent. This function is called whenever an invitation is created or resent.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -32,12 +84,20 @@ import { organization } from "better-auth/plugins"
 export const auth = betterAuth({
     plugins: [
         organization({
-            sendInvitationEmail: async ({ email, organization, invitationLink }) => {
+            sendInvitationEmail: async (data, ctx) => {
+                const { email, organization, inviter, invitation } = data
+                
                 // Send email using your email provider
                 await sendEmail({
                     to: email,
                     subject: `You've been invited to ${organization.name}`,
-                    html: `<a href="${invitationLink}">Accept invitation</a>`
+                    html: `
+                        <p>${inviter.user.name} invited you to join ${organization.name}</p>
+                        <p>Role: ${invitation.role}</p>
+                        <a href="https://yourapp.com/accept-invite?id=${invitation.id}">
+                            Accept Invitation
+                        </a>
+                    `
                 })
             }
         })
@@ -45,3 +105,133 @@ export const auth = betterAuth({
 })
 ```
 
+The `sendInvitationEmail` function receives:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Invitation ID |
+| `email` | `string` | Invitee's email address |
+| `role` | `string` | Role(s) to be assigned |
+| `organization` | `Organization` | The organization object |
+| `invitation` | `Invitation` | The full invitation object |
+| `inviter` | `Member & { user: User }` | The member who sent the invitation |
+
+### `invitationExpiresIn`
+
+Set how long invitations remain valid (in seconds).
+
+```ts
+organization({
+    invitationExpiresIn: 60 * 60 * 24 * 7 // 7 days
+})
+```
+
+**Default:** `172800` (48 hours)
+
+### `invitationLimit`
+
+Limit the number of pending invitations per organization. Can be a number or an async function.
+
+```ts
+// Static limit
+organization({
+    invitationLimit: 10
+})
+
+// Dynamic limit based on organization
+organization({
+    invitationLimit: async ({ organization, member, user }, ctx) => {
+        // Premium orgs get more invitations
+        if (organization.metadata?.plan === "premium") {
+            return 100
+        }
+        return 10
+    }
+})
+```
+
+**Default:** `100`
+
+### `cancelPendingInvitationsOnReInvite`
+
+When `true`, cancels any existing pending invitations before creating a new one for the same email.
+
+```ts
+organization({
+    cancelPendingInvitationsOnReInvite: true
+})
+```
+
+**Default:** `false`
+
+<Callout type="info">
+    This differs from `resend`. With `cancelPendingInvitationsOnReInvite`, a new 
+    invitation is created and the old one is marked as canceled. With `resend`, 
+    the existing invitation is reused.
+</Callout>
+
+---
+
+## Invitation Schema
+
+The invitation table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `organizationId` | `string` | Organization reference |
+| `email` | `string` | Invitee's email address |
+| `role` | `string` | Role(s) to assign on acceptance |
+| `status` | `string` | `pending`, `accepted`, `rejected`, `canceled` |
+| `inviterId` | `string` | User who sent the invitation |
+| `expiresAt` | `Date` | Expiration timestamp |
+| `createdAt` | `Date` | Creation timestamp |
+
+---
+
+## Permission Requirements
+
+By default, only members with `admin` or `owner` roles can create invitations.
+Members with the `member` role cannot invite others.
+
+You can customize this behavior using [Access Control](/docs/plugins/organization/access-control).
+
+<Callout type="warn">
+    Non-owners cannot invite users with the `owner` role. Only existing owners
+    can invite new owners to the organization.
+</Callout>
+
+---
+
+## Error Handling
+
+Common errors when creating invitations:
+
+| Error Code | Description |
+|------------|-------------|
+| `USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION` | A pending invitation already exists for this email |
+| `USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION` | The user is already a member |
+| `INVITATION_LIMIT_REACHED` | Maximum pending invitations reached |
+| `YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION` | Insufficient permissions |
+| `YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE` | Cannot invite with this role (e.g., non-owner inviting owner) |
+| `MEMBER_NOT_FOUND` | The inviter is not a member of the organization |
+
+```ts
+const { data, error } = await authClient.organization.inviteMember({
+    email: "user@example.com",
+    role: "member",
+})
+
+if (error) {
+    switch (error.code) {
+        case "USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION":
+            // Offer to resend
+            break
+        case "INVITATION_LIMIT_REACHED":
+            // Show upgrade prompt
+            break
+        default:
+            console.error(error.message)
+    }
+}
+```
