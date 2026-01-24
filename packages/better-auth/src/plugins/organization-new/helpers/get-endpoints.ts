@@ -7,6 +7,7 @@ import { acceptInvitation } from "../routes/invitations/accept-invitation";
 import { cancelInvitation } from "../routes/invitations/cancel-invitation";
 import { createInvitation } from "../routes/invitations/create-invitation";
 import { getInvitation } from "../routes/invitations/get-invitation";
+import { listInvitations } from "../routes/invitations/list-invitation";
 import { rejectInvitation } from "../routes/invitations/reject-invitation";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { createOrganization } from "../routes/organization/create-organizations";
@@ -29,6 +30,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	listOrganizations: ReturnType<typeof listOrganizations<O>>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
 	getInvitation: ReturnType<typeof getInvitation<O>>;
+	listInvitations: ReturnType<typeof listInvitations<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	rejectInvitation: ReturnType<typeof rejectInvitation<O>>;
 	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
@@ -58,6 +60,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		listOrganizations: listOrganizations(options),
 		createInvitation: createInvitation(options),
 		getInvitation: getInvitation(options),
+		listInvitations: listInvitations(options),
 		acceptInvitation: acceptInvitation(options),
 		rejectInvitation: rejectInvitation(options),
 		cancelInvitation: cancelInvitation(options),
