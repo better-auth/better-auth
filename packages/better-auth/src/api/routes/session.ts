@@ -354,6 +354,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 * or if the session refresh is disabled
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
+					// Still set the cookie cache if enabled - this is about caching, not session lifetime
+					await setCookieCache(ctx, session, !!dontRememberMe);
 					// Parse session and user to ensure additionalFields are included
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
