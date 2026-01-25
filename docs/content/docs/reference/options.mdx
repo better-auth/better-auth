@@ -200,7 +200,7 @@ export const auth = betterAuth({
 ```
 
 - `sendVerificationEmail`: Function to send verification email
-- `sendOnSignUp`: Send verification email automatically after sign up (default: `false`)
+- `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `requireEmailVerification` behavior (default: `undefined`)
 - `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
 - `autoSignInAfterVerification`: Auto sign in the user after they verify their email
 - `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
