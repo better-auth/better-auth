@@ -276,23 +276,6 @@ export async function setSessionCookie(
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
 	ctx.context.setNewSession(session);
-	/**
-	 * If secondary storage is enabled, store the session data in the secondary storage
-	 * This is useful if the session got updated and we want to update the session data in the
-	 * secondary storage
-	 */
-	if (ctx.context.options.secondaryStorage) {
-		await ctx.context.secondaryStorage?.set(
-			session.session.token,
-			JSON.stringify({
-				user: session.user,
-				session: session.session,
-			}),
-			Math.floor(
-				(new Date(session.session.expiresAt).getTime() - Date.now()) / 1000,
-			),
-		);
-	}
 }
 
 /**
