@@ -54,15 +54,31 @@ export const hasPermission = async (
 			// If it's for an existing role, skip as we shouldn't override hard-coded roles.
 			if (role in acRoles) continue;
 
+			let parsed: Record<string, string[]>;
+			try {
+				parsed = JSON.parse(permissionsString);
+			} catch (error: unknown) {
+				ctx.context.logger.error(
+					"[hasPermission] Failed to parse permissions for role " + role,
+					{
+						permissions: permissionsString,
+						error: error,
+					},
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Failed to parse permissions for role " + role,
+				});
+			}
+
 			const result = z
 				.record(z.string(), z.array(z.string()))
-				.safeParse(JSON.parse(permissionsString));
+				.safeParse(parsed);
 
 			if (!result.success) {
 				ctx.context.logger.error(
 					"[hasPermission] Invalid permissions for role " + role,
 					{
-						permissions: JSON.parse(permissionsString),
+						permissions: parsed,
 					},
 				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
