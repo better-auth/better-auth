@@ -14,7 +14,7 @@
     "better-auth": "workspace:*",
     "msw": "^2.12.4",
     "openid-client": "^6.8.1",
-    "undici": "^7.0.0",
+    "undici": "^7.18.2",
     "vitest": "catalog:vitest"
   }
 }
