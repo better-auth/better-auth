@@ -340,10 +340,18 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					).toString();
 					const storedToken = await storeToken(ctx, token);
-					const tokenValue =
+					// Try prefixed identifier first (new format), then fallback to non-prefixed (backward compatibility)
+					let tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
 							`magic-link:${storedToken}`,
 						);
+					if (!tokenValue) {
+						// Fallback to non-prefixed identifier for backward compatibility
+						tokenValue =
+							await ctx.context.internalAdapter.findVerificationValue(
+								storedToken,
+							);
+					}
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}

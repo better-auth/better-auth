@@ -386,7 +386,7 @@ describe("magic link storeToken", async () => {
 			plugins: [
 				magicLink({
 					storeToken: "hashed",
-					sendMagicLink(data, request) {
+					sendMagicLink(data, _request) {
 						verificationEmail = data;
 					},
 				}),
@@ -402,8 +402,9 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = await defaultKeyHasher(verificationEmail.token);
-		const storedToken =
-			await internalAdapter.findVerificationValue(`magic-link:${hashedToken}`);
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
 		expect(storedToken).toBeDefined();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
@@ -426,10 +427,10 @@ describe("magic link storeToken", async () => {
 					storeToken: {
 						type: "custom-hasher",
 						async hash(token) {
-							return token + "hashed";
+							return `${token}hashed`;
 						},
 					},
-					sendMagicLink(data, request) {
+					sendMagicLink(data, _request) {
 						verificationEmail = data;
 					},
 				}),
@@ -445,8 +446,9 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		const hashedToken = `${verificationEmail.token}hashed`;
-		const storedToken =
-			await internalAdapter.findVerificationValue(`magic-link:${hashedToken}`);
+		const storedToken = await internalAdapter.findVerificationValue(
+			`magic-link:${hashedToken}`,
+		);
 		expect(storedToken).toBeDefined();
 		const response2 = await auth.api.signInMagicLink({
 			body: {
@@ -455,5 +457,63 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		expect(response2.status).toBe(true);
+	});
+
+	it("should verify tokens stored without prefix for backward compatibility", async () => {
+		let _verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const {
+			auth,
+			signInWithTestUser,
+			testUser,
+			customFetchImpl,
+			sessionSetter,
+		} = await getTestInstance({
+			plugins: [
+				magicLink({
+					sendMagicLink(data) {
+						_verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+		await signInWithTestUser();
+
+		// Manually create a verification value without the prefix (simulating old format)
+		const token = "backward-compat-token";
+		await internalAdapter.createVerificationValue({
+			identifier: token, // No prefix - old format
+			value: JSON.stringify({ email: testUser.email }),
+			expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+		});
+
+		// Verify that the token can still be verified (backward compatibility)
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const verifyHeaders = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(verifyHeaders),
+			},
+		});
+
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = verifyHeaders.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
 	});
 });
