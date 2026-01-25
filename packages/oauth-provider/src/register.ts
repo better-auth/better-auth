@@ -393,7 +393,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? [],
+		redirect_uris: redirectUris ?? undefined,
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
