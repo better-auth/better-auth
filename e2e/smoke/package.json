@@ -2,6 +2,7 @@
   "name": "@better-auth-test/smoke",
   "type": "module",
   "dependencies": {
+    "@better-auth/passkey": "workspace:*",
     "better-auth": "workspace:*"
   },
   "scripts": {
