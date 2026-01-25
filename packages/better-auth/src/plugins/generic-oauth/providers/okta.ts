@@ -53,7 +53,7 @@ export function okta(options: OktaOptions): GenericOAuthConfig {
 	const getUserInfo = async (
 		tokens: OAuth2Tokens,
 	): Promise<OAuth2UserInfo | null> => {
-		const userInfoUrl = `${issuer}/v1/userinfo`;
+		const userInfoUrl = `${issuer}/oauth2/v1/userinfo`;
 
 		const { data: profile, error } = await betterFetch<OktaProfile>(
 			userInfoUrl,
