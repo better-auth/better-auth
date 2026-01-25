@@ -76,7 +76,6 @@ export const getInvitation = <O extends OrganizationOptions>(options: O) => {
 											"status",
 											"expiresAt",
 											"organizationName",
-											"organizationSlug",
 											"inviterEmail",
 										],
 									},

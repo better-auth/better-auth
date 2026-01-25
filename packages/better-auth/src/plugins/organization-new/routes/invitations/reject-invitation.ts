@@ -94,7 +94,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(
 
 			const rejectInvitationHooks = getHook("RejectInvitation", options);
 
-			rejectInvitationHooks.before(
+			await rejectInvitationHooks.before(
 				{
 					invitation: invitation as unknown as Invitation,
 					organization,
