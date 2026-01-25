@@ -19,6 +19,9 @@
       "path": "./packages/expo/tsconfig.json"
     },
     {
+      "path": "./packages/i18n/tsconfig.json"
+    },
+    {
       "path": "./packages/passkey/tsconfig.json"
     },
     {
@@ -44,6 +47,9 @@
     },
     {
       "path": "./packages/kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "./packages/test-utils/tsconfig.json"
     },
     {
       "path": "./test/tsconfig.json"

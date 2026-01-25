@@ -272,6 +272,16 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/leon-wbr.png",
 		},
 	},
+	{
+		name: "@ramiras123/better-auth-strapi",
+		url: "https://github.com/Ramiras123/better-auth-strapi",
+		description: "Plugin for authorization via strapi",
+		author: {
+			name: "Ramiras123",
+			github: "ramiras123",
+			avatar: "https://github.com/ramiras123.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);

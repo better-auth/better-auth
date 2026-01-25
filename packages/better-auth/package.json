@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.5.0-beta.8",
+  "version": "1.5.0-beta.9",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -25,6 +25,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
@@ -480,14 +481,14 @@
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^2.0.0",
-    "@noble/hashes": "^2.0.0",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/hashes": "^2.0.1",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
-    "nanostores": "^1.0.1",
-    "zod": "^4.1.12"
+    "kysely": "^0.28.10",
+    "nanostores": "^1.1.0",
+    "zod": "^4.3.5"
   },
   "devDependencies": {
     "@lynx-js/react": "^0.115.4",
@@ -496,9 +497,10 @@
     "@tanstack/solid-start": "^1.151.2",
     "@types/better-sqlite3": "^7.6.13",
     "@types/bun": "^1.3.6",
+    "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^12.6.2",
     "deepmerge": "^4.3.1",
     "happy-dom": "^20.0.10",
     "listhen": "^1.9.0",

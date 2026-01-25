@@ -1,33 +1,21 @@
 {
-  "name": "adapter",
-  "scripts": {
-    "test": "vitest",
-    "prepare": "prisma generate --schema ./test/prisma-adapter/base.prisma"
-  },
+  "name": "@better-auth-test/adapter-base",
+  "type": "module",
   "private": true,
   "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/drizzle-adapter": "workspace:*",
-    "@better-auth/kysely-adapter": "workspace:*",
-    "@better-auth/memory-adapter": "workspace:*",
-    "@better-auth/mongo-adapter": "workspace:*",
-    "@better-auth/prisma-adapter": "workspace:*",
-    "@prisma/client": "^5.22.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.15.5",
-    "better-auth": "workspace:*",
-    "better-sqlite3": "^12.5.0",
+    "better-sqlite3": "^12.6.2",
     "drizzle-kit": "^0.30.0",
     "drizzle-orm": "^0.45.1",
     "mongodb": "^7.0.0",
     "mysql2": "^3.14.4",
     "pg": "^8.16.3",
-    "prisma": "^5.22.0",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1"
   },
   "dependencies": {
     "deepmerge": "^4.3.1",
-    "kysely": "^0.28.5"
+    "kysely": "^0.28.10"
   }
 }
