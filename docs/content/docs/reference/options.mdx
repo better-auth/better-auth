@@ -571,7 +571,7 @@ export const auth = betterAuth({
 	logger: {
 		disabled: false,
 		disableColors: false,
-		level: "error",
+		level: "warn",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
 			console.log(`[${level}] ${message}`, ...args);
@@ -584,13 +584,13 @@ The logger configuration allows you to customize how Better Auth handles logging
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
 - `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
-- `level`: Set the minimum log level to display. Available levels are:
-  - `"info"`: Show all logs
+- `level`: Set the minimum log level to display (default: `"warn"`)
+  - `"debug"`: Show all logs including debug information
+  - `"info"`: Show all logs except debug information
   - `"warn"`: Show warnings and errors
   - `"error"`: Show only errors
-  - `"debug"`: Show all logs including debug information
 - `log`: Custom logging function that receives:
-  - `level`: The log level (`"info"`, `"warn"`, `"error"`, or `"debug"`)
+  - `level`: The log level
   - `message`: The log message
   - `...args`: Additional arguments passed to the logger
 
