@@ -116,6 +116,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			requirePKCE: {
+				type: "boolean",
+				required: false,
+			},
 			// All other metadata
 			referenceId: {
 				type: "string",

@@ -54,7 +54,7 @@ export const getOAuthProviderPlugin = (ctx: AuthContext) => {
 export const getJwtPlugin = (ctx: AuthContext) => {
 	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
-		throw new BetterAuthError("jwt_config", "jwt plugin not found");
+		throw new BetterAuthError("jwt plugin not found");
 	}
 	return plugin;
 };
@@ -424,4 +424,42 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			: query.delete("prompt");
 	}
 	return Object.fromEntries(query);
+}
+
+/**
+ * Determines if PKCE is required for a given client and scope.
+ *
+ * PKCE is always required for:
+ * 1. Public clients (cannot securely store client_secret)
+ * 2. Requests with offline_access scope (refresh token security)
+ *
+ * For confidential clients without offline_access:
+ * - Uses client.requirePKCE if set (defaults to true)
+ *
+ * @internal
+ */
+export function isPKCERequired(
+	opts: OAuthOptions<Scope[]>,
+	client: SchemaClient<Scope[]>,
+	requestedScopes?: string[],
+): boolean {
+	// Determine if client is public
+	const isPublicClient =
+		client.tokenEndpointAuthMethod === "none" ||
+		client.type === "native" ||
+		client.type === "user-agent-based" ||
+		client.public === true;
+
+	// PKCE always required for public clients
+	if (isPublicClient) {
+		return true;
+	}
+
+	// PKCE always required for offline_access scope (refresh tokens)
+	if (requestedScopes?.includes("offline_access")) {
+		return true;
+	}
+
+	// For confidential clients, check per-client setting (defaults to true)
+	return client.requirePKCE ?? true;
 }

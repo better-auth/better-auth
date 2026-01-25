@@ -20,6 +20,7 @@ import {
 	decryptStoredClientSecret,
 	getJwtPlugin,
 	getStoredToken,
+	isPKCERequired,
 	parseClientMetadata,
 	storeToken,
 	validateClientCredentials,
@@ -609,14 +610,6 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
-		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"Missing a required credential value for authorization_code grant",
-			error: "invalid_request",
-		});
-	}
-
 	/** Get and check Verification Value */
 	const verificationValue = await checkVerificationValue(
 		ctx,
@@ -642,31 +635,70 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 	);
 
-	/** Check challenge */
-	const challenge =
-		code_verifier && verificationValue.query?.code_challenge_method === "S256"
-			? await generateCodeChallenge(code_verifier)
-			: undefined;
-	if (
-		// AuthCodeWithSecret - Required if sent
-		isAuthCodeWithSecret &&
-		(challenge || verificationValue?.query?.code_challenge) &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+	// Parse scopes from the authorization request
+	const requestedScopes =
+		(verificationValue.query?.scope as string)?.split(" ") || [];
+
+	// Check if PKCE is required for this client
+	const pkceRequired = isPKCERequired(opts, client, requestedScopes);
+
+	// Validate credentials based on requirements
+	if (pkceRequired) {
+		// PKCE is required - must have code_verifier
+		if (!isAuthCodeWithPkce) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "PKCE is required for this client",
+				error: "invalid_request",
+			});
+		}
+	} else {
+		// PKCE is optional - must have either PKCE or client_secret
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"Either PKCE (code_verifier) or client authentication (client_secret) is required",
+				error: "invalid_request",
+			});
+		}
 	}
-	if (
-		// AuthCodeWithPkce - Always required
-		isAuthCodeWithPkce &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+
+	/** Check PKCE challenge if verifier is provided */
+	const pkceUsedInAuth = !!verificationValue.query?.code_challenge;
+	const pkceUsedInToken = !!code_verifier;
+
+	if (pkceUsedInAuth || pkceUsedInToken) {
+		// PKCE was used - must verify consistency
+
+		if (pkceUsedInAuth && !pkceUsedInToken) {
+			// PKCE was used in authorization but not in token exchange
+			throw new APIError("UNAUTHORIZED", {
+				error_description:
+					"code_verifier required because PKCE was used in authorization",
+				error: "invalid_request",
+			});
+		}
+
+		if (!pkceUsedInAuth && pkceUsedInToken) {
+			// PKCE was not used in authorization but verifier provided
+			throw new APIError("UNAUTHORIZED", {
+				error_description:
+					"code_verifier provided but PKCE was not used in authorization",
+				error: "invalid_request",
+			});
+		}
+
+		// Both sides used PKCE - verify the challenge
+		const challenge =
+			verificationValue.query?.code_challenge_method === "S256"
+				? await generateCodeChallenge(code_verifier!)
+				: undefined;
+
+		if (challenge !== verificationValue.query?.code_challenge) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code verification failed",
+				error: "invalid_request",
+			});
+		}
 	}
 
 	/** Get user */

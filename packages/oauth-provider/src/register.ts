@@ -251,6 +251,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
 		reference_id: referenceId,
 		metadata: inputMetadata,
 		// All other metadata
@@ -304,6 +305,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata,
 	};
@@ -350,6 +352,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
@@ -390,7 +393,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		software_version: softwareVersion ?? undefined,
 		software_statement: softwareStatement ?? undefined,
 		// Authentication Metadata
-		redirect_uris: redirectUris ?? undefined,
+		redirect_uris: redirectUris ?? [],
 		post_logout_redirect_uris: postLogoutRedirectUris ?? undefined,
 		token_endpoint_auth_method: tokenEndpointAuthMethod ?? undefined,
 		grant_types: grantTypes ?? undefined,
@@ -402,6 +405,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }
