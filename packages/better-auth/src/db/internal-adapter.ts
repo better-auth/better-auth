@@ -167,10 +167,12 @@ export const createInternalAdapter = (
 					seenTokens.add(token);
 
 					const data = await secondaryStorage.get(token);
-					if (!data || typeof data !== "string") continue;
+					if (!data) continue;
 
 					try {
-						const parsed = JSON.parse(data) as {
+						const parsed = (
+							typeof data === "string" ? JSON.parse(data) : data
+						) as {
 							session: Session;
 							user: User;
 						};
@@ -468,9 +470,13 @@ export const createInternalAdapter = (
 				}[] = [];
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
-					if (sessionStringified && typeof sessionStringified === "string") {
+					if (sessionStringified) {
 						try {
-							const s = JSON.parse(sessionStringified) as {
+							const s = (
+								typeof sessionStringified === "string"
+									? JSON.parse(sessionStringified)
+									: sessionStringified
+							) as {
 								session: Session;
 								user: User;
 							};
