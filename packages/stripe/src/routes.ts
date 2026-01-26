@@ -15,6 +15,7 @@ import {
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
+import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
 	CustomerType,
@@ -334,7 +335,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						try {
 							// First, search for existing organization customer by organizationId
 							const existingOrgCustomers = await client.customers.search({
-								query: `metadata["organizationId"]:"${org.id}"`,
+								query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
 								limit: 1,
 							});
 
@@ -354,15 +355,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 								// Create Stripe customer for organization
 								// Email can be set via getCustomerCreateParams or updated in billing portal
-								// Use defu to ensure internal metadata fields are preserved
-								const customerParams: StripeType.CustomerCreateParams = defu(
+								// Use defu to merge params (first argument takes priority)
+								const customerParams = defu(
 									{
 										name: org.name,
-										metadata: {
-											...ctx.body.metadata,
-											organizationId: org.id,
-											customerType: "organization",
-										},
+										metadata: customerMetadata.set(
+											{
+												organizationId: org.id,
+												customerType: "organization",
+											},
+											ctx.body.metadata,
+										),
 									},
 									extraCreateParams,
 								);
@@ -412,7 +415,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					try {
 						// Try to find existing user Stripe customer by email
 						const existingCustomers = await client.customers.search({
-							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
+							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
 							limit: 1,
 						});
 
@@ -422,11 +425,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							stripeCustomer = await client.customers.create({
 								email: user.email,
 								name: user.name,
-								metadata: {
-									...ctx.body.metadata,
-									userId: user.id,
-									customerType: "user",
-								},
+								metadata: customerMetadata.set(
+									{
+										userId: user.id,
+										customerType: "user",
+									},
+									ctx.body.metadata,
+								),
 							});
 						}
 
@@ -712,24 +717,29 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 						subscription_data: {
 							...freeTrial,
-							metadata: {
-								...ctx.body.metadata,
-								...params?.params?.subscription_data?.metadata,
-								userId: user.id,
-								subscriptionId: subscription.id,
-								referenceId,
-							},
+							metadata: subscriptionMetadata.set(
+								{
+									userId: user.id,
+									subscriptionId: subscription.id,
+									referenceId,
+								},
+								ctx.body.metadata,
+								params?.params?.subscription_data?.metadata,
+							),
 						},
 						mode: "subscription",
 						client_reference_id: referenceId,
 						...params?.params,
-						metadata: {
-							...ctx.body.metadata,
-							...params?.params?.metadata,
-							userId: user.id,
-							subscriptionId: subscription.id,
-							referenceId,
-						},
+						// metadata should come after spread to protect internal fields
+						metadata: subscriptionMetadata.set(
+							{
+								userId: user.id,
+								subscriptionId: subscription.id,
+								referenceId,
+							},
+							ctx.body.metadata,
+							params?.params?.metadata,
+						),
 					},
 					params?.options,
 				)
