@@ -69,7 +69,7 @@ Alternatively, you can manually configure the MCP server for each client:
 <Tabs items={["Claude Code", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"
-      claude mcp add --transport http better-auth https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
+      claude mcp add --transport http better-auth-docs https://mcp.inkeep.com/better-auth/mcp
       ```
     </Tab>
     <Tab value="Open Code">
@@ -77,9 +77,9 @@ Alternatively, you can manually configure the MCP server for each client:
         {
             "$schema": "https://opencode.ai/config.json",
             "mcp": {
-                "better-auth": {
+                "better-auth-docs": {
                     "type": "remote",
-                    "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp",
+                    "url": "https://mcp.inkeep.com/better-auth/mcp",
                     "enabled": true,
                 }
             }
@@ -89,8 +89,8 @@ Alternatively, you can manually configure the MCP server for each client:
     <Tab value="Manual">
      ```json title="mcp.json"
     {
-        "better-auth": {
-            "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp"
+        "better-auth-docs": {
+            "url": "https://mcp.inkeep.com/better-auth/mcp"
         }
     }
     ```
@@ -98,6 +98,6 @@ Alternatively, you can manually configure the MCP server for each client:
 </Tabs>
 
 <Callout>
-We provide a first‑party MCP, powered by [Chonkie](https://chonkie.ai). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
+We provide a first‑party MCP, powered by [Inkeep](https://inkeep.com).
 </Callout>
 
