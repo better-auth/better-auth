@@ -2379,7 +2379,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string;
 				};
 				memberRequiredField: string;
@@ -2443,7 +2443,7 @@ describe("Additional Fields", async () => {
 			user: {
 				id: string;
 				email: string;
-				name: string;
+				name?: string | undefined;
 				image?: string;
 			};
 			memberRequiredField: string;
@@ -2573,13 +2573,13 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name?: string;
+					name: string | null | undefined;
 					image: string | null | undefined;
 				};
 			})[];
 			total: number;
 		};
-		expectTypeOf<Result>().toMatchTypeOf<ExpectedResult>();
+		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 		expect(members?.members?.[1]?.memberRequiredField).toBe("hey");
 		expect(members?.members?.[1]?.memberOptionalField).toBe("hey2");
 	});
@@ -2632,7 +2632,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string | undefined;
 				};
 				memberRequiredField: string;
