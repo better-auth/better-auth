@@ -622,7 +622,7 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 
 		const testOpts = {
-			database: new DatabaseSync(':memory:'),
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -670,7 +670,7 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 
 		const testOpts = {
-			database: new DatabaseSync(':memory:'),
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -714,7 +714,7 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 
 		const testOpts = {
-			database: new DatabaseSync(':memory:'),
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -757,7 +757,7 @@ describe("internal adapter test", async () => {
 	it("listSessions should return empty array when all sessions are missing/corrupt", async () => {
 		const testMap = new Map<string, string>();
 		const testOpts = {
-			database: new DatabaseSync(':memory:'),
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -798,7 +798,7 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 
 		const testOpts = {
-			database: new DatabaseSync(':memory:'),
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
