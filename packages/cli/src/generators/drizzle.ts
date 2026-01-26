@@ -65,7 +65,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
 				const useNumberId =
-					options.advanced?.database?.useNumberId ||
 					options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
@@ -170,7 +169,6 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		let id: string = "";
 
 		const useNumberId =
-			options.advanced?.database?.useNumberId ||
 			options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -552,7 +550,6 @@ function generateImport({
 	}
 
 	const useNumberId =
-		options.advanced?.database?.useNumberId ||
 		options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
@@ -614,8 +611,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			((options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial") &&
+			(options.advanced?.database?.generateId === "serial" &&
 				hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");

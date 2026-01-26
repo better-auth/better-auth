@@ -336,7 +336,7 @@ describe("Email Verification Secondary Storage", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					async sendChangeEmailVerification(data, request) {
+					async sendChangeEmailConfirmation(data, request) {
 						token = data.token;
 					},
 				},
@@ -555,7 +555,7 @@ describe("Email Verification Secondary Storage", async () => {
 				user: {
 					changeEmail: {
 						enabled: true,
-						async sendChangeEmailVerification(data) {
+						async sendChangeEmailConfirmation(data) {
 							capturedToken = data.token;
 						},
 					},

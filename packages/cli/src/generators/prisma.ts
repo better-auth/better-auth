@@ -171,7 +171,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					const useNumberId =
-						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
 					const useUUIDs = options.advanced?.database?.generateId === "uuid";
 					if (useNumberId) {
@@ -208,7 +207,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				const useNumberId =
-					options.advanced?.database?.useNumberId ||
 					options.advanced?.database?.generateId === "serial";
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
@@ -427,7 +425,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
 						const useNumberId =
-							options.advanced?.database?.useNumberId ||
 							options.advanced?.database?.generateId === "serial";
 						const useUUIDs = options.advanced?.database?.generateId === "uuid";
 						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {

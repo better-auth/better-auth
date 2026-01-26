@@ -1169,7 +1169,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateOrderLegacy = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 				user: ["read"],
 			},
@@ -1304,7 +1304,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1315,7 +1315,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "user", // user role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1345,7 +1345,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: bannedUserId, // banned user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1355,7 +1355,7 @@ describe("access control", async (it) => {
 		const checkWithoutRole = await auth.api.userHasPermission({
 			body: {
 				userId: bannedUserId, // banned user ID only
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1503,7 +1503,7 @@ describe("edge cases: userId validation", async () => {
 		{
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: 'serial',
 				},
 			},
 			plugins: [

@@ -273,7 +273,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				{
 					role: member.role,
 					options: options,
-					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+					permissions: (ctx.body.permissions ) as any,
 					organizationId: activeOrganizationId,
 				},
 				ctx,

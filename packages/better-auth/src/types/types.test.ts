@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf } from "vitest";
-import { createAuthEndpoint, organization, twoFactor } from "../plugins";
+import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+import { createAuthEndpoint } from '../api';
 
 type TestTypeOptions = {
 	test: boolean;

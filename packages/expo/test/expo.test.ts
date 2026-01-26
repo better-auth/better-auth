@@ -1,6 +1,5 @@
 import { magicLinkClient } from "better-auth/client/plugins";
 import {
-	createAuthMiddleware,
 	magicLink,
 	oAuthProxy,
 } from "better-auth/plugins";
@@ -8,6 +7,7 @@ import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";
 import { expoClient, storageAdapter } from "../src/client";
+import { createAuthMiddleware } from 'better-auth/api'
 
 vi.mock("expo-web-browser", async () => {
 	return {
