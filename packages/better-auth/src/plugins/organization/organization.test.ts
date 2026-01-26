@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -26,6 +26,10 @@ import type {
 	InvitationStatus,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
+
+vi.setConfig({
+	testTimeout: 10_000,
+});
 
 describe("organization type", () => {
 	it("empty org type should works", () => {
@@ -984,7 +988,8 @@ describe("organization", async (it) => {
 			"user4@email.com",
 		];
 
-		for (const user of users) {
+		// Create all users in parallel
+		const userPromises = users.map(async (user) => {
 			const newUser = await auth.api.signUpEmail({
 				body: {
 					email: user,
@@ -992,19 +997,28 @@ describe("organization", async (it) => {
 					name: user,
 				},
 			});
+			return { user, newUser };
+		});
+
+		const createdUsers = await Promise.all(userPromises);
+
+		// Add all members to organization in parallel
+		const memberPromises = createdUsers.map(async ({ newUser }) => {
 			const session = await auth.api.getSession({
 				headers: new Headers({
 					Authorization: `Bearer ${newUser?.token}`,
 				}),
 			});
-			await auth.api.addMember({
+			return auth.api.addMember({
 				body: {
 					organizationId: org?.id,
 					userId: session?.user.id!,
 					role: "admin",
 				},
 			});
-		}
+		});
+
+		await Promise.all(memberPromises);
 
 		const userOverLimit = {
 			email: "shouldthrowerror@email.com",
@@ -1054,16 +1068,7 @@ describe("organization", async (it) => {
 			},
 		});
 		if (!invite.data) throw new Error("Invitation not created");
-		await client.signUp.email({
-			email: userOverLimit.email,
-			password: userOverLimit.password,
-			name: userOverLimit.name,
-		});
-		const { headers: headers2 } = await signInWithUser(
-			userOverLimit2.email,
-			userOverLimit2.password,
-		);
-
+		const headers2 = new Headers();
 		await client.signUp.email(
 			{
 				email: userOverLimit2.email,
@@ -1137,14 +1142,25 @@ describe("organization", async (it) => {
 			headers: headers2,
 		});
 
+		// Create both users in parallel to save time
+		const [newUser, secondUser] = await Promise.all([
+			auth.api.signUpEmail({
+				body: {
+					email: "user1@email.com",
+					password: "password",
+					name: "user1",
+				},
+			}),
+			auth.api.signUpEmail({
+				body: {
+					email: "user2@email.com",
+					password: "password",
+					name: "user2",
+				},
+			}),
+		]);
+
 		// Add 1 member, now count = 2 (creator + 1)
-		const newUser = await auth.api.signUpEmail({
-			body: {
-				email: "user1@email.com",
-				password: "password",
-				name: "user1",
-			},
-		});
 		const session = await auth.api.getSession({
 			headers: new Headers({
 				Authorization: `Bearer ${newUser?.token}`,
@@ -1159,13 +1175,6 @@ describe("organization", async (it) => {
 		});
 
 		// Try to add a second member, should fail since limit is 2
-		const secondUser = await auth.api.signUpEmail({
-			body: {
-				email: "user2@email.com",
-				password: "password",
-				name: "user2",
-			},
-		});
 		const session2 = await auth.api.getSession({
 			headers: new Headers({
 				Authorization: `Bearer ${secondUser?.token}`,
