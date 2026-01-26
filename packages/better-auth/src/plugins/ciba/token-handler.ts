@@ -12,7 +12,11 @@ import { SignJWT } from "jose";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "../oidc-provider";
 import { CIBA_ERROR_CODES } from "./error-codes";
-import { deleteCibaRequest, findCibaRequest, updateCibaRequest } from "./storage";
+import {
+	deleteCibaRequest,
+	findCibaRequest,
+	updateCibaRequest,
+} from "./storage";
 
 const CIBA_GRANT_TYPE = "urn:openid:params:grant-type:ciba";
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
@@ -188,9 +192,7 @@ export function createCibaTokenHandler() {
 						family_name: user.name?.split(" ")[1],
 						name: user.name,
 						picture: user.image,
-						updated_at: Math.floor(
-							new Date(user.updatedAt).getTime() / 1000,
-						),
+						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
 					}
 				: {};
 

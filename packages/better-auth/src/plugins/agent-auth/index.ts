@@ -1,7 +1,12 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { mergeSchema } from "../../db";
 import { CIBA_ERROR_CODES } from "../ciba/error-codes";
-import { bcAuthorize, cibaAuthorize, cibaReject, cibaVerify } from "../ciba/routes";
+import {
+	bcAuthorize,
+	cibaAuthorize,
+	cibaReject,
+	cibaVerify,
+} from "../ciba/routes";
 import { createCibaTokenHandler } from "../ciba/token-handler";
 import type { CibaInternalOptions, CibaNotificationData } from "../ciba/types";
 import { oidcProvider } from "../oidc-provider";
@@ -9,8 +14,8 @@ import { schema as oidcSchema } from "../oidc-provider/schema";
 import type { AgentAuthOptions, AgentNotificationData } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"agent-auth": {
 			creator: typeof agentAuth;
 		};
