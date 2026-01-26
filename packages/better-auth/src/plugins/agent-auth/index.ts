@@ -106,8 +106,10 @@ export const agentAuth = (options: AgentAuthOptions) => {
 				: {}),
 		},
 		hooks: {
+			// CIBA token handler (intercepts CIBA grant type on /oauth2/token)
 			before: asyncAuth ? [createCibaTokenHandler()] : [],
-			after: internalOidc.hooks?.after || [],
+			// OIDC provider after hooks
+			after: internalOidc.hooks.after,
 		},
 		$ERROR_CODES: CIBA_ERROR_CODES,
 		options,

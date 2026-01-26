@@ -76,17 +76,6 @@ export interface AgentAuthOptions {
 	 */
 	asyncAuth?: boolean;
 
-	/**
-	 * Enable token delegation (Token Exchange RFC 8693).
-	 * Agent can act on behalf of user with other services.
-	 * @default true
-	 */
-	delegation?: boolean;
-
-	/**
-	 * Enable token storage / vault.
-	 * Store tokens for 3rd party services (Google, Slack, etc).
-	 * @default true
-	 */
-	tokenStorage?: boolean;
+	// Note: delegation (Token Exchange) and tokenStorage (Token Vault)
+	// options will be added when those features are implemented
 }

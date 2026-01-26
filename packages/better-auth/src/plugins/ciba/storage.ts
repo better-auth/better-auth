@@ -64,19 +64,53 @@ export async function findCibaRequest(
 /**
  * Update a CIBA request.
  * Used for:
- * - Updating `lastPolledAt` when agent polls (rate limiting)
- * - Updating `status` to "approved" or "denied" when user responds
+ * - Updating `lastPolledAt` and `pollingInterval` when agent polls (rate limiting)
+ * - Updating `status` to "approved" or "rejected" when user responds
+ *
+ * Note: This uses read-modify-write pattern which has a potential race condition
+ * between concurrent updates (e.g., user approving while agent polls). To mitigate:
+ * - Status updates are preserved even if concurrent poll updates occur
+ * - For production, consider using Redis transactions or database-level locks
  */
 export async function updateCibaRequest(
 	ctx: GenericEndpointContext,
 	authReqId: string,
 	updates: Partial<CibaRequestData>,
 ): Promise<CibaRequestData | null> {
+	const key = getStorageKey(authReqId);
+
+	// Re-fetch to get latest state (minimize race window)
 	const existing = await findCibaRequest(ctx, authReqId);
 	if (!existing) return null;
 
+	// If the request is already approved/rejected, don't allow poll updates to change status
+	// This ensures user actions take precedence over agent polling
+	if (existing.status !== "pending" && !updates.status) {
+		// Only allow lastPolledAt/pollingInterval updates on non-pending requests
+		const safeUpdates: Partial<CibaRequestData> = {
+			lastPolledAt: updates.lastPolledAt,
+			pollingInterval: updates.pollingInterval,
+		};
+		const updated: CibaRequestData = { ...existing, ...safeUpdates };
+		const value = JSON.stringify(updated);
+		const ttlSeconds = Math.floor((updated.expiresAt - Date.now()) / 1000);
+
+		if (ctx.context.secondaryStorage) {
+			await ctx.context.secondaryStorage.set(key, value, ttlSeconds);
+		} else {
+			const verification =
+				await ctx.context.internalAdapter.findVerificationValue(key);
+			if (verification) {
+				await ctx.context.internalAdapter.updateVerificationValue(
+					verification.id,
+					{ value },
+				);
+			}
+		}
+		return updated;
+	}
+
 	const updated: CibaRequestData = { ...existing, ...updates };
-	const key = getStorageKey(authReqId);
 	const value = JSON.stringify(updated);
 	const ttlSeconds = Math.floor((updated.expiresAt - Date.now()) / 1000);
 

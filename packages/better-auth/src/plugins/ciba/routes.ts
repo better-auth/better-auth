@@ -6,7 +6,12 @@ import { generateRandomString } from "../../crypto";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
 import { getClient } from "../oidc-provider";
-import { parseClientCredentials } from "../oidc-provider/utils";
+import type { OIDCOptions } from "../oidc-provider/types";
+import type { StoreClientSecretOption } from "../oidc-provider/utils";
+import {
+	parseClientCredentials,
+	verifyClientSecret,
+} from "../oidc-provider/utils";
 import { CIBA_ERROR_CODES } from "./error-codes";
 import {
 	deleteCibaRequest,
@@ -89,6 +94,9 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 					error_description: CIBA_ERROR_CODES.OIDC_PROVIDER_REQUIRED.message,
 				});
 			}
+			const oidcOpts = (oidcPlugin.options || {}) as OIDCOptions;
+			const storeMethod: StoreClientSecretOption =
+				oidcOpts.storeClientSecret ?? "plain";
 
 			// Parse client credentials
 			const credentials = parseClientCredentials(
@@ -105,7 +113,29 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 
 			// Validate client
 			const client = await getClient(credentials.clientId);
-			if (!client || client.clientSecret !== credentials.clientSecret) {
+			if (!client) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "invalid_client",
+					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+				});
+			}
+
+			// Confidential clients must have a secret
+			if (!client.clientSecret) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "invalid_client",
+					error_description: "Client secret is required",
+				});
+			}
+
+			// Verify client secret using proper method
+			const isValidSecret = await verifyClientSecret(
+				client.clientSecret,
+				credentials.clientSecret,
+				storeMethod,
+				ctx.context.secret,
+			);
+			if (!isValidSecret) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
 					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
@@ -142,6 +172,8 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 					user = "user" in result ? result.user : result;
 				}
 
+				let userId: string | null = null;
+
 				if (!user) {
 					// Try as phone number (if phone-number plugin is enabled)
 					const phoneUser = await ctx.context.adapter.findOne<{ id: string }>({
@@ -149,11 +181,11 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 						where: [{ field: "phoneNumber", value: loginHint }],
 					});
 					if (phoneUser) {
-						user = phoneUser;
+						userId = phoneUser.id;
 					}
 				}
 
-				if (!user) {
+				if (!user && !userId) {
 					// Try as username (if username plugin is enabled)
 					const usernameUser = await ctx.context.adapter.findOne<{
 						id: string;
@@ -162,8 +194,13 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 						where: [{ field: "username", value: loginHint }],
 					});
 					if (usernameUser) {
-						user = usernameUser;
+						userId = usernameUser.id;
 					}
+				}
+
+				// If we found a user by phone/username, look up the full user object
+				if (!user && userId) {
+					user = await ctx.context.internalAdapter.findUserById(userId);
 				}
 			}
 
@@ -205,7 +242,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendNotification(
 					{
-						user: user as any,
+						user,
 						authReqId,
 						approvalUrl: approvalUrl.toString(),
 						bindingMessage: ctx.body.binding_message,
@@ -404,7 +441,7 @@ export const cibaAuthorize = createAuthEndpoint(
 
 /**
  * POST /ciba/reject
- * User rejects the request
+ * User rejects the request (requires session)
  */
 
 const rejectBodySchema = z.object({
@@ -416,9 +453,11 @@ export const cibaReject = createAuthEndpoint(
 	{
 		method: "POST",
 		body: rejectBodySchema,
+		requireHeaders: true,
 		metadata: {
 			openapi: {
-				description: "Reject a CIBA authentication request",
+				description:
+					"Reject a CIBA authentication request (requires user session)",
 				responses: {
 					200: {
 						description: "Request rejected",
@@ -433,14 +472,26 @@ export const cibaReject = createAuthEndpoint(
 							},
 						},
 					},
+					401: {
+						description: "User not authenticated",
+					},
 					400: {
-						description: "Invalid request",
+						description: "Invalid request or user mismatch",
 					},
 				},
 			},
 		},
 	},
 	async (ctx) => {
+		// Require authenticated session
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "unauthorized",
+				error_description: CIBA_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+			});
+		}
+
 		const { auth_req_id } = ctx.body;
 
 		const cibaRequest = await findCibaRequest(ctx, auth_req_id);
@@ -465,6 +516,14 @@ export const cibaReject = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description: CIBA_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
+			});
+		}
+
+		// Verify the authenticated user matches the requested user
+		if (session.user.id !== cibaRequest.userId) {
+			throw new APIError("BAD_REQUEST", {
+				error: "access_denied",
+				error_description: CIBA_ERROR_CODES.USER_MISMATCH.message,
 			});
 		}
 

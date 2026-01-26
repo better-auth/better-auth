@@ -8,9 +8,17 @@
 
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "../oidc-provider";
+import type { OIDCOptions } from "../oidc-provider/types";
+import type { StoreClientSecretOption } from "../oidc-provider/utils";
+import {
+	parseClientCredentials,
+	verifyClientSecret,
+} from "../oidc-provider/utils";
 import { CIBA_ERROR_CODES } from "./error-codes";
 import {
 	deleteCibaRequest,
@@ -21,6 +29,19 @@ import {
 const CIBA_GRANT_TYPE = "urn:openid:params:grant-type:ciba";
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
+const SLOW_DOWN_INTERVAL_INCREASE = 5000; // 5 seconds in ms per CIBA spec
+
+/**
+ * Compute at_hash claim for ID token (per OIDC spec)
+ */
+async function computeAtHash(accessToken: string): Promise<string> {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(accessToken),
+	);
+	// Take left-most half of the hash
+	const halfHash = new Uint8Array(hash).slice(0, 16);
+	return base64Url.encode(halfHash, { padding: false });
+}
 
 /**
  * Creates the hook handler for CIBA grant type on /oauth2/token.
@@ -49,20 +70,17 @@ export function createCibaTokenHandler() {
 				return;
 			}
 
-			// Get OIDC provider options for token expiration
+			// Get OIDC provider options
 			const oidcPlugin = ctx.context.getPlugin("oidc-provider");
-			const oidcOpts = (oidcPlugin?.options || {}) as {
-				accessTokenExpiresIn?: number;
-				refreshTokenExpiresIn?: number;
-			};
+			const oidcOpts = (oidcPlugin?.options || {}) as OIDCOptions;
 			const accessTokenExpiresIn =
 				oidcOpts.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
 			const refreshTokenExpiresIn =
 				oidcOpts.refreshTokenExpiresIn ?? DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
+			const storeMethod: StoreClientSecretOption =
+				oidcOpts.storeClientSecret ?? "plain";
 
 			const authReqId = body.auth_req_id as string | undefined;
-			const clientId = body.client_id as string | undefined;
-			const clientSecret = body.client_secret as string | undefined;
 
 			if (!authReqId) {
 				throw new APIError("BAD_REQUEST", {
@@ -71,19 +89,44 @@ export function createCibaTokenHandler() {
 				});
 			}
 
-			if (!clientId) {
-				throw new APIError("BAD_REQUEST", {
+			// Parse client credentials (supports Basic Auth and body params)
+			const credentials = parseClientCredentials(
+				body,
+				ctx.request?.headers.get("authorization") || null,
+			);
+
+			if (!credentials) {
+				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
-					error_description: "client_id is required",
+					error_description: "client_id and client_secret are required",
 				});
 			}
 
 			// Validate client
-			const client = await getClient(clientId);
-			if (
-				!client ||
-				(client.clientSecret && client.clientSecret !== clientSecret)
-			) {
+			const client = await getClient(credentials.clientId);
+			if (!client) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "invalid_client",
+					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+				});
+			}
+
+			// Confidential clients must have a secret
+			if (!client.clientSecret) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "invalid_client",
+					error_description: "Client secret is required",
+				});
+			}
+
+			// Verify client secret
+			const isValidSecret = await verifyClientSecret(
+				client.clientSecret,
+				credentials.clientSecret,
+				storeMethod,
+				ctx.context.secret,
+			);
+			if (!isValidSecret) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
 					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
@@ -100,10 +143,19 @@ export function createCibaTokenHandler() {
 			}
 
 			// Verify client matches
-			if (cibaRequest.clientId !== clientId) {
+			if (cibaRequest.clientId !== credentials.clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
 					error_description: "Client ID mismatch",
+				});
+			}
+
+			// Check if expired first (before rate limit check)
+			if (cibaRequest.expiresAt < Date.now()) {
+				await deleteCibaRequest(ctx, authReqId);
+				throw new APIError("BAD_REQUEST", {
+					error: "expired_token",
+					error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
 				});
 			}
 
@@ -111,6 +163,12 @@ export function createCibaTokenHandler() {
 			if (cibaRequest.lastPolledAt) {
 				const timeSinceLastPoll = Date.now() - cibaRequest.lastPolledAt;
 				if (timeSinceLastPoll < cibaRequest.pollingInterval) {
+					// Per CIBA spec: slow_down should increase the interval by 5 seconds
+					await updateCibaRequest(ctx, authReqId, {
+						lastPolledAt: Date.now(),
+						pollingInterval:
+							cibaRequest.pollingInterval + SLOW_DOWN_INTERVAL_INCREASE,
+					});
 					throw new APIError("BAD_REQUEST", {
 						error: "slow_down",
 						error_description: CIBA_ERROR_CODES.SLOW_DOWN.message,
@@ -122,15 +180,6 @@ export function createCibaTokenHandler() {
 			await updateCibaRequest(ctx, authReqId, {
 				lastPolledAt: Date.now(),
 			});
-
-			// Check if expired
-			if (cibaRequest.expiresAt < Date.now()) {
-				await deleteCibaRequest(ctx, authReqId);
-				throw new APIError("BAD_REQUEST", {
-					error: "expired_token",
-					error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
-				});
-			}
 
 			// Check status
 			if (cibaRequest.status === "pending") {
@@ -161,22 +210,29 @@ export function createCibaTokenHandler() {
 
 			// Generate tokens
 			const accessToken = generateRandomString(32, "a-z", "A-Z", "0-9");
-			const refreshToken = generateRandomString(32, "a-z", "A-Z", "0-9");
 			const now = Date.now();
 			const accessTokenExpiresAt = new Date(now + accessTokenExpiresIn * 1000);
-			const refreshTokenExpiresAt = new Date(
-				now + refreshTokenExpiresIn * 1000,
-			);
+
+			const requestedScopes = cibaRequest.scope.split(" ");
+			const needsRefreshToken = requestedScopes.includes("offline_access");
+
+			// Only generate refresh token if offline_access scope is requested
+			const refreshToken = needsRefreshToken
+				? generateRandomString(32, "a-z", "A-Z", "0-9")
+				: null;
+			const refreshTokenExpiresAt = needsRefreshToken
+				? new Date(now + refreshTokenExpiresIn * 1000)
+				: null;
 
 			// Store access token
 			await ctx.context.adapter.create({
 				model: "oauthAccessToken",
 				data: {
 					accessToken,
-					refreshToken,
+					refreshToken: refreshToken ?? "",
 					accessTokenExpiresAt,
-					refreshTokenExpiresAt,
-					clientId,
+					refreshTokenExpiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+					clientId: credentials.clientId,
 					userId: user.id,
 					scopes: cibaRequest.scope,
 					createdAt: new Date(),
@@ -184,8 +240,7 @@ export function createCibaTokenHandler() {
 				},
 			});
 
-			// Generate ID token
-			const requestedScopes = cibaRequest.scope.split(" ");
+			// Generate ID token with at_hash claim
 			const profile = requestedScopes.includes("profile")
 				? {
 						given_name: user.name?.split(" ")[0],
@@ -203,11 +258,15 @@ export function createCibaTokenHandler() {
 					}
 				: {};
 
+			// Compute at_hash for ID token (per OIDC spec)
+			const atHash = await computeAtHash(accessToken);
+
 			const idToken = await new SignJWT({
 				sub: user.id,
-				aud: clientId,
+				aud: credentials.clientId,
 				iat: Math.floor(now / 1000),
 				auth_req_id: authReqId,
+				at_hash: atHash,
 				...profile,
 				...email,
 			})
@@ -226,9 +285,7 @@ export function createCibaTokenHandler() {
 					access_token: accessToken,
 					token_type: "Bearer",
 					expires_in: accessTokenExpiresIn,
-					refresh_token: requestedScopes.includes("offline_access")
-						? refreshToken
-						: undefined,
+					refresh_token: refreshToken ?? undefined,
 					scope: cibaRequest.scope,
 					id_token: requestedScopes.includes("openid") ? idToken : undefined,
 				},
