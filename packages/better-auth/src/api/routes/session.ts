@@ -384,8 +384,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
 
+				const skipSessionRefresh = (
+					ctx.context as typeof ctx.context & {
+						_skipSessionRefresh?: boolean;
+					}
+				)._skipSessionRefresh;
+
+				if (skipSessionRefresh && shouldBeUpdated) {
+					ctx.context.logger.debug(
+						"SKIP_SESSION_REFRESH",
+						"Skipping session refresh in RSC context to prevent DB/cookie mismatch",
+					);
+				}
+
 				if (
 					shouldBeUpdated &&
+					!skipSessionRefresh &&
 					(!ctx.query?.disableRefresh ||
 						!ctx.context.options.session?.disableSessionRefresh)
 				) {
