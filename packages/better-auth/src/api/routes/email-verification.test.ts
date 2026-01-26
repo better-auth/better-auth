@@ -541,7 +541,7 @@ describe("Email Verification Secondary Storage", async () => {
 		const afterEmailVerificationMock = vi.fn();
 		let capturedToken: string;
 
-		const { client, auth, signInWithTestUser, cookieSetter, testUser } =
+		const { client, auth, signInWithTestUser, cookieSetter } =
 			await getTestInstance({
 				emailAndPassword: {
 					enabled: true,
