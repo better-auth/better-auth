@@ -71,7 +71,7 @@
     "@better-auth/utils": "catalog:",
     "@clack/prompts": "^0.11.0",
     "@mrleebo/prisma-ast": "^0.13.0",
-    "@prisma/client": "^5.22.0",
+    "@prisma/client": "^7.3.0",
     "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",

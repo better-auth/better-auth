@@ -9,7 +9,6 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "@prisma/client": "^5.22.0",
     "better-auth": "workspace:*"
   }
 }

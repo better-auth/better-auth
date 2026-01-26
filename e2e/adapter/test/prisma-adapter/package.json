@@ -10,8 +10,8 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "@prisma/client": "5.22.0",
+    "@prisma/client": "7.3.0",
     "better-auth": "workspace:*",
-    "prisma": "^5.22.0"
+    "prisma": "^7.3.0"
   }
 }
