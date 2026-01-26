@@ -12,5 +12,6 @@ export default defineConfig({
 		"@better-auth/core",
 		"better-auth",
 	],
+	sourcemap: true,
 	treeshake: true,
 });

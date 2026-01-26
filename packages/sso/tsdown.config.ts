@@ -5,4 +5,5 @@ export default defineConfig({
 	format: ["esm"],
 	entry: ["./src/index.ts", "./src/client.ts"],
 	external: ["better-auth", "better-call", "@better-fetch/fetch", "stripe"],
+	sourcemap: true,
 });
