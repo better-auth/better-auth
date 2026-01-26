@@ -1,1 +1,1 @@
-export * from "./drizzle-adapter";
+export * from "@better-auth/drizzle-adapter";
