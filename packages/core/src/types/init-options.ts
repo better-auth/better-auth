@@ -322,7 +322,7 @@ export type BetterAuthAdvancedOptions = {
 	 * }
 	 */
 	backgroundTasks?: {
-		handler: (promise: Promise<void>) => void;
+		handler: (promise: Promise<unknown>) => void;
 	};
 	/**
 	 * Skip trailing slash validation in route matching
@@ -485,10 +485,13 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
-				 * Send a verification email automatically
-				 * after sign up
+				 * Send a verification email automatically after sign up.
 				 *
-				 * @default false
+				 * - `true`: Always send verification email on sign up
+				 * - `false`: Never send verification email on sign up
+				 * - `undefined`: Follows `requireEmailVerification` behavior
+				 *
+				 * @default undefined
 				 */
 				sendOnSignUp?: boolean;
 				/**
