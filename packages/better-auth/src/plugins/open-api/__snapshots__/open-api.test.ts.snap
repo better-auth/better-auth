@@ -138,7 +138,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
           },
         },
         "required": [
-          "name",
           "email",
           "createdAt",
           "updatedAt",
@@ -4000,7 +3999,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                   },
                 },
                 "required": [
-                  "name",
                   "email",
                   "password",
                 ],
@@ -4048,6 +4046,7 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                         },
                         "name": {
                           "description": "The name of the user",
+                          "nullable": true,
                           "type": "string",
                         },
                         "updatedAt": {
@@ -4059,7 +4058,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "required": [
                         "id",
                         "email",
-                        "name",
                         "emailVerified",
                         "createdAt",
                         "updatedAt",

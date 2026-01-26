@@ -45,10 +45,10 @@ export interface AppleProfile {
 	 */
 	real_user_status: number;
 	/**
-	 * The user’s full name in the format provided during the authorization
-	 * process.
+	 * The user's full name in the format provided during the authorization
+	 * process. This may not always be provided by Apple.
 	 */
-	name: string;
+	name?: string;
 	/**
 	 * The URL to the user's profile picture.
 	 */
@@ -162,15 +162,14 @@ export const apple = (options: AppleOptions) => {
 				return null;
 			}
 
-			// TODO: " " masking will be removed when the name field is made optional
-			let name: string;
+			let name: string | undefined;
 			if (token.user?.name) {
 				const firstName = token.user.name.firstName || "";
 				const lastName = token.user.name.lastName || "";
 				const fullName = `${firstName} ${lastName}`.trim();
-				name = fullName || " ";
+				name = fullName || undefined;
 			} else {
-				name = profile.name || " ";
+				name = profile.name || undefined;
 			}
 
 			const emailVerified =

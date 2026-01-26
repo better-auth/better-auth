@@ -951,9 +951,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const nameParts = user.name?.split(" ") ?? [];
 					const profile = {
-						given_name: user.name.split(" ")[0]!,
-						family_name: user.name.split(" ")[1]!,
+						given_name: nameParts[0],
+						family_name: nameParts[1],
 						name: user.name,
 						profile: user.image,
 						updated_at: new Date(user.updatedAt).toISOString(),
@@ -1195,6 +1196,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
+					const nameParts = user.name?.split(" ") ?? [];
 					const baseUserClaims = {
 						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
@@ -1203,10 +1205,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]!
+							? nameParts[0]
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]!
+							? nameParts[1]
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified

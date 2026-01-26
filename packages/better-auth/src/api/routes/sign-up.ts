@@ -14,9 +14,9 @@ import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string(),
 		email: z.email(),
 		password: z.string().nonempty(),
+		name: z.string().optional(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),
 		rememberMe: z.boolean().optional(),
@@ -38,7 +38,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				],
 				$Infer: {
 					body: {} as {
-						name: string;
+						name?: string | null | undefined;
 						email: string;
 						password: string;
 						image?: string | undefined;
@@ -86,7 +86,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												"If this is false, the session will not be remembered. Default is `true`.",
 										},
 									},
-									required: ["name", "email", "password"],
+									required: ["email", "password"],
 								},
 							},
 						},
@@ -118,6 +118,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 													},
 													name: {
 														type: "string",
+														nullable: true,
 														description: "The name of the user",
 													},
 													image: {
@@ -144,7 +145,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												required: [
 													"id",
 													"email",
-													"name",
 													"emailVerified",
 													"createdAt",
 													"updatedAt",

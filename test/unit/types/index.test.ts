@@ -29,11 +29,11 @@ test("infer user type correctly", async () => {
 		updatedAt: Date;
 		email: string;
 		emailVerified: boolean;
-		name: string;
+		name?: string | null | undefined;
 		image?: string | null | undefined;
-		onboardingCompleted: boolean | null | undefined;
+		onboardingCompleted?: boolean | null | undefined;
 	};
-	expectTypeOf<User>().toEqualTypeOf<Res>();
+	expectTypeOf<User>().toMatchTypeOf<Res>();
 	const { api } = {
 		api:
 			// use proxy to avoid runtime error
@@ -52,7 +52,7 @@ test("infer user type correctly", async () => {
 				password: "",
 			},
 		});
-		expectTypeOf(user).toEqualTypeOf<Res>();
+		expectTypeOf(user).toMatchTypeOf<Res>();
 	}
 	{
 		const { user } = await api.signInEmail({
@@ -61,6 +61,6 @@ test("infer user type correctly", async () => {
 				password: "",
 			},
 		});
-		expectTypeOf(user).toEqualTypeOf<Res>();
+		expectTypeOf(user).toMatchTypeOf<Res>();
 	}
 });

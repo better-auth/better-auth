@@ -251,7 +251,7 @@ export const callbackOAuth = createAuthEndpoint(
 				...userInfo,
 				id: String(userInfo.id),
 				email: userInfo.email,
-				name: userInfo.name || userInfo.email,
+				name: userInfo.name,
 			},
 			account: accountData,
 			callbackURL,

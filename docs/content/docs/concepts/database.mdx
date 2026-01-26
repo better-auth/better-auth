@@ -269,11 +269,6 @@ Table Name: `user`
       isPrimaryKey: true,
     },
     {
-      name: "name",
-      type: "string",
-      description: "User's chosen display name",
-    },
-    {
       name: "email",
       type: "string",
       description: "User's email address for communication and login",
@@ -282,6 +277,12 @@ Table Name: `user`
       name: "emailVerified",
       type: "boolean",
       description: "Whether the user's email is verified",
+    },
+        {
+      name: "name",
+      type: "string",
+      description: "User's chosen display name",
+      isOptional: true,
     },
     {
       name: "image",
@@ -607,9 +608,10 @@ export const auth = betterAuth({
       clientId: "YOUR_GITHUB_CLIENT_ID",
       clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
       mapProfileToUser: (profile) => {
+        const nameParts = profile.name?.split(" ") ?? [];
         return {
-          firstName: profile.name.split(" ")[0],
-          lastName: profile.name.split(" ")[1],
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(" ") || undefined,
         };
       },
     },
@@ -808,12 +810,13 @@ export const auth = betterAuth({
       create: {
         before: async (user, ctx) => {
           // Modify the user object before it is created
+          const nameParts = user.name?.split(" ") ?? [];
           return {
             data: {
               // Ensure to return Better-Auth named fields, not the original field names in your database.
               ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1],
+              firstName: nameParts[0],
+              lastName: nameParts.slice(1).join(" ") || undefined,
             },
           };
         },

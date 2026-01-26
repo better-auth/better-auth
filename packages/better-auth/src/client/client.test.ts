@@ -183,7 +183,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -292,7 +292,7 @@ describe("type", () => {
 				id: string;
 				email: string;
 				emailVerified: boolean;
-				name: string;
+				name?: string | undefined | null;
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined | null;
@@ -310,7 +310,7 @@ describe("type", () => {
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
-			name: string;
+			name?: string | undefined | null;
 			id: string;
 			email: string;
 			emailVerified: boolean;
@@ -339,7 +339,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -394,7 +394,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -430,7 +430,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -468,7 +468,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -507,7 +507,7 @@ describe("type", () => {
 							id: string;
 							email: string;
 							emailVerified: boolean;
-							name: string;
+							name?: string | undefined | null;
 							createdAt: Date;
 							updatedAt: Date;
 							image?: string | undefined | null;
@@ -547,7 +547,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name: string;
+					name?: string | undefined | null;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
