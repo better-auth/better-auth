@@ -97,6 +97,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			const oidcOpts = (oidcPlugin.options || {}) as OIDCOptions;
 			const storeMethod: StoreClientSecretOption =
 				oidcOpts.storeClientSecret ?? "plain";
+			const trustedClients = oidcOpts.trustedClients ?? [];
 
 			// Parse client credentials
 			const credentials = parseClientCredentials(
@@ -111,8 +112,8 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				});
 			}
 
-			// Validate client
-			const client = await getClient(credentials.clientId);
+			// Validate client (check trusted clients first, then database)
+			const client = await getClient(credentials.clientId, trustedClients);
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
@@ -176,25 +177,35 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 
 				if (!user) {
 					// Try as phone number (if phone-number plugin is enabled)
-					const phoneUser = await ctx.context.adapter.findOne<{ id: string }>({
-						model: "user",
-						where: [{ field: "phoneNumber", value: loginHint }],
-					});
-					if (phoneUser) {
-						userId = phoneUser.id;
+					try {
+						const phoneUser = await ctx.context.adapter.findOne<{ id: string }>(
+							{
+								model: "user",
+								where: [{ field: "phoneNumber", value: loginHint }],
+							},
+						);
+						if (phoneUser) {
+							userId = phoneUser.id;
+						}
+					} catch {
+						// Phone number field doesn't exist, skip
 					}
 				}
 
 				if (!user && !userId) {
 					// Try as username (if username plugin is enabled)
-					const usernameUser = await ctx.context.adapter.findOne<{
-						id: string;
-					}>({
-						model: "user",
-						where: [{ field: "username", value: loginHint }],
-					});
-					if (usernameUser) {
-						userId = usernameUser.id;
+					try {
+						const usernameUser = await ctx.context.adapter.findOne<{
+							id: string;
+						}>({
+							model: "user",
+							where: [{ field: "username", value: loginHint }],
+						});
+						if (usernameUser) {
+							userId = usernameUser.id;
+						}
+					} catch {
+						// Username field doesn't exist, skip
 					}
 				}
 

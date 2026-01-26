@@ -79,6 +79,7 @@ export function createCibaTokenHandler() {
 				oidcOpts.refreshTokenExpiresIn ?? DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
 			const storeMethod: StoreClientSecretOption =
 				oidcOpts.storeClientSecret ?? "plain";
+			const trustedClients = oidcOpts.trustedClients ?? [];
 
 			const authReqId = body.auth_req_id as string | undefined;
 
@@ -102,8 +103,8 @@ export function createCibaTokenHandler() {
 				});
 			}
 
-			// Validate client
-			const client = await getClient(credentials.clientId);
+			// Validate client (check trusted clients first, then database)
+			const client = await getClient(credentials.clientId, trustedClients);
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
