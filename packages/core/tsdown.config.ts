@@ -28,6 +28,7 @@ export default defineConfig({
 		BETTER_AUTH_TELEMETRY_ENDPOINT:
 			process.env.BETTER_AUTH_TELEMETRY_ENDPOINT ?? "",
 	},
+	sourcemap: true,
 	unbundle: true,
 	clean: true,
 });
