@@ -340,7 +340,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							if (session?.user.id === newSession.user.id) {
 								tokensToDelete.push(token);
 								ctx.setCookie(key, "", {
-									...sessionCookieConfig.options,
+									...sessionCookieConfig.attributes,
 									maxAge: 0,
 								});
 							}
