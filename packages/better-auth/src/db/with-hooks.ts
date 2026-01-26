@@ -50,7 +50,6 @@ export function getWithHooks(
 			created = await (await getCurrentAdapter(adapter)).create<T>({
 				model,
 				data: actualData as any,
-				forceAllowId: true,
 			});
 		}
 		if (customCreateFn?.fn) {
