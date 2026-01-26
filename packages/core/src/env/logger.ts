@@ -94,7 +94,7 @@ export type InternalLogger = {
 
 export const createLogger = (options?: Logger | undefined): InternalLogger => {
 	const enabled = options?.disabled !== true;
-	const logLevel = options?.level ?? "error";
+	const logLevel = options?.level ?? "warn";
 
 	const isDisableColorsSpecified = options?.disableColors !== undefined;
 	const colorsEnabled = isDisableColorsSpecified

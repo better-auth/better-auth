@@ -45,8 +45,16 @@ import {
 	validateSAMLAlgorithms,
 	validateSingleAssertion,
 } from "../saml";
+import { SAML_ERROR_CODES } from "../saml/error-codes";
 import { generateRelayState, parseRelayState } from "../saml-state";
-import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
+import type {
+	OIDCConfig,
+	SAMLAssertionExtract,
+	SAMLConfig,
+	SAMLSessionRecord,
+	SSOOptions,
+	SSOProvider,
+} from "../types";
 import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
 import {
 	createIdP,
@@ -167,7 +175,7 @@ const spMetadataQuerySchema = z.object({
 
 type RelayState = Awaited<ReturnType<typeof parseRelayState>>;
 
-export const spMetadata = () => {
+export const spMetadata = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/saml2/sp/metadata",
 		{
@@ -211,6 +219,21 @@ export const spMetadata = () => {
 					message: "Invalid SAML configuration",
 				});
 			}
+
+			const sloLocation = `${ctx.context.baseURL}/sso/saml2/sp/slo/${ctx.query.providerId}`;
+			const singleLogoutService = options?.saml?.enableSingleLogout
+				? [
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+							Location: sloLocation,
+						},
+						{
+							Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+							Location: sloLocation,
+						},
+					]
+				: undefined;
+
 			const sp = parsedSamlConfig.spMetadata.metadata
 				? saml.ServiceProvider({
 						metadata: parsedSamlConfig.spMetadata.metadata,
@@ -226,6 +249,7 @@ export const spMetadata = () => {
 									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
 							},
 						],
+						singleLogoutService,
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
 						nameIDFormat: parsedSamlConfig.identifierFormat
 							? [parsedSamlConfig.identifierFormat]
@@ -2000,13 +2024,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
-			validateSAMLTimestamp((extract as any).conditions, {
+			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,
 			});
 
-			const inResponseTo = (extract as any).inResponseTo as string | undefined;
+			const inResponseTo = (extract as SAMLAssertionExtract).inResponseTo as
+				| string
+				| undefined;
 			const shouldValidateInResponseTo =
 				options?.saml?.enableInResponseToValidation;
 
@@ -2095,7 +2121,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 			if (assertionId) {
 				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as any).conditions as
+				const conditions = (extract as SAMLAssertionExtract).conditions as
 					| SAMLConditions
 					| undefined;
 				const clockSkew =
@@ -2265,6 +2291,30 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			});
 
 			await setSessionCookie(ctx, { session, user });
+
+			if (options?.saml?.enableSingleLogout && extract.nameID) {
+				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;
+				const samlSessionData: SAMLSessionRecord = {
+					sessionId: session.id,
+					providerId: provider.providerId,
+					nameID: extract.nameID,
+					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+				};
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: samlSessionKey,
+						value: JSON.stringify(samlSessionData),
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
+						value: samlSessionKey,
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
+			}
 
 			const safeRedirectUrl = getSafeRedirectUrl(
 				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
@@ -2471,13 +2521,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
-			validateSAMLTimestamp((extract as any).conditions, {
+			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
 				clockSkew: options?.saml?.clockSkew,
 				requireTimestamps: options?.saml?.requireTimestamps,
 				logger: ctx.context.logger,
 			});
 
-			const inResponseToAcs = (extract as any).inResponseTo as
+			const inResponseToAcs = (extract as SAMLAssertionExtract).inResponseTo as
 				| string
 				| undefined;
 			const shouldValidateInResponseToAcs =
@@ -2561,7 +2611,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			if (assertionIdAcs) {
 				const issuer = idp.entityMeta.getEntityID();
-				const conditions = (extract as any).conditions as
+				const conditions = (extract as SAMLAssertionExtract).conditions as
 					| SAMLConditions
 					| undefined;
 				const clockSkew =
@@ -2728,17 +2778,35 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			});
 
 			await setSessionCookie(ctx, { session, user });
+
+			if (options?.saml?.enableSingleLogout && extract.nameID) {
+				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
+				const samlSessionData: SAMLSessionRecord = {
+					sessionId: session.id,
+					providerId,
+					nameID: extract.nameID,
+					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+				};
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: samlSessionKey,
+						value: JSON.stringify(samlSessionData),
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
+				await ctx.context.internalAdapter
+					.createVerificationValue({
+						identifier: `${constants.SAML_SESSION_BY_ID_PREFIX}${session.id}`,
+						value: samlSessionKey,
+						expiresAt: session.expiresAt,
+					})
+					.catch(() => {});
+			}
+
 			throw ctx.redirect(callbackUrl);
 		},
 	);
 };
-
-interface SAMLSessionRecord {
-	sessionId: string;
-	providerId: string;
-	nameID: string;
-	sessionIndex?: string;
-}
 
 const sloSchema = z.object({
 	SAMLRequest: z.string().optional(),
@@ -2765,19 +2833,29 @@ export const sloEndpoint = (options?: SSOOptions) => {
 		},
 		async (ctx) => {
 			if (!options?.saml?.enableSingleLogout) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Single Logout is not enabled",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+				);
 			}
 
 			const { providerId } = ctx.params;
-			const samlRequest = ctx.body?.SAMLRequest || ctx.query?.SAMLRequest;
-			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
-			const binding =
-				ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
 
-			if (!samlRequest) {
-				throw new APIError("BAD_REQUEST", { message: "Missing SAMLRequest" });
+			const samlRequest = ctx.body?.SAMLRequest || ctx.query?.SAMLRequest;
+			const samlResponse = ctx.body?.SAMLResponse || ctx.query?.SAMLResponse;
+			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
+			const appOrigin = new URL(ctx.context.baseURL).origin;
+			const safeErrorURL = getSafeRedirectUrl(
+				relayState,
+				`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
+				appOrigin,
+				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+			);
+
+			if (!samlRequest && !samlResponse) {
+				throw ctx.redirect(
+					`${safeErrorURL}?error=invalid_request&error_description=missing_logout_data`,
+				);
 			}
 
 			const provider = await findSAMLProvider(
@@ -2786,99 +2864,291 @@ export const sloEndpoint = (options?: SSOOptions) => {
 				ctx.context.adapter,
 			);
 			if (!provider?.samlConfig) {
-				throw new APIError("NOT_FOUND", { message: "SAML provider not found" });
+				throw APIError.from(
+					"NOT_FOUND",
+					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+				);
 			}
 
 			const config = provider.samlConfig as SAMLConfig;
 			const sp = createSP(config, ctx.context.baseURL, providerId);
 			const idp = createIdP(config);
 
-			const parsed = await sp.parseLogoutRequest(idp, binding, {
-				body: ctx.body,
-				query: ctx.query,
-			});
-			if (!parsed?.extract) {
-				throw new APIError("BAD_REQUEST", { message: "Invalid LogoutRequest" });
+			if (samlResponse) {
+				return handleLogoutResponse(ctx, sp, idp, relayState, providerId);
 			}
 
-			const { nameID } = parsed.extract;
-			const sessionIndex = (parsed.extract as { sessionIndex?: string })
-				.sessionIndex;
+			return handleLogoutRequest(ctx, sp, idp, relayState, providerId);
+		},
+	);
+};
 
-			// Look up stored SAML session by nameID (and optionally sessionIndex)
-			const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
-			const stored =
-				await ctx.context.internalAdapter.findVerificationValue(key);
+async function handleLogoutResponse(
+	ctx: any,
+	sp: ReturnType<typeof createSP>,
+	idp: ReturnType<typeof createIdP>,
+	relayState: string | undefined,
+	providerId: string,
+) {
+	const binding =
+		ctx.method === "POST" && ctx.body?.SAMLResponse ? "post" : "redirect";
 
-			if (stored) {
-				try {
+	let parsed: Awaited<ReturnType<typeof sp.parseLogoutResponse>> | undefined;
+	try {
+		parsed = await sp.parseLogoutResponse(idp, binding, {
+			body: ctx.body,
+			query: ctx.query,
+		});
+	} catch (error) {
+		ctx.context.logger.error("LogoutResponse validation failed", { error });
+		throw APIError.from(
+			"BAD_REQUEST",
+			SAML_ERROR_CODES.INVALID_LOGOUT_RESPONSE,
+		);
+	}
+
+	const extract = parsed?.extract as {
+		response?: { inResponseTo?: string };
+		status?: string;
+		statusCode?: string;
+	};
+
+	const statusCode =
+		extract?.statusCode ||
+		extract?.status ||
+		(parsed as any)?.samlContent?.status?.statusCode;
+	if (statusCode && statusCode !== constants.SAML_STATUS_SUCCESS) {
+		ctx.context.logger.warn("LogoutResponse indicates failure", { statusCode });
+		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.LOGOUT_FAILED_AT_IDP);
+	}
+
+	const inResponseTo = extract?.response?.inResponseTo;
+	if (inResponseTo) {
+		const key = `${constants.LOGOUT_REQUEST_KEY_PREFIX}${inResponseTo}`;
+		const pendingRequest =
+			await ctx.context.internalAdapter.findVerificationValue(key);
+
+		if (!pendingRequest) {
+			ctx.context.logger.warn(
+				"LogoutResponse references unknown or expired request",
+				{ inResponseTo },
+			);
+		}
+
+		await ctx.context.internalAdapter
+			.deleteVerificationValue(key)
+			.catch(() => {});
+	}
+
+	deleteSessionCookie(ctx);
+
+	const appOrigin = new URL(ctx.context.baseURL).origin;
+	const safeRedirectUrl = getSafeRedirectUrl(
+		relayState,
+		`${appOrigin}/sso/saml2/sp/slo/${providerId}`,
+		appOrigin,
+		(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+	);
+	throw ctx.redirect(safeRedirectUrl);
+}
+
+async function handleLogoutRequest(
+	ctx: any,
+	sp: ReturnType<typeof createSP>,
+	idp: ReturnType<typeof createIdP>,
+	relayState: string | undefined,
+	providerId: string,
+) {
+	const binding =
+		ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
+
+	let parsed: Awaited<ReturnType<typeof sp.parseLogoutRequest>> | undefined;
+	try {
+		parsed = await sp.parseLogoutRequest(idp, binding, {
+			body: ctx.body,
+			query: ctx.query,
+		});
+	} catch (error) {
+		ctx.context.logger.error("LogoutRequest validation failed", { error });
+		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.INVALID_LOGOUT_REQUEST);
+	}
+	if (!parsed?.extract) {
+		throw APIError.from("BAD_REQUEST", SAML_ERROR_CODES.INVALID_LOGOUT_REQUEST);
+	}
+
+	const { nameID } = parsed.extract;
+	const sessionIndex = (parsed.extract as SAMLAssertionExtract).sessionIndex;
+
+	const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
+	const stored = await ctx.context.internalAdapter.findVerificationValue(key);
+
+	if (stored) {
+		const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+		if (data) {
+			if (
+				!sessionIndex ||
+				!data.sessionIndex ||
+				sessionIndex === data.sessionIndex
+			) {
+				await ctx.context.internalAdapter
+					.deleteSession(data.sessionId)
+					.catch(() => {});
+				await ctx.context.internalAdapter
+					.deleteVerificationValue(
+						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
+					)
+					.catch(() => {});
+			} else {
+				ctx.context.logger.warn(
+					"SessionIndex mismatch in LogoutRequest - skipping session deletion",
+					{
+						providerId,
+						requestedSessionIndex: sessionIndex,
+						storedSessionIndex: data.sessionIndex,
+					},
+				);
+			}
+		}
+		await ctx.context.internalAdapter
+			.deleteVerificationValue(key)
+			.catch(() => {});
+	}
+
+	const currentSession = await getSessionFromCtx(ctx);
+	if (currentSession?.session) {
+		await ctx.context.internalAdapter.deleteSession(currentSession.session.id);
+	}
+
+	deleteSessionCookie(ctx);
+
+	const requestId = parsed.extract.request?.id || "";
+	const res = sp.createLogoutResponse(
+		idp,
+		null,
+		binding,
+		relayState || "",
+		(template: string) =>
+			template
+				.replace("{InResponseTo}", requestId)
+				.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
+	) as { context: string; entityEndpoint?: string };
+
+	if (binding === "post" && res.entityEndpoint) {
+		return createSAMLPostForm(
+			res.entityEndpoint,
+			"SAMLResponse",
+			res.context,
+			relayState,
+		);
+	}
+	throw ctx.redirect(res.context);
+}
+
+export const initiateSLO = (options?: SSOOptions) => {
+	return createAuthEndpoint(
+		"/sso/saml2/logout/:providerId",
+		{
+			method: "POST",
+			body: z.object({
+				callbackURL: z.string().optional(),
+			}),
+			use: [sessionMiddleware],
+			metadata: HIDE_METADATA,
+		},
+		async (ctx) => {
+			if (!options?.saml?.enableSingleLogout) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.SINGLE_LOGOUT_NOT_ENABLED,
+				);
+			}
+
+			const { providerId } = ctx.params;
+			const callbackURL = ctx.body.callbackURL || ctx.context.baseURL;
+
+			const provider = await findSAMLProvider(
+				providerId,
+				options,
+				ctx.context.adapter,
+			);
+			if (!provider?.samlConfig) {
+				throw APIError.from(
+					"NOT_FOUND",
+					SAML_ERROR_CODES.SAML_PROVIDER_NOT_FOUND,
+				);
+			}
+
+			const config = provider.samlConfig as SAMLConfig;
+
+			const idpHasSLO =
+				config.idpMetadata?.singleLogoutService?.length ||
+				(config.idpMetadata?.metadata &&
+					config.idpMetadata.metadata.includes("SingleLogoutService"));
+			if (!idpHasSLO) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					SAML_ERROR_CODES.IDP_SLO_NOT_SUPPORTED,
+				);
+			}
+
+			const sp = createSP(config, ctx.context.baseURL, providerId);
+			const idp = createIdP(config);
+
+			const session = ctx.context.session;
+			const sessionLookupKey = `${constants.SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
+			const sessionLookup =
+				await ctx.context.internalAdapter.findVerificationValue(
+					sessionLookupKey,
+				);
+
+			let nameID = session.user.email;
+			let sessionIndex: string | undefined;
+			let samlSessionKey: string | undefined;
+
+			if (sessionLookup) {
+				samlSessionKey = sessionLookup.value;
+				const stored =
+					await ctx.context.internalAdapter.findVerificationValue(
+						samlSessionKey,
+					);
+				if (stored) {
 					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
 					if (data) {
-						// Only delete session if SessionIndex matches (or one side doesn't have it)
-						if (
-							!sessionIndex ||
-							!data.sessionIndex ||
-							sessionIndex === data.sessionIndex
-						) {
-							await ctx.context.internalAdapter
-								.deleteSession(data.sessionId)
-								.catch(() => {});
-						} else {
-							ctx.context.logger.warn(
-								"SessionIndex mismatch in LogoutRequest - skipping session deletion",
-								{
-									providerId,
-									requestedSessionIndex: sessionIndex,
-									storedSessionIndex: data.sessionIndex,
-								},
-							);
-						}
+						nameID = data.nameID || nameID;
+						sessionIndex = data.sessionIndex;
 					}
-				} catch (error) {
-					ctx.context.logger.warn(
-						"Failed to parse stored SAML session record",
-						{
-							key,
-							error: error instanceof Error ? error.message : String(error),
-						},
-					);
 				}
+			}
+
+			const logoutRequest = sp.createLogoutRequest(idp, "redirect", {
+				logoutNameID: nameID,
+				sessionIndex,
+				relayState: callbackURL,
+			}) as { id: string; context: string };
+
+			const ttl =
+				options?.saml?.logoutRequestTTL ??
+				constants.DEFAULT_LOGOUT_REQUEST_TTL_MS;
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier: `${constants.LOGOUT_REQUEST_KEY_PREFIX}${logoutRequest.id}`,
+				value: providerId,
+				expiresAt: new Date(Date.now() + ttl),
+			});
+
+			if (samlSessionKey) {
 				await ctx.context.internalAdapter
-					.deleteVerificationValue(key)
+					.deleteVerificationValue(samlSessionKey)
 					.catch(() => {});
 			}
+			await ctx.context.internalAdapter
+				.deleteVerificationValue(sessionLookupKey)
+				.catch(() => {});
 
-			const currentSession = await getSessionFromCtx(ctx);
-			if (currentSession?.session) {
-				await ctx.context.internalAdapter.deleteSession(
-					currentSession.session.id,
-				);
-			}
+			await ctx.context.internalAdapter.deleteSession(session.session.id);
 
-			// Clear the session cookie
 			deleteSessionCookie(ctx);
 
-			const requestId = parsed.extract.request?.id || "";
-			const res = sp.createLogoutResponse(
-				idp,
-				null,
-				binding,
-				relayState || "",
-				(template: string) =>
-					template
-						.replace("{InResponseTo}", requestId)
-						.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
-			) as { context: string; entityEndpoint?: string };
-
-			if (binding === "post" && res.entityEndpoint) {
-				return createSAMLPostForm(
-					res.entityEndpoint,
-					"SAMLResponse",
-					res.context,
-					relayState,
-				);
-			}
-			throw ctx.redirect(res.context);
+			throw ctx.redirect(logoutRequest.context);
 		},
 	);
 };

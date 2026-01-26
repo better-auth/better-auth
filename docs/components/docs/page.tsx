@@ -272,7 +272,7 @@ export const DocsTitle = forwardRef<
 		<h1
 			ref={ref}
 			{...props}
-			className={cn("text-3xl font-semibold", props.className)}
+			className={cn("text-3xl font-semibold wrap-break-word", props.className)}
 		>
 			{props.children}
 		</h1>

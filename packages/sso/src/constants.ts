@@ -17,6 +17,12 @@ export const USED_ASSERTION_KEY_PREFIX = "saml-used-assertion:";
 /** Prefix for SAML session data (NameID + SessionIndex) for SLO */
 export const SAML_SESSION_KEY_PREFIX = "saml-session:";
 
+/** Prefix for reverse lookup of SAML session by Better Auth session ID */
+export const SAML_SESSION_BY_ID_PREFIX = "saml-session-by-id:";
+
+/** Prefix for LogoutRequest IDs used in SP-initiated SLO validation */
+export const LOGOUT_REQUEST_KEY_PREFIX = "saml-logout-request:";
+
 // ============================================================================
 // Time-To-Live (TTL) Defaults
 // ============================================================================
@@ -32,6 +38,12 @@ export const DEFAULT_AUTHN_REQUEST_TTL_MS = 5 * 60 * 1000;
  * This should match the maximum expected NotOnOrAfter window plus clock skew.
  */
 export const DEFAULT_ASSERTION_TTL_MS = 15 * 60 * 1000;
+
+/**
+ * Default TTL for LogoutRequest records (5 minutes).
+ * Should be sufficient for IdP to process and respond.
+ */
+export const DEFAULT_LOGOUT_REQUEST_TTL_MS = 5 * 60 * 1000;
 
 /**
  * Default clock skew tolerance (5 minutes).
