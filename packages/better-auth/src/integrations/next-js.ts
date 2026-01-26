@@ -25,6 +25,25 @@ export const nextCookies = () => {
 	return {
 		id: "next-cookies",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						const headers = ctx.request?.headers || ctx.headers;
+						if (!headers) return false;
+						// RSC can read but not set cookies - skip refresh to prevent DB/cookie mismatch
+						const rscHeader = headers.get("RSC");
+						const nextActionHeader = headers.get("Next-Action");
+						return rscHeader === "1" && !nextActionHeader;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						(
+							ctx.context as typeof ctx.context & {
+								_skipSessionRefresh?: boolean;
+							}
+						)._skipSessionRefresh = true;
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {
