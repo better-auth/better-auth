@@ -35,17 +35,11 @@ export async function generatePrismaSchema(
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
-	if (dialect === "postgresql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"postgres://user:password@localhost:5434/better_auth"',
-		);
-	} else if (dialect === "mysql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"mysql://user:password@localhost:3308/better_auth"',
-		);
-	}
+
+	// In Prisma v7, remove the url property from the datasource
+	// The connection is now handled via adapter in PrismaClient constructor
+	code = code?.replace(/url\s*=\s*(env\([^)]+\)|"[^"]*")\n?/g, "");
+
 	code = code
 		?.split("\n")
 		.map((line, index) => {

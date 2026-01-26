@@ -1,4 +1,7 @@
 import { fileURLToPath } from "node:url";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { PrismaPg } from "@prisma/adapter-pg";
 import type { PrismaClient } from "@prisma/client";
 
 type PC = InstanceType<typeof PrismaClient>;
@@ -16,12 +19,39 @@ export const getPrismaClient = async (
 			? "@prisma/client"
 			: fileURLToPath(
 					new URL(
-						`./.tmp/prisma-client-${dialect}-${migrationCount}`,
+						`./.tmp/prisma-client-${dialect}-${migrationCount}/client.ts`,
 						import.meta.url,
 					),
 				)
 	);
-	const db = new PrismaClient();
+
+	// Create the appropriate adapter based on dialect
+	let adapter: PrismaPg | PrismaMariaDb | PrismaBetterSqlite3;
+	if (dialect === "postgresql") {
+		adapter = new PrismaPg({
+			connectionString: "postgres://user:password@localhost:5434/better_auth",
+		});
+	} else if (dialect === "mysql") {
+		adapter = new PrismaMariaDb({
+			host: "localhost",
+			port: 3308,
+			user: "user",
+			password: "password",
+			database: "better_auth",
+			timezone: "Z",
+		});
+	} else if (dialect === "sqlite") {
+		// Use a file-based database instead of :memory: because in-memory
+		// databases don't persist across PrismaClient reconnections
+		const dbPath = fileURLToPath(new URL("./dev.db", import.meta.url));
+		adapter = new PrismaBetterSqlite3({
+			url: `file:${dbPath}`,
+		});
+	} else {
+		throw new Error(`Unsupported dialect: ${dialect}`);
+	}
+
+	const db = new PrismaClient({ adapter });
 	clientMap.set(`${dialect}-${migrationCount}`, db);
 	return db as PC;
 };
