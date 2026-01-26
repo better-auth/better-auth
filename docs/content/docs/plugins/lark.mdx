@@ -115,8 +115,6 @@ lark({
 })
 ```
 
-### Configuration Options
-
 - **`larkClient`** (Required): The Lark billing SDK client instance initialized with your API key.
 
 - **`createCustomerOnSignUp`** (Optional, default: `false`): When set to `true`, automatically creates a [Lark subject](https://docs.uselark.ai/api/resources/subjects/methods/create) (customer) in Lark when a user signs up in Better Auth. The subject is created with the user's name, email, and uses the Better Auth `user.id` as the external ID for linking.
