@@ -143,8 +143,8 @@ describe("Email Verification", async () => {
 		expect(res.error?.code).toBe("TOKEN_EXPIRED");
 	});
 
-	it("should call onEmailVerification callback when email is verified", async () => {
-		const onEmailVerificationMock = vi.fn();
+	it("should call afterEmailVerification callback when email is verified", async () => {
+		const afterEmailVerificationMock = vi.fn();
 		const { auth, client } = await getTestInstance({
 			emailAndPassword: {
 				enabled: true,
@@ -155,7 +155,7 @@ describe("Email Verification", async () => {
 					token = _token;
 					mockSendEmail(user.email, url);
 				},
-				onEmailVerification: onEmailVerificationMock,
+				afterEmailVerification: afterEmailVerificationMock,
 			},
 		});
 
@@ -172,7 +172,7 @@ describe("Email Verification", async () => {
 		});
 
 		expect(res.data?.status).toBe(true);
-		expect(onEmailVerificationMock).toHaveBeenCalledWith(
+		expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 			expect.objectContaining({ email: testUser.email }),
 			expect.any(Object),
 		);
@@ -538,7 +538,6 @@ describe("Email Verification Secondary Storage", async () => {
 	});
 
 	it("should call hooks when verifying email change (change-email-verification)", async () => {
-		const onEmailVerificationMock = vi.fn();
 		const afterEmailVerificationMock = vi.fn();
 		let capturedToken: string;
 
@@ -551,7 +550,6 @@ describe("Email Verification Secondary Storage", async () => {
 					async sendVerificationEmail({ token: _token }) {
 						capturedToken = _token;
 					},
-					onEmailVerification: onEmailVerificationMock,
 					afterEmailVerification: afterEmailVerificationMock,
 				},
 				user: {
@@ -588,10 +586,6 @@ describe("Email Verification Secondary Storage", async () => {
 			});
 
 			// Hooks should be called when email is verified
-			expect(onEmailVerificationMock).toHaveBeenCalledWith(
-				expect.objectContaining({ email: testUser.email }),
-				expect.any(Object),
-			);
 			expect(afterEmailVerificationMock).toHaveBeenCalledWith(
 				expect.objectContaining({
 					email: "newemail@example.com",

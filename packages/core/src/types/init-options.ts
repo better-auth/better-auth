@@ -508,13 +508,6 @@ export type BetterAuthOptions = {
 				 */
 				expiresIn?: number;
 				/**
-				 * A function that is called when a user verifies their email
-				 * @param user the user that verified their email
-				 * @param request the request object
-				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
-				 */
-				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
-				/**
 				 * A function that is called before a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
