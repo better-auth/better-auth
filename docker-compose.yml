@@ -8,7 +8,15 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
-  
+
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
   # drizzle
   postgres:
     image: postgres:latest
@@ -113,11 +121,12 @@ services:
 
 volumes:
   mongodb_data:
+  redis_data:
   postgres_data:
   postgres-kysely_data:
   postgres-prisma_data:
   mysql_data:
   mssql_data:
   mysql-kysely_data:
-  mysql-prisma_data: 
+  mysql-prisma_data:
   postgres-kysely2_data:
