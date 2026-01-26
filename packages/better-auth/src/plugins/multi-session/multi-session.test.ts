@@ -20,7 +20,7 @@ describe("multi-session", async () => {
 		},
 	);
 
-	let headers = new Headers();
+	const headers = new Headers();
 	const testUser2 = {
 		email: "second-email@test.com",
 		password: "password",

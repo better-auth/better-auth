@@ -21,6 +21,14 @@ Better Auth aims to be the most comprehensive auth library. It provides a wide r
 
 Better Auth exposes an `LLMs.txt` that helps AI models understand how to integrate and interact with your authentication system. See it at [https://better-auth.com/llms.txt](https://better-auth.com/llms.txt).
 
+### Skills
+
+Better Auth provides skills that can be added to your AI coding assistant to help it understand Better Auth best practices and implementation patterns.
+
+```bash title="terminal"
+npx skills add better-auth/skills
+```
+
 ### MCP
 
 Better Auth provides an MCP server so you can use it with any AI model that supports the Model Context Protocol (MCP).
@@ -61,7 +69,7 @@ Alternatively, you can manually configure the MCP server for each client:
 <Tabs items={["Claude Code", "Open Code", "Manual"]}>
     <Tab value="Claude Code">
       ```bash title="terminal"
-      claude mcp add --transport http better-auth https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp
+      claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp
       ```
     </Tab>
     <Tab value="Open Code">
@@ -71,7 +79,7 @@ Alternatively, you can manually configure the MCP server for each client:
             "mcp": {
                 "better-auth": {
                     "type": "remote",
-                    "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp",
+                    "url": "https://mcp.inkeep.com/better-auth/mcp",
                     "enabled": true,
                 }
             }
@@ -82,7 +90,7 @@ Alternatively, you can manually configure the MCP server for each client:
      ```json title="mcp.json"
     {
         "better-auth": {
-            "url": "https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp"
+            "url": "https://mcp.inkeep.com/better-auth/mcp"
         }
     }
     ```
@@ -90,5 +98,6 @@ Alternatively, you can manually configure the MCP server for each client:
 </Tabs>
 
 <Callout>
-We provide a first‑party MCP, powered by [Chonkie](https://chonkie.ai). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
+We provide a first‑party MCP, powered by [Inkeep](https://inkeep.com). You can alternatively use [`context7`](https://context7.com/) and other MCP providers.
 </Callout>
+

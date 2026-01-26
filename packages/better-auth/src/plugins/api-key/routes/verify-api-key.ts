@@ -126,10 +126,10 @@ export async function validateApiKey({
 
 		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	} else if (remaining !== null) {
-		let now = Date.now();
+		const now = Date.now();
 		const refillInterval = apiKey.refillInterval;
 		const refillAmount = apiKey.refillAmount;
-		let lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
+		const lastTime = new Date(lastRefillAt ?? apiKey.createdAt).getTime();
 
 		if (refillInterval && refillAmount) {
 			// if they provide refill info, then we should refill once the interval is reached.
@@ -199,11 +199,9 @@ export async function validateApiKey({
 
 	if (opts.deferUpdates) {
 		ctx.context.runInBackground(
-			performUpdate()
-				.then(() => {})
-				.catch((error) => {
-					ctx.context.logger.error("Failed to update API key:", error);
-				}),
+			performUpdate().catch((error) => {
+				ctx.context.logger.error("Failed to update API key:", error);
+			}),
 		);
 		newApiKey = updated;
 	} else {

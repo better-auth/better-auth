@@ -758,14 +758,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -823,7 +823,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
 			let organizationId = ctx.body.organizationId;
-			let organizationSlug = ctx.body.organizationSlug;
+			const organizationSlug = ctx.body.organizationSlug;
 
 			if (organizationId === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
@@ -881,7 +881,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			let organization = await adapter.findOrganizationById(organizationId);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -899,14 +899,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);

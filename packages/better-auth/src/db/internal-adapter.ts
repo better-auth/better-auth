@@ -269,19 +269,21 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const ctx = await getCurrentAuthContext().catch(() => null);
-			const headers = ctx?.headers || ctx?.request?.headers;
-			const { id: _, ...rest } = override || {};
-			//we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(
-				ctx?.context.options ?? options,
-				{},
-			);
-			const data: Omit<Session, "id"> = {
-				ipAddress:
-					ctx?.request || ctx?.headers
-						? getIp(ctx?.request || ctx?.headers!, ctx?.context.options) || ""
-						: "",
+			const headers: Headers | undefined = await (async () => {
+				const ctx = await getCurrentAuthContext().catch(() => null);
+				return ctx?.headers || ctx?.request?.headers;
+			})();
+			const storeInDb = options.session?.storeSessionInDatabase;
+			const {
+				// always ignore override id - new sessions must have new ids
+				id: _,
+				...rest
+			} = override || {};
+
+			// we're parsing default values for session additional fields
+			const defaultAdditionalFields = parseSessionInput(options, {});
+			const data = {
+				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -299,7 +301,7 @@ export const createInternalAdapter = (
 				updatedAt: new Date(),
 				...defaultAdditionalFields,
 				...(overrideAll ? rest : {}),
-			};
+			} satisfies Partial<Session>;
 			const res = await createWithHooks(
 				data,
 				"session",
@@ -369,7 +371,7 @@ export const createInternalAdapter = (
 
 								return sessionData;
 							},
-							executeMainFn: options.session?.storeSessionInDatabase,
+							executeMainFn: storeInDb,
 						}
 					: undefined,
 			);
@@ -609,7 +611,7 @@ export const createInternalAdapter = (
 						`active-sessions-${userId}`,
 					);
 					if (currentList) {
-						let list: { token: string; expiresAt: number }[] =
+						const list: { token: string; expiresAt: number }[] =
 							safeJSONParse(currentList) || [];
 						const now = Date.now();
 
@@ -722,26 +724,29 @@ export const createInternalAdapter = (
 			providerId: string,
 		) => {
 			// we need to find account first to avoid missing user if the email changed with the provider for the same account
-			const account = await (await getCurrentAdapter(adapter))
-				.findMany<Account & { user: User | null }>({
-					model: "account",
-					where: [
-						{
-							value: accountId,
-							field: "accountId",
-						},
-					],
-					join: {
-						user: true,
+			const account = await (await getCurrentAdapter(adapter)).findOne<
+				Account & { user: User | null }
+			>({
+				model: "account",
+				where: [
+					{
+						value: accountId,
+						field: "accountId",
 					},
-				})
-				.then((accounts) => {
-					return accounts.find((a) => a.providerId === providerId);
-				});
+					{
+						value: providerId,
+						field: "providerId",
+					},
+				],
+				join: {
+					user: true,
+				},
+			});
 			if (account) {
 				if (account.user) {
 					return {
 						user: account.user,
+						linkedAccount: account,
 						accounts: [account],
 					};
 				} else {
@@ -757,6 +762,7 @@ export const createInternalAdapter = (
 					if (user) {
 						return {
 							user,
+							linkedAccount: account,
 							accounts: [account],
 						};
 					}
@@ -786,6 +792,7 @@ export const createInternalAdapter = (
 					});
 					return {
 						user,
+						linkedAccount: null,
 						accounts: accounts || [],
 					};
 				} else {
