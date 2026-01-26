@@ -63,10 +63,10 @@
   "dependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "fast-xml-parser": "^5.2.5",
+    "fast-xml-parser": "^5.3.3",
     "jose": "^6.1.0",
-    "samlify": "^2.10.1",
-    "zod": "^4.3.5"
+    "samlify": "^2.10.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
@@ -74,8 +74,8 @@
     "@types/express": "^5.0.6",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "body-parser": "^2.2.1",
-    "express": "^5.1.0",
+    "body-parser": "^2.2.2",
+    "express": "^5.2.1",
     "oauth2-mock-server": "^8.2.0",
     "tsdown": "catalog:"
   },
