@@ -74,10 +74,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			const isPostRequest = ctx.method === "POST";
 
 			if (isPostRequest && !deferSessionRefresh) {
-				throw new APIError("METHOD_NOT_ALLOWED", {
-					message:
-						"POST method requires deferSessionRefresh to be enabled in session config",
-				});
+				throw APIError.from(
+					"METHOD_NOT_ALLOWED",
+					BASE_ERROR_CODES.METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED,
+				);
 			}
 
 			try {
