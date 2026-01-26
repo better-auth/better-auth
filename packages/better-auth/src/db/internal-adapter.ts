@@ -167,14 +167,14 @@ export const createInternalAdapter = (
 					seenTokens.add(token);
 
 					const data = await secondaryStorage.get(token);
-					if (!data) continue;
+					if (!data || typeof data !== "string") continue;
 
 					try {
-						const parsed = safeJSONParse<{
+						const parsed = JSON.parse(data) as {
 							session: Session;
 							user: User;
-						}>(data);
-						if (!parsed) continue;
+						};
+						if (!parsed?.session) continue;
 
 						sessions.push(
 							parseSessionOutput(ctx.options, {
@@ -468,13 +468,13 @@ export const createInternalAdapter = (
 				}[] = [];
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
-					if (sessionStringified) {
+					if (sessionStringified && typeof sessionStringified === "string") {
 						try {
-							const s = safeJSONParse<{
+							const s = JSON.parse(sessionStringified) as {
 								session: Session;
 								user: User;
-							}>(sessionStringified);
-							if (!s) continue;
+							};
+							if (!s?.session) continue;
 							const session = {
 								session: {
 									...s.session,
