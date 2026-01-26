@@ -45,17 +45,17 @@ export function getWithHooks(
 			}
 		}
 
-		const customCreated = customCreateFn
-			? await customCreateFn.fn(actualData)
-			: null;
-		const created =
-			!customCreateFn || customCreateFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).create<T>({
-						model,
-						data: actualData as any,
-						forceAllowId: true,
-					})
-				: customCreated;
+		let created: any = null;
+		if (!customCreateFn || customCreateFn.executeMainFn) {
+			created = await (await getCurrentAdapter(adapter)).create<T>({
+				model,
+				data: actualData as any,
+				forceAllowId: true,
+			});
+		}
+		if (customCreateFn?.fn) {
+			created = await customCreateFn.fn(created ?? actualData);
+		}
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;

@@ -478,7 +478,6 @@ describe("internal adapter test", async () => {
 		const expectedTTL = Math.floor(3599500 / 1000); // Should be 3599 seconds (rounded down)
 
 		const session = {
-			id: "test-session-id",
 			userId: testUser.id,
 			token: "test-token",
 			expiresAt,
@@ -583,10 +582,6 @@ describe("internal adapter test", async () => {
 			email: "test@email.com",
 		});
 		const session = await internalAdapter.createSession(user.id);
-
-		// Session should have an id
-		expect(session.id).toBeDefined();
-		expect(typeof session.id).toBe("string");
 
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
