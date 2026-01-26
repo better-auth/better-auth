@@ -11,6 +11,7 @@ export default defineConfig({
 		"better-auth",
 		"better-call",
 	],
+	sourcemap: true,
 	treeshake: true,
 	clean: true,
 });
