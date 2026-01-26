@@ -1,4 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
+import Database from "better-sqlite3";
+import { SqliteDialect } from "kysely";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
