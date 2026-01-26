@@ -16,7 +16,7 @@ const signUpEmailBodySchema = z
 	.object({
 		email: z.email(),
 		password: z.string().nonempty(),
-		name: z.string().optional(),
+		name: z.string().nullish(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),
 		rememberMe: z.boolean().optional(),
@@ -38,9 +38,9 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				],
 				$Infer: {
 					body: {} as {
-						name?: string | null | undefined;
 						email: string;
 						password: string;
+						name?: string | null | undefined;
 						image?: string | undefined;
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
