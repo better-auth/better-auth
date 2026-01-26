@@ -7,14 +7,17 @@ import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
 	deleteSessionCookie,
+	expireCookie,
 	parseCookies,
 	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
 	setSessionCookie,
 } from "../../cookies";
+import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"multi-session": {
 			creator: typeof multiSession;
 		};
@@ -109,7 +112,12 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						},
 						[] as typeof validSessions,
 					);
-					return ctx.json(uniqueUserSessions);
+					return ctx.json(
+						uniqueUserSessions.map((item) => ({
+							session: parseSessionOutput(ctx.context.options, item.session),
+							user: parseUserOutput(ctx.context.options, item.user),
+						})),
+					);
 				},
 			),
 			/**
@@ -175,9 +183,9 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionToken);
 					if (!session || session.session.expiresAt < new Date()) {
-						ctx.setCookie(multiSessionCookieName, "", {
-							...ctx.context.authCookies.sessionToken.options,
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: multiSessionCookieName,
+							attributes: ctx.context.authCookies.sessionToken.attributes,
 						});
 						throw APIError.from(
 							"UNAUTHORIZED",
@@ -185,7 +193,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						);
 					}
 					await setSessionCookie(ctx, session);
-					return ctx.json(session);
+					return ctx.json({
+						session: parseSessionOutput(ctx.context.options, session.session),
+						user: parseUserOutput(ctx.context.options, session.user),
+					});
 				},
 			),
 			/**
@@ -250,9 +261,9 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					}
 
 					await ctx.context.internalAdapter.deleteSession(sessionToken);
-					ctx.setCookie(multiSessionCookieName, "", {
-						...ctx.context.authCookies.sessionToken.options,
-						maxAge: 0,
+					expireCookie(ctx, {
+						name: multiSessionCookieName,
+						attributes: ctx.context.authCookies.sessionToken.attributes,
 					});
 					const isActive = ctx.context.session?.session.token === sessionToken;
 					if (!isActive) return ctx.json({ status: true });
@@ -330,7 +341,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							cookieName,
 							sessionToken,
 							ctx.context.secret,
-							sessionCookieConfig.options,
+							sessionCookieConfig.attributes,
 						);
 					}),
 				},
@@ -351,14 +362,16 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 										ctx.context.secret,
 									);
 									if (verifiedToken) {
-										ctx.setCookie(
-											key.toLowerCase().replace("__secure-", "__Secure-"),
-											"",
-											{
-												...ctx.context.authCookies.sessionToken.options,
-												maxAge: 0,
-											},
-										);
+										expireCookie(ctx, {
+											name: key
+												.toLowerCase()
+												.replace(
+													SECURE_COOKIE_PREFIX.toLowerCase(),
+													SECURE_COOKIE_PREFIX,
+												),
+											attributes:
+												ctx.context.authCookies.sessionToken.attributes,
+										});
 										return verifiedToken;
 									}
 									return null;

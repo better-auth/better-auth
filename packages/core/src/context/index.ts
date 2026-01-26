@@ -4,6 +4,7 @@ export {
 	getCurrentAuthContextAsyncLocalStorage,
 	runWithEndpointContext,
 } from "./endpoint-context";
+export { getBetterAuthVersion } from "./global";
 export {
 	defineRequestState,
 	getCurrentRequestState,
@@ -16,6 +17,7 @@ export {
 export {
 	getCurrentAdapter,
 	getCurrentDBAdapterAsyncLocalStorage,
+	queueAfterTransactionHook,
 	runWithAdapter,
 	runWithTransaction,
 } from "./transaction";

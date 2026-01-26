@@ -20,7 +20,12 @@ import {
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
-import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
+import {
+	testClientPlugin,
+	testClientPlugin2,
+	testDeepMergePluginA,
+	testDeepMergePluginB,
+} from "./test-plugin";
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
@@ -616,5 +621,53 @@ describe("type", () => {
 		expectTypeOf(
 			client.$ERROR_CODES.USER_NOT_FOUND.message,
 		).toEqualTypeOf<"User not found">();
+	});
+});
+
+describe("plugin actions deep merge", () => {
+	it("should merge actions from multiple plugins with same top-level key", async () => {
+		const client = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both methods should be accessible under signIn
+		expect(typeof client.signIn.methodA).toBe("function");
+		expect(typeof client.signIn.methodB).toBe("function");
+
+		// Both methods should work correctly
+		const resultA = await client.signIn.methodA();
+		const resultB = await client.signIn.methodB();
+		expect(resultA).toEqual({ success: true, method: "A" });
+		expect(resultB).toEqual({ success: true, method: "B" });
+	});
+
+	it("should preserve first plugin methods when second plugin adds to same key", async () => {
+		// Order matters: A first, then B
+		const clientAB = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Order reversed: B first, then A
+		const clientBA = createVanillaClient({
+			plugins: [testDeepMergePluginB(), testDeepMergePluginA()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both orders should have both methods
+		expect(typeof clientAB.signIn.methodA).toBe("function");
+		expect(typeof clientAB.signIn.methodB).toBe("function");
+		expect(typeof clientBA.signIn.methodA).toBe("function");
+		expect(typeof clientBA.signIn.methodB).toBe("function");
 	});
 });
