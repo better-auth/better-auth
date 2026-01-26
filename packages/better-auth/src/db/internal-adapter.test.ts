@@ -1,8 +1,6 @@
 import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import Database from "better-sqlite3";
-import { SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
@@ -623,16 +621,8 @@ describe("internal adapter test", async () => {
 	it("listSessions should skip missing sessions without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(':memory:'),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -674,23 +664,13 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
-
-		testDb.close();
 	});
 
 	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
 		const testMap = new Map<string, string>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(':memory:'),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -728,23 +708,13 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
-
-		testDb.close();
 	});
 
 	it("listSessions should skip corrupt/unparsable sessions without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(':memory:'),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -782,23 +752,12 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
-
-		testDb.close();
 	});
 
 	it("listSessions should return empty array when all sessions are missing/corrupt", async () => {
 		const testMap = new Map<string, string>();
-
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(':memory:'),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -833,23 +792,13 @@ describe("internal adapter test", async () => {
 		// listSessions should return empty array
 		const sessions = await testInternalAdapter.listSessions(user.id);
 		expect(sessions.length).toBe(0);
-
-		testDb.close();
 	});
 
 	it("findSessions should skip corrupt sessions without blanking the list", async () => {
 		const testMap = new Map<string, string>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(':memory:'),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -891,8 +840,6 @@ describe("internal adapter test", async () => {
 		expect(sessions.map((s) => s.session.token).sort()).toEqual(
 			[session1.token, session3.token].sort(),
 		);
-
-		testDb.close();
 	});
 
 	it("should update session and active-sessions list in secondary storage", async () => {
