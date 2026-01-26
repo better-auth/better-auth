@@ -1,9 +1,8 @@
+import { DatabaseSync } from "node:sqlite";
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import Database from "better-sqlite3";
-import { Kysely, SqliteDialect } from "kysely";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { betterAuth } from "../auth";
+import { betterAuth } from "../auth/full";
 import { init } from "../context/init";
 import { getTestInstance } from "../test-utils/test-instance";
 import type {
@@ -15,9 +14,6 @@ import type {
 import { getMigrations } from "./get-migration";
 
 describe("internal adapter test", async () => {
-	const sqliteDialect = new SqliteDialect({
-		database: new Database(":memory:"),
-	});
 	const map = new Map();
 	const expirationMap = new Map();
 	let id = 1;
@@ -30,10 +26,7 @@ describe("internal adapter test", async () => {
 	const pluginHookUserCreateBefore = vi.fn();
 	const pluginHookUserCreateAfter = vi.fn();
 	const opts = {
-		database: {
-			dialect: sqliteDialect,
-			type: "sqlite",
-		},
+		database: new DatabaseSync(":memory:"),
 		user: {
 			fields: {
 				email: "email_address",
@@ -270,30 +263,19 @@ describe("internal adapter test", async () => {
 		};
 		const hookUserCreateAfter = vi.fn();
 
-		const dialect = new SqliteDialect({
-			database: new Database(":memory:"),
-		});
+		const database = new DatabaseSync(":memory:");
 
-		const db = new Kysely<any>({
-			dialect,
-		});
-
-		const opts: BetterAuthOptions = {
-			database: {
-				dialect,
-				type: "sqlite",
-			},
+		const opts = {
+			database,
 			databaseHooks: {
 				user: {
 					create: {
 						async after(user, context) {
 							hookUserCreateAfter(user, context);
 
-							const userFromDb: any = await db
-								.selectFrom("user")
-								.selectAll()
-								.where("id", "=", user.id)
-								.executeTakeFirst();
+							const userFromDb = database
+								.prepare("SELECT * FROM user WHERE id = ?")
+								.get(user.id)!;
 
 							expect(user.id).toBe(userFromDb.id);
 							expect(user.name).toBe(userFromDb.name);
@@ -303,10 +285,10 @@ describe("internal adapter test", async () => {
 								Boolean(userFromDb.emailVerified),
 							);
 							expect(user.createdAt).toStrictEqual(
-								new Date(userFromDb.createdAt),
+								new Date(userFromDb.createdAt as string),
 							);
 							expect(user.updatedAt).toStrictEqual(
-								new Date(userFromDb.updatedAt),
+								new Date(userFromDb.updatedAt as string),
 							);
 						},
 					},
@@ -339,12 +321,7 @@ describe("internal adapter test", async () => {
 		const capturedTTLs: number[] = [];
 
 		const testOpts = {
-			database: {
-				dialect: new SqliteDialect({
-					database: new Database(":memory:"),
-				}),
-				type: "sqlite",
-			},
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number | undefined) {
 					if (ttl !== undefined) {
@@ -496,6 +473,11 @@ describe("internal adapter test", async () => {
 			email: "test@email.com",
 		});
 		const session = await internalAdapter.createSession(user.id);
+
+		// Session should have an id
+		expect(session.id).toBeDefined();
+		expect(typeof session.id).toBe("string");
+
 		const storedSessions: { token: string; expiresAt: number }[] = JSON.parse(
 			map.get(`active-sessions-${user.id}`),
 		);
@@ -915,16 +897,8 @@ describe("internal adapter test", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
-		const testDb = new Database(":memory:");
-		const testSqliteDialect = new SqliteDialect({
-			database: testDb,
-		});
-
 		const testOpts = {
-			database: {
-				dialect: testSqliteDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -1022,23 +996,14 @@ describe("internal adapter test", async () => {
 		expect(updatedTTL).toBeDefined();
 		expect(updatedTTL! - expectedTTL).toBeLessThanOrEqual(1);
 		expect(updatedTTL! - expectedTTL).toBeGreaterThanOrEqual(0);
-
-		// Clean up DB
-		testDb.close();
 	});
 
 	it("should deduplicate sessions when active-sessions list contains duplicates", async () => {
-		const testDb = new Database(":memory:");
-		const testDialect = new SqliteDialect({ database: testDb });
-
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
 
 		const testOpts = {
-			database: {
-				dialect: testDialect,
-				type: "sqlite",
-			},
+			database: new DatabaseSync(":memory:"),
 			secondaryStorage: {
 				set(key: string, value: string, ttl?: number) {
 					testMap.set(key, value);
@@ -1093,8 +1058,5 @@ describe("internal adapter test", async () => {
 		// listSessions should deduplicate and return only unique sessions
 		const sessions = await testInternalAdapter.listSessions(user.id);
 		expect(sessions.length).toBe(1);
-
-		// Clean up DB
-		testDb.close();
 	});
 });
