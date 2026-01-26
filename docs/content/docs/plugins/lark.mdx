@@ -1,0 +1,258 @@
+---
+title: Lark Billing
+description: Better Auth Plugin for Lark Billing
+---
+
+[Lark](https://uselark.ai/) is a billing platform for modern pricing. The plugin helps you integrate Lark billing with Better Auth. For example, you can automatically create customers in Lark and subscribe them to free plans on signup. You can also subscribe users to paid plans on demand, cancel subscriptions, fetch recent invoices, and more.
+
+<Callout>
+  This plugin is maintained by the Lark team. For bugs, issues or feature requests,
+  please contact the [Lark team](mailto:support@uselark.ai).
+</Callout>
+
+## Features
+- Automatic customer creation on signup
+- Free plan subscription on signup
+- Subscription management (create, upgrade, cancel)
+- Billing state and entitlements checking
+- Customer portal integration
+- Invoice history access
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Create a Lark account
+    If you don't have a Lark account, you can create one [here](https://uselark.ai). Then set up [rate cards](https://docs.uselark.ai/guides/rate_cards/rate_cards/) as per your pricing model. In this example, we'll subscribe users to a free plan on signup and let them upgrade to a starter or premium plan on demand.
+  </Step>
+  <Step>
+    ### Install dependencies
+
+    Install the Better Auth Lark plugin:
+
+    ```package-install
+    @uselark/better-auth-lark
+    ```
+
+    <Callout>
+      If you're using a separate client and server setup, make sure to install the plugin in both parts of your project.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Add `LARK_API_KEY` to your environment variables
+
+    You can find your API key in your Lark dashboard.
+
+    ```bash title=".env"
+    LARK_API_KEY=your_api_key_here
+    ```
+  </Step>
+
+  <Step>
+    ### Configure the server plugin
+
+    Initialize the Lark client and add the plugin to your Better Auth configuration:
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import LarkClient from "lark-billing";
+    import { lark } from "@uselark/better-auth-lark";
+
+    const larkSdkClient = new LarkClient({
+      apiKey: process.env.LARK_API_KEY,
+    });
+
+    export const auth = betterAuth({
+      // ... your existing config
+      plugins: [
+        lark({
+          larkClient: larkSdkClient,
+          createCustomerOnSignUp: true,
+          freePlanRateCardInfo: {
+            freePlanRateCardId: "FREE_PLAN_RATE_CARD_ID",
+            fixedRateQuantities: {
+              "FREE_PLAN_RATE_QUANTITY_CODE": 1,
+            },
+          },
+        }),
+      ],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Configure the client plugin
+
+    Add the client plugin to your Better Auth client:
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/react";
+    import { larkClient } from "@uselark/better-auth-lark";
+
+    export const authClient = createAuthClient({
+      baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
+      plugins: [larkClient()],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Configuration Options
+
+### Core Plugin Options
+
+```ts title="auth.ts"
+lark({
+  larkClient: larkSdkClient, // Required: Lark billing SDK instance
+  createCustomerOnSignUp: true, // Optional: Create Lark customer on signup (default: false)
+  freePlanRateCardInfo: { // Optional: Subscribe users to a free plan on signup
+    freePlanRateCardId: "FREE_PLAN_RATE_CARD_ID",
+    fixedRateQuantities: {
+      "FREE_PLAN_RATE_QUANTITY_CODE": 1,
+    },
+  },
+})
+```
+
+### Configuration Options
+
+- **`larkClient`** (Required): The Lark billing SDK client instance initialized with your API key.
+
+- **`createCustomerOnSignUp`** (Optional, default: `false`): When set to `true`, automatically creates a [Lark subject](https://docs.uselark.ai/api/resources/subjects/methods/create) (customer) in Lark when a user signs up in Better Auth. The subject is created with the user's name, email, and uses the Better Auth `user.id` as the external ID for linking.
+
+- **`freePlanRateCardInfo`** (Optional): Configuration object to automatically subscribe new users to a free plan on signup. This should only be used with rate cards that have $0 fixed fees, as users would otherwise need to go through a checkout flow which isn't supported during signup.
+  - **`freePlanRateCardId`**: The ID of the rate card in Lark that represents your free plan.
+  - **`fixedRateQuantities`**: An object mapping rate quantity codes to their quantities. These are passed to the [create subscription API](https://docs.uselark.ai/api/resources/subscriptions/methods/create) when subscribing users to the free plan on signup.
+
+## Usage
+
+### Subscribe to a Plan
+
+If you haven't configured the Lark plugin to automatically subscribe new users to a free plan on signup by setting `freePlanRateCardInfo`, then you can subscribe them to a plan on demand.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.createSubscription({
+  rate_card_id: plan.rateCardId,
+  fixed_rate_quantities: { "rate_quantity_code": 1 },
+  checkout_callback_urls: {
+    cancelled_url: currentUrl,
+    success_url: currentUrl,
+  },
+});
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+if (data?.result?.result_type === "requires_action" && data.result.action?.checkout_url) {
+  // Redirect to checkout
+  window.location.href = data.result.action.checkout_url;
+  return;
+}
+
+if (data?.result?.result_type === "success") {
+  alert("Successfully subscribed customer");
+}
+```
+
+### Upgrade Plan
+
+If a customer is already subscribed to a plan, you can change their rate card to facilitate upgrades. If a payment method doesn't exist on file for the customer, then the customer will be redirected to a checkout to confirm the upgrade.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.changeRateCard({
+  subscription_id: subscriptionId,
+  rate_card_id: plan.rateCardId,
+  cancelled_url: currentUrl,
+  success_url: currentUrl,
+});
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+if (data?.result?.result_type === "requires_action" && data.result.action?.checkout_url) {
+  // Redirect to checkout
+  window.location.href = data.result.action.checkout_url;
+  return;
+}
+
+if (data?.result?.result_type === "success") {
+  alert("Successfully upgraded customer");
+}
+```
+
+### Get Billing State
+
+To check entitlements for a customer, you can fetch the billing state for them at any point.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.getBillingState();
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+const { active_subscriptions } = data;
+// Use active_subscriptions to check entitlements
+```
+
+### Cancel a Subscription
+
+You can support subscription cancellation with a single line in your app.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.cancelSubscription({
+  subscription_id: subscriptionId,
+  reason: "User requested cancellation",
+});
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+alert("Subscription cancelled successfully");
+```
+
+### Redirect to Billing Portal
+
+You can also redirect a customer to the [Lark customer portal](https://docs.uselark.ai/api/resources/customer_portal/methods/create_session) where they can view their upcoming bill, past invoices, etc.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.createCustomerPortalSession({
+  return_url: currentUrl,
+});
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+// Redirect to portal
+window.location.href = data.url;
+```
+
+### List Recent Invoices
+
+If you want to show the customer their past few invoices, you can fetch them with a single command.
+
+```tsx
+const { data, error } = await authClient.larkBillingPlugin.listRecentInvoices();
+
+if (error) {
+  alert(error.message);
+  return;
+}
+
+const { invoices } = data;
+// Display invoices to the user
+```
+
+## Learn More
+
+Visit [docs.uselark.ai](https://docs.uselark.ai/) to learn more about Lark billing integration. We provide frontend SDKs to fetch billing state and have simple APIs for subscription management.
