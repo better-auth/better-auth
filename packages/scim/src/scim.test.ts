@@ -2014,12 +2014,12 @@ describe("SCIM", () => {
 			});
 		});
 
-	it("should only allow access to users that belong to the same provider and organization", async () => {
-		const { auth, getSCIMToken, registerOrganization } = createTestInstance();
-		const [organizationA, organizationB] = await Promise.all([
-			registerOrganization("org:a"),
-			registerOrganization("org:b"),
-		]);
+		it("should only allow access to users that belong to the same provider and organization", async () => {
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
+			const [organizationA, organizationB] = await Promise.all([
+				registerOrganization("org:a"),
+				registerOrganization("org:b"),
+			]);
 
 			const [scimTokenProviderA, scimTokenProviderB] = await Promise.all([
 				getSCIMToken("provider-a", organizationA?.id),
@@ -2064,16 +2064,16 @@ describe("SCIM", () => {
 				Resources: [userB],
 			});
 
-		expect(usersProviderB).toMatchObject({
-			itemsPerPage: 2,
-			schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
-			startIndex: 1,
-			totalResults: 2,
-			Resources: [userA, userC],
-		});
-	}, 10000);
+			expect(usersProviderB).toMatchObject({
+				itemsPerPage: 2,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 2,
+				Resources: [userA, userC],
+			});
+		}, 10000);
 
-	it("should filter the list of users", async () => {
+		it("should filter the list of users", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
