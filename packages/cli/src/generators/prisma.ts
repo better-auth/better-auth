@@ -206,8 +206,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				const useNumberId =
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
 					field === "id" && useNumberId

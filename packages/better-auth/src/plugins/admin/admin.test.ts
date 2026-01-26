@@ -1503,7 +1503,7 @@ describe("edge cases: userId validation", async () => {
 		{
 			advanced: {
 				database: {
-					generateId: 'serial',
+					generateId: "serial",
 				},
 			},
 			plugins: [

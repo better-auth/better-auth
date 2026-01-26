@@ -811,7 +811,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		const sendConfirmationToOldEmail =
 			ctx.context.session.user.emailVerified &&
-			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (sendConfirmationToOldEmail) {
 			const token = await createEmailVerificationToken(

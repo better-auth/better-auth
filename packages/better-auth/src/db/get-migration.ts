@@ -274,8 +274,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
-	const useNumberId =
-		config.advanced?.database?.generateId === "serial";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;

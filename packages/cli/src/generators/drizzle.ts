@@ -64,8 +64,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId =
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
@@ -168,8 +167,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId =
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
@@ -549,8 +547,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId =
-		options.advanced?.database?.generateId === "serial";
+	const useNumberId = options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -611,8 +608,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			(options.advanced?.database?.generateId === "serial" &&
-				hasFkToId);
+			(options.advanced?.database?.generateId === "serial" && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}
