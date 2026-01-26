@@ -1461,3 +1461,111 @@ describe("date field type consistency", async () => {
 		);
 	});
 });
+
+describe("RSC context session refresh", async () => {
+	const { nextCookies } = await import("../../integrations/next-js");
+
+	it("should skip session refresh in RSC context to prevent DB/cookie mismatch", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				updateAge: 0, // Update on every request
+			},
+			plugins: [nextCookies()],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			returnHeaders: true,
+		});
+
+		const headers = new Headers();
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
+
+		const initialSession = await auth.api.getSession({ headers });
+		expect(initialSession).not.toBeNull();
+		const initialExpiresAt = initialSession!.session.expiresAt;
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const rscHeaders = new Headers(headers);
+		rscHeaders.set("RSC", "1");
+
+		const rscSession = await auth.api.getSession({
+			headers: rscHeaders,
+		});
+
+		expect(rscSession).not.toBeNull();
+
+		expect(new Date(rscSession!.session.expiresAt).getTime()).toBe(
+			new Date(initialExpiresAt).getTime(),
+		);
+	});
+
+	it("should still refresh session when RSC header is present with Next-Action (server actions)", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				updateAge: 0, // Update on every request
+			},
+			plugins: [nextCookies()],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			returnHeaders: true,
+		});
+
+		const headers = new Headers();
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
+
+		const initialSession = await auth.api.getSession({ headers });
+		expect(initialSession).not.toBeNull();
+		const initialExpiresAt = initialSession!.session.expiresAt;
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const serverActionHeaders = new Headers(headers);
+		serverActionHeaders.set("RSC", "1");
+		serverActionHeaders.set("Next-Action", "some-action-id");
+
+		const serverActionSession = await auth.api.getSession({
+			headers: serverActionHeaders,
+		});
+
+		expect(serverActionSession).not.toBeNull();
+
+		expect(
+			new Date(serverActionSession!.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(initialExpiresAt).getTime());
+	});
+
+	it("should refresh session normally without RSC header", async () => {
+		const { auth, testUser } = await getTestInstance({
+			session: {
+				updateAge: 0, // Update on every request
+			},
+			plugins: [nextCookies()],
+		});
+
+		const signInRes = await auth.api.signInEmail({
+			body: { email: testUser.email, password: testUser.password },
+			returnHeaders: true,
+		});
+
+		const headers = new Headers();
+		headers.set("cookie", signInRes.headers.getSetCookie().join("; "));
+
+		const initialSession = await auth.api.getSession({ headers });
+		expect(initialSession).not.toBeNull();
+		const initialExpiresAt = initialSession!.session.expiresAt;
+
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		const normalSession = await auth.api.getSession({ headers });
+
+		expect(normalSession).not.toBeNull();
+
+		expect(
+			new Date(normalSession!.session.expiresAt).getTime(),
+		).toBeGreaterThan(new Date(initialExpiresAt).getTime());
+	});
+});
