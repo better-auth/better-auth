@@ -246,7 +246,7 @@ export const auth = betterAuth({
 	// ... other options
 	secondaryStorage: redisStorage({
 		client: redis,
-		keyPrefix: "better-auth:", // optional, defaults to "better-auth:"
+		kxeyPrefix: "better-auth:", // optional, defaults to "better-auth:"
 	}),
 });
 ```
