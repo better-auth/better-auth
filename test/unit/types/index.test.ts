@@ -31,9 +31,9 @@ test("infer user type correctly", async () => {
 		emailVerified: boolean;
 		name?: string | null | undefined;
 		image?: string | null | undefined;
-		onboardingCompleted?: boolean | null | undefined;
+		onboardingCompleted: boolean | null | undefined;
 	};
-	expectTypeOf<User>().toMatchTypeOf<Res>();
+	expectTypeOf<User>().toEqualTypeOf<Res>();
 	const { api } = {
 		api:
 			// use proxy to avoid runtime error
@@ -52,7 +52,7 @@ test("infer user type correctly", async () => {
 				password: "",
 			},
 		});
-		expectTypeOf(user).toMatchTypeOf<Res>();
+		expectTypeOf(user).toEqualTypeOf<Res>();
 	}
 	{
 		const { user } = await api.signInEmail({
@@ -61,6 +61,6 @@ test("infer user type correctly", async () => {
 				password: "",
 			},
 		});
-		expectTypeOf(user).toMatchTypeOf<Res>();
+		expectTypeOf(user).toEqualTypeOf<Res>();
 	}
 });
