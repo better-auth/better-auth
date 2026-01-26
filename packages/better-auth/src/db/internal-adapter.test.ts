@@ -368,7 +368,6 @@ describe("internal adapter test", async () => {
 		const expectedTTL = Math.floor(3599500 / 1000); // Should be 3599 seconds (rounded down)
 
 		const session = {
-			id: "test-session-id",
 			userId: testUser.id,
 			token: "test-token",
 			expiresAt,
