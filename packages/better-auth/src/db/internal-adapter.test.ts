@@ -636,6 +636,255 @@ describe("internal adapter test", async () => {
 		expect(accounts.length).toBe(0);
 	});
 
+	it("listSessions should skip missing sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-skip",
+			email: "test-skip@email.com",
+		});
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Verify all 3 sessions exist
+		let sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(3);
+
+		// Delete session2 from storage (simulating missing/expired session)
+		testMap.delete(session2.token);
+
+		// listSessions should still return session1 and session3
+		sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should skip malformed session data (valid JSON but wrong structure)", async () => {
+		const testMap = new Map<string, string>();
+
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-malformed",
+			email: "test-malformed@email.com",
+		});
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Set session2 to valid JSON but malformed structure (session is null, will throw on property access)
+		testMap.set(session2.token, JSON.stringify({ session: null, user: null }));
+
+		// listSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should skip corrupt/unparsable sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-corrupt",
+			email: "test-corrupt@email.com",
+		});
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt session2 data
+		testMap.set(session2.token, "invalid-json{{{");
+
+		// listSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
+	it("listSessions should return empty array when all sessions are missing/corrupt", async () => {
+		const testMap = new Map<string, string>();
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-all-corrupt",
+			email: "test-all-corrupt@email.com",
+		});
+
+		// Create 2 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt both sessions
+		testMap.set(session1.token, "invalid-json");
+		testMap.set(session2.token, "also-invalid");
+
+		// listSessions should return empty array
+		const sessions = await testInternalAdapter.listSessions(user.id);
+		expect(sessions.length).toBe(0);
+	});
+
+	it("findSessions should skip corrupt sessions without blanking the list", async () => {
+		const testMap = new Map<string, string>();
+
+		const testDb = new Database(":memory:");
+		const testDialect = new SqliteDialect({ database: testDb });
+		const testOpts = {
+			database: {
+				dialect: testDialect,
+				type: "sqlite",
+			},
+			secondaryStorage: {
+				set(key: string, value: string, ttl?: number) {
+					testMap.set(key, value);
+				},
+				get(key: string) {
+					return testMap.get(key) || null;
+				},
+				delete(key: string) {
+					testMap.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+
+		const testCtx = await init(testOpts);
+		const testInternalAdapter = testCtx.internalAdapter;
+
+		const user = await testInternalAdapter.createUser({
+			name: "test-user-find",
+			email: "test-find@email.com",
+		});
+
+		// Create 3 sessions
+		const session1 = await testInternalAdapter.createSession(user.id);
+		const session2 = await testInternalAdapter.createSession(user.id);
+		const session3 = await testInternalAdapter.createSession(user.id);
+
+		// Corrupt session2 data
+		testMap.set(session2.token, "invalid-json{{{");
+
+		// findSessions should still return session1 and session3
+		const sessions = await testInternalAdapter.findSessions([
+			session1.token,
+			session2.token,
+			session3.token,
+		]);
+		expect(sessions.length).toBe(2);
+		expect(sessions.map((s) => s.session.token).sort()).toEqual(
+			[session1.token, session3.token].sort(),
+		);
+	});
+
 	it("should update session and active-sessions list in secondary storage", async () => {
 		const testMap = new Map<string, string>();
 		const testExpirationMap = new Map<string, number>();
