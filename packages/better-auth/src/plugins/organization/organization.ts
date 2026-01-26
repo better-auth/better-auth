@@ -184,18 +184,9 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	return createAuthEndpoint(
 		"/organization/has-permission",

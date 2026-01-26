@@ -20,19 +20,6 @@ export type {
 	BetterAuthClientPlugin,
 };
 
-/**
- * @deprecated use type `ClientStore` instead.
- */
-export type Store = ClientStore;
-/**
- * @deprecated use type `ClientAtomListener` instead.
- */
-export type AtomListener = ClientAtomListener;
-/**
- * @deprecated use type `BetterAuthClientOptions` instead.
- */
-export type ClientOptions = BetterAuthClientOptions;
-
 export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
 		? Auth["api"] &
