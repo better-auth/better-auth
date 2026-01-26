@@ -106,6 +106,48 @@ test("Redis secondary storage integration", async (t) => {
 	);
 
 	await t.test(
+		"should have session id in Redis when `storeSessionInDatabase` is true",
+		async (t: TestContext) => {
+			const auth = betterAuth({
+				database: new DatabaseSync(":memory:"),
+				emailAndPassword: {
+					enabled: true,
+				},
+				secondaryStorage: redisStorage({
+					client: redisClient,
+					keyPrefix: `${id}|`,
+				}),
+				session: {
+					storeSessionInDatabase: true,
+				},
+			});
+
+			const { runMigrations } = await getMigrations(auth.options);
+			await runMigrations();
+
+			const { token } = await auth.api.signUpEmail({
+				body: {
+					email: "himself65@outlook.com",
+					password: "123456789",
+					name: "Alex Yang",
+				},
+			});
+
+			t.assert.ok(token);
+
+			const storage = auth.options.secondaryStorage;
+			const keys = await storage.listKeys();
+			t.assert.equal(keys.length, 2);
+			const key = keys.find((key) => !key.startsWith("active-sessions"))!;
+			const sessionDataString = await storage.get(key);
+			t.assert.ok(sessionDataString);
+			const sessionData = JSON.parse(sessionDataString);
+			t.assert.ok(sessionData.user.id);
+			t.assert.ok(sessionData.session.id);
+		},
+	);
+
+	await t.test(
 		"should store session data in Redis with stateless mode and Google OAuth",
 		async (t: TestContext) => {
 			const auth = betterAuth({
