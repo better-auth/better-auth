@@ -795,6 +795,14 @@ export type BetterAuthOptions = {
 				 */
 				disableSessionRefresh?: boolean;
 				/**
+				 * Defer session refresh writes to POST requests.
+				 * When enabled, GET is read-only and POST performs refresh.
+				 * Useful for read-replica database setups.
+				 *
+				 * @default false
+				 */
+				deferSessionRefresh?: boolean;
+				/**
 				 * Additional fields for the session
 				 */
 				additionalFields?: {
@@ -944,6 +952,17 @@ export type BetterAuthOptions = {
 					 * @default true
 					 */
 					enabled?: boolean;
+					/**
+					 * Disable implicit account linking on sign-in.
+					 *
+					 * When enabled, accounts will not be automatically linked
+					 * during OAuth sign-in, even if the email is verified or
+					 * the provider is trusted. Users must explicitly link
+					 * accounts using `linkSocial()` while authenticated.
+					 *
+					 * @default false
+					 */
+					disableImplicitLinking?: boolean;
 					/**
 					 * List of trusted providers
 					 */

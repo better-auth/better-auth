@@ -73,6 +73,7 @@ export interface SAMLConfig {
 		encPrivateKeyPass?: string | undefined;
 	};
 	wantAssertionsSigned?: boolean | undefined;
+	authnRequestsSigned?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;
