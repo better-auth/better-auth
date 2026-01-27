@@ -107,10 +107,11 @@ export const ciba = (options: CibaOptions) => {
 	return {
 		id: "ciba",
 		init(ctx) {
-			const oidcPlugin = ctx.getPlugin("oidc-provider");
+			const oidcPlugin =
+				ctx.getPlugin("oidc-provider") || ctx.getPlugin("oauth-provider");
 			if (!oidcPlugin) {
 				ctx.logger.error(
-					"CIBA plugin requires oidcProvider plugin. Please add oidcProvider to your plugins.",
+					"CIBA plugin requires oidcProvider or oauthProvider plugin. Please add one to your plugins.",
 				);
 			}
 		},
@@ -133,3 +134,11 @@ export type {
 	CibaNotificationData,
 	CibaTokenPendingError,
 } from "./types";
+
+/**
+ * Async Auth - friendly alias for CIBA (Client-Initiated Backchannel Authentication)
+ *
+ * Use this for AI agent authentication flows where the agent requests access
+ * and the user approves via notification (email, SMS, push).
+ */
+export const asyncAuth = ciba;

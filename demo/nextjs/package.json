@@ -21,6 +21,8 @@
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.8.1",
     "@libsql/kysely-libsql": "^0.4.1",
+    "pg": "^8.13.1",
+    "nodemailer": "^6.9.16",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@number-flow/react": "^0.5.10",
     "@radix-ui/react-accordion": "^1.2.12",

@@ -1,4 +1,5 @@
 import { dash, sendEmail } from "@better-auth/dash";
+import nodemailer from "nodemailer";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -11,6 +12,7 @@ import { nextCookies } from "better-auth/next-js";
 import type { Organization } from "better-auth/plugins";
 import {
 	admin,
+	asyncAuth,
 	bearer,
 	customSession,
 	deviceAuthorization,
@@ -30,7 +32,27 @@ import { Stripe } from "stripe";
 const _from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
 const _to = process.env.TEST_EMAIL || "";
 
-const dialect = (() => {
+// Gmail/Google Workspace transporter for async auth notifications
+const gmailTransporter = nodemailer.createTransport({
+	host: "smtp.gmail.com",
+	port: 587,
+	secure: false,
+	auth: {
+		user: process.env.GMAIL_USER,
+		pass: process.env.GMAIL_APP_PASSWORD, // Use App Password, not regular password
+	},
+});
+
+const dialect = await (async () => {
+	// PostgreSQL
+	if (process.env.DATABASE_URL?.startsWith("postgresql://")) {
+		const { Pool } = await import("pg");
+		const { PostgresDialect } = await import("kysely");
+		return new PostgresDialect({
+			pool: new Pool({ connectionString: process.env.DATABASE_URL }),
+		});
+	}
+	// MySQL
 	if (process.env.USE_MYSQL) {
 		if (!process.env.MYSQL_DATABASE_URL) {
 			throw new Error(
@@ -38,19 +60,19 @@ const dialect = (() => {
 			);
 		}
 		return new MysqlDialect(createPool(process.env.MYSQL_DATABASE_URL || ""));
-	} else {
-		if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
-			return new LibsqlDialect({
-				url: process.env.TURSO_DATABASE_URL,
-				authToken: process.env.TURSO_AUTH_TOKEN,
-			});
-		}
+	}
+	// Turso/LibSQL
+	if (process.env.TURSO_DATABASE_URL && process.env.TURSO_AUTH_TOKEN) {
+		return new LibsqlDialect({
+			url: process.env.TURSO_DATABASE_URL,
+			authToken: process.env.TURSO_AUTH_TOKEN,
+		});
 	}
 	return null;
 })();
 
 if (!dialect) {
-	throw new Error("No dialect found");
+	throw new Error("No dialect found. Set DATABASE_URL (PostgreSQL), USE_MYSQL + MYSQL_DATABASE_URL, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN");
 }
 
 const authOptions = {
@@ -61,19 +83,36 @@ const authOptions = {
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			await sendEmail({
-				to: user.email,
-				subject: "Verify your email address",
-				template: "verify-email",
-				variables: {
-					verificationUrl: url,
-					userEmail: user.email,
-					userName: user.name,
-					appName: "Better Auth Demo",
-					expirationMinutes: "10",
-					verificationCode: "",
-				},
-			});
+			// Use Gmail if configured, otherwise use Resend
+			if (process.env.GMAIL_USER && process.env.GMAIL_APP_PASSWORD) {
+				await gmailTransporter.sendMail({
+					from: process.env.GMAIL_USER,
+					to: user.email,
+					subject: "Verify your email address",
+					html: `
+						<h2>Verify your email</h2>
+						<p>Hi ${user.name || "there"},</p>
+						<p>Please verify your email address by clicking the button below:</p>
+						<p><a href="${url}" style="background: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Verify Email</a></p>
+						<p>Or copy this link: ${url}</p>
+						<p>This link expires in 10 minutes.</p>
+					`,
+				});
+			} else {
+				await sendEmail({
+					to: user.email,
+					subject: "Verify your email address",
+					template: "verify-email",
+					variables: {
+						verificationUrl: url,
+						userEmail: user.email,
+						userName: user.name,
+						appName: "Better Auth Demo",
+						expirationMinutes: "10",
+						verificationCode: "",
+					},
+				});
+			}
 		},
 	},
 	account: {
@@ -348,6 +387,28 @@ const authOptions = {
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",
+		}),
+		// Async Auth (CIBA) - for AI agent authentication
+		asyncAuth({
+			async sendNotification(data) {
+				await gmailTransporter.sendMail({
+					from: process.env.GMAIL_USER,
+					to: data.user.email,
+					subject: `${data.clientId} wants to sign in on your behalf`,
+					html: `
+						<h2>Authentication Request</h2>
+						<p>Hi ${data.user.name || "there"},</p>
+						<p><strong>${data.clientId}</strong> is requesting access to your account.</p>
+						${data.bindingMessage ? `<p>Message: ${data.bindingMessage}</p>` : ""}
+						<p>Scopes requested: ${data.scope}</p>
+						<p>This request expires at: ${data.expiresAt.toLocaleString()}</p>
+						<p><a href="${data.approvalUrl}" style="background: #0070f3; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Approve Request</a></p>
+						<p>Or copy this link: ${data.approvalUrl}</p>
+					`,
+				});
+			},
+			requestLifetime: "5m",
+			pollingInterval: "5s",
 		}),
 		lastLoginMethod(),
 		jwt({

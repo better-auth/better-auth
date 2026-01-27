@@ -23,14 +23,25 @@ export async function storeCibaRequest(
 	const value = JSON.stringify(data);
 	const ttlSeconds = Math.floor((data.expiresAt - Date.now()) / 1000);
 
-	if (ctx.context.secondaryStorage) {
-		await ctx.context.secondaryStorage.set(key, value, ttlSeconds);
-	} else {
-		await ctx.context.internalAdapter.createVerificationValue({
-			identifier: key,
-			value,
-			expiresAt: new Date(data.expiresAt),
-		});
+	console.log(`[CIBA DEBUG] storeCibaRequest called with key: ${key}, ttl: ${ttlSeconds}`);
+	console.log(`[CIBA DEBUG] secondaryStorage exists: ${!!ctx.context.secondaryStorage}`);
+
+	try {
+		if (ctx.context.secondaryStorage) {
+			await ctx.context.secondaryStorage.set(key, value, ttlSeconds);
+			console.log(`[CIBA DEBUG] Stored in secondaryStorage`);
+		} else {
+			console.log(`[CIBA DEBUG] Calling createVerificationValue...`);
+			const result = await ctx.context.internalAdapter.createVerificationValue({
+				identifier: key,
+				value,
+				expiresAt: new Date(data.expiresAt),
+			});
+			console.log(`[CIBA DEBUG] createVerificationValue result:`, result);
+		}
+	} catch (error) {
+		console.error(`[CIBA DEBUG] Error storing request:`, error);
+		throw error;
 	}
 }
 
@@ -43,22 +54,30 @@ export async function findCibaRequest(
 ): Promise<CibaRequestData | null> {
 	const key = getStorageKey(authReqId);
 
-	if (ctx.context.secondaryStorage) {
-		const value = await ctx.context.secondaryStorage.get(key);
-		if (!value) return null;
-		return safeJSONParse<CibaRequestData>(value);
-	}
+	try {
+		if (ctx.context.secondaryStorage) {
+			const value = await ctx.context.secondaryStorage.get(key);
+			ctx.context.logger.info(`[CIBA] Find in secondaryStorage: ${key} -> ${value ? "found" : "not found"}`);
+			if (!value) return null;
+			return safeJSONParse<CibaRequestData>(value);
+		}
 
-	const verification =
-		await ctx.context.internalAdapter.findVerificationValue(key);
-	if (!verification) return null;
+		const verification =
+			await ctx.context.internalAdapter.findVerificationValue(key);
+		ctx.context.logger.info(`[CIBA] Find in verification table: ${key} -> ${verification ? "found" : "not found"}`);
+		if (!verification) return null;
 
-	if (verification.expiresAt < new Date()) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		if (verification.expiresAt < new Date()) {
+			ctx.context.logger.info(`[CIBA] Request expired, deleting: ${key}`);
+			await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+			return null;
+		}
+
+		return safeJSONParse<CibaRequestData>(verification.value);
+	} catch (error) {
+		ctx.context.logger.error(`[CIBA] Failed to find request: ${error}`);
 		return null;
 	}
-
-	return safeJSONParse<CibaRequestData>(verification.value);
 }
 
 /**

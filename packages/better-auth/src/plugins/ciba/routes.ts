@@ -87,7 +87,9 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 		},
 		async (ctx) => {
 			// Check that OIDC provider is enabled
-			const oidcPlugin = ctx.context.getPlugin("oidc-provider");
+			const oidcPlugin =
+				ctx.context.getPlugin("oidc-provider") ||
+				ctx.context.getPlugin("oauth-provider");
 			if (!oidcPlugin) {
 				throw new APIError("INTERNAL_SERVER_ERROR", {
 					error: "server_error",
@@ -113,7 +115,32 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			}
 
 			// Validate client (check trusted clients first, then database)
-			const client = await getClient(credentials.clientId, trustedClients);
+			// Check trusted clients first
+			let client = trustedClients?.find(
+				(c) => c.clientId === credentials.clientId,
+			);
+
+			// If not in trusted clients, check database
+			if (!client) {
+				// Try oidc-provider model (oauthApplication) first, then oauth-provider model (oauthClient)
+				const pluginId = oidcPlugin.id;
+				const modelName =
+					pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
+				const dbClient = await ctx.context.adapter
+					.findOne<{
+						clientId: string;
+						clientSecret: string | null;
+						disabled?: boolean;
+					}>({
+						model: modelName,
+						where: [{ field: "clientId", value: credentials.clientId }],
+					})
+					.catch(() => null);
+				if (dbClient && !dbClient.disabled) {
+					client = dbClient;
+				}
+			}
+
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
@@ -243,7 +270,9 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				createdAt: Date.now(),
 			};
 
+			console.log("[CIBA DEBUG] About to call storeCibaRequest for:", authReqId);
 			await storeCibaRequest(ctx, cibaRequest);
+			console.log("[CIBA DEBUG] storeCibaRequest completed for:", authReqId);
 
 			// Build approval URL
 			const approvalUrl = new URL(opts.approvalUri, ctx.context.baseURL);

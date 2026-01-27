@@ -71,7 +71,9 @@ export function createCibaTokenHandler() {
 			}
 
 			// Get OIDC provider options
-			const oidcPlugin = ctx.context.getPlugin("oidc-provider");
+			const oidcPlugin =
+				ctx.context.getPlugin("oidc-provider") ||
+				ctx.context.getPlugin("oauth-provider");
 			const oidcOpts = (oidcPlugin?.options || {}) as OIDCOptions;
 			const accessTokenExpiresIn =
 				oidcOpts.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
@@ -104,7 +106,32 @@ export function createCibaTokenHandler() {
 			}
 
 			// Validate client (check trusted clients first, then database)
-			const client = await getClient(credentials.clientId, trustedClients);
+			// Check trusted clients first
+			let client = trustedClients?.find(
+				(c) => c.clientId === credentials.clientId,
+			);
+
+			// If not in trusted clients, check database
+			if (!client) {
+				// Try oidc-provider model (oauthApplication) or oauth-provider model (oauthClient)
+				const pluginId = oidcPlugin?.id;
+				const modelName =
+					pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
+				const dbClient = await ctx.context.adapter
+					.findOne<{
+						clientId: string;
+						clientSecret: string | null;
+						disabled?: boolean;
+					}>({
+						model: modelName,
+						where: [{ field: "clientId", value: credentials.clientId }],
+					})
+					.catch(() => null);
+				if (dbClient && !dbClient.disabled) {
+					client = dbClient;
+				}
+			}
+
 			if (!client) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
@@ -224,19 +251,33 @@ export function createCibaTokenHandler() {
 				now + refreshTokenExpiresIn * 1000,
 			);
 
-			// Store access token
+			// Store refresh token first (if needed) to get the ID for access token reference
+			let refreshTokenRecord: { id: string } | null = null;
+			if (needsRefreshToken) {
+				refreshTokenRecord = await ctx.context.adapter.create<{ id: string }>({
+					model: "oauthRefreshToken",
+					data: {
+						token: refreshToken,
+						clientId: credentials.clientId,
+						userId: user.id,
+						scopes: cibaRequest.scope.split(" "),
+						expiresAt: refreshTokenExpiresAt,
+						createdAt: new Date(),
+					},
+				});
+			}
+
+			// Store access token (field names must match oauth-provider schema)
 			await ctx.context.adapter.create({
 				model: "oauthAccessToken",
 				data: {
-					accessToken,
-					refreshToken,
-					accessTokenExpiresAt,
-					refreshTokenExpiresAt,
+					token: accessToken,
 					clientId: credentials.clientId,
 					userId: user.id,
-					scopes: cibaRequest.scope,
+					scopes: cibaRequest.scope.split(" "),
+					refreshId: refreshTokenRecord?.id,
+					expiresAt: accessTokenExpiresAt,
 					createdAt: new Date(),
-					updatedAt: new Date(),
 				},
 			});
 
