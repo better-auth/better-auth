@@ -182,7 +182,7 @@ jobs:
 
       - name: Upload coverage reports
         if: github.event_name != 'merge_group'
-        uses: actions/upload-artifact@ea165717662392c48260a9e9fbf32eb3e2b69e99 # v6.2.1
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
           name: coverage-${{ matrix.shard }}
           path: |
@@ -209,7 +209,7 @@ jobs:
         run: pnpm install
 
       - name: Download all coverage reports
-        uses: actions/download-artifact@cc203385981bf7c8c4b2e5d968ffbb0c3e4e6dd0 # v6.2.1
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           pattern: coverage-*
           path: coverage/raw
