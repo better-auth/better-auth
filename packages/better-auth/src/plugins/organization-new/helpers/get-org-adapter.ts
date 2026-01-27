@@ -844,6 +844,21 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			// Remove member from all teams they're part of
 			return data.memberId;
 		},
+		/**
+		 * Update a member's role in an organization.
+		 * @param memberId - The member ID to update.
+		 * @param role - The new role to assign.
+		 * @returns The updated member or null.
+		 */
+		updateMember: async (memberId: string, role: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const member = await adapter.update<InferMember<O, false>>({
+				model: "member",
+				where: [{ field: "id", value: memberId }],
+				update: { role },
+			});
+			return member ? filterMemberOutput(member) : null;
+		},
 	};
 	return orgAdapter;
 };
