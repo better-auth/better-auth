@@ -44,3 +44,20 @@ export async function checkPassword(userId: string, c: GenericEndpointContext) {
 	}
 	return true;
 }
+
+export async function shouldRequirePassword(
+	ctx: GenericEndpointContext,
+	userId: string,
+	allowPasswordless?: boolean,
+): Promise<boolean> {
+	if (!allowPasswordless) {
+		return true;
+	}
+
+	const accounts = await ctx.context.internalAdapter.findAccounts(userId);
+	const credentialAccount = accounts?.find(
+		(account) => account.providerId === "credential" && account.password,
+	);
+
+	return Boolean(credentialAccount);
+}
