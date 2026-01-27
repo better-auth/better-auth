@@ -285,10 +285,6 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						session: newSession,
 						user: updatedUser,
 					});
-					//remove current session
-					await ctx.context.internalAdapter.deleteSession(
-						ctx.context.session.session.token,
-					);
 					return ctx.json({ status: true });
 				},
 			),
