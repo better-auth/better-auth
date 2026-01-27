@@ -32,6 +32,7 @@
       "dependsOn": ["^build", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/vitest.config.ts",
         "vitest.config.*",
         "src/**",
         "test/**",
@@ -47,6 +48,7 @@
       "dependsOn": ["^build", "build"],
       "inputs": [
         "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/vitest.config.ts",
         "vitest.config.*",
         "src/**",
         "test/**",
