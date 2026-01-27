@@ -1,10 +1,10 @@
 import { dash, sendEmail } from "@better-auth/dash";
+import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
-import { electron } from "@better-auth/electron";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import type { BetterAuthOptions } from "better-auth";
 import { APIError, betterAuth } from "better-auth";

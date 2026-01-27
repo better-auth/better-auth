@@ -1,8 +1,8 @@
 import { dashClient } from "@better-auth/dash/client";
+import { electronProxyClient } from "@better-auth/electron/proxy";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
-import { electronProxyClient } from "@better-auth/electron/proxy";
 import {
 	adminClient,
 	customSessionClient,
@@ -18,8 +18,8 @@ import { toast } from "sonner";
 import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
-  // Required for electron
-  baseURL: "http://localhost:3000",
+	// Required for electron
+	baseURL: "http://localhost:3000",
 	plugins: [
 		dashClient(),
 		organizationClient(),
@@ -45,9 +45,9 @@ export const authClient = createAuthClient({
 		deviceAuthorizationClient(),
 		lastLoginMethodClient(),
 		electronProxyClient({
-  		protocol: {
-        scheme: "com.better-auth.demo",
-      },
+			protocol: {
+				scheme: "com.better-auth.demo",
+			},
 		}),
 	],
 	fetchOptions: {

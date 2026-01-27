@@ -32,7 +32,7 @@ interface SignInFormProps {
 	onSuccess?: () => void;
 	callbackURL?: string;
 	showPasswordToggle?: boolean;
-  params?: URLSearchParams;
+	params?: URLSearchParams;
 }
 
 export function SignInForm({
@@ -67,7 +67,7 @@ export function SignInForm({
 					callbackURL,
 				},
 				{
-  				query: params ? Object.fromEntries(params.entries()) : undefined,
+					query: params ? Object.fromEntries(params.entries()) : undefined,
 					onSuccess() {
 						toast.success("Successfully signed in");
 						onSuccess?.();

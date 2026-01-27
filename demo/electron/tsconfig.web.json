@@ -5,14 +5,14 @@
     "src/renderer/src/**/*",
     "src/renderer/src/**/*.tsx",
     "src/preload/*.d.ts",
-    "src/lib/auth-client.ts",
+    "src/lib/auth-client.ts"
   ],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@renderer/*": ["src/renderer/src/*"],
-    },
-  },
+      "@renderer/*": ["src/renderer/src/*"]
+    }
+  }
 }

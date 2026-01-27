@@ -40,7 +40,7 @@ export default function SignIn() {
 			<CardContent>
 				<div className="grid gap-4">
 					<SignInForm
-  					params={params}
+						params={params}
 						onSuccess={() => router.push(getCallbackURL(params))}
 						callbackURL="/dashboard"
 					/>
@@ -55,7 +55,7 @@ export default function SignIn() {
 									provider: "google",
 									callbackURL: "/dashboard",
 									fetchOptions: {
-  									query: params,
+										query: params,
 									},
 								});
 							}}
@@ -97,7 +97,7 @@ export default function SignIn() {
 									provider: "github",
 									callbackURL: "/dashboard",
 									fetchOptions: {
-  									query: params,
+										query: params,
 									},
 								});
 							}}
@@ -127,7 +127,7 @@ export default function SignIn() {
 									provider: "microsoft",
 									callbackURL: "/dashboard",
 									fetchOptions: {
-  									query: params,
+										query: params,
 									},
 								});
 							}}
@@ -157,7 +157,7 @@ export default function SignIn() {
 									provider: "vercel",
 									callbackURL: "/dashboard",
 									fetchOptions: {
-  									query: params,
+										query: params,
 									},
 								});
 							}}
@@ -198,7 +198,7 @@ export default function SignIn() {
 						onClick={async () => {
 							await authClient.signIn.passkey({
 								fetchOptions: {
-  								query: params,
+									query: params,
 									onSuccess() {
 										toast.success("Successfully signed in");
 										router.push(getCallbackURL(params));

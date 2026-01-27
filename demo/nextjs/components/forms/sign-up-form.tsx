@@ -68,7 +68,7 @@ export function SignUpForm({
 				image: image ? await convertImageToBase64(image) : "",
 				callbackURL,
 				fetchOptions: {
-		      query: params ? Object.fromEntries(params.entries()) : undefined,
+					query: params ? Object.fromEntries(params.entries()) : undefined,
 					onError: (ctx) => {
 						toast.error(ctx.error.message);
 					},
