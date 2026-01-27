@@ -23,9 +23,15 @@ import {
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import type { InferSession, InferUser, Session, User } from "../../types";
-import type { Prettify } from "../../types/helper";
+import type {
+	InferSession,
+	InferUser,
+	Prettify,
+	Session,
+	User,
+} from "../../types";
 import { getDate } from "../../utils/date";
+import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
@@ -383,8 +389,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					expiresIn * 1000 +
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
+				const shouldSkipSessionRefresh = await getShouldSkipSessionRefresh();
 
 				if (
+					!shouldSkipSessionRefresh &&
 					shouldBeUpdated &&
 					(!ctx.query?.disableRefresh ||
 						!ctx.context.options.session?.disableSessionRefresh)

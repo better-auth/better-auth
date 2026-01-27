@@ -9,7 +9,7 @@ import { logger } from "@better-auth/core/env";
 import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import type { UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
 import { onRequestRateLimit } from "./rate-limiter";
@@ -379,3 +379,8 @@ export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
+export { getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";
