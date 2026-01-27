@@ -1,5 +1,5 @@
 export {
-  formCsrfMiddleware,
-  originCheck,
-  originCheckMiddleware
+	formCsrfMiddleware,
+	originCheck,
+	originCheckMiddleware,
 } from "./origin-check";
