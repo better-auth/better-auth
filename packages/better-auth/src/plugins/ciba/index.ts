@@ -128,4 +128,8 @@ export const ciba = (options: CibaOptions) => {
 	} satisfies BetterAuthPlugin;
 };
 
-export type { CibaNotificationData } from "./types";
+export type {
+	BcAuthorizeResponse,
+	CibaNotificationData,
+	CibaTokenPendingError,
+} from "./types";
