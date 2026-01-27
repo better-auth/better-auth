@@ -1,16 +1,16 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const DEVICE_AUTHORIZATION_ERROR_CODES = defineErrorCodes({
-	INVALID_DEVICE_CODE: "Invalid device code",
-	EXPIRED_DEVICE_CODE: "Device code has expired",
-	EXPIRED_USER_CODE: "User code has expired",
-	AUTHORIZATION_PENDING: "Authorization pending",
-	ACCESS_DENIED: "Access denied",
-	INVALID_USER_CODE: "Invalid user code",
-	DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
-	POLLING_TOO_FREQUENTLY: "Polling too frequently",
-	USER_NOT_FOUND: "User not found",
-	FAILED_TO_CREATE_SESSION: "Failed to create session",
-	INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
-	AUTHENTICATION_REQUIRED: "Authentication required",
+	ERR_INVALID_DEVICE_CODE: "Invalid device code",
+	ERR_EXPIRED_DEVICE_CODE: "Device code has expired",
+	ERR_EXPIRED_USER_CODE: "User code has expired",
+	ERR_AUTHORIZATION_PENDING: "Authorization pending",
+	ERR_ACCESS_DENIED: "Access denied",
+	ERR_INVALID_USER_CODE: "Invalid user code",
+	ERR_DEVICE_CODE_ALREADY_PROCESSED: "Device code already processed",
+	ERR_POLLING_TOO_FREQUENTLY: "Polling too frequently",
+	ERR_USER_NOT_FOUND: "User not found",
+	ERR_FAILED_TO_CREATE_SESSION: "Failed to create session",
+	ERR_INVALID_DEVICE_CODE_STATUS: "Invalid device code status",
+	ERR_AUTHENTICATION_REQUIRED: "Authentication required",
 });

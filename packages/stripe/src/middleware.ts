@@ -28,7 +28,7 @@ export const referenceMiddleware = (
 	createAuthMiddleware(async (ctx) => {
 		const ctxSession = ctx.context.session as StripeCtxSession;
 		if (!ctxSession) {
-			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.ERR_UNAUTHORIZED);
 		}
 
 		const customerType: CustomerType =
@@ -43,7 +43,7 @@ export const referenceMiddleware = (
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+					STRIPE_ERROR_CODES.ERR_ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
 				);
 			}
 
@@ -52,7 +52,7 @@ export const referenceMiddleware = (
 			if (!referenceId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.ORGANIZATION_REFERENCE_ID_REQUIRED,
+					STRIPE_ERROR_CODES.ERR_ORGANIZATION_REFERENCE_ID_REQUIRED,
 				);
 			}
 			const isAuthorized = await subscriptionOptions.authorizeReference(
@@ -65,7 +65,7 @@ export const referenceMiddleware = (
 				ctx,
 			);
 			if (!isAuthorized) {
-				throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
+				throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.ERR_UNAUTHORIZED);
 			}
 			return;
 		}
@@ -86,7 +86,7 @@ export const referenceMiddleware = (
 			);
 			throw APIError.from(
 				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
+				STRIPE_ERROR_CODES.ERR_REFERENCE_ID_NOT_ALLOWED,
 			);
 		}
 		const isAuthorized = await subscriptionOptions.authorizeReference(
@@ -99,6 +99,6 @@ export const referenceMiddleware = (
 			ctx,
 		);
 		if (!isAuthorized) {
-			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.ERR_UNAUTHORIZED);
 		}
 	});

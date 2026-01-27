@@ -83,7 +83,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			if (isPostRequest && !deferSessionRefresh) {
 				throw APIError.from(
 					"METHOD_NOT_ALLOWED",
-					BASE_ERROR_CODES.METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED,
+					BASE_ERROR_CODES.ERR_METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED,
 				);
 			}
 
@@ -493,7 +493,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
-					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+					BASE_ERROR_CODES.ERR_FAILED_TO_GET_SESSION,
 				);
 			}
 		},
@@ -617,7 +617,7 @@ export const freshSessionMiddleware = createAuthMiddleware(async (ctx) => {
 	const now = Date.now();
 	const isFresh = now - lastUpdated < freshAge * 1000;
 	if (!isFresh) {
-		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.SESSION_NOT_FRESH);
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_SESSION_NOT_FRESH);
 	}
 	return {
 		session,

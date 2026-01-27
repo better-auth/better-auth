@@ -1,6 +1,6 @@
 import { betterFetch } from "@better-fetch/fetch";
 import { middlewareResponse } from "../../../utils/middleware-response";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "../error-codes";
+import { CAPCHA_CLIENT_SIDE_ERROR_CODES, CAPTCHA_SERVER_SIDE_ERROR_CODES } from "../error-codes";
 import { encodeToURLParams } from "../utils";
 
 type Params = {
@@ -54,12 +54,12 @@ export const hCaptcha = async ({
 	});
 
 	if (!response.data || response.error) {
-		throw new Error(INTERNAL_ERROR_CODES.SERVICE_UNAVAILABLE.message);
+		throw new Error(CAPTCHA_SERVER_SIDE_ERROR_CODES.ERR_SERVICE_UNAVAILABLE.message);
 	}
 
 	if (!response.data.success) {
 		return middlewareResponse({
-			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
+			message: CAPCHA_CLIENT_SIDE_ERROR_CODES.ERR_VERIFICATION_FAILED.message,
 			status: 403,
 		});
 	}

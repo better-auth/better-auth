@@ -109,7 +109,7 @@ export function parseInputData<T extends Record<string, any>>(
 				}
 				if (data[key]) {
 					throw APIError.from("BAD_REQUEST", {
-						...BASE_ERROR_CODES.FIELD_NOT_ALLOWED,
+						...BASE_ERROR_CODES.ERR_FIELD_NOT_ALLOWED,
 						message: `${key} is not allowed to be set`,
 					});
 				}
@@ -122,12 +122,12 @@ export function parseInputData<T extends Record<string, any>>(
 				if (result instanceof Promise) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.ASYNC_VALIDATION_NOT_SUPPORTED,
+						BASE_ERROR_CODES.ERR_ASYNC_VALIDATION_NOT_SUPPORTED,
 					);
 				}
 				if ("issues" in result && result.issues) {
 					throw APIError.from("BAD_REQUEST", {
-						...BASE_ERROR_CODES.VALIDATION_ERROR,
+						...BASE_ERROR_CODES.ERR_VALIDATION_ERROR,
 						message: result.issues[0]?.message || "Validation Error",
 					});
 				}
@@ -153,7 +153,7 @@ export function parseInputData<T extends Record<string, any>>(
 
 		if (fields[key]!.required && action === "create") {
 			throw APIError.from("BAD_REQUEST", {
-				...BASE_ERROR_CODES.MISSING_FIELD,
+				...BASE_ERROR_CODES.ERR_MISSING_FIELD,
 				message: `${key} is required`,
 			});
 		}

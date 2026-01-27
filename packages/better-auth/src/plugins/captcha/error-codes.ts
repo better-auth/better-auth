@@ -1,14 +1,13 @@
 // These error codes are returned by the API
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
-export const EXTERNAL_ERROR_CODES = defineErrorCodes({
-	VERIFICATION_FAILED: "Captcha verification failed",
-	MISSING_RESPONSE: "Missing CAPTCHA response",
-	UNKNOWN_ERROR: "Something went wrong",
+export const CAPCHA_CLIENT_SIDE_ERROR_CODES = defineErrorCodes({
+	ERR_VERIFICATION_FAILED: "Captcha verification failed",
+	ERR_MISSING_RESPONSE: "Missing CAPTCHA response",
+	ERR_UNKNOWN_ERROR: "Something went wrong",
 });
 
-// These error codes are only visible in the server logs
-export const INTERNAL_ERROR_CODES = defineErrorCodes({
-	MISSING_SECRET_KEY: "Missing secret key",
-	SERVICE_UNAVAILABLE: "CAPTCHA service unavailable",
+export const CAPTCHA_SERVER_SIDE_ERROR_CODES = defineErrorCodes({
+	ERR_MISSING_SECRET_KEY: "Missing secret key",
+	ERR_SERVICE_UNAVAILABLE: "CAPTCHA service unavailable",
 });

@@ -83,14 +83,14 @@ function getReferenceId(
 		if (!options.organization?.enabled) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+				STRIPE_ERROR_CODES.ERR_ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
 			);
 		}
 
 		if (!session.activeOrganizationId) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				STRIPE_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 			);
 		}
 		return session.activeOrganizationId;
@@ -263,7 +263,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			if (!user.emailVerified && subscriptionOptions.requireEmailVerification) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED,
+					STRIPE_ERROR_CODES.ERR_EMAIL_VERIFICATION_REQUIRED,
 				);
 			}
 
@@ -271,7 +271,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			if (!plan) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_PLAN_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_PLAN_NOT_FOUND,
 				);
 			}
 
@@ -291,7 +291,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			if (
@@ -301,7 +301,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 
@@ -325,7 +325,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					if (!org) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							STRIPE_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+							STRIPE_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 						);
 					}
 					customerId = org.stripeCustomerId;
@@ -402,7 +402,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							ctx.context.logger.error(e);
 							throw APIError.from(
 								"BAD_REQUEST",
-								STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+								STRIPE_ERROR_CODES.ERR_UNABLE_TO_CREATE_CUSTOMER,
 							);
 						}
 					}
@@ -454,7 +454,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						ctx.context.logger.error(e);
 						throw APIError.from(
 							"BAD_REQUEST",
-							STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+							STRIPE_ERROR_CODES.ERR_UNABLE_TO_CREATE_CUSTOMER,
 						);
 					}
 				}
@@ -543,7 +543,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			if (isAlreadySubscribed) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
+					STRIPE_ERROR_CODES.ERR_ALREADY_SUBSCRIBED_PLAN,
 				);
 			}
 
@@ -651,7 +651,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				ctx.context.logger.error("Subscription ID not found");
 				throw APIError.from(
 					"NOT_FOUND",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 
@@ -967,7 +967,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const activeSubscriptions = await client.subscriptions
@@ -991,7 +991,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 				});
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const activeSubscription = activeSubscriptions.find(
@@ -1000,7 +1000,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 			if (!activeSubscription) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			const { url } = await client.billingPortal.sessions
@@ -1147,19 +1147,19 @@ export const restoreSubscription = (options: StripeOptions) => {
 			if (!subscription || !subscription.stripeCustomerId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 			if (!isActiveOrTrialing(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
 			if (!isPendingCancel(subscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 				);
 			}
 
@@ -1171,7 +1171,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 			if (!activeSubscription) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 				);
 			}
 
@@ -1539,7 +1539,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 				}
 			}
 			if (!customerId) {
-				throw APIError.from("NOT_FOUND", STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND);
+				throw APIError.from("NOT_FOUND", STRIPE_ERROR_CODES.ERR_CUSTOMER_NOT_FOUND);
 			}
 
 			try {
@@ -1560,7 +1560,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 				);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
-					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_BILLING_PORTAL,
+					STRIPE_ERROR_CODES.ERR_UNABLE_TO_CREATE_BILLING_PORTAL,
 				);
 			}
 		},
@@ -1586,7 +1586,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 			if (!ctx.request?.body) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.INVALID_REQUEST_BODY,
+					STRIPE_ERROR_CODES.ERR_INVALID_REQUEST_BODY,
 				);
 			}
 
@@ -1594,7 +1594,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 			if (!sig) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.STRIPE_SIGNATURE_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_STRIPE_SIGNATURE_NOT_FOUND,
 				);
 			}
 
@@ -1602,7 +1602,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 			if (!webhookSecret) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
-					STRIPE_ERROR_CODES.STRIPE_WEBHOOK_SECRET_NOT_FOUND,
+					STRIPE_ERROR_CODES.ERR_STRIPE_WEBHOOK_SECRET_NOT_FOUND,
 				);
 			}
 
@@ -1626,13 +1626,13 @@ export const stripeWebhook = (options: StripeOptions) => {
 				ctx.context.logger.error(`${err.message}`);
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
+					STRIPE_ERROR_CODES.ERR_FAILED_TO_CONSTRUCT_STRIPE_EVENT,
 				);
 			}
 			if (!event) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.FAILED_TO_CONSTRUCT_STRIPE_EVENT,
+					STRIPE_ERROR_CODES.ERR_FAILED_TO_CONSTRUCT_STRIPE_EVENT,
 				);
 			}
 			try {
@@ -1661,7 +1661,7 @@ export const stripeWebhook = (options: StripeOptions) => {
 				ctx.context.logger.error(`Stripe webhook failed. Error: ${e.message}`);
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.STRIPE_WEBHOOK_ERROR,
+					STRIPE_ERROR_CODES.ERR_STRIPE_WEBHOOK_ERROR,
 				);
 			}
 			return ctx.json({ success: true });

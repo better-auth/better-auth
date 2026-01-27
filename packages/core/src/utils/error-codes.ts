@@ -33,14 +33,17 @@ type IsValidUpperSnakeCase<S extends string> = S extends `${infer F}${infer R}`
 		: false
 	: true;
 
+type IsValidErrorCode<S extends string> = S extends `ERR_${string}` ? true : false;
+
 type InvalidKeyError<K extends string> =
-	`Invalid error code key: "${K}" - must only contain uppercase letters (A-Z) and underscores (_)`;
+	`Invalid error code key: "${K}" - must only contain uppercase letters (A-Z) and underscores (_) starting with "ERR_"`;
 
 type ValidateErrorCodes<T> = {
 	[K in keyof T]: K extends string
-		? IsValidUpperSnakeCase<K> extends false
+		? IsValidErrorCode<K> extends true ? IsValidUpperSnakeCase<K> extends false
 			? InvalidKeyError<K>
 			: T[K]
+			: InvalidKeyError<K>
 		: T[K];
 };
 

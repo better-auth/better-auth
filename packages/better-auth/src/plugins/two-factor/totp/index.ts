@@ -178,7 +178,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			if (!twoFactor) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+					TWO_FACTOR_ERROR_CODES.ERR_TOTP_NOT_ENABLED,
 				);
 			}
 			const secret = await symmetricDecrypt({
@@ -250,7 +250,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 			if (!twoFactor) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.TOTP_NOT_ENABLED,
+					TWO_FACTOR_ERROR_CODES.ERR_TOTP_NOT_ENABLED,
 				);
 			}
 			const decrypted = await symmetricDecrypt({
@@ -262,14 +262,14 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				digits: opts.digits,
 			}).verify(ctx.body.code);
 			if (!status) {
-				return invalid("INVALID_CODE");
+				return invalid("ERR_INVALID_CODE");
 			}
 
 			if (!user.twoFactorEnabled) {
 				if (!session.session) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 					);
 				}
 				const updatedUser = await ctx.context.internalAdapter.updateUser(

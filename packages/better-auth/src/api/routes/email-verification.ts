@@ -51,7 +51,7 @@ export async function sendVerificationEmailFn(
 		ctx.context.logger.error("Verification email isn't enabled.");
 		throw APIError.from(
 			"BAD_REQUEST",
-			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			BASE_ERROR_CODES.ERR_VERIFICATION_EMAIL_NOT_ENABLED,
 		);
 	}
 	const token = await createEmailVerificationToken(
@@ -164,7 +164,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw APIError.from(
 				"BAD_REQUEST",
-				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+				BASE_ERROR_CODES.ERR_VERIFICATION_EMAIL_NOT_ENABLED,
 			);
 		}
 		const { email } = ctx.body;
@@ -189,12 +189,12 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		if (session?.user.email !== email) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_EMAIL_MISMATCH);
 		}
 		if (session?.user.emailVerified) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+				BASE_ERROR_CODES.ERR_EMAIL_ALREADY_VERIFIED,
 			);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
@@ -293,9 +293,9 @@ export const verifyEmail = createAuthEndpoint(
 			);
 		} catch (e) {
 			if (e instanceof JWTExpired) {
-				return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
+				return redirectOnError(BASE_ERROR_CODES.ERR_TOKEN_EXPIRED);
 			}
-			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
+			return redirectOnError(BASE_ERROR_CODES.ERR_INVALID_TOKEN);
 		}
 		const schema = z.object({
 			email: z.email(),
@@ -307,12 +307,12 @@ export const verifyEmail = createAuthEndpoint(
 			parsed.email,
 		);
 		if (!user) {
-			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
+			return redirectOnError(BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
 			if (session && session.user.email !== parsed.email) {
-				return redirectOnError(BASE_ERROR_CODES.INVALID_USER);
+				return redirectOnError(BASE_ERROR_CODES.ERR_INVALID_USER);
 			}
 			switch (parsed.requestType) {
 				/**
@@ -359,7 +359,7 @@ export const verifyEmail = createAuthEndpoint(
 						if (!newSession) {
 							throw APIError.from(
 								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+								BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 							);
 						}
 						activeSession = {
@@ -415,7 +415,7 @@ export const verifyEmail = createAuthEndpoint(
 						if (!newSession) {
 							throw APIError.from(
 								"INTERNAL_SERVER_ERROR",
-								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+								BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 							);
 						}
 						activeSession = {
@@ -507,7 +507,7 @@ export const verifyEmail = createAuthEndpoint(
 				if (!session) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 					);
 				}
 				await setSessionCookie(ctx, {

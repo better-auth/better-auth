@@ -42,7 +42,7 @@ async function getAnonUserEmail(
 		if (!validation.success) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
+				ANONYMOUS_ERROR_CODES.ERR_INVALID_EMAIL_FORMAT,
 			);
 		}
 		return customEmail;
@@ -101,7 +101,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					if (existingSession?.user.isAnonymous) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+							ANONYMOUS_ERROR_CODES.ERR_ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 						);
 					}
 
@@ -118,7 +118,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					if (!newUser) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
-							ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
+							ANONYMOUS_ERROR_CODES.ERR_FAILED_TO_CREATE_USER,
 						);
 					}
 					const session = await ctx.context.internalAdapter.createSession(
@@ -128,7 +128,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						return ctx.json(null, {
 							status: 400,
 							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
+								message: ANONYMOUS_ERROR_CODES.ERR_COULD_NOT_CREATE_SESSION.message,
 							},
 						});
 					}
@@ -208,14 +208,14 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					if (options?.disableDeleteAnonymousUser) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
+							ANONYMOUS_ERROR_CODES.ERR_DELETE_ANONYMOUS_USER_DISABLED,
 						);
 					}
 
 					if (!session.user.isAnonymous) {
 						throw APIError.from(
 							"FORBIDDEN",
-							ANONYMOUS_ERROR_CODES.USER_IS_NOT_ANONYMOUS,
+							ANONYMOUS_ERROR_CODES.ERR_USER_IS_NOT_ANONYMOUS,
 						);
 					}
 
@@ -225,7 +225,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						ctx.context.logger.error("Failed to delete anonymous user", error);
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
-							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER,
+							ANONYMOUS_ERROR_CODES.ERR_FAILED_TO_DELETE_ANONYMOUS_USER,
 						);
 					}
 					deleteSessionCookie(ctx);
@@ -284,7 +284,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
 							throw APIError.from(
 								"BAD_REQUEST",
-								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+								ANONYMOUS_ERROR_CODES.ERR_ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
 							);
 						}
 						const newSession = ctx.context.newSession;

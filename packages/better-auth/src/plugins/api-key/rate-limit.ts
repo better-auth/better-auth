@@ -80,7 +80,7 @@ export function isRateLimited(
 		// Rate limit exceeded.
 		return {
 			success: false,
-			message: ERROR_CODES.RATE_LIMIT_EXCEEDED.message,
+			message: ERROR_CODES.ERR_RATE_LIMIT_EXCEEDED.message,
 			update: null,
 			tryAgainIn: Math.ceil(rateLimitTimeWindow - timeSinceLastRequest),
 		};

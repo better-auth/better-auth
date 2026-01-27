@@ -40,7 +40,7 @@ describe("api-key", async () => {
 		expect(apiKeyFail.error?.status).toEqual(401);
 		expect(apiKeyFail.error?.statusText).toEqual("UNAUTHORIZED");
 		expect(apiKeyFail.error?.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+			ERROR_CODES.ERR_UNAUTHORIZED_SESSION.message,
 		);
 	});
 
@@ -99,7 +99,7 @@ describe("api-key", async () => {
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+			ERROR_CODES.ERR_UNAUTHORIZED_SESSION.message,
 		);
 	});
 
@@ -203,7 +203,7 @@ describe("api-key", async () => {
 			err = error;
 		}
 		expect(err).toBeDefined();
-		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED.message);
+		expect(err.body.message).toBe(ERROR_CODES.ERR_NAME_REQUIRED.message);
 	});
 
 	it("should respect rateLimit configuration from plugin options", async () => {
@@ -272,7 +272,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_NAME_LENGTH.message,
+			ERROR_CODES.ERR_INVALID_NAME_LENGTH.message,
 		);
 	});
 
@@ -296,7 +296,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_NAME_LENGTH.message,
+			ERROR_CODES.ERR_INVALID_NAME_LENGTH.message,
 		);
 	});
 
@@ -334,7 +334,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
+			ERROR_CODES.ERR_INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -358,7 +358,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
+			ERROR_CODES.ERR_INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -474,7 +474,7 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
+			ERROR_CODES.ERR_KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -499,7 +499,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
+			ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -524,7 +524,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
+			ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -540,7 +540,7 @@ describe("api-key", async () => {
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
 		expect(apiKey.error?.message).toEqual(
-			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+			ERROR_CODES.ERR_SERVER_ONLY_PROPERTY.message,
 		);
 
 		const apiKey2 = await client.apiKey.create(
@@ -554,7 +554,7 @@ describe("api-key", async () => {
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
 		expect(apiKey2.error?.message).toEqual(
-			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+			ERROR_CODES.ERR_SERVER_ONLY_PROPERTY.message,
 		);
 	});
 
@@ -579,7 +579,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
+			ERROR_CODES.ERR_REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -604,7 +604,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
+			ERROR_CODES.ERR_REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -723,7 +723,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE.message,
+			ERROR_CODES.ERR_INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -810,7 +810,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.METADATA_DISABLED.message,
+			ERROR_CODES.ERR_METADATA_DISABLED.message,
 		);
 	});
 
@@ -895,7 +895,7 @@ describe("api-key", async () => {
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
 		expect(apiKey.error?.message).toEqual(
-			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+			ERROR_CODES.ERR_SERVER_ONLY_PROPERTY.message,
 		);
 
 		const apiKey2 = await client.apiKey.create(
@@ -909,7 +909,7 @@ describe("api-key", async () => {
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
 		expect(apiKey2.error?.message).toEqual(
-			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+			ERROR_CODES.ERR_SERVER_ONLY_PROPERTY.message,
 		);
 	});
 
@@ -1118,7 +1118,7 @@ describe("api-key", async () => {
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+			ERROR_CODES.ERR_UNAUTHORIZED_SESSION.message,
 		);
 	});
 
@@ -1151,7 +1151,7 @@ describe("api-key", async () => {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
-						ERROR_CODES.INVALID_NAME_LENGTH.message,
+						ERROR_CODES.ERR_INVALID_NAME_LENGTH.message,
 					);
 				}
 			});
@@ -1173,7 +1173,7 @@ describe("api-key", async () => {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
-						ERROR_CODES.INVALID_NAME_LENGTH.message,
+						ERROR_CODES.ERR_INVALID_NAME_LENGTH.message,
 					);
 				}
 			});
@@ -1194,7 +1194,7 @@ describe("api-key", async () => {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
 					expect(error?.body?.message).toEqual(
-						ERROR_CODES.NO_VALUES_TO_UPDATE.message,
+						ERROR_CODES.ERR_NO_VALUES_TO_UPDATE.message,
 					);
 				}
 			});
@@ -1259,7 +1259,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
+			ERROR_CODES.ERR_KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -1306,7 +1306,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
+			ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -1353,7 +1353,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
+			ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -1392,7 +1392,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
+			ERROR_CODES.ERR_REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -1417,7 +1417,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
+			ERROR_CODES.ERR_REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -1473,7 +1473,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE.message,
+			ERROR_CODES.ERR_INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -2071,7 +2071,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_NOT_FOUND.message,
+			ERROR_CODES.ERR_KEY_NOT_FOUND.message,
 		);
 	});
 

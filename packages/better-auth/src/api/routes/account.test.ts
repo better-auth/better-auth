@@ -348,7 +348,7 @@ describe("account", async () => {
 				accountId: unlinkAccountId,
 			});
 			expect(unlinkRes.error?.message).toBe(
-				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
+				BASE_ERROR_CODES.ERR_FAILED_TO_UNLINK_LAST_ACCOUNT.message,
 			);
 		});
 	});

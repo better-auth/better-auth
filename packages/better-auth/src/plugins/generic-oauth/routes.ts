@@ -119,7 +119,7 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 			const config = options.config.find((c) => c.providerId === providerId);
 			if (!config) {
 				throw APIError.fromStatus("BAD_REQUEST", {
-					message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
+					message: `${GENERIC_OAUTH_ERROR_CODES.ERR_PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 				});
 			}
 			const {
@@ -160,7 +160,7 @@ export const signInWithOAuth2 = (options: GenericOAuthOptions) =>
 			if (!finalAuthUrl || !finalTokenUrl) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+					GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIGURATION,
 				);
 			}
 			if (authorizationUrlParams) {
@@ -285,7 +285,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			if (!providerId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					GENERIC_OAUTH_ERROR_CODES.PROVIDER_ID_REQUIRED,
+					GENERIC_OAUTH_ERROR_CODES.ERR_PROVIDER_ID_REQUIRED,
 				);
 			}
 			const providerConfig = options.config.find(
@@ -294,7 +294,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 
 			if (!providerConfig) {
 				throw APIError.fromStatus("BAD_REQUEST", {
-					message: `${GENERIC_OAUTH_ERROR_CODES.PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
+					message: `${GENERIC_OAUTH_ERROR_CODES.ERR_PROVIDER_CONFIG_NOT_FOUND} ${providerId}`,
 				});
 			}
 
@@ -351,7 +351,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					if (!finalTokenUrl) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
+							GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIG,
 						);
 					}
 					const additionalParams =
@@ -383,7 +383,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			if (!tokens) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIG,
+					GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIG,
 				);
 			}
 			const userInfo: Omit<User, "createdAt" | "updatedAt"> =
@@ -605,14 +605,14 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			if (!session) {
 				throw APIError.from(
 					"UNAUTHORIZED",
-					GENERIC_OAUTH_ERROR_CODES.SESSION_REQUIRED,
+					GENERIC_OAUTH_ERROR_CODES.ERR_SESSION_REQUIRED,
 				);
 			}
 			const provider = options.config.find(
 				(p) => p.providerId === c.body.providerId,
 			);
 			if (!provider) {
-				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
+				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.ERR_PROVIDER_NOT_FOUND);
 			}
 			const {
 				providerId,
@@ -633,7 +633,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 				if (!discoveryUrl) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+						GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIGURATION,
 					);
 				}
 				const discovery = await betterFetch<{
@@ -656,7 +656,7 @@ export const oAuth2LinkAccount = (options: GenericOAuthOptions) =>
 			if (!finalAuthUrl) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+					GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIGURATION,
 				);
 			}
 

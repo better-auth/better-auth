@@ -34,11 +34,11 @@ export async function validateApiKey({
 	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
 	if (!apiKey) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_INVALID_API_KEY);
 	}
 
 	if (apiKey.enabled === false) {
-		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_KEY_DISABLED);
 	}
 
 	if (apiKey.expiresAt) {
@@ -72,7 +72,7 @@ export async function validateApiKey({
 				await deleteExpiredKey();
 			}
 
-			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_EXPIRED);
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_KEY_EXPIRED);
 		}
 	}
 
@@ -84,12 +84,12 @@ export async function validateApiKey({
 			: null;
 
 		if (!apiKeyPermissions) {
-			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_KEY_NOT_FOUND);
 		}
 		const r = role(apiKeyPermissions as any);
 		const result = r.authorize(permissions);
 		if (!result.success) {
-			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_KEY_NOT_FOUND);
 		}
 	}
 
@@ -124,7 +124,7 @@ export async function validateApiKey({
 			await deleteExhaustedKey();
 		}
 
-		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.ERR_USAGE_EXCEEDED);
 	} else if (remaining !== null) {
 		const now = Date.now();
 		const refillInterval = apiKey.refillInterval;
@@ -143,7 +143,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.ERR_USAGE_EXCEEDED);
 		} else {
 			remaining--;
 		}
@@ -209,7 +209,7 @@ export async function validateApiKey({
 		if (!newApiKey) {
 			throw APIError.from(
 				"INTERNAL_SERVER_ERROR",
-				ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+				ERROR_CODES.ERR_FAILED_TO_UPDATE_API_KEY,
 			);
 		}
 	}
@@ -255,7 +255,7 @@ export function verifyApiKey({
 					return ctx.json({
 						valid: false,
 						error: {
-							message: ERROR_CODES.INVALID_API_KEY,
+							message: ERROR_CODES.ERR_INVALID_API_KEY,
 							code: "KEY_NOT_FOUND" as const,
 						},
 						key: null,
@@ -302,7 +302,7 @@ export function verifyApiKey({
 				return ctx.json({
 					valid: false,
 					error: {
-						message: ERROR_CODES.INVALID_API_KEY,
+						message: ERROR_CODES.ERR_INVALID_API_KEY,
 						code: "INVALID_API_KEY" as const,
 					},
 					key: null,

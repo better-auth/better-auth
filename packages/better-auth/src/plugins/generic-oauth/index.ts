@@ -88,7 +88,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!finalAuthUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+								GENERIC_OAUTH_ERROR_CODES.ERR_INVALID_OAUTH_CONFIGURATION,
 							);
 						}
 						return createAuthorizationURL({
@@ -134,7 +134,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!finalTokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+								GENERIC_OAUTH_ERROR_CODES.ERR_TOKEN_URL_NOT_FOUND,
 							);
 						}
 						return validateAuthorizationCode({
@@ -169,7 +169,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						if (!finalTokenUrl) {
 							throw APIError.from(
 								"BAD_REQUEST",
-								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+								GENERIC_OAUTH_ERROR_CODES.ERR_TOKEN_URL_NOT_FOUND,
 							);
 						}
 						return refreshAccessToken({

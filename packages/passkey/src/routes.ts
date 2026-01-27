@@ -456,7 +456,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			if (!verificationToken) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					PASSKEY_ERROR_CODES.ERR_CHALLENGE_NOT_FOUND,
 				);
 			}
 
@@ -476,7 +476,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			if (userData.id !== ctx.context.session.user.id) {
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+					PASSKEY_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 				);
 			}
 
@@ -524,7 +524,7 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				ctx.context.logger.error("Failed to verify registration", e);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
-					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					PASSKEY_ERROR_CODES.ERR_FAILED_TO_VERIFY_REGISTRATION,
 				);
 			}
 		},
@@ -590,7 +590,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			if (!verificationToken) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					PASSKEY_ERROR_CODES.ERR_CHALLENGE_NOT_FOUND,
 				);
 			}
 
@@ -601,7 +601,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+					PASSKEY_ERROR_CODES.ERR_CHALLENGE_NOT_FOUND,
 				);
 			}
 			const { expectedChallenge } = JSON.parse(
@@ -619,7 +619,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 			if (!passkey) {
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND,
+					PASSKEY_ERROR_CODES.ERR_PASSKEY_NOT_FOUND,
 				);
 			}
 			try {
@@ -642,7 +642,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				if (!verified)
 					throw APIError.from(
 						"UNAUTHORIZED",
-						PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+						PASSKEY_ERROR_CODES.ERR_AUTHENTICATION_FAILED,
 					);
 
 				await ctx.context.adapter.update<Passkey>({
@@ -663,7 +663,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				if (!s) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
-						PASSKEY_ERROR_CODES.UNABLE_TO_CREATE_SESSION,
+						PASSKEY_ERROR_CODES.ERR_UNABLE_TO_CREATE_SESSION,
 					);
 				}
 				const user = await ctx.context.internalAdapter.findUserById(
@@ -692,7 +692,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				ctx.context.logger.error("Failed to verify authentication", e);
 				throw APIError.from(
 					"BAD_REQUEST",
-					PASSKEY_ERROR_CODES.AUTHENTICATION_FAILED,
+					PASSKEY_ERROR_CODES.ERR_AUTHENTICATION_FAILED,
 				);
 			}
 		},
@@ -823,7 +823,7 @@ export const deletePasskey = createAuthEndpoint(
 			],
 		});
 		if (!passkey) {
-			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
+			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.ERR_PASSKEY_NOT_FOUND);
 		}
 		if (passkey.userId !== ctx.context.session.user.id) {
 			throw new APIError("UNAUTHORIZED");
@@ -904,13 +904,13 @@ export const updatePasskey = createAuthEndpoint(
 		});
 
 		if (!passkey) {
-			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.PASSKEY_NOT_FOUND);
+			throw APIError.from("NOT_FOUND", PASSKEY_ERROR_CODES.ERR_PASSKEY_NOT_FOUND);
 		}
 
 		if (passkey.userId !== ctx.context.session.user.id) {
 			throw APIError.from(
 				"UNAUTHORIZED",
-				PASSKEY_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
+				PASSKEY_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_REGISTER_THIS_PASSKEY,
 			);
 		}
 
@@ -930,7 +930,7 @@ export const updatePasskey = createAuthEndpoint(
 		if (!updatedPasskey) {
 			throw APIError.from(
 				"INTERNAL_SERVER_ERROR",
-				PASSKEY_ERROR_CODES.FAILED_TO_UPDATE_PASSKEY,
+				PASSKEY_ERROR_CODES.ERR_FAILED_TO_UPDATE_PASSKEY,
 			);
 		}
 		return ctx.json(

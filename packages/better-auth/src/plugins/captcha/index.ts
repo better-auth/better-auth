@@ -2,7 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
-import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
+import { CAPCHA_CLIENT_SIDE_ERROR_CODES, CAPTCHA_SERVER_SIDE_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
 
 declare module "@better-auth/core" {
@@ -31,7 +31,7 @@ export const captcha = (options: CaptchaOptions) =>
 					return undefined;
 
 				if (!options.secretKey) {
-					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
+					throw new Error(CAPTCHA_SERVER_SIDE_ERROR_CODES.ERR_MISSING_SECRET_KEY.message);
 				}
 
 				const captchaResponse = request.headers.get("x-captcha-response");
@@ -39,7 +39,7 @@ export const captcha = (options: CaptchaOptions) =>
 
 				if (!captchaResponse) {
 					return middlewareResponse({
-						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
+						message: CAPCHA_CLIENT_SIDE_ERROR_CODES.ERR_MISSING_RESPONSE.message,
 						status: 400,
 					});
 				}
@@ -88,7 +88,7 @@ export const captcha = (options: CaptchaOptions) =>
 				});
 
 				return middlewareResponse({
-					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
+					message: CAPCHA_CLIENT_SIDE_ERROR_CODES.ERR_UNKNOWN_ERROR.message,
 					status: 500,
 				});
 			}

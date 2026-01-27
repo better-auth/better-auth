@@ -309,7 +309,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
 					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE.message,
+						DEVICE_AUTHORIZATION_ERROR_CODES.ERR_INVALID_DEVICE_CODE.message,
 				});
 			}
 
@@ -333,7 +333,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					throw new APIError("BAD_REQUEST", {
 						error: "slow_down",
 						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.POLLING_TOO_FREQUENTLY.message,
+							DEVICE_AUTHORIZATION_ERROR_CODES.ERR_POLLING_TOO_FREQUENTLY.message,
 					});
 				}
 			}
@@ -365,7 +365,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				throw new APIError("BAD_REQUEST", {
 					error: "expired_token",
 					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_DEVICE_CODE.message,
+						DEVICE_AUTHORIZATION_ERROR_CODES.ERR_EXPIRED_DEVICE_CODE.message,
 				});
 			}
 
@@ -373,7 +373,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				throw new APIError("BAD_REQUEST", {
 					error: "authorization_pending",
 					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.AUTHORIZATION_PENDING.message,
+						DEVICE_AUTHORIZATION_ERROR_CODES.ERR_AUTHORIZATION_PENDING.message,
 				});
 			}
 
@@ -390,7 +390,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				throw new APIError("BAD_REQUEST", {
 					error: "access_denied",
 					error_description:
-						DEVICE_AUTHORIZATION_ERROR_CODES.ACCESS_DENIED.message,
+						DEVICE_AUTHORIZATION_ERROR_CODES.ERR_ACCESS_DENIED.message,
 				});
 			}
 
@@ -403,7 +403,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					throw new APIError("INTERNAL_SERVER_ERROR", {
 						error: "server_error",
 						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.USER_NOT_FOUND.message,
+							DEVICE_AUTHORIZATION_ERROR_CODES.ERR_USER_NOT_FOUND.message,
 					});
 				}
 
@@ -415,7 +415,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					throw new APIError("INTERNAL_SERVER_ERROR", {
 						error: "server_error",
 						error_description:
-							DEVICE_AUTHORIZATION_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
+							DEVICE_AUTHORIZATION_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION.message,
 					});
 				}
 
@@ -474,7 +474,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 			throw new APIError("INTERNAL_SERVER_ERROR", {
 				error: "server_error",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_DEVICE_CODE_STATUS.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_INVALID_DEVICE_CODE_STATUS.message,
 			});
 		},
 	);
@@ -543,7 +543,7 @@ export const deviceVerify = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_INVALID_USER_CODE.message,
 			});
 		}
 
@@ -551,7 +551,7 @@ export const deviceVerify = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "expired_token",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_EXPIRED_USER_CODE.message,
 			});
 		}
 
@@ -617,7 +617,7 @@ export const deviceApprove = createAuthEndpoint(
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_AUTHENTICATION_REQUIRED.message,
 			});
 		}
 
@@ -638,7 +638,7 @@ export const deviceApprove = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_INVALID_USER_CODE.message,
 			});
 		}
 
@@ -646,7 +646,7 @@ export const deviceApprove = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "expired_token",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_EXPIRED_USER_CODE.message,
 			});
 		}
 
@@ -654,7 +654,7 @@ export const deviceApprove = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_DEVICE_CODE_ALREADY_PROCESSED
 						.message,
 			});
 		}
@@ -746,7 +746,7 @@ export const deviceDeny = createAuthEndpoint(
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_AUTHENTICATION_REQUIRED.message,
 			});
 		}
 
@@ -767,7 +767,7 @@ export const deviceDeny = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.INVALID_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_INVALID_USER_CODE.message,
 			});
 		}
 
@@ -775,7 +775,7 @@ export const deviceDeny = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "expired_token",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.EXPIRED_USER_CODE.message,
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_EXPIRED_USER_CODE.message,
 			});
 		}
 
@@ -783,7 +783,7 @@ export const deviceDeny = createAuthEndpoint(
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
 				error_description:
-					DEVICE_AUTHORIZATION_ERROR_CODES.DEVICE_CODE_ALREADY_PROCESSED
+					DEVICE_AUTHORIZATION_ERROR_CODES.ERR_DEVICE_CODE_ALREADY_PROCESSED
 						.message,
 			});
 		}

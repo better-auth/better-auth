@@ -29,7 +29,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		if (!signedTwoFactorCookie) {
 			throw APIError.from(
 				"UNAUTHORIZED",
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				TWO_FACTOR_ERROR_CODES.ERR_INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const verificationToken =
@@ -39,7 +39,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		if (!verificationToken) {
 			throw APIError.from(
 				"UNAUTHORIZED",
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				TWO_FACTOR_ERROR_CODES.ERR_INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const user = (await ctx.context.internalAdapter.findUserById(
@@ -48,7 +48,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 		if (!user) {
 			throw APIError.from(
 				"UNAUTHORIZED",
-				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+				TWO_FACTOR_ERROR_CODES.ERR_INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const dontRememberMe = await ctx.getSignedCookie(

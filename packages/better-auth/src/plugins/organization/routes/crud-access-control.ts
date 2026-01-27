@@ -114,7 +114,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"NOT_IMPLEMENTED",
-					ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
+					ORGANIZATION_ERROR_CODES.ERR_MISSING_AC_INSTANCE,
 				);
 			}
 
@@ -128,7 +128,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
 				);
 			}
 
@@ -170,7 +170,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 
@@ -196,7 +196,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
 				);
 			}
 
@@ -230,7 +230,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TOO_MANY_ROLES,
+					ORGANIZATION_ERROR_CODES.ERR_TOO_MANY_ROLES,
 				);
 			}
 
@@ -331,7 +331,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -362,7 +362,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 
@@ -388,7 +388,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
 				);
 			}
 
@@ -408,7 +408,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					);
 					throw APIError.from(
 						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
+						ORGANIZATION_ERROR_CODES.ERR_CANNOT_DELETE_A_PRE_DEFINED_ROLE,
 					);
 				}
 			}
@@ -436,7 +436,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 			const existingRoleInDB =
@@ -464,7 +464,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 
@@ -524,7 +524,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -555,7 +555,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 
@@ -581,7 +581,7 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
 				);
 			}
 
@@ -663,7 +663,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -694,7 +694,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 
@@ -720,7 +720,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
 				);
 			}
 
@@ -747,7 +747,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 			const role = await ctx.context.adapter.findOne<OrganizationRole>({
@@ -774,7 +774,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 
@@ -855,7 +855,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"NOT_IMPLEMENTED",
-					ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
+					ORGANIZATION_ERROR_CODES.ERR_MISSING_AC_INSTANCE,
 				);
 			}
 
@@ -867,7 +867,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -898,7 +898,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
 				);
 			}
 
@@ -919,7 +919,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
 				);
 			}
 
@@ -946,7 +946,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 			const role = await ctx.context.adapter.findOne<OrganizationRole>({
@@ -973,7 +973,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND,
 				);
 			}
 			role.permission = role.permission
@@ -1087,7 +1087,7 @@ async function checkForInvalidResources({
 		);
 		throw APIError.from(
 			"BAD_REQUEST",
-			ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
+			ORGANIZATION_ERROR_CODES.ERR_INVALID_RESOURCE,
 		);
 	}
 }
@@ -1149,16 +1149,16 @@ async function checkIfMemberHasPermission({
 		);
 		let error: { code: string; message: string };
 		if (action === "create")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
 		else if (action === "update")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
 		else if (action === "delete")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
 		else if (action === "read")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
 		else if (action === "list")
-			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
-		else error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
+		else error = ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
 
 		throw APIError.fromStatus("FORBIDDEN", {
 			message: error.message,
@@ -1193,7 +1193,7 @@ async function checkIfRoleNameIsTakenByPreDefinedRole({
 		);
 		throw APIError.from(
 			"BAD_REQUEST",
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ERR_ROLE_NAME_IS_ALREADY_TAKEN,
 		);
 	}
 }
@@ -1234,7 +1234,7 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 		);
 		throw APIError.from(
 			"BAD_REQUEST",
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ERR_ROLE_NAME_IS_ALREADY_TAKEN,
 		);
 	}
 }

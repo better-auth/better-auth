@@ -85,7 +85,7 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_EMAIL);
 			}
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
@@ -344,24 +344,24 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_EMAIL);
 			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 			}
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`${ctx.body.type}-otp-${email}`,
 				);
 			if (!verificationValue) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_OTP_EXPIRED);
 			}
 
 			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
@@ -370,7 +370,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+				throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_TOO_MANY_ATTEMPTS);
 			}
 			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
 			if (!verified) {
@@ -380,7 +380,7 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			return ctx.json({
 				success: true,
@@ -459,7 +459,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const email = ctx.body.email.toLowerCase();
 			const isValidEmail = z.email().safeParse(email);
 			if (!isValidEmail.success) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_EMAIL);
 			}
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
@@ -467,10 +467,10 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 
 			if (!verificationValue) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_OTP_EXPIRED);
 			}
 
 			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
@@ -479,7 +479,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+				throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_TOO_MANY_ATTEMPTS);
 			}
 			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
 			if (!verified) {
@@ -489,7 +489,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
@@ -500,7 +500,7 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				 * safe to leak the existence of a user, given the user has already the OTP from the
 				 * email
 				 */
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 			}
 			if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 				await ctx.context.options.emailVerification.beforeEmailVerification(
@@ -635,10 +635,10 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					`sign-in-otp-${email}`,
 				);
 			if (!verificationValue) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_OTP_EXPIRED);
 			}
 			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
 			const allowedAttempts = opts?.allowedAttempts || 3;
@@ -646,7 +646,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+				throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_TOO_MANY_ATTEMPTS);
 			}
 			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
 			if (!verified) {
@@ -656,7 +656,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
@@ -664,7 +664,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
-					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 				}
 				const newUser = await ctx.context.internalAdapter.createUser({
 					email,
@@ -857,13 +857,13 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					`forget-password-otp-${email}`,
 				);
 			if (!verificationValue) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_OTP_EXPIRED);
 			}
 			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
 			const allowedAttempts = opts?.allowedAttempts || 3;
@@ -871,7 +871,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				await ctx.context.internalAdapter.deleteVerificationValue(
 					verificationValue.id,
 				);
-				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+				throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_TOO_MANY_ATTEMPTS);
 			}
 			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
 			if (!verified) {
@@ -881,7 +881,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
 				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_OTP);
 			}
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
@@ -890,15 +890,15 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				includeAccounts: true,
 			});
 			if (!user) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 			}
 			const minPasswordLength = ctx.context.password.config.minPasswordLength;
 			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_SHORT);
 			}
 			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_LONG);
 			}
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 			const account = user.accounts?.find(

@@ -278,11 +278,11 @@ export function createApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -297,17 +297,17 @@ export function createApiKey({
 					permissions !== undefined ||
 					remaining !== null
 				) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_SERVER_ONLY_PROPERTY);
 				}
 			}
 
 			// if metadata is defined, than check that it's an object.
 			if (metadata) {
 				if (opts.enableMetadata === false) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.METADATA_DISABLED);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_METADATA_DISABLED);
 				}
 				if (typeof metadata !== "object") {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_METADATA_TYPE);
 				}
 			}
 
@@ -315,14 +315,14 @@ export function createApiKey({
 			if (refillAmount && !refillInterval) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+					ERROR_CODES.ERR_REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 				);
 			}
 			// make sure that if they pass a refill interval, they also pass a refill amount
 			if (refillInterval && !refillAmount) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+					ERROR_CODES.ERR_REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 				);
 			}
 
@@ -330,7 +330,7 @@ export function createApiKey({
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+						ERROR_CODES.ERR_KEY_DISABLED_EXPIRATION,
 					);
 				}
 
@@ -339,33 +339,33 @@ export function createApiKey({
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+						ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_SMALL,
 					);
 				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+						ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_LARGE,
 					);
 				}
 			}
 			if (prefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_PREFIX_LENGTH);
 				}
 				if (prefix.length > opts.maximumPrefixLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_PREFIX_LENGTH);
 				}
 			}
 
 			if (name) {
 				if (name.length < opts.minimumNameLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_NAME_LENGTH);
 				}
 				if (name.length > opts.maximumNameLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_NAME_LENGTH);
 				}
 			} else if (opts.requireName) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.NAME_REQUIRED);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_NAME_REQUIRED);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

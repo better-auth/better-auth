@@ -318,7 +318,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				}
 				throw APIError.from(
 					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.OTP_HAS_EXPIRED,
+					TWO_FACTOR_ERROR_CODES.ERR_OTP_HAS_EXPIRED,
 				);
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
@@ -328,7 +328,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					TWO_FACTOR_ERROR_CODES.TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
+					TWO_FACTOR_ERROR_CODES.ERR_TOO_MANY_ATTEMPTS_REQUEST_NEW_CODE,
 				);
 			}
 			const [storedValue, inputValue] = await decryptOrHashForComparison(
@@ -345,7 +345,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					if (!session.session) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(
@@ -379,7 +379,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
 				);
-				return invalid("INVALID_CODE");
+				return invalid("ERR_INVALID_CODE");
 			}
 		},
 	);

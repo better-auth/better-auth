@@ -273,11 +273,11 @@ export function updateApiKey({
 					: session?.user || { id: ctx.body.userId };
 
 			if (!user?.id) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_UNAUTHORIZED_SESSION);
 			}
 
 			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_UNAUTHORIZED_SESSION);
 			}
 
 			if (authRequired) {
@@ -292,7 +292,7 @@ export function updateApiKey({
 					remaining !== undefined ||
 					permissions !== undefined
 				) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_SERVER_ONLY_PROPERTY);
 				}
 			}
 
@@ -306,16 +306,16 @@ export function updateApiKey({
 			}
 
 			if (!apiKey) {
-				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+				throw APIError.from("NOT_FOUND", ERROR_CODES.ERR_KEY_NOT_FOUND);
 			}
 
 			const newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_NAME_LENGTH);
 				} else if (name.length > opts.maximumNameLength) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_NAME_LENGTH);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_NAME_LENGTH);
 				}
 				newValues.name = name;
 			}
@@ -327,7 +327,7 @@ export function updateApiKey({
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.KEY_DISABLED_EXPIRATION,
+						ERROR_CODES.ERR_KEY_DISABLED_EXPIRATION,
 					);
 				}
 				if (expiresIn !== null) {
@@ -338,12 +338,12 @@ export function updateApiKey({
 					if (expiresIn_in_days < opts.keyExpiration.minExpiresIn) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+							ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_SMALL,
 						);
 					} else if (expiresIn_in_days > opts.keyExpiration.maxExpiresIn) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+							ERROR_CODES.ERR_EXPIRES_IN_IS_TOO_LARGE,
 						);
 					}
 				}
@@ -352,7 +352,7 @@ export function updateApiKey({
 
 			if (metadata !== undefined && opts.enableMetadata === true) {
 				if (typeof metadata !== "object") {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_METADATA_TYPE);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_INVALID_METADATA_TYPE);
 				}
 				// The adapter will automatically apply the schema transform to stringify
 				newValues.metadata = metadata;
@@ -364,12 +364,12 @@ export function updateApiKey({
 				if (refillAmount !== undefined && refillInterval === undefined) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+						ERROR_CODES.ERR_REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
 					);
 				} else if (refillInterval !== undefined && refillAmount === undefined) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+						ERROR_CODES.ERR_REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
 					);
 				}
 				newValues.refillAmount = refillAmount;
@@ -392,7 +392,7 @@ export function updateApiKey({
 			}
 
 			if (Object.keys(newValues).length === 0) {
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.NO_VALUES_TO_UPDATE);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.ERR_NO_VALUES_TO_UPDATE);
 			}
 
 			let newApiKey: ApiKey = apiKey;

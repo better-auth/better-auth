@@ -185,7 +185,7 @@ describe("organization", async (it) => {
 		});
 		expect(existingSlug.error?.status).toBe(400);
 		expect(existingSlug.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN.message,
+			ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_SLUG_ALREADY_TAKEN.message,
 		);
 	});
 
@@ -273,7 +273,7 @@ describe("organization", async (it) => {
 		// This should fail with duplicate slug error
 		expect(organization.error?.status).toBe(400);
 		expect(organization.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_SLUG_ALREADY_TAKEN,
 		);
 	});
 
@@ -493,7 +493,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+			ORGANIZATION_ERROR_CODES.ERR_USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
 				.message,
 		);
 
@@ -506,7 +506,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
+			ORGANIZATION_ERROR_CODES.ERR_USER_IS_ALREADY_INVITED_TO_THIS_ORGANIZATION
 				.message,
 		);
 
@@ -536,7 +536,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgain.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+			ORGANIZATION_ERROR_CODES.ERR_USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
 				.message,
 		);
 
@@ -549,7 +549,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(inviteMemberAgainUpper.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
+			ORGANIZATION_ERROR_CODES.ERR_USER_IS_ALREADY_A_MEMBER_OF_THIS_ORGANIZATION
 				.message,
 		);
 	});
@@ -684,7 +684,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
+			ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_INVITE_USER_WITH_THIS_ROLE
 				.message,
 		);
 	});
@@ -880,7 +880,7 @@ describe("organization", async (it) => {
 
 		expect(deleteResult.error?.status).toBe(400);
 		expect(deleteResult.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
+			ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.message,
 		);
 	});
 
@@ -1056,7 +1056,7 @@ describe("organization", async (it) => {
 				expect(e).not.toBeNull();
 				expect(isAPIError(e)).toBeTruthy();
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
 				);
 			});
 		const invite = await client.organization.inviteMember({
@@ -1087,7 +1087,7 @@ describe("organization", async (it) => {
 			},
 		});
 		expect(invitation.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED.message,
+			ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_MEMBERSHIP_LIMIT_REACHED.message,
 		);
 
 		const getFullOrganization = await client.organization.getFullOrganization({
@@ -1192,7 +1192,7 @@ describe("organization", async (it) => {
 				expect(e).not.toBeNull();
 				expect(isAPIError(e)).toBeTruthy();
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_MEMBERSHIP_LIMIT_REACHED
 						.message,
 				);
 			});
@@ -1685,7 +1685,7 @@ describe("invitation limit", async () => {
 		});
 		expect(invite.error?.status).toBe(403);
 		expect(invite.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
+			ORGANIZATION_ERROR_CODES.ERR_INVITATION_LIMIT_REACHED.message,
 		);
 	});
 
@@ -1718,7 +1718,7 @@ describe("invitation limit", async () => {
 			})
 			.catch((e: APIError) => {
 				expect(e.message).toBe(
-					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED.message,
+					ORGANIZATION_ERROR_CODES.ERR_INVITATION_LIMIT_REACHED.message,
 				);
 			});
 	});
@@ -2040,7 +2040,7 @@ describe("owner can update roles", async () => {
 				})
 				.catch((e: APIError) => {
 					expect(e.message).toBe(
-						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
+						ORGANIZATION_ERROR_CODES.ERR_YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER,
 					);
 				});
 		};

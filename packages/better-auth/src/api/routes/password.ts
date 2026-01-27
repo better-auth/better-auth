@@ -273,7 +273,7 @@ export const resetPassword = createAuthEndpoint(
 	async (ctx) => {
 		const token = ctx.body.token || ctx.query?.token;
 		if (!token) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_TOKEN);
 		}
 
 		const { newPassword } = ctx.body;
@@ -281,10 +281,10 @@ export const resetPassword = createAuthEndpoint(
 		const minLength = ctx.context.password?.config.minPasswordLength;
 		const maxLength = ctx.context.password?.config.maxPasswordLength;
 		if (newPassword.length < minLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_SHORT);
 		}
 		if (newPassword.length > maxLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_LONG);
 		}
 
 		const id = `reset-password:${token}`;
@@ -292,7 +292,7 @@ export const resetPassword = createAuthEndpoint(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(id);
 		if (!verification || verification.expiresAt < new Date()) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_TOKEN);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_TOKEN);
 		}
 		const userId = verification.value;
 		const hashedPassword = await ctx.context.password.hash(newPassword);
@@ -378,7 +378,7 @@ export const verifyPassword = createAuthEndpoint(
 		});
 
 		if (!isValid) {
-			throw new APIError("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_INVALID_PASSWORD);
 		}
 
 		return ctx.json({

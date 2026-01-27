@@ -121,7 +121,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						if (typeof key !== "string") {
 							throw APIError.from(
 								"BAD_REQUEST",
-								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+								API_KEY_ERROR_CODES.ERR_INVALID_API_KEY_GETTER_RETURN_TYPE,
 							);
 						}
 
@@ -131,7 +131,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							// a prefix may be added to the key.
 							throw APIError.from(
 								"FORBIDDEN",
-								API_KEY_ERROR_CODES.INVALID_API_KEY,
+								API_KEY_ERROR_CODES.ERR_INVALID_API_KEY,
 							);
 						}
 
@@ -140,7 +140,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							if (!isValid) {
 								throw APIError.from(
 									"FORBIDDEN",
-									API_KEY_ERROR_CODES.INVALID_API_KEY,
+									API_KEY_ERROR_CODES.ERR_INVALID_API_KEY,
 								);
 							}
 						}
@@ -174,7 +174,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 						if (!user) {
 							throw APIError.from(
 								"UNAUTHORIZED",
-								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
+								API_KEY_ERROR_CODES.ERR_INVALID_USER_ID_FROM_API_KEY,
 							);
 						}
 

@@ -265,7 +265,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			if (!activeOrganizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
@@ -276,7 +276,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			if (!member) {
 				throw APIError.from(
 					"UNAUTHORIZED",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 			const result = await hasPermission(

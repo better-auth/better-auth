@@ -128,7 +128,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			if (!canCreateOrg && !isSystemAction) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
@@ -144,7 +144,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			if (hasReachedOrgLimit) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
 				);
 			}
 
@@ -154,7 +154,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 			if (existingOrganization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_ALREADY_EXISTS,
 				);
 			}
 
@@ -360,7 +360,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 			}
 			throw APIError.from(
 				"BAD_REQUEST",
-				ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+				ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_SLUG_ALREADY_TAKEN,
 			);
 		},
 	);
@@ -465,7 +465,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
@@ -476,7 +476,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 			const canUpdateOrg = await hasPermission(
@@ -493,7 +493,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 			if (!canUpdateOrg) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
 				);
 			}
 			// Check if slug is being updated and validate uniqueness
@@ -507,7 +507,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+						ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_SLUG_ALREADY_TAKEN,
 					);
 				}
 			}
@@ -601,7 +601,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
+						message: ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND.message,
 					},
 				});
 			}
@@ -613,7 +613,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 			const canDeleteOrg = await hasPermission(
@@ -630,7 +630,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (!canDeleteOrg) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
 				);
 			}
 			if (organizationId === session.session.activeOrganizationId) {
@@ -740,7 +740,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 			const isMember = await adapter.checkMembership({
@@ -751,7 +751,7 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw new APIError("FORBIDDEN", {
 					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
+						ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
 							.message,
 				});
 			}
@@ -856,7 +856,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				if (!organization) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+						ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 					);
 				}
 				organizationId = organization.id;
@@ -865,7 +865,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -877,7 +877,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 
@@ -885,7 +885,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 			const updatedSession = await adapter.setActiveOrganization(

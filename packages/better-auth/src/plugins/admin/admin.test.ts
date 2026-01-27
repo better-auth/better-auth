@@ -1431,7 +1431,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
+			ADMIN_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },
@@ -1462,7 +1462,7 @@ describe("access control", async (it) => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toBe(400);
 		expect(res.error?.code).toBe(
-			ADMIN_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
+			ADMIN_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_SET_NON_EXISTENT_VALUE.code,
 		);
 		await client.admin.removeUser(
 			{ userId: createdUser.data?.user.id || "" },

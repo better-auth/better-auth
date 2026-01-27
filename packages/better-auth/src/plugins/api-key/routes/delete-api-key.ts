@@ -82,7 +82,7 @@ export function deleteApiKey({
 			const { keyId } = ctx.body;
 			const session = ctx.context.session;
 			if (session.user.banned === true) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.USER_BANNED);
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.ERR_USER_BANNED);
 			}
 
 			let apiKey: ApiKey | null = null;
@@ -90,7 +90,7 @@ export function deleteApiKey({
 			apiKey = await getApiKeyById(ctx, keyId, opts);
 
 			if (!apiKey || apiKey.userId !== session.user.id) {
-				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+				throw APIError.from("NOT_FOUND", ERROR_CODES.ERR_KEY_NOT_FOUND);
 			}
 
 			try {

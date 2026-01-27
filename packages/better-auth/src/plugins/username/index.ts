@@ -250,7 +250,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.context.logger.error("Username or password not found");
 						throw APIError.from(
 							"UNAUTHORIZED",
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							ERROR_CODES.ERR_INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -268,7 +268,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						});
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_SHORT,
+							ERROR_CODES.ERR_USERNAME_TOO_SHORT,
 						);
 					}
 
@@ -278,7 +278,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						});
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_LONG,
+							ERROR_CODES.ERR_USERNAME_TOO_LONG,
 						);
 					}
 
@@ -289,7 +289,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!valid) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.INVALID_USERNAME,
+							ERROR_CODES.ERR_INVALID_USERNAME,
 						);
 					}
 
@@ -313,7 +313,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						});
 						throw APIError.from(
 							"UNAUTHORIZED",
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							ERROR_CODES.ERR_INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -333,7 +333,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!account) {
 						throw APIError.from(
 							"UNAUTHORIZED",
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							ERROR_CODES.ERR_INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 					const currentPassword = account?.password;
@@ -343,7 +343,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						});
 						throw APIError.from(
 							"UNAUTHORIZED",
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							ERROR_CODES.ERR_INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 					const validPassword = await ctx.context.password.verify({
@@ -354,7 +354,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.context.logger.error("Invalid password");
 						throw APIError.from(
 							"UNAUTHORIZED",
-							ERROR_CODES.INVALID_USERNAME_OR_PASSWORD,
+							ERROR_CODES.ERR_INVALID_USERNAME_OR_PASSWORD,
 						);
 					}
 
@@ -365,7 +365,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						if (
 							!ctx.context.options?.emailVerification?.sendVerificationEmail
 						) {
-							throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
+							throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_EMAIL_NOT_VERIFIED);
 						}
 
 						if (ctx.context.options?.emailVerification?.sendOnSignIn) {
@@ -390,7 +390,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							);
 						}
 
-						throw APIError.from("FORBIDDEN", ERROR_CODES.EMAIL_NOT_VERIFIED);
+						throw APIError.from("FORBIDDEN", ERROR_CODES.ERR_EMAIL_NOT_VERIFIED);
 					}
 
 					const session = await ctx.context.internalAdapter.createSession(
@@ -401,7 +401,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 						return ctx.json(null, {
 							status: 500,
 							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
+								message: BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION.message,
 							},
 						});
 					}
@@ -427,7 +427,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!username) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.INVALID_USERNAME,
+							ERROR_CODES.ERR_INVALID_USERNAME,
 						);
 					}
 
@@ -437,14 +437,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (username.length < minUsernameLength) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_SHORT,
+							ERROR_CODES.ERR_USERNAME_TOO_SHORT,
 						);
 					}
 
 					if (username.length > maxUsernameLength) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.USERNAME_TOO_LONG,
+							ERROR_CODES.ERR_USERNAME_TOO_LONG,
 						);
 					}
 
@@ -455,7 +455,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					if (!valid) {
 						throw APIError.from(
 							"UNPROCESSABLE_ENTITY",
-							ERROR_CODES.INVALID_USERNAME,
+							ERROR_CODES.ERR_INVALID_USERNAME,
 						);
 					}
 					const user = await ctx.context.adapter.findOne<User>({
@@ -507,14 +507,14 @@ export const username = (options?: UsernameOptions | undefined) => {
 							if (username.length < minUsernameLength) {
 								throw APIError.from(
 									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_SHORT,
+									ERROR_CODES.ERR_USERNAME_TOO_SHORT,
 								);
 							}
 
 							if (username.length > maxUsernameLength) {
 								throw APIError.from(
 									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_TOO_LONG,
+									ERROR_CODES.ERR_USERNAME_TOO_LONG,
 								);
 							}
 
@@ -525,7 +525,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							if (!valid) {
 								throw APIError.from(
 									"BAD_REQUEST",
-									ERROR_CODES.INVALID_USERNAME,
+									ERROR_CODES.ERR_INVALID_USERNAME,
 								);
 							}
 							const user = await ctx.context.adapter.findOne<User>({
@@ -547,7 +547,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 							if (blockChangeSignUp || blockChangeUpdateUser) {
 								throw APIError.from(
 									"BAD_REQUEST",
-									ERROR_CODES.USERNAME_IS_ALREADY_TAKEN,
+									ERROR_CODES.ERR_USERNAME_IS_ALREADY_TAKEN,
 								);
 							}
 						}
@@ -568,7 +568,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 								if (!valid) {
 									throw APIError.from(
 										"BAD_REQUEST",
-										ERROR_CODES.INVALID_DISPLAY_USERNAME,
+										ERROR_CODES.ERR_INVALID_DISPLAY_USERNAME,
 									);
 								}
 							}

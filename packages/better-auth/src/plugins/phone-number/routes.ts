@@ -95,7 +95,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!isValidNumber) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+						PHONE_NUMBER_ERROR_CODES.ERR_INVALID_PHONE_NUMBER,
 					);
 				}
 			}
@@ -112,7 +112,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!user) {
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+					PHONE_NUMBER_ERROR_CODES.ERR_INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			if (opts.requireVerification) {
@@ -136,7 +136,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					}
 					throw APIError.from(
 						"UNAUTHORIZED",
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_NOT_VERIFIED,
+						PHONE_NUMBER_ERROR_CODES.ERR_PHONE_NUMBER_NOT_VERIFIED,
 					);
 				}
 			}
@@ -152,7 +152,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				});
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+					PHONE_NUMBER_ERROR_CODES.ERR_INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			const currentPassword = credentialAccount?.password;
@@ -160,7 +160,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				ctx.context.logger.error("Password not found", { phoneNumber });
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
+					PHONE_NUMBER_ERROR_CODES.ERR_UNEXPECTED_ERROR,
 				);
 			}
 			const validPassword = await ctx.context.password.verify({
@@ -171,7 +171,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				ctx.context.logger.error("Invalid password");
 				throw APIError.from(
 					"UNAUTHORIZED",
-					PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER_OR_PASSWORD,
+					PHONE_NUMBER_ERROR_CODES.ERR_INVALID_PHONE_NUMBER_OR_PASSWORD,
 				);
 			}
 			const session = await ctx.context.internalAdapter.createSession(
@@ -182,7 +182,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				ctx.context.logger.error("Failed to create session");
 				throw APIError.from(
 					"UNAUTHORIZED",
-					BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 				);
 			}
 
@@ -257,7 +257,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				ctx.context.logger.warn("sendOTP not implemented");
 				throw APIError.from(
 					"NOT_IMPLEMENTED",
-					PHONE_NUMBER_ERROR_CODES.SEND_OTP_NOT_IMPLEMENTED,
+					PHONE_NUMBER_ERROR_CODES.ERR_SEND_OTP_NOT_IMPLEMENTED,
 				);
 			}
 
@@ -268,7 +268,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 				if (!isValidNumber) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.INVALID_PHONE_NUMBER,
+						PHONE_NUMBER_ERROR_CODES.ERR_INVALID_PHONE_NUMBER,
 					);
 				}
 			}
@@ -461,7 +461,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!isValid) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+						PHONE_NUMBER_ERROR_CODES.ERR_INVALID_OTP,
 					);
 				}
 
@@ -482,12 +482,12 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					if (otp && otp.expiresAt < new Date()) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
+							PHONE_NUMBER_ERROR_CODES.ERR_OTP_EXPIRED,
 						);
 					}
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
+						PHONE_NUMBER_ERROR_CODES.ERR_OTP_NOT_FOUND,
 					);
 				}
 				const [otpValue, attempts] = otp.value.split(":");
@@ -496,7 +496,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
 					throw APIError.from(
 						"FORBIDDEN",
-						PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
+						PHONE_NUMBER_ERROR_CODES.ERR_TOO_MANY_ATTEMPTS,
 					);
 				}
 				if (otpValue !== ctx.body.code) {
@@ -505,7 +505,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					});
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+						PHONE_NUMBER_ERROR_CODES.ERR_INVALID_OTP,
 					);
 				}
 
@@ -515,7 +515,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (ctx.body.updatePhoneNumber) {
 				const session = await getSessionFromCtx(ctx);
 				if (!session) {
-					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.USER_NOT_FOUND);
+					throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.ERR_USER_NOT_FOUND);
 				}
 				const existingUser =
 					await ctx.context.adapter.findMany<UserWithPhoneNumber>({
@@ -530,7 +530,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (existingUser.length) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
+						PHONE_NUMBER_ERROR_CODES.ERR_PHONE_NUMBER_EXIST,
 					);
 				}
 				const user =
@@ -573,7 +573,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					if (!user) {
 						throw APIError.from(
 							"INTERNAL_SERVER_ERROR",
-							BASE_ERROR_CODES.FAILED_TO_CREATE_USER,
+							BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_USER,
 						);
 					}
 				}
@@ -589,7 +589,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!user) {
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
-					BASE_ERROR_CODES.FAILED_TO_UPDATE_USER,
+					BASE_ERROR_CODES.ERR_FAILED_TO_UPDATE_USER,
 				);
 			}
 
@@ -608,7 +608,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				if (!session) {
 					throw APIError.from(
 						"INTERNAL_SERVER_ERROR",
-						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						BASE_ERROR_CODES.ERR_FAILED_TO_CREATE_SESSION,
 					);
 				}
 				await setSessionCookie(ctx, {
@@ -762,13 +762,13 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!verification) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PHONE_NUMBER_ERROR_CODES.OTP_NOT_FOUND,
+					PHONE_NUMBER_ERROR_CODES.ERR_OTP_NOT_FOUND,
 				);
 			}
 			if (verification.expiresAt < new Date()) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PHONE_NUMBER_ERROR_CODES.OTP_EXPIRED,
+					PHONE_NUMBER_ERROR_CODES.ERR_OTP_EXPIRED,
 				);
 			}
 			const [otpValue, attempts] = verification.value.split(":");
@@ -779,7 +779,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 				throw APIError.from(
 					"FORBIDDEN",
-					PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
+					PHONE_NUMBER_ERROR_CODES.ERR_TOO_MANY_ATTEMPTS,
 				);
 			}
 			if (ctx.body.otp !== otpValue) {
@@ -791,7 +791,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
-					PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
+					PHONE_NUMBER_ERROR_CODES.ERR_INVALID_OTP,
 				);
 			}
 			const user = await ctx.context.adapter.findOne<User>({
@@ -806,16 +806,16 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			if (!user) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
+					PHONE_NUMBER_ERROR_CODES.ERR_UNEXPECTED_ERROR,
 				);
 			}
 			const minLength = ctx.context.password.config.minPasswordLength;
 			const maxLength = ctx.context.password.config.maxPasswordLength;
 			if (ctx.body.newPassword.length < minLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_SHORT);
 			}
 			if (ctx.body.newPassword.length > maxLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PASSWORD_TOO_LONG);
 			}
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,

@@ -105,7 +105,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
@@ -117,7 +117,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				if (!member) {
 					throw APIError.from(
 						"FORBIDDEN",
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
 					);
 				}
 				const canCreate = await hasPermission(
@@ -135,7 +135,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 				if (!canCreate) {
 					throw APIError.from(
 						"FORBIDDEN",
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_CREATE_TEAMS_IN_THIS_ORGANIZATION,
 					);
 				}
 			}
@@ -156,7 +156,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			if (maxTeamsReached) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS,
 				);
 			}
 			const { name, organizationId: _, ...additionalFields } = ctx.body;
@@ -165,7 +165,7 @@ export const createTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -265,7 +265,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 			if (!session && (ctx.request || ctx.headers)) {
@@ -281,7 +281,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				if (!member || session.session?.activeTeamId === ctx.body.teamId) {
 					throw APIError.from(
 						"FORBIDDEN",
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
+						ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_TEAM,
 					);
 				}
 
@@ -300,7 +300,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				if (!canRemove) {
 					throw APIError.from(
 						"FORBIDDEN",
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION,
+						ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_DELETE_TEAMS_IN_THIS_ORGANIZATION,
 					);
 				}
 			}
@@ -311,7 +311,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!team || team.organizationId !== organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_TEAM_NOT_FOUND,
 				);
 			}
 
@@ -320,7 +320,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 				if (teams.length <= 1) {
 					throw APIError.from(
 						"BAD_REQUEST",
-						ORGANIZATION_ERROR_CODES.UNABLE_TO_REMOVE_LAST_TEAM,
+						ORGANIZATION_ERROR_CODES.ERR_UNABLE_TO_REMOVE_LAST_TEAM,
 					);
 				}
 			}
@@ -329,7 +329,7 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -448,7 +448,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
@@ -460,7 +460,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!member) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
 				);
 			}
 
@@ -479,7 +479,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!canUpdate) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM,
 				);
 			}
 
@@ -491,7 +491,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!team || team.organizationId !== organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_TEAM_NOT_FOUND,
 				);
 			}
 
@@ -501,7 +501,7 @@ export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -639,7 +639,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			if (!organizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
@@ -650,7 +650,7 @@ export const listOrganizationTeams = <O extends OrganizationOptions>(
 			if (!member) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_ACCESS_THIS_ORGANIZATION,
 				);
 			}
 			const teams = await adapter.listTeams(organizationId);
@@ -739,7 +739,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!team) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_TEAM_NOT_FOUND,
 				);
 			}
 
@@ -751,7 +751,7 @@ export const setActiveTeam = <O extends OrganizationOptions>(options: O) =>
 			if (!member) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				);
 			}
 
@@ -882,7 +882,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			if (!teamId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_DO_NOT_HAVE_AN_ACTIVE_TEAM,
 				);
 			}
 			const member = await adapter.findTeamMember({
@@ -893,7 +893,7 @@ export const listTeamMembers = <O extends OrganizationOptions>(options: O) =>
 			if (!member) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				);
 			}
 			const members = await adapter.listTeamMembers({
@@ -970,7 +970,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!session.session.activeOrganizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -982,7 +982,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!currentMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 
@@ -1001,7 +1001,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!canUpdateMember) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER,
 				);
 			}
 
@@ -1013,7 +1013,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!toBeAddedMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 
@@ -1025,7 +1025,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!team) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_TEAM_NOT_FOUND,
 				);
 			}
 
@@ -1035,7 +1035,7 @@ export const addTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -1135,7 +1135,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!session.session.activeOrganizationId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_NO_ACTIVE_ORGANIZATION,
 				);
 			}
 
@@ -1147,7 +1147,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!currentMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 
@@ -1166,7 +1166,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!canDeleteMember) {
 				throw APIError.from(
 					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
+					ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_REMOVE_A_TEAM_MEMBER,
 				);
 			}
 
@@ -1178,7 +1178,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!toBeAddedMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 
@@ -1190,7 +1190,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!team) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_TEAM_NOT_FOUND,
 				);
 			}
 
@@ -1200,7 +1200,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ERR_ORGANIZATION_NOT_FOUND,
 				);
 			}
 
@@ -1221,7 +1221,7 @@ export const removeTeamMember = <O extends OrganizationOptions>(options: O) =>
 			if (!teamMember) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
+					ORGANIZATION_ERROR_CODES.ERR_USER_IS_NOT_A_MEMBER_OF_THE_TEAM,
 				);
 			}
 

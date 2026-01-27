@@ -78,24 +78,24 @@ export const originCheckMiddleware = createAuthMiddleware(async (ctx) => {
 				`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 			);
 			if (label === "origin") {
-				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_INVALID_ORIGIN);
 			}
 			if (label === "callbackURL") {
-				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_CALLBACK_URL);
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_INVALID_CALLBACK_URL);
 			}
 			if (label === "redirectURL") {
-				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_REDIRECT_URL);
+				throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_INVALID_REDIRECT_URL);
 			}
 			if (label === "errorCallbackURL") {
 				throw APIError.from(
 					"FORBIDDEN",
-					BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+					BASE_ERROR_CODES.ERR_INVALID_ERROR_CALLBACK_URL,
 				);
 			}
 			if (label === "newUserCallbackURL") {
 				throw APIError.from(
 					"FORBIDDEN",
-					BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+					BASE_ERROR_CODES.ERR_INVALID_NEW_USER_CALLBACK_URL,
 				);
 			}
 			throw APIError.fromStatus("FORBIDDEN", {
@@ -136,30 +136,30 @@ export const originCheck = (
 					`Current list of trustedOrigins: ${ctx.context.trustedOrigins}`,
 				);
 				if (label === "origin") {
-					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
+					throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_INVALID_ORIGIN);
 				}
 				if (label === "callbackURL") {
 					throw APIError.from(
 						"FORBIDDEN",
-						BASE_ERROR_CODES.INVALID_CALLBACK_URL,
+						BASE_ERROR_CODES.ERR_INVALID_CALLBACK_URL,
 					);
 				}
 				if (label === "redirectURL") {
 					throw APIError.from(
 						"FORBIDDEN",
-						BASE_ERROR_CODES.INVALID_REDIRECT_URL,
+						BASE_ERROR_CODES.ERR_INVALID_REDIRECT_URL,
 					);
 				}
 				if (label === "errorCallbackURL") {
 					throw APIError.from(
 						"FORBIDDEN",
-						BASE_ERROR_CODES.INVALID_ERROR_CALLBACK_URL,
+						BASE_ERROR_CODES.ERR_INVALID_ERROR_CALLBACK_URL,
 					);
 				}
 				if (label === "newUserCallbackURL") {
 					throw APIError.from(
 						"FORBIDDEN",
-						BASE_ERROR_CODES.INVALID_NEW_USER_CALLBACK_URL,
+						BASE_ERROR_CODES.ERR_INVALID_NEW_USER_CALLBACK_URL,
 					);
 				}
 				throw APIError.fromStatus("FORBIDDEN", {
@@ -222,7 +222,7 @@ async function validateOrigin(
 	}
 
 	if (!originHeader || originHeader === "null") {
-		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.MISSING_OR_NULL_ORIGIN);
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_MISSING_OR_NULL_ORIGIN);
 	}
 
 	const trustedOrigins: string[] = Array.isArray(
@@ -245,7 +245,7 @@ async function validateOrigin(
 			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
-		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.ERR_INVALID_ORIGIN);
 	}
 }
 
@@ -308,7 +308,7 @@ async function validateFormCsrf(ctx: GenericEndpointContext): Promise<void> {
 			);
 			throw APIError.from(
 				"FORBIDDEN",
-				BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
+				BASE_ERROR_CODES.ERR_CROSS_SITE_NAVIGATION_LOGIN_BLOCKED,
 			);
 		}
 

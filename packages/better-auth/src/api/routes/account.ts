@@ -223,7 +223,7 @@ export const linkSocialAccount = createAuthEndpoint(
 					provider: c.body.provider,
 				},
 			);
-			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.ERR_PROVIDER_NOT_FOUND);
 		}
 
 		// Handle ID Token flow if provided
@@ -237,7 +237,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				);
 				throw APIError.from(
 					"NOT_FOUND",
-					BASE_ERROR_CODES.ID_TOKEN_NOT_SUPPORTED,
+					BASE_ERROR_CODES.ERR_ID_TOKEN_NOT_SUPPORTED,
 				);
 			}
 
@@ -247,7 +247,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				c.context.logger.error("Invalid id token", {
 					provider: c.body.provider,
 				});
-				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.INVALID_TOKEN);
+				throw APIError.from("UNAUTHORIZED", BASE_ERROR_CODES.ERR_INVALID_TOKEN);
 			}
 
 			const linkingUserInfo = await provider.getUserInfo({
@@ -262,7 +262,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 				throw APIError.from(
 					"UNAUTHORIZED",
-					BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+					BASE_ERROR_CODES.ERR_FAILED_TO_GET_USER_INFO,
 				);
 			}
 
@@ -274,7 +274,7 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 				throw APIError.from(
 					"UNAUTHORIZED",
-					BASE_ERROR_CODES.USER_EMAIL_NOT_FOUND,
+					BASE_ERROR_CODES.ERR_USER_EMAIL_NOT_FOUND,
 				);
 			}
 
@@ -425,7 +425,7 @@ export const unlinkAccount = createAuthEndpoint(
 		) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+				BASE_ERROR_CODES.ERR_FAILED_TO_UNLINK_LAST_ACCOUNT,
 			);
 		}
 		const accountExist = accounts.find((account) =>
@@ -434,7 +434,7 @@ export const unlinkAccount = createAuthEndpoint(
 				: account.providerId === providerId,
 		);
 		if (!accountExist) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_ACCOUNT_NOT_FOUND);
 		}
 		await ctx.context.internalAdapter.deleteAccount(accountExist.id);
 		return ctx.json({
@@ -536,13 +536,13 @@ export const getAccessToken = createAuthEndpoint(
 		}
 
 		if (!account) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_ACCOUNT_NOT_FOUND);
 		}
 		const provider = ctx.context.socialProviders.find(
 			(p) => p.id === providerId,
 		);
 		if (!provider) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_PROVIDER_NOT_FOUND);
 		}
 
 		try {
@@ -728,7 +728,7 @@ export const refreshToken = createAuthEndpoint(
 		}
 
 		if (!account) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_ACCOUNT_NOT_FOUND);
 		}
 
 		let refreshToken: string | null | undefined = undefined;
@@ -887,7 +887,7 @@ export const accountInfo = createAuthEndpoint(
 		}
 
 		if (!account || account.userId !== ctx.context.session.user.id) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_ACCOUNT_NOT_FOUND);
 		}
 
 		const provider = ctx.context.socialProviders.find(

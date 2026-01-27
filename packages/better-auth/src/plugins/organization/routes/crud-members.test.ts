@@ -236,7 +236,7 @@ describe("listMembers", async () => {
 		});
 		expect(members.error).toBeTruthy();
 		expect(members.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
+			ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
 				.message,
 		);
 	});
@@ -357,7 +357,7 @@ describe("updateMemberRole", async () => {
 		);
 		expect(updatedMember.error).toBeTruthy();
 		expect(updatedMember.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER
+			ORGANIZATION_ERROR_CODES.ERR_YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER
 				.message,
 		);
 	});
@@ -497,7 +497,7 @@ describe("inviteMember role validation", async () => {
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
 		expect(error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
+			ORGANIZATION_ERROR_CODES.ERR_ROLE_NOT_FOUND.message,
 		);
 	});
 

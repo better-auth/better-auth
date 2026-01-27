@@ -53,17 +53,17 @@ export const restoreSubscription = createAuthEndpoint(
 					);
 		if (!subscription || !subscription.stripeCustomerId) {
 			throw ctx.error("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				message: STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 			});
 		}
 		if (subscription.status != "active" && subscription.status != "trialing") {
 			throw ctx.error("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
+				message: STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_ACTIVE,
 			});
 		}
 		if (!subscription.cancelAtPeriodEnd) {
 			throw ctx.error("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+				message: STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
 			});
 		}
 
@@ -79,7 +79,7 @@ export const restoreSubscription = createAuthEndpoint(
 			);
 		if (!activeSubscription) {
 			throw ctx.error("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				message: STRIPE_ERROR_CODES.ERR_SUBSCRIPTION_NOT_FOUND,
 			});
 		}
 
@@ -106,7 +106,7 @@ export const restoreSubscription = createAuthEndpoint(
 		} catch (error) {
 			ctx.context.logger.error("Error restoring subscription", error);
 			throw new APIError("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.UNABLE_TO_CREATE_CUSTOMER,
+				message: STRIPE_ERROR_CODES.ERR_UNABLE_TO_CREATE_CUSTOMER,
 			});
 		}
 	},

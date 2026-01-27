@@ -137,7 +137,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					if (!isPasswordValid) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							BASE_ERROR_CODES.INVALID_PASSWORD,
+							BASE_ERROR_CODES.ERR_INVALID_PASSWORD,
 						);
 					}
 					const secret = generateRandomString(32);
@@ -256,7 +256,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					if (!isPasswordValid) {
 						throw APIError.from(
 							"BAD_REQUEST",
-							BASE_ERROR_CODES.INVALID_PASSWORD,
+							BASE_ERROR_CODES.ERR_INVALID_PASSWORD,
 						);
 					}
 					const updatedUser = await ctx.context.internalAdapter.updateUser(

@@ -17,7 +17,7 @@ export async function generateState(
 ) {
 	const callbackURL = c.body?.callbackURL || c.context.options.baseURL;
 	if (!callbackURL) {
-		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.CALLBACK_URL_REQUIRED);
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ERR_CALLBACK_URL_REQUIRED);
 	}
 
 	const codeVerifier = generateRandomString(128);

@@ -16,7 +16,7 @@ declare module "@better-auth/core" {
 }
 
 const ERROR_CODES = defineErrorCodes({
-	PASSWORD_COMPROMISED:
+	ERR_PASSWORD_COMPROMISED:
 		"The password you entered has been compromised. Please choose a different password.",
 });
 
@@ -54,8 +54,8 @@ async function checkPasswordCompromise(
 
 		if (found) {
 			throw APIError.from("BAD_REQUEST", {
-				message: customMessage || ERROR_CODES.PASSWORD_COMPROMISED.message,
-				code: ERROR_CODES.PASSWORD_COMPROMISED.code,
+				message: customMessage || ERROR_CODES.ERR_PASSWORD_COMPROMISED.message,
+				code: ERROR_CODES.ERR_PASSWORD_COMPROMISED.code,
 			});
 		}
 	} catch (error) {
