@@ -49,7 +49,7 @@ export const facebook = (options: FacebookOptions) => {
 			return await createAuthorizationURL({
 				id: "facebook",
 				options,
-				authorizationEndpoint: "https://www.facebook.com/v21.0/dialog/oauth",
+				authorizationEndpoint: "https://www.facebook.com/v24.0/dialog/oauth",
 				scopes: _scopes,
 				state,
 				redirectURI,
@@ -66,7 +66,7 @@ export const facebook = (options: FacebookOptions) => {
 				code,
 				redirectURI,
 				options,
-				tokenEndpoint: "https://graph.facebook.com/oauth/access_token",
+				tokenEndpoint: "https://graph.facebook.com/v24.0/oauth/access_token",
 			});
 		},
 		async verifyIdToken(token, nonce) {
@@ -121,7 +121,7 @@ export const facebook = (options: FacebookOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint:
-							"https://graph.facebook.com/v18.0/oauth/access_token",
+							"https://graph.facebook.com/v24.0/oauth/access_token",
 					});
 				},
 		async getUserInfo(token) {
