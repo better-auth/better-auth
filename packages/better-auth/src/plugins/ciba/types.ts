@@ -94,4 +94,3 @@ export interface CibaTokenPendingError {
 		| "access_denied";
 	error_description: string;
 }
-

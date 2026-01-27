@@ -78,8 +78,14 @@ export function createCibaTokenHandler() {
 				oidcOpts.accessTokenExpiresIn ?? DEFAULT_ACCESS_TOKEN_EXPIRES_IN;
 			const refreshTokenExpiresIn =
 				oidcOpts.refreshTokenExpiresIn ?? DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
+			const isOAuthProvider = oidcPlugin?.id === "oauth-provider";
+			const defaultStoreMethod = isOAuthProvider
+				? (oidcOpts as { disableJwtPlugin?: boolean }).disableJwtPlugin
+					? "encrypted"
+					: "hashed"
+				: "plain";
 			const storeMethod: StoreClientSecretOption =
-				oidcOpts.storeClientSecret ?? "plain";
+				oidcOpts.storeClientSecret ?? defaultStoreMethod;
 			const trustedClients = oidcOpts.trustedClients ?? [];
 
 			const authReqId = body.auth_req_id as string | undefined;

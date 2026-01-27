@@ -3,7 +3,6 @@
 import { Check, Loader2, X } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { useSessionQuery } from "@/data/user/session-query";
@@ -63,7 +62,9 @@ export default function CibaApprovePage() {
 				});
 				const data = await res.json();
 				if (!res.ok) {
-					setError(data.error_description || data.message || "Failed to approve");
+					setError(
+						data.error_description || data.message || "Failed to approve",
+					);
 				} else {
 					router.push("/dashboard?ciba=approved");
 				}
@@ -113,7 +114,9 @@ export default function CibaApprovePage() {
 
 	if (!session) {
 		// Redirect to sign in with return URL
-		router.push(`/sign-in?callbackUrl=${encodeURIComponent(`/ciba/approve?auth_req_id=${authReqId}`)}`);
+		router.push(
+			`/sign-in?callbackUrl=${encodeURIComponent(`/ciba/approve?auth_req_id=${authReqId}`)}`,
+		);
 		return null;
 	}
 
@@ -126,9 +129,12 @@ export default function CibaApprovePage() {
 						<X className="h-12 w-12 text-muted-foreground mx-auto" />
 						<h1 className="text-2xl font-bold">Request Expired</h1>
 						<p className="text-muted-foreground">
-							This authentication request has expired or has already been processed.
+							This authentication request has expired or has already been
+							processed.
 						</p>
-						<Button onClick={() => router.push("/dashboard")}>Go to Dashboard</Button>
+						<Button onClick={() => router.push("/dashboard")}>
+							Go to Dashboard
+						</Button>
 					</div>
 				</Card>
 			</div>
@@ -139,7 +145,9 @@ export default function CibaApprovePage() {
 		return (
 			<div className="flex min-h-screen items-center justify-center p-4">
 				<Card className="w-full max-w-md p-6">
-					<p className="text-center text-red-500">Missing auth_req_id parameter</p>
+					<p className="text-center text-red-500">
+						Missing auth_req_id parameter
+					</p>
 				</Card>
 			</div>
 		);

@@ -1,5 +1,4 @@
 import { dash, sendEmail } from "@better-auth/dash";
-import nodemailer from "nodemailer";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -27,6 +26,7 @@ import {
 } from "better-auth/plugins";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
+import nodemailer from "nodemailer";
 import { Stripe } from "stripe";
 
 const _from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
@@ -72,7 +72,9 @@ const dialect = await (async () => {
 })();
 
 if (!dialect) {
-	throw new Error("No dialect found. Set DATABASE_URL (PostgreSQL), USE_MYSQL + MYSQL_DATABASE_URL, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN");
+	throw new Error(
+		"No dialect found. Set DATABASE_URL (PostgreSQL), USE_MYSQL + MYSQL_DATABASE_URL, or TURSO_DATABASE_URL + TURSO_AUTH_TOKEN",
+	);
 }
 
 const authOptions = {

@@ -512,24 +512,23 @@ asyncAuth({
   // URL of the approval page (default: "/ciba/approve")
   approvalUri: "/ciba/approve",
 
-  // How long requests are valid (default: "5m")
+  // How long requests are valid as TimeString (default: "5m")
   requestLifetime: "5m",
 
-  // Minimum polling interval in seconds (default: 5)
-  pollingInterval: 5,
+  // Minimum polling interval as TimeString (default: "5s")
+  pollingInterval: "5s",
 
-  // Access token expiration in seconds (default: 3600)
-  accessTokenExpiresIn: 3600,
-
-  // Refresh token expiration in seconds (default: 604800 - 7 days)
-  refreshTokenExpiresIn: 604800,
-
-  // Trusted clients that don't need DB lookup
-  trustedClients: [
-    { clientId: "my-agent", clientSecret: "secret123" },
-  ],
+  // Custom user resolver (default: looks up by email)
+  resolveUser: async (loginHint, ctx) => {
+    // Return user or null if not found
+    return await ctx.context.internalAdapter.findUserByEmail(loginHint);
+  },
 });
 ```
+
+<Callout type="info">
+  Token expiration settings (`accessTokenExpiresIn`, `refreshTokenExpiresIn`) and client configuration (`trustedClients`) are configured on the `oauthProvider()` or `oidcProvider()` plugin, not on `asyncAuth()`.
+</Callout>
 
 ## Error Handling
 

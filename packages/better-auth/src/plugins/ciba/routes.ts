@@ -96,8 +96,14 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				});
 			}
 			const oidcOpts = (oidcPlugin.options || {}) as OIDCOptions;
+			const isOAuthProvider = oidcPlugin.id === "oauth-provider";
+			const defaultStoreMethod = isOAuthProvider
+				? (oidcOpts as { disableJwtPlugin?: boolean }).disableJwtPlugin
+					? "encrypted"
+					: "hashed"
+				: "plain";
 			const storeMethod: StoreClientSecretOption =
-				oidcOpts.storeClientSecret ?? "plain";
+				oidcOpts.storeClientSecret ?? defaultStoreMethod;
 			const trustedClients = oidcOpts.trustedClients ?? [];
 
 			// Parse client credentials
