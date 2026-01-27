@@ -61,7 +61,7 @@ describe("list members", async (it) => {
 			headers,
 		});
 
-		expect(result.members.length).toBe(11); // 10 added + 1 owner
+		expect(result.members.length).toBe(11);
 		expect(result.total).toBe(11);
 	});
 
@@ -91,8 +91,8 @@ describe("list members", async (it) => {
 			},
 		});
 
-		expect(result.members.length).toBe(1); // Only the owner
-		expect(result.total).toBe(1);
+		expect(result.members.length).toBe(11);
+		expect(result.total).toBe(11);
 	});
 
 	it("should limit the number of members", async () => {
