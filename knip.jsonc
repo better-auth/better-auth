@@ -82,14 +82,11 @@
 			]
 		},
 		"packages/electron": {
-      "ignoreDependencies": [
-        // implicit dependencies
-        "electron"
-      ],
-      "project": [
-       	"src/**/*.ts",
-       	"test/**/*.ts",
-      ]
+			"ignoreDependencies": [
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
 		"packages/stripe": {
 			"ignoreDependencies": [
