@@ -143,6 +143,33 @@ await auth.api.updateMemberRole({
     If you need to change the owner's role, first assign the owner role to another member.
 </Callout>
 
+## Getting the Active Member
+
+You can get the current user's member details for the active organization using the `organization.getActiveMember` method.
+
+<APIMethod
+    path="/organization/get-active-member"
+    method="GET">
+```ts
+type getActiveMember = {
+    // No parameters required
+    // Uses the session's active organization
+}
+```
+</APIMethod>
+
+
+Returns:
+
+```ts
+type Member = {
+    id: string
+    userId: string
+    organizationId: string
+    role: string
+}
+```
+
 ---
 
 ## Configuration Options
