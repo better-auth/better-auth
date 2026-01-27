@@ -5,7 +5,6 @@ import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
-import { getClient } from "../oidc-provider";
 import type { OIDCOptions } from "../oidc-provider/types";
 import type { StoreClientSecretOption } from "../oidc-provider/utils";
 import {
@@ -115,10 +114,24 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			}
 
 			// Validate client (check trusted clients first, then database)
+			// Define minimal client type needed for CIBA
+			type MinimalClient = {
+				clientId: string;
+				clientSecret: string | null | undefined;
+				disabled?: boolean;
+			};
+
 			// Check trusted clients first
-			let client = trustedClients?.find(
+			const trustedClient = trustedClients?.find(
 				(c) => c.clientId === credentials.clientId,
 			);
+			let client: MinimalClient | undefined = trustedClient
+				? {
+						clientId: trustedClient.clientId,
+						clientSecret: trustedClient.clientSecret,
+						disabled: trustedClient.disabled,
+					}
+				: undefined;
 
 			// If not in trusted clients, check database
 			if (!client) {
@@ -127,11 +140,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				const modelName =
 					pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
 				const dbClient = await ctx.context.adapter
-					.findOne<{
-						clientId: string;
-						clientSecret: string | null;
-						disabled?: boolean;
-					}>({
+					.findOne<MinimalClient>({
 						model: modelName,
 						where: [{ field: "clientId", value: credentials.clientId }],
 					})
@@ -145,6 +154,14 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
 					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+				});
+			}
+
+			// Check if client is disabled (before expensive secret verification)
+			if (client.disabled) {
+				throw new APIError("UNAUTHORIZED", {
+					error: "invalid_client",
+					error_description: "Client is disabled",
 				});
 			}
 
@@ -167,13 +184,6 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				throw new APIError("UNAUTHORIZED", {
 					error: "invalid_client",
 					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
-
-			if (client.disabled) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "Client is disabled",
 				});
 			}
 

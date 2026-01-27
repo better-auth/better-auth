@@ -157,37 +157,27 @@ export default function CibaApprovePage() {
 					</div>
 
 					<div className="space-y-4">
-						{requestInfo && (
-							<>
-								<div className="rounded-lg bg-muted p-4">
-									<p className="text-sm font-medium">Application</p>
-									<p className="font-mono">{requestInfo.clientId}</p>
-								</div>
+						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Application</p>
+							<p className="font-mono">{requestInfo.clientId}</p>
+						</div>
 
-								<div className="rounded-lg bg-muted p-4">
-									<p className="text-sm font-medium">Requested Scopes</p>
-									<p>{requestInfo.scope}</p>
-								</div>
+						<div className="rounded-lg bg-muted p-4">
+							<p className="text-sm font-medium">Requested Scopes</p>
+							<p>{requestInfo.scope}</p>
+						</div>
 
-								{requestInfo.bindingMessage && (
-									<div className="rounded-lg bg-muted p-4">
-										<p className="text-sm font-medium">Message</p>
-										<p>{requestInfo.bindingMessage}</p>
-									</div>
-								)}
-							</>
+						{requestInfo.bindingMessage && (
+							<div className="rounded-lg bg-muted p-4">
+								<p className="text-sm font-medium">Message</p>
+								<p>{requestInfo.bindingMessage}</p>
+							</div>
 						)}
 
 						<div className="rounded-lg bg-muted p-4">
 							<p className="text-sm font-medium">Signed in as</p>
 							<p>{session.user.email}</p>
 						</div>
-
-						{error && (
-							<Alert variant="destructive">
-								<AlertDescription>{error}</AlertDescription>
-							</Alert>
-						)}
 
 						<div className="flex gap-3">
 							<Button
