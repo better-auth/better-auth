@@ -193,6 +193,80 @@ type Member = {
 }
 ```
 
+## Listing Members
+
+List all members of an organization with pagination, sorting, and filtering support.
+
+<APIMethod
+    path="/organization/list-members"
+    method="GET">
+```ts
+type listMembers = {
+    /**
+     * The organization ID to list members for.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The organization slug to list members for.
+     * If not provided, uses the active organization.
+     */
+    organizationSlug?: string = "org-slug"
+    /**
+     * Maximum number of members to return.
+     */
+    limit?: number = 10
+    /**
+     * Number of members to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by (e.g., "createdAt", "role").
+     */
+    sortBy?: string = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "asc"
+    /**
+     * Field to filter by.
+     */
+    filterField?: string = "role"
+    /**
+     * Value to filter by.
+     */
+    filterValue?: string | number | boolean = "admin"
+    /**
+     * Filter operator.
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains" = "eq"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type ListMembersResponse = {
+    members: Array<{
+        id: string
+        userId: string
+        organizationId: string
+        role: string
+        createdAt: Date
+        user: {
+            id: string
+            name: string
+            email: string
+            image: string | null
+        }
+    }>
+    total: number
+    limit: number | null
+    offset: number | null
+}
+```
+
 ---
 
 ## Configuration Options

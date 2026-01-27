@@ -813,17 +813,59 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			};
 		},
 		/**
-		 * Lists members for an organization.
-		 * @param data - The organization ID to list members for.
-		 * @returns The members list.
+		 * Lists members for an organization with pagination, sorting, and filtering.
+		 * @param data - The organization ID and optional pagination/sort/filter params.
+		 * @returns The members list with total count.
 		 */
-		listMembers: async (data: { organizationId: RealOrganizationId }) => {
+		listMembers: async (data: {
+			organizationId: RealOrganizationId;
+			limit?: number;
+			offset?: number;
+			sortBy?: string;
+			sortOrder?: "asc" | "desc";
+			filter?: {
+				field: string;
+				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+				value: any;
+			};
+		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const members = await adapter.findMany<InferMember<O, false>>({
-				model: "member",
-				where: [{ field: "organizationId", value: data.organizationId }],
-			});
-			return { members: members.map(filterMemberOutput) };
+			const whereClause: Array<{
+				field: string;
+				value: any;
+				operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+			}> = [{ field: "organizationId", value: data.organizationId }];
+
+			if (data.filter?.field) {
+				whereClause.push({
+					field: data.filter.field,
+					value: data.filter.value,
+					...(data.filter.operator ? { operator: data.filter.operator } : {}),
+				});
+			}
+
+			const defaultLimit =
+				typeof options?.membershipLimit === "number"
+					? options.membershipLimit
+					: 100;
+
+			const [members, total] = await Promise.all([
+				adapter.findMany<InferMember<O, false>>({
+					model: "member",
+					where: whereClause,
+					limit: data.limit ?? defaultLimit,
+					offset: data.offset ?? 0,
+					sortBy: data.sortBy
+						? { field: data.sortBy, direction: data.sortOrder ?? "asc" }
+						: undefined,
+				}),
+				adapter.count({
+					model: "member",
+					where: whereClause,
+				}),
+			]);
+
+			return { members: members.map(filterMemberOutput), total };
 		},
 		/**
 		 * Delete a member from an organization.
