@@ -78,7 +78,7 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			// 	});
 			// }
 
-		const user = await ctx.context.internalAdapter.findUserById(body.userId);
+			const user = await ctx.context.internalAdapter.findUserById(body.userId);
 
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
@@ -126,36 +126,36 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-		const {
-			role: _,
-			userId: __,
-			organizationId: ___,
-			...additionalFields
-		} = body;
+			const {
+				role: _,
+				userId: __,
+				organizationId: ___,
+				...additionalFields
+			} = body;
 
-		let memberData = {
-			organizationId: orgId,
-			userId: user.id,
-			role: parseRoles(body.role),
-			createdAt: new Date(),
-			...(additionalFields ? additionalFields : {}),
-		};
+			let memberData = {
+				organizationId: orgId,
+				userId: user.id,
+				role: parseRoles(body.role),
+				createdAt: new Date(),
+				...(additionalFields ? additionalFields : {}),
+			};
 
-		const addMemberHook = getHook("AddMember", options);
+			const addMemberHook = getHook("AddMember", options);
 
-		const modify = await addMemberHook.before(
-			{
-				member: {
-					userId: user.id,
-					organizationId: orgId,
-					role: parseRoles(body.role as string | string[]),
-					...additionalFields,
+			const modify = await addMemberHook.before(
+				{
+					member: {
+						userId: user.id,
+						organizationId: orgId,
+						role: parseRoles(body.role as string | string[]),
+						...additionalFields,
+					},
+					user,
+					organization,
 				},
-				user,
-				organization,
-			},
-			ctx,
-		);
+				ctx,
+			);
 
 			if (modify) {
 				memberData = {
@@ -174,16 +174,16 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			// 	});
 			// }
 
-		await addMemberHook.after(
-			{
-				member: createdMember,
-				user,
-				organization,
-			},
-			ctx,
-		);
+			await addMemberHook.after(
+				{
+					member: createdMember,
+					user,
+					organization,
+				},
+				ctx,
+			);
 
-		return ctx.json(createdMember);
+			return ctx.json(createdMember);
 		},
 	);
 };

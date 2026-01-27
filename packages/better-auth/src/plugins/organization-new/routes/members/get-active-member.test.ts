@@ -65,10 +65,7 @@ describe("get active member", async (it) => {
 		});
 
 		const newUserHeaders = new Headers();
-		newUserHeaders.set(
-			"Authorization",
-			`Bearer ${signInResult.token}`,
-		);
+		newUserHeaders.set("Authorization", `Bearer ${signInResult.token}`);
 
 		// Set the organization as active for the new user
 		await auth.api.setActiveOrganization({
@@ -97,10 +94,7 @@ describe("get active member", async (it) => {
 		});
 
 		const newUserHeaders = new Headers();
-		newUserHeaders.set(
-			"Authorization",
-			`Bearer ${newUser.token}`,
-		);
+		newUserHeaders.set("Authorization", `Bearer ${newUser.token}`);
 
 		await expect(
 			auth.api.getActiveMember({
@@ -120,10 +114,7 @@ describe("get active member", async (it) => {
 		});
 
 		const newUserHeaders = new Headers();
-		newUserHeaders.set(
-			"Authorization",
-			`Bearer ${newUser.token}`,
-		);
+		newUserHeaders.set("Authorization", `Bearer ${newUser.token}`);
 
 		// Create a separate organization for this user
 		const separateOrgData = getOrganizationData();

@@ -173,8 +173,8 @@ describe("remove member - last owner protection", async (it) => {
 				},
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER
-				.message,
+			ORGANIZATION_ERROR_CODES
+				.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER.message,
 		);
 	});
 
