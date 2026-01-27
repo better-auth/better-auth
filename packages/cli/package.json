@@ -59,7 +59,7 @@
     "jiti": "^2.6.0",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
-    "type-fest": "^5.4.1",
+    "type-fest": "^5.4.2",
     "typescript": "catalog:"
   },
   "dependencies": {

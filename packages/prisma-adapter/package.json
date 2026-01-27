@@ -28,14 +28,14 @@
     "@prisma/client": "^5.0.0"
   },
   "peerDependencies": {
-    "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
+    "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "prisma": "^5.0.0 || ^6.0.0 || ^7.0.0"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/utils": "^0.3.1",
     "prisma": "^5.0.0",
     "tsdown": "catalog:",
     "typescript": "catalog:"

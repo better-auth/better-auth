@@ -66,11 +66,11 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~17.1.7",
-    "expo-linking": "~7.1.7",
-    "expo-network": "^8.0.7",
-    "expo-web-browser": "~14.2.0",
-    "react-native": "~0.80.2",
+    "expo-constants": "~18.0.13",
+    "expo-linking": "~8.0.11",
+    "expo-network": "^8.0.8",
+    "expo-web-browser": "~15.0.10",
+    "react-native": "~0.83.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

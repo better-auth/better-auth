@@ -4,14 +4,14 @@
   "dependencies": {
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
-    "drizzle-orm": "^0.44.5",
+    "drizzle-orm": "^0.45.1",
     "hono": "^4.11.6"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.8.69",
-    "@cloudflare/workers-types": "^4.20250903.0",
-    "drizzle-kit": "^0.31.4",
-    "wrangler": "4.33.2"
+    "@cloudflare/vitest-pool-workers": "^0.12.7",
+    "@cloudflare/workers-types": "^4.20260127.0",
+    "drizzle-kit": "^0.31.8",
+    "wrangler": "4.61.0"
   },
   "scripts": {
     "check": "tsc && wrangler build",

@@ -49,6 +49,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 				origin: "http://localhost:8081",
 			},
 		],
+		"expo-web-browser",
 		"expo-secure-store",
 		"expo-font",
 	],
