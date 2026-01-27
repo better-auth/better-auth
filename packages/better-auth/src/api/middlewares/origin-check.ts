@@ -245,7 +245,7 @@ async function validateOrigin(
 			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
-		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
 	}
 }
 

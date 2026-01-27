@@ -88,9 +88,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			};
 
 			if (typeof body !== "object" || Array.isArray(body)) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Body must be an object",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
+				);
 			}
 
 			if (body.email) {
@@ -359,10 +360,7 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw APIError.from("BAD_REQUEST", {
-			message: "user already has a password",
-			code: "USER_ALREADY_HAS_PASSWORD",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );
 
