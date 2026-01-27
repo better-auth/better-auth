@@ -303,6 +303,39 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
+	it("should work with Headers object directly (Next.js ReadonlyHeaders compatibility)", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Pass Headers object directly (simulating Next.js ReadonlyHeaders from `await headers()`)
+		const cookies = getSessionCookie(headers);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with Headers-like object that has inherited 'headers' property", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		class ReadonlyHeadersLike extends Headers {
+			// This property exists in the prototype chain, making "headers" in obj return true
+			get headers(): undefined {
+				return undefined;
+			}
+		}
+
+		const readonlyHeaders = new ReadonlyHeadersLike();
+		// Copy cookies from original headers
+		const cookieValue = headers.get("cookie");
+		if (cookieValue) {
+			readonlyHeaders.set("cookie", cookieValue);
+		}
+
+		const cookies = getSessionCookie(readonlyHeaders);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
 	it("should return the correct session cookie on production", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			baseURL: "https://example.com",
