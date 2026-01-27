@@ -333,6 +333,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						nonce: z.string().optional(),
 						prompt: z
 							.enum([
+								"none",
 								"consent",
 								"login",
 								"create",
