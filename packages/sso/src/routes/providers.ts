@@ -136,6 +136,7 @@ function sanitizeProvider(
 					callbackUrl: samlConfig.callbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
+					authnRequestsSigned: samlConfig.authnRequestsSigned,
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
@@ -349,6 +350,8 @@ function mergeSAMLConfig(
 		audience: updates.audience ?? current.audience,
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
+		authnRequestsSigned:
+			updates.authnRequestsSigned ?? current.authnRequestsSigned,
 		identifierFormat: updates.identifierFormat ?? current.identifierFormat,
 		signatureAlgorithm:
 			updates.signatureAlgorithm ?? current.signatureAlgorithm,

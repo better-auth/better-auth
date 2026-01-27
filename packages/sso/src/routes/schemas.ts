@@ -78,6 +78,7 @@ const samlConfigSchema = z.object({
 		})
 		.optional(),
 	wantAssertionsSigned: z.boolean().optional(),
+	authnRequestsSigned: z.boolean().optional(),
 	signatureAlgorithm: z.string().optional(),
 	digestAlgorithm: z.string().optional(),
 	identifierFormat: z.string().optional(),
