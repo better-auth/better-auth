@@ -352,8 +352,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						);
 
 						if (trustDeviceCookie) {
-							const [token, trustIdentifier] =
-								trustDeviceCookie.split("!");
+							const [token, trustIdentifier] = trustDeviceCookie.split("!");
 							if (token && trustIdentifier) {
 								const expectedToken = await createHMAC(
 									"SHA-256",
@@ -371,10 +370,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 										);
 									if (
 										verificationRecord &&
-										verificationRecord.value ===
-											data.user.id &&
-										verificationRecord.expiresAt >
-											new Date()
+										verificationRecord.value === data.user.id &&
+										verificationRecord.expiresAt > new Date()
 									) {
 										await ctx.context.internalAdapter.deleteVerificationValue(
 											verificationRecord.id,
@@ -387,24 +384,19 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 											ctx.context.secret,
 											`${data.user.id}!${newTrustIdentifier}`,
 										);
-										await ctx.context.internalAdapter.createVerificationValue(
+										await ctx.context.internalAdapter.createVerificationValue({
+											value: data.user.id,
+											identifier: newTrustIdentifier,
+											expiresAt: new Date(
+												Date.now() + trustDeviceMaxAge * 1000,
+											),
+										});
+										const newTrustDeviceCookie = ctx.context.createAuthCookie(
+											TRUST_DEVICE_COOKIE_NAME,
 											{
-												value: data.user.id,
-												identifier: newTrustIdentifier,
-												expiresAt: new Date(
-													Date.now() +
-														trustDeviceMaxAge *
-															1000,
-												),
+												maxAge: trustDeviceMaxAge,
 											},
 										);
-										const newTrustDeviceCookie =
-											ctx.context.createAuthCookie(
-												TRUST_DEVICE_COOKIE_NAME,
-												{
-													maxAge: trustDeviceMaxAge,
-												},
-											);
 										await ctx.setSignedCookie(
 											newTrustDeviceCookie.name,
 											`${newToken}!${newTrustIdentifier}`,

@@ -310,9 +310,9 @@ export const backupCode2fa = (
 				},
 				async (ctx) => {
 					const { session, valid } = await verifyTwoFactor(
-					ctx,
-					trustDeviceMaxAge,
-				);
+						ctx,
+						trustDeviceMaxAge,
+					);
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,

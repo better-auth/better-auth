@@ -886,7 +886,7 @@ describe("trust device server-side validation", async () => {
 			},
 			asResponse: true,
 		});
-		let twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
 
 		// Send and verify OTP with trustDevice
 		await auth.api.sendTwoFactorOTP({
@@ -908,7 +908,9 @@ describe("trust device server-side validation", async () => {
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
-		const trustDeviceCookieValue = parsed.get("better-auth.trust_device")?.value;
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
 		// The cookie value is signed: "value.signature" where value is "token!trustIdentifier"
@@ -918,9 +920,14 @@ describe("trust device server-side validation", async () => {
 		const [, trustIdentifier] = unsignedValue.split("!");
 		expect(trustIdentifier).toBeDefined();
 
-		const verificationRecord = await db.findOne({
+		const verificationRecord = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationRecord).toBeDefined();
 
@@ -935,7 +942,10 @@ describe("trust device server-side validation", async () => {
 
 		// Now sign in with the trust device cookie - should require 2FA again
 		const trustHeaders = new Headers();
-		trustHeaders.set("cookie", `better-auth.trust_device=${trustDeviceCookieValue}`);
+		trustHeaders.set(
+			"cookie",
+			`better-auth.trust_device=${trustDeviceCookieValue}`,
+		);
 
 		const signIn2Res = await auth.api.signInEmail({
 			body: {
@@ -946,7 +956,9 @@ describe("trust device server-side validation", async () => {
 			asResponse: true,
 		});
 
-		const signIn2Json = (await signIn2Res.json()) as { twoFactorRedirect?: boolean };
+		const signIn2Json = (await signIn2Res.json()) as {
+			twoFactorRedirect?: boolean;
+		};
 		expect(signIn2Json.twoFactorRedirect).toBe(true);
 
 		// The expired trust cookie should have been cleared
@@ -966,7 +978,7 @@ describe("trust device server-side validation", async () => {
 			},
 			asResponse: true,
 		});
-		let twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
 
 		// Send and verify OTP with trustDevice
 		await auth.api.sendTwoFactorOTP({
@@ -989,7 +1001,9 @@ describe("trust device server-side validation", async () => {
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
-		const trustDeviceCookieValue = parsed.get("better-auth.trust_device")?.value;
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
 		// Extract trust identifier (cookie is signed: "value.signature")
@@ -998,9 +1012,14 @@ describe("trust device server-side validation", async () => {
 		const [, trustIdentifier] = unsignedValue.split("!");
 		expect(trustIdentifier).toBeDefined();
 
-		const verificationBefore = await db.findOne({
+		const verificationBefore = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationBefore).toBeDefined();
 
@@ -1015,20 +1034,30 @@ describe("trust device server-side validation", async () => {
 		const signOutParsed = parseSetCookieHeader(
 			signOutRes.headers.get("Set-Cookie") || "",
 		);
-		const trustCookieAfterSignOut = signOutParsed.get("better-auth.trust_device");
+		const trustCookieAfterSignOut = signOutParsed.get(
+			"better-auth.trust_device",
+		);
 		// Cookie should either not be set (unchanged) or still have its value
 		expect(trustCookieAfterSignOut?.value || "preserved").not.toBe("");
 
 		// Verify the DB record still exists
-		const verificationAfter = await db.findOne({
+		const verificationAfter = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationAfter).toBeDefined();
 
 		// Sign in again with the trust device cookie - should skip 2FA
 		const trustHeaders = new Headers();
-		trustHeaders.set("cookie", `better-auth.trust_device=${trustDeviceCookieValue}`);
+		trustHeaders.set(
+			"cookie",
+			`better-auth.trust_device=${trustDeviceCookieValue}`,
+		);
 
 		const signIn2Res = await auth.api.signInEmail({
 			body: {
@@ -1039,7 +1068,9 @@ describe("trust device server-side validation", async () => {
 			asResponse: true,
 		});
 
-		const signIn2Json = (await signIn2Res.json()) as { user?: { email: string } };
+		const signIn2Json = (await signIn2Res.json()) as {
+			user?: { email: string };
+		};
 		// Should NOT require 2FA - trust device survived sign-out
 		expect(signIn2Json.user?.email).toBe(testUser.email);
 	});
@@ -1053,7 +1084,7 @@ describe("trust device server-side validation", async () => {
 			},
 			asResponse: true,
 		});
-		let twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
 
 		// Send and verify OTP with trustDevice
 		await auth.api.sendTwoFactorOTP({
@@ -1070,13 +1101,15 @@ describe("trust device server-side validation", async () => {
 			asResponse: true,
 		});
 		expect(verifyRes.status).toBe(200);
-		let sessionHeaders = convertSetCookieToCookie(verifyRes.headers);
+		const sessionHeaders = convertSetCookieToCookie(verifyRes.headers);
 
 		// Extract the trust device cookie
 		const parsed = parseSetCookieHeader(
 			verifyRes.headers.get("Set-Cookie") || "",
 		);
-		const trustDeviceCookieValue = parsed.get("better-auth.trust_device")?.value;
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
 		expect(trustDeviceCookieValue).toBeDefined();
 
 		// Extract trust identifier (cookie is signed: "value.signature")
@@ -1085,9 +1118,14 @@ describe("trust device server-side validation", async () => {
 		const [, trustIdentifier] = unsignedValue.split("!");
 		expect(trustIdentifier).toBeDefined();
 
-		const verificationBefore = await db.findOne({
+		const verificationBefore = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationBefore).toBeDefined();
 
@@ -1109,9 +1147,14 @@ describe("trust device server-side validation", async () => {
 		expect(clearedCookie?.value).toBe("");
 
 		// Verify the DB record was deleted
-		const verificationAfter = await db.findOne({
+		const verificationAfter = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationAfter).toBeNull();
 	});
@@ -1189,9 +1232,14 @@ describe("trustDeviceMaxAge", async () => {
 		const [, trustIdentifier] = unsignedValue.split("!");
 		expect(trustIdentifier).toBeDefined();
 
-		const verificationRecord = await db.findOne({
+		const verificationRecord = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier }],
+			where: [{ field: "identifier", value: trustIdentifier! }],
 		});
 		expect(verificationRecord).toBeDefined();
 
@@ -1204,33 +1252,29 @@ describe("trustDeviceMaxAge", async () => {
 
 	it("should use default 30 days when trustDeviceMaxAge is not specified", async () => {
 		let defaultOTP = "";
-		const {
-			auth: authDefault,
-			signInWithTestUser: signInDefault,
-			db: dbDefault,
-		} = await getTestInstance({
-			secret: DEFAULT_SECRET,
-			plugins: [
-				twoFactor({
-					otpOptions: {
-						sendOTP({ otp }) {
-							defaultOTP = otp;
+		const { auth: authDefault, signInWithTestUser: signInDefault } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								defaultOTP = otp;
+							},
 						},
-					},
-					skipVerificationOnEnable: true,
-				}),
-			],
-		});
+						skipVerificationOnEnable: true,
+					}),
+				],
+			});
 
-		let { headers: defaultHeaders } = await signInDefault();
+		const { headers: defaultHeaders } = await signInDefault();
 
 		// Enable 2FA
-		const enableRes = await authDefault.api.enableTwoFactor({
+		await authDefault.api.enableTwoFactor({
 			body: { password: testUser.password },
 			headers: defaultHeaders,
 			asResponse: true,
 		});
-		defaultHeaders = convertSetCookieToCookie(enableRes.headers);
 
 		// Sign in to trigger 2FA
 		const signInRes = await authDefault.api.signInEmail({

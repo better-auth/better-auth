@@ -82,8 +82,7 @@ export async function verifyTwoFactor(
 				// Always clear the two factor cookie after successful verification
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
-					const maxAge =
-						trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
+					const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
