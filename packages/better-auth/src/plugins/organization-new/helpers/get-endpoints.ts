@@ -17,6 +17,8 @@ import type { ListUserInvitations } from "../routes/invitations/list-user-invita
 import { listUserInvitations } from "../routes/invitations/list-user-invitations";
 import type { RejectInvitation } from "../routes/invitations/reject-invitation";
 import { rejectInvitation } from "../routes/invitations/reject-invitation";
+import type { AddMember } from "../routes/members/add-member";
+import { addMember } from "../routes/members/add-member";
 import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
 import type { CreateOrganization } from "../routes/organization/create-organizations";
@@ -51,6 +53,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	acceptInvitation: AcceptInvitation<O>;
 	rejectInvitation: RejectInvitation<O>;
 	cancelInvitation: CancelInvitation<O>;
+	addMember: AddMember<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -82,6 +85,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		acceptInvitation: acceptInvitation(options),
 		rejectInvitation: rejectInvitation(options),
 		cancelInvitation: cancelInvitation(options),
+		addMember: addMember(options),
 		...(addonEndpoints || {}),
 	};
 
