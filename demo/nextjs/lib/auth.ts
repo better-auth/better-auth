@@ -78,7 +78,18 @@ const authOptions = {
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github", "demo-app", "sso"],
+			trustedProviders: [
+				"email-password",
+				"facebook",
+				"github",
+				"google",
+				"discord",
+				"microsoft",
+				"twitch",
+				"twitter",
+				"paypal",
+				"vercel",
+			],
 		},
 	},
 	emailAndPassword: {
@@ -174,10 +185,7 @@ const authOptions = {
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin({
-			/* cspell:disable-next-line */
-			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
-		}),
+		admin(),
 		multiSession(),
 		oAuthProxy({
 			productionURL:
@@ -336,16 +344,7 @@ const authOptions = {
 				},
 			],
 		}),
-		scim({
-			defaultSCIM: [
-				{
-					providerId: "sso",
-					/* cspell:disable-next-line */
-					// encoded token = ZGVmYXVsdC1zY2ltLXRva2VuOnNzbw==
-					scimToken: "default-scim-token",
-				},
-			],
-		}),
+		scim(),
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",

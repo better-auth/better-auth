@@ -38,20 +38,24 @@ export async function handleOAuthUserInfo(
 	const isRegister = !user;
 
 	if (dbUser) {
-		const hasBeenLinked = dbUser.accounts.find(
-			(a) =>
-				a.providerId === account.providerId &&
-				a.accountId === account.accountId,
-		);
-		if (!hasBeenLinked) {
+		const linkedAccount =
+			dbUser.linkedAccount ??
+			dbUser.accounts.find(
+				(acc) =>
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
+			);
+		if (!linkedAccount) {
+			const accountLinking = c.context.options.account?.accountLinking;
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId as "apple");
+				trustedProviders?.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
 					logger.warn(
@@ -112,14 +116,14 @@ export async function handleOAuthUserInfo(
 
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, {
-					...hasBeenLinked,
+					...linkedAccount,
 					...freshTokens,
 				});
 			}
 
 			if (Object.keys(freshTokens).length > 0) {
 				await c.context.internalAdapter.updateAccount(
-					hasBeenLinked.id,
+					linkedAccount.id,
 					freshTokens,
 				);
 			}

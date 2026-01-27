@@ -6,8 +6,8 @@ import { generator } from "./generator";
 import { logo } from "./logo";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"open-api": {
 			creator: typeof openAPI;
 		};
@@ -100,7 +100,7 @@ export interface OpenAPIOptions {
 }
 
 export const openAPI = <O extends OpenAPIOptions>(options?: O | undefined) => {
-	const path = (options?.path ?? "/reference") as "/reference";
+	const path = options?.path ?? "/reference";
 	return {
 		id: "open-api",
 		endpoints: {

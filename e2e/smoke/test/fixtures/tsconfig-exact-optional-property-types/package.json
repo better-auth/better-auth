@@ -1,5 +1,5 @@
 {
-  "name": "tsconfig-exact-optional-property-types",
+  "name": "@better-auth-test/fixtures-tsconfig-exact-optional-property-types",
   "private": true,
   "type": "module",
   "scripts": {

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.5.0-beta.8",
+  "version": "1.5.0-beta.9",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -128,13 +128,13 @@
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
-    "nanostores": "^1.0.1",
+    "kysely": "^0.28.10",
+    "nanostores": "^1.1.0",
     "tsdown": "catalog:"
   },
   "dependencies": {
     "@standard-schema/spec": "^1.0.0",
-    "zod": "^4.1.12"
+    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",

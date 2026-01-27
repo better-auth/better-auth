@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/test",
+  "name": "@better-auth-test/test",
   "private": true,
   "type": "module",
   "scripts": {

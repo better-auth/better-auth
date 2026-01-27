@@ -112,6 +112,18 @@ export async function createAuthContext(
 		);
 	}
 
+	if (
+		adapter.id === "memory" &&
+		options.advanced?.database?.generateId === false
+	) {
+		logger.error(
+			`[better-auth] Misconfiguration detected.
+You are using the memory DB with generateId: false.
+This will cause no id to be generated for any model.
+Most of the features of Better Auth will not work correctly.`,
+		);
+	}
+
 	const secret =
 		options.secret ||
 		env.BETTER_AUTH_SECRET ||
@@ -159,8 +171,15 @@ export async function createAuthContext(
 		if (typeof (options.advanced as any)?.generateId === "function") {
 			return (options.advanced as any).generateId({ model, size });
 		}
-		if (typeof options?.advanced?.database?.generateId === "function") {
-			return options.advanced.database.generateId({ model, size });
+		const dbGenerateId = options?.advanced?.database?.generateId;
+		if (typeof dbGenerateId === "function") {
+			return dbGenerateId({ model, size });
+		}
+		if (dbGenerateId === "uuid") {
+			return crypto.randomUUID();
+		}
+		if (dbGenerateId === "serial" || dbGenerateId === false) {
+			return false;
 		}
 		return generateId(size);
 	};
@@ -325,7 +344,7 @@ export async function createAuthContext(
 			}
 		},
 		getPlugin: getPluginFn,
-		hasPlugin: hasPluginFn,
+		hasPlugin: hasPluginFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);

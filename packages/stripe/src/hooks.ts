@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
+import { subscriptionMetadata } from "./metadata";
 import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
 	getPlanByPriceInfo,
@@ -66,10 +67,10 @@ export async function onCheckoutSessionCompleted(
 			priceLookupKey,
 		);
 		if (plan) {
+			const checkoutMeta = subscriptionMetadata.get(checkoutSession?.metadata);
 			const referenceId =
-				checkoutSession?.client_reference_id ||
-				checkoutSession?.metadata?.referenceId;
-			const subscriptionId = checkoutSession?.metadata?.subscriptionId;
+				checkoutSession?.client_reference_id || checkoutMeta.referenceId;
+			const { subscriptionId } = checkoutMeta;
 			const seats = subscriptionItem.quantity;
 			if (referenceId && subscriptionId) {
 				const trial =
@@ -162,7 +163,9 @@ export async function onSubscriptionCreated(
 		}
 
 		// Check if subscription already exists in database
-		const subscriptionId = subscriptionCreated.metadata?.subscriptionId;
+		const { subscriptionId } = subscriptionMetadata.get(
+			subscriptionCreated.metadata,
+		);
 		const existingSubscription =
 			await ctx.context.adapter.findOne<Subscription>({
 				model: "subscription",
@@ -275,7 +278,9 @@ export async function onSubscriptionUpdated(
 		const priceLookupKey = subscriptionItem.price.lookup_key;
 		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
 
-		const subscriptionId = subscriptionUpdated.metadata?.subscriptionId;
+		const { subscriptionId } = subscriptionMetadata.get(
+			subscriptionUpdated.metadata,
+		);
 		const customerId = subscriptionUpdated.customer?.toString();
 		let subscription = await ctx.context.adapter.findOne<Subscription>({
 			model: "subscription",

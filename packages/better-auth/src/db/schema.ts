@@ -1,49 +1,28 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type {
+	BaseModelNames,
 	BetterAuthPluginDBSchema,
 	DBFieldAttribute,
 } from "@better-auth/core/db";
 import { getAuthTables } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import type { Account, Session, User } from "../types";
+
+type Mode = "input" | "output";
 
 // Cache for parsed schemas to avoid reparsing on every request
 const cache = new WeakMap<
 	BetterAuthOptions,
-	Map<string, Record<string, DBFieldAttribute>>
+	Map<`${BaseModelNames}:${Mode}`, Record<string, DBFieldAttribute>>
 >();
-
-function parseOutputData<T extends Record<string, any>>(
-	data: T,
-	schema: {
-		fields: Record<string, DBFieldAttribute>;
-	},
-) {
-	const fields = schema.fields;
-	const parsedData: Record<string, any> = {};
-	for (const key in data) {
-		const field = fields[key];
-		if (!field) {
-			parsedData[key] = data[key];
-			continue;
-		}
-		if (
-			field.returned === false &&
-			key !== "id" // id is always returned
-		) {
-			continue;
-		}
-		parsedData[key] = data[key];
-	}
-	return parsedData as T;
-}
 
 function getFields(
 	options: BetterAuthOptions,
-	table: string,
-	mode: "input" | "output",
+	modelName: BaseModelNames,
+	mode: Mode,
 ) {
-	const cacheKey = `${table}:${mode}`;
+	const cacheKey = `${modelName}:${mode}` as const;
 	if (!cache.has(options)) {
 		cache.set(options, new Map());
 	}
@@ -52,20 +31,20 @@ function getFields(
 		return tableCache.get(cacheKey)!;
 	}
 	const coreSchema =
-		mode === "output" ? (getAuthTables(options)[table]?.fields ?? {}) : {};
+		mode === "output" ? (getAuthTables(options)[modelName]?.fields ?? {}) : {};
 	const additionalFields =
-		table === "user" || table === "session" || table === "account"
-			? options[table]?.additionalFields
+		modelName === "user" || modelName === "session" || modelName === "account"
+			? options[modelName]?.additionalFields
 			: undefined;
 	let schema: Record<string, DBFieldAttribute> = {
 		...coreSchema,
 		...(additionalFields ?? {}),
 	};
 	for (const plugin of options.plugins || []) {
-		if (plugin.schema && plugin.schema[table]) {
+		if (plugin.schema && plugin.schema[modelName]) {
 			schema = {
 				...schema,
-				...plugin.schema[table].fields,
+				...plugin.schema[modelName].fields,
 			};
 		}
 	}
@@ -78,7 +57,7 @@ export function parseUserOutput<T extends User>(
 	user: T,
 ) {
 	const schema = getFields(options, "user", "output");
-	return parseOutputData(user, { fields: schema });
+	return filterOutputFields(user, schema);
 }
 
 export function parseSessionOutput<T extends Session>(
@@ -86,7 +65,7 @@ export function parseSessionOutput<T extends Session>(
 	session: T,
 ) {
 	const schema = getFields(options, "session", "output");
-	return parseOutputData(session, { fields: schema });
+	return filterOutputFields(session, schema);
 }
 
 export function parseAccountOutput<T extends Account>(
@@ -94,9 +73,9 @@ export function parseAccountOutput<T extends Account>(
 	account: T,
 ) {
 	const schema = getFields(options, "account", "output");
-	const parsed = parseOutputData(account, { fields: schema });
+	const parsed = filterOutputFields(account, schema);
 	// destructuring for type inference
-	// runtime filtering is already done by `parseOutputData`
+	// runtime filtering is already done by `filterOutputFields`
 	const {
 		accessToken: _accessToken,
 		refreshToken: _refreshToken,
@@ -118,10 +97,7 @@ export function parseInputData<T extends Record<string, any>>(
 ) {
 	const action = schema.action || "create";
 	const fields = schema.fields;
-	const parsedData: Record<string, any> = Object.assign(
-		Object.create(null),
-		null,
-	);
+	const parsedData = Object.create(null);
 	for (const key in fields) {
 		if (key in data) {
 			if (fields[key]!.input === false) {
