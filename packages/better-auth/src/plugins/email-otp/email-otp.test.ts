@@ -143,8 +143,8 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should reset password using new requestPasswordReset endpoint", async () => {
-		await client.requestPasswordReset.emailOtp({
+	it("should reset password using new emailOtp.requestPasswordReset endpoint", async () => {
+		await client.emailOtp.requestPasswordReset({
 			email: testUser.email,
 		});
 		await client.emailOtp.resetPassword({

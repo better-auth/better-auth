@@ -714,7 +714,7 @@ const requestPasswordResetEmailOTPBodySchema = z.object({
 /**
  * ### Endpoint
  *
- * POST `/request-password-reset/email-otp`
+ * POST `/email-otp/request-password-reset`
  *
  * ### API Methods
  *
@@ -722,13 +722,13 @@ const requestPasswordResetEmailOTPBodySchema = z.object({
  * `auth.api.requestPasswordResetEmailOTP`
  *
  * **client:**
- * `authClient.requestPasswordReset.emailOtp`
+ * `authClient.emailOtp.requestPasswordReset`
  *
  * @see [Read our docs to learn more.](https://www.better-auth.com/docs/plugins/email-otp#reset-password-with-otp)
  */
 export const requestPasswordResetEmailOTP = (opts: RequiredEmailOTPOptions) =>
 	createAuthEndpoint(
-		"/request-password-reset/email-otp",
+		"/email-otp/request-password-reset",
 		{
 			method: "POST",
 			body: requestPasswordResetEmailOTPBodySchema,
@@ -813,14 +813,14 @@ const forgetPasswordEmailOTPBodySchema = z.object({
  * **client:**
  * `authClient.forgetPassword.emailOtp`
  *
- * @deprecated Use `/request-password-reset/email-otp` instead.
+ * @deprecated Use `/email-otp/request-password-reset` instead.
  * @see [Read our docs to learn more.](https://www.better-auth.com/docs/plugins/email-otp#reset-password-with-otp)
  */
 export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 	const warnDeprecation = deprecate(
 		() => {},
 		'The "/forget-password/email-otp" endpoint is deprecated. ' +
-			'Please use "/request-password-reset/email-otp" instead. ' +
+			'Please use "/email-otp/request-password-reset" instead. ' +
 			"This endpoint will be removed in the next major version.",
 	);
 
@@ -833,7 +833,7 @@ export const forgetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) => {
 				openapi: {
 					operationId: "forgetPasswordWithEmailOTP",
 					description:
-						"Deprecated: Use /request-password-reset/email-otp instead.",
+						"Deprecated: Use /email-otp/request-password-reset instead.",
 					responses: {
 						200: {
 							description: "Success",
