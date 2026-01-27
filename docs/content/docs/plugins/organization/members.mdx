@@ -69,6 +69,34 @@ await auth.api.addMember({
     member additions, use the [invitation system](/docs/plugins/organization/invitations) instead.
 </Callout>
 
+## Removing a Member
+
+You can remove a member from an organization using the `organization.removeMember` method.
+The member can be identified by their member ID or email address.
+
+<APIMethod
+    path="/organization/remove-member"
+    method="POST">
+```ts
+type removeMember = {
+    /**
+     * The member ID or email address of the member to remove.
+     */
+    memberIdOrEmail: string = "member-id-or-email"
+    /**
+     * The organization ID to remove the member from.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+    The last owner of an organization cannot be removed. If you need to remove the owner,
+    first assign the owner role to another member.
+</Callout>
+
 ---
 
 ## Configuration Options
