@@ -5,11 +5,13 @@ packages:
   - e2e/**
   - test
 
+blockExoticSubdeps: true
+
 catalog:
   '@better-auth/utils': 0.3.1
   '@better-fetch/fetch': 1.1.21
   better-call: 1.2.0
-  tsdown: ^0.19.0
+  tsdown: ^0.20.1
   typescript: ^5.9.3
 
 catalogs:
@@ -30,6 +32,8 @@ catalogs:
 
 linkWorkspacePackages: true
 
+minimumReleaseAge: 0
+
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - '@prisma/client'
@@ -43,11 +47,6 @@ onlyBuiltDependencies:
   - sharp
   - workerd
 
-blockExoticSubdeps: true
 trustPolicy: no-downgrade
+
 trustPolicyIgnoreAfter: 43200
-# https://github.com/pnpm/pnpm/issues/10257
-# minimumReleaseAge: 4320
-minimumReleaseAge: 0
-# minimumReleaseAgeExclude:
-#   - package-name
