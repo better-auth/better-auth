@@ -1,0 +1,93 @@
+{
+  "name": "@better-auth/electron",
+  "version": "1.5.0-beta.1",
+  "type": "module",
+  "description": "Better Auth integration for Electron applications.",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/better-auth/better-auth",
+    "directory": "packages/electron"
+  },
+  "homepage": "https://www.better-auth.com/docs/integrations/electron",
+  "keywords": [
+    "electron",
+    "auth",
+    "better-auth",
+    "typescript"
+  ],
+  "scripts": {
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    },
+    "./client": {
+      "dev-source": "./src/client.ts",
+      "types": "./dist/client.d.mts",
+      "default": "./dist/client.mjs"
+    },
+    "./proxy": {
+      "dev-source": "./src/proxy.ts",
+      "types": "./dist/proxy.d.mts",
+      "default": "./dist/proxy.mjs"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "*": [
+        "./dist/index.d.mts"
+      ],
+      "client": [
+        "./dist/client.d.mts"
+      ],
+      "proxy": [
+        "./dist/proxy.d.mts"
+      ]
+    }
+  },
+  "peerDependenciesMeta": {
+    "electron": {
+      "optional": true
+    }
+  },
+  "peerDependencies": {
+    "electron": ">=37.0.0",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "@better-auth/core": "workspace:*"
+  },
+  "dependencies": {
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "better-auth": "workspace:*",
+    "@better-auth/core": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.6.2",
+    "tsdown": "catalog:"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": [
+    "dist"
+  ]
+}
