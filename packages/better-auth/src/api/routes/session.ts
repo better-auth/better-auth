@@ -37,7 +37,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/get-session",
 		{
-			method: "GET",
+			method: ["GET", "POST"],
 			operationId: "getSession",
 			query: getSessionQuerySchema,
 			requireHeaders: true,
@@ -76,6 +76,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 			session: InferSession<Option>;
 			user: InferUser<Option>;
 		} | null> => {
+			const deferSessionRefresh =
+				ctx.context.options.session?.deferSessionRefresh;
+			const isPostRequest = ctx.method === "POST";
+
+			if (isPostRequest && !deferSessionRefresh) {
+				throw APIError.from(
+					"METHOD_NOT_ALLOWED",
+					BASE_ERROR_CODES.METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED,
+				);
+			}
+
 			try {
 				const sessionCookieToken = await ctx.getSignedCookie(
 					ctx.context.authCookies.sessionToken.name,
@@ -348,10 +359,13 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (session) {
 						/**
 						 * if session expired clean up the session
+						 * Only delete on POST when deferSessionRefresh is enabled
 						 */
-						await ctx.context.internalAdapter.deleteSession(
-							session.session.token,
-						);
+						if (!deferSessionRefresh || isPostRequest) {
+							await ctx.context.internalAdapter.deleteSession(
+								session.session.token,
+							);
+						}
 					}
 					return ctx.json(null);
 				}
@@ -389,14 +403,35 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					expiresIn * 1000 +
 					updateAge * 1000;
 				const shouldBeUpdated = sessionIsDueToBeUpdatedDate <= Date.now();
+				const disableRefresh =
+					ctx.query?.disableRefresh ||
+					ctx.context.options.session?.disableSessionRefresh;
 				const shouldSkipSessionRefresh = await getShouldSkipSessionRefresh();
+				const needsRefresh =
+					shouldBeUpdated && !disableRefresh && !shouldSkipSessionRefresh;
 
-				if (
-					!shouldSkipSessionRefresh &&
-					shouldBeUpdated &&
-					(!ctx.query?.disableRefresh ||
-						!ctx.context.options.session?.disableSessionRefresh)
-				) {
+				/**
+				 * When deferSessionRefresh is enabled and this is a GET request,
+				 * return the session without performing writes, but include needsRefresh flag
+				 */
+				if (deferSessionRefresh && !isPostRequest) {
+					await setCookieCache(ctx, session, !!dontRememberMe);
+					const parsedSession = parseSessionOutput(
+						ctx.context.options,
+						session.session,
+					);
+					const parsedUser = parseUserOutput(ctx.context.options, session.user);
+					return ctx.json({
+						session: parsedSession,
+						user: parsedUser,
+						needsRefresh,
+					} as unknown as {
+						session: InferSession<Option>;
+						user: InferUser<Option>;
+					});
+				}
+
+				if (needsRefresh) {
 					const updatedSession =
 						await ctx.context.internalAdapter.updateSession(
 							session.session.token,
@@ -485,6 +520,7 @@ export const getSessionFromCtx = async <
 
 	const session = await getSession()({
 		...ctx,
+		method: "GET",
 		asResponse: false,
 		headers: ctx.headers!,
 		returnHeaders: false,
