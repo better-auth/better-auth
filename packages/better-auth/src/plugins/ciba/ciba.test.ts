@@ -7,7 +7,7 @@ describe("CIBA plugin", async () => {
 	// Mock notification callback
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
-	const { auth, signInWithTestUser } = await getTestInstance(
+	const { auth, signInWithTestUser, signInWithUser } = await getTestInstance(
 		{
 			plugins: [
 				oidcProvider({
@@ -366,6 +366,104 @@ describe("CIBA plugin", async () => {
 			});
 
 			expect(tokenResponse.refresh_token).toBeDefined();
+		});
+
+		it("should NOT include refresh_token without offline_access scope", async () => {
+			const { headers } = await signInWithTestUser();
+
+			// Request WITHOUT offline_access
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid profile",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaAuthorize({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			const tokenResponse = await auth.api.oAuth2token({
+				body: {
+					grant_type: "urn:openid:params:grant-type:ciba",
+					auth_req_id: bcResponse.auth_req_id,
+					client_id: testClientId,
+					client_secret: testClientSecret,
+				},
+			});
+
+			// refresh_token should be undefined when offline_access not requested
+			expect(tokenResponse.refresh_token).toBeUndefined();
+		});
+
+		it("should reject approval if different user is logged in", async () => {
+			// Create and sign in as a different user
+			await auth.api.signUpEmail({
+				body: {
+					email: "other-user@test.com",
+					password: "password123",
+					name: "Other User",
+				},
+			});
+			const { headers: otherHeaders } = await signInWithUser(
+				"other-user@test.com",
+				"password123",
+			);
+
+			// Initiate CIBA request for test@test.com (the default test user)
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com", // Request is for test@test.com
+				},
+			});
+
+			// Other user tries to approve - should fail
+			await expect(
+				auth.api.cibaAuthorize({
+					body: { auth_req_id: bcResponse.auth_req_id },
+					headers: otherHeaders, // Logged in as other-user@test.com
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "access_denied",
+				},
+			});
+		});
+
+		it("should reject rejection if different user is logged in", async () => {
+			// Sign in as other user (created in previous test)
+			const { headers: otherHeaders } = await signInWithUser(
+				"other-user@test.com",
+				"password123",
+			);
+
+			// Initiate CIBA request for test@test.com
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			// Other user tries to reject - should fail
+			await expect(
+				auth.api.cibaReject({
+					body: { auth_req_id: bcResponse.auth_req_id },
+					headers: otherHeaders,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "access_denied",
+				},
+			});
 		});
 
 		it("should require authentication for approval", async () => {

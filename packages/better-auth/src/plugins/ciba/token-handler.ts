@@ -217,22 +217,21 @@ export function createCibaTokenHandler() {
 			const requestedScopes = cibaRequest.scope.split(" ");
 			const needsRefreshToken = requestedScopes.includes("offline_access");
 
-			// Only generate refresh token if offline_access scope is requested
-			const refreshToken = needsRefreshToken
-				? generateRandomString(32, "a-z", "A-Z", "0-9")
-				: null;
-			const refreshTokenExpiresAt = needsRefreshToken
-				? new Date(now + refreshTokenExpiresIn * 1000)
-				: null;
+			// Always generate refresh token for DB storage (unique constraint)
+			// but only return it if offline_access scope is requested
+			const refreshToken = generateRandomString(32, "a-z", "A-Z", "0-9");
+			const refreshTokenExpiresAt = new Date(
+				now + refreshTokenExpiresIn * 1000,
+			);
 
 			// Store access token
 			await ctx.context.adapter.create({
 				model: "oauthAccessToken",
 				data: {
 					accessToken,
-					refreshToken: refreshToken ?? "",
+					refreshToken,
 					accessTokenExpiresAt,
-					refreshTokenExpiresAt: refreshTokenExpiresAt ?? accessTokenExpiresAt,
+					refreshTokenExpiresAt,
 					clientId: credentials.clientId,
 					userId: user.id,
 					scopes: cibaRequest.scope,
@@ -286,7 +285,7 @@ export function createCibaTokenHandler() {
 					access_token: accessToken,
 					token_type: "Bearer",
 					expires_in: accessTokenExpiresIn,
-					refresh_token: refreshToken ?? undefined,
+					refresh_token: needsRefreshToken ? refreshToken : undefined,
 					scope: cibaRequest.scope,
 					id_token: requestedScopes.includes("openid") ? idToken : undefined,
 				},
