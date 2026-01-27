@@ -193,6 +193,37 @@ type Member = {
 }
 ```
 
+## Getting a Member's Role
+
+Get the role of a member in an organization. If no `userId` is provided, returns the current user's role.
+
+<APIMethod
+    path="/organization/get-active-member-role"
+    method="GET">
+```ts
+type getActiveMemberRole = {
+    /**
+     * The user ID to get the role for.
+     * If not provided, returns the current user's role.
+     */
+    userId?: string = "user-id"
+    /**
+     * The organization ID to get the member's role from.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type GetActiveMemberRoleResponse = {
+    role: string
+}
+```
+
 ## Listing Members
 
 List all members of an organization with pagination, sorting, and filtering support.
