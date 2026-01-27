@@ -1,5 +1,19 @@
 import { defineErrorCodes } from "../utils/error-codes";
 
+declare module "@better-auth/core" {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		/**
+		 * This plugin does not exist, do not use it in runtime.
+		 */
+		"$internal:base": {
+			creator: () => {
+				$ERROR_CODES: typeof BASE_ERROR_CODES;
+			};
+		};
+	}
+}
+
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_USER: "Failed to create user",

@@ -245,6 +245,7 @@ describe("i18n plugin", async () => {
 					INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
 				},
 				de: {
+					DEF: "",
 					USER_NOT_FOUND: "Benutzer nicht gefunden",
 					INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
 				},
