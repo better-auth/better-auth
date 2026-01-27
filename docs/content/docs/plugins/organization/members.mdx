@@ -97,6 +97,52 @@ type removeMember = {
     first assign the owner role to another member.
 </Callout>
 
+## Updating a Member's Role
+
+You can update a member's role using the `organization.updateMemberRole` method.
+
+<APIMethod
+    path="/organization/update-member-role"
+    method="POST">
+```ts
+type updateMemberRole = {
+    /**
+     * The new role(s) to assign to the member.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "admin"
+    /**
+     * The member ID to update.
+     */
+    memberId: string = "member-id"
+    /**
+     * The organization ID. If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Updating to Multiple Roles
+
+You can assign multiple roles to a member:
+
+```ts
+await auth.api.updateMemberRole({
+    headers,
+    body: {
+        memberId: "member-id",
+        role: ["admin", "moderator"], // Multiple roles
+        organizationId: "org-id",
+    },
+})
+```
+
+<Callout type="warn">
+    The last owner of an organization cannot have their owner role removed. 
+    If you need to change the owner's role, first assign the owner role to another member.
+</Callout>
+
 ---
 
 ## Configuration Options
