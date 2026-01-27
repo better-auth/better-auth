@@ -21,6 +21,8 @@ import type { AddMember } from "../routes/members/add-member";
 import { addMember } from "../routes/members/add-member";
 import type { GetActiveMember } from "../routes/members/get-active-member";
 import { getActiveMember } from "../routes/members/get-active-member";
+import type { GetActiveMemberRole } from "../routes/members/get-active-member-role";
+import { getActiveMemberRole } from "../routes/members/get-active-member-role";
 import type { LeaveOrganization } from "../routes/members/leave-organization";
 import { leaveOrganization } from "../routes/members/leave-organization";
 import type { ListMembers } from "../routes/members/list-members";
@@ -65,6 +67,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	cancelInvitation: CancelInvitation<O>;
 	addMember: AddMember<O>;
 	getActiveMember: GetActiveMember<O>;
+	getActiveMemberRole: GetActiveMemberRole<O>;
 	removeMember: RemoveMember<O>;
 	updateMemberRole: UpdateMemberRole<O>;
 	leaveOrganization: LeaveOrganization<O>;
@@ -102,6 +105,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		cancelInvitation: cancelInvitation(options),
 		addMember: addMember(options),
 		getActiveMember: getActiveMember(options),
+		getActiveMemberRole: getActiveMemberRole(options),
 		removeMember: removeMember(options),
 		updateMemberRole: updateMemberRole(options),
 		leaveOrganization: leaveOrganization(options),
