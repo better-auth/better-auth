@@ -16,7 +16,7 @@ export default function Page() {
 	useEffect(() => {
 		authClient.oneTap({
 			fetchOptions: {
-  			query: params,
+				query: params,
 				onError: ({ error }) => {
 					toast.error(error.message || "An error occurred");
 				},

@@ -4,10 +4,10 @@
     "electron.vite.config.*",
     "src/main/**/*",
     "src/preload/**/*",
-    "src/lib/auth-client.ts",
+    "src/lib/auth-client.ts"
   ],
   "compilerOptions": {
     "composite": true,
-    "types": ["electron-vite/node"],
-  },
+    "types": ["electron-vite/node"]
+  }
 }

@@ -2,11 +2,11 @@
 
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
+import { useEffect } from "react";
 import { getQueryClient } from "@/data/query-client";
+import { authClient } from "@/lib/auth-client";
 import { ThemeProvider } from "./theme-provider";
 import { Toaster } from "./ui/sonner";
-import { useEffect } from "react";
-import { authClient } from "@/lib/auth-client";
 
 type Props = {
 	children: React.ReactNode;
@@ -14,11 +14,11 @@ type Props = {
 
 const Providers = ({ children }: Props) => {
 	const queryClient = getQueryClient();
-	
+
 	useEffect(() => {
-    const id = authClient.ensureElectronRedirect();
-    return () => clearInterval(id);
-  }, []);
+		const id = authClient.ensureElectronRedirect();
+		return () => clearInterval(id);
+	}, []);
 
 	return (
 		<ThemeProvider attribute="class" defaultTheme="dark">
