@@ -143,10 +143,9 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should reset password", async () => {
-		await client.emailOtp.sendVerificationOtp({
+	it("should reset password using new requestPasswordReset endpoint", async () => {
+		await client.requestPasswordReset.emailOtp({
 			email: testUser.email,
-			type: "forget-password",
 		});
 		await client.emailOtp.resetPassword({
 			email: testUser.email,
@@ -157,6 +156,23 @@ describe("email-otp", async () => {
 		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
+		});
+		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
+		await client.forgetPassword.emailOtp({
+			email: testUser.email,
+		});
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "changed-password-2",
+		});
+
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password-2",
 		});
 		expect(data?.user).toBeDefined();
 	});
