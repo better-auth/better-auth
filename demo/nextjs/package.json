@@ -18,6 +18,7 @@
     "@better-auth/scim": "workspace:*",
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
+    "@better-auth/electron": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.8.1",
     "@libsql/kysely-libsql": "^0.4.1",

@@ -36,6 +36,8 @@ onlyBuiltDependencies:
   - '@prisma/engines'
   - '@swc/core'
   - better-sqlite3
+  - electron
+  - electron-winstaller
   - esbuild
   - less
   - msw

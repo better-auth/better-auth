@@ -4,6 +4,7 @@ import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
 import { sso } from "@better-auth/sso";
 import { stripe } from "@better-auth/stripe";
+import { electron } from "@better-auth/electron";
 import { LibsqlDialect } from "@libsql/kysely-libsql";
 import type { BetterAuthOptions } from "better-auth";
 import { APIError, betterAuth } from "better-auth";
@@ -438,11 +439,13 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		electron(),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
 		"exp://",
+		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],
 } satisfies BetterAuthOptions;
