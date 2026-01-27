@@ -14,7 +14,7 @@ import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
 import type { ElectronOptions } from "./types";
 
-export const electronTokenBodySchema = z.object({
+const electronTokenBodySchema = z.object({
 	token: z.string().nonempty(),
 	state: z.string().nonempty(),
 	code_verifier: z.string().nonempty(),
@@ -114,7 +114,7 @@ export const electronToken = (opts: ElectronOptions) =>
 		},
 	);
 
-export const electronInitOAuthProxyQuerySchema = z.object({
+const electronInitOAuthProxyQuerySchema = z.object({
 	provider: z.string().nonempty(),
 	state: z.string(),
 	code_challenge: z.string(),
