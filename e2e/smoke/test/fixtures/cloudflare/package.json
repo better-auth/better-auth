@@ -11,7 +11,7 @@
     "@cloudflare/vitest-pool-workers": "^0.8.69",
     "@cloudflare/workers-types": "^4.20250903.0",
     "drizzle-kit": "^0.31.4",
-    "wrangler": "4.33.2"
+    "wrangler": "4.59.1"
   },
   "scripts": {
     "check": "tsc && wrangler build",
