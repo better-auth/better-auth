@@ -688,13 +688,14 @@ export const deviceDeny = createAuthEndpoint(
 			}),
 		}),
 		error: z.object({
-			error: z.enum(["invalid_request", "expired_token"]).meta({
+			error: z.enum(["invalid_request", "expired_token", "unauthorized"]).meta({
 				description: "Error code",
 			}),
 			error_description: z.string().meta({
 				description: "Detailed error description",
 			}),
 		}),
+		requireHeaders: true,
 		metadata: {
 			openapi: {
 				description: "Deny device authorization",
@@ -719,6 +720,15 @@ export const deviceDeny = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
+		const session = await getSessionFromCtx(ctx);
+		if (!session) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "unauthorized",
+				error_description:
+					DEVICE_AUTHORIZATION_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+			});
+		}
+
 		const { userCode } = ctx.body;
 		const cleanUserCode = userCode.replace(/-/g, "");
 

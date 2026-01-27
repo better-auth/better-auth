@@ -314,16 +314,19 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should deny device authorization", async () => {
+			// First, sign in as a user
+			const { headers } = await signInWithTestUser();
+
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
 				},
 			});
 
-			// Deny the device
+			// Deny the device (requires authentication)
 			const denyResponse = await auth.api.deviceDeny({
 				body: { userCode: user_code },
-				headers: new Headers(),
+				headers,
 			});
 			expect("success" in denyResponse && denyResponse.success).toBe(true);
 
@@ -353,6 +356,26 @@ describe("device authorization flow", async () => {
 
 			await expect(
 				auth.api.deviceApprove({
+					body: { userCode: user_code },
+					headers: new Headers(),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "unauthorized",
+					error_description: "Authentication required",
+				},
+			});
+		});
+
+		it("should require authentication for denial", async () => {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			await expect(
+				auth.api.deviceDeny({
 					body: { userCode: user_code },
 					headers: new Headers(),
 				}),
