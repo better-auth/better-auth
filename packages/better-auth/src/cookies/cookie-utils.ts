@@ -1,4 +1,4 @@
-interface CookieAttributes {
+export interface CookieAttributes {
 	value: string;
 	"max-age"?: number | undefined;
 	expires?: Date | undefined;
