@@ -1117,6 +1117,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									"authorization_code",
 									"client_credentials",
 									"refresh_token",
+									"urn:openid:params:grant-type:ciba",
 								]),
 							)
 							.default(["authorization_code"])

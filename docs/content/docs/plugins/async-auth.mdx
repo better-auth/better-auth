@@ -1,0 +1,623 @@
+---
+title: Async Auth
+description: Client-Initiated Backchannel Authentication for AI agents, CLI tools, and headless applications
+---
+
+`OpenID Connect` `CIBA` `AI Agents` `CLI` `MCP`
+
+The Async Auth plugin implements OpenID Connect Client-Initiated Backchannel Authentication (CIBA), enabling authentication flows where an agent or application requests authentication on behalf of a user, and the user approves via a separate channel (email, push notification, etc.).
+
+This is ideal for:
+- **AI Agents**: Agents that need to act on behalf of users
+- **CLI Applications**: Command-line tools requiring user authentication
+- **MCP Servers**: Model Context Protocol servers needing user permissions
+- **IoT Devices**: Devices without browsers or keyboards
+- **Automated Workflows**: Background processes requiring user authorization
+
+## How It Works
+
+Unlike traditional OAuth flows where users interact directly with a browser, CIBA separates the authentication request from user interaction:
+
+1. **Agent requests auth**: The agent/application calls `bc-authorize` with a user identifier (email, phone, etc.)
+2. **User gets notified**: The user receives a notification (email, SMS, push) with an approval link
+3. **User approves/denies**: The user reviews the request and approves or denies it
+4. **Agent polls for tokens**: The agent polls the token endpoint until approved, then receives OIDC tokens
+
+```
+┌─────────┐                              ┌─────────┐                    ┌──────┐
+│  Agent  │                              │  Server │                    │ User │
+└────┬────┘                              └────┬────┘                    └──┬───┘
+     │                                        │                            │
+     │  POST /oauth/bc-authorize              │                            │
+     │  (client_id, login_hint: email)        │                            │
+     │ ──────────────────────────────────────>│                            │
+     │                                        │                            │
+     │  { auth_req_id, expires_in, interval } │   Email notification       │
+     │ <──────────────────────────────────────│ ──────────────────────────>│
+     │                                        │                            │
+     │                                        │      User clicks link      │
+     │                                        │      and approves          │
+     │                                        │ <──────────────────────────│
+     │  POST /oauth2/token                    │                            │
+     │  (grant_type: ciba, auth_req_id)       │                            │
+     │ ──────────────────────────────────────>│                            │
+     │                                        │                            │
+     │  { access_token, refresh_token,        │                            │
+     │    id_token, ... }                     │                            │
+     │ <──────────────────────────────────────│                            │
+     │                                        │                            │
+```
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+        
+        Add the async auth plugin along with the OAuth provider to your server configuration.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { asyncAuth } from "better-auth/plugins"; // [!code highlight]
+        import { oauthProvider } from "@better-auth/oauth-provider"; // [!code highlight]
+
+        export const auth = betterAuth({
+          // ... other config
+          plugins: [
+            oauthProvider({
+              // OAuth provider config (required for token endpoint)
+            }),
+            asyncAuth({ // [!code highlight]
+              sendNotification: async ({ user, approvalUrl, authReqId }) => { // [!code highlight]
+                // Send email/SMS/push notification to user // [!code highlight]
+                await sendEmail({ // [!code highlight]
+                  to: user.email, // [!code highlight]
+                  subject: "Authentication Request", // [!code highlight]
+                  html: `<a href="${approvalUrl}">Click to approve</a>`, // [!code highlight]
+                }); // [!code highlight]
+              }, // [!code highlight]
+            }), // [!code highlight]
+          ],
+        });
+        ```
+    </Step>
+    
+    <Step>
+        ### Register an OAuth client
+        
+        Register an OAuth client that will be used by your agent/application. CIBA requires a **confidential client** (with `client_secret`), so you must be authenticated with a session cookie when registering.
+
+        ```bash
+        # First sign in to get a session cookie, then register:
+        curl -X POST http://localhost:3000/api/auth/oauth2/register \
+          -H "Content-Type: application/json" \
+          -H "Cookie: better-auth.session_token=YOUR_SESSION_COOKIE" \
+          -d '{
+            "client_name": "My AI Agent",
+            "grant_types": ["urn:openid:params:grant-type:ciba"],
+            "token_endpoint_auth_method": "client_secret_post"
+          }'
+        ```
+
+        Response:
+        ```json
+        {
+          "client_id": "abc123...",
+          "client_secret": "secret...",
+          "token_endpoint_auth_method": "client_secret_post"
+        }
+        ```
+
+        <Callout type="info">
+          The `token_endpoint_auth_method: "client_secret_post"` means the agent must send `client_id` and `client_secret` in the request body when calling token endpoints. This is required for CIBA since the agent needs to prove its identity.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Create the approval page
+        
+        Create a page where users can approve or deny authentication requests.
+
+        ```tsx title="app/ciba/approve/page.tsx"
+        "use client";
+        import { useSearchParams } from "next/navigation";
+        import { useState, useEffect } from "react";
+
+        export default function CibaApprovePage() {
+          const searchParams = useSearchParams();
+          const authReqId = searchParams.get("auth_req_id");
+          const [requestInfo, setRequestInfo] = useState(null);
+          const [loading, setLoading] = useState(true);
+
+          useEffect(() => {
+            // Fetch request details
+            fetch(`/api/auth/ciba/verify?auth_req_id=${authReqId}`)
+              .then(res => res.json())
+              .then(data => {
+                setRequestInfo(data);
+                setLoading(false);
+              });
+          }, [authReqId]);
+
+          const handleApprove = async () => {
+            await fetch("/api/auth/ciba/authorize", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ auth_req_id: authReqId }),
+            });
+            // Redirect to success page
+          };
+
+          const handleDeny = async () => {
+            await fetch("/api/auth/ciba/reject", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ auth_req_id: authReqId }),
+            });
+            // Redirect to denied page
+          };
+
+          if (loading) return <div>Loading...</div>;
+          if (!requestInfo) return <div>Request not found or expired</div>;
+
+          return (
+            <div>
+              <h1>Authentication Request</h1>
+              <p>An application is requesting access to your account.</p>
+              <p>Client: {requestInfo.client_id}</p>
+              <p>Scopes: {requestInfo.scope}</p>
+              <button onClick={handleApprove}>Approve</button>
+              <button onClick={handleDeny}>Deny</button>
+            </div>
+          );
+        }
+        ```
+    </Step>
+</Steps>
+
+## Agent Usage
+
+### Initiating Authentication
+
+The agent initiates authentication by calling the backchannel authorize endpoint:
+
+<APIMethod
+  path="/oauth/bc-authorize"
+  method="POST"
+>
+```ts
+type bcAuthorize = {
+    /**
+     * The OAuth client identifier
+     */
+    client_id: string;
+    /**
+     * The OAuth client secret
+     */
+    client_secret: string;
+    /**
+     * User identifier (email, phone, or user ID)
+     */
+    login_hint: string;
+    /**
+     * Space-separated list of requested scopes
+     */
+    scope?: string;
+    /**
+     * Optional message to display to user
+     */
+    binding_message?: string;
+}
+```
+</APIMethod>
+
+Example:
+```ts
+const response = await fetch("https://auth.example.com/api/auth/oauth/bc-authorize", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    client_id: "your-client-id",
+    client_secret: "your-client-secret",
+    login_hint: "user@example.com",
+    scope: "openid profile email offline_access",
+    binding_message: "AI Agent requesting access",
+  }),
+});
+
+const { auth_req_id, expires_in, interval } = await response.json();
+// auth_req_id: unique identifier for this request
+// expires_in: seconds until request expires
+// interval: minimum seconds between poll attempts
+```
+
+### Polling for Tokens
+
+After initiating authentication, poll the token endpoint until the user approves:
+
+<APIMethod
+  path="/oauth2/token"
+  method="POST"
+>
+```ts
+type cibaToken = {
+    /**
+     * Must be "urn:openid:params:grant-type:ciba"
+     */
+    grant_type: "urn:openid:params:grant-type:ciba";
+    /**
+     * The auth request ID from bc-authorize
+     */
+    auth_req_id: string;
+    /**
+     * The OAuth client identifier
+     */
+    client_id: string;
+    /**
+     * The OAuth client secret
+     */
+    client_secret: string;
+}
+```
+</APIMethod>
+
+Example polling implementation:
+```ts
+async function pollForTokens(authReqId: string, interval: number) {
+  let pollingInterval = interval;
+
+  while (true) {
+    await sleep(pollingInterval * 1000);
+
+    const response = await fetch("https://auth.example.com/api/auth/oauth2/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "urn:openid:params:grant-type:ciba",
+        auth_req_id: authReqId,
+        client_id: "your-client-id",
+        client_secret: "your-client-secret",
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.access_token) {
+      // Success! User approved
+      return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token,
+        idToken: data.id_token,
+        expiresIn: data.expires_in,
+      };
+    }
+
+    if (data.error) {
+      switch (data.error) {
+        case "authorization_pending":
+          // User hasn't responded yet, continue polling
+          break;
+        case "slow_down":
+          // Polling too fast, increase interval
+          pollingInterval += 5;
+          break;
+        case "access_denied":
+          throw new Error("User denied the request");
+        case "expired_token":
+          throw new Error("Request expired");
+        default:
+          throw new Error(data.error_description || data.error);
+      }
+    }
+  }
+}
+```
+
+## Complete Agent Example
+
+Here's a complete example for an AI agent or CLI tool:
+
+```ts title="agent-auth.ts"
+interface CibaTokens {
+  accessToken: string;
+  refreshToken?: string;
+  idToken?: string;
+  expiresIn: number;
+}
+
+class AgentAuth {
+  private baseUrl: string;
+  private clientId: string;
+  private clientSecret: string;
+
+  constructor(config: { baseUrl: string; clientId: string; clientSecret: string }) {
+    this.baseUrl = config.baseUrl;
+    this.clientId = config.clientId;
+    this.clientSecret = config.clientSecret;
+  }
+
+  async requestAuth(userEmail: string, scope = "openid profile email"): Promise<CibaTokens> {
+    // Step 1: Initiate backchannel authentication
+    console.log(`Requesting authentication for ${userEmail}...`);
+    
+    const bcResponse = await fetch(`${this.baseUrl}/api/auth/oauth/bc-authorize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        client_id: this.clientId,
+        client_secret: this.clientSecret,
+        login_hint: userEmail,
+        scope,
+        binding_message: "AI Agent requesting access to your account",
+      }),
+    });
+
+    if (!bcResponse.ok) {
+      const error = await bcResponse.json();
+      throw new Error(error.error_description || "Failed to initiate auth");
+    }
+
+    const { auth_req_id, expires_in, interval } = await bcResponse.json();
+    console.log(`Authentication request sent. User has ${expires_in}s to approve.`);
+    console.log("Waiting for user approval...");
+
+    // Step 2: Poll for tokens
+    return this.pollForTokens(auth_req_id, interval, expires_in);
+  }
+
+  private async pollForTokens(
+    authReqId: string,
+    interval: number,
+    expiresIn: number
+  ): Promise<CibaTokens> {
+    const startTime = Date.now();
+    let pollingInterval = interval;
+
+    while (Date.now() - startTime < expiresIn * 1000) {
+      await this.sleep(pollingInterval * 1000);
+
+      const response = await fetch(`${this.baseUrl}/api/auth/oauth2/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "urn:openid:params:grant-type:ciba",
+          auth_req_id: authReqId,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.access_token) {
+        console.log("Authentication successful!");
+        return {
+          accessToken: data.access_token,
+          refreshToken: data.refresh_token,
+          idToken: data.id_token,
+          expiresIn: data.expires_in,
+        };
+      }
+
+      if (data.error === "authorization_pending") {
+        continue;
+      } else if (data.error === "slow_down") {
+        pollingInterval += 5;
+      } else if (data.error === "access_denied") {
+        throw new Error("User denied the authentication request");
+      } else if (data.error === "expired_token") {
+        throw new Error("Authentication request expired");
+      } else if (data.error) {
+        throw new Error(data.error_description || data.error);
+      }
+    }
+
+    throw new Error("Authentication request timed out");
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+
+// Usage
+const agent = new AgentAuth({
+  baseUrl: "https://auth.example.com",
+  clientId: "your-client-id",
+  clientSecret: "your-client-secret",
+});
+
+const tokens = await agent.requestAuth("user@example.com", "openid profile email offline_access");
+console.log("Access Token:", tokens.accessToken);
+```
+
+## User Endpoints
+
+### Verify Request
+
+Check if an authentication request is valid and get its details:
+
+<APIMethod
+  path="/ciba/verify"
+  method="GET"
+>
+```ts
+type verifyRequest = {
+    /**
+     * The authentication request ID
+     */
+    auth_req_id: string;
+}
+```
+</APIMethod>
+
+### Approve Request
+
+Approve an authentication request (requires user session):
+
+<APIMethod
+  path="/ciba/authorize"
+  method="POST"
+  requireSession
+>
+```ts
+type approveRequest = {
+    /**
+     * The authentication request ID to approve
+     */
+    auth_req_id: string;
+}
+```
+</APIMethod>
+
+### Reject Request
+
+Reject an authentication request (requires user session):
+
+<APIMethod
+  path="/ciba/reject"
+  method="POST"
+  requireSession
+>
+```ts
+type rejectRequest = {
+    /**
+     * The authentication request ID to reject
+     */
+    auth_req_id: string;
+}
+```
+</APIMethod>
+
+## Configuration Options
+
+```ts
+asyncAuth({
+  // Required: Function to notify user of authentication request
+  sendNotification: async ({ user, approvalUrl, authReqId, bindingMessage, clientId, scope, expiresAt }) => {
+    await sendEmail({
+      to: user.email,
+      subject: "Authentication Request",
+      html: `
+        <h2>Authentication Request</h2>
+        <p>Client ${clientId} is requesting access to your account.</p>
+        <p>Requested permissions: ${scope}</p>
+        ${bindingMessage ? `<p>Message: ${bindingMessage}</p>` : ""}
+        <p>This request expires at ${expiresAt.toISOString()}</p>
+        <a href="${approvalUrl}">Click here to approve or deny</a>
+      `,
+    });
+  },
+
+  // URL of the approval page (default: "/ciba/approve")
+  approvalUri: "/ciba/approve",
+
+  // How long requests are valid as TimeString (default: "5m")
+  requestLifetime: "5m",
+
+  // Minimum polling interval as TimeString (default: "5s")
+  pollingInterval: "5s",
+
+  // Custom user resolver (default: looks up by email)
+  resolveUser: async (loginHint, ctx) => {
+    // Return user or null if not found
+    return await ctx.context.internalAdapter.findUserByEmail(loginHint);
+  },
+});
+```
+
+<Callout type="info">
+  Token expiration settings (`accessTokenExpiresIn`, `refreshTokenExpiresIn`) and client configuration (`trustedClients`) are configured on the `oauthProvider()` or `oidcProvider()` plugin, not on `asyncAuth()`.
+</Callout>
+
+## Error Handling
+
+The CIBA flow defines specific error codes:
+
+| Error Code | Description |
+|------------|-------------|
+| `authorization_pending` | User hasn't responded yet (continue polling) |
+| `slow_down` | Polling too frequently (increase interval by 5s) |
+| `expired_token` | Authentication request has expired |
+| `access_denied` | User denied the request |
+| `invalid_grant` | Invalid auth_req_id or client credentials |
+| `invalid_client` | Client authentication failed |
+| `unknown_user_id` | User not found for the given login_hint |
+
+## Security Considerations
+
+1. **Client Authentication**: Always use client secrets and validate them on each request
+2. **Rate Limiting**: The polling interval is enforced server-side with `slow_down` responses
+3. **Request Expiration**: Requests expire after the configured lifetime (default: 5 minutes)
+4. **User Notification**: Ensure notifications clearly identify the requesting application
+5. **Binding Message**: Use binding messages to provide context about why access is being requested
+6. **HTTPS Only**: Always use HTTPS in production
+7. **Token Storage**: Securely store tokens received by agents
+
+## Use Cases
+
+### AI Agents with MCP
+
+When building AI agents that use the Model Context Protocol (MCP), async auth enables secure user authorization:
+
+```ts
+// MCP server that requires user auth
+const mcpServer = createMcpServer({
+  async onConnect(client) {
+    // Request user authorization
+    const tokens = await agentAuth.requestAuth(
+      client.userEmail,
+      "openid profile email read:calendar write:tasks"
+    );
+    
+    // Store tokens for this session
+    client.setTokens(tokens);
+  },
+  
+  async onRequest(request, client) {
+    // Use tokens to make authenticated API calls
+    const response = await fetch("https://api.example.com/user/data", {
+      headers: {
+        Authorization: `Bearer ${client.tokens.accessToken}`,
+      },
+    });
+    return response.json();
+  },
+});
+```
+
+### CLI Tools
+
+```ts
+// CLI login command
+async function login() {
+  const email = await prompt("Enter your email: ");
+  
+  console.log("Check your email for an authentication link...");
+  
+  const tokens = await agentAuth.requestAuth(email);
+  
+  // Save tokens locally
+  await saveTokens(tokens);
+  
+  console.log("Successfully authenticated!");
+}
+```
+
+### Background Jobs
+
+```ts
+// Background job that needs user permissions
+async function syncUserCalendar(userId: string) {
+  const user = await db.users.findById(userId);
+  
+  // Request permission if no valid token
+  const tokens = await agentAuth.requestAuth(
+    user.email,
+    "openid read:calendar"
+  );
+  
+  // Sync calendar with user's authorization
+  await calendarApi.sync(tokens.accessToken);
+}
+```
