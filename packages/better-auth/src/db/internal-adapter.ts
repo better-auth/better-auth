@@ -169,18 +169,24 @@ export const createInternalAdapter = (
 					const data = await secondaryStorage.get(token);
 					if (!data) continue;
 
-					const parsed = safeJSONParse<{
-						session: Session;
-						user: User;
-					}>(data);
-					if (!parsed) continue;
+					try {
+						const parsed = (
+							typeof data === "string" ? JSON.parse(data) : data
+						) as {
+							session: Session;
+							user: User;
+						};
+						if (!parsed?.session) continue;
 
-					sessions.push(
-						parseSessionOutput(ctx.options, {
-							...parsed.session,
-							expiresAt: new Date(parsed.session.expiresAt),
-						}),
-					);
+						sessions.push(
+							parseSessionOutput(ctx.options, {
+								...parsed.session,
+								expiresAt: new Date(parsed.session.expiresAt),
+							}),
+						);
+					} catch {
+						continue;
+					}
 				}
 				return sessions;
 			}
@@ -269,8 +275,10 @@ export const createInternalAdapter = (
 			override?: (Partial<Session> & Record<string, any>) | undefined,
 			overrideAll?: boolean | undefined,
 		) => {
-			const authCtx = await getCurrentAuthContext().catch(() => null);
-			const headers = authCtx?.headers || authCtx?.request?.headers;
+			const headers: Headers | undefined = await (async () => {
+				const ctx = await getCurrentAuthContext().catch(() => null);
+				return ctx?.headers || ctx?.request?.headers;
+			})();
 			const storeInDb = options.session?.storeSessionInDatabase;
 			const {
 				// always ignore override id - new sessions must have new ids
@@ -278,30 +286,10 @@ export const createInternalAdapter = (
 				...rest
 			} = override || {};
 
-			// determine session id
-			let sessionId: string | undefined;
-			const generatedId = ctx.generateId({ model: "session" });
-			if (generatedId !== false) {
-				sessionId = generatedId;
-			} else if (secondaryStorage && storeInDb === false) {
-				// no database to auto-generate id
-				sessionId = generateId();
-			} // otherwise database will generate the id
-
 			// we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(
-				authCtx?.context.options ?? options,
-				{},
-			);
+			const defaultAdditionalFields = parseSessionInput(options, {});
 			const data = {
-				...(sessionId ? { id: sessionId } : {}),
-				ipAddress:
-					authCtx?.request || authCtx?.headers
-						? getIp(
-								authCtx?.request || authCtx?.headers!,
-								authCtx?.context.options,
-							) || ""
-						: "",
+				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
 				...rest,
 				/**
@@ -465,26 +453,35 @@ export const createInternalAdapter = (
 				for (const sessionToken of sessionTokens) {
 					const sessionStringified = await secondaryStorage.get(sessionToken);
 					if (sessionStringified) {
-						const s = safeJSONParse<{
-							session: Session;
-							user: User;
-						}>(sessionStringified);
-						if (!s) return [];
-						const session = {
-							session: {
-								...s.session,
-								expiresAt: new Date(s.session.expiresAt),
-							},
-							user: {
-								...s.user,
-								createdAt: new Date(s.user.createdAt),
-								updatedAt: new Date(s.user.updatedAt),
-							},
-						} as {
-							session: Session;
-							user: User;
-						};
-						sessions.push(session);
+						try {
+							const s = (
+								typeof sessionStringified === "string"
+									? JSON.parse(sessionStringified)
+									: sessionStringified
+							) as {
+								session: Session;
+								user: User;
+							};
+							if (!s?.session) continue;
+							const session = {
+								session: {
+									...s.session,
+									expiresAt: new Date(s.session.expiresAt),
+								},
+								user: {
+									...s.user,
+									createdAt: new Date(s.user.createdAt),
+									updatedAt: new Date(s.user.updatedAt),
+								},
+							} as {
+								session: Session;
+								user: User;
+							};
+							sessions.push(session);
+						} catch {
+							// Skip invalid/corrupt session data
+							continue;
+						}
 					}
 				}
 				return sessions;
