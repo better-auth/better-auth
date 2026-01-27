@@ -786,6 +786,64 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				organizationName: organization.name,
 			}));
 		},
+		/**
+		 * Find a member by their member ID.
+		 * @param memberId - The member ID to find.
+		 * @returns The member with user data, or null if not found.
+		 */
+		findMemberById: async (memberId: string) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const result = await adapter.findOne<
+				InferMember<O, false> & { user: User }
+			>({
+				model: "member",
+				where: [{ field: "id", value: memberId }],
+				join: { user: true },
+			});
+			if (!result || !result.user) return null;
+			const { user, ...member } = result;
+			return {
+				...filterMemberOutput(member),
+				user: {
+					id: user.id,
+					name: user.name,
+					email: user.email,
+					image: user.image,
+				},
+			};
+		},
+		/**
+		 * Lists members for an organization.
+		 * @param data - The organization ID to list members for.
+		 * @returns The members list.
+		 */
+		listMembers: async (data: { organizationId: RealOrganizationId }) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const members = await adapter.findMany<InferMember<O, false>>({
+				model: "member",
+				where: [{ field: "organizationId", value: data.organizationId }],
+			});
+			return { members: members.map(filterMemberOutput) };
+		},
+		/**
+		 * Delete a member from an organization.
+		 * @param data - The member ID, organization ID, and optionally user ID.
+		 * @returns The deleted member ID.
+		 */
+		deleteMember: async (data: {
+			memberId: string;
+			organizationId: RealOrganizationId;
+			userId?: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.delete({
+				model: "member",
+				where: [{ field: "id", value: data.memberId }],
+			});
+			//TODO: Add team support
+			// Remove member from all teams they're part of
+			return data.memberId;
+		},
 	};
 	return orgAdapter;
 };
