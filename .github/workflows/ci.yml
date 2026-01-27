@@ -174,7 +174,7 @@ jobs:
 
       - name: Test
         if: github.event_name != 'merge_group'
-        run: pnpm coverage --shard=${{ matrix.shard }}/4
+        run: pnpm coverage -- --shard=${{ matrix.shard }}/4
 
       - name: Stop Docker Containers
         if: github.event_name != 'merge_group'
