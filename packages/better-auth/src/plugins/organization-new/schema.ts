@@ -12,7 +12,19 @@ const organizationSchema = z.object({
 	logo: z.string().nullish().optional(),
 	metadata: z
 		.record(z.string(), z.unknown())
-		.or(z.string().transform((v) => JSON.parse(v)))
+		.or(
+			z.string().transform((v, ctx) => {
+				try {
+					return JSON.parse(v);
+				} catch {
+					ctx.addIssue({
+						code: "custom",
+						message: "Invalid JSON string for metadata",
+					});
+					return z.NEVER;
+				}
+			}),
+		)
 		.optional(),
 	createdAt: z.date(),
 });

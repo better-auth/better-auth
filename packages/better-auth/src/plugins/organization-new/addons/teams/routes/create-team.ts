@@ -148,7 +148,8 @@ export const createTeam = <O extends TeamsOptions>(
 				session,
 			});
 
-			const maxTeamsReached = maximum ? existingTeamCount >= maximum : false;
+			const maxTeamsReached =
+				typeof maximum === "number" ? existingTeamCount >= maximum : false;
 			if (maxTeamsReached) {
 				const code = "YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_TEAMS";
 				const msg = ORGANIZATION_ERROR_CODES[code];
