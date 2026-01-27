@@ -366,6 +366,58 @@ describe("updateUser", async () => {
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
 
+	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
+		const store = new Map<string, string>();
+		const writeLog: { key: string; timestamp: number }[] = [];
+
+		const { auth, signInWithTestUser: signIn } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					writeLog.push({ key, timestamp: Date.now() });
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Clear any previous state
+		store.clear();
+		writeLog.length = 0;
+
+		const { headers } = await signIn();
+
+		// Get the session token that was just created
+		const sessionTokens = Array.from(store.keys()).filter(
+			(k) => !k.startsWith("active-sessions-"),
+		);
+		expect(sessionTokens.length).toBe(1);
+		const sessionToken = sessionTokens[0];
+
+		// Clear the write log before updateUser call
+		writeLog.length = 0;
+
+		// Use auth.api.updateUser directly to reproduce the issue
+		await auth.api.updateUser({
+			body: {
+				name: "updatedName",
+			},
+			headers,
+		});
+
+		// Count how many times the same session token was written
+		const sessionTokenWrites = writeLog.filter(
+			(log) => log.key === sessionToken,
+		);
+
+		// Should only write once per session token, not multiple times
+		expect(sessionTokenWrites.length).toBe(1);
+	});
+
 	it("should not allow updating user with additional fields that are input: false", async () => {
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{

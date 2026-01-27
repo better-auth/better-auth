@@ -11,56 +11,25 @@ interface MCPOptions {
 	claudeCode?: boolean;
 	openCode?: boolean;
 	manual?: boolean;
-	localOnly?: boolean;
-	remoteOnly?: boolean;
 }
 
-const REMOTE_MCP_URL =
-	"https://mcp.chonkie.ai/better-auth/better-auth-builder/mcp";
-const LOCAL_MCP_COMMAND = "npx @better-auth/mcp";
+const REMOTE_MCP_URL = "https://mcp.inkeep.com/better-auth/mcp";
 
 async function mcpAction(options: MCPOptions) {
-	const installLocal = !options.remoteOnly;
-	const installRemote = !options.localOnly;
-
 	if (options.cursor) {
-		await handleCursorAction(installLocal, installRemote);
+		await handleCursorAction();
 	} else if (options.claudeCode) {
-		handleClaudeCodeAction(installLocal, installRemote);
+		handleClaudeCodeAction();
 	} else if (options.openCode) {
-		handleOpenCodeAction(installLocal, installRemote);
+		handleOpenCodeAction();
 	} else if (options.manual) {
-		handleManualAction(installLocal, installRemote);
+		handleManualAction();
 	} else {
 		showAllOptions();
 	}
 }
 
-async function _installMcpServers(
-	client: "cursor" | "claude-code" | "open-code" | "manual" | string,
-	installLocal: boolean = true,
-	installRemote: boolean = true,
-) {
-	switch (client) {
-		case "cursor":
-			await handleCursorAction(installLocal, installRemote);
-			break;
-		case "claude-code":
-			handleClaudeCodeAction(installLocal, installRemote);
-			break;
-		case "open-code":
-			handleOpenCodeAction(installLocal, installRemote);
-			break;
-		case "manual":
-			handleManualAction(installLocal, installRemote);
-			break;
-	}
-}
-
-async function handleCursorAction(
-	installLocal: boolean,
-	installRemote: boolean,
-) {
+async function handleCursorAction() {
 	console.log(chalk.bold.blue("🚀 Adding Better Auth MCP to Cursor..."));
 
 	const platform = os.platform();
@@ -80,62 +49,30 @@ async function handleCursorAction(
 			throw new Error(`Unsupported platform: ${platform}`);
 	}
 
-	const installed: string[] = [];
+	const remoteConfig = { url: REMOTE_MCP_URL };
+	const encodedRemote = base64.encode(
+		new TextEncoder().encode(JSON.stringify(remoteConfig)),
+	);
+	const remoteDeeplink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent("better-auth")}&config=${encodedRemote}`;
 
-	if (installRemote) {
-		const remoteConfig = { url: REMOTE_MCP_URL };
-		const encodedRemote = base64.encode(
-			new TextEncoder().encode(JSON.stringify(remoteConfig)),
+	try {
+		const cmd =
+			platform === "win32"
+				? `start "" "${remoteDeeplink}"`
+				: `${openCommand} "${remoteDeeplink}"`;
+		execSync(cmd, { stdio: "inherit" });
+		console.log(chalk.green("\n✓ Better Auth MCP server installed!"));
+	} catch {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically open Cursor for MCP installation.",
+			),
 		);
-		const remoteDeeplink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent("better-auth-docs")}&config=${encodedRemote}`;
-
-		try {
-			const cmd =
-				platform === "win32"
-					? `start "" "${remoteDeeplink}"`
-					: `${openCommand} "${remoteDeeplink}"`;
-			execSync(cmd, { stdio: "inherit" });
-			installed.push("better-auth-docs (remote - documentation & search)");
-		} catch {
-			console.log(
-				chalk.yellow("\n⚠ Could not automatically open Cursor for remote MCP."),
-			);
-		}
-	}
-
-	if (installLocal) {
-		await new Promise((resolve) => setTimeout(resolve, 1000));
-
-		const localConfig = { command: LOCAL_MCP_COMMAND };
-		const encodedLocal = base64.encode(
-			new TextEncoder().encode(JSON.stringify(localConfig)),
-		);
-		const localDeeplink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent("better-auth")}&config=${encodedLocal}`;
-
-		try {
-			const cmd =
-				platform === "win32"
-					? `start "" "${localDeeplink}"`
-					: `${openCommand} "${localDeeplink}"`;
-			execSync(cmd, { stdio: "inherit" });
-			installed.push("better-auth (local - setup & diagnostics)");
-		} catch {
-			console.log(
-				chalk.yellow("\n⚠ Could not automatically open Cursor for local MCP."),
-			);
-		}
-	}
-
-	if (installed.length > 0) {
-		console.log(chalk.green("\n✓ Cursor MCP servers installed:"));
-		for (const name of installed) {
-			console.log(chalk.green(`  • ${name}`));
-		}
 	}
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
-		chalk.gray("• The MCP servers will be added to your Cursor configuration"),
+		chalk.gray("• The MCP server will be added to your Cursor configuration"),
 	);
 	console.log(
 		chalk.gray("• You can now use Better Auth features directly in Cursor"),
@@ -147,42 +84,27 @@ async function handleCursorAction(
 	);
 }
 
-function handleClaudeCodeAction(installLocal: boolean, installRemote: boolean) {
+function handleClaudeCodeAction() {
 	console.log(chalk.bold.blue("🤖 Adding Better Auth MCP to Claude Code..."));
 
-	const commands: string[] = [];
+	const command = `claude mcp add --transport http better-auth ${REMOTE_MCP_URL}`;
 
-	if (installRemote) {
-		commands.push(
-			`claude mcp add --transport http better-auth-docs ${REMOTE_MCP_URL}`,
-		);
-	}
-	if (installLocal) {
-		commands.push(`claude mcp add better-auth -- ${LOCAL_MCP_COMMAND}`);
-	}
-
-	let anySucceeded = false;
-	for (const command of commands) {
-		try {
-			execSync(command, { stdio: "inherit" });
-			anySucceeded = true;
-		} catch {
-			console.log(
-				chalk.yellow(
-					"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
-				),
-			);
-			console.log(chalk.cyan(command));
-		}
-	}
-
-	if (anySucceeded) {
+	try {
+		execSync(command, { stdio: "inherit" });
 		console.log(chalk.green("\n✓ Claude Code MCP configured!"));
+	} catch {
+		console.log(
+			chalk.yellow(
+				"\n⚠ Could not automatically add to Claude Code. Please run this command manually:",
+			),
+		);
+		console.log(chalk.cyan(command));
 	}
+
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
 	console.log(
 		chalk.gray(
-			"• The MCP servers will be added to your Claude Code configuration",
+			"• The MCP server will be added to your Claude Code configuration",
 		),
 	);
 	console.log(
@@ -192,30 +114,18 @@ function handleClaudeCodeAction(installLocal: boolean, installRemote: boolean) {
 	);
 }
 
-function handleOpenCodeAction(installLocal: boolean, installRemote: boolean) {
+function handleOpenCodeAction() {
 	console.log(chalk.bold.blue("🔧 Adding Better Auth MCP to Open Code..."));
-
-	const mcpConfig: Record<string, unknown> = {};
-
-	if (installRemote) {
-		mcpConfig["better-auth-docs"] = {
-			type: "remote",
-			url: REMOTE_MCP_URL,
-			enabled: true,
-		};
-	}
-
-	if (installLocal) {
-		mcpConfig["better-auth"] = {
-			type: "stdio",
-			command: LOCAL_MCP_COMMAND,
-			enabled: true,
-		};
-	}
 
 	const openCodeConfig = {
 		$schema: "https://opencode.ai/config.json",
-		mcp: mcpConfig,
+		mcp: {
+			"better-auth": {
+				type: "remote",
+				url: REMOTE_MCP_URL,
+				enabled: true,
+			},
+		},
 	};
 
 	const configPath = path.join(process.cwd(), "opencode.json");
@@ -243,7 +153,7 @@ function handleOpenCodeAction(installLocal: boolean, installRemote: boolean) {
 		console.log(
 			chalk.green(`\n✓ Open Code configuration written to ${configPath}`),
 		);
-		console.log(chalk.green("✓ Better Auth MCP servers added successfully!"));
+		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
 		console.log(
 			chalk.yellow(
@@ -254,28 +164,20 @@ function handleOpenCodeAction(installLocal: boolean, installRemote: boolean) {
 	}
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
-	console.log(chalk.gray("• Restart Open Code to load the new MCP servers"));
+	console.log(chalk.gray("• Restart Open Code to load the new MCP server"));
 	console.log(
 		chalk.gray("• You can now use Better Auth features directly in Open Code"),
 	);
 }
 
-function handleManualAction(installLocal: boolean, installRemote: boolean) {
+function handleManualAction() {
 	console.log(chalk.bold.blue("📝 Better Auth MCP Configuration..."));
 
-	const manualConfig: Record<string, unknown> = {};
-
-	if (installRemote) {
-		manualConfig["better-auth-docs"] = {
+	const manualConfig = {
+		"better-auth": {
 			url: REMOTE_MCP_URL,
-		};
-	}
-
-	if (installLocal) {
-		manualConfig["better-auth"] = {
-			command: LOCAL_MCP_COMMAND,
-		};
-	}
+		},
+	};
 
 	const configPath = path.join(process.cwd(), "mcp.json");
 
@@ -293,7 +195,7 @@ function handleManualAction(installLocal: boolean, installRemote: boolean) {
 
 		fs.writeFileSync(configPath, JSON.stringify(mergedConfig, null, 2));
 		console.log(chalk.green(`\n✓ MCP configuration written to ${configPath}`));
-		console.log(chalk.green("✓ Better Auth MCP servers added successfully!"));
+		console.log(chalk.green("✓ Better Auth MCP server added successfully!"));
 	} catch {
 		console.log(
 			chalk.yellow(
@@ -304,7 +206,7 @@ function handleManualAction(installLocal: boolean, installRemote: boolean) {
 	}
 
 	console.log(chalk.bold.white("\n✨ Next Steps:"));
-	console.log(chalk.gray("• Restart your MCP client to load the new servers"));
+	console.log(chalk.gray("• Restart your MCP client to load the new server"));
 	console.log(
 		chalk.gray(
 			"• You can now use Better Auth features directly in your MCP client",
@@ -313,7 +215,7 @@ function handleManualAction(installLocal: boolean, installRemote: boolean) {
 }
 
 function showAllOptions() {
-	console.log(chalk.bold.blue("🔌 Better Auth MCP Servers"));
+	console.log(chalk.bold.blue("🔌 Better Auth MCP Server"));
 	console.log(chalk.gray("Choose your MCP client to get started:"));
 	console.log();
 
@@ -328,41 +230,19 @@ function showAllOptions() {
 	);
 	console.log();
 
-	console.log(chalk.bold.white("Server Selection:"));
-	console.log(
-		chalk.cyan("  --local-only  ") +
-			chalk.gray("Install only local MCP (setup & diagnostics)"),
-	);
-	console.log(
-		chalk.cyan("  --remote-only ") +
-			chalk.gray("Install only remote MCP (documentation & search)"),
-	);
-	console.log(chalk.gray("  (default: install both servers)"));
-	console.log();
-
-	console.log(chalk.bold.white("Servers:"));
+	console.log(chalk.bold.white("Server:"));
 	console.log(
 		chalk.gray("  • ") +
 			chalk.white("better-auth") +
-			chalk.gray(" (local) - Setup auth, diagnose issues, validate config"),
-	);
-	console.log(
-		chalk.gray("  • ") +
-			chalk.white("better-auth-docs") +
-			chalk.gray(" (remote) - Search documentation, code examples"),
+			chalk.gray(" - Search documentation, code examples, setup assistance"),
 	);
 	console.log();
 }
 
 export const mcp = new Command("mcp")
-	.description("Add Better Auth MCP servers to MCP Clients")
+	.description("Add Better Auth MCP server to MCP Clients")
 	.option("--cursor", "Automatically open Cursor with the MCP configuration")
 	.option("--claude-code", "Show Claude Code MCP configuration command")
 	.option("--open-code", "Show Open Code MCP configuration")
 	.option("--manual", "Show manual MCP configuration for mcp.json")
-	.option("--local-only", "Install only local MCP server (setup & diagnostics)")
-	.option(
-		"--remote-only",
-		"Install only remote MCP server (documentation & search)",
-	)
 	.action(mcpAction);

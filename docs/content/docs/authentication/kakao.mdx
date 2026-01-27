@@ -14,6 +14,11 @@ description: Kakao provider setup and usage.
         ### Configure the provider
         To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
 
+        <Callout type="info">
+            - The default scopes are `account_email`, `profile_image`, and `profile_nickname`. 
+            - Note that retrieving `account_email` requires the app to be a **Biz App** (an app that has completed business verification). For more details, refer to the [Kakao Login scopes documentation](https://developers.kakao.com/docs/latest/kakaologin/utilize#scope-user).
+        </Callout>
+
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
 
@@ -43,5 +48,4 @@ description: Kakao provider setup and usage.
         }
         ```
     </Step>
-
 </Steps>

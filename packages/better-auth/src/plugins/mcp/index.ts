@@ -15,7 +15,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
 import { getBaseURL } from "../../utils/url";
@@ -32,8 +32,8 @@ import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		mcp: {
 			creator: typeof mcp;
 		};
@@ -205,8 +205,9 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -639,7 +640,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
+					const secretKey = {
 						alg: "HS256",
 						key: await getWebcryptoSubtle().generateKey(
 							{

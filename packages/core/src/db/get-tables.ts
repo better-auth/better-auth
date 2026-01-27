@@ -32,16 +32,21 @@ export const getAuthTables = (
 			fields: {
 				key: {
 					type: "string",
+					unique: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.key || "key",
 				},
 				count: {
 					type: "number",
+					required: true,
 					fieldName: options.rateLimit?.fields?.count || "count",
 				},
 				lastRequest: {
 					type: "number",
 					bigint: true,
+					required: true,
 					fieldName: options.rateLimit?.fields?.lastRequest || "lastRequest",
+					defaultValue: () => Date.now(),
 				},
 			},
 		},
@@ -183,21 +188,25 @@ export const getAuthTables = (
 				accessToken: {
 					type: "string",
 					required: false,
+					returned: false,
 					fieldName: options.account?.fields?.accessToken || "accessToken",
 				},
 				refreshToken: {
 					type: "string",
 					required: false,
+					returned: false,
 					fieldName: options.account?.fields?.refreshToken || "refreshToken",
 				},
 				idToken: {
 					type: "string",
 					required: false,
+					returned: false,
 					fieldName: options.account?.fields?.idToken || "idToken",
 				},
 				accessTokenExpiresAt: {
 					type: "date",
 					required: false,
+					returned: false,
 					fieldName:
 						options.account?.fields?.accessTokenExpiresAt ||
 						"accessTokenExpiresAt",
@@ -205,6 +214,7 @@ export const getAuthTables = (
 				refreshTokenExpiresAt: {
 					type: "date",
 					required: false,
+					returned: false,
 					fieldName:
 						options.account?.fields?.refreshTokenExpiresAt ||
 						"refreshTokenExpiresAt",
@@ -217,6 +227,7 @@ export const getAuthTables = (
 				password: {
 					type: "string",
 					required: false,
+					returned: false,
 					fieldName: options.account?.fields?.password || "password",
 				},
 				createdAt: {

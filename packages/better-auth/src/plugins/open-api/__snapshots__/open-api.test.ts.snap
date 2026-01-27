@@ -1494,13 +1494,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "idToken": {
                       "type": "string",
                     },
-                    "refreshToken": {
-                      "type": "string",
-                    },
-                    "refreshTokenExpiresAt": {
-                      "format": "date-time",
-                      "type": "string",
-                    },
                     "tokenType": {
                       "type": "string",
                     },

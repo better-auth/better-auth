@@ -19,7 +19,11 @@ export default function ArticleLayout() {
 
 	function getDefaultValue() {
 		const defaultValue = contents.findIndex((item) =>
-			item.list.some((listItem) => listItem.href === pathname),
+			item.list.some(
+				(listItem) =>
+					listItem.href === pathname ||
+					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)),
+			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
 	}
@@ -112,7 +116,14 @@ export default function ArticleLayout() {
 																	</div>
 																}
 															>
-																{listItem.group ? (
+																{listItem.separator ? (
+																	<div className="flex flex-row items-center gap-2 mx-5 my-2">
+																		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+																			{listItem.title}
+																		</p>
+																		<div className="flex-grow h-px bg-border" />
+																	</div>
+																) : listItem.group ? (
 																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
 																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
 																			{listItem.title}
@@ -126,6 +137,7 @@ export default function ArticleLayout() {
 																		title={listItem.title}
 																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
 																		activeClassName="[&>div>div]:!bg-fd-muted"
+																		hasSubpages={listItem.hasSubpages}
 																	>
 																		<div className="min-w-4">
 																			<listItem.icon className="text-stone-950 dark:text-white" />

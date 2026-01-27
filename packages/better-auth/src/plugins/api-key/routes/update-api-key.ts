@@ -309,7 +309,7 @@ export function updateApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			let newValues: Partial<ApiKey> = {};
+			const newValues: Partial<ApiKey> = {};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
