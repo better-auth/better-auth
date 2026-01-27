@@ -46,7 +46,7 @@ export async function handleOAuthUserInfo(
 					acc.accountId === account.accountId,
 			);
 		if (!linkedAccount) {
-      const accountLinking = c.context.options.account?.accountLinking;
+			const accountLinking = c.context.options.account?.accountLinking;
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
