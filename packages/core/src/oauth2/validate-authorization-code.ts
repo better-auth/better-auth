@@ -1,6 +1,7 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { jwtVerify } from "jose";
+import type { JWK } from "jose";
+import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -126,14 +127,7 @@ export async function validateAuthorizationCode({
 
 export async function validateToken(token: string, jwksEndpoint: string) {
 	const { data, error } = await betterFetch<{
-		keys: {
-			kid: string;
-			kty: string;
-			use: string;
-			n: string;
-			e: string;
-			x5c: string[];
-		}[];
+		keys: JWK[];
 	}>(jwksEndpoint, {
 		method: "GET",
 		headers: {
@@ -144,11 +138,12 @@ export async function validateToken(token: string, jwksEndpoint: string) {
 		throw error;
 	}
 	const keys = data["keys"];
-	const header = JSON.parse(atob(token.split(".")[0]!));
-	const key = keys.find((key) => key.kid === header.kid);
+	const header = decodeProtectedHeader(token);
+	const key = keys.find((k) => k.kid === header.kid);
 	if (!key) {
 		throw new Error("Key not found");
 	}
-	const verified = await jwtVerify(token, key);
+	const cryptoKey = await importJWK(key, header.alg);
+	const verified = await jwtVerify(token, cryptoKey);
 	return verified;
 }

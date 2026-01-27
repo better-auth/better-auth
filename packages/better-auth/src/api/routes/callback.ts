@@ -126,7 +126,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("oauth_provider_not_found");
 		}
 
-		let tokens: OAuth2Tokens;
+		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
 				code: code,
@@ -136,6 +136,9 @@ export const callbackOAuth = createAuthEndpoint(
 			});
 		} catch (e) {
 			c.context.logger.error("", e);
+			throw redirectOnError("invalid_code");
+		}
+		if (!tokens) {
 			throw redirectOnError("invalid_code");
 		}
 		const parsedUserData = userData
@@ -172,9 +175,7 @@ export const callbackOAuth = createAuthEndpoint(
 		if (link) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				provider.id as "apple",
-			);
+			const isTrustedProvider = trustedProviders?.includes(provider.id);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
