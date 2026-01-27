@@ -91,9 +91,12 @@ export const hasPermission = async (
 	}
 
 	if (input.useMemoryCache) {
+		// Only read from cache, don't update it with potentially incomplete data
 		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
+	} else {
+		// Only cache when fresh data was loaded from database
+		cacheAllRoles.set(input.organizationId, acRoles);
 	}
-	cacheAllRoles.set(input.organizationId, acRoles);
 
 	return hasPermissionFn(input, acRoles);
 };

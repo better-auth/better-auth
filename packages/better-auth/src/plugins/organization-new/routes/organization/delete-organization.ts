@@ -65,7 +65,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 												description: "When the organization was created",
 											},
 											metadata: {
-												type: "string",
+												type: "object",
 												nullable: true,
 												description: "Additional metadata",
 											},
