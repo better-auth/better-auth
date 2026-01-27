@@ -203,7 +203,8 @@ export const removeMember = <O extends OrganizationOptions>(_options: O) => {
 
 			if (
 				session.user.id === toBeRemovedMember.userId &&
-				session.session.activeOrganizationId === toBeRemovedMember.organizationId
+				session.session.activeOrganizationId ===
+					toBeRemovedMember.organizationId
 			) {
 				await adapter.setActiveOrganization(session.session.token, null);
 			}

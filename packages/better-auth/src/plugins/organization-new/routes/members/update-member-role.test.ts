@@ -228,8 +228,8 @@ describe("update member role - last owner protection", async (it) => {
 				},
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER
-				.message,
+			ORGANIZATION_ERROR_CODES
+				.YOU_CANNOT_LEAVE_THE_ORGANIZATION_WITHOUT_AN_OWNER.message,
 		);
 	});
 
