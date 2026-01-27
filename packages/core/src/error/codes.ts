@@ -49,6 +49,10 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	ASYNC_VALIDATION_NOT_SUPPORTED: "Async validation is not supported",
 	VALIDATION_ERROR: "Validation Error",
 	MISSING_FIELD: "Field is required",
+	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
+		"POST method requires deferSessionRefresh to be enabled in session config",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	PASSWORD_ALREADY_SET: "User already has a password set",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;

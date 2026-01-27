@@ -32,6 +32,11 @@ type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
 
+export type StoreIdentifierOption =
+	| "plain"
+	| "hashed"
+	| { hash: (identifier: string) => Promise<string> };
+
 export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
@@ -138,23 +143,11 @@ export type BetterAuthAdvancedOptions = {
 				disableIpTracking?: boolean;
 				/**
 				 * IPv6 subnet prefix length for rate limiting.
+				 * IPv6 addresses will be normalized to this subnet.
 				 *
-				 * IPv6 addresses can be grouped by subnet to prevent attackers from
-				 * bypassing rate limits by rotating through multiple addresses in
-				 * their allocation.
-				 *
-				 * Common values:
-				 * - 128 (default): Individual IPv6 address
-				 * - 64: /64 subnet (typical home/business allocation)
-				 * - 48: /48 subnet (larger network allocation)
-				 * - 32: /32 subnet (ISP allocation)
-				 *
-				 * Note: This only affects IPv6 addresses. IPv4 addresses are always
-				 * rate limited individually.
-				 *
-				 * @default 64 (/64 subnet)
+				 * @default 64
 				 */
-				ipv6Subnet?: 128 | 64 | 48 | 32 | undefined;
+				ipv6Subnet?: 128 | 64 | 48 | 32;
 		  }
 		| undefined;
 	/**
@@ -322,14 +315,17 @@ export type BetterAuthAdvancedOptions = {
 	 * }
 	 */
 	backgroundTasks?: {
-		handler: (promise: Promise<void>) => void;
+		handler: (promise: Promise<unknown>) => void;
 	};
 	/**
-	 * Skip trailing slash validation in route matching
+	 * Skip trailing slashes in API routes.
+	 *
+	 * When enabled, requests with trailing slashes (e.g., `/api/auth/session/`)
+	 * will be handled the same as requests without (e.g., `/api/auth/session`).
 	 *
 	 * @default false
 	 */
-	skipTrailingSlashes?: boolean | undefined;
+	skipTrailingSlashes?: boolean;
 };
 
 export type BetterAuthOptions = {
@@ -485,10 +481,13 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
-				 * Send a verification email automatically
-				 * after sign up
+				 * Send a verification email automatically after sign up.
 				 *
-				 * @default false
+				 * - `true`: Always send verification email on sign up
+				 * - `false`: Never send verification email on sign up
+				 * - `undefined`: Follows `requireEmailVerification` behavior
+				 *
+				 * @default undefined
 				 */
 				sendOnSignUp?: boolean;
 				/**
@@ -792,6 +791,14 @@ export type BetterAuthOptions = {
 				 */
 				disableSessionRefresh?: boolean;
 				/**
+				 * Defer session refresh writes to POST requests.
+				 * When enabled, GET is read-only and POST performs refresh.
+				 * Useful for read-replica database setups.
+				 *
+				 * @default false
+				 */
+				deferSessionRefresh?: boolean;
+				/**
 				 * Additional fields for the session
 				 */
 				additionalFields?: {
@@ -942,6 +949,17 @@ export type BetterAuthOptions = {
 					 */
 					enabled?: boolean;
 					/**
+					 * Disable implicit account linking on sign-in.
+					 *
+					 * When enabled, accounts will not be automatically linked
+					 * during OAuth sign-in, even if the email is verified or
+					 * the provider is trusted. Users must explicitly link
+					 * accounts using `linkSocial()` while authenticated.
+					 *
+					 * @default false
+					 */
+					disableImplicitLinking?: boolean;
+					/**
 					 * List of trusted providers
 					 */
 					trustedProviders?: Array<
@@ -1034,6 +1052,24 @@ export type BetterAuthOptions = {
 				 * fetched
 				 */
 				disableCleanup?: boolean;
+				/**
+				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 *
+				 * @example "hashed"
+				 *
+				 * @default "plain"
+				 */
+				storeIdentifier?:
+					| StoreIdentifierOption
+					| {
+							default: StoreIdentifierOption;
+							overrides?: Record<string, StoreIdentifierOption>;
+					  };
+				/**
+				 * Store verification data in database even when secondary storage is configured.
+				 * @default false
+				 */
+				storeInDatabase?: boolean;
 		  }
 		| undefined;
 	/**

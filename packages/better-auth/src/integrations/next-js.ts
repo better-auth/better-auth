@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader } from "../cookies";
 
 export function toNextJsHandler(
@@ -25,6 +26,21 @@ export const nextCookies = () => {
 	return {
 		id: "next-cookies",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						const headers = ctx.request?.headers || ctx.headers;
+						if (!headers) return false;
+						// RSC can read but not set cookies - skip refresh to prevent DB/cookie mismatch
+						const rscHeader = headers.get("RSC");
+						const nextActionHeader = headers.get("Next-Action");
+						return rscHeader === "1" && !nextActionHeader;
+					},
+					handler: createAuthMiddleware(async () => {
+						await setShouldSkipSessionRefresh(true);
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {

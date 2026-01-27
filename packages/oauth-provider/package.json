@@ -48,14 +48,14 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.25.3",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
   },
   "dependencies": {
     "jose": "^6.1.0",
-    "zod": "^4.3.5"
+    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",

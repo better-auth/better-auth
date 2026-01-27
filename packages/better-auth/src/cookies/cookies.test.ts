@@ -7,7 +7,6 @@ import {
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
-import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
 	HOST_COOKIE_PREFIX,
@@ -219,6 +218,24 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		const map = parseSetCookieHeader(header);
 		expect(map.get("a")?.value).toBe("1");
 		expect(map.get("b")?.value).toBe("2");
+		expect(map.get("a")?.expires).toEqual(
+			new Date("Wed, 21 Oct 2015 07:28:00 GMT"),
+		);
+		expect(map.get("b")?.expires).toEqual(
+			new Date("Thu, 22 Oct 2015 07:28:00 GMT"),
+		);
+	});
+
+	it("handles cookie with Expires followed by cookie without Expires", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
+		);
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.expires).toEqual(
+			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+		);
+		expect(map.get("token")?.value).toBe("abc");
+		expect(map.get("token")?.expires).toBeUndefined();
 	});
 });
 
@@ -652,26 +669,6 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
-	});
-
-	it("should always include id in parseUserOutput", () => {
-		const options = {
-			user: {
-				additionalFields: {
-					id: { type: "string", returned: false },
-				},
-			},
-		} as any;
-		const user = {
-			id: "custom-oauth-id-123",
-			email: "test@example.com",
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: "Test User",
-		};
-		const result = parseUserOutput(options, user);
-		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {
