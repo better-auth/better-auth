@@ -5,19 +5,21 @@ packages:
   - e2e/**
   - test
 
+blockExoticSubdeps: true
+
 catalog:
   '@better-auth/utils': 0.3.1
   '@better-fetch/fetch': 1.1.21
   better-call: 1.2.0
-  tsdown: ^0.19.0
+  tsdown: ^0.20.1
   typescript: ^5.9.3
 
 catalogs:
   react19:
-    '@types/react': ^19.2.0
+    '@types/react': ^19.2.10
     '@types/react-dom': ^19.2.0
-    react: ^19.2.3
-    react-dom: ^19.2.3
+    react: ^19.2.4
+    react-dom: ^19.2.4
   tailwind:
     '@tailwindcss/postcss': ^4.1.18
     '@tailwindcss/vite': ^4.1.18
@@ -29,6 +31,8 @@ catalogs:
     vitest: ^4.0.18
 
 linkWorkspacePackages: true
+
+minimumReleaseAge: 0
 
 onlyBuiltDependencies:
   - '@parcel/watcher'
@@ -43,11 +47,6 @@ onlyBuiltDependencies:
   - sharp
   - workerd
 
-blockExoticSubdeps: true
 trustPolicy: no-downgrade
+
 trustPolicyIgnoreAfter: 43200
-# https://github.com/pnpm/pnpm/issues/10257
-# minimumReleaseAge: 4320
-minimumReleaseAge: 0
-# minimumReleaseAgeExclude:
-#   - package-name

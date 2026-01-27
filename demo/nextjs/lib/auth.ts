@@ -27,9 +27,6 @@ import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
 import { Stripe } from "stripe";
 
-const _from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
-const _to = process.env.TEST_EMAIL || "";
-
 const dialect = (() => {
 	if (process.env.USE_MYSQL) {
 		if (!process.env.MYSQL_DATABASE_URL) {
