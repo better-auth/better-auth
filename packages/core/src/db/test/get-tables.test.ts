@@ -80,4 +80,37 @@ describe("getAuthTables", () => {
 		expect(newField.fieldName).toBe("new_field");
 		expect(newField.type).toBe("string");
 	});
+
+	it("should exclude verification table when secondaryStorage is configured", () => {
+		const tables = getAuthTables({
+			secondaryStorage: {
+				get: async () => null,
+				set: async () => {},
+				delete: async () => {},
+			},
+		});
+
+		expect(tables.verification).toBeUndefined();
+	});
+
+	it("should include verification table when storeInDatabase is true", () => {
+		const tables = getAuthTables({
+			secondaryStorage: {
+				get: async () => null,
+				set: async () => {},
+				delete: async () => {},
+			},
+			verification: {
+				storeInDatabase: true,
+			},
+		});
+
+		expect(tables.verification).toBeDefined();
+	});
+
+	it("should include verification table when no secondaryStorage", () => {
+		const tables = getAuthTables({});
+
+		expect(tables.verification).toBeDefined();
+	});
 });

@@ -33,6 +33,9 @@ describe("internal adapter test", async () => {
 				emailVerified: "email_verified",
 			},
 		},
+		verification: {
+			storeInDatabase: true,
+		},
 		secondaryStorage: {
 			set(key, value, ttl) {
 				map.set(key, value);
@@ -213,7 +216,7 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
 		const value2 = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value2).toBe(undefined);
+		expect(value2).toBeNull();
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
@@ -253,6 +256,116 @@ describe("internal adapter test", async () => {
 		);
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
+	});
+
+	describe("verification token storage", () => {
+		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
+			const hashedOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeIdentifier: "hashed" as const,
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(hashedOpts)).runMigrations();
+			const hashedCtx = await init(hashedOpts);
+			const hashedAdapter = hashedCtx.internalAdapter;
+
+			const verification = await hashedAdapter.createVerificationValue({
+				identifier: "reset-password:my-token-123",
+				value: "user-id-123",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Stored identifier should be hashed (not equal to original)
+			expect(verification.identifier).not.toBe("reset-password:my-token-123");
+
+			// Should be able to find by original identifier
+			const found = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("user-id-123");
+
+			// Should be able to delete by original identifier
+			await hashedAdapter.deleteVerificationByIdentifier(
+				"reset-password:my-token-123",
+			);
+			const deleted = await hashedAdapter.findVerificationValue(
+				"reset-password:my-token-123",
+			);
+			expect(deleted).toBeNull();
+		});
+
+		it("should use overrides for specific prefixes", async () => {
+			const overrideOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeIdentifier: {
+						default: "plain" as const,
+						overrides: {
+							"reset-password": "hashed" as const,
+						},
+					},
+				},
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(overrideOpts)).runMigrations();
+			const overrideCtx = await init(overrideOpts);
+			const overrideAdapter = overrideCtx.internalAdapter;
+
+			// reset-password should be hashed
+			const hashedVerification = await overrideAdapter.createVerificationValue({
+				identifier: "reset-password:token-abc",
+				value: "user-1",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(hashedVerification.identifier).not.toBe(
+				"reset-password:token-abc",
+			);
+
+			// other identifiers should be plain
+			const plainVerification = await overrideAdapter.createVerificationValue({
+				identifier: "magic-link:token-xyz",
+				value: "user-2",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
+		});
+
+		it("should fallback to plain lookup for old tokens", async () => {
+			const database = new DatabaseSync(":memory:");
+
+			// First create with plain storage
+			const plainOpts = {
+				database,
+				verification: { storeIdentifier: "plain" as const },
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(plainOpts)).runMigrations();
+			const plainCtx = await init(plainOpts);
+			await plainCtx.internalAdapter.createVerificationValue({
+				identifier: "old-token:abc123",
+				value: "old-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			// Now switch to hashed storage (simulating config change)
+			const hashedOpts = {
+				database,
+				verification: { storeIdentifier: "hashed" as const },
+			} satisfies BetterAuthOptions;
+
+			const hashedCtx = await init(hashedOpts);
+
+			// Should still find old plain token via fallback
+			const found =
+				await hashedCtx.internalAdapter.findVerificationValue(
+					"old-token:abc123",
+				);
+			expect(found).toBeDefined();
+			expect(found?.value).toBe("old-value");
+		});
 	});
 
 	it("runs the after hook after adding user to db", async () => {
@@ -1002,5 +1115,207 @@ describe("internal adapter test", async () => {
 		// listSessions should deduplicate and return only unique sessions
 		const sessions = await testInternalAdapter.listSessions(user.id);
 		expect(sessions.length).toBe(1);
+	});
+
+	describe("verification secondary storage", () => {
+		function createMockStorage() {
+			const dataMap = new Map<string, string>();
+			const ttlMap = new Map<string, number>();
+			return {
+				dataMap,
+				ttlMap,
+				storage: {
+					set(key: string, value: string, ttl?: number) {
+						dataMap.set(key, value);
+						if (ttl) ttlMap.set(key, ttl);
+					},
+					get(key: string) {
+						return dataMap.get(key) || null;
+					},
+					delete(key: string) {
+						dataMap.delete(key);
+						ttlMap.delete(key);
+					},
+				},
+			};
+		}
+
+		it("should store verification in secondary storage by default", async () => {
+			const { dataMap, ttlMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			const verification = await ctx.internalAdapter.createVerificationValue({
+				identifier: "test-verification",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has(`verification:${verification.identifier}`)).toBe(true);
+			expect(ttlMap.has(`verification:${verification.identifier}`)).toBe(true);
+		});
+
+		it("should find verification from secondary storage", async () => {
+			const { storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "find-test",
+				value: "find-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("find-test");
+			expect(found).not.toBeNull();
+			expect(found?.identifier).toBe("find-test");
+			expect(found?.value).toBe("find-value");
+		});
+
+		it("should NOT store in database when secondary-only mode", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "secondary-only-test",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:secondary-only-test")).toBe(true);
+
+			dataMap.clear();
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"secondary-only-test",
+			);
+			expect(found).toBeNull(); // Proves DB was NOT used
+		});
+
+		it("should delete verification from secondary storage", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "delete-test",
+				value: "delete-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:delete-test")).toBe(true);
+
+			await ctx.internalAdapter.deleteVerificationByIdentifier("delete-test");
+
+			expect(dataMap.has("verification:delete-test")).toBe(false);
+		});
+
+		it("should store in both when storeInDatabase is true", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "both-test",
+				value: "both-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			expect(dataMap.has("verification:both-test")).toBe(true);
+
+			dataMap.clear();
+			const found =
+				await ctx.internalAdapter.findVerificationValue("both-test");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("both-value");
+		});
+
+		it("should fallback to database when not in secondary storage", async () => {
+			const { dataMap, storage } = createMockStorage();
+
+			const dualStorageOpts = {
+				database: new DatabaseSync(":memory:"),
+				verification: {
+					storeInDatabase: true,
+				},
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(dualStorageOpts)).runMigrations();
+			const ctx = await init(dualStorageOpts);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "fallback-test",
+				value: "fallback-value",
+				expiresAt: new Date(Date.now() + 60000),
+			});
+
+			dataMap.clear();
+
+			const found =
+				await ctx.internalAdapter.findVerificationValue("fallback-test");
+			expect(found).not.toBeNull();
+			expect(found?.value).toBe("fallback-value");
+		});
+
+		it("should set correct TTL based on expiresAt", async () => {
+			const { ttlMap, storage } = createMockStorage();
+
+			const secondaryOnlyOpts = {
+				database: new DatabaseSync(":memory:"),
+				secondaryStorage: storage,
+			} satisfies BetterAuthOptions;
+
+			(await getMigrations(secondaryOnlyOpts)).runMigrations();
+			const ctx = await init(secondaryOnlyOpts);
+
+			const expiresIn = 300000; // 5 minutes in ms
+			const expiresAt = new Date(Date.now() + expiresIn);
+
+			await ctx.internalAdapter.createVerificationValue({
+				identifier: "ttl-test",
+				value: "ttl-value",
+				expiresAt,
+			});
+
+			const ttl = ttlMap.get("verification:ttl-test");
+			expect(ttl).toBeDefined();
+			expect(ttl).toBeGreaterThanOrEqual(298);
+			expect(ttl).toBeLessThanOrEqual(300);
+		});
 	});
 });
