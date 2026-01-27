@@ -303,7 +303,7 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
-	it("should work with Headers object directly (Next.js ReadonlyHeaders compatibility)", async () => {
+	it("should work with Headers object directly", async () => {
 		const { signInWithTestUser } = await getTestInstance();
 		const { headers } = await signInWithTestUser();
 
