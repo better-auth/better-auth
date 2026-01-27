@@ -53,61 +53,22 @@ export interface CibaNotificationData {
 }
 
 /**
- * CIBA plugin options
+ * Internal options with defaults applied (after zod validation)
  */
-export interface CibaOptions {
-	/**
-	 * Callback to send notification to user
-	 * The implementer decides how to notify (email, SMS, push, etc.)
-	 */
+export interface CibaInternalOptions {
 	sendNotification: (
 		data: CibaNotificationData,
 		request?: Request,
 	) => Promise<void>;
-
-	/**
-	 * How long the CIBA request is valid
-	 * Use formats like "5m", "30s", "1h"
-	 * @default "5m"
-	 */
-	requestLifetime?: string;
-
-	/**
-	 * Minimum polling interval for agents
-	 * Use formats like "5s", "10s"
-	 * @default "5s"
-	 */
-	pollingInterval?: string;
-
-	/**
-	 * The URI where users approve/deny the request.
-	 * Can be absolute URL or relative path.
-	 * The auth_req_id will be appended as a query parameter.
-	 * @default "/ciba/approve"
-	 */
-	approvalUri?: string;
-
-	/**
-	 * Custom function to resolve user from login_hint
-	 * By default, searches by email, then phone, then username
-	 */
-	resolveUser?: (
-		loginHint: string,
-		ctx: GenericEndpointContext,
-	) => Promise<User | null>;
-}
-
-/**
- * Internal options with defaults applied
- */
-export interface CibaInternalOptions {
-	sendNotification: CibaOptions["sendNotification"];
 	/** Request lifetime as TimeString */
 	requestLifetime: string;
 	/** Polling interval as TimeString */
 	pollingInterval: string;
 	approvalUri: string;
-	resolveUser?: CibaOptions["resolveUser"];
+	resolveUser?: (
+		loginHint: string,
+		ctx: GenericEndpointContext,
+	) => Promise<User | null>;
 }
 
 /**
