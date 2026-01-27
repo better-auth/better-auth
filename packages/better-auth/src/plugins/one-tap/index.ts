@@ -8,7 +8,6 @@ import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"one-tap": {
 			creator: typeof oneTap;

@@ -6,7 +6,7 @@ packages:
   - test
 
 catalog:
-  '@better-auth/utils': 0.3.0
+  '@better-auth/utils': 0.3.1
   '@better-fetch/fetch': 1.1.21
   better-call: 1.2.0
   tsdown: ^0.19.0
@@ -24,9 +24,9 @@ catalogs:
     tailwindcss: ^4.1.18
     tailwindcss-animate: ^1.0.7
   vitest:
-    '@vitest/coverage-istanbul': ^4.0.17
-    '@vitest/ui': ^4.0.17
-    vitest: ^4.0.17
+    '@vitest/coverage-istanbul': ^4.0.18
+    '@vitest/ui': ^4.0.18
+    vitest: ^4.0.18
 
 linkWorkspacePackages: true
 

@@ -16,7 +16,6 @@ import {
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"multi-session": {
 			creator: typeof multiSession;
