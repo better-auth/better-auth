@@ -36,11 +36,13 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 interface SignUpFormProps {
 	onSuccess?: () => void;
 	callbackURL?: string;
+	params?: URLSearchParams;
 }
 
 export function SignUpForm({
 	onSuccess,
 	callbackURL = "/dashboard",
+	params,
 }: SignUpFormProps) {
 	const [loading, startTransition] = useTransition();
 	const { image, imagePreview, handleImageChange, clearImage } =
@@ -66,6 +68,7 @@ export function SignUpForm({
 				image: image ? await convertImageToBase64(image) : "",
 				callbackURL,
 				fetchOptions: {
+		      query: params ? Object.fromEntries(params.entries()) : undefined,
 					onError: (ctx) => {
 						toast.error(ctx.error.message);
 					},

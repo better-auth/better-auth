@@ -27,6 +27,7 @@ export function SignUp() {
 			</CardHeader>
 			<CardContent>
 				<SignUpForm
+				  params={params}
 					onSuccess={() => router.push(getCallbackURL(params))}
 					callbackURL={getCallbackURL(params)}
 				/>
