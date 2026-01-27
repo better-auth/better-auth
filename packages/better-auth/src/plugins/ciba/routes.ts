@@ -270,9 +270,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				createdAt: Date.now(),
 			};
 
-			console.log("[CIBA DEBUG] About to call storeCibaRequest for:", authReqId);
 			await storeCibaRequest(ctx, cibaRequest);
-			console.log("[CIBA DEBUG] storeCibaRequest completed for:", authReqId);
 
 			// Build approval URL
 			const approvalUrl = new URL(opts.approvalUri, ctx.context.baseURL);
