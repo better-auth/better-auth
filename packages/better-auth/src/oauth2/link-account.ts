@@ -45,6 +45,7 @@ export async function handleOAuthUserInfo(
 					acc.accountId === account.accountId,
 			);
 		if (!linkedAccount) {
+			const accountLinking = c.context.options.account?.accountLinking;
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
@@ -52,7 +53,8 @@ export async function handleOAuthUserInfo(
 				trustedProviders?.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
 					logger.warn(
