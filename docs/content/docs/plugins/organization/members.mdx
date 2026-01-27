@@ -6,12 +6,98 @@ description: Manage organization members and their roles.
 Members are users who belong to an organization.
 Each member has a role that determines their permissions within the organization.
 
+## Adding a Member
+
+You can add a user directly to an organization using the `organization.addMember` method.
+This is useful for server-side operations where you want to add a member without sending an invitation.
+
+<APIMethod
+    path="/organization/add-member"
+    method="POST"
+    note="This is a server-only API. Use invitations for client-side member additions.">
+```ts
+type addMember = {
+    /**
+     * The user ID of the user to add as a member.
+     */
+    userId: string = "user-id"
+    /**
+     * The role(s) to assign to the new member.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "member"
+    /**
+     * The organization ID to add the member to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Adding a Member with Multiple Roles
+
+You can assign multiple roles to a member:
+
+```ts
+await auth.api.addMember({
+    body: {
+        userId: "user-id",
+        role: ["admin", "moderator"], // Multiple roles
+        organizationId: "org-id",
+    },
+})
+```
+
+### Adding a Member with Additional Fields
+
+If you have defined additional fields in the member schema, you can include them when adding a member:
+
+```ts
+await auth.api.addMember({
+    body: {
+        userId: "user-id",
+        role: "member",
+        organizationId: "org-id",
+        department: "Engineering", // Custom additional field
+    },
+})
+```
+
+<Callout type="info">
+    The `addMember` API is intended for server-side use only. For client-side 
+    member additions, use the [invitation system](/docs/plugins/organization/invitations) instead.
+</Callout>
 
 ---
 
-## Member related options
+## Configuration Options
 
-//TODO: config options for members
+### `membershipLimit`
+
+The maximum number of members allowed in an organization. Can be a number or an async function.
+
+```ts
+// Static limit
+organization({
+    membershipLimit: 50
+})
+
+// Dynamic limit based on organization
+organization({
+    membershipLimit: async (user, organization, ctx) => {
+        // Premium orgs get more members
+        if (organization.metadata?.plan === "premium") {
+            return 500
+        }
+        return 50
+    }
+})
+```
+
+**Default:** `100`
+
+---
 
 ## Member Schema
 
