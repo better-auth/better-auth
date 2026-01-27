@@ -42,3 +42,12 @@ onlyBuiltDependencies:
   - prisma
   - sharp
   - workerd
+
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 43200
+# https://github.com/pnpm/pnpm/issues/10257
+# minimumReleaseAge: 4320
+minimumReleaseAge: 0
+# minimumReleaseAgeExclude:
+#   - package-name
