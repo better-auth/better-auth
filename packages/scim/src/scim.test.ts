@@ -2071,7 +2071,7 @@ describe("SCIM", () => {
 				totalResults: 2,
 				Resources: [userA, userC],
 			});
-		}, 10000);
+		});
 
 		it("should filter the list of users", async () => {
 			const { auth, getSCIMToken } = createTestInstance();
