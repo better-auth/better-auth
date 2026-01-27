@@ -37,7 +37,33 @@ export interface GoogleProfile {
 }
 
 export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
-	clientId: string;
+	/**
+	 * The client ID of your application. Can be a single string or an array of strings.
+	 *
+	 * Use an array to support multiple platforms (Android, iOS, Chrome extensions, Web)
+	 * with different client IDs in a single provider configuration. When using an array,
+	 * the first client ID will be used for OAuth flows, and all client IDs will be
+	 * validated when verifying ID tokens.
+	 *
+	 * Example:
+	 * ```ts
+	 * clientId: [
+	 *   "web-client-id.apps.googleusercontent.com",
+	 *   "android-client-id.apps.googleusercontent.com",
+	 *   "ios-client-id.apps.googleusercontent.com"
+	 * ]
+	 * ```
+	 */
+	clientId: string | string[];
+	/**
+	 * Skip nonce verification when validating ID tokens.
+	 * This is useful for development or when using native mobile SDKs that
+	 * don't support nonce verification.
+	 *
+	 * @default false
+	 * @warning Only enable this in development or if you understand the security implications.
+	 */
+	skipNonceCheck?: boolean | undefined;
 	/**
 	 * The access type to use for the authorization code request
 	 */
@@ -53,6 +79,12 @@ export interface GoogleOptions extends ProviderOptions<GoogleProfile> {
 }
 
 export const google = (options: GoogleOptions) => {
+	const getPrimaryClientId = () => {
+		return Array.isArray(options.clientId)
+			? options.clientId[0]
+			: options.clientId;
+	};
+
 	return {
 		id: "google",
 		name: "Google",
@@ -64,7 +96,8 @@ export const google = (options: GoogleOptions) => {
 			loginHint,
 			display,
 		}) {
-			if (!options.clientId || !options.clientSecret) {
+			const primaryClientId = getPrimaryClientId();
+			if (!primaryClientId || !options.clientSecret) {
 				logger.error(
 					"Client Id and Client Secret is required for Google. Make sure to provide them in the options.",
 				);
@@ -73,6 +106,10 @@ export const google = (options: GoogleOptions) => {
 			if (!codeVerifier) {
 				throw new BetterAuthError("codeVerifier is required for Google");
 			}
+			const normalizedOptions = {
+				...options,
+				clientId: getPrimaryClientId(),
+			};
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["email", "profile", "openid"];
@@ -80,7 +117,7 @@ export const google = (options: GoogleOptions) => {
 			if (scopes) _scopes.push(...scopes);
 			const url = await createAuthorizationURL({
 				id: "google",
-				options,
+				options: normalizedOptions,
 				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
 				scopes: _scopes,
 				state,
@@ -98,11 +135,15 @@ export const google = (options: GoogleOptions) => {
 			return url;
 		},
 		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
+			const normalizedOptions = {
+				...options,
+				clientId: getPrimaryClientId(),
+			};
 			return validateAuthorizationCode({
 				code,
 				codeVerifier,
 				redirectURI,
-				options,
+				options: normalizedOptions,
 				tokenEndpoint: "https://oauth2.googleapis.com/token",
 			});
 		},
@@ -141,7 +182,7 @@ export const google = (options: GoogleOptions) => {
 				maxTokenAge: "1h",
 			});
 
-			if (nonce && jwtClaims.nonce !== nonce) {
+			if (!options.skipNonceCheck && nonce && jwtClaims.nonce !== nonce) {
 				return false;
 			}
 
