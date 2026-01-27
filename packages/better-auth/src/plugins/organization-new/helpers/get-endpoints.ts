@@ -25,6 +25,8 @@ import type { RemoveMember } from "../routes/members/remove-member";
 import { removeMember } from "../routes/members/remove-member";
 import type { UpdateMemberRole } from "../routes/members/update-member-role";
 import { updateMemberRole } from "../routes/members/update-member-role";
+import type { LeaveOrganization } from "../routes/members/leave-organization";
+import { leaveOrganization } from "../routes/members/leave-organization";
 import type { CheckOrganizationSlug } from "../routes/organization/check-organization-slug";
 import { checkOrganizationSlug } from "../routes/organization/check-organization-slug";
 import type { CreateOrganization } from "../routes/organization/create-organizations";
@@ -63,6 +65,7 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	getActiveMember: GetActiveMember<O>;
 	removeMember: RemoveMember<O>;
 	updateMemberRole: UpdateMemberRole<O>;
+	leaveOrganization: LeaveOrganization<O>;
 };
 
 export const getEndpoints = <O extends OrganizationOptions>(
@@ -98,6 +101,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		getActiveMember: getActiveMember(options),
 		removeMember: removeMember(options),
 		updateMemberRole: updateMemberRole(options),
+		leaveOrganization: leaveOrganization(options),
 		...(addonEndpoints || {}),
 	};
 

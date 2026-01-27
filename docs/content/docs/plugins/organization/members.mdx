@@ -97,6 +97,29 @@ type removeMember = {
     first assign the owner role to another member.
 </Callout>
 
+## Leaving an Organization
+
+A member can leave an organization using the `organization.leave` method.
+This is different from `removeMember` in that it allows a user to remove themselves from an organization.
+
+<APIMethod
+    path="/organization/leave"
+    method="POST">
+```ts
+type leaveOrganization = {
+    /**
+     * The organization ID to leave.
+     */
+    organizationId: string = "org-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+    The last owner of an organization cannot leave. If you need to leave as the only owner,
+    first assign the owner role to another member.
+</Callout>
+
 ## Updating a Member's Role
 
 You can update a member's role using the `organization.updateMemberRole` method.
