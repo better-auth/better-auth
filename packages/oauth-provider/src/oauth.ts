@@ -31,7 +31,6 @@ import { userInfoEndpoint } from "./userinfo";
 import { deleteFromPrompt, getJwtPlugin } from "./utils";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oauth-provider": {
 			creator: typeof oauthProvider;

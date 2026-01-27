@@ -13,6 +13,6 @@
     "better-auth": "workspace:*",
     "kysely": "^0.28.10",
     "kysely-postgres-js": "^3.0.0",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.8"
   }
 }
