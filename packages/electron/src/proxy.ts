@@ -17,6 +17,13 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 		id: "electron-proxy",
 		getActions: () => {
 			return {
+				/**
+				 * Ensures redirecting to the Electron app.
+				 *
+				 * Polls for a cookie set by the server to indicate that an authorization code is available.
+				 *
+				 * @returns The interval ID which can be used to clear the polling.
+				 */
 				ensureElectronRedirect: (
 					cfg?:
 						| {

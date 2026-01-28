@@ -1,12 +1,8 @@
 import { Buffer } from "node:buffer";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { BetterAuthError } from "@better-auth/core/error";
 import { base64 } from "@better-auth/utils/base64";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
 import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
-import * as z from "zod";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
 import type { exposeBridges } from "./bridges";
@@ -177,7 +173,19 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 */
 				requestAuth: (options?: ElectronRequestAuthOptions | undefined) =>
 					requestAuth(clientOptions, opts, options),
+				/**
+				 * Sets up the renderer process.
+				 *
+				 * - Exposes IPC bridges to the renderer process.
+				 */
 				setupRenderer: () => setupRenderer(opts),
+				/**
+				 * Sets up the main process.
+				 *
+				 * - Registers custom protocol scheme.
+				 * - Registers IPC bridge handlers.
+				 * - Handles content security policy if needed.
+				 */
 				setupMain: (cfg?: {
 					csp?: boolean | undefined;
 					bridges?: boolean | undefined;
