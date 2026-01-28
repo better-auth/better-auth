@@ -1,4 +1,5 @@
 import { electronClient } from "@better-auth/electron/client";
+import { storage } from "@better-auth/electron/storage";
 import { createAuthClient } from "better-auth/client";
 
 export const authClient = createAuthClient({
@@ -9,6 +10,7 @@ export const authClient = createAuthClient({
 				scheme: "com.better-auth.demo",
 			},
 			signInURL: "http://localhost:3000/sign-in",
+			storage: storage(),
 		}),
 	],
 });

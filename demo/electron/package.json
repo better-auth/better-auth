@@ -26,6 +26,7 @@
     "better-auth": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "conf": "^15.0.2",
     "electron-store": "^11.0.2",
     "tailwind-merge": "^3.3.1",
     "tailwindcss-animate": "catalog:tailwind"

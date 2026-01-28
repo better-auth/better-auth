@@ -113,16 +113,6 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
-						if (
-							ctx.path.startsWith("/callback") ||
-							ctx.path.startsWith("/oauth2/callback")
-						) {
-							const state = await getOAuthState();
-							if (state?.electron === true) {
-								console.log("SUCCESS !!!!!!!!");
-							}
-						}
-
 						const transferCookie = await ctx.getSignedCookie(
 							`${opts.cookiePrefix}.transfer_token`,
 							ctx.context.secret,
