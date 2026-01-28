@@ -29,10 +29,11 @@ export function UserProvider({
 		startTransition(async () => {
 			setUser(await window.getUser());
 		});
-		window.onAuthenticated((u) => {
+		const unsubscribe = window.onAuthenticated((u) => {
 			setUser(u);
 		});
 		return () => {
+			unsubscribe();
 			setUser(null);
 		};
 	}, []);
