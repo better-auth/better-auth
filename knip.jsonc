@@ -83,6 +83,9 @@
 		},
 		"packages/electron": {
 			"ignoreDependencies": [
+				// lopading of optional peers
+				"conf",
+
 				// implicit dependencies
 				"electron"
 			],
