@@ -60,11 +60,11 @@ export interface ElectronClientOptions {
 	 */
 	cookiePrefix?: string | string[] | undefined;
 	/**
-	 * Namespace for IPC bridges (e.g., "better-auth:request-auth")
+	 * Channel prefix for IPC bridges (e.g., "better-auth:request-auth")
 	 *
 	 * @default "better-auth"
 	 */
-	namespace?: string | undefined;
+	channelPrefix?: string | undefined;
 	/**
 	 * Client ID to use for identifying the Electron client during authorization.
 	 *

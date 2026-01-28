@@ -23,7 +23,7 @@ export function exposeBridges(opts: ElectronClientOptions) {
 		);
 	}
 
-	const prefix = getNamespaceWithDelimiter(opts.namespace);
+	const prefix = getNamespaceWithDelimiter(opts.channelPrefix);
 	const bridges = {
 		getUser: async () => {
 			return (await ipcRenderer.invoke(`${prefix}getUser`)) as User &
@@ -87,7 +87,7 @@ export function setupBridges(
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
-	const prefix = getNamespaceWithDelimiter(opts.namespace);
+	const prefix = getNamespaceWithDelimiter(opts.channelPrefix);
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
 		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(
