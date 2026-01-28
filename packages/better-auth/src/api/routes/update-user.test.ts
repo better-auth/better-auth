@@ -17,7 +17,7 @@ describe("updateUser", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
+					sendChangeEmailConfirmation: async ({
 						user,
 						newEmail,
 						url,

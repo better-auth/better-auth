@@ -811,8 +811,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		const sendConfirmationToOldEmail =
 			ctx.context.session.user.emailVerified &&
-			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (sendConfirmationToOldEmail) {
 			const token = await createEmailVerificationToken(
@@ -828,8 +827,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
+				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 			if (sendFn) {
 				await ctx.context.runInBackgroundOrAwait(
 					sendFn(

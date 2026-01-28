@@ -21,10 +21,7 @@ export const normalTestSuite = createTestSuite(
 		return {
 			"init - tests": async () => {
 				const opts = helpers.getBetterAuthOptions();
-				expect(
-					!opts.advanced?.database?.useNumberId &&
-						opts.advanced?.database?.generateId !== "serial",
-				).toBeTruthy();
+				expect(opts.advanced?.database?.generateId !== "serial").toBeTruthy();
 			},
 			...tests,
 		};
@@ -56,7 +53,6 @@ export const getNormalTestSuiteTests = (
 			});
 			const options = getBetterAuthOptions();
 			if (
-				options.advanced?.database?.useNumberId ||
 				options.advanced?.database?.generateId === "serial" ||
 				options.advanced?.database?.generateId === "uuid"
 			) {
@@ -1687,10 +1683,7 @@ export const getNormalTestSuiteTests = (
 				throw error;
 			}
 			const options = getBetterAuthOptions();
-			if (
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial"
-			) {
+			if (options.advanced?.database?.generateId === "serial") {
 				expect(Number(users[0]!.id)).not.toBeNaN();
 			}
 		},

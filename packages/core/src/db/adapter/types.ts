@@ -1,9 +1,8 @@
 import type { BetterAuthOptions } from "../../types";
-import type { Prettify } from "../../types/helper";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import type {
-	DBAdapterSchemaCreation as AdapterSchemaCreation,
-	CustomAdapter as CoreCustomAdapter,
+	CleanedWhere,
+	CustomAdapter,
 	DBAdapterFactoryConfig,
 	JoinConfig,
 	DBTransactionAdapter as TransactionAdapter,
@@ -127,45 +126,7 @@ export type AdapterFactoryCustomizeAdapterCreator = (config: {
 	}) => W extends undefined ? undefined : CleanedWhere[];
 }) => CustomAdapter;
 
-/**
- * @deprecated Use `CustomAdapter` from `@better-auth/core/db/adapter` instead.
- */
-export interface CustomAdapter extends Omit<CoreCustomAdapter, "createSchema"> {
-	createSchema?:
-		| ((props: {
-				/**
-				 * The file the user may have passed in to the `generate` command as the expected schema file output path.
-				 */
-				file?: string;
-				/**
-				 * The tables from the user's Better-Auth instance schema.
-				 */
-				tables: BetterAuthDBSchema;
-		  }) => Promise<AdapterSchemaCreation>)
-		| undefined;
-}
-
-/**
- * @deprecated Use `CleanedWhere` from `@better-auth/core/db/adapter` instead.
- */
-export type CleanedWhere = Prettify<Required<Where>>;
-
 export type AdapterTestDebugLogs = {
 	resetDebugLogs: () => void;
 	printDebugLogs: () => void;
 };
-
-/**
- * @deprecated Use `AdapterFactoryOptions` instead. This export will be removed in a future version.
- */
-export type CreateAdapterOptions = AdapterFactoryOptions;
-
-/**
- * @deprecated Use `AdapterFactoryConfig` instead. This export will be removed in a future version.
- */
-export type AdapterConfig = AdapterFactoryConfig;
-
-/**
- * @deprecated Use `AdapterFactoryCustomizeAdapterCreator` instead. This export will be removed in a future version.
- */
-export type CreateCustomAdapter = AdapterFactoryCustomizeAdapterCreator;
