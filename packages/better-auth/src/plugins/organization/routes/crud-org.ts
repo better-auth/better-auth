@@ -164,25 +164,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				...orgData
 			} = ctx.body;
 
-			if (options.organizationCreation?.beforeCreate) {
-				const response = await options.organizationCreation.beforeCreate(
-					{
-						organization: {
-							...orgData,
-							createdAt: new Date(),
-						},
-						user,
-					},
-					ctx.request,
-				);
-				if (response && typeof response === "object" && "data" in response) {
-					orgData = {
-						...ctx.body,
-						...response.data,
-					};
-				}
-			}
-
 			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
 					await options?.organizationHooks.beforeCreateOrganization({
@@ -281,17 +262,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization,
 					});
 				}
-			}
-
-			if (options.organizationCreation?.afterCreate) {
-				await options.organizationCreation.afterCreate(
-					{
-						organization,
-						user,
-						member,
-					},
-					ctx.request,
-				);
 			}
 
 			if (options?.organizationHooks?.afterCreateOrganization) {
@@ -578,14 +548,8 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const disableOrganizationDeletion =
-				ctx.context.orgOptions.organizationDeletion?.disabled ||
 				ctx.context.orgOptions.disableOrganizationDeletion;
 			if (disableOrganizationDeletion) {
-				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
-					ctx.context.logger.info(
-						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
-					);
-				}
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion is disabled",
 					code: "ORGANIZATION_DELETION_DISABLED",

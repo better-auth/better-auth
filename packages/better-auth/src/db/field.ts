@@ -36,34 +36,34 @@ export type InferValueType<T extends DBFieldType> = T extends "string"
 							? T[number]
 							: never;
 
-export type InferFieldsOutput<Field> =
-	Field extends Record<infer Key, DBFieldAttribute>
+export type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
+	Fields extends Record<infer Key, DBFieldAttribute>
 		? {
-				[key in Key as Field[key]["returned"] extends false
+				[key in Key as Fields[key]["returned"] extends false
 					? never
-					: Field[key]["required"] extends false
-						? Field[key]["defaultValue"] extends
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
 								| boolean
 								| string
 								| number
 								| Date
 							? key
 							: never
-						: key]: InferFieldOutput<Field[key]>;
+						: key]: InferFieldOutput<Fields[key]>;
 			} & {
-				[key in Key as Field[key]["returned"] extends false
+				[key in Key as Fields[key]["returned"] extends false
 					? never
-					: Field[key]["required"] extends false
-						? Field[key]["defaultValue"] extends
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
 								| boolean
 								| string
 								| number
 								| Date
 							? never
 							: key
-						: never]?: InferFieldOutput<Field[key]> | null;
+						: never]?: InferFieldOutput<Fields[key]> | null;
 			}
-		: {};
+		: never;
 
 export type InferFieldsInput<Field> =
 	Field extends Record<infer Key, DBFieldAttribute>
@@ -86,30 +86,32 @@ export type InferFieldsInput<Field> =
 /**
  * For client will add "?" on optional fields
  */
-export type InferFieldsInputClient<Field> =
-	Field extends Record<infer Key, DBFieldAttribute>
+export type InferFieldsInputClient<
+	Fields extends Record<string, DBFieldAttribute>,
+> =
+	Fields extends Record<infer Key, DBFieldAttribute>
 		? {
-				[key in Key as Field[key]["required"] extends false
+				[key in Key as Fields[key]["required"] extends false
 					? never
-					: Field[key]["defaultValue"] extends string | number | boolean | Date
+					: Fields[key]["defaultValue"] extends string | number | boolean | Date
 						? never
-						: Field[key]["input"] extends false
+						: Fields[key]["input"] extends false
 							? never
-							: key]: InferFieldInput<Field[key]>;
+							: key]: InferFieldInput<Fields[key]>;
 			} & {
-				[key in Key as Field[key]["input"] extends false
+				[key in Key as Fields[key]["input"] extends false
 					? never
-					: Field[key]["required"] extends false
+					: Fields[key]["required"] extends false
 						? key
-						: Field[key]["defaultValue"] extends
+						: Fields[key]["defaultValue"] extends
 									| string
 									| number
 									| boolean
 									| Date
 							? key
-							: never]?: InferFieldInput<Field[key]> | undefined | null;
+							: never]?: InferFieldInput<Fields[key]> | undefined | null;
 			}
-		: {};
+		: never;
 
 type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never
@@ -200,13 +202,15 @@ export type InferFieldsFromPlugins<
 		? T extends {
 				schema: {
 					[key in Key]: {
-						fields: infer Field;
+						fields: infer Fields;
 					};
 				};
 			}
-			? Format extends "output"
-				? InferFieldsOutput<Field>
-				: InferFieldsInput<Field>
+			? Fields extends Record<string, DBFieldAttribute>
+				? Format extends "output"
+					? InferFieldsOutput<Fields>
+					: InferFieldsInput<Fields>
+				: {}
 			: {}
 		: {};
 
@@ -215,9 +219,11 @@ export type InferFieldsFromOptions<
 	Key extends "session" | "user",
 	Format extends "output" | "input",
 > = Options[Key] extends {
-	additionalFields: infer Field;
+	additionalFields: {
+		[key: string]: DBFieldAttribute;
+	};
 }
 	? Format extends "output"
-		? InferFieldsOutput<Field>
-		: InferFieldsInput<Field>
+		? InferFieldsOutput<Options[Key]["additionalFields"]>
+		: InferFieldsInput<Options[Key]["additionalFields"]>
 	: {};
