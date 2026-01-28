@@ -229,7 +229,7 @@ describe("Electron", () => {
 		).resolves.toBeUndefined();
 
 		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
-			"auth:authenticated",
+			"better-auth:authenticated",
 			expect.objectContaining({
 				id: user.id,
 			}),
