@@ -1005,4 +1005,185 @@ describe("Electron", () => {
 		});
 		expect(origin).toBe(null);
 	});
+
+	it("should register ipc handlers", async ({ setProcessType }) => {
+		setProcessType("browser");
+
+		client.setupMain({
+			bridges: true,
+		});
+
+		const prefix = `${(options as any).channelPrefix ?? "better-auth"}:`;
+
+		expect(mockElectron.ipcMain.handle).toHaveBeenCalledWith(
+			`${prefix}getUser`,
+			expect.any(Function),
+		);
+		expect(mockElectron.ipcMain.handle).toHaveBeenCalledWith(
+			`${prefix}requestAuth`,
+			expect.any(Function),
+		);
+		expect(mockElectron.ipcMain.handle).toHaveBeenCalledWith(
+			`${prefix}signOut`,
+			expect.any(Function),
+		);
+	});
+
+	it("should surface safeStorage errors during encryption", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		// Create a user and verification entry that would normally trigger
+		// cookie/session encryption during the token exchange.
+		const { user } = await auth.api.signUpEmail({
+			body: {
+				name: "Sage Storage Test",
+				email: "safe-storage@test.com",
+				password: "password",
+			},
+		});
+
+		const codeVerifier = base64Url.encode(randomBytes(32));
+		const codeChallenge = base64Url.encode(
+			await createHash("SHA-256").digest(codeVerifier),
+		);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge,
+					codeChallengeMethod: "s256",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		// Make encryptString throw
+		mockElectron.safeStorage.encryptString.mockImplementationOnce(() => {
+			throw new Error("encryption failed");
+		});
+
+		// Expect the token exchange to surface the error (encryption failure)
+		await expect(
+			client.$fetch("/electron/token", {
+				method: "POST",
+				body: {
+					token: identifier,
+					code_verifier: codeVerifier,
+					state: "abc",
+				},
+			}),
+		).rejects.toThrow("encryption failed");
+	});
+
+	it("should quit when single instance lock not acquired", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		mockElectron.app.requestSingleInstanceLock.mockReturnValueOnce(false);
+
+		client.setupMain({
+			scheme: true,
+		});
+
+		expect(mockElectron.app.quit).toHaveBeenCalled();
+	});
+
+	it("should log error when setAsDefaultProtocolClient fails", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		const original = mockElectron.app.setAsDefaultProtocolClient;
+		mockElectron.app.setAsDefaultProtocolClient.mockReturnValueOnce(false);
+
+		const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		client.setupMain({
+			scheme: true,
+		});
+
+		expect(mockElectron.app.setAsDefaultProtocolClient).toHaveBeenCalled();
+		expect(spy).toHaveBeenCalled();
+
+		spy.mockRestore();
+		mockElectron.app.setAsDefaultProtocolClient = original;
+	});
+
+	it("should not duplicate CSP origin entry when already present", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		client.setupMain({
+			csp: true,
+		});
+
+		// wait a tick for whenReady then-callback to run
+		await Promise.resolve();
+
+		const onHeadersReceived =
+			mockElectron.session.defaultSession.webRequest.onHeadersReceived;
+		expect(onHeadersReceived).toHaveBeenCalled();
+
+		const handler = onHeadersReceived.mock.calls[0][0];
+
+		const origin = "http://localhost:3000";
+		const details = {
+			responseHeaders: {
+				"content-security-policy": [`connect-src 'self' ${origin}`],
+			},
+		};
+
+		let callbackResult: any = null;
+		const callback = (res: any) => {
+			callbackResult = res;
+		};
+
+		// First invocation - policy already contains origin once
+		await handler(details, callback);
+		const firstPolicy = String(
+			callbackResult.responseHeaders["content-security-policy"],
+		);
+		const firstCount = (
+			firstPolicy.match(
+				new RegExp(origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+			) || []
+		).length;
+
+		// Invoke handler again with the policy that already contains the origin
+		callbackResult = null;
+		await handler(details, callback);
+		const secondPolicy = String(
+			callbackResult.responseHeaders["content-security-policy"],
+		);
+		const secondCount = (
+			secondPolicy.match(
+				new RegExp(origin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"),
+			) || []
+		).length;
+
+		// Origin should not be duplicated
+		expect(firstCount).toBeGreaterThanOrEqual(1);
+		expect(secondCount).toBe(firstCount);
+	});
+
+	it("should reject requestAuth when shell.openExternal fails", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		mockElectron.shell.openExternal.mockRejectedValueOnce(
+			new Error("failed to open"),
+		);
+
+		await expect(client.requestAuth()).rejects.toThrow();
+	});
 });
