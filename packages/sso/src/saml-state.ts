@@ -1,7 +1,7 @@
+import { APIError } from "@better-auth/core/error";
 import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError } from "better-call";
 
 export async function generateRelayState(
 	c: GenericEndpointContext,
@@ -15,7 +15,8 @@ export async function generateRelayState(
 ) {
 	const callbackURL = c.body.callbackURL;
 	if (!callbackURL) {
-		throw new APIError("BAD_REQUEST", {
+		throw APIError.from("BAD_REQUEST", {
+			code: "CALLBACK_URL_REQUIRED",
 			message: "callbackURL is required",
 		});
 	}
@@ -44,9 +45,9 @@ export async function generateRelayState(
 			"Failed to create verification for relay state",
 			error,
 		);
-		throw new APIError("INTERNAL_SERVER_ERROR", {
+		throw APIError.from("INTERNAL_SERVER_ERROR", {
+			code: "RELAY_STATE_CREATION_FAILED",
 			message: "State error: Unable to create verification for relay state",
-			cause: error,
 		});
 	}
 }
@@ -64,9 +65,9 @@ export async function parseRelayState(c: GenericEndpointContext) {
 		});
 	} catch (error) {
 		c.context.logger.error("Failed to parse relay state", error);
-		throw new APIError("BAD_REQUEST", {
+		throw APIError.from("BAD_REQUEST", {
+			code: "RELAY_STATE_VALIDATION_FAILED",
 			message: "State error: failed to validate relay state",
-			cause: error,
 		});
 	}
 
