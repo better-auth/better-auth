@@ -38,32 +38,32 @@ export function exposeBridges(opts: ElectronClientOptions) {
 		onAuthenticated: (
 			callback: (user: User & Record<string, any>) => unknown,
 		) => {
-      const channel = `${prefix}authenticated`;
-     	const listener: (
-     	  event: Electron.IpcRendererEvent,
-        ...args: any[]
-     	) => void = async (_evt, user) => {
-     	  await callback(user);
-     	};
-     	ipcRenderer.on(channel, listener);
-     	return () => {
-     	  ipcRenderer.off(channel, listener);
-     	}
+			const channel = `${prefix}authenticated`;
+			const listener: (
+				event: Electron.IpcRendererEvent,
+				...args: any[]
+			) => void = async (_evt, user) => {
+				await callback(user);
+			};
+			ipcRenderer.on(channel, listener);
+			return () => {
+				ipcRenderer.off(channel, listener);
+			};
 		},
 		onAuthError: (
 			callback: (context: BetterFetchError & { path: string }) => unknown,
 		) => {
-		  const channel = `${prefix}error`;
+			const channel = `${prefix}error`;
 			const listener: (
-			  event: Electron.IpcRendererEvent,
+				event: Electron.IpcRendererEvent,
 				...args: any[]
 			) => void = async (_evt, context) => {
-			  await callback(context);
+				await callback(context);
 			};
 			ipcRenderer.on(channel, listener);
 			return () => {
-			  ipcRenderer.off(channel, listener);
-			}
+				ipcRenderer.off(channel, listener);
+			};
 		},
 	};
 

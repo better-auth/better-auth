@@ -5,7 +5,6 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
-import { getOAuthState } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";

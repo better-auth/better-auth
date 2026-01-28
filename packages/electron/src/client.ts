@@ -22,7 +22,7 @@ import { isProcessType, parseProtocolScheme } from "./utils";
 
 const { app, safeStorage, webContents } = electron;
 
-const getDefaultStorageProvider = (): Storage => {
+const _getDefaultStorageProvider = (): Storage => {
 	const getPath = () => {
 		const { data: name } = z.string().slugify().safeParse(app.getName());
 
