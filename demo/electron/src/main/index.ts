@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { electronApp, is, optimizer } from "@electron-toolkit/utils";
+import { electronApp, optimizer } from "@electron-toolkit/utils";
 import { app, BrowserWindow, shell } from "electron";
 import icon from "../../resources/icon.png?asset";
 import { authClient } from "../lib/auth-client";
@@ -30,13 +30,7 @@ function createWindow(): void {
 		return { action: "deny" };
 	});
 
-	// HMR for renderer base on electron-vite cli.
-	// Load the remote URL for development or the local html file for production.
-	if (is.dev && process.env["ELECTRON_RENDERER_URL"]) {
-		mainWindow.loadURL(process.env["ELECTRON_RENDERER_URL"]);
-	} else {
-		mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
-	}
+	mainWindow.loadFile(join(__dirname, "../renderer/index.html"));
 }
 
 // This method will be called when Electron has finished
@@ -71,6 +65,4 @@ app.on("window-all-closed", () => {
 	}
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and require them here.
 authClient.setupMain();
