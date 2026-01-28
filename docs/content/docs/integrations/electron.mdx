@@ -637,13 +637,13 @@ electronClient({
 });
 ```
 
-#### `namespace?`
+#### `channelPrefix?`
 
-Namespace for IPC bridges. (defaults to `better-auth`)
+Channel prefix for IPC bridges. (defaults to `better-auth`)
 
 ```ts title="electron/auth-client.ts"
 electronClient({
-  namespace: "myapp",
+  channelPrefix: "myapp",
 });
 ```
 

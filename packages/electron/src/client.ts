@@ -22,41 +22,6 @@ import { isProcessType, parseProtocolScheme } from "./utils";
 
 const { app, safeStorage, webContents } = electron;
 
-const _getDefaultStorageProvider = (): Storage => {
-	const getPath = () => {
-		const { data: name } = z.string().slugify().safeParse(app.getName());
-
-		if (!name) {
-			throw new BetterAuthError(
-				"Failed to construct storage file path. Please provide a custom storage provider.",
-			);
-		}
-
-		return join(app.getPath("userData"), `.${name}`);
-	};
-	const readStorage = () => {
-		const path = getPath();
-
-		try {
-			return JSON.parse(readFileSync(path, { encoding: "utf-8" }));
-		} catch {}
-		return null;
-	};
-
-	return {
-		getItem(name) {
-			return readStorage()?.[name] ?? null;
-		},
-		setItem(name, value) {
-			const data = readStorage() || {};
-			data[name] = value;
-			writeFileSync(getPath(), JSON.stringify(data), {
-				encoding: "utf-8",
-			});
-		},
-	};
-};
-
 const storageAdapter = (storage: Storage) => {
 	return {
 		...storage,
@@ -78,9 +43,8 @@ export const electronClient = (options: ElectronClientOptions) => {
 	const opts = {
 		storagePrefix: "better-auth",
 		cookiePrefix: "better-auth",
-		namespace: "better-auth",
+		channelPrefix: "better-auth",
 		callbackPath: "/auth/callback",
-		// storage: getDefaultStorageProvider(),
 		...options,
 	};
 
@@ -173,7 +137,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 					onError: async (context) => {
 						webContents
 							.getFocusedWebContents()
-							?.send(`${opts.namespace}:error`, {
+							?.send(`${opts.channelPrefix}:error`, {
 								...context.error,
 								path: context.request.url,
 							});
