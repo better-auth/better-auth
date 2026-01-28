@@ -1,5 +1,7 @@
 import type { JWSAlgorithms } from "better-auth/plugins";
-import type { Prompt } from ".";
+import * as z from "zod";
+import type { Prompt } from "../types";
+import { HttpsOnlyUrlSchema, SafeUrlSchema } from "./zod";
 
 /**
  * Supported grant types of the token endpoint
@@ -170,6 +172,12 @@ export interface AuthServerMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: "S256"[];
+	/**
+	 * Support available for [CIMD](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/)
+	 *
+	 * @default undefined
+	 */
+	client_id_metadata_document_supported?: boolean;
 }
 
 /**
@@ -242,6 +250,50 @@ export interface OIDCMetadata extends AuthServerMetadata {
 	 */
 	prompt_values_supported: Prompt[];
 }
+
+/**
+ * RFC 7591 OAuth 2.0 Dynamic Client Registration metadata
+ */
+export const OAuthClientRegistrationSchema = z
+	.object({
+		redirect_uris: z.array(SafeUrlSchema).min(1),
+		scope: z.string().optional(),
+		client_name: z.string().optional(),
+		client_uri: SafeUrlSchema.optional(),
+		logo_uri: SafeUrlSchema.optional(),
+		contacts: z.array(z.string().min(1)).optional(),
+		tos_uri: SafeUrlSchema.optional(),
+		policy_uri: SafeUrlSchema.optional(),
+		software_id: z.string().optional(),
+		software_version: z.string().optional(),
+		software_statement: z.string().optional(),
+		post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
+		token_endpoint_auth_method: z
+			.enum(["none", "client_secret_basic", "client_secret_post"])
+			.default("client_secret_basic")
+			.optional(),
+		grant_types: z
+			.array(
+				z.enum(["authorization_code", "client_credentials", "refresh_token"]),
+			)
+			.default(["authorization_code"])
+			.optional(),
+		response_types: z
+			.array(z.enum(["code"]))
+			.default(["code"])
+			.optional(),
+	})
+	.strip();
+
+/**
+ * CIMD Schema
+ * @see https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/
+ */
+export const OAuthClientMetadataSchema = OAuthClientRegistrationSchema.extend(
+	z.object({
+		client_id: HttpsOnlyUrlSchema,
+	}).shape,
+);
 
 /**
  * OAuth 2.0 Dynamic Client Registration Schema

@@ -269,7 +269,10 @@ export async function updateClientEndpoint(
 					value: clientId,
 				},
 			],
-			update: oauthToSchema(updates),
+			update: {
+				...oauthToSchema(updates),
+				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
+			},
 		},
 	);
 	if (!updatedClient) {
@@ -353,6 +356,7 @@ export async function rotateClientSecretEndpoint(
 			update: {
 				...schemaToOAuth(client),
 				clientSecret: storedClientSecret,
+				updatedAt: new Date(Math.floor(Date.now() / 1000) * 1000),
 			},
 		},
 	);

@@ -26,6 +26,7 @@ import { revokeEndpoint } from "./revoke";
 import { schema } from "./schema";
 import { tokenEndpoint } from "./token";
 import type { OAuthOptions, Scope } from "./types";
+import { OAuthClientRegistrationSchema } from "./types/oauth";
 import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import { deleteFromPrompt, getJwtPlugin } from "./utils";
@@ -148,6 +149,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	) {
 		throw new BetterAuthError(
 			"encryption method not recommended, please use 'hashed' or the 'hash' function",
+		);
+	}
+
+	if (opts.allowUnauthenticatedClientRegistration) {
+		logger.warn(
+			`allowUnauthenticatedClientRegistration is deprecated. Please use 'cimd' instead.`,
 		);
 	}
 
@@ -298,6 +305,12 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							public_client_supported:
+								opts.cimd?.enable ??
+								opts.allowUnauthenticatedClientRegistration,
+							cimd_supported: opts.cimd?.enable,
+							grant_types_supported: opts.grantTypes,
+							jwt_disabled: opts.disableJwtPlugin,
 						});
 						return authMetadata;
 					}
@@ -1093,39 +1106,11 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 				"/oauth2/register",
 				{
 					method: "POST",
-					body: z.object({
-						redirect_uris: z.array(SafeUrlSchema).min(1).min(1),
-						scope: z.string().optional(),
-						client_name: z.string().optional(),
-						client_uri: z.string().optional(),
-						logo_uri: z.string().optional(),
-						contacts: z.array(z.string().min(1)).min(1).optional(),
-						tos_uri: z.string().optional(),
-						policy_uri: z.string().optional(),
-						software_id: z.string().optional(),
-						software_version: z.string().optional(),
-						software_statement: z.string().optional(),
-						post_logout_redirect_uris: z.array(SafeUrlSchema).min(1).optional(),
-						token_endpoint_auth_method: z
-							.enum(["none", "client_secret_basic", "client_secret_post"])
-							.default("client_secret_basic")
-							.optional(),
-						grant_types: z
-							.array(
-								z.enum([
-									"authorization_code",
-									"client_credentials",
-									"refresh_token",
-								]),
-							)
-							.default(["authorization_code"])
-							.optional(),
-						response_types: z
-							.array(z.enum(["code"]))
-							.default(["code"])
-							.optional(),
-						type: z.enum(["web", "native", "user-agent-based"]).optional(),
-					}),
+					body: OAuthClientRegistrationSchema.extend(
+						z.object({
+							type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						}).shape,
+					),
 					metadata: {
 						openapi: {
 							description: "Register an OAuth2 application",
