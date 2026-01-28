@@ -44,10 +44,10 @@ const getDefaultStorageProvider = (): Storage => {
 	};
 
 	return {
-		getItem(name: string) {
+		getItem(name) {
 			return readStorage()?.[name] ?? null;
 		},
-		setItem(name: string, value: string) {
+		setItem(name, value) {
 			const data = readStorage() || {};
 			data[name] = value;
 			writeFileSync(getPath(), JSON.stringify(data), {
@@ -62,7 +62,7 @@ const storageAdapter = (storage: Storage) => {
 		...storage,
 		getDecrypted: (name: string) => {
 			const item = storage.getItem(name);
-			if (!item) return null;
+			if (!item || typeof item !== "string") return null;
 			return safeStorage.decryptString(Buffer.from(base64.decode(item)));
 		},
 		setEncrypted: (name: string, value: string) => {
@@ -80,7 +80,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 		cookiePrefix: "better-auth",
 		namespace: "better-auth",
 		callbackPath: "/auth/callback",
-		storage: getDefaultStorageProvider(),
+		// storage: getDefaultStorageProvider(),
 		...options,
 	};
 

@@ -46,6 +46,11 @@
       "dev-source": "./src/proxy.ts",
       "types": "./dist/proxy.d.mts",
       "default": "./dist/proxy.mjs"
+    },
+    "./storage": {
+      "dev-source": "./src/storage.ts",
+      "types": "./dist/storage.d.mts",
+      "default": "./dist/storage.mjs"
     }
   },
   "typesVersions": {
@@ -58,29 +63,36 @@
       ],
       "proxy": [
         "./dist/proxy.d.mts"
+      ],
+      "storage": [
+        "./dist/storage.d.mts"
       ]
     }
   },
   "peerDependenciesMeta": {
     "electron": {
       "optional": true
+    },
+    "conf": {
+      "optional": true
     }
   },
   "peerDependencies": {
-    "electron": ">=37.0.0",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
+    "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@better-auth/core": "workspace:*"
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "electron": ">=37.0.0",
+    "conf": "^15.0.2"
   },
   "dependencies": {
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "better-auth": "workspace:*",
     "@better-auth/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
+    "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "tsdown": "catalog:"
   },

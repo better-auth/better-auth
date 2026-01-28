@@ -93,14 +93,40 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
             protocol: {
               scheme: "com.example.app" // The custom protocol scheme registered by your Electron app
             },
+            storage: {
+              getItem: async (key) => {
+                // retrieve entry from storage
+              },
+              setItem: async (key, value) => {
+                // set entry in storage
+              },
+            },
           }),
         ],
       });
       ```
+      
+      If you'd rather not implement your own storage solution, we offer a default option:
+      
+      1. Make sure to install the `conf` package:
+      ```package-install
+      conf
+      ```
+      2. Then, you can use it as follows:
+      
+      ```ts title="electron/lib/auth-client.ts"
+      import { storage } from "@better-auth/electron/storage";
+      
+      electronClient({
+        storage: storage(),
+      });
+      ```
+
       <Callout type="warning">
           You should never expose the authClient directly
           to the renderer process. Instead, [create an IPC bridge](#creating-ipc-bridges) to securely communicate between the main and renderer processes.
       </Callout>
+
   </Step>
   
   <Step>
@@ -185,6 +211,8 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       
       authClient.setupMain();
       ```
+      
+      Note that this must be called before the app is ready.
   </Step>
   
   <Step>
@@ -197,6 +225,8 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
 
       authClient.setupRenderer();
       ```
+
+      Note that this must also be called before the app is ready.
 
       <Callout type="info">
         To infer the types of the exposed bridges, you can use `authClient.$Infer.Bridges` to extend the `Window` interface.
@@ -239,7 +269,10 @@ function SignIn({
   const query = use(searchParams);
 
   useEffect(() => {
-    authClient.ensureElectronRedirect();
+    const id = authClient.ensureElectronRedirect();
+    return () => {
+      clearTimeout(id);
+    }
   }, []);
 
   return (
@@ -264,12 +297,19 @@ In your Electron renderer process, you can use the IPC bridges exposed by the pr
 ```tsx title="electron/App.tsx"
 function Auth() {
   useEffect(() => {
-    window.onAuthenticated((user) => {
-      console.log("Authenticated user:", user);
-    });
-    window.onAuthError((ctx) => {
-      toast.error(`Authentication error: ${ctx.message}`);
-    });
+    const unsubscribeAuthenticated =
+      window.onAuthenticated((user) => {
+        console.log("Authenticated user:", user);
+      });
+    const unsubscribeAuthError =
+      window.onAuthError((ctx) => {
+        toast.error(`Authentication error: ${ctx.message}`);
+      });
+
+    return () => {
+      unsubscribeAuthenticated();
+      unsubscribeAuthError();
+    };
   }, []);
 
   return (
@@ -312,11 +352,12 @@ To sign out the user inside the renderer process, you can use the `signOut` brid
 Listen for authentication errors via the `onAuthError` bridge in the renderer process. The bridge will receive error context forwarded from fetch hooks.
 
 ```ts title="electron/error-listener.tsx"
-useEffect(() => {}, [
-  window.onAuthError((err) => {
-    toast.error("Authentication error", err);
-  }),
-]);
+useEffect(() => {
+  const unsubscribe = window.onAuthError((ctx) => {
+    console.error("Authentication error:", ctx);
+  });
+  return () => unsubscribe();
+}, []);
 ```
 
 ### Creating IPC bridges
@@ -548,7 +589,7 @@ electronClient({
 });
 ```
 
-#### `storage?`
+#### `storage`
 
 Storage solution to use to store session and cookie data.
 

@@ -83,7 +83,7 @@ export async function requestAuth(
 	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);
 
-	if (!url) {
+	if (url === null) {
 		throw new Error("Failed to construct sign-in URL.");
 	}
 
@@ -124,7 +124,7 @@ export async function authenticate(
 		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
-				`${options.namespace || "auth"}:authenticated`,
+				`${options.namespace || "better-auth"}:authenticated`,
 				ctx.data.user,
 			);
 		},

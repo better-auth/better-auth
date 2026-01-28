@@ -1,6 +1,6 @@
 export interface Storage {
-	getItem: (name: string) => string | null;
-	setItem: (name: string, value: string) => void;
+	getItem: (name: string) => unknown | null;
+	setItem: (name: string, value: unknown) => void;
 }
 
 export interface ElectronClientOptions {
@@ -41,7 +41,7 @@ export interface ElectronClientOptions {
 	 * });
 	 * ```
 	 */
-	storage?: Storage | undefined;
+	storage: Storage;
 	/**
 	 * Prefix for local storage keys (e.g., "my-app_cookie", "my-app_session_data")
 	 * @default "better-auth"
