@@ -1152,15 +1152,19 @@ oauthProvider({
 })
 ```
 
-To disable rate limiting for a specific endpoint, set it to `false`:
+To remove the per-endpoint rate limit override and fall back to global rate limits, set it to `false`:
 
 ```ts title="auth.ts"
 oauthProvider({
   rateLimit: {
-    introspect: false, // Disable rate limiting for introspection
+    introspect: false, // Uses global rate limits instead of per-endpoint limits
   },
 })
 ```
+
+<Callout type="info">
+Setting an endpoint to `false` removes the OAuth Provider's stricter per-endpoint limit. The endpoint will still be subject to Better Auth's global rate limiting if enabled.
+</Callout>
 
 
 ### Refresh Token Customization
