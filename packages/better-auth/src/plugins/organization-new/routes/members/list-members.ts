@@ -16,13 +16,6 @@ const listMembersQuerySchema = z
 					'The organization ID to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-id"',
 			})
 			.optional(),
-		organizationSlug: z
-			.string()
-			.meta({
-				description:
-					'The organization slug to list members for. If not provided, will default to the user\'s active organization. Eg: "organization-slug"',
-			})
-			.optional(),
 		limit: z.coerce
 			.number()
 			.int()
