@@ -572,7 +572,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = !!useNumberId || hasNonBigintNumber;
+		const needsInt = useNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
 		}
