@@ -134,16 +134,18 @@ export const getAddonHook = <H extends AddonHookOptions>(
 		before: async (
 			data: Parameters<Before>[0],
 			ctx: GenericEndpointContext,
+			addonContext?: AddonContext,
 		): Promise<Record<string, any> | null> => {
 			const hooks = collectHooks<Before>(`before${hook}`);
 			if (hooks.length === 0) return null;
 
+			const contextToUse = addonContext ?? addonCtx;
 			let mergedData: Record<string, any> | null = null;
 
 			for (const { hookFn } of hooks) {
 				try {
 					// @ts-expect-error - intentional, complex union types
-					const response = await hookFn(data, ctx, addonCtx);
+					const response = await hookFn(data, ctx, contextToUse);
 
 					if (response && typeof response === "object" && "data" in response) {
 						const responseData = response.data as Record<string, any>;
@@ -165,13 +167,15 @@ export const getAddonHook = <H extends AddonHookOptions>(
 		after: async (
 			data: Parameters<After>[0],
 			ctx: GenericEndpointContext,
+			addonContext?: AddonContext,
 		): Promise<void> => {
 			const hooks = collectHooks<After>(`after${hook}`);
 			if (hooks.length === 0) return;
 
+			const contextToUse = addonContext ?? addonCtx;
 			for (const { hookFn } of hooks) {
 				try {
-					await hookFn(data, ctx, addonCtx);
+					await hookFn(data, ctx, contextToUse);
 				} catch (error) {
 					// Re-throw errors to allow hooks to signal failures
 					throw error;
