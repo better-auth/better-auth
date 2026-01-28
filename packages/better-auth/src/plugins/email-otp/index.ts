@@ -141,6 +141,27 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				window: 60,
 				max: 3,
 			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-password-reset";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/reset-password";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/forget-password/email-otp";
+				},
+				window: 60,
+				max: 3,
+			},
 		],
 		options,
 	} satisfies BetterAuthPlugin;
