@@ -229,7 +229,7 @@ describe("oauth register", async () => {
 		expect(response?.nested).toEqual({ key: "value" });
 	});
 
-	it("should register client with metadata and other extra fields", async () => {
+	it("should register client with metadata and strip extra fields not in schema", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -241,9 +241,9 @@ describe("oauth register", async () => {
 			} as any,
 		});
 		expect(response?.client_id).toBeDefined();
-		// Both metadata and extra fields should be spread at the top level
+		// metadata contents should be spread at the top level, extra fields not in schema should be stripped
 		expect(response?.fromMetadata).toBe("value1");
-		expect(response?.customField).toBe("value2");
+		expect(response?.customField).toBe(undefined);
 	});
 });
 

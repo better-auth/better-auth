@@ -16,7 +16,15 @@ import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
@@ -199,7 +207,9 @@ describe("oauth", async () => {
 	}
 
 	// Tests if it is oauth2 compatible
-	it("should sign in using generic oauth plugin", async () => {
+	it("should sign in using generic oauth plugin", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -241,13 +251,13 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let signInEmailRedirectUri = "";
@@ -275,7 +285,9 @@ describe("oauth", async () => {
 		expect(callbackUrl).toContain("/success");
 	});
 
-	it("should sign in using generic oauth discovery", async () => {
+	it("should sign in using generic oauth discovery", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -321,13 +333,13 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let signInEmailRedirectUri = "";
@@ -445,13 +457,10 @@ describe("oauth - prompt", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: undefined,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: undefined,
 			},
-			writable: true,
 		});
 
 		// Opens the authorization server for testing with genericOAuth
@@ -507,14 +516,7 @@ describe("oauth - prompt", async () => {
 
 	afterAll(async () => {
 		await server.close();
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: undefined,
-				},
-			},
-			writable: true,
-		});
+		vi.unstubAllGlobals();
 	});
 
 	async function createTestInstance(
@@ -702,7 +704,7 @@ describe("oauth - prompt", async () => {
 		isUserRegistered = true;
 	});
 
-	it("consent - should sign in", async () => {
+	it("consent - should sign in", async ({ onTestFinished }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -751,13 +753,14 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Give consent and obtain redirect callback
@@ -773,13 +776,13 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.redirect).toBeTruthy();
 		expect(consentRes.uri).toContain(redirectUri);
 		expect(consentRes.uri).toContain(`code=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRes.uri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRes.uri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let callbackURL = "";
@@ -795,7 +798,7 @@ describe("oauth - prompt", async () => {
 	});
 
 	it("consent - should sign in given previous consent (see previous test)", async ({
-		expect,
+		onTestFinished,
 	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -841,13 +844,13 @@ describe("oauth - prompt", async () => {
 		expect(callbackRedirectUrl).toContain(redirectUri);
 		expect(callbackRedirectUrl).toContain("code=");
 		expect(callbackRedirectUrl).toContain("state=");
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(callbackRedirectUrl, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(callbackRedirectUrl, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Code exchange should be successful
@@ -911,7 +914,9 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`state=`);
 	});
 
-	it("select_account - should sign in requesting account selection", async () => {
+	it("select_account - should sign in requesting account selection", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -960,13 +965,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Account selected, continue auth flow
@@ -987,7 +992,9 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
-	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async () => {
+	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1035,13 +1042,13 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Check for redirection to /consent after login
@@ -1061,7 +1068,9 @@ describe("oauth - prompt", async () => {
 		expect(signInEmailRedirectUri).toContain("prompt=consent");
 	});
 
-	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async () => {
+	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1113,13 +1122,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Account selected, continue auth flow
@@ -1142,7 +1151,9 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
-	it("shall allow user to select an organization/team post login and consent", async () => {
+	it("shall allow user to select an organization/team post login and consent", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1192,13 +1203,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Select Account and continue auth flow
@@ -1229,13 +1240,13 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Give consent and obtain redirect callback

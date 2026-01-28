@@ -336,6 +336,22 @@ type Result = {
 >
 ```ts
 type listApiKeys = {
+    /**
+     * The number of API keys to return.
+     */
+    limit?: number
+    /**
+     * The offset to start from (for pagination).
+     */
+    offset?: number
+    /**
+     * The field to sort by (e.g., "createdAt", "name", "expiresAt").
+     */
+    sortBy?: string
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc"
 }
 ```
 </APIMethod>
@@ -343,10 +359,44 @@ type listApiKeys = {
 #### Result
 
 If fails, throws `APIError`.
-Otherwise, you'll receive:
+Otherwise, you'll receive a paginated response:
 
 ```ts
-type Result = ApiKey[];
+type Result = {
+  apiKeys: Omit<ApiKey, "key">[];
+  total: number;
+  limit?: number;
+  offset?: number;
+};
+```
+
+#### Pagination Examples
+
+```ts
+// Get first 10 API keys
+const result = await authClient.apiKey.list({
+  query: { limit: 10 }
+});
+
+// Get second page (10 items per page)
+const page2 = await authClient.apiKey.list({
+  query: { limit: 10, offset: 10 }
+});
+
+// Sort by creation date (newest first)
+const sorted = await authClient.apiKey.list({
+  query: { sortBy: "createdAt", sortDirection: "desc" }
+});
+
+// Combined pagination and sorting
+const combined = await authClient.apiKey.list({
+  query: { 
+    limit: 20, 
+    offset: 0, 
+    sortBy: "name", 
+    sortDirection: "asc" 
+  }
+});
 ```
 
 ---

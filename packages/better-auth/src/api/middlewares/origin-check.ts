@@ -2,16 +2,18 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import { matchesOriginPattern } from "../../auth/trusted-origins";
 
 /**
  * Checks if CSRF should be skipped for backward compatibility.
  * Previously, disableOriginCheck also disabled CSRF checks.
  * This maintains that behavior when disableCSRFCheck isn't explicitly set.
+ * Only triggers for skipOriginCheck === true, not for path arrays.
  */
 function shouldSkipCSRFForBackwardCompat(ctx: GenericEndpointContext): boolean {
 	return (
-		ctx.context.skipOriginCheck &&
+		ctx.context.skipOriginCheck === true &&
 		ctx.context.options.advanced?.disableCSRFCheck === undefined
 	);
 }
@@ -197,6 +199,22 @@ async function validateOrigin(
 		return;
 	}
 
+	const skipOriginCheck = ctx.context.skipOriginCheck;
+	if (Array.isArray(skipOriginCheck)) {
+		try {
+			const basePath = new URL(ctx.context.baseURL).pathname;
+			const currentPath = normalizePathname(ctx.request.url, basePath);
+			const shouldSkipPath = skipOriginCheck.some((skipPath) =>
+				currentPath.startsWith(skipPath),
+			);
+			if (shouldSkipPath) {
+				return;
+			}
+		} catch {
+			// If parsing fails, don't skip - continue with validation
+		}
+	}
+
 	const shouldValidate = forceValidate || useCookies;
 
 	if (!shouldValidate) {
@@ -227,7 +245,7 @@ async function validateOrigin(
 			`If it's a valid URL, please add ${originHeader} to trustedOrigins in your auth config\n`,
 			`Current list of trustedOrigins: ${trustedOrigins}`,
 		);
-		throw new APIError("FORBIDDEN", { message: "Invalid origin" });
+		throw APIError.from("FORBIDDEN", BASE_ERROR_CODES.INVALID_ORIGIN);
 	}
 }
 

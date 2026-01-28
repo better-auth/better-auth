@@ -1,10 +1,10 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
-import { Highlight } from "prism-react-renderer";
+import { useTheme } from "next-themes";
+import { Highlight, themes } from "prism-react-renderer";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import theme from "./theme";
 
 interface CodeEditorProps {
 	code: string;
@@ -13,6 +13,7 @@ interface CodeEditorProps {
 
 export function CodeEditor({ code, language }: CodeEditorProps) {
 	const [isCopied, setIsCopied] = useState(false);
+	const { resolvedTheme } = useTheme();
 
 	const copyToClipboard = async () => {
 		try {
@@ -24,9 +25,11 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 		}
 	};
 
+	const theme = resolvedTheme === "dark" ? themes.vsDark : themes.vsLight;
+
 	return (
 		<div className="relative">
-			<div className="dark:bg-bg-white rounded-md overflow-hidden">
+			<div className="rounded-md overflow-hidden">
 				<Highlight theme={theme} code={code} language={language}>
 					{({ className, style, tokens, getLineProps, getTokenProps }) => (
 						<div className="overflow-auto max-h-[400px]">
@@ -42,7 +45,10 @@ export function CodeEditor({ code, language }: CodeEditorProps) {
 											className={lineProps.className}
 											style={lineProps.style}
 										>
-											<span className="inline-block w-8 pr-2 text-right mr-4 text-gray-500 select-none sticky left-0 bg-black">
+											<span
+												className="inline-block w-8 pr-2 text-right mr-4 select-none sticky left-0 text-muted-foreground"
+												style={{ backgroundColor: style.backgroundColor }}
+											>
 												{i + 1}
 											</span>
 											{line.map((token, key) => {

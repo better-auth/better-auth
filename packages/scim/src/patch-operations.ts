@@ -10,19 +10,25 @@ type Operation = {
 type Mapping = {
 	target: string;
 	resource: "user" | "account";
-	map: (user: User, op: Operation) => any;
+	map: (user: User, op: Operation, resources: Resources) => any;
 };
 
-const identity = (user: User, op: Operation) => {
+type Resources = {
+	user: Record<string, any>;
+	account: Record<string, any>;
+};
+
+const identity = (user: User, op: Operation, resources: Resources) => {
 	return op.value;
 };
 
-const lowerCase = (user: User, op: Operation) => {
+const lowerCase = (user: User, op: Operation, resources: Resources) => {
 	return op.value.toLowerCase();
 };
 
-const givenName = (user: User, op: Operation) => {
-	const familyName = user.name.split(" ").slice(1).join(" ").trim();
+const givenName = (user: User, op: Operation, resources: Resources) => {
+	const currentName = (resources.user.name as string) ?? user.name;
+	const familyName = currentName.split(" ").slice(1).join(" ").trim();
 	const givenName = op.value;
 
 	return getUserFullName(user.email, {
@@ -31,9 +37,10 @@ const givenName = (user: User, op: Operation) => {
 	});
 };
 
-const familyName = (user: User, op: Operation) => {
+const familyName = (user: User, op: Operation, resources: Resources) => {
+	const currentName = (resources.user.name as string) ?? user.name;
 	const givenName = (
-		user.name.split(" ").slice(0, -1).join(" ") || user.name
+		currentName.split(" ").slice(0, -1).join(" ") || currentName
 	).trim();
 	const familyName = op.value;
 	return getUserFullName(user.email, {
@@ -58,22 +65,83 @@ const userPatchMappings: Record<string, Mapping> = {
 	"/userName": { resource: "user", target: "email", map: lowerCase },
 };
 
+const normalizePath = (path: string): string => {
+	const withoutLeadingSlash = path.startsWith("/") ? path.slice(1) : path;
+	return `/${withoutLeadingSlash.replaceAll(".", "/")}`;
+};
+
+const isNestedObject = (value: unknown): value is Record<string, unknown> => {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+const applyMapping = (
+	user: User,
+	resources: Resources,
+	path: string,
+	value: unknown,
+	op: "add" | "replace",
+) => {
+	const normalizedPath = normalizePath(path);
+	const mapping = userPatchMappings[normalizedPath];
+
+	if (!mapping) {
+		return;
+	}
+
+	const newValue = mapping.map(
+		user,
+		{
+			op,
+			value,
+			path: normalizedPath,
+		},
+		resources,
+	);
+
+	if (op === "add" && mapping.resource === "user") {
+		const currentValue = (user as Record<string, unknown>)[mapping.target];
+		if (currentValue === newValue) {
+			return;
+		}
+	}
+
+	resources[mapping.resource][mapping.target] = newValue;
+};
+
+const applyPatchValue = (
+	user: User,
+	resources: Resources,
+	value: unknown,
+	op: "add" | "replace",
+	path?: string | undefined,
+) => {
+	if (isNestedObject(value)) {
+		for (const [key, nestedValue] of Object.entries(value)) {
+			const nestedPath = path ? `${path}.${key}` : key;
+			applyPatchValue(user, resources, nestedValue, op, nestedPath);
+		}
+	} else if (path) {
+		applyMapping(user, resources, path, value, op);
+	}
+};
+
 export const buildUserPatch = (user: User, operations: Operation[]) => {
 	const userPatch: Record<string, any> = {};
 	const accountPatch: Record<string, any> = {};
-
-	const resources = { user: userPatch, account: accountPatch };
+	const resources: Resources = { user: userPatch, account: accountPatch };
 
 	for (const operation of operations) {
-		if (operation.op !== "replace" || !operation.path) {
+		if (operation.op !== "add" && operation.op !== "replace") {
 			continue;
 		}
 
-		const mapping = userPatchMappings[operation.path];
-		if (mapping) {
-			const resource = resources[mapping.resource];
-			resource[mapping.target] = mapping.map(user, operation);
-		}
+		applyPatchValue(
+			user,
+			resources,
+			operation.value,
+			operation.op,
+			operation.path,
+		);
 	}
 
 	return resources;

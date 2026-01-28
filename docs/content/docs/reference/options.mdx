@@ -200,7 +200,7 @@ export const auth = betterAuth({
 ```
 
 - `sendVerificationEmail`: Function to send verification email
-- `sendOnSignUp`: Send verification email automatically after sign up (default: `false`)
+- `sendOnSignUp`: Send verification email automatically after sign up. `true` always sends, `false` never sends, `undefined` follows `requireEmailVerification` behavior (default: `undefined`)
 - `sendOnSignIn`: Send verification email automatically on sign in when the user's email is not verified (default: `false`)
 - `autoSignInAfterVerification`: Auto sign in the user after they verify their email
 - `expiresIn`: Number of seconds the verification token is valid for (default: `3600` seconds)
@@ -543,7 +543,8 @@ export const auth = betterAuth({
 			})) | false | "serial" | "uuid",
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
-		}
+		},
+		skipTrailingSlashes: true
 	},
 })
 ```
@@ -557,6 +558,7 @@ export const auth = betterAuth({
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
+- `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 - OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
 
 ## `logger`
@@ -569,7 +571,7 @@ export const auth = betterAuth({
 	logger: {
 		disabled: false,
 		disableColors: false,
-		level: "error",
+		level: "warn",
 		log: (level, message, ...args) => {
 			// Custom logging implementation
 			console.log(`[${level}] ${message}`, ...args);
@@ -582,13 +584,13 @@ The logger configuration allows you to customize how Better Auth handles logging
 
 - `disabled`: Disable all logging when set to `true` (default: `false`)
 - `disableColors`: Disable colors in the default logger implementation (default: determined by the terminal's color support)
-- `level`: Set the minimum log level to display. Available levels are:
-  - `"info"`: Show all logs
+- `level`: Set the minimum log level to display (default: `"warn"`)
+  - `"debug"`: Show all logs including debug information
+  - `"info"`: Show all logs except debug information
   - `"warn"`: Show warnings and errors
   - `"error"`: Show only errors
-  - `"debug"`: Show all logs including debug information
 - `log`: Custom logging function that receives:
-  - `level`: The log level (`"info"`, `"warn"`, `"error"`, or `"debug"`)
+  - `level`: The log level
   - `message`: The log message
   - `...args`: Additional arguments passed to the logger
 

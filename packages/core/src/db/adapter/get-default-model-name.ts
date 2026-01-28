@@ -23,7 +23,7 @@ export const initGetDefaultModelName = ({
 		// It's possible this `model` could had applied `usePlural`.
 		// Thus we'll try the search but without the trailing `s`.
 		if (usePlural && model.charAt(model.length - 1) === "s") {
-			let pluralessModel = model.slice(0, -1);
+			const pluralessModel = model.slice(0, -1);
 			let m = schema[pluralessModel] ? pluralessModel : undefined;
 			if (!m) {
 				m = Object.entries(schema).find(

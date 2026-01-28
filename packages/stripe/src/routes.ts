@@ -15,6 +15,7 @@ import {
 	onSubscriptionDeleted,
 	onSubscriptionUpdated,
 } from "./hooks";
+import { customerMetadata, subscriptionMetadata } from "./metadata";
 import { referenceMiddleware, stripeSessionMiddleware } from "./middleware";
 import type {
 	CustomerType,
@@ -162,7 +163,20 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
-	 * Success URL to redirect back after successful subscription
+	 * The IETF language tag of the locale Checkout is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
+	locale: z
+		.custom<StripeType.Checkout.Session.Locale>((localization) => {
+			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The locale to display Checkout in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
+		})
+		.optional(),
+	/**
+	 * The URL to which Stripe should send customers when payment or setup is complete.
 	 */
 	successUrl: z
 		.string()
@@ -172,7 +186,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Cancel URL
+	 * If set, checkout shows a back button and customers will be directed here if they cancel payment.
 	 */
 	cancelUrl: z
 		.string()
@@ -182,7 +196,7 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.default("/"),
 	/**
-	 * Return URL
+	 * The URL to return to from the Billing Portal (used when upgrading existing subscriptions)
 	 */
 	returnUrl: z
 		.string()
@@ -261,8 +275,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			// Find existing subscription by Stripe ID or reference ID
-			let subscriptionToUpdate = ctx.body.subscriptionId
+			// If subscriptionId is provided, find that specific subscription.
+			// Otherwise, active subscription will be resolved by referenceId later.
+			const subscriptionToUpdate = ctx.body.subscriptionId
 				? await ctx.context.adapter.findOne<Subscription>({
 						model: "subscription",
 						where: [
@@ -272,26 +287,18 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							},
 						],
 					})
-				: referenceId
-					? await ctx.context.adapter.findOne<Subscription>({
-							model: "subscription",
-							where: [
-								{
-									field: "referenceId",
-									value: referenceId,
-								},
-							],
-						})
-					: null;
-
+				: null;
+			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+				);
+			}
 			if (
 				ctx.body.subscriptionId &&
 				subscriptionToUpdate &&
 				subscriptionToUpdate.referenceId !== referenceId
 			) {
-				subscriptionToUpdate = null;
-			}
-			if (ctx.body.subscriptionId && !subscriptionToUpdate) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -328,7 +335,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						try {
 							// First, search for existing organization customer by organizationId
 							const existingOrgCustomers = await client.customers.search({
-								query: `metadata["organizationId"]:"${org.id}"`,
+								query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
 								limit: 1,
 							});
 
@@ -348,15 +355,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 								// Create Stripe customer for organization
 								// Email can be set via getCustomerCreateParams or updated in billing portal
-								// Use defu to ensure internal metadata fields are preserved
-								const customerParams: StripeType.CustomerCreateParams = defu(
+								// Use defu to merge params (first argument takes priority)
+								const customerParams = defu(
 									{
 										name: org.name,
-										metadata: {
-											...ctx.body.metadata,
-											organizationId: org.id,
-											customerType: "organization",
-										},
+										metadata: customerMetadata.set(
+											{
+												organizationId: org.id,
+												customerType: "organization",
+											},
+											ctx.body.metadata,
+										),
 									},
 									extraCreateParams,
 								);
@@ -406,7 +415,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					try {
 						// Try to find existing user Stripe customer by email
 						const existingCustomers = await client.customers.search({
-							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["customerType"]:"organization"`,
+							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
 							limit: 1,
 						});
 
@@ -416,11 +425,13 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							stripeCustomer = await client.customers.create({
 								email: user.email,
 								name: user.name,
-								metadata: {
-									...ctx.body.metadata,
-									userId: user.id,
-									customerType: "user",
-								},
+								metadata: customerMetadata.set(
+									{
+										userId: user.id,
+										customerType: "user",
+									},
+									ctx.body.metadata,
+								),
 							});
 						}
 
@@ -489,17 +500,47 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				return false;
 			});
 
+			// Get the current price ID from the active Stripe subscription
+			const stripeSubscriptionPriceId =
+				activeSubscription?.items.data[0]?.price.id;
+
 			// Also find any incomplete subscription that we can reuse
 			const incompleteSubscription = subscriptions.find(
 				(sub) => sub.status === "incomplete",
 			);
 
-			if (
-				activeOrTrialingSubscription &&
-				activeOrTrialingSubscription.status === "active" &&
-				activeOrTrialingSubscription.plan === ctx.body.plan &&
-				activeOrTrialingSubscription.seats === (ctx.body.seats || 1)
-			) {
+			const priceId = ctx.body.annual
+				? plan.annualDiscountPriceId
+				: plan.priceId;
+			const lookupKey = ctx.body.annual
+				? plan.annualDiscountLookupKey
+				: plan.lookupKey;
+			const resolvedPriceId = lookupKey
+				? await resolvePriceIdFromLookupKey(client, lookupKey)
+				: undefined;
+
+			const priceIdToUse = priceId || resolvedPriceId;
+			if (!priceIdToUse) {
+				throw ctx.error("BAD_REQUEST", {
+					message: "Price ID not found for the selected plan",
+				});
+			}
+
+			const isSamePlan = activeOrTrialingSubscription?.plan === ctx.body.plan;
+			const isSameSeats =
+				activeOrTrialingSubscription?.seats === (ctx.body.seats || 1);
+			const isSamePriceId = stripeSubscriptionPriceId === priceIdToUse;
+			const isSubscriptionStillValid =
+				!activeOrTrialingSubscription?.periodEnd ||
+				activeOrTrialingSubscription.periodEnd > new Date();
+
+			const isAlreadySubscribed =
+				activeOrTrialingSubscription?.status === "active" &&
+				isSamePlan &&
+				isSameSeats &&
+				isSamePriceId &&
+				isSubscriptionStillValid;
+			if (isAlreadySubscribed) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.ALREADY_SUBSCRIBED_PLAN,
@@ -534,32 +575,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 					});
 					dbSubscription = activeOrTrialingSubscription;
-				}
-
-				// Resolve price ID if using lookup keys
-				let priceIdToUse: string | undefined = undefined;
-				if (ctx.body.annual) {
-					priceIdToUse = plan.annualDiscountPriceId;
-					if (!priceIdToUse && plan.annualDiscountLookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.annualDiscountLookupKey,
-						);
-					}
-				} else {
-					priceIdToUse = plan.priceId;
-					if (!priceIdToUse && plan.lookupKey) {
-						priceIdToUse = await resolvePriceIdFromLookupKey(
-							client,
-							plan.lookupKey,
-						);
-					}
-				}
-
-				if (!priceIdToUse) {
-					throw ctx.error("BAD_REQUEST", {
-						message: "Price ID not found for the selected plan",
-					});
 				}
 
 				const { url } = await client.billingPortal.sessions
@@ -670,24 +685,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
-			let priceIdToUse: string | undefined = undefined;
-			if (ctx.body.annual) {
-				priceIdToUse = plan.annualDiscountPriceId;
-				if (!priceIdToUse && plan.annualDiscountLookupKey) {
-					priceIdToUse = await resolvePriceIdFromLookupKey(
-						client,
-						plan.annualDiscountLookupKey,
-					);
-				}
-			} else {
-				priceIdToUse = plan.priceId;
-				if (!priceIdToUse && plan.lookupKey) {
-					priceIdToUse = await resolvePriceIdFromLookupKey(
-						client,
-						plan.lookupKey,
-					);
-				}
-			}
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
@@ -702,6 +699,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							: {
 									customer_email: user.email,
 								}),
+						locale: ctx.body.locale,
 						success_url: getUrl(
 							ctx,
 							`${
@@ -719,24 +717,29 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 						subscription_data: {
 							...freeTrial,
-							metadata: {
-								...ctx.body.metadata,
-								...params?.params?.subscription_data?.metadata,
-								userId: user.id,
-								subscriptionId: subscription.id,
-								referenceId,
-							},
+							metadata: subscriptionMetadata.set(
+								{
+									userId: user.id,
+									subscriptionId: subscription.id,
+									referenceId,
+								},
+								ctx.body.metadata,
+								params?.params?.subscription_data?.metadata,
+							),
 						},
 						mode: "subscription",
 						client_reference_id: referenceId,
 						...params?.params,
-						metadata: {
-							...ctx.body.metadata,
-							...params?.params?.metadata,
-							userId: user.id,
-							subscriptionId: subscription.id,
-							referenceId,
-						},
+						// metadata should come after spread to protect internal fields
+						metadata: subscriptionMetadata.set(
+							{
+								userId: user.id,
+								subscriptionId: subscription.id,
+								referenceId,
+							},
+							ctx.body.metadata,
+							params?.params?.metadata,
+						),
 					},
 					params?.options,
 				)
@@ -1429,9 +1432,17 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 };
 
 const createBillingPortalBodySchema = z.object({
+	/**
+	 * The IETF language tag of the locale Customer Portal is displayed in.
+	 * If not provided or set to `auto`, the browser's locale is used.
+	 */
 	locale: z
 		.custom<StripeType.Checkout.Session.Locale>((localization) => {
 			return typeof localization === "string";
+		})
+		.meta({
+			description:
+				"The IETF language tag of the locale Customer Portal is displayed in. Eg: 'en', 'ko'. If not provided or set to `auto`, the browser's locale is used.",
 		})
 		.optional(),
 	referenceId: z.string().optional(),

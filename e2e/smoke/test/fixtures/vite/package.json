@@ -1,5 +1,5 @@
 {
-  "name": "fixture-vite",
+  "name": "@better-auth-test/fixtures-vite",
   "private": true,
   "scripts": {
     "build": "vite build"

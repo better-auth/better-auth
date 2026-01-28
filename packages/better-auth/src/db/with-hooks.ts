@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 } from "@better-auth/core/context";
 import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
@@ -44,23 +45,25 @@ export function getWithHooks(
 			}
 		}
 
-		const customCreated = customCreateFn
-			? await customCreateFn.fn(actualData)
-			: null;
-		const created =
-			!customCreateFn || customCreateFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).create<T>({
-						model,
-						data: actualData as any,
-						forceAllowId: true,
-					})
-				: customCreated;
+		let created: any = null;
+		if (!customCreateFn || customCreateFn.executeMainFn) {
+			created = await (await getCurrentAdapter(adapter)).create<T>({
+				model,
+				data: actualData as any,
+				forceAllowId: true,
+			});
+		}
+		if (customCreateFn?.fn) {
+			created = await customCreateFn.fn(created ?? actualData);
+		}
 
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.create?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(created as any, context);
+				await queueAfterTransactionHook(async () => {
+					// @ts-expect-error context type mismatch
+					await toRun(created as any, context);
+				});
 			}
 		}
 
@@ -115,8 +118,10 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(updated as any, context);
+				await queueAfterTransactionHook(async () => {
+					// @ts-expect-error context type mismatch
+					await toRun(updated as any, context);
+				});
 			}
 		}
 		return updated;
@@ -170,8 +175,10 @@ export function getWithHooks(
 		for (const hook of hooks || []) {
 			const toRun = hook[model]?.update?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(updated as any, context);
+				await queueAfterTransactionHook(async () => {
+					// @ts-expect-error context type mismatch
+					await toRun(updated as any, context);
+				});
 			}
 		}
 
@@ -231,8 +238,10 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					await toRun(entityToDelete as any, context);
+					await queueAfterTransactionHook(async () => {
+						// @ts-expect-error context type mismatch
+						await toRun(entityToDelete as any, context);
+					});
 				}
 			}
 		}
@@ -291,8 +300,11 @@ export function getWithHooks(
 			for (const hook of hooks || []) {
 				const toRun = hook[model]?.delete?.after;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					await toRun(entity as any, context);
+					// Queue after hooks to run post-transaction
+					await queueAfterTransactionHook(async () => {
+						// @ts-expect-error context type mismatch
+						await toRun(entity as any, context);
+					});
 				}
 			}
 		}

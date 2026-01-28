@@ -1,3 +1,4 @@
+import { isAPIError } from "better-auth/api";
 import { verifyAccessToken } from "better-auth/oauth2";
 import { APIError } from "better-call";
 import type { JWTPayload } from "jose";
@@ -61,7 +62,7 @@ export function handleMcpErrors(
 		resourceMetadataMappings?: Record<string, string>;
 	},
 ) {
-	if (error instanceof APIError && error.status === "UNAUTHORIZED") {
+	if (isAPIError(error) && error.status === "UNAUTHORIZED") {
 		const _resources = Array.isArray(resource) ? resource : [resource];
 		const wwwAuthenticateValue = _resources
 			.map((v) => {

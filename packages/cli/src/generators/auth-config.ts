@@ -48,7 +48,7 @@ export async function generateAuthConfig({
 	dependencies: string[];
 	envs: string[];
 }> {
-	let _start_of_plugins_common_index = {
+	const _start_of_plugins_common_index = {
 		START_OF_PLUGINS: {
 			type: "regex",
 			regex: /betterAuth\([\w\W]*plugins:[\W]*\[()/m,
@@ -88,7 +88,7 @@ export async function generateAuthConfig({
 			pluginContents: string;
 			config: string;
 		}): Promise<{ code: string; dependencies: string[]; envs: string[] }> => {
-			let start_of_plugins = getGroupInfo(
+			const start_of_plugins = getGroupInfo(
 				opts.config,
 				common_indexes.START_OF_PLUGINS,
 				{},
@@ -101,7 +101,7 @@ export async function generateAuthConfig({
 					"Couldn't find start of your plugins array in your auth config file.",
 				);
 			}
-			let end_of_plugins = getGroupInfo(
+			const end_of_plugins = getGroupInfo(
 				opts.config,
 				common_indexes.END_OF_PLUGINS,
 				{ start_of_plugins: start_of_plugins.index },
@@ -180,7 +180,7 @@ export async function generateAuthConfig({
 				}
 			}
 			try {
-				let new_content = format(importString + opts.config);
+				const new_content = format(importString + opts.config);
 				return { code: await new_content, dependencies: [], envs: [] };
 			} catch (error) {
 				console.error(error);
@@ -214,7 +214,7 @@ export async function generateAuthConfig({
 				code_before_betterAuth?: string;
 			}) {
 				if (code_before_betterAuth) {
-					let start_of_betterauth = getGroupInfo(
+					const start_of_betterauth = getGroupInfo(
 						opts.config,
 						common_indexes.START_OF_BETTERAUTH,
 						{},
@@ -440,7 +440,7 @@ export async function generateAuthConfig({
 				});
 			}
 
-			let start_of_betterauth = getGroupInfo(
+			const start_of_betterauth = getGroupInfo(
 				opts.config,
 				common_indexes.START_OF_BETTERAUTH,
 				{},
@@ -473,8 +473,8 @@ export async function generateAuthConfig({
 	};
 
 	let new_user_config: string = await format(current_user_config);
-	let total_dependencies: string[] = [];
-	let total_envs: string[] = [];
+	const total_dependencies: string[] = [];
+	const total_envs: string[] = [];
 
 	if (plugins.length !== 0) {
 		const imports: {

@@ -57,10 +57,10 @@ Better Auth provides a `getMigrations` function that you can use to generate and
 
 #### Using `getMigrations`
 
-The `getMigrations` function is available from `better-auth/db` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
+The `getMigrations` function is available from `better-auth/db/migration` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
 
 ```typescript
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 
 const { toBeCreated, toBeAdded, runMigrations, compileMigrations } = await getMigrations(authConfig);
 
@@ -83,7 +83,7 @@ For Cloudflare Workers using D1 (SQLite), you can create a migration endpoint th
 ```typescript title="src/index.ts"
 import { Hono } from "hono";
 import { auth } from "./auth"; // your auth instance
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -220,9 +220,42 @@ betterAuth({
 });
 ```
 
-**Example: Redis Implementation**
+### Redis Storage
 
-Here's a basic example using Redis:
+Better Auth provides an official Redis storage package that uses [ioredis](https://github.com/redis/ioredis):
+
+```bash
+npm install @better-auth/redis-storage ioredis
+# or
+pnpm add @better-auth/redis-storage ioredis
+```
+
+**Usage:**
+
+```typescript
+import { betterAuth } from "better-auth";
+import { Redis } from "ioredis";
+import { redisStorage } from "@better-auth/redis-storage";
+
+const redis = new Redis({
+	host: "localhost",
+	port: 6379,
+});
+
+export const auth = betterAuth({
+	// ... other options
+	secondaryStorage: redisStorage({
+		client: redis,
+		kxeyPrefix: "better-auth:", // optional, defaults to "better-auth:"
+	}),
+});
+```
+
+The Redis storage supports all ioredis connection modes including standalone, cluster, and sentinel configurations.
+
+**Manual Implementation:**
+
+If you prefer to implement your own Redis secondary storage, here's a basic example:
 
 ```typescript
 import { createClient } from "redis";
@@ -239,8 +272,6 @@ export const auth = betterAuth({
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
-			// or for ioredis:
-			// if (ttl) await redis.set(key, value, 'EX', ttl)
 			else await redis.set(key, value);
 		},
 		delete: async (key) => {

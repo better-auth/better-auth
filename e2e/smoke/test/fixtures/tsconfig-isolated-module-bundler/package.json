@@ -1,5 +1,5 @@
 {
-  "name": "tsconfig-isolated-module-bundler",
+  "name": "@better-auth-test/fixtures-tsconfig-isolated-module-bundler",
   "private": true,
   "type": "module",
   "scripts": {

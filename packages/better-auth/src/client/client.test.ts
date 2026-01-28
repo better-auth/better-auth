@@ -20,7 +20,12 @@ import {
 import { createAuthClient as createReactClient } from "./react";
 import { createAuthClient as createSolidClient } from "./solid";
 import { createAuthClient as createSvelteClient } from "./svelte";
-import { testClientPlugin, testClientPlugin2 } from "./test-plugin";
+import {
+	testClientPlugin,
+	testClientPlugin2,
+	testDeepMergePluginA,
+	testDeepMergePluginB,
+} from "./test-plugin";
 import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
@@ -579,42 +584,90 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
-		).toEqualTypeOf<"Organization not found">();
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
+		).toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.message,
-		).toEqualTypeOf<"OTP has expired">();
+			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
+		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL.message,
-		).toEqualTypeOf<"Invalid email">();
+			client.$ERROR_CODES.INVALID_EMAIL.code,
+		).toEqualTypeOf<"INVALID_EMAIL">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.message,
-		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.code,
+		).toEqualTypeOf<"YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN.message,
-		).toEqualTypeOf<"Invalid session token">();
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
+		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.message,
-		).toEqualTypeOf<"Provider not found">();
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
+		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE.message,
-		).toEqualTypeOf<"Invalid device code">();
+			client.$ERROR_CODES.INVALID_DEVICE_CODE.code,
+		).toEqualTypeOf<"INVALID_DEVICE_CODE">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND.message,
-		).toEqualTypeOf<"User not found">();
+			client.$ERROR_CODES.USER_NOT_FOUND.code,
+		).toEqualTypeOf<"USER_NOT_FOUND">();
+	});
+});
+
+describe("plugin actions deep merge", () => {
+	it("should merge actions from multiple plugins with same top-level key", async () => {
+		const client = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both methods should be accessible under signIn
+		expect(typeof client.signIn.methodA).toBe("function");
+		expect(typeof client.signIn.methodB).toBe("function");
+
+		// Both methods should work correctly
+		const resultA = await client.signIn.methodA();
+		const resultB = await client.signIn.methodB();
+		expect(resultA).toEqual({ success: true, method: "A" });
+		expect(resultB).toEqual({ success: true, method: "B" });
+	});
+
+	it("should preserve first plugin methods when second plugin adds to same key", async () => {
+		// Order matters: A first, then B
+		const clientAB = createVanillaClient({
+			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Order reversed: B first, then A
+		const clientBA = createVanillaClient({
+			plugins: [testDeepMergePluginB(), testDeepMergePluginA()],
+			fetchOptions: {
+				customFetchImpl: async () => new Response(),
+				baseURL: "http://localhost:3000",
+			},
+		});
+
+		// Both orders should have both methods
+		expect(typeof clientAB.signIn.methodA).toBe("function");
+		expect(typeof clientAB.signIn.methodB).toBe("function");
+		expect(typeof clientBA.signIn.methodA).toBe("function");
+		expect(typeof clientBA.signIn.methodB).toBe("function");
 	});
 });

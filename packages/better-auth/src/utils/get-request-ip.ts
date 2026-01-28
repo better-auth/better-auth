@@ -1,6 +1,6 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { isDevelopment, isTest } from "@better-auth/core/env";
-import * as z from "zod";
+import { isValidIP, normalizeIP } from "@better-auth/core/utils/ip";
 
 // Localhost IP used for test and development environments
 const LOCALHOST_IP = "127.0.0.1";
@@ -25,7 +25,9 @@ export function getIp(
 		if (typeof value === "string") {
 			const ip = value.split(",")[0]!.trim();
 			if (isValidIP(ip)) {
-				return ip;
+				return normalizeIP(ip, {
+					ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
+				});
 			}
 		}
 	}
@@ -36,19 +38,4 @@ export function getIp(
 	}
 
 	return null;
-}
-
-function isValidIP(ip: string): boolean {
-	const ipv4 = z.ipv4().safeParse(ip);
-
-	if (ipv4.success) {
-		return true;
-	}
-
-	const ipv6 = z.ipv6().safeParse(ip);
-	if (ipv6.success) {
-		return true;
-	}
-
-	return false;
 }

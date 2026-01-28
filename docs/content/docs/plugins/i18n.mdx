@@ -1,0 +1,219 @@
+---
+title: i18n
+description: Internationalization plugin for translating error messages
+---
+
+The i18n plugin allows you to translate error messages returned by Better Auth based on the user's locale. It supports multiple locale detection strategies including HTTP headers, cookies, session data, and custom callbacks.
+
+Better Auth already provides English error messages by default, so you only need to provide translations for other languages.
+
+## Installation
+
+<Steps>
+<Step>
+### Install the plugin
+
+```package-install
+@better-auth/i18n
+```
+</Step>
+<Step>
+### Add the plugin to your **auth** config
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { i18n } from "@better-auth/i18n"
+
+export const auth = betterAuth({
+    plugins: [
+        i18n({
+            translations: {
+                fr: {
+                    USER_NOT_FOUND: "Utilisateur non trouvé",
+                    INVALID_EMAIL_OR_PASSWORD: "Email ou mot de passe invalide",
+                    INVALID_PASSWORD: "Mot de passe invalide",
+                },
+                de: {
+                    USER_NOT_FOUND: "Benutzer nicht gefunden",
+                    INVALID_EMAIL_OR_PASSWORD: "Ungültige E-Mail oder Passwort",
+                    INVALID_PASSWORD: "Ungültiges Passwort",
+                },
+            },
+        }),
+    ],
+})
+```
+</Step>
+</Steps>
+
+## Usage
+
+The plugin automatically detects the user's locale and translates error messages accordingly. When an error is returned, the response will include both the translated message and the original message.
+
+### Error Response Format
+
+When an error occurs and a translation is available, the response will look like this:
+
+```json
+{
+    "code": "INVALID_EMAIL_OR_PASSWORD",
+    "message": "Email ou mot de passe invalide",
+    "originalMessage": "Invalid email or password"
+}
+```
+
+### Locale Detection
+
+By default, the plugin detects the locale from the `Accept-Language` HTTP header. You can configure multiple detection strategies that are checked in order:
+
+```ts title="auth.ts"
+i18n({
+    translations: { /* ... */ },
+    detection: ["cookie", "header", "session"], // Priority order
+})
+```
+
+Available detection strategies:
+
+- **`header`** - Uses the `Accept-Language` HTTP header (default)
+- **`cookie`** - Reads locale from a cookie
+- **`session`** - Reads locale from the authenticated user's stored preference
+- **`callback`** - Uses a custom function to determine locale
+
+### Header-Based Detection
+
+The plugin automatically parses the `Accept-Language` header, including quality values:
+
+```http
+Accept-Language: fr-CA, fr;q=0.9, en;q=0.8
+```
+
+This would first try `fr-CA` (mapped to `fr`), then `fr`, then `en`.
+
+### Cookie-Based Detection
+
+To use cookie-based detection, add `"cookie"` to the detection strategies and optionally configure the cookie name:
+
+```ts title="auth.ts"
+i18n({
+    translations: { /* ... */ },
+    detection: ["cookie", "header"],
+    localeCookie: "lang", // Default is "locale"
+})
+```
+
+### Session-Based Detection
+
+If you store the user's locale preference in their profile, you can detect it from the session:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    user: {
+        additionalFields: {
+            locale: { type: "string", required: false },
+        },
+    },
+    plugins: [
+        i18n({
+            translations: { /* ... */ },
+            detection: ["session", "header"],
+            userLocaleField: "locale", // Default is "locale"
+        }),
+    ],
+})
+```
+
+### Custom Detection Callback
+
+For advanced use cases, you can provide a custom locale detection function:
+
+```ts title="auth.ts"
+i18n({
+    translations: { /* ... */ },
+    detection: ["callback", "header"],
+    getLocale: (request, ctx) => {
+        // Custom logic: use query param, custom header, etc.
+        const url = new URL(request.url);
+        return url.searchParams.get("lang");
+    },
+})
+```
+
+The callback receives the request object and the auth context, and should return the locale code or `null`.
+
+## Error Codes
+
+The plugin translates error messages based on error codes. You can find all available error codes in the [Error Codes Reference](/docs/reference/errors).
+
+Common error codes include:
+
+| Code | Default Message |
+|------|-----------------|
+| `USER_NOT_FOUND` | User not found |
+| `INVALID_EMAIL_OR_PASSWORD` | Invalid email or password |
+| `INVALID_PASSWORD` | Invalid password |
+| `CREDENTIAL_ACCOUNT_NOT_FOUND` | Credential account not found |
+| `EMAIL_NOT_VERIFIED` | Email not verified |
+| `SESSION_EXPIRED` | Session expired |
+
+## Options
+
+### `translations`
+
+**Type:** `Record<string, Record<string, string>>`
+
+**Required:** Yes
+
+A dictionary of translations keyed by locale code. Each locale contains a mapping of error codes to translated messages. Since Better Auth already provides English messages, you typically only need to provide translations for other languages.
+
+```ts
+translations: {
+    fr: { USER_NOT_FOUND: "Utilisateur non trouvé" },
+    de: { USER_NOT_FOUND: "Benutzer nicht gefunden" },
+}
+```
+
+### `defaultLocale`
+
+**Type:** `string`
+
+**Default:** `"en" when possible, otherwise the first locale in the translations dictionary`
+
+The fallback locale to use when no locale can be detected or the detected locale is not in the translations.
+
+### `detection`
+
+**Type:** `Array<"header" | "cookie" | "session" | "callback">`
+
+**Default:** `["header"]`
+
+An array of detection strategies to use, in priority order. The first strategy that returns a valid locale will be used.
+
+### `localeCookie`
+
+**Type:** `string`
+
+**Default:** `"locale"`
+
+The name of the cookie to read when using the `"cookie"` detection strategy.
+
+### `userLocaleField`
+
+**Type:** `string`
+
+**Default:** `"locale"`
+
+The field name on the user object that stores their locale preference when using the `"session"` detection strategy.
+
+### `getLocale`
+
+**Type:** `(request: Request, ctx: AuthContext) => string | null | Promise<string | null>`
+
+A custom function to detect the locale when using the `"callback"` detection strategy. Receives the request and auth context, returns the locale code or `null`.
+
+## Fallback Behavior
+
+- If a translation is not found for a specific error code in the detected locale, the built-in English message is kept.
+- If the detected locale is not in the translations dictionary, the built-in English message is used.
+- If no locale can be detected from any strategy, the built-in English message is used.
+- Non-error responses are never modified by this plugin.

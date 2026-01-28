@@ -1,0 +1,17 @@
+{
+  "name": "@better-auth-test/prisma-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run",
+    "prepare": "prisma generate --schema ./base.prisma"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "@prisma/client": "5.22.0",
+    "better-auth": "workspace:*",
+    "prisma": "^5.22.0"
+  }
+}

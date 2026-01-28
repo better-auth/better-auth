@@ -1,5 +1,5 @@
 {
-  "name": "integration",
+  "name": "@better-auth-test/integration",
   "scripts": {
     "e2e:integration": "playwright test"
   },
@@ -7,6 +7,6 @@
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@playwright/test": "^1.56.1"
+    "@playwright/test": "^1.58.0"
   }
 }

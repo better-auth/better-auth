@@ -74,7 +74,7 @@ export const dropbox = (options: DropboxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://api.dropbox.com/oauth2/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {

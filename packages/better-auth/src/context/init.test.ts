@@ -1,9 +1,9 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it } from "vitest";
 import { init } from "./init";
 
 describe("init (with Kysely)", () => {
-	const database = new Database(":memory:");
+	const database = new DatabaseSync(":memory:");
 
 	it("should initialize with Kysely adapter", async () => {
 		const res = await init({
