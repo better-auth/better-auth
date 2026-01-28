@@ -120,7 +120,10 @@ function getPathAliasesRecursive(
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
+	let tsConfigPath = path.join(cwd, "tsconfig.json");
+	if (!fs.existsSync(tsConfigPath)) {
+		tsConfigPath = path.join(cwd, "jsconfig.json");
+	}
 	if (!fs.existsSync(tsConfigPath)) {
 		return null;
 	}
