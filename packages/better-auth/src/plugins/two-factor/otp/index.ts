@@ -204,9 +204,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 					code: "OTP_NOT_CONFIGURED",
 				});
 			}
-			const plugin = ctx.context.getPlugin("two-factor");
-			const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
-			const { session, key } = await verifyTwoFactor(ctx, trustDeviceMaxAge);
+			const { session, key } = await verifyTwoFactor(ctx);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
 			await ctx.context.internalAdapter.createVerificationValue({
@@ -306,12 +304,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			},
 		},
 		async (ctx) => {
-			const plugin = ctx.context.getPlugin("two-factor");
-			const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
-			const { session, key, valid, invalid } = await verifyTwoFactor(
-				ctx,
-				trustDeviceMaxAge,
-			);
+			const { session, key, valid, invalid } = await verifyTwoFactor(ctx);
 			const toCheckOtp =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`2fa-otp-${key}`,
