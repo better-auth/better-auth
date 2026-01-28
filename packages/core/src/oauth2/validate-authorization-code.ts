@@ -6,7 +6,7 @@ import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
-export async function createAuthorizationCodeRequest({
+export async function authorizationCodeRequest({
 	code,
 	codeVerifier,
 	redirectURI,
@@ -27,13 +27,50 @@ export async function createAuthorizationCodeRequest({
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
+	options = typeof options === "function" ? await options() : options;
+	return createAuthorizationCodeRequest({
+		code,
+		codeVerifier,
+		redirectURI,
+		options,
+		authentication,
+		deviceId,
+		headers,
+		additionalParams,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd authorizationCodeRequest instead
+ */
+export function createAuthorizationCodeRequest({
+	code,
+	codeVerifier,
+	redirectURI,
+	options,
+	authentication,
+	deviceId,
+	headers,
+	additionalParams = {},
+	resource,
+}: {
+	code: string;
+	redirectURI: string;
+	options: Partial<ProviderOptions>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
 	const body = new URLSearchParams();
 	const requestHeaders: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 		...headers,
 	};
-	options = typeof options === "function" ? await options() : options;
 
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
@@ -103,18 +140,17 @@ export async function validateAuthorizationCode({
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
-	const { body, headers: requestHeaders } =
-		await createAuthorizationCodeRequest({
-			code,
-			codeVerifier,
-			redirectURI,
-			options,
-			authentication,
-			deviceId,
-			headers,
-			additionalParams,
-			resource,
-		});
+	const { body, headers: requestHeaders } = await authorizationCodeRequest({
+		code,
+		codeVerifier,
+		redirectURI,
+		options,
+		authentication,
+		deviceId,
+		headers,
+		additionalParams,
+		resource,
+	});
 
 	const { data, error } = await betterFetch<object>(tokenEndpoint, {
 		method: "POST",

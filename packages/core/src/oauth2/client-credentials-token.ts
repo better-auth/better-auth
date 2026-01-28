@@ -3,7 +3,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export async function createClientCredentialsTokenRequest({
+export async function clientCredentialsTokenRequest({
 	options,
 	scope,
 	authentication,
@@ -14,12 +14,34 @@ export async function createClientCredentialsTokenRequest({
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
+	options = typeof options === "function" ? await options() : options;
+	return createClientCredentialsTokenRequest({
+		options,
+		scope,
+		authentication,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd clientCredentialsTokenRequest instead
+ */
+export function createClientCredentialsTokenRequest({
+	options,
+	scope,
+	authentication,
+	resource,
+}: {
+	options: ProviderOptions & { clientSecret: string };
+	scope?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
-	options = typeof options === "function" ? await options() : options;
 
 	body.set("grant_type", "client_credentials");
 	scope && body.set("scope", scope);
@@ -67,7 +89,7 @@ export async function clientCredentialsToken({
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = await createClientCredentialsTokenRequest({
+	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,

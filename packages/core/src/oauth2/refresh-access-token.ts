@@ -3,7 +3,7 @@ import { betterFetch } from "@better-fetch/fetch";
 import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
-export async function createRefreshAccessTokenRequest({
+export async function refreshAccessTokenRequest({
 	refreshToken,
 	options,
 	authentication,
@@ -16,12 +16,37 @@ export async function createRefreshAccessTokenRequest({
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
+	options = typeof options === "function" ? await options() : options;
+	return createRefreshAccessTokenRequest({
+		refreshToken,
+		options,
+		authentication,
+		extraParams,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd refreshAccessTokenRequest instead
+ */
+export function createRefreshAccessTokenRequest({
+	refreshToken,
+	options,
+	authentication,
+	extraParams,
+	resource,
+}: {
+	refreshToken: string;
+	options: ProviderOptions;
+	authentication?: ("basic" | "post") | undefined;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
 	const body = new URLSearchParams();
 	const headers: Record<string, any> = {
 		"content-type": "application/x-www-form-urlencoded",
 		accept: "application/json",
 	};
-	options = typeof options === "function" ? await options() : options;
 
 	body.set("grant_type", "refresh_token");
 	body.set("refresh_token", refreshToken);
