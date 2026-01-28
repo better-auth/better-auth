@@ -4,6 +4,7 @@ import type {
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
+import type { RawError } from "@better-auth/core/utils/error-codes";
 import type {
 	BetterAuthPluginDBSchema,
 	InferFieldsInputClient,
@@ -83,15 +84,11 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
 					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
-						? E extends Record<
-								string,
-								{
-									code: string;
-									message: string;
-								}
-							>
-							? E
-							: {}
+						? {
+								[K in keyof E & string]: E[K] extends RawError
+									? RawError<K>
+									: never;
+							}
 						: {}
 					: {}
 			>

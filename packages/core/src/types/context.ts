@@ -226,9 +226,13 @@ export type PluginContext<Options extends BetterAuthOptions> = {
 		pluginId: ID,
 	) =>
 		| (ID extends BetterAuthPluginRegistryIdentifier
-				? ReturnType<
-						BetterAuthPluginRegistry<Options, PluginOptions>[ID]["creator"]
-					>
+				? BetterAuthPluginRegistry<Options, PluginOptions>[ID] extends {
+						creator: infer C;
+					}
+					? C extends (...args: any[]) => infer R
+						? R
+						: never
+					: never
 				: BetterAuthPlugin)
 		| null;
 	/**
