@@ -290,6 +290,15 @@ export interface OAuthClient {
 	disabled?: boolean;
 	skip_consent?: boolean;
 	enable_end_session?: boolean;
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	require_pkce?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
 	[key: string]: unknown;

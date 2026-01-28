@@ -842,6 +842,15 @@ export interface SchemaClient<
 	 * - user-agent-based - A user-agent-based application (public client)
 	 */
 	type?: "web" | "native" | "user-agent-based";
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	requirePKCE?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;

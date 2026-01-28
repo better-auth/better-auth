@@ -56,6 +56,7 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 					.default(0),
 				skip_consent: z.boolean().optional(),
 				enable_end_session: z.boolean().optional(),
+				require_pkce: z.boolean().optional(),
 				metadata: z.record(z.string(), z.unknown()).optional(),
 			}),
 			metadata: {

@@ -1072,6 +1072,76 @@ oauthProvider({
 ```
 
 
+### PKCE Configuration
+
+PKCE (Proof Key for Code Exchange) is a security mechanism that prevents authorization code interception attacks. This plugin follows the OAuth 2.1 specification, which requires PKCE by default for all authorization code flows.
+
+#### Default Behavior
+
+By default, PKCE is required for all clients. This provides maximum security and follows OAuth 2.1 best practices.
+
+**PKCE is always required for:**
+- Public clients (native/user-agent-based applications)
+- Any authorization request with the `offline_access` scope (refresh tokens)
+
+#### Per-Client PKCE Configuration
+
+Individual clients can opt-out of PKCE requirement during registration if needed for compatibility:
+
+```ts title="register-client.ts"
+// Register a confidential client that doesn't support PKCE
+const response = await auth.api.createOAuthClient({
+  headers,
+  body: {
+    client_name: 'Legacy Backend Service',
+    redirect_uris: ['https://app.example.com/callback'],
+    token_endpoint_auth_method: 'client_secret_post',
+    grant_types: ['authorization_code'],
+    require_pkce: false, // Opt-out of PKCE requirement
+  }
+});
+```
+
+The `require_pkce` field:
+- Defaults to `true` (PKCE required)
+- Only applies to confidential clients
+- Ignored for public clients (PKCE always required)
+- Ignored for `offline_access` scope (PKCE always required)
+
+**When to use `require_pkce: false`:**
+- Migrating from OAuth 2.0 with legacy confidential clients that don't support PKCE
+- Backend-to-backend integrations where updating the client is not feasible
+- Temporary compatibility during a phased migration
+
+**Recommendation:** Keep PKCE enabled (default) whenever possible. PKCE provides defense-in-depth even for confidential clients.
+
+#### Migrating from oidc-provider
+
+If you're migrating from the deprecated `oidc-provider` plugin and have confidential clients that don't support PKCE:
+
+1. **For legacy clients, opt-out per-client:**
+   Set `require_pkce: false` when registering clients that cannot be updated to support PKCE.
+
+2. **For new clients, use PKCE:**
+   New client registrations should always use PKCE (the default) for better security.
+
+3. **Phase out non-PKCE clients:**
+   Plan to upgrade or replace clients that don't support PKCE over time.
+
+4. **Monitor usage:**
+   Track which clients have `require_pkce: false` for migration planning.
+
+#### Security Considerations
+
+PKCE prevents authorization code interception attacks. Even for confidential clients with client_secret authentication, PKCE provides additional security:
+
+- **Defense in depth**: Multiple security layers
+- **Protection against misconfiguration**: Accidental secret exposure
+- **Future-proof**: Aligns with OAuth 2.1 best practices
+
+Only disable PKCE for confidential clients when absolutely necessary for legacy compatibility.
+
+
 ### Organizations
 
 OAuth Clients are tied to either a user or `reference_id` at registration and is immutable. If you are utilizing the [organization plugin](/docs/plugins/organization), you must ensure that the [`activeOrganizationId`](/docs/plugins/organization#active-organization) is set on your active session when you create new clients.
@@ -1793,7 +1863,7 @@ To improve lookup performance, database adapters may map the field `client_id` o
 - **`clientRegistrationDefaultScopes`** (previously `defaultScope`) is now in array format instead of a space-separated string
 - **`consentPage`** is now required
 - **`getConsentHTML`** is removed in favor of the `consentPage` as raw html is not a response type supported by the authorize endpoint in OAuth
-- **`requirePKCE`** is removed as PKCE is required in OAuth 2.1
+- **`requirePKCE`** (global option) is removed. PKCE is now required by default per OAuth 2.1. Individual clients can opt-out using `require_pkce: false` during registration if needed for legacy compatibility.
 - **`allowPlainCodeChallengeMethod`** is removed as the `plain` code challenge is considered less secure than the default `S256` method
 - **`customUserInfoClaims`** (previously `getAdditionalUserInfoClaim`) passes the jwt payload instead of the client of the access token used in the request.
 - **`storeClientSecret`** now defaults to `hashed`, or `encrypted` if `disableJwtPlugin: true` (previously `plain`).
@@ -1828,6 +1898,7 @@ const defaultHasher = async (value: string) => {
     - Clients with `type: "user-agent-based"`: set `public: true` and `clientSecret: undefined`
     - Clients with `clientSecret: undefined`: set `public: true`
 - `redirectURLs` renamed to `redirectUris`
+- `requirePkce` field added (optional, defaults to `true`). For existing confidential clients that don't support PKCE, set `requirePkce: false`.
 - `metadata` is now stored in database as individual fields instead of a JSON object. Parse the metadata into their respective fields. The OIDC plugin did not utilize this field but this OAuth plugin may utilize them in the future.
 
 ##### Table: `oauthAccessToken`
