@@ -55,26 +55,20 @@ export const updateMemberRole = <O extends OrganizationOptions>(
 									schema: {
 										type: "object",
 										properties: {
-											member: {
-												type: "object",
-												properties: {
-													id: {
-														type: "string",
-													},
-													userId: {
-														type: "string",
-													},
-													organizationId: {
-														type: "string",
-													},
-													role: {
-														type: "string",
-													},
-												},
-												required: ["id", "userId", "organizationId", "role"],
+											id: {
+												type: "string",
+											},
+											userId: {
+												type: "string",
+											},
+											organizationId: {
+												type: "string",
+											},
+											role: {
+												type: "string",
 											},
 										},
-										required: ["member"],
+										required: ["id", "userId", "organizationId", "role"],
 									},
 								},
 							},

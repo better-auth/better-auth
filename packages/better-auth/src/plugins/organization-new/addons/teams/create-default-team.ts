@@ -26,10 +26,10 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 
 	const teamHook = getHook("CreateTeam", options);
 
-	let team: Omit<InferTeam<O>, "id"> & Record<string, any>;
+	let team: InferTeam<O> & Record<string, any>;
 	try {
 		team = await (async () => {
-			type Result = Omit<InferTeam<O>, "id"> & Record<string, any>;
+			type Result = InferTeam<O> & Record<string, any>;
 			if (customCreateDefaultTeam) {
 				const result = await customCreateDefaultTeam(organization, ctx);
 				return result as unknown as Result;
@@ -50,6 +50,8 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 		const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM;
 		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 	}
+
+	await teamHook.after({ organization, team, user });
 
 	try {
 		await adapter.createTeamMember({

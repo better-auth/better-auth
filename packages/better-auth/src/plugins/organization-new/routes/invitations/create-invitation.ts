@@ -279,8 +279,23 @@ export const createInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			// If resend is true and there's an existing invitation, reuse it
-			if (alreadyInvited.length && ctx.body.resend) {
+			// If resend is true and cancelPendingInvitationsOnReInvite is enabled,
+			// cancel the old invitation and create a new one
+			if (
+				alreadyInvited.length &&
+				ctx.body.resend &&
+				options.cancelPendingInvitationsOnReInvite
+			) {
+				const invitation = alreadyInvited[0]!;
+				await adapter.updateInvitation({
+					invitationId: invitation.id,
+					status: "canceled",
+				});
+				// Fall through to create a new invitation
+			}
+			// If resend is true but cancelPendingInvitationsOnReInvite is false,
+			// just update the existing invitation's expiration and return
+			else if (alreadyInvited.length && ctx.body.resend) {
 				const existingInvitation = alreadyInvited[0]!;
 
 				// Update the invitation's expiration date using the same logic as createInvitation
@@ -322,14 +337,6 @@ export const createInvitation = <O extends OrganizationOptions>(
 				);
 
 				return ctx.json({ invitation: updatedInvitation, organization });
-			}
-
-			if (alreadyInvited.length && options.cancelPendingInvitationsOnReInvite) {
-				const invitation = alreadyInvited[0]!;
-				await adapter.updateInvitation({
-					invitationId: invitation.id,
-					status: "canceled",
-				});
 			}
 
 			const invitationLimit = await options.invitationLimit(
