@@ -332,3 +332,5 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";
