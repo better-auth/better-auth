@@ -336,6 +336,22 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
+	it("should work with cross-realm Headers-like object (instanceof fails)", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Simulate cross-realm Headers where instanceof check fails
+		// See: https://github.com/better-auth/better-auth/pull/1838
+		const crossRealmHeaders = {
+			get: (name: string) => headers.get(name),
+			has: (name: string) => headers.has(name),
+		};
+
+		const cookies = getSessionCookie(crossRealmHeaders as Headers);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
 	it("should return the correct session cookie on production", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			baseURL: "https://example.com",
