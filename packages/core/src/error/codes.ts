@@ -1,7 +1,6 @@
 import { defineErrorCodes } from "../utils/error-codes";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		/**
 		 * This plugin does not exist, do not use it in runtime.
