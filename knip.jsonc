@@ -90,8 +90,7 @@
 		"packages/sso": {
 			"ignoreDependencies": [
 				// type-only dependencies
-				"@better-auth/core",
-				"better-call"
+				"@better-auth/core"
 			]
 		},
 		"packages/test-utils": {

@@ -73,7 +73,6 @@
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
     "body-parser": "^2.2.2",
     "express": "^5.2.1",
     "oauth2-mock-server": "^8.2.1",
