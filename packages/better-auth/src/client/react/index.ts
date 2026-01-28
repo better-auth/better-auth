@@ -8,7 +8,7 @@ import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import type { UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -99,9 +99,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
+			$ERROR_CODES: InferErrorCodes<Option> & typeof BASE_ERROR_CODES;
 		};
 }
 
