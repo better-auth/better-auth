@@ -16,7 +16,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 		const { oauthState } = ctx.query;
 		if (oauthState) {
 			const oauthStateCookie = ctx.context.createAuthCookie("oauth_state", {
-				maxAge: 10 * 60 * 1000, // 10 minutes
+				maxAge: 10 * 60, // 10 minutes
 			});
 			ctx.setCookie(
 				oauthStateCookie.name,
@@ -35,7 +35,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 			});
 		}
 		const stateCookie = ctx.context.createAuthCookie("state", {
-			maxAge: 5 * 60 * 1000, // 5 minutes
+			maxAge: 5 * 60, // 5 minutes
 		});
 		await ctx.setSignedCookie(
 			stateCookie.name,

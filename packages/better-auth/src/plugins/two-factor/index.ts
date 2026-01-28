@@ -8,7 +8,11 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
 import { sessionMiddleware } from "../../api";
-import { deleteSessionCookie, setSessionCookie } from "../../cookies";
+import {
+	deleteSessionCookie,
+	expireCookie,
+	setSessionCookie,
+} from "../../cookies";
 import { symmetricEncrypt } from "../../crypto";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db/schema";
@@ -58,6 +62,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const opts = {
 		twoFactorTable: "twoFactor",
 	};
+	const trustDeviceMaxAge =
+		options?.trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 	const backupCodeOptions = {
 		storeBackupCodes: "encrypted",
 		...options?.backupCodeOptions,
@@ -289,6 +295,25 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					await ctx.context.internalAdapter.deleteSession(
 						ctx.context.session.session.token,
 					);
+					const disableTrustCookie = ctx.context.createAuthCookie(
+						TRUST_DEVICE_COOKIE_NAME,
+						{
+							maxAge: trustDeviceMaxAge,
+						},
+					);
+					const disableTrustValue = await ctx.getSignedCookie(
+						disableTrustCookie.name,
+						ctx.context.secret,
+					);
+					if (disableTrustValue) {
+						const [, trustId] = disableTrustValue.split("!");
+						if (trustId) {
+							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+								trustId,
+							);
+						}
+						expireCookie(ctx, disableTrustCookie);
+					}
 					return ctx.json({ status: true });
 				},
 			),
@@ -317,7 +342,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						const trustDeviceCookieAttrs = ctx.context.createAuthCookie(
 							TRUST_DEVICE_COOKIE_NAME,
 							{
-								maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+								maxAge: trustDeviceMaxAge,
 							},
 						);
 						// Check for trust device cookie
@@ -327,36 +352,62 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						);
 
 						if (trustDeviceCookie) {
-							const [token, sessionToken] = trustDeviceCookie.split("!");
-							const expectedToken = await createHMAC(
-								"SHA-256",
-								"base64urlnopad",
-							).sign(ctx.context.secret, `${data.user.id}!${sessionToken}`);
-
-							// Checks if the token is signed correctly, not that its the current session token
-							if (token === expectedToken) {
-								// Trust device cookie is valid, refresh it and skip 2FA
-								const newTrustDeviceCookie = ctx.context.createAuthCookie(
-									TRUST_DEVICE_COOKIE_NAME,
-									{
-										maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
-									},
-								);
-								const newToken = await createHMAC(
+							const [token, trustIdentifier] = trustDeviceCookie.split("!");
+							if (token && trustIdentifier) {
+								const expectedToken = await createHMAC(
 									"SHA-256",
 									"base64urlnopad",
 								).sign(
 									ctx.context.secret,
-									`${data.user.id}!${data.session.token}`,
+									`${data.user.id}!${trustIdentifier}`,
 								);
-								await ctx.setSignedCookie(
-									newTrustDeviceCookie.name,
-									`${newToken}!${data.session.token}`,
-									ctx.context.secret,
-									trustDeviceCookieAttrs.attributes,
-								);
-								return;
+
+								if (token === expectedToken) {
+									// HMAC is valid; verify the server-side record
+									const verificationRecord =
+										await ctx.context.internalAdapter.findVerificationValue(
+											trustIdentifier,
+										);
+									if (
+										verificationRecord &&
+										verificationRecord.value === data.user.id &&
+										verificationRecord.expiresAt > new Date()
+									) {
+										await ctx.context.internalAdapter.deleteVerificationValue(
+											verificationRecord.id,
+										);
+										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
+										const newToken = await createHMAC(
+											"SHA-256",
+											"base64urlnopad",
+										).sign(
+											ctx.context.secret,
+											`${data.user.id}!${newTrustIdentifier}`,
+										);
+										await ctx.context.internalAdapter.createVerificationValue({
+											value: data.user.id,
+											identifier: newTrustIdentifier,
+											expiresAt: new Date(
+												Date.now() + trustDeviceMaxAge * 1000,
+											),
+										});
+										const newTrustDeviceCookie = ctx.context.createAuthCookie(
+											TRUST_DEVICE_COOKIE_NAME,
+											{
+												maxAge: trustDeviceMaxAge,
+											},
+										);
+										await ctx.setSignedCookie(
+											newTrustDeviceCookie.name,
+											`${newToken}!${newTrustIdentifier}`,
+											ctx.context.secret,
+											trustDeviceCookieAttrs.attributes,
+										);
+										return;
+									}
+								}
 							}
+							expireCookie(ctx, trustDeviceCookieAttrs);
 						}
 
 						/**
