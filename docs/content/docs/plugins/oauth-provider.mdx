@@ -1114,6 +1114,55 @@ By default all secrets are `hashed` by default on the database. This helps prote
 - **storeTokens**: the storage method of token values, specifically session refresh tokens and opaque access tokens.
 
 
+### Rate Limiting
+
+The OAuth Provider includes built-in rate limiting for all OAuth endpoints to protect against abuse and denial-of-service attacks.
+
+<Callout type="info">
+Rate limiting is **per-IP per-endpoint**. Each client IP address has its own rate limit counter for each endpoint. Rate limits reset after the window period expires.
+</Callout>
+
+<Callout type="warn">
+These rate limits only apply when Better Auth's global rate limiting is enabled. By default, rate limiting is only enabled in production. See [Rate Limiting](/docs/concepts/rate-limit) for global configuration.
+</Callout>
+
+**Default limits:**
+
+| Endpoint | Window | Max Requests |
+|----------|--------|--------------|
+| `/oauth2/token` | 60s | 20 |
+| `/oauth2/authorize` | 60s | 30 |
+| `/oauth2/introspect` | 60s | 100 |
+| `/oauth2/revoke` | 60s | 30 |
+| `/oauth2/register` | 60s | 5 |
+| `/oauth2/userinfo` | 60s | 60 |
+
+You can customize the rate limits for each endpoint:
+
+```ts title="auth.ts"
+oauthProvider({
+  rateLimit: {
+    token: { window: 60, max: 20 },        // 20 requests per minute
+    authorize: { window: 60, max: 30 },    // 30 requests per minute
+    introspect: { window: 60, max: 100 },  // 100 requests per minute
+    revoke: { window: 60, max: 30 },       // 30 requests per minute
+    register: { window: 60, max: 5 },      // 5 requests per minute
+    userinfo: { window: 60, max: 60 },     // 60 requests per minute
+  },
+})
+```
+
+To disable rate limiting for a specific endpoint, set it to `false`:
+
+```ts title="auth.ts"
+oauthProvider({
+  rateLimit: {
+    introspect: false, // Disable rate limiting for introspection
+  },
+})
+```
+
+
 ### Refresh Token Customization
 
 You can choose to format your session tokens in a different string format using the `formatRefreshToken`.
