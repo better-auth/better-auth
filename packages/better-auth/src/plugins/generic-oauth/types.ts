@@ -168,4 +168,9 @@ export interface GenericOAuthConfig {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+
+	/**
+	 * Additional params to include during refresh token requests.
+	 */
+	refreshAccessTokenExtraParams?: Record<string, string> | undefined;
 }
