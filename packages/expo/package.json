@@ -88,6 +88,9 @@
     "expo-linking": {
       "optional": true
     },
+    "expo-network": {
+      "optional": true
+    },
     "expo-web-browser": {
       "optional": true
     }
