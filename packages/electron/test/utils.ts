@@ -48,7 +48,7 @@ export const it = test.extend<{
 });
 
 function getTestInstance(overrideOpts?: BetterAuthOptions) {
-	const storage = new Map<string, string>();
+	const storage = new Map<string, any>();
 	const options = {
 		signInURL: "http://localhost:3000/sign-in",
 		protocol: {
