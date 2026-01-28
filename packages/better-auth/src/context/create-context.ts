@@ -348,22 +348,19 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
 	if (
-		typeof context.options.emailVerification?.onEmailVerification === "function"
+		typeof ctx.options.emailVerification?.onEmailVerification === "function"
 	) {
-		context.options.emailVerification.onEmailVerification = deprecate(
-			context.options.emailVerification.onEmailVerification,
+		ctx.options.emailVerification.onEmailVerification = deprecate(
+			ctx.options.emailVerification.onEmailVerification,
 			"Use `afterEmailVerification` instead. This will be removed in 1.5",
-			context.logger,
+			ctx.logger,
 		);
 	}
 
-	return context;
+	return ctx;
 }
