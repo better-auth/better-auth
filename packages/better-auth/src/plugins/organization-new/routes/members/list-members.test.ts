@@ -83,18 +83,6 @@ describe("list members", async (it) => {
 		expect(result.data?.total).toBe(11);
 	});
 
-	it("should return all members by organization slug", async () => {
-		const result = await auth.api.listMembers({
-			headers,
-			query: {
-				organizationSlug: secondOrgData.slug,
-			},
-		});
-
-		expect(result.members.length).toBe(11);
-		expect(result.total).toBe(11);
-	});
-
 	it("should limit the number of members", async () => {
 		const result = await auth.api.listMembers({
 			headers,
@@ -386,5 +374,44 @@ describe("list members with custom membershipLimit", async (it) => {
 		expect(result.members.length).toBe(2);
 		expect(result.total).toBe(4);
 		expect(result.limit).toBe(2);
+	});
+});
+
+describe("list members with defaultOrganizationIdField: slug", async (it) => {
+	const plugin = organization({ defaultOrganizationIdField: "slug" });
+	const { auth, signInWithTestUser } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	// Create an organization
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should allow listing members by organizationId using slug", async () => {
+		const result = await auth.api.listMembers({
+			headers,
+			query: {
+				organizationId: testOrg.slug,
+			},
+		});
+
+		expect(result.members.length).toBe(1);
+		expect(result.total).toBe(1);
+	});
+
+	it("should not allow listing members by organizationId using id when slug is the default", async () => {
+		await expect(
+			auth.api.listMembers({
+				headers,
+				query: {
+					organizationId: testOrg.id,
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message);
 	});
 });
