@@ -47,8 +47,8 @@ export const electronClient = (options: ElectronClientOptions) => {
 	const { scheme } = parseProtocolScheme(opts.protocol);
 
 	let store: ClientStore | null = null;
-	const cookieName = `${opts.storagePrefix}_cookie`;
-	const localCacheName = `${opts.storagePrefix}_local_cache`;
+	const cookieName = `${opts.storagePrefix}.cookie`;
+	const localCacheName = `${opts.storagePrefix}.local_cache`;
 	const { getDecrypted, setEncrypted } = storageAdapter(opts.storage);
 
 	if (
