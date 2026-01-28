@@ -68,9 +68,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 		storeBackupCodes: "encrypted",
 		...options?.backupCodeOptions,
 	} satisfies BackupCodeOptions;
-	const totp = totp2fa(options?.totpOptions, trustDeviceMaxAge);
-	const backupCode = backupCode2fa(backupCodeOptions, trustDeviceMaxAge);
-	const otp = otp2fa(options?.otpOptions, trustDeviceMaxAge);
+	const totp = totp2fa(options?.totpOptions);
+	const backupCode = backupCode2fa(backupCodeOptions);
+	const otp = otp2fa(options?.otpOptions);
 
 	return {
 		id: "two-factor",

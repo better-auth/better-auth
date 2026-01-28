@@ -70,10 +70,7 @@ const verifyTOTPBodySchema = z.object({
 		.optional(),
 });
 
-export const totp2fa = (
-	options?: TOTPOptions | undefined,
-	trustDeviceMaxAge?: number,
-) => {
+export const totp2fa = (options?: TOTPOptions | undefined) => {
 	const opts = {
 		...options,
 		digits: options?.digits || 6,
@@ -238,10 +235,7 @@ export const totp2fa = (
 					code: "TOTP_NOT_CONFIGURED",
 				});
 			}
-			const { session, valid, invalid } = await verifyTwoFactor(
-				ctx,
-				trustDeviceMaxAge,
-			);
+			const { session, valid, invalid } = await verifyTwoFactor(ctx);
 			const user = session.user as UserWithTwoFactor;
 			const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 				model: twoFactorTable,

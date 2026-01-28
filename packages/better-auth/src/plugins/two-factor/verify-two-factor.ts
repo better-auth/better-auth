@@ -13,10 +13,7 @@ import {
 import { TWO_FACTOR_ERROR_CODES } from "./error-code";
 import type { UserWithTwoFactor } from "./types";
 
-export async function verifyTwoFactor(
-	ctx: GenericEndpointContext,
-	trustDeviceMaxAge?: number,
-) {
+export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 	const invalid = (errorKey: keyof typeof TWO_FACTOR_ERROR_CODES) => {
 		throw APIError.from("UNAUTHORIZED", TWO_FACTOR_ERROR_CODES[errorKey]);
 	};
@@ -82,6 +79,8 @@ export async function verifyTwoFactor(
 				// Always clear the two factor cookie after successful verification
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
+					const plugin = ctx.context.getPlugin("two-factor");
+					const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
 					const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,

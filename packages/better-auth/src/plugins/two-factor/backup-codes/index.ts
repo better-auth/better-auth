@@ -167,10 +167,7 @@ const generateBackupCodesBodySchema = z.object({
 	}),
 });
 
-export const backupCode2fa = (
-	opts: BackupCodeOptions,
-	trustDeviceMaxAge?: number,
-) => {
+export const backupCode2fa = (opts: BackupCodeOptions) => {
 	const twoFactorTable = "twoFactor";
 
 	return {
@@ -309,10 +306,7 @@ export const backupCode2fa = (
 					},
 				},
 				async (ctx) => {
-					const { session, valid } = await verifyTwoFactor(
-						ctx,
-						trustDeviceMaxAge,
-					);
+					const { session, valid } = await verifyTwoFactor(ctx);
 					const user = session.user as UserWithTwoFactor;
 					const twoFactor = await ctx.context.adapter.findOne<TwoFactorTable>({
 						model: twoFactorTable,

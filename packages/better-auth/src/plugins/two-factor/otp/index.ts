@@ -106,10 +106,7 @@ const send2FaOTPBodySchema = z
 /**
  * The otp adapter is created from the totp adapter.
  */
-export const otp2fa = (
-	options?: OTPOptions | undefined,
-	trustDeviceMaxAge?: number,
-) => {
+export const otp2fa = (options?: OTPOptions | undefined) => {
 	const opts = {
 		storeOTP: "plain",
 		digits: 6,
@@ -207,6 +204,8 @@ export const otp2fa = (
 					code: "OTP_NOT_CONFIGURED",
 				});
 			}
+			const plugin = ctx.context.getPlugin("two-factor");
+			const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
 			const { session, key } = await verifyTwoFactor(ctx, trustDeviceMaxAge);
 			const code = generateRandomString(opts.digits, "0-9");
 			const hashedCode = await storeOTP(ctx, code);
@@ -307,6 +306,8 @@ export const otp2fa = (
 			},
 		},
 		async (ctx) => {
+			const plugin = ctx.context.getPlugin("two-factor");
+			const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
 			const { session, key, valid, invalid } = await verifyTwoFactor(
 				ctx,
 				trustDeviceMaxAge,
