@@ -99,7 +99,7 @@ export const leaveOrganization = <O extends OrganizationOptions>(
 				userId: session.user.id,
 			});
 
-			if (session.session.activeOrganizationId === ctx.body.organizationId) {
+			if (session.session.activeOrganizationId === realOrgId) {
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
 

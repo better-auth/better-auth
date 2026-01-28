@@ -94,6 +94,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 						required: false,
 						fieldName: options.schema?.teamMember?.fields?.createdAt,
 					},
+					...(options.schema?.teamMember?.additionalFields || {}),
 				},
 			},
 		},

@@ -81,7 +81,7 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		(acc, addon) => {
 			return {
 				...acc,
-				...addon.endpoints,
+				...(addon.endpoints || {}),
 			};
 		},
 		{} satisfies Record<string, Endpoint>,

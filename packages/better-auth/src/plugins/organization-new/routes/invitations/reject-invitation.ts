@@ -107,10 +107,14 @@ export const rejectInvitation = <O extends OrganizationOptions>(
 				invitationId: ctx.body.invitationId,
 				status: "rejected",
 			});
+			if (!rejectedI) {
+				const msg = ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
 
 			await rejectInvitationHooks.after(
 				{
-					invitation: rejectedI || (invitation as unknown as Invitation),
+					invitation: rejectedI as unknown as Invitation,
 					user: session.user,
 					organization,
 				},
