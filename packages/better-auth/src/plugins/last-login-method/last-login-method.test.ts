@@ -303,7 +303,7 @@ describe("lastLoginMethod", async () => {
 			{ throw: true },
 		);
 
-		let session = await auth.api.getSession({
+		const session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${emailSignInData.token}`,
 			}),

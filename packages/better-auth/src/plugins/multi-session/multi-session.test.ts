@@ -20,7 +20,7 @@ describe("multi-session", async () => {
 		},
 	);
 
-	let headers = new Headers();
+	const headers = new Headers();
 	const testUser2 = {
 		email: "second-email@test.com",
 		password: "password",
@@ -147,6 +147,66 @@ describe("multi-session", async () => {
 			},
 		});
 		expect(res2.data).toHaveLength(0);
+	});
+
+	it("should replace old multi-session cookie when same user signs in again", async () => {
+		const sameUserHeaders = new Headers();
+		const sameUser = {
+			email: "same-user@test.com",
+			password: "password",
+			name: "Same User",
+		};
+
+		let firstSessionToken = "";
+		await client.signUp.email(sameUser, {
+			onSuccess: cookieSetter(sameUserHeaders),
+			onResponse(context) {
+				const header = context.response.headers.get("set-cookie");
+				const cookies = parseSetCookieHeader(header || "");
+				firstSessionToken =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+			},
+		});
+
+		const sessionsAfterFirst = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: sameUserHeaders },
+		});
+		const firstUserSessions = sessionsAfterFirst.data?.filter(
+			(s) => s.user.email === sameUser.email,
+		);
+		expect(firstUserSessions).toHaveLength(1);
+
+		let secondSessionToken = "";
+		await client.signIn.email(
+			{
+				email: sameUser.email,
+				password: sameUser.password,
+			},
+			{
+				onSuccess: cookieSetter(sameUserHeaders),
+				onResponse(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					secondSessionToken =
+						cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+					// Verify old cookie is being deleted
+					const oldCookieName = `better-auth.session_token_multi-${firstSessionToken.toLowerCase()}`;
+					const oldCookie = cookies.get(oldCookieName);
+					expect(oldCookie?.["max-age"]).toBe(0);
+				},
+				headers: sameUserHeaders,
+			},
+		);
+
+		expect(secondSessionToken).not.toBe(firstSessionToken);
+		const sessionsAfterSecond = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: sameUserHeaders },
+		});
+		const secondUserSessions = sessionsAfterSecond.data?.filter(
+			(s) => s.user.email === sameUser.email,
+		);
+		expect(secondUserSessions).toHaveLength(1);
+		expect(secondUserSessions?.[0]?.session.token).toBe(secondSessionToken);
 	});
 
 	it("should reject forged multi-session cookies on sign-out", async () => {

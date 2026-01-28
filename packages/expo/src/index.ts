@@ -10,6 +10,14 @@ export interface ExpoOptions {
 	disableOriginOverride?: boolean | undefined;
 }
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		expo: {
+			creator: typeof expo;
+		};
+	}
+}
+
 export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",

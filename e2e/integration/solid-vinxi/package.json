@@ -1,5 +1,5 @@
 {
-  "name": "better-auth-solid-vinxi-e2e",
+  "name": "@better-auth-test/fixtures-solid-vinxi",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,14 +8,13 @@
     "start": "vinxi start"
   },
   "dependencies": {
-    "@solidjs/router": "^0.15.3",
-    "@solidjs/start": "^1.1.7",
+    "@solidjs/router": "^0.15.4",
+    "@solidjs/start": "^1.2.1",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "solid-js": "^1.9.7",
-    "vinxi": "^0.5.8"
+    "solid-js": "^1.9.11",
+    "vinxi": "^0.5.11"
   },
   "devDependencies": {
-    "@better-auth/test-utils": "workspace:*"
+    "@better-auth-test/test-utils": "workspace:*"
   }
 }

@@ -1,10 +1,13 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { Account, DBAdapter, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
-import { APIError, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
-import { createAuthEndpoint } from "better-auth/plugins";
 import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import type { AuthMiddleware } from "./middlewares";
@@ -83,11 +86,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 				});
 			}
 
-			const isOrgPluginEnabled = ctx.context.options.plugins?.some(
-				(p) => p.id === "organization",
-			);
-
-			if (organizationId && !isOrgPluginEnabled) {
+			if (organizationId && !ctx.context.hasPlugin("organization")) {
 				throw new APIError("BAD_REQUEST", {
 					message:
 						"Restricting a token to an organization requires the organization plugin",
@@ -430,7 +429,7 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
-			let apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
+			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 			ctx.context.logger.info("Querying result with filters: ", apiFilters);
 
@@ -536,7 +535,11 @@ const patchSCIMUserBodySchema = z.object({
 		),
 	Operations: z.array(
 		z.object({
-			op: z.enum(["replace", "add", "remove"]).default("replace"),
+			op: z
+				.string()
+				.toLowerCase()
+				.default("replace")
+				.pipe(z.enum(["replace", "add", "remove"])),
 			path: z.string().optional(),
 			value: z.any(),
 		}),
@@ -623,7 +626,7 @@ export const deleteSCIMUser = (authMiddleware: AuthMiddleware) =>
 			method: "DELETE",
 			metadata: {
 				...HIDE_METADATA,
-				allowedMediaTypes: supportedMediaTypes,
+				allowedMediaTypes: [...supportedMediaTypes, ""],
 				openapi: {
 					summary: "Delete SCIM user",
 					description:

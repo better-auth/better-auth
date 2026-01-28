@@ -1,19 +1,18 @@
 {
-  "name": "vanilla-node-e2e",
+  "name": "@better-auth-test/fixtures-vanilla-node",
   "private": true,
   "type": "module",
   "scripts": {
     "start:client": "vite"
   },
   "devDependencies": {
-    "@better-auth/test-utils": "workspace:*",
-    "vite": "^7.2.4"
+    "@better-auth-test/test-utils": "workspace:*",
+    "vite": "^7.3.1"
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.2.0",
-    "kysely": "^0.28.5",
+    "kysely": "^0.28.10",
     "kysely-postgres-js": "^3.0.0",
-    "postgres": "^3.4.7"
+    "postgres": "^3.4.8"
   }
 }

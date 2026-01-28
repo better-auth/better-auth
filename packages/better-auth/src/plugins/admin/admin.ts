@@ -29,6 +29,14 @@ import type {
 	UserWithRole,
 } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		admin: {
+			creator: typeof admin;
+		};
+	}
+}
+
 export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
 		...(options || {}),

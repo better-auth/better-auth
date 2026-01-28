@@ -12,6 +12,14 @@ import { getSession } from "../../api";
 import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
+
 const getSessionQuerySchema = z.optional(
 	z.object({
 		/**

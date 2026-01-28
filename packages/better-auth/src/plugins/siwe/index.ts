@@ -16,6 +16,14 @@ import type {
 	WalletAddress,
 } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		siwe: {
+			creator: typeof siwe;
+		};
+	}
+}
+
 export interface SIWEPluginOptions {
 	domain: string;
 	emailDomainName?: string | undefined;

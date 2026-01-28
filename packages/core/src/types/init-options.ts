@@ -32,30 +32,47 @@ type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
 
+export type StoreIdentifierOption =
+	| "plain"
+	| "hashed"
+	| { hash: (identifier: string) => Promise<string> };
+
 export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
 
-export type BetterAuthRateLimitOptions = {
-	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
-	 */
-	enabled?: boolean | undefined;
+export interface BetterAuthRateLimitStorage {
+	get: (key: string) => Promise<RateLimit | null | undefined>;
+	set: (
+		key: string,
+		value: RateLimit,
+		update?: boolean | undefined,
+	) => Promise<void>;
+}
+
+export type BetterAuthRateLimitRule = {
 	/**
 	 * Default window to use for rate limiting. The value
 	 * should be in seconds.
 	 *
 	 * @default 10 seconds
 	 */
-	window?: number | undefined;
+	window: number;
 	/**
 	 * The default maximum number of requests allowed within the window.
 	 *
 	 * @default 100 requests
 	 */
-	max?: number | undefined;
+	max: number;
+};
+
+export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
+	/**
+	 * By default, rate limiting is only
+	 * enabled on production.
+	 */
+	enabled?: boolean | undefined;
 	/**
 	 * Custom rate limit rules to apply to
 	 * specific paths.
@@ -63,27 +80,12 @@ export type BetterAuthRateLimitOptions = {
 	customRules?:
 		| {
 				[key: string]:
-					| {
-							/**
-							 * The window to use for the custom rule.
-							 */
-							window: number;
-							/**
-							 * The maximum number of requests allowed within the window.
-							 */
-							max: number;
-					  }
+					| BetterAuthRateLimitRule
 					| false
-					| ((request: Request) =>
-							| { window: number; max: number }
-							| false
-							| Promise<
-									| {
-											window: number;
-											max: number;
-									  }
-									| false
-							  >);
+					| ((
+							request: Request,
+							currentRule: BetterAuthRateLimitRule,
+					  ) => Awaitable<false | BetterAuthRateLimitRule>);
 		  }
 		| undefined;
 	/**
@@ -113,10 +115,7 @@ export type BetterAuthRateLimitOptions = {
 	 * NOTE: If custom storage is used storage
 	 * is ignored
 	 */
-	customStorage?: {
-		get: (key: string) => Promise<RateLimit | undefined>;
-		set: (key: string, value: RateLimit) => Promise<void>;
-	};
+	customStorage?: BetterAuthRateLimitStorage;
 };
 
 export type BetterAuthAdvancedOptions = {
@@ -142,6 +141,13 @@ export type BetterAuthAdvancedOptions = {
 				 * ⚠︎ This is a security risk and it may expose your application to abuse
 				 */
 				disableIpTracking?: boolean;
+				/**
+				 * IPv6 subnet prefix length for rate limiting.
+				 * IPv6 addresses will be normalized to this subnet.
+				 *
+				 * @default 64
+				 */
+				ipv6Subnet?: 128 | 64 | 48 | 32;
 		  }
 		| undefined;
 	/**
@@ -151,17 +157,32 @@ export type BetterAuthAdvancedOptions = {
 	 */
 	useSecureCookies?: boolean | undefined;
 	/**
-	 * Disable trusted origins check
+	 * Disable all CSRF protection.
+	 *
+	 * When enabled, this disables:
+	 * - Origin header validation when cookies are present
+	 * - Fetch Metadata checks (Sec-Fetch-Site, Sec-Fetch-Mode, Sec-Fetch-Dest)
+	 * - Cross-site navigation blocking for first-login scenarios
 	 *
 	 * ⚠︎ This is a security risk and it may expose your application to
 	 * CSRF attacks
+	 *
+	 * @default false
 	 */
 	disableCSRFCheck?: boolean | undefined;
 	/**
-	 * Disable origin check
+	 * Disable URL validation against trustedOrigins.
 	 *
-	 * ⚠︎ This may allow requests from any origin to be processed by
-	 * Better Auth. And could lead to security vulnerabilities.
+	 * When enabled, this disables validation of:
+	 * - callbackURL
+	 * - redirectTo
+	 * - errorCallbackURL
+	 * - newUserCallbackURL
+	 *
+	 * ⚠︎ This may allow open redirects and could lead to security
+	 * vulnerabilities.
+	 *
+	 * @default false
 	 */
 	disableOriginCheck?: boolean | undefined;
 	/**
@@ -229,17 +250,6 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				defaultFindManyLimit?: number;
 				/**
-				 * If your database auto increments number ids, set this to `true`.
-				 *
-				 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
-				 *
-				 * @default false
-				 *
-				 * @deprecated Please use `generateId` instead. This will be removed in future
-				 * releases.
-				 */
-				useNumberId?: boolean;
-				/**
 				 * Custom generateId function.
 				 *
 				 * If not provided, random ids will be generated.
@@ -294,8 +304,17 @@ export type BetterAuthAdvancedOptions = {
 	 * }
 	 */
 	backgroundTasks?: {
-		handler: (promise: Promise<void>) => void;
+		handler: (promise: Promise<unknown>) => void;
 	};
+	/**
+	 * Skip trailing slashes in API routes.
+	 *
+	 * When enabled, requests with trailing slashes (e.g., `/api/auth/session/`)
+	 * will be handled the same as requests without (e.g., `/api/auth/session`).
+	 *
+	 * @default false
+	 */
+	skipTrailingSlashes?: boolean;
 };
 
 export type BetterAuthOptions = {
@@ -451,10 +470,13 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
-				 * Send a verification email automatically
-				 * after sign up
+				 * Send a verification email automatically after sign up.
 				 *
-				 * @default false
+				 * - `true`: Always send verification email on sign up
+				 * - `false`: Never send verification email on sign up
+				 * - `undefined`: Follows `requireEmailVerification` behavior
+				 *
+				 * @default undefined
 				 */
 				sendOnSignUp?: boolean;
 				/**
@@ -475,11 +497,14 @@ export type BetterAuthOptions = {
 				 */
 				expiresIn?: number;
 				/**
-				 * A function that is called when a user verifies their email
+				 * A function that is called before a user verifies their email
 				 * @param user the user that verified their email
 				 * @param request the request object
 				 */
-				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
+				beforeEmailVerification?: (
+					user: User,
+					request?: Request,
+				) => Promise<void>;
 				/**
 				 * A function that is called when a user's email is updated to verified
 				 * @param user the user that verified their email
@@ -631,21 +656,6 @@ export type BetterAuthOptions = {
 					 */
 					enabled: boolean;
 					/**
-					 * Send a verification email when the user changes their email.
-					 * @param data the data object
-					 * @param request the request object
-					 * @deprecated Use `sendChangeEmailConfirmation` instead
-					 */
-					sendChangeEmailVerification?: (
-						data: {
-							user: User;
-							newEmail: string;
-							url: string;
-							token: string;
-						},
-						request?: Request,
-					) => Promise<void>;
-					/**
 					 * Send a confirmation email to the old email address when the user changes their email.
 					 * @param data the data object
 					 * @param request the request object
@@ -747,6 +757,14 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				disableSessionRefresh?: boolean;
+				/**
+				 * Defer session refresh writes to POST requests.
+				 * When enabled, GET is read-only and POST performs refresh.
+				 * Useful for read-replica database setups.
+				 *
+				 * @default false
+				 */
+				deferSessionRefresh?: boolean;
 				/**
 				 * Additional fields for the session
 				 */
@@ -898,6 +916,17 @@ export type BetterAuthOptions = {
 					 */
 					enabled?: boolean;
 					/**
+					 * Disable implicit account linking on sign-in.
+					 *
+					 * When enabled, accounts will not be automatically linked
+					 * during OAuth sign-in, even if the email is verified or
+					 * the provider is trusted. Users must explicitly link
+					 * accounts using `linkSocial()` while authenticated.
+					 *
+					 * @default false
+					 */
+					disableImplicitLinking?: boolean;
+					/**
 					 * List of trusted providers
 					 */
 					trustedProviders?: Array<
@@ -990,6 +1019,24 @@ export type BetterAuthOptions = {
 				 * fetched
 				 */
 				disableCleanup?: boolean;
+				/**
+				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 *
+				 * @example "hashed"
+				 *
+				 * @default "plain"
+				 */
+				storeIdentifier?:
+					| StoreIdentifierOption
+					| {
+							default: StoreIdentifierOption;
+							overrides?: Record<string, StoreIdentifierOption>;
+					  };
+				/**
+				 * Store verification data in database even when secondary storage is configured.
+				 * @default false
+				 */
+				storeInDatabase?: boolean;
 		  }
 		| undefined;
 	/**

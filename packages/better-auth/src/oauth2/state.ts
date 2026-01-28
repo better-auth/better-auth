@@ -1,12 +1,9 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import * as z from "zod";
-import { setOAuthState } from "../api/middlewares/oauth";
-import {
-	generateRandomString,
-	symmetricDecrypt,
-	symmetricEncrypt,
-} from "../crypto";
+import { setOAuthState } from "../api/state/oauth";
+import { generateRandomString } from "../crypto";
+import type { StateData } from "../state";
+import { generateGenericState, parseGenericState, StateError } from "../state";
 
 export async function generateState(
 	c: GenericEndpointContext,
@@ -24,200 +21,55 @@ export async function generateState(
 	}
 
 	const codeVerifier = generateRandomString(128);
-	const state = generateRandomString(32);
-	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
 
-	const stateData = {
+	const stateData: StateData = {
 		...(additionalData ? additionalData : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body?.errorCallbackURL,
 		newUserURL: c.body?.newUserCallbackURL,
 		link,
-		/**
-		 * This is the actual expiry time of the state
-		 */
 		expiresAt: Date.now() + 10 * 60 * 1000,
 		requestSignUp: c.body?.requestSignUp,
-		state,
 	};
 
 	await setOAuthState(stateData);
 
-	if (storeStateStrategy === "cookie") {
-		// Store state data in an encrypted cookie
-		const encryptedData = await symmetricEncrypt({
-			key: c.context.secret,
-			data: JSON.stringify(stateData),
+	try {
+		return generateGenericState(c, stateData);
+	} catch (error) {
+		c.context.logger.error("Failed to create verification", error);
+		throw new APIError("INTERNAL_SERVER_ERROR", {
+			message: "Unable to create verification",
+			cause: error,
 		});
-
-		const stateCookie = c.context.createAuthCookie("oauth_state", {
-			maxAge: 10 * 60 * 1000, // 10 minutes
-		});
-
-		c.setCookie(stateCookie.name, encryptedData, stateCookie.attributes);
-
-		return {
-			state,
-			codeVerifier,
-		};
 	}
-
-	// Default: database strategy
-	const stateCookie = c.context.createAuthCookie("state", {
-		maxAge: 5 * 60 * 1000, // 5 minutes
-	});
-	await c.setSignedCookie(
-		stateCookie.name,
-		state,
-		c.context.secret,
-		stateCookie.attributes,
-	);
-
-	const expiresAt = new Date();
-	expiresAt.setMinutes(expiresAt.getMinutes() + 10);
-	const verification = await c.context.internalAdapter.createVerificationValue({
-		value: JSON.stringify(stateData),
-		identifier: state,
-		expiresAt,
-	});
-	if (!verification) {
-		c.context.logger.error(
-			"Unable to create verification. Make sure the database adapter is properly working and there is a verification table in the database",
-		);
-		throw APIError.from(
-			"INTERNAL_SERVER_ERROR",
-			BASE_ERROR_CODES.FAILED_TO_CREATE_VERIFICATION,
-		);
-	}
-	return {
-		state: verification.identifier,
-		codeVerifier,
-	};
 }
 
 export async function parseState(c: GenericEndpointContext) {
 	const state = c.query.state || c.body.state;
-	const storeStateStrategy = c.context.oauthConfig.storeStateStrategy;
+	const errorURL =
+		c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 
-	const stateDataSchema = z.looseObject({
-		callbackURL: z.string(),
-		codeVerifier: z.string(),
-		errorURL: z.string().optional(),
-		newUserURL: z.string().optional(),
-		expiresAt: z.number(),
-		link: z
-			.object({
-				email: z.string(),
-				userId: z.coerce.string(),
-			})
-			.optional(),
-		requestSignUp: z.boolean().optional(),
-		state: z.string().optional(),
-	});
+	let parsedData: StateData;
 
-	let parsedData: z.infer<typeof stateDataSchema>;
-	/**
-	 * This is generally cause security issue and should only be used in
-	 * dev or staging environments. It's currently used by the oauth-proxy
-	 * plugin
-	 */
-	const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
-	if (storeStateStrategy === "cookie") {
-		// Retrieve state data from encrypted cookie
-		const stateCookie = c.context.createAuthCookie("oauth_state");
-		const encryptedData = c.getCookie(stateCookie.name);
+	try {
+		parsedData = await parseGenericState(c, state);
+	} catch (error) {
+		c.context.logger.error("Failed to parse state", error);
 
-		if (!encryptedData) {
-			c.context.logger.error("State Mismatch. OAuth state cookie not found", {
-				state,
-			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
-		}
-
-		try {
-			const decryptedData = await symmetricDecrypt({
-				key: c.context.secret,
-				data: encryptedData,
-			});
-
-			parsedData = stateDataSchema.parse(JSON.parse(decryptedData));
-		} catch (error) {
-			c.context.logger.error("Failed to decrypt or parse OAuth state cookie", {
-				error,
-			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
-		}
-
-		const skipStateCookieCheck = c.context.oauthConfig?.skipStateCookieCheck;
 		if (
-			!skipStateCookieCheck &&
-			parsedData.state &&
-			parsedData.state !== state
+			error instanceof StateError &&
+			error.code === "state_security_mismatch"
 		) {
-			c.context.logger.error("State Mismatch. State parameter does not match", {
-				expected: parsedData.state,
-				received: state,
-			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 			throw c.redirect(`${errorURL}?error=state_mismatch`);
 		}
 
-		// Clear the cookie after successful parsing
-		c.setCookie(stateCookie.name, "", {
-			maxAge: 0,
-		});
-	} else {
-		// Default: database strategy
-		const data = await c.context.internalAdapter.findVerificationValue(state);
-		if (!data) {
-			c.context.logger.error("State Mismatch. Verification not found", {
-				state,
-			});
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=please_restart_the_process`);
-		}
-
-		parsedData = stateDataSchema.parse(JSON.parse(data.value));
-
-		const stateCookie = c.context.createAuthCookie("state");
-		const stateCookieValue = await c.getSignedCookie(
-			stateCookie.name,
-			c.context.secret,
-		);
-
-		if (
-			!skipStateCookieCheck &&
-			(!stateCookieValue || stateCookieValue !== state)
-		) {
-			const errorURL =
-				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-			throw c.redirect(`${errorURL}?error=state_mismatch`);
-		}
-		c.setCookie(stateCookie.name, "", {
-			maxAge: 0,
-		});
-
-		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
 	}
 
 	if (!parsedData.errorURL) {
-		parsedData.errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-	}
-
-	// Check expiration
-	if (parsedData.expiresAt < Date.now()) {
-		const errorURL =
-			c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
-		throw c.redirect(`${errorURL}?error=please_restart_the_process`);
+		parsedData.errorURL = errorURL;
 	}
 
 	if (parsedData) {

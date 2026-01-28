@@ -8,7 +8,11 @@
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": ["src/**/*.ts!"],
+			"ignoreDependencies": ["@better-auth/core"]
+		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -35,7 +39,7 @@
 				"@lynx-js/react",
 				"@sveltejs/kit",
 				"@tanstack/react-start",
-				"@tanstack/start-server-core",
+				"@tanstack/solid-start",
 				"next",
 				"react",
 				"react-dom",
@@ -48,7 +52,10 @@
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!"
+				"nanostores!",
+
+				// implicit test dependencies
+				"vitest"
 			]
 		},
 		"packages/cli": {
@@ -83,7 +90,17 @@
 		"packages/sso": {
 			"ignoreDependencies": [
 				// type-only dependencies
+				"@better-auth/core",
 				"better-call"
+			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
 			]
 		}
 	},

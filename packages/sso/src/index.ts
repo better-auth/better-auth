@@ -8,6 +8,12 @@ import {
 	verifyDomain,
 } from "./routes/domain-verification";
 import {
+	deleteSSOProvider,
+	getSSOProvider,
+	listSSOProviders,
+	updateSSOProvider,
+} from "./routes/providers";
+import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
@@ -40,6 +46,14 @@ export {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		sso: {
+			creator: typeof sso;
+		};
+	}
+}
 
 export {
 	computeDiscoveryUrl,
@@ -84,6 +98,10 @@ type SSOEndpoints<O extends SSOOptions> = {
 	callbackSSO: ReturnType<typeof callbackSSO>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	listSSOProviders: ReturnType<typeof listSSOProviders>;
+	getSSOProvider: ReturnType<typeof getSSOProvider>;
+	updateSSOProvider: ReturnType<typeof updateSSOProvider>;
+	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
@@ -94,6 +112,16 @@ export type SSOPlugin<O extends SSOOptions> = {
 			: {});
 };
 
+/**
+ * SAML endpoint paths that should skip origin check validation.
+ * These endpoints receive POST requests from external Identity Providers,
+ * which won't have a matching Origin header.
+ */
+const SAML_SKIP_ORIGIN_CHECK_PATHS = [
+	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
+	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
+];
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -103,7 +131,7 @@ export function sso<
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: any;
+	schema: NonNullable<BetterAuthPlugin["schema"]>;
 	options: O;
 };
 export function sso<O extends SSOOptions>(
@@ -113,7 +141,9 @@ export function sso<O extends SSOOptions>(
 	endpoints: SSOEndpoints<O>;
 };
 
-export function sso<O extends SSOOptions>(options?: O | undefined): any {
+export function sso<O extends SSOOptions>(
+	options?: O | undefined,
+): BetterAuthPlugin {
 	const optionsWithStore = options as O;
 
 	let endpoints = {
@@ -123,6 +153,10 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 		callbackSSO: callbackSSO(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		listSSOProviders: listSSOProviders(),
+		getSSOProvider: getSSOProvider(),
+		updateSSOProvider: updateSSOProvider(optionsWithStore),
+		deleteSSOProvider: deleteSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {
@@ -139,6 +173,18 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
+		init(ctx) {
+			const existing = ctx.skipOriginCheck;
+			if (existing === true) {
+				return {};
+			}
+			const existingPaths = Array.isArray(existing) ? existing : [];
+			return {
+				context: {
+					skipOriginCheck: [...existingPaths, ...SAML_SKIP_ORIGIN_CHECK_PATHS],
+				},
+			};
+		},
 		endpoints,
 		hooks: {
 			after: [
@@ -152,10 +198,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-							(plugin: { id: string }) => plugin.id === "organization",
-						);
-						if (!isOrgPluginEnabled) {
+						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
 

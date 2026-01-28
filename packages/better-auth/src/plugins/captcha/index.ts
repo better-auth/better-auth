@@ -4,6 +4,15 @@ import { middlewareResponse } from "../../utils/middleware-response";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
 import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		captcha: {
+			creator: typeof captcha;
+		};
+	}
+}
+
 import * as verifyHandlers from "./verify-handlers";
 
 export type * from "./types";

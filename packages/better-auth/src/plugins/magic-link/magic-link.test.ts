@@ -343,6 +343,9 @@ describe("magic link verify origin validation", async () => {
 					},
 				}),
 			],
+			advanced: {
+				disableOriginCheck: false,
+			},
 		});
 
 		const client = createAuthClient({

@@ -19,6 +19,14 @@ import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"generic-oauth": {
+			creator: typeof genericOAuth;
+		};
+	}
+}
+
 /**
  * Base type for OAuth provider options.
  * Extracts common fields from GenericOAuthConfig and makes clientSecret required.

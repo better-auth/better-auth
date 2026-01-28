@@ -4,7 +4,12 @@ import type {
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
-import type { InferFieldsInputClient, InferFieldsOutput } from "../db";
+import type { RawError } from "@better-auth/core/utils/error-codes";
+import type {
+	BetterAuthPluginDBSchema,
+	InferFieldsInputClient,
+	InferFieldsOutput,
+} from "../db";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
 import type { InferRoutes } from "./path-to-object";
@@ -14,19 +19,6 @@ export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,
 };
-
-/**
- * @deprecated use type `ClientStore` instead.
- */
-export type Store = ClientStore;
-/**
- * @deprecated use type `ClientAtomListener` instead.
- */
-export type AtomListener = ClientAtomListener;
-/**
- * @deprecated use type `BetterAuthClientOptions` instead.
- */
-export type ClientOptions = BetterAuthClientOptions;
 
 export type InferClientAPI<O extends BetterAuthClientOptions> = InferRoutes<
 	O["plugins"] extends Array<any>
@@ -79,15 +71,11 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
 		? UnionToIntersection<
 				Plugin extends BetterAuthClientPlugin
 					? Plugin["$InferServerPlugin"] extends { $ERROR_CODES: infer E }
-						? E extends Record<
-								string,
-								{
-									code: string;
-									message: string;
-								}
-							>
-							? E
-							: {}
+						? {
+								[K in keyof E & string]: E[K] extends RawError
+									? RawError<K>
+									: never;
+							}
 						: {}
 					: {}
 			>
@@ -97,11 +85,6 @@ export type InferErrorCodes<O extends BetterAuthClientOptions> =
  * as a convention they start with "$"
  */
 export type IsSignal<T> = T extends `$${infer _}` ? true : false;
-
-export type InferPluginsFromClient<O extends BetterAuthClientOptions> =
-	O["plugins"] extends Array<BetterAuthClientPlugin>
-		? Array<O["plugins"][number]["$InferServerPlugin"]>
-		: undefined;
 
 export type InferSessionFromClient<O extends BetterAuthClientOptions> =
 	StripEmptyObjects<
@@ -117,18 +100,14 @@ export type InferAdditionalFromClient<
 	Options extends BetterAuthClientOptions,
 	Key extends string,
 	Format extends "input" | "output" = "output",
-> = Options["plugins"] extends Array<infer T>
-	? T extends BetterAuthClientPlugin
-		? T["$InferServerPlugin"] extends {
-				schema: {
-					[key in Key]: {
-						fields: infer Field;
-					};
-				};
-			}
-			? Format extends "input"
-				? InferFieldsInputClient<Field>
-				: InferFieldsOutput<Field>
+> = Options["plugins"] extends Array<infer Plugin>
+	? Plugin extends BetterAuthClientPlugin
+		? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
+			? Schema extends BetterAuthPluginDBSchema
+				? Format extends "input"
+					? InferFieldsInputClient<Schema[Key]["fields"]>
+					: InferFieldsOutput<Schema[Key]["fields"]>
+				: {}
 			: {}
 		: {}
 	: {};

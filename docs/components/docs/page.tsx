@@ -1,7 +1,6 @@
-import type { TableOfContents } from "fumadocs-core/server";
-import type { AnchorProviderProps } from "fumadocs-core/toc";
+import type { AnchorProviderProps, TableOfContents } from "fumadocs-core/toc";
 import { AnchorProvider } from "fumadocs-core/toc";
-import { I18nLabel } from "fumadocs-ui/provider";
+import { I18nLabel } from "fumadocs-ui/contexts/i18n";
 import { Edit, Text } from "lucide-react";
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
@@ -273,7 +272,7 @@ export const DocsTitle = forwardRef<
 		<h1
 			ref={ref}
 			{...props}
-			className={cn("text-3xl font-semibold", props.className)}
+			className={cn("text-3xl font-semibold wrap-break-word", props.className)}
 		>
 			{props.children}
 		</h1>

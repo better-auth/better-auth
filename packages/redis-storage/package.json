@@ -1,0 +1,39 @@
+{
+  "name": "@better-auth/redis-storage",
+  "version": "1.5.0-beta.10",
+  "description": "Redis storage for Better Auth secondary storage",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/redis-storage"
+  },
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
+  "exports": {
+    ".": {
+      "dev-source": "./src/index.ts",
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "ioredis": "^5.0.0"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@types/node": "^25.0.10",
+    "ioredis": "^5.9.2",
+    "tsdown": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:vitest"
+  }
+}

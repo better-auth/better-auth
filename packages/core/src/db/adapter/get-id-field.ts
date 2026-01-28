@@ -1,6 +1,6 @@
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
-import { generateId as defaultGenerateId } from "../../utils";
+import { generateId as defaultGenerateId } from "../../utils/id";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
@@ -31,12 +31,10 @@ export const initGetIdField = ({
 		customModelName?: string;
 		forceAllowId?: boolean;
 	}) => {
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-		let shouldGenerateId: boolean = (() => {
+		const shouldGenerateId: boolean = (() => {
 			if (disableIdGeneration) {
 				return false;
 			} else if (useNumberId && !forceAllowId) {
@@ -58,7 +56,7 @@ export const initGetIdField = ({
 				? {
 						defaultValue() {
 							if (disableIdGeneration) return undefined;
-							let generateId = options.advanced?.database?.generateId;
+							const generateId = options.advanced?.database?.generateId;
 							if (generateId === false || useNumberId) return undefined;
 							if (typeof generateId === "function") {
 								return generateId({

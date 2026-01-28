@@ -16,6 +16,14 @@ import {
 } from "./routes";
 import type { SCIMOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		scim: {
+			creator: typeof scim;
+		};
+	}
+}
+
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
@@ -63,3 +71,5 @@ export const scim = (options?: SCIMOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./types";

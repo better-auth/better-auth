@@ -143,10 +143,9 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should reset password", async () => {
-		await client.emailOtp.sendVerificationOtp({
+	it("should reset password using new emailOtp.requestPasswordReset endpoint", async () => {
+		await client.emailOtp.requestPasswordReset({
 			email: testUser.email,
-			type: "forget-password",
 		});
 		await client.emailOtp.resetPassword({
 			email: testUser.email,
@@ -157,6 +156,23 @@ describe("email-otp", async () => {
 		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
+		});
+		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
+		await client.forgetPassword.emailOtp({
+			email: testUser.email,
+		});
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "changed-password-2",
+		});
+
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password-2",
 		});
 		expect(data?.user).toBeDefined();
 	});
@@ -856,7 +872,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
 
 		it("should create a custom encryptor otp", async () => {
 			const { get } = getTheSentOTP();
@@ -959,7 +975,7 @@ describe("custom storeOTP", async () => {
 		const authCtx = await auth.$context;
 
 		let validOTP = "";
-		let userEmail1 = `${crypto.randomUUID()}@email.com`;
+		const userEmail1 = `${crypto.randomUUID()}@email.com`;
 
 		it("should create a custom hasher otp", async () => {
 			const { get } = getTheSentOTP();
@@ -1132,6 +1148,57 @@ describe("override default email verification", async () => {
 			expect.objectContaining({
 				email: "test-no-duplicate@email.com",
 				type: "email-verification",
+			}),
+			expect.any(Object),
+		);
+	});
+
+	it("should call afterEmailVerification hook when override is enabled", async () => {
+		const afterEmailVerification = vi.fn();
+		let otp = "";
+
+		const { client } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+				},
+				emailVerification: {
+					sendOnSignUp: true,
+					afterEmailVerification,
+				},
+				plugins: [
+					emailOTP({
+						async sendVerificationOTP(data, request) {
+							otp = data.otp;
+						},
+						overrideDefaultEmailVerification: true,
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [emailOTPClient()],
+				},
+			},
+		);
+
+		await client.signUp.email({
+			email: "test-hook@email.com",
+			password: "password",
+			name: "Test User",
+		});
+
+		const res = await client.emailOtp.verifyEmail({
+			email: "test-hook@email.com",
+			otp,
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(afterEmailVerification).toHaveBeenCalledTimes(1);
+		expect(afterEmailVerification).toHaveBeenCalledWith(
+			expect.objectContaining({
+				email: "test-hook@email.com",
+				emailVerified: true,
 			}),
 			expect.any(Object),
 		);

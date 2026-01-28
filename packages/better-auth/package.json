@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.5.0-beta.2",
+  "version": "1.5.0-beta.10",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -25,12 +25,12 @@
   },
   "scripts": {
     "build": "tsdown",
+    "dev": "tsdown --watch",
     "test": "vitest",
-    "coverage": "vitest run --coverage",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
     "test:adapters": "vitest run --config vitest.config.adapters.ts",
-    "prepare": "prisma generate --schema ./src/adapters/prisma-adapter/test/base.prisma",
     "typecheck": "tsc --project tsconfig.json"
   },
   "files": [
@@ -150,10 +150,30 @@
       "types": "./dist/integrations/tanstack-start.d.mts",
       "default": "./dist/integrations/tanstack-start.mjs"
     },
+    "./tanstack-start/solid": {
+      "dev-source": "./src/integrations/tanstack-start-solid.ts",
+      "types": "./dist/integrations/tanstack-start-solid.d.mts",
+      "default": "./dist/integrations/tanstack-start-solid.mjs"
+    },
     "./node": {
       "dev-source": "./src/integrations/node.ts",
       "types": "./dist/integrations/node.d.mts",
       "default": "./dist/integrations/node.mjs"
+    },
+    "./db/adapter": {
+      "dev-source": "./src/db/adapter-kysely.ts",
+      "types": "./dist/db/adapter-kysely.d.mts",
+      "default": "./dist/db/adapter-kysely.mjs"
+    },
+    "./db/adapter/minimal": {
+      "dev-source": "./src/db/adapter-base.ts",
+      "types": "./dist/db/adapter-base.d.mts",
+      "default": "./dist/db/adapter-base.mjs"
+    },
+    "./db/migration": {
+      "dev-source": "./src/db/get-migration.ts",
+      "types": "./dist/db/get-migration.d.mts",
+      "default": "./dist/db/get-migration.mjs"
     },
     "./adapters/prisma": {
       "dev-source": "./src/adapters/prisma-adapter/index.ts",
@@ -174,11 +194,6 @@
       "dev-source": "./src/adapters/memory-adapter/index.ts",
       "types": "./dist/adapters/memory-adapter/index.d.mts",
       "default": "./dist/adapters/memory-adapter/index.mjs"
-    },
-    "./adapters/test": {
-      "dev-source": "./src/adapters/test.ts",
-      "types": "./dist/adapters/test.d.mts",
-      "default": "./dist/adapters/test.mjs"
     },
     "./adapters": {
       "dev-source": "./src/adapters/index.ts",
@@ -349,6 +364,15 @@
       "db": [
         "./dist/db/index.d.mts"
       ],
+      "db/adapter": [
+        "./dist/db/adapter-kysely.d.mts"
+      ],
+      "db/adapter/minimal": [
+        "./dist/db/adapter-base.d.mts"
+      ],
+      "db/migration": [
+        "./dist/db/get-migration.d.mts"
+      ],
       "svelte-kit": [
         "./dist/integrations/svelte-kit.d.mts"
       ],
@@ -360,6 +384,9 @@
       ],
       "tanstack-start": [
         "./dist/integrations/tanstack-start.d.mts"
+      ],
+      "tanstack-start/solid": [
+        "./dist/integrations/tanstack-start-solid.d.mts"
       ],
       "adapters": [
         "./dist/adapters/index.d.mts"
@@ -446,55 +473,57 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/memory-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "@noble/ciphers": "^2.0.0",
-    "@noble/hashes": "^2.0.0",
+    "@noble/ciphers": "^2.1.1",
+    "@noble/hashes": "^2.0.1",
     "better-call": "catalog:",
     "defu": "^6.1.4",
     "jose": "^6.1.0",
-    "kysely": "^0.28.5",
-    "nanostores": "^1.0.1",
-    "zod": "^4.1.12"
+    "kysely": "^0.28.10",
+    "nanostores": "^1.1.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@lynx-js/react": "^0.114.0",
-    "@prisma/client": "^5.22.0",
-    "@sveltejs/kit": "^2.37.1",
+    "@lynx-js/react": "^0.116.1",
+    "@sveltejs/kit": "^2.50.1",
+    "@tanstack/react-start": "^1.157.16",
+    "@tanstack/solid-start": "^1.157.16",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/bun": "^1.3.3",
+    "@types/bun": "^1.3.7",
+    "@types/google.accounts": "^0.0.18",
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
-    "better-sqlite3": "^12.4.1",
+    "better-sqlite3": "^12.6.2",
     "deepmerge": "^4.3.1",
-    "drizzle-kit": "^0.31.4",
-    "drizzle-orm": "^0.41.0",
-    "happy-dom": "^20.0.10",
+    "happy-dom": "^20.4.0",
     "listhen": "^1.9.0",
-    "mongodb": "^6.18.0",
     "msw": "^2.12.4",
-    "mysql2": "^3.14.4",
-    "next": "^16.1.1",
-    "oauth2-mock-server": "^7.2.1",
-    "pg": "^8.16.3",
-    "prisma": "^5.22.0",
+    "next": "^16.1.6",
+    "oauth2-mock-server": "^8.2.1",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
-    "solid-js": "^1.9.8",
+    "solid-js": "^1.9.11",
     "tarn": "^3.0.2",
     "tedious": "^18.6.1",
     "tsdown": "catalog:",
-    "type-fest": "^5.2.0",
+    "type-fest": "^5.4.2",
     "typescript": "catalog:",
-    "vitest": "^4.0.15",
-    "vue": "^3.5.18"
+    "vitest": "^4.0.18",
+    "vue": "^3.5.27"
   },
   "peerDependencies": {
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
     "@tanstack/react-start": "^1.0.0",
+    "@tanstack/solid-start": "^1.0.0",
     "better-sqlite3": "^12.0.0",
     "drizzle-kit": ">=0.31.4",
     "drizzle-orm": ">=0.41.0",
@@ -521,6 +550,9 @@
       "optional": true
     },
     "@tanstack/react-start": {
+      "optional": true
+    },
+    "@tanstack/solid-start": {
       "optional": true
     },
     "next": {

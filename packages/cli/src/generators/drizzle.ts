@@ -64,9 +64,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
@@ -169,9 +167,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
@@ -196,12 +192,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
 
-		let indexes: Index[] = [];
+		const indexes: Index[] = [];
 
 		const assignIndexes = (indexes: Index[]): string => {
 			if (!indexes.length) return "";
 
-			let code: string[] = [`, (table) => [`];
+			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
 				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
@@ -551,9 +547,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId =
-		options.advanced?.database?.useNumberId ||
-		options.advanced?.database?.generateId === "serial";
+	const useNumberId = options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -578,7 +572,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = !!useNumberId || hasNonBigintNumber;
+		const needsInt = useNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
 		}
@@ -614,9 +608,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			((options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial") &&
-				hasFkToId);
+			(options.advanced?.database?.generateId === "serial" && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

@@ -3,6 +3,12 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import {
+	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "better-auth/cookies";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -12,79 +18,6 @@ import { setupExpoOnlineManager } from "./online-manager";
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
 	setupExpoOnlineManager();
-}
-
-interface CookieAttributes {
-	value: string;
-	expires?: Date | undefined;
-	"max-age"?: number | undefined;
-	domain?: string | undefined;
-	path?: string | undefined;
-	secure?: boolean | undefined;
-	httpOnly?: boolean | undefined;
-	sameSite?: ("Strict" | "Lax" | "None") | undefined;
-}
-
-export function parseSetCookieHeader(
-	header: string,
-): Map<string, CookieAttributes> {
-	const cookieMap = new Map<string, CookieAttributes>();
-	const cookies = splitSetCookieHeader(header);
-	cookies.forEach((cookie) => {
-		const parts = cookie.split(";").map((p) => p.trim());
-		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = (nameValue || "").split("=");
-		const value = valueParts.join("=");
-
-		if (!name || value === undefined) {
-			return;
-		}
-
-		const attrObj: CookieAttributes = { value };
-		attributes.forEach((attr) => {
-			const [attrName, ...attrValueParts] = attr.split("=");
-			if (!attrName?.trim()) {
-				return;
-			}
-			const attrValue = attrValueParts.join("=");
-			const normalizedAttrName = attrName.trim().toLowerCase();
-			attrObj[normalizedAttrName as "value"] = attrValue;
-		});
-		cookieMap.set(name, attrObj);
-	});
-	return cookieMap;
-}
-
-function splitSetCookieHeader(setCookie: string): string[] {
-	const parts: string[] = [];
-	let buffer = "";
-	let i = 0;
-	while (i < setCookie.length) {
-		const char = setCookie[i];
-		if (char === ",") {
-			const recent = buffer.toLowerCase();
-			const hasExpires = recent.includes("expires=");
-			const hasGmt = /gmt/i.test(recent);
-			if (hasExpires && !hasGmt) {
-				buffer += char;
-				i += 1;
-				continue;
-			}
-			if (buffer.trim().length > 0) {
-				parts.push(buffer.trim());
-				buffer = "";
-			}
-			i += 1;
-			if (setCookie[i] === " ") i += 1;
-			continue;
-		}
-		buffer += char;
-		i += 1;
-	}
-	if (buffer.trim().length > 0) {
-		parts.push(buffer.trim());
-	}
-	return parts;
 }
 
 interface ExpoClientOptions {
@@ -180,6 +113,33 @@ export function getCookie(cookie: string) {
 	return toSend;
 }
 
+function getOAuthStateValue(
+	cookieJson: string | null,
+	cookiePrefix: string | string[],
+): string | null {
+	if (!cookieJson) return null;
+
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookieJson);
+	if (!parsed) return null;
+
+	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+
+	for (const prefix of prefixes) {
+		// cookie strategy uses: <prefix>.oauth_state
+		const candidates = [
+			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
+			`${prefix}.oauth_state`,
+		];
+
+		for (const name of candidates) {
+			const value = parsed?.[name]?.value;
+			if (value) return value;
+		}
+	}
+
+	return null;
+}
+
 function getOrigin(scheme: string) {
 	const schemeURI = Linking.createURL("", { scheme });
 	return schemeURI;
@@ -258,9 +218,7 @@ export function hasBetterAuthCookies(
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
 		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		const nameWithoutSecure = stripSecureCookiePrefix(name);
 
 		// Check against all provided prefixes
 		for (const prefix of prefixes) {
@@ -366,7 +324,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = await storage.getItem(cookieName);
+								const prevCookie = storage.getItem(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "",
 									prevCookie ?? undefined,
@@ -378,7 +336,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
@@ -419,7 +377,18 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								} catch {}
 							}
 
-							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
+							const storedCookieJson = storage.getItem(cookieName);
+							const oauthStateValue = getOAuthStateValue(
+								storedCookieJson,
+								cookiePrefix,
+							);
+							const params = new URLSearchParams({
+								authorizationURL: signInURL,
+							});
+							if (oauthStateValue) {
+								params.append("oauthState", oauthStateValue);
+							}
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
 							const result = await Browser.openAuthSessionAsync(
 								proxyURL,
 								to,
@@ -427,9 +396,9 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
-							const cookie = String(url.searchParams.get("cookie"));
+							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = await storage.getItem(cookieName);
+							const prevCookie = storage.getItem(cookieName);
 							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
 							storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
@@ -478,7 +447,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						}
 					}
 					if (url.includes("/sign-out")) {
-						await storage.setItem(cookieName, "{}");
+						storage.setItem(cookieName, "{}");
 						store?.atoms.session?.set({
 							...store.atoms.session.get(),
 							data: null,
@@ -497,5 +466,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export { parseSetCookieHeader } from "better-auth/cookies";
 export * from "./focus-manager";
 export * from "./online-manager";

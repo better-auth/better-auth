@@ -1,13 +1,3 @@
-/**
- * @deprecated Please import from `better-auth/api` directly.
- */
-export {
-	type AuthEndpoint,
-	type AuthMiddleware,
-	createAuthEndpoint,
-	createAuthMiddleware,
-	optionsMiddleware,
-} from "@better-auth/core/api";
 export * from "../types/plugins";
 export * from "../utils/hide-metadata";
 export * from "./access";

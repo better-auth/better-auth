@@ -13,6 +13,14 @@ import {
 import { schema } from "./schema";
 import type { Passkey, PasskeyOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		passkey: {
+			creator: typeof passkey;
+		};
+	}
+}
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
