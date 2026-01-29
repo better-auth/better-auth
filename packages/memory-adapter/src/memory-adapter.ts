@@ -29,7 +29,6 @@ export const memoryAdapter = (
 			supportsArrays: true,
 			customTransformInput(props) {
 				const useNumberId =
-					props.options.advanced?.database?.useNumberId ||
 					props.options.advanced?.database?.generateId === "serial";
 				if (useNumberId && props.field === "id" && props.action === "create") {
 					return db[props.model]!.length + 1;
@@ -242,7 +241,6 @@ export const memoryAdapter = (
 			return {
 				create: async ({ model, data }) => {
 					const useNumberId =
-						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
 					if (useNumberId) {
 						// @ts-expect-error

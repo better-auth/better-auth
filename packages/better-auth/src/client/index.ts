@@ -35,7 +35,6 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 export type * from "@better-auth/core/db";
 export type { DBPrimitive } from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
-// @ts-expect-error
 export type * from "nanostores";
 export type * from "../plugins/access";
 export type * from "../plugins/organization";
