@@ -65,7 +65,6 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
     "stripe": "^20.0.0",
     "tsdown": "catalog:"
   }
