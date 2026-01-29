@@ -120,39 +120,20 @@ jobs:
       - name: Stop Docker Containers
         if: github.event_name != 'merge_group'
         run: docker compose down
-  adapter-integration:
-    name: ${{ matrix.package }} Integration Test
+  detect-adapter-changes:
+    name: Detect adapter changes
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: [22.x]
-        include:
-          - package: "@better-auth-test/adapter-factory"
-            path: "packages/core/src/db/adapter/**"
-          - package: "@better-auth-test/drizzle-adapter"
-            path: "packages/drizzle-adapter/**"
-          - package: "@better-auth-test/kysely-prisma-adapter"
-            path: "packages/kysely-adapter/**"
-          - package: "@better-auth-test/memory-adapter"
-            path: "packages/memory-adapter/**"
-          - package: "@better-auth-test/mongo-adapter"
-            path: "packages/mongo-adapter/**"
-          - package: "@better-auth-test/prisma-adapter"
-            path: "packages/prisma-adapter/**"
+    if: github.event_name != 'merge_group'
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      has_changes: ${{ steps.set-matrix.outputs.has_changes }}
     steps:
-      - name: Skip integration tests in merge queue
-        if: github.event_name == 'merge_group'
-        run: echo "Skipping integration tests in merge queue"
-
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
-        if: github.event_name != 'merge_group'
         with:
           fetch-depth: 0
 
-      - name: Check for changes
-        if: github.event_name != 'merge_group'
-        id: changes
+      - name: Detect changes and build matrix
+        id: set-matrix
         run: |
           if [ "${{ github.event_name }}" = "push" ]; then
             BASE_SHA="${{ github.event.before }}"
@@ -161,19 +142,60 @@ jobs:
             BASE_SHA="${{ github.event.pull_request.base.sha }}"
             HEAD_SHA="${{ github.event.pull_request.head.sha }}"
           fi
-          
-          # Check if any files matching the path pattern have changed
-          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '${{ matrix.path }}' | head -1)
-          if [ -n "$CHANGED" ]; then
-            echo "has_changes=true" >> $GITHUB_OUTPUT
-            echo "Changes detected in ${{ matrix.path }}"
-          else
+
+          # Define adapter mappings
+          declare -A ADAPTERS=(
+            ["@better-auth-test/adapter-factory"]="packages/core/src/db/adapter"
+            ["@better-auth-test/drizzle-adapter"]="packages/drizzle-adapter"
+            ["@better-auth-test/kysely-prisma-adapter"]="packages/kysely-adapter"
+            ["@better-auth-test/memory-adapter"]="packages/memory-adapter"
+            ["@better-auth-test/mongo-adapter"]="packages/mongo-adapter"
+            ["@better-auth-test/prisma-adapter"]="packages/prisma-adapter"
+          )
+
+          # Build matrix of changed adapters
+          MATRIX="["
+          FIRST=true
+          for PACKAGE in "${!ADAPTERS[@]}"; do
+            PATH_PATTERN="${ADAPTERS[$PACKAGE]}"
+            CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$PATH_PATTERN" | head -1)
+            if [ -n "$CHANGED" ]; then
+              echo "Changes detected in $PATH_PATTERN for $PACKAGE"
+              if [ "$FIRST" = true ]; then
+                FIRST=false
+              else
+                MATRIX="$MATRIX,"
+              fi
+              MATRIX="$MATRIX{\"package\":\"$PACKAGE\"}"
+            else
+              echo "No changes in $PATH_PATTERN"
+            fi
+          done
+          MATRIX="$MATRIX]"
+
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+          if [ "$MATRIX" = "[]" ]; then
             echo "has_changes=false" >> $GITHUB_OUTPUT
-            echo "No changes in ${{ matrix.path }}, skipping tests"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
+          echo "Generated matrix: $MATRIX"
+
+  adapter-integration:
+    name: ${{ matrix.package }} Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: github.event_name != 'merge_group' && needs.detect-adapter-changes.outputs.has_changes == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect-adapter-changes.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
 
       - name: Cache turbo build setup
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
@@ -182,35 +204,28 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         with:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
       - name: Install
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: pnpm install
 
       - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: pnpm exec playwright install --with-deps
         working-directory: e2e/integration
 
       - name: Start Docker Containers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: |
           docker compose up -d
           # Wait for services to be ready (optional)
           sleep 10
 
       - name: Adapter Integration
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: pnpm e2e:integration --filter=${{ matrix.package }}
 
       - name: Stop Docker Containers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: docker compose down
