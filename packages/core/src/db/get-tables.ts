@@ -154,12 +154,6 @@ export const getAuthTables = (
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
-				name: {
-					type: "string",
-					required: true,
-					fieldName: options.user?.fields?.name || "name",
-					sortable: true,
-				},
 				email: {
 					type: "string",
 					unique: true,
@@ -173,6 +167,12 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
 					input: false,
+				},
+				name: {
+					type: "string",
+					required: false,
+					fieldName: options.user?.fields?.name || "name",
+					sortable: true,
 				},
 				image: {
 					type: "string",
