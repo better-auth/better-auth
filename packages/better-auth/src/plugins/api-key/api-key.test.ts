@@ -1,4 +1,4 @@
-import type { APIError } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isAPIError } from "../../utils/is-api-error";
@@ -3224,6 +3224,8 @@ describe("api-key", async () => {
 			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result3.valid).toBe(false);
 			expect(result3.error?.code).toBe("RATE_LIMITED");
+			expect(result3.error).toHaveProperty("details");
+			expect((result3.error as any)?.details).toHaveProperty("tryAgainIn");
 		});
 
 		it("should defer remaining count updates", async () => {
