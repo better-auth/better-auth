@@ -497,7 +497,7 @@ describe("inviteMember role validation", async () => {
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
 		expect(error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
 		);
 	});
 

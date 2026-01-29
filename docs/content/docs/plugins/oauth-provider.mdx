@@ -10,6 +10,7 @@ The plugin has a secured configuration by default providing ease to users unfami
 **Key Features**:
 
 - **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
+- **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
 - **MCP Enabled**: Support with [MCP authentication](#mcp)
 - **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
   - **UserInfo**: Endpoint providing current user details
@@ -34,10 +35,6 @@ The plugin has a secured configuration by default providing ease to users unfami
 - **authorization_code**: Code for user token exchange with PKCE and S256 requirements.
 - **refresh_token**: Issue refresh tokens and handle access token renewal using `offline_access` scope.
 - **client_credentials**: Machine to Machine tokens for API communication.
-
-<Callout type="warn">
-This plugin is in active development and may not be suitable for production use. Please report any issues or bugs on [GitHub](https://github.com/better-auth/better-auth).
-</Callout>
 
 ## Installation
 
@@ -425,6 +422,7 @@ The Authorization Endpoint is the entry point for initiating an OAuth 2.1 author
 Important notes:
 - In OAuth 2.1, only `response_type: "code"` is supported.
 - `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
+- All authorization responses (success and error) include the `iss` parameter for issuer validation ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)).
 
 **State**
 
@@ -1182,6 +1180,59 @@ By default all secrets are `hashed` by default on the database. This helps prote
 
 - **storeClientSecret**: the storage method of application `client_secrets`. Only when `disableJwtPlugin: true`, the client secret shall rather be `encrypted`.
 - **storeTokens**: the storage method of token values, specifically session refresh tokens and opaque access tokens.
+
+
+### Rate Limiting
+
+The OAuth Provider includes built-in rate limiting for all OAuth endpoints to protect against abuse and denial-of-service attacks.
+
+<Callout type="info">
+Rate limiting is **per-IP per-endpoint**. Each client IP address has its own rate limit counter for each endpoint. Rate limits reset after the window period expires.
+</Callout>
+
+<Callout type="warn">
+These rate limits only apply when Better Auth's global rate limiting is enabled. By default, rate limiting is only enabled in production. See [Rate Limiting](/docs/concepts/rate-limit) for global configuration.
+</Callout>
+
+**Default limits:**
+
+| Endpoint | Window | Max Requests |
+|----------|--------|--------------|
+| `/oauth2/token` | 60s | 20 |
+| `/oauth2/authorize` | 60s | 30 |
+| `/oauth2/introspect` | 60s | 100 |
+| `/oauth2/revoke` | 60s | 30 |
+| `/oauth2/register` | 60s | 5 |
+| `/oauth2/userinfo` | 60s | 60 |
+
+You can customize the rate limits for each endpoint:
+
+```ts title="auth.ts"
+oauthProvider({
+  rateLimit: {
+    token: { window: 60, max: 20 },        // 20 requests per minute
+    authorize: { window: 60, max: 30 },    // 30 requests per minute
+    introspect: { window: 60, max: 100 },  // 100 requests per minute
+    revoke: { window: 60, max: 30 },       // 30 requests per minute
+    register: { window: 60, max: 5 },      // 5 requests per minute
+    userinfo: { window: 60, max: 60 },     // 60 requests per minute
+  },
+})
+```
+
+To remove the per-endpoint rate limit override and fall back to global rate limits, set it to `false`:
+
+```ts title="auth.ts"
+oauthProvider({
+  rateLimit: {
+    introspect: false, // Uses global rate limits instead of per-endpoint limits
+  },
+})
+```
+
+<Callout type="info">
+Setting an endpoint to `false` removes the OAuth Provider's stricter per-endpoint limit. The endpoint will still be subject to Better Auth's global rate limiting if enabled.
+</Callout>
 
 
 ### Refresh Token Customization

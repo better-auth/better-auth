@@ -26,7 +26,10 @@ export default defineConfig({
 	external: ["@better-auth/core/async_hooks"],
 	env: {
 		BETTER_AUTH_VERSION: packageJson.version,
+		BETTER_AUTH_TELEMETRY_ENDPOINT:
+			process.env.BETTER_AUTH_TELEMETRY_ENDPOINT ?? "",
 	},
+	sourcemap: true,
 	unbundle: true,
 	clean: true,
 });

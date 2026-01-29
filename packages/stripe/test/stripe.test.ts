@@ -16,6 +16,7 @@ import {
 import type { StripePlugin } from "../src";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
+import { customerMetadata, subscriptionMetadata } from "../src/metadata";
 import type { StripeOptions, Subscription } from "../src/types";
 
 describe("stripe type", () => {
@@ -96,6 +97,50 @@ describe("stripe type", () => {
 		expectTypeOf<
 			(typeof auth)["$Infer"]["Session"]["user"]["customField"]
 		>().toEqualTypeOf<string | null | undefined>();
+	});
+});
+
+describe("stripe - metadata helpers", () => {
+	it("customerMetadata.set protects internal fields", () => {
+		const result = customerMetadata.set(
+			{ userId: "real", customerType: "user" },
+			{ userId: "fake", custom: "value" },
+		);
+		expect(result.userId).toBe("real");
+		expect(result.customerType).toBe("user");
+		expect(result.custom).toBe("value");
+	});
+
+	it("customerMetadata.get extracts typed fields", () => {
+		const result = customerMetadata.get({
+			userId: "u1",
+			customerType: "organization",
+			extra: "ignored",
+		});
+		expect(result.userId).toBe("u1");
+		expect(result.customerType).toBe("organization");
+		expect(result).not.toHaveProperty("extra");
+	});
+
+	it("subscriptionMetadata.set protects internal fields", () => {
+		const result = subscriptionMetadata.set(
+			{ userId: "u1", subscriptionId: "s1", referenceId: "r1" },
+			{ subscriptionId: "fake" },
+		);
+		expect(result.subscriptionId).toBe("s1");
+	});
+
+	it("subscriptionMetadata.get extracts typed fields", () => {
+		const result = subscriptionMetadata.get({
+			userId: "u1",
+			subscriptionId: "s1",
+			referenceId: "r1",
+			extra: "ignored",
+		});
+		expect(result.userId).toBe("u1");
+		expect(result.subscriptionId).toBe("s1");
+		expect(result.referenceId).toBe("r1");
+		expect(result).not.toHaveProperty("extra");
 	});
 });
 
