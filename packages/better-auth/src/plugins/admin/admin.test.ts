@@ -1597,3 +1597,406 @@ describe("edge cases: userId validation", async () => {
 		).rejects.toThrow("user not found");
 	});
 });
+
+describe("adminRoles option", async (it) => {
+	const ac = createAccessControl({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read", "update", "delete"],
+	});
+
+	const superAdminAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+	const moderatorAc = ac.newRole({
+		user: ["read", "update"],
+		order: ["read"],
+	});
+	const userAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+
+	const { signInWithTestUser, signInWithUser, auth, customFetchImpl } =
+		await getTestInstance(
+			{
+				plugins: [
+					admin({
+						ac,
+						roles: {
+							superadmin: superAdminAc,
+							moderator: moderatorAc,
+							user: userAc,
+						},
+						adminRoles: ["superadmin", "moderator"],
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Super Admin") {
+									return {
+										data: {
+											...user,
+											role: "superadmin",
+										},
+									};
+								}
+								if (user.name === "Moderator") {
+									return {
+										data: {
+											...user,
+											role: "moderator",
+										},
+									};
+								}
+							},
+						},
+					},
+				},
+			},
+			{
+				testUser: {
+					name: "Super Admin",
+				},
+			},
+		);
+
+	const client = createAuthClient({
+		plugins: [
+			adminClient({
+				ac,
+				roles: {
+					superadmin: superAdminAc,
+					moderator: moderatorAc,
+					user: userAc,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const { headers: superAdminHeaders, user: superAdminUser } =
+		await signInWithTestUser();
+
+	it("should grant all permissions to superadmin role", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: superAdminUser.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: superAdminUser.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(true);
+
+		const canUpdateOrder = await auth.api.userHasPermission({
+			body: {
+				userId: superAdminUser.id,
+				permissions: {
+					order: ["update"],
+				},
+			},
+		});
+		expect(canUpdateOrder.success).toBe(true);
+	});
+
+	it("should grant all permissions to moderator role", async () => {
+		const moderatorUser = await client.signUp.email({
+			email: "moderator@test.com",
+			password: "password",
+			name: "Moderator",
+		});
+		const { headers: moderatorHeaders } = await signInWithUser(
+			"moderator@test.com",
+			"password",
+		);
+
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: moderatorUser.data?.user.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: moderatorUser.data?.user.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(true);
+
+		const canDeleteOrder = await auth.api.userHasPermission({
+			body: {
+				userId: moderatorUser.data?.user.id,
+				permissions: {
+					order: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteOrder.success).toBe(true);
+	});
+
+	it("should not grant all permissions to regular user role", async () => {
+		const regularUser = await client.signUp.email({
+			email: "regular@test.com",
+			password: "password",
+			name: "Regular User",
+		});
+
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: regularUser.data?.user.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(false);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: regularUser.data?.user.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(false);
+
+		const canReadUser = await auth.api.userHasPermission({
+			body: {
+				userId: regularUser.data?.user.id,
+				permissions: {
+					user: ["read"],
+				},
+			},
+		});
+		expect(canReadUser.success).toBe(true);
+	});
+
+	it("should work with role parameter instead of userId", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				role: "superadmin",
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canDeleteOrder = await auth.api.userHasPermission({
+			body: {
+				role: "moderator",
+				permissions: {
+					order: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteOrder.success).toBe(true);
+
+		const canCreateUserAsRegular = await auth.api.userHasPermission({
+			body: {
+				role: "user",
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUserAsRegular.success).toBe(false);
+	});
+
+	it("should work with multiple roles assigned to a user", async () => {
+		const multiRoleUser = await client.admin.createUser(
+			{
+				name: "Multi Role User",
+				email: "multirole@test.com",
+				password: "password",
+				role: ["user", "moderator"],
+			},
+			{
+				headers: superAdminHeaders,
+			},
+		);
+
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: multiRoleUser.data?.user.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: multiRoleUser.data?.user.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(true);
+
+		await client.admin.removeUser(
+			{
+				userId: multiRoleUser.data?.user.id || "",
+			},
+			{
+				headers: superAdminHeaders,
+			},
+		);
+	});
+});
+
+describe("adminRoles as single string", async (it) => {
+	const ac = createAccessControl({
+		user: ["create", "read", "update", "delete"],
+		order: ["create", "read"],
+	});
+
+	const adminAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+	const userAc = ac.newRole({
+		user: ["read"],
+		order: ["read"],
+	});
+
+	const { signInWithTestUser, auth, customFetchImpl } = await getTestInstance(
+		{
+			plugins: [
+				admin({
+					ac,
+					roles: {
+						admin: adminAc,
+						user: userAc,
+					},
+					adminRoles: "admin",
+				}),
+			],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
+		},
+		{
+			testUser: {
+				name: "Admin",
+			},
+		},
+	);
+
+	const client = createAuthClient({
+		plugins: [
+			adminClient({
+				ac,
+				roles: {
+					admin: adminAc,
+					user: userAc,
+				},
+			}),
+		],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const { user: adminUser } = await signInWithTestUser();
+
+	it("should grant all permissions when adminRoles is a single string", async () => {
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: adminUser.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(true);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: adminUser.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(true);
+
+		const canUpdateUser = await auth.api.userHasPermission({
+			body: {
+				userId: adminUser.id,
+				permissions: {
+					user: ["update"],
+				},
+			},
+		});
+		expect(canUpdateUser.success).toBe(true);
+	});
+
+	it("should not grant all permissions to non-admin roles", async () => {
+		const regularUser = await client.signUp.email({
+			email: "user@test.com",
+			password: "password",
+			name: "User",
+		});
+
+		const canCreateUser = await auth.api.userHasPermission({
+			body: {
+				userId: regularUser.data?.user.id,
+				permissions: {
+					user: ["create"],
+				},
+			},
+		});
+		expect(canCreateUser.success).toBe(false);
+
+		const canDeleteUser = await auth.api.userHasPermission({
+			body: {
+				userId: regularUser.data?.user.id,
+				permissions: {
+					user: ["delete"],
+				},
+			},
+		});
+		expect(canDeleteUser.success).toBe(false);
+	});
+});
