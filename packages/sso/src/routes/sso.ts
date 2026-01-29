@@ -1304,7 +1304,7 @@ export const signInSSO = (options?: SSOOptions) => {
 					// with fallbacks to top-level samlConfig values
 					idp = saml.IdentityProvider({
 						entityID: idpData?.entityID || parsedSamlConfig.issuer,
-						singleSignOnService: [
+						singleSignOnService: idpData?.singleSignOnService || [
 							{
 								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
 								Location: parsedSamlConfig.entryPoint,
