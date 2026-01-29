@@ -41,7 +41,6 @@ app.use(
 		origin: "http://localhost:3001", // replace with your origin
 		allowHeaders: ["Content-Type", "Authorization"],
 		allowMethods: ["POST", "GET", "OPTIONS"],
-		exposeHeaders: ["Content-Length"],
 		maxAge: 600,
 		credentials: true,
 	}),
@@ -55,6 +54,29 @@ serve(app);
 ```
 
 > **Important:** CORS middleware must be registered before your routes. This ensures that cross-origin requests are properly handled before they reach your authentication endpoints.
+
+<Callout type="warning">
+**CORS `exposeHeaders` Configuration**: Better Auth automatically manages the `access-control-expose-headers` header to expose authentication-related headers. If you need to use the `exposeHeaders` option in your CORS configuration, you **must** include the following headers that Better Auth plugins use:
+
+- `set-auth-token` (if using the [Bearer plugin](/docs/plugins/bearer))
+- `set-auth-jwt` (if using the [JWT plugin](/docs/plugins/jwt))
+- `set-ott` (if using the One-time-token plugin)
+
+For example, if you're using the Bearer plugin:
+
+```ts
+cors({
+	origin: "http://localhost:3001",
+	allowHeaders: ["Content-Type", "Authorization"],
+	allowMethods: ["POST", "GET", "OPTIONS"],
+	exposeHeaders: ["set-auth-token"], // Include Better Auth headers
+	maxAge: 600,
+	credentials: true,
+})
+```
+
+If you omit `exposeHeaders` from your CORS configuration, Better Auth will automatically handle exposing the necessary headers.
+</Callout>
 
 ### Middleware
 

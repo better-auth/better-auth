@@ -136,6 +136,46 @@ export async function handler(req, res) {
 }
 ```
 
+## CORS Configuration
+
+The Bearer plugin automatically adds the `set-auth-token` header to the `access-control-expose-headers` response header, allowing clients to read the token from response headers in cross-origin scenarios.
+
+<Callout type="warning">
+**CORS `exposeHeaders` Configuration**: If you're using CORS middleware (such as Hono's `cors`, Express's `cors`, or similar) and need to configure the `exposeHeaders` option, you **must** include `set-auth-token` in the list. Otherwise, the Bearer plugin's automatic header exposure will be overridden and clients won't be able to read the token.
+
+**Example with Hono:**
+
+```ts
+import { cors } from "hono/cors";
+
+app.use(
+	"/api/auth/*",
+	cors({
+		origin: "http://localhost:3001",
+		allowHeaders: ["Content-Type", "Authorization"],
+		allowMethods: ["POST", "GET", "OPTIONS"],
+		exposeHeaders: ["set-auth-token"], // Required for Bearer plugin
+		credentials: true,
+	}),
+);
+```
+
+**Example with Express:**
+
+```ts
+import cors from "cors";
+
+app.use(
+	cors({
+		origin: "http://localhost:3001",
+		credentials: true,
+		exposedHeaders: ["set-auth-token"], // Required for Bearer plugin
+	}),
+);
+```
+
+If you omit `exposeHeaders` from your CORS configuration, Better Auth will automatically handle exposing the `set-auth-token` header.
+</Callout>
 
 ## Options
 
