@@ -162,7 +162,7 @@ Trusted origins prevent CSRF attacks and block open redirects. You can set a lis
 
 ### Basic Usage
 
-The most basic usage is to specify exact origins:
+The most basic usage is to specify exact origins, below is an example of a trusted origins configuration:
 
 ```typescript
 {
@@ -173,6 +173,9 @@ The most basic usage is to specify exact origins:
   ]
 }
 ```
+<Callout type="warning">
+  Do not leave the localhost origin in a trusted origins list of a production auth instance.
+</Callout>
 
 ### Wildcard Origins
 
