@@ -39,6 +39,20 @@ haveIBeenPwned({
     customPasswordCompromisedMessage: "Please choose a more secure password."
 })
 ```
+
+or if you have custom locale support, you can use a function to return the message accordingly:
+
+```ts
+haveIBeenPwned({
+    customPasswordCompromisedMessage: async () => {
+        const locale = await getLocale();
+        const t = await getMessages({ locale });
+
+        return t("Please choose a more secure password.")
+    }
+})
+```
+
 ## Security Notes
 
 - Only the first 5 characters of the password hash are sent to the API
