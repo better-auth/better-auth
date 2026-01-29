@@ -55,6 +55,10 @@ export function checkEndpointConflicts(
 		string,
 		{ pluginId: string; endpointKey: string; methods: string[] }[]
 	>();
+	const publicEndpointRegistry = new Map<
+		string,
+		{ pluginId: string; endpointKey: string; methods: string[] }[]
+	>();
 
 	options.plugins?.forEach((plugin) => {
 		if (plugin.endpoints) {
@@ -88,8 +92,70 @@ export function checkEndpointConflicts(
 				}
 			}
 		}
+		if (plugin.publicEndpoints) {
+			for (const [key, endpoint] of Object.entries(plugin.publicEndpoints)) {
+				if (
+					endpoint &&
+					"path" in endpoint &&
+					typeof endpoint.path === "string"
+				) {
+					const path = endpoint.path;
+					let methods: string[] = [];
+					if (endpoint.options && "method" in endpoint.options) {
+						if (Array.isArray(endpoint.options.method)) {
+							methods = endpoint.options.method;
+						} else if (typeof endpoint.options.method === "string") {
+							methods = [endpoint.options.method];
+						}
+					}
+					if (methods.length === 0) {
+						methods = ["*"];
+					}
+
+					if (!publicEndpointRegistry.has(path)) {
+						publicEndpointRegistry.set(path, []);
+					}
+					publicEndpointRegistry.get(path)!.push({
+						pluginId: plugin.id,
+						endpointKey: key,
+						methods,
+					});
+				}
+			}
+		}
 	});
 
+	const conflicts = detectEndpointConflicts(endpointRegistry);
+	const publicConflicts = detectEndpointConflicts(publicEndpointRegistry);
+	if (conflicts.length > 0 || publicConflicts.length > 0) {
+		const messages = [
+			formatConflictMessages(conflicts, "Endpoint path conflicts:"),
+			formatConflictMessages(
+				publicConflicts,
+				"Public endpoint path conflicts:",
+			),
+		]
+			.filter(Boolean)
+			.join("\n\n");
+		logger.error(
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths with conflicting HTTP methods:
+${messages}
+
+To resolve this, you can:
+\t1. Use only one of the conflicting plugins
+\t2. Configure the plugins to use different paths (if supported)
+\t3. Ensure plugins use different HTTP methods for the same path
+`,
+		);
+	}
+}
+
+function detectEndpointConflicts(
+	endpointRegistry: Map<
+		string,
+		{ pluginId: string; endpointKey: string; methods: string[] }[]
+	>,
+) {
 	const conflicts: {
 		path: string;
 		plugins: string[];
@@ -141,25 +207,25 @@ export function checkEndpointConflicts(
 			}
 		}
 	}
+	return conflicts;
+}
 
-	if (conflicts.length > 0) {
-		const conflictMessages = conflicts
-			.map(
-				(conflict) =>
-					`  - "${conflict.path}" [${conflict.conflictingMethods.join(", ")}] used by plugins: ${conflict.plugins.join(", ")}`,
-			)
-			.join("\n");
-		logger.error(
-			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths with conflicting HTTP methods:
-${conflictMessages}
-
-To resolve this, you can:
-	1. Use only one of the conflicting plugins
-	2. Configure the plugins to use different paths (if supported)
-	3. Ensure plugins use different HTTP methods for the same path
-`,
-		);
-	}
+function formatConflictMessages(
+	items: {
+		path: string;
+		plugins: string[];
+		conflictingMethods: string[];
+	}[],
+	label: string,
+) {
+	if (items.length === 0) return "";
+	const conflictMessages = items
+		.map(
+			(conflict) =>
+				`  - "${conflict.path}" [${conflict.conflictingMethods.join(", ")}] used by plugins: ${conflict.plugins.join(", ")}`,
+		)
+		.join("\n");
+	return `${label}\n${conflictMessages}`;
 }
 
 export function getEndpoints<Option extends BetterAuthOptions>(
@@ -173,12 +239,30 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 				...plugin.endpoints,
 			};
 		}, {}) ?? {};
+	const pluginPublicEndpoints =
+		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
+			return {
+				...acc,
+				...plugin.publicEndpoints,
+			};
+		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
 			? T extends BetterAuthPlugin
 				? T extends {
 						endpoints: infer E;
+					}
+					? E
+					: {}
+				: {}
+			: {}
+	>;
+	type PluginPublicEndpoint = UnionToIntersection<
+		Option["plugins"] extends Array<infer T>
+			? T extends BetterAuthPlugin
+				? T extends {
+						publicEndpoints: infer E;
 					}
 					? E
 					: {}
@@ -246,9 +330,14 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		ok,
 		error,
 	} as const;
+	const publicEndpoints = {
+		...pluginPublicEndpoints,
+	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
+	const publicApi = toAuthEndpoints(publicEndpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
+		publicApi: publicApi as typeof publicEndpoints & PluginPublicEndpoint,
 		middlewares,
 	};
 }
@@ -258,7 +347,24 @@ export const router = <Option extends BetterAuthOptions>(
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);
 	const basePath = new URL(ctx.baseURL).pathname;
+	return createAuthRouter(ctx, options, api, middlewares, basePath);
+};
 
+export const publicRouter = <Option extends BetterAuthOptions>(
+	ctx: AuthContext,
+	options: Option,
+) => {
+	const { publicApi, middlewares } = getEndpoints(ctx, options);
+	return createAuthRouter(ctx, options, publicApi, middlewares, "/");
+};
+
+function createAuthRouter<API extends Record<string, Endpoint>>(
+	ctx: AuthContext,
+	options: BetterAuthOptions,
+	api: API,
+	middlewares: { path: string; middleware: Middleware }[],
+	basePath: string,
+) {
 	return createRouter(api, {
 		routerContext: ctx,
 		openapi: {
@@ -365,7 +471,7 @@ export const router = <Option extends BetterAuthOptions>(
 			}
 		},
 	});
-};
+}
 
 export {
 	type AuthEndpoint,
