@@ -248,6 +248,8 @@ Each provider configuration object supports the following options:
 interface GenericOAuthConfig {
   providerId: string;
   discoveryUrl?: string;
+  issuer?: string;
+  requireIssuerValidation?: boolean;
   authorizationUrl?: string;
   tokenUrl?: string;
   userInfoUrl?: string;
@@ -268,6 +270,10 @@ interface GenericOAuthConfig {
 **providerId**: A unique string to identify the OAuth provider configuration.
 
 **discoveryUrl**: (Optional) URL to fetch the provider's OAuth 2.0/OIDC configuration. If provided, endpoints like `authorizationUrl`, `tokenUrl`, and `userInfoUrl` can be auto-discovered.
+
+**issuer**: (Optional) The expected issuer identifier for validation. If not provided but `discoveryUrl` is set, it will be fetched from the discovery document. When set, the callback validates that the `iss` parameter matches this value.
+
+**requireIssuerValidation**: (Optional) When `true`, requires the `iss` parameter in callbacks if an issuer is configured. This provides stricter security but may break with older OAuth servers. Defaults to `false`.
 
 **authorizationUrl**: (Optional) The OAuth provider's authorization endpoint. Not required if using `discoveryUrl`.
 
@@ -315,6 +321,69 @@ interface GenericOAuthConfig {
 **authorizationHeaders**: (Optional) Custom headers to include in the authorization request. Useful for providers that require special headers.
 
 **overrideUserInfo**: (Optional) If true, the user's info in your database will be updated with the provider's info every time they sign in. Defaults to `false`.
+
+## Security: Issuer Validation
+
+Better Auth validates the OAuth provider's issuer to protect against mix-up attacks ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)). A mix-up attack occurs when a malicious authorization server tricks your application into sending an authorization code to the wrong token endpoint.
+
+### How It Works
+
+When an OAuth provider supports RFC 9207, it includes an `iss` (issuer) parameter in the authorization response. Better Auth validates this parameter against the expected issuer to ensure the response came from the intended provider.
+
+### Configuration Examples
+
+**Auto-discovery (recommended for OIDC providers):**
+```ts
+genericOAuth({
+  config: [{
+    providerId: "my-provider",
+    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+    clientId: "...",
+    clientSecret: "...",
+    // issuer is automatically fetched from discovery document
+  }]
+})
+```
+
+**Manual issuer configuration:**
+```ts
+genericOAuth({
+  config: [{
+    providerId: "custom-oauth",
+    authorizationUrl: "https://auth.example.com/authorize",
+    tokenUrl: "https://auth.example.com/token",
+    issuer: "https://auth.example.com",  // manually specify expected issuer
+    clientId: "...",
+    clientSecret: "...",
+  }]
+})
+```
+
+**Strict mode (recommended for modern providers):**
+```ts
+genericOAuth({
+  config: [{
+    providerId: "secure-provider",
+    discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+    clientId: "...",
+    clientSecret: "...",
+    requireIssuerValidation: true,  // reject if iss parameter is missing
+  }]
+})
+```
+
+### Validation Behavior
+
+| Scenario | `requireIssuerValidation` | Result |
+|----------|---------------------------|--------|
+| `iss` matches expected | - | Success |
+| `iss` doesn't match | - | `issuer_mismatch` error |
+| `iss` missing | `false` (default) | Success (backward compatible) |
+| `iss` missing | `true` | `issuer_missing` error |
+
+<Callout>
+For maximum security with modern OAuth/OIDC providers (Google, Auth0, Okta, etc.), we recommend enabling `requireIssuerValidation: true`.
+</Callout>
 
 ## Advanced Usage
 

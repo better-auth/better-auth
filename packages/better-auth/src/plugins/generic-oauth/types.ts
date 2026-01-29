@@ -21,6 +21,20 @@ export interface GenericOAuthConfig {
 	 */
 	discoveryUrl?: string | undefined;
 	/**
+	 * The expected issuer identifier for validation.
+	 * If not provided but discoveryUrl is set, it will be fetched from the discovery document.
+	 * When set, the callback validates that the `iss` parameter matches this value.
+	 * @see https://datatracker.ietf.org/doc/html/rfc9207
+	 */
+	issuer?: string | undefined;
+	/**
+	 * When true, requires the `iss` parameter in callbacks if an issuer is configured.
+	 * This provides stricter security but may break with older OAuth servers
+	 * that don't support issuer identification.
+	 * @default false
+	 */
+	requireIssuerValidation?: boolean | undefined;
+	/**
 	 * URL for the authorization endpoint.
 	 * Optional if using discoveryUrl.
 	 */

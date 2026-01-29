@@ -234,6 +234,12 @@ const OAuth2CallbackQuerySchema = z.object({
 			description: "The state parameter from the OAuth2 request",
 		})
 		.optional(),
+	iss: z
+		.string()
+		.meta({
+			description: "The issuer identifier",
+		})
+		.optional(),
 });
 
 export const oAuth2Callback = (options: GenericOAuthOptions) =>
@@ -325,10 +331,13 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 
 			let finalTokenUrl = providerConfig.tokenUrl;
 			let finalUserInfoUrl = providerConfig.userInfoUrl;
+			let expectedIssuer = providerConfig.issuer;
+
 			if (providerConfig.discoveryUrl) {
 				const discovery = await betterFetch<{
 					token_endpoint: string;
 					userinfo_endpoint: string;
+					issuer: string;
 				}>(providerConfig.discoveryUrl, {
 					method: "GET",
 					headers: providerConfig.discoveryHeaders,
@@ -336,8 +345,29 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (discovery.data) {
 					finalTokenUrl = discovery.data.token_endpoint;
 					finalUserInfoUrl = discovery.data.userinfo_endpoint;
+					if (!expectedIssuer && discovery.data.issuer) {
+						expectedIssuer = discovery.data.issuer;
+					}
 				}
 			}
+
+			if (expectedIssuer) {
+				if (ctx.query.iss) {
+					if (ctx.query.iss !== expectedIssuer) {
+						ctx.context.logger.error("OAuth issuer mismatch", {
+							expected: expectedIssuer,
+							received: ctx.query.iss,
+						});
+						return redirectOnError("issuer_mismatch");
+					}
+				} else if (providerConfig.requireIssuerValidation) {
+					ctx.context.logger.error("OAuth issuer parameter missing", {
+						expected: expectedIssuer,
+					});
+					return redirectOnError("issuer_missing");
+				}
+			}
+
 			try {
 				// Use custom getToken if provided
 				if (providerConfig.getToken) {

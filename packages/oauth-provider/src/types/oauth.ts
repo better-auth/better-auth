@@ -170,6 +170,14 @@ export interface AuthServerMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: "S256"[];
+	/**
+	 * Boolean value specifying whether the authorization server provides
+	 * the iss parameter in the authorization response (RFC 9207)
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9207
+	 * @default true
+	 */
+	authorization_response_iss_parameter_supported?: boolean;
 }
 
 /**
