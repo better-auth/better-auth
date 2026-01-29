@@ -7,7 +7,7 @@ export const hasPermissionFn = (
 		[x: string]: Role<any> | undefined;
 	},
 ) => {
-	if (!input.permissions && !input.permission) return false;
+	if (!input.permissions) return false;
 
 	const roles = input.role.split(",");
 	const creatorRole = input.options.creatorRole || "owner";
@@ -18,7 +18,7 @@ export const hasPermissionFn = (
 
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permissions ?? input.permission);
+		const result = _role?.authorize(input.permissions);
 		if (result?.success) {
 			return true;
 		}
@@ -26,18 +26,9 @@ export const hasPermissionFn = (
 	return false;
 };
 
-export type PermissionExclusive =
-	| {
-			/**
-			 * @deprecated Use `permissions` instead
-			 */
-			permission: { [key: string]: string[] };
-			permissions?: never | undefined;
-	  }
-	| {
-			permissions: { [key: string]: string[] };
-			permission?: never | undefined;
-	  };
+export type PermissionExclusive = {
+	permissions: { [key: string]: string[] };
+};
 
 export const cacheAllRoles = new Map<
 	string,
