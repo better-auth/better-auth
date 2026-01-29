@@ -48,6 +48,13 @@
 				"vue"
 			]
 		},
+		"packages/siwx": {
+			"ignoreDependencies": [
+				// optional dependencies for native wallet callbacks
+				"bs58",
+				"tweetnacl"
+			]
+		},
 		"packages/core": {
 			"ignoreDependencies": [
 				// type-only dependencies

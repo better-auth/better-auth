@@ -38,5 +38,7 @@ rxvt
 gitea
 MMDD
 ABCDEFGHJKLMNPQRSTUVWXYZ23456789
+siwx
+nacl
 setex
 kxeyPrefix
