@@ -1,5 +1,18 @@
 import { defineErrorCodes } from "../utils/error-codes";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		/**
+		 * This plugin does not exist, do not use it in runtime.
+		 */
+		"$internal:base": {
+			creator: () => {
+				$ERROR_CODES: typeof BASE_ERROR_CODES;
+			};
+		};
+	}
+}
+
 export const BASE_ERROR_CODES = defineErrorCodes({
 	USER_NOT_FOUND: "User not found",
 	FAILED_TO_CREATE_USER: "Failed to create user",
@@ -51,6 +64,8 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	MISSING_FIELD: "Field is required",
 	METHOD_NOT_ALLOWED_DEFER_SESSION_REQUIRED:
 		"POST method requires deferSessionRefresh to be enabled in session config",
+	BODY_MUST_BE_AN_OBJECT: "Body must be an object",
+	PASSWORD_ALREADY_SET: "User already has a password set",
 });
 
 export type APIErrorCode = keyof typeof BASE_ERROR_CODES;
