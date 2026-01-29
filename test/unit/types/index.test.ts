@@ -29,7 +29,7 @@ test("infer user type correctly", async () => {
 		updatedAt: Date;
 		email: string;
 		emailVerified: boolean;
-		name: string;
+		name?: string | null | undefined;
 		image?: string | null | undefined;
 		onboardingCompleted: boolean | null | undefined;
 	};

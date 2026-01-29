@@ -97,7 +97,7 @@ export const slack = (options: SlackOptions) => {
 			return {
 				user: {
 					id: profile["https://slack.com/user_id"],
-					name: profile.name || "",
+					name: profile.name || undefined,
 					email: profile.email,
 					emailVerified: profile.email_verified,
 					image: profile.picture || profile["https://slack.com/user_image_512"],
