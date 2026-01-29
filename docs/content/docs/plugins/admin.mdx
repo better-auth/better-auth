@@ -754,7 +754,9 @@ admin({
 ```
 ### Admin Roles
 
-The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
+Specifies which of the built-in roles (`admin` and `user`) are considered admin roles. Defaults to `["admin"]`.
+
+**Note**: Custom roles require using custom access control with the `ac` and `roles` options. Without custom access control, you can only use the built-in `admin` and `user` roles.
 
 ```ts title="auth.ts"
 admin({
