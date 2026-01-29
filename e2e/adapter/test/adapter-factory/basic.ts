@@ -981,6 +981,34 @@ export const getNormalTestSuiteTests = (
 				expect(user.session).toHaveLength(3);
 			});
 		},
+		"findMany - should find many with select": async () => {
+			const expectedResults = (await insertRandom("user", 3)).map(
+				([{ id, email }]) => ({ id, email }),
+			);
+			const select = ["id", "email"];
+			const result = await adapter.findMany<Pick<User, "id" | "email">>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: expectedResults.map((r) => r.id),
+						operator: "in",
+					},
+				],
+				select,
+			});
+
+			expect(result.length).toEqual(expectedResults.length);
+			expect(result[0]).toSatisfy(
+				(obj) =>
+					expectedResults.some(
+						(r) => r.id === obj.id && r.email === obj.email,
+					) &&
+					Object.entries(obj).every(
+						([k, v]) => select.includes(k) || v === undefined,
+					),
+			);
+		},
 		"findMany - should find many with join and offset": async () => {
 			const users: User[] = [];
 
