@@ -40,7 +40,6 @@ const getAdditionalFields = <
 	}
 	const additionalFieldsSchema = toZodSchema({
 		fields: additionalFields,
-		isClientSide: true,
 	});
 	type AdditionalFields = AllPartial extends true
 		? Partial<InferAdditionalFieldsFromPluginOptions<"organizationRole", O>>
