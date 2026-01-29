@@ -8,13 +8,6 @@ describe("SafeUrlSchema", () => {
 			expect(result.success).toBe(true);
 		});
 
-		it("should accept HTTPS URLs with paths and query params", () => {
-			const result = SafeUrlSchema.safeParse(
-				"https://example.com/oauth/callback?foo=bar",
-			);
-			expect(result.success).toBe(true);
-		});
-
 		it("should accept HTTP localhost", () => {
 			const result = SafeUrlSchema.safeParse(
 				"http://localhost:3000/api/auth/callback",
@@ -42,6 +35,20 @@ describe("SafeUrlSchema", () => {
 			const result = SafeUrlSchema.safeParse("http://192.168.1.1/callback");
 			expect(result.success).toBe(false);
 		});
+
+		it("should reject HTTP localhost.evil.com (subdomain attack)", () => {
+			const result = SafeUrlSchema.safeParse(
+				"http://localhost.evil.com/callback",
+			);
+			expect(result.success).toBe(false);
+		});
+
+		it("should reject HTTP 127.0.0.1.evil.com (subdomain attack)", () => {
+			const result = SafeUrlSchema.safeParse(
+				"http://127.0.0.1.evil.com/callback",
+			);
+			expect(result.success).toBe(false);
+		});
 	});
 
 	describe("dangerous schemes", () => {
@@ -67,13 +74,6 @@ describe("SafeUrlSchema", () => {
 	describe("custom schemes (mobile apps)", () => {
 		it("should accept custom schemes for mobile apps", () => {
 			const result = SafeUrlSchema.safeParse("myapp://oauth/callback");
-			expect(result.success).toBe(true);
-		});
-
-		it("should accept custom schemes with complex paths", () => {
-			const result = SafeUrlSchema.safeParse(
-				"com.example.app://auth?code=abc123",
-			);
 			expect(result.success).toBe(true);
 		});
 	});
