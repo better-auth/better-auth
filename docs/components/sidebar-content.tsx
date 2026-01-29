@@ -1,11 +1,13 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	Activity,
 	Binoculars,
 	Book,
 	CircleHelp,
 	Database,
 	Gauge,
+	IdCard,
 	Key,
 	KeyRound,
 	LucideAArrowDown,
@@ -14,6 +16,7 @@ import {
 	Phone,
 	ScanFace,
 	ShieldCheck,
+	ShieldPlusIcon,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
@@ -22,20 +25,23 @@ import {
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
+export interface ContentListItem {
+	title: string;
+	href: string;
+	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
+	isNew?: boolean;
+	isUpdated?: boolean;
+	children?: ContentListItem[];
+}
+
 interface Content {
 	title: string;
 	href?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
-	list: {
-		title: string;
-		href: string;
-		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
-		group?: boolean;
-		separator?: boolean;
-		isNew?: boolean;
-		hasSubpages?: boolean;
-	}[];
+	isUpdated?: boolean;
+	list: ContentListItem[];
 }
 
 export function getPageTree(): Root {
@@ -61,6 +67,35 @@ export function getPageTree(): Root {
 	};
 }
 
+function contentListItemToPageTreeNode(
+	item: ContentListItem,
+): Folder | { type: "page"; url: string; name: string; icon: ReactNode } {
+	// If item has children, create a folder with nested pages
+	if (item.children && item.children.length > 0) {
+		return {
+			type: "folder",
+			name: item.title,
+			icon: <item.icon />,
+			index: {
+				type: "page",
+				url: item.href,
+				name: item.title,
+				icon: <item.icon />,
+			},
+			children: item.children
+				.filter((child) => !child.group && child.href)
+				.map((child) => contentListItemToPageTreeNode(child)),
+		};
+	}
+	// Regular page
+	return {
+		type: "page",
+		url: item.href,
+		name: item.title,
+		icon: <item.icon />,
+	};
+}
+
 function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
@@ -75,20 +110,8 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && (item.href || item.separator))
-			.map((item) =>
-				item.separator
-					? ({
-							type: "separator",
-							name: item.title,
-						} as const)
-					: ({
-							type: "page",
-							url: item.href,
-							name: item.title,
-							icon: <item.icon />,
-						} as const),
-			),
+			.filter((item) => !item.group && item.href)
+			.map((item) => contentListItemToPageTreeNode(item)),
 	};
 }
 
@@ -2538,7 +2561,68 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				hasSubpages: true,
+				children: [
+					{
+						title: "invalid_callback_request",
+						href: "/docs/reference/errors/invalid_callback_request",
+						icon: () => null,
+					},
+					{
+						title: "state_not_found",
+						href: "/docs/reference/errors/state_not_found",
+						icon: () => null,
+					},
+					{
+						title: "state_mismatch",
+						href: "/docs/reference/errors/state_mismatch",
+						icon: () => null,
+					},
+					{
+						title: "no_code",
+						href: "/docs/reference/errors/no_code",
+						icon: () => null,
+					},
+					{
+						title: "no_callback_url",
+						href: "/docs/reference/errors/no_callback_url",
+						icon: () => null,
+					},
+					{
+						title: "oauth_provider_not_found",
+						href: "/docs/reference/errors/oauth_provider_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_not_found",
+						href: "/docs/reference/errors/email_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_doesn't_match",
+						href: "/docs/reference/errors/email_doesn't_match",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_get_user_info",
+						href: "/docs/reference/errors/unable_to_get_user_info",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_link_account",
+						href: "/docs/reference/errors/unable_to_link_account",
+						icon: () => null,
+					},
+					{
+						title: "account_already_linked_to_different_user",
+						href: "/docs/reference/errors/account_already_linked_to_different_user",
+						icon: () => null,
+					},
+					{
+						title: "signup_disabled",
+						href: "/docs/reference/errors/signup_disabled",
+						icon: () => null,
+					},
+				],
 			},
 			{
 				title: "Contributing",
