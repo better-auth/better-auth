@@ -191,11 +191,14 @@ export const createTeam = <O extends TeamsOptions>(
 					...additionalFields,
 				} as Omit<InferTeam<O>, "id"> & { slug?: string };
 
-				const response = await teamHook.before({
-					organization: org,
-					team,
-					user: session?.user,
-				});
+				const response = await teamHook.before(
+					{
+						organization: org,
+						team,
+						user: session?.user,
+					},
+					ctx,
+				);
 
 				return { ...team, ...(response || {}) };
 			})();
@@ -209,7 +212,10 @@ export const createTeam = <O extends TeamsOptions>(
 				throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 			}
 
-			await teamHook.after({ organization: org, team, user: session?.user });
+			await teamHook.after(
+				{ organization: org, team, user: session?.user },
+				ctx,
+			);
 
 			return ctx.json(team);
 		},

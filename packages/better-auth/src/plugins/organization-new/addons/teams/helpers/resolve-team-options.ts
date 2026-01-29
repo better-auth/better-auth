@@ -13,7 +13,7 @@ export const resolveTeamOptions = <O extends TeamsOptions>(
 			customCreateDefaultTeam:
 				options.defaultTeam?.customCreateDefaultTeam ?? undefined,
 		},
-		allowRemovingAllTeams: options.allowRemovingAllTeams ?? true,
+		allowRemovingAllTeams: options.allowRemovingAllTeams ?? false,
 		maximumMembersPerTeam: async (data) => {
 			const maximumMembersPerTeam = options.maximumMembersPerTeam;
 			if (typeof maximumMembersPerTeam === "function") {
@@ -30,5 +30,7 @@ export const resolveTeamOptions = <O extends TeamsOptions>(
 			}
 			return maximumTeams ?? DEFAULT_MAXIMUM_TEAMS;
 		},
+		defaultTeamIdField: options.defaultTeamIdField ?? "id",
+		enableSlugs: options.enableSlugs ?? false,
 	} satisfies ResolvedTeamsOptions;
 };

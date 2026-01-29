@@ -28,7 +28,8 @@ export const getUserFromSessionOrBody = async (ctx: GenericEndpointContext) => {
 
 	const user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 	if (!user) {
-		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+		const msg = BASE_ERROR_CODES.USER_NOT_FOUND;
+		throw APIError.from("BAD_REQUEST", msg);
 	}
 
 	return user;
