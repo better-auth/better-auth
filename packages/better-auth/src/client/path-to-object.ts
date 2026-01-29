@@ -34,8 +34,8 @@ export type InferSignUpEmailCtx<
 	FetchOptions extends ClientFetchOption,
 > = {
 	email: string;
-	name: string;
 	password: string;
+	name?: string | undefined | null;
 	image?: string | undefined;
 	callbackURL?: string | undefined;
 	fetchOptions?: FetchOptions | undefined;

@@ -155,7 +155,7 @@ export const discord = (options: DiscordOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.global_name || profile.username || "",
+					name: profile.global_name || profile.username || undefined,
 					email: profile.email,
 					emailVerified: profile.verified,
 					image: profile.image_url,

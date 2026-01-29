@@ -4,29 +4,25 @@ export const getAccountId = (userName: string, externalId?: string) => {
 	return externalId ?? userName;
 };
 
-const getFormattedName = (name: SCIMName) => {
+const getFormattedName = (name: SCIMName): string | undefined => {
 	if (name.givenName && name.familyName) {
 		return `${name.givenName} ${name.familyName}`;
 	}
-
 	if (name.givenName) {
 		return name.givenName;
 	}
-
-	return name.familyName ?? "";
+	return name.familyName;
 };
 
-export const getUserFullName = (email: string, name?: SCIMName) => {
-	if (name) {
-		const formatted = name.formatted?.trim() ?? "";
-		if (formatted.length > 0) {
-			return formatted;
-		}
-
-		return getFormattedName(name) || email;
+export const getUserFullName = (name?: SCIMName): string | undefined => {
+	if (!name) {
+		return undefined;
 	}
-
-	return email;
+	const formatted = name.formatted?.trim();
+	if (formatted) {
+		return formatted;
+	}
+	return getFormattedName(name);
 };
 
 export const getUserPrimaryEmail = (userName: string, emails?: SCIMEmail[]) => {
