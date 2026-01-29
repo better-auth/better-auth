@@ -44,7 +44,7 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 };
 
 /**
- * Validates that the issuer 
+ * Validates that the issuer URL
  * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
  * - MUST NOT contain query components
  * - MUST NOT contain fragment components

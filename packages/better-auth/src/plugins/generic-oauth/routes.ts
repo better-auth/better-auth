@@ -237,8 +237,7 @@ const OAuth2CallbackQuerySchema = z.object({
 	iss: z
 		.string()
 		.meta({
-			description:
-				"The issuer identifier",
+			description: "The issuer identifier",
 		})
 		.optional(),
 });
@@ -330,44 +329,45 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				throw ctx.redirect(url);
 			}
 
-		let finalTokenUrl = providerConfig.tokenUrl;
-		let finalUserInfoUrl = providerConfig.userInfoUrl;
-		let expectedIssuer = providerConfig.issuer;
+			let finalTokenUrl = providerConfig.tokenUrl;
+			let finalUserInfoUrl = providerConfig.userInfoUrl;
+			let expectedIssuer = providerConfig.issuer;
 
-		if (providerConfig.discoveryUrl) {
-			const discovery = await betterFetch<{
-				token_endpoint: string;
-				userinfo_endpoint: string;
-				issuer: string;
-			}>(providerConfig.discoveryUrl, {
-				method: "GET",
-				headers: providerConfig.discoveryHeaders,
-			});
-			if (discovery.data) {
-				finalTokenUrl = discovery.data.token_endpoint;
-				finalUserInfoUrl = discovery.data.userinfo_endpoint;
-				if (!expectedIssuer && discovery.data.issuer) {
-					expectedIssuer = discovery.data.issuer;
-				}
-			}
-		}
-
-		if (expectedIssuer) {
-			if (ctx.query.iss) {
-				if (ctx.query.iss !== expectedIssuer) {
-					ctx.context.logger.error("OAuth issuer mismatch", {
-						expected: expectedIssuer,
-						received: ctx.query.iss,
-					});
-					return redirectOnError("issuer_mismatch");
-				}
-			} else if (providerConfig.requireIssuerValidation) {
-				ctx.context.logger.error("OAuth issuer parameter missing", {
-					expected: expectedIssuer,
+			if (providerConfig.discoveryUrl) {
+				const discovery = await betterFetch<{
+					token_endpoint: string;
+					userinfo_endpoint: string;
+					issuer: string;
+				}>(providerConfig.discoveryUrl, {
+					method: "GET",
+					headers: providerConfig.discoveryHeaders,
 				});
-				return redirectOnError("issuer_missing");
+				if (discovery.data) {
+					finalTokenUrl = discovery.data.token_endpoint;
+					finalUserInfoUrl = discovery.data.userinfo_endpoint;
+					if (!expectedIssuer && discovery.data.issuer) {
+						expectedIssuer = discovery.data.issuer;
+					}
+				}
 			}
-		}
+
+			if (expectedIssuer) {
+				if (ctx.query.iss) {
+					if (ctx.query.iss !== expectedIssuer) {
+						ctx.context.logger.error("OAuth issuer mismatch", {
+							expected: expectedIssuer,
+							received: ctx.query.iss,
+						});
+						return redirectOnError("issuer_mismatch");
+					}
+				} else if (providerConfig.requireIssuerValidation) {
+					ctx.context.logger.error("OAuth issuer parameter missing", {
+						expected: expectedIssuer,
+					});
+					return redirectOnError("issuer_missing");
+				}
+			}
+
 			try {
 				// Use custom getToken if provided
 				if (providerConfig.getToken) {
