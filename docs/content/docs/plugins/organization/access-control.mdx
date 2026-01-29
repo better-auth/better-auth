@@ -1,0 +1,85 @@
+---
+title: Roles & Permissions
+description: Configure roles and permissions for fine-grained access control.
+---
+
+The organization plugin provides a flexible role-based access control (RBAC) system for managing permissions.
+
+## Default Roles
+
+The plugin comes with three built-in roles:
+
+| Role | Description |
+|------|-------------|
+| `owner` | Full access to all organization features |
+| `admin` | Can manage members, invitations, and settings |
+| `member` | Basic access to organization resources |
+
+## Custom Roles
+
+Define custom roles with specific permissions:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            roles: {
+                owner: {
+                    permissions: ["*"] // All permissions
+                },
+                admin: {
+                    permissions: [
+                        "member:read",
+                        "member:write",
+                        "invitation:read",
+                        "invitation:write",
+                        "organization:read",
+                        "organization:update"
+                    ]
+                },
+                member: {
+                    permissions: [
+                        "member:read",
+                        "organization:read"
+                    ]
+                },
+                viewer: {
+                    permissions: [
+                        "organization:read"
+                    ]
+                }
+            }
+        })
+    ]
+})
+```
+
+## Checking Permissions
+
+Check if the current user has a specific permission:
+
+```ts
+const hasPermission = await authClient.organization.hasPermission({
+    organizationId: "org_123",
+    permission: "member:write"
+})
+
+if (hasPermission) {
+    // User can manage members
+}
+```
+
+## Permission Format
+
+Permissions follow the `resource:action` format:
+
+- `organization:read` - View organization details
+- `organization:update` - Update organization settings
+- `organization:delete` - Delete the organization
+- `member:read` - View member list
+- `member:write` - Add/remove members
+- `invitation:read` - View invitations
+- `invitation:write` - Create/cancel invitations
