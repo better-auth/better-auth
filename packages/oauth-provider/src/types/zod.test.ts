@@ -48,16 +48,19 @@ describe("SafeUrlSchema", () => {
 		it("should reject javascript: scheme", () => {
 			const result = SafeUrlSchema.safeParse("javascript:alert(1)");
 			expect(result.success).toBe(false);
+			expect(result.error?.issues[0]?.message).toContain("javascript:");
 		});
 
 		it("should reject data: scheme", () => {
 			const result = SafeUrlSchema.safeParse("data:text/html,<script>");
 			expect(result.success).toBe(false);
+			expect(result.error?.issues[0]?.message).toContain("data:");
 		});
 
 		it("should reject vbscript: scheme", () => {
 			const result = SafeUrlSchema.safeParse("vbscript:msgbox");
 			expect(result.success).toBe(false);
+			expect(result.error?.issues[0]?.message).toContain("vbscript:");
 		});
 	});
 
