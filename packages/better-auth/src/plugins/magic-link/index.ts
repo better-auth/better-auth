@@ -152,6 +152,42 @@ export const magicLink = (options: MagicLinkOptions) => {
 		return token;
 	}
 
+	async function createMagicLink(
+		ctx: GenericEndpointContext & {
+			body: z.infer<typeof signInMagicLinkBodySchema>;
+		},
+	) {
+		const { email } = ctx.body;
+		const verificationToken = opts?.generateToken
+			? await opts.generateToken(email)
+			: generateRandomString(32, "a-z", "A-Z");
+		const storedToken = await storeToken(ctx, verificationToken);
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: storedToken,
+			value: JSON.stringify({ email, name: ctx.body.name }),
+			expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
+		});
+		const realBaseURL = new URL(ctx.context.baseURL);
+		const pathname = realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
+		const basePath = pathname ? "" : ctx.context.options.basePath || "";
+		const url = new URL(
+			`${pathname}${basePath}/magic-link/verify`,
+			realBaseURL.origin,
+		);
+		url.searchParams.set("token", verificationToken);
+		url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
+		if (ctx.body.newUserCallbackURL) {
+			url.searchParams.set("newUserCallbackURL", ctx.body.newUserCallbackURL);
+		}
+		if (ctx.body.errorCallbackURL) {
+			url.searchParams.set("errorCallbackURL", ctx.body.errorCallbackURL);
+		}
+		return {
+			url: url.toString(),
+			token: verificationToken,
+		};
+	}
+
 	return {
 		id: "magic-link",
 		endpoints: {
@@ -202,46 +238,56 @@ export const magicLink = (options: MagicLinkOptions) => {
 				},
 				async (ctx) => {
 					const { email } = ctx.body;
-
-					const verificationToken = opts?.generateToken
-						? await opts.generateToken(email)
-						: generateRandomString(32, "a-z", "A-Z");
-					const storedToken = await storeToken(ctx, verificationToken);
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: storedToken,
-						value: JSON.stringify({ email, name: ctx.body.name }),
-						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
-					});
-					const realBaseURL = new URL(ctx.context.baseURL);
-					const pathname =
-						realBaseURL.pathname === "/" ? "" : realBaseURL.pathname;
-					const basePath = pathname ? "" : ctx.context.options.basePath || "";
-					const url = new URL(
-						`${pathname}${basePath}/magic-link/verify`,
-						realBaseURL.origin,
-					);
-					url.searchParams.set("token", verificationToken);
-					url.searchParams.set("callbackURL", ctx.body.callbackURL || "/");
-					if (ctx.body.newUserCallbackURL) {
-						url.searchParams.set(
-							"newUserCallbackURL",
-							ctx.body.newUserCallbackURL,
-						);
-					}
-					if (ctx.body.errorCallbackURL) {
-						url.searchParams.set("errorCallbackURL", ctx.body.errorCallbackURL);
-					}
+					const result = await createMagicLink(ctx);
 					await options.sendMagicLink(
 						{
 							email,
-							url: url.toString(),
-							token: verificationToken,
+							url: result.url,
+							token: result.token,
 						},
 						ctx,
 					);
 					return ctx.json({
 						status: true,
 					});
+				},
+			),
+			generateMagicLink: createAuthEndpoint(
+				"/generate-magic-link",
+				{
+					method: "POST",
+					requireHeaders: true,
+					body: signInMagicLinkBodySchema,
+					metadata: {
+						openapi: {
+							operationId: "generateMagicLink",
+							description: "Generate magic link",
+							responses: {
+								200: {
+									description: "Success",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													url: {
+														type: "string",
+													},
+													token: {
+														type: "string",
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const result = await createMagicLink(ctx);
+					return ctx.json(result);
 				},
 			),
 			/**
