@@ -635,3 +635,136 @@ describe("delete user", async () => {
 		expect(sessionAfterPasswordChange.data).toBeNull();
 	});
 });
+
+describe("changeEmail with requireVerificationOnOldEmail", async () => {
+	it("should skip old email verification when requireVerificationOnOldEmail is false", async () => {
+		const sendChangeEmail = vi.fn();
+		let newEmailVerificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					newEmailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					requireVerificationOnOldEmail: false,
+					sendChangeEmailConfirmation: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
+
+		// Mark user as verified
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const newEmail = "new-direct-email@email.com";
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail,
+			});
+			expect(res.data?.status).toBe(true);
+
+			// Old email confirmation should NOT have been called
+			expect(sendChangeEmail).not.toHaveBeenCalled();
+
+			// New email verification should have been sent directly
+			expect(newEmailVerificationToken).toBeDefined();
+			expect(newEmailVerificationToken.length).toBeGreaterThan(0);
+
+			// Verify the new email token
+			const verifyRes = await client.verifyEmail({
+				query: {
+					token: newEmailVerificationToken,
+				},
+			});
+			expect(verifyRes.data?.status).toBe(true);
+
+			// Now the email should be updated
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(newEmail);
+		});
+	});
+
+	it("should still send old email verification when requireVerificationOnOldEmail is true (default)", async () => {
+		const sendChangeEmail = vi.fn();
+		let newEmailVerificationToken = "";
+
+		const { client, testUser, db, signInWithTestUser } = await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail({ user, url, token }) {
+					newEmailVerificationToken = token;
+				},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+					// requireVerificationOnOldEmail defaults to true
+					sendChangeEmailConfirmation: async ({
+						user,
+						newEmail,
+						url,
+						token,
+					}) => {
+						sendChangeEmail(user, newEmail, url, token);
+					},
+				},
+			},
+		});
+
+		// Mark user as verified
+		await db.update({
+			model: "user",
+			update: {
+				emailVerified: true,
+			},
+			where: [
+				{
+					field: "email",
+					value: testUser.email,
+				},
+			],
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		const newEmail = "new-confirmed-email@email.com";
+
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail,
+			});
+			expect(res.data?.status).toBe(true);
+
+			// Old email confirmation SHOULD have been called
+			expect(sendChangeEmail).toHaveBeenCalled();
+
+			// New email verification should NOT have been sent yet
+			expect(newEmailVerificationToken).toBe("");
+
+			// Email should not be updated yet
+			const sessionRes = await client.getSession();
+			expect(sessionRes.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
