@@ -351,5 +351,5 @@ Most of the features of Better Auth will not work correctly.`,
 		await initOrPromise;
 	}
 
-	return context as unknown as AuthContext<Options>;
+	return ctx as unknown as AuthContext<Options>;
 }
