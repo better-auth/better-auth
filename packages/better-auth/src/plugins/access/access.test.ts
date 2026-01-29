@@ -2,14 +2,23 @@ import { describe, expect, it } from "vitest";
 import { createAccessControl } from "./access";
 
 describe("access", () => {
-	const ac = createAccessControl({
+  const statements = {
 		project: ["create", "update", "delete", "delete-many"],
 		ui: ["view", "edit", "comment", "hide"],
-	});
+  } as const;
+	const ac = createAccessControl(statements);
 
 	const role1 = ac.newRole({
 		project: ["create", "update", "delete"],
 		ui: ["view", "edit", "comment"],
+	});
+	
+	it("should allow passing defined statements directly into newRole", () => {
+	  const role2 = ac.newRole(statements);
+    const response = role2.authorize({
+      project: ["create"],
+    });
+    expect(response.success).toBe(true);
 	});
 
 	it("should validate permissions", async () => {
