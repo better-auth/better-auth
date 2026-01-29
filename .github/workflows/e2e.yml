@@ -1,7 +1,7 @@
 name: E2E
 on:
   push:
-    branches: [ main, canary ]
+    branches: [main, canary]
   merge_group:
   pull_request:
 
@@ -37,8 +37,8 @@ jobs:
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
@@ -93,8 +93,8 @@ jobs:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         if: github.event_name != 'merge_group'
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
@@ -128,18 +128,18 @@ jobs:
       matrix:
         include:
           - packages: "@better-auth-test/adapter-factory"
-            paths: "packages/core/src/db/adapter/**
+            paths: "packages/core/src/db/adapter/**"
           - packages: "@better-auth-test/drizzle-adapter"
-            paths: "packages/drizzle-adapter/**
+            paths: "packages/drizzle-adapter/**"
           - packages: "@better-auth-test/kysely-prisma-adapter"
-            paths: "packages/kysely-adapter/**
+            paths: "packages/kysely-adapter/**"
           - packages: "@better-auth-test/memory-adapter"
-            paths: "packages/memory-adapter/**
+            paths: "packages/memory-adapter/**"
           - packages: "@better-auth-test/mongo-adapter"
-            paths: "packages/mongo-adapter/**
+            paths: "packages/mongo-adapter/**"
           - packages: "@better-auth-test/prisma-adapter"
-            paths: "packages/prisma-adapter/**
-        node-version: [ 22.x ]
+            paths: "packages/prisma-adapter/**"
+        node-version: [22.x]
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -162,7 +162,7 @@ jobs:
             # For pushes, check the last commit
             CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
           fi
-          
+
           # Check if the adapter package or related test files changed
           # Remove ** from path pattern and check if any file starts with the base path
           BASE_PATH=$(echo "${{ matrix.paths }}" | sed 's/\*\*$//')
@@ -196,8 +196,8 @@ jobs:
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
         with:
-          node-version-file: '.nvmrc'
-          registry-url: 'https://registry.npmjs.org'
+          node-version-file: ".nvmrc"
+          registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
