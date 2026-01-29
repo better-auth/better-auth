@@ -80,8 +80,8 @@ export function createAccessControl<const TStatements extends Statements>(
 	s: TStatements,
 ) {
 	return {
-		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements> | TStatements) {
-			return role<Subset<K, TStatements> | TStatements>(statements);
+		newRole<K extends keyof TStatements>(statements: Subset<K, TStatements>) {
+			return role<Subset<K, TStatements>>(statements);
 		},
 		statements: s,
 	};
