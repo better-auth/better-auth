@@ -1,7 +1,7 @@
 import type { GenericEndpointContext, StateData } from "better-auth";
 import { generateGenericState, parseGenericState } from "better-auth";
+import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import { APIError } from "better-call";
 
 export async function generateRelayState(
 	c: GenericEndpointContext,

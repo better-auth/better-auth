@@ -1737,3 +1737,265 @@ describe("oauth - config", () => {
 		}
 	});
 });
+
+describe("oauth - rate limiting", () => {
+	it("should have default rate limits configured", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+		expect(plugin?.rateLimit).toBeDefined();
+		expect(plugin?.rateLimit?.length).toBe(6);
+
+		// Check token endpoint default
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule?.window).toBe(60);
+		expect(tokenRule?.max).toBe(20);
+
+		// Check authorize endpoint default
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule?.window).toBe(60);
+		expect(authorizeRule?.max).toBe(30);
+
+		// Check introspect endpoint default
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule?.window).toBe(60);
+		expect(introspectRule?.max).toBe(100);
+
+		// Check revoke endpoint default
+		const revokeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/revoke"),
+		);
+		expect(revokeRule?.window).toBe(60);
+		expect(revokeRule?.max).toBe(30);
+
+		// Check register endpoint default
+		const registerRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/register"),
+		);
+		expect(registerRule?.window).toBe(60);
+		expect(registerRule?.max).toBe(5);
+
+		// Check userinfo endpoint default
+		const userinfoRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/userinfo"),
+		);
+		expect(userinfoRule?.window).toBe(60);
+		expect(userinfoRule?.max).toBe(60);
+	});
+
+	it("should allow custom rate limit values", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					rateLimit: {
+						token: { window: 1, max: 4 },
+						introspect: { window: 1, max: 50 },
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+
+		// Check custom token values
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule?.window).toBe(1);
+		expect(tokenRule?.max).toBe(4);
+
+		// Check custom introspect values
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule?.window).toBe(1);
+		expect(introspectRule?.max).toBe(50);
+
+		// Other endpoints should still have defaults
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule?.window).toBe(60);
+		expect(authorizeRule?.max).toBe(30);
+	});
+
+	it("should allow disabling rate limit for specific endpoints", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					rateLimit: {
+						token: false,
+						introspect: false,
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+
+		// Token and introspect should be disabled (not in array)
+		expect(plugin?.rateLimit?.length).toBe(4);
+
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule).toBeUndefined();
+
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule).toBeUndefined();
+
+		// Other endpoints should still exist
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule).toBeDefined();
+	});
+
+	it("should enforce rate limits on token endpoint", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						rateLimit: {
+							token: { window: 60, max: 3 },
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+			},
+		});
+
+		const statuses: number[] = [];
+
+		// Make requests until rate limited
+		for (let i = 0; i < 5; i++) {
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client!.client_id,
+						client_secret: client!.client_secret!,
+					}).toString(),
+				},
+			);
+			statuses.push(response.status);
+		}
+
+		// First 3 requests should succeed (200), last 2 should be rate limited (429)
+		expect(statuses[0]).toBe(200);
+		expect(statuses[1]).toBe(200);
+		expect(statuses[2]).toBe(200);
+		expect(statuses[3]).toBe(429);
+		expect(statuses[4]).toBe(429);
+	});
+
+	it("should not rate limit when endpoint rate limit is disabled", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						rateLimit: {
+							token: false, // Disable rate limiting for token endpoint
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+			},
+		});
+
+		// Make 10 requests - none should be rate limited
+		for (let i = 0; i < 10; i++) {
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client!.client_id,
+						client_secret: client!.client_secret!,
+					}).toString(),
+				},
+			);
+			expect(response.status).toBe(200);
+		}
+	});
+
+	// Note: Window expiry/reset behavior is tested in the core rate-limiter tests.
+	// See packages/better-auth/src/api/rate-limiter/rate-limiter.test.ts
+});
