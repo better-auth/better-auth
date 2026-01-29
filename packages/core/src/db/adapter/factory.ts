@@ -1107,6 +1107,7 @@ export const createAdapterFactory =
 					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
+						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					const experimentalJoins = options.experimental?.joins;

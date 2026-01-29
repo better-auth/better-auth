@@ -522,7 +522,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 
 					let builder = db
 						.select(
-							select?.length && select?.length > 0
+							select?.length && select.length > 0
 								? select.reduce((acc, field) => {
 										const fieldName = getFieldName({ model, field });
 										return {
