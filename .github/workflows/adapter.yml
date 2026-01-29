@@ -1,0 +1,326 @@
+name: Adapter Integration
+
+on:
+  push:
+    branches: [main, canary]
+  pull_request:
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  TURBO_CACHE: remote:rw
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  detect-adapter-changes:
+    name: Detect adapter changes
+    runs-on: ubuntu-latest
+    outputs:
+      adapter-factory: ${{ steps.changes.outputs.adapter-factory }}
+      drizzle-adapter: ${{ steps.changes.outputs.drizzle-adapter }}
+      kysely-adapter: ${{ steps.changes.outputs.kysely-adapter }}
+      memory-adapter: ${{ steps.changes.outputs.memory-adapter }}
+      mongo-adapter: ${{ steps.changes.outputs.mongo-adapter }}
+      prisma-adapter: ${{ steps.changes.outputs.prisma-adapter }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          else
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          fi
+
+          check_changes() {
+            local name=$1
+            local path=$2
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- "$path" | grep -q .; then
+              echo "$name=true" >> $GITHUB_OUTPUT
+              echo "Changes detected in $path"
+            else
+              echo "$name=false" >> $GITHUB_OUTPUT
+              echo "No changes in $path"
+            fi
+          }
+
+          check_changes "adapter-factory" "packages/core/src/db/adapter"
+          check_changes "drizzle-adapter" "packages/drizzle-adapter"
+          check_changes "kysely-adapter" "packages/kysely-adapter"
+          check_changes "memory-adapter" "packages/memory-adapter"
+          check_changes "mongo-adapter" "packages/mongo-adapter"
+          check_changes "prisma-adapter" "packages/prisma-adapter"
+
+  adapter-factory-integration:
+    name: Adapter Factory Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.adapter-factory == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/adapter-factory
+
+      - name: Stop Docker Containers
+        run: docker compose down
+
+  drizzle-adapter-integration:
+    name: Drizzle Adapter Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.drizzle-adapter == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/drizzle-adapter
+
+      - name: Stop Docker Containers
+        run: docker compose down
+
+  kysely-adapter-integration:
+    name: Kysely Adapter Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.kysely-adapter == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/kysely-prisma-adapter
+
+      - name: Stop Docker Containers
+        run: docker compose down
+
+  memory-adapter-integration:
+    name: Memory Adapter Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.memory-adapter == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/memory-adapter
+
+      - name: Stop Docker Containers
+        run: docker compose down
+
+  mongo-adapter-integration:
+    name: Mongo Adapter Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.mongo-adapter == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/mongo-adapter
+
+      - name: Stop Docker Containers
+        run: docker compose down
+
+  prisma-adapter-integration:
+    name: Prisma Adapter Integration Test
+    runs-on: ubuntu-latest
+    needs: detect-adapter-changes
+    if: needs.detect-adapter-changes.outputs.prisma-adapter == 'true'
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install --with-deps
+        working-directory: e2e/integration
+
+      - name: Start Docker Containers
+        run: |
+          docker compose up -d
+          sleep 10
+
+      - name: Adapter Integration
+        run: pnpm e2e:integration --filter=@better-auth-test/prisma-adapter
+
+      - name: Stop Docker Containers
+        run: docker compose down
