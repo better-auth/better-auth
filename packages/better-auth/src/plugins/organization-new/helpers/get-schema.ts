@@ -4,7 +4,12 @@ import type {
 	DBFieldAttribute,
 } from "@better-auth/core/db";
 import defu from "defu";
-import type { Addon, ResolvedOrganizationOptions } from "../types";
+import type {
+	Addon,
+	OrganizationOptions,
+	ResolvedOrganizationOptions,
+} from "../types";
+import { teams } from "../addons";
 
 /** Base organization fields */
 type BaseOrganizationFields<DisableSlugs extends boolean> = {
@@ -105,7 +110,7 @@ type ExtractAddonModelFields<
 
 /** Get additional fields from options for a specific model */
 type GetAdditionalFields<
-	O extends ResolvedOrganizationOptions,
+	O extends OrganizationOptions,
 	Model extends "organization" | "member" | "invitation",
 > = O["schema"] extends { [K in Model]?: { additionalFields?: infer F } }
 	? F extends Record<string, DBFieldAttribute>
@@ -125,49 +130,51 @@ type BaseSessionFields = {
 };
 
 /** Inferred schema type from options */
-export type InferOrganizationSchema<O extends ResolvedOrganizationOptions> =
-	Prettify<
-		GetAddonExtraTables<MergedAddonSchemas<O["use"]>> & {
-			organization: {
-				modelName?: string;
-				fields: Prettify<
-					BaseOrganizationFields<O["disableSlugs"]> &
-						ExtractAddonModelFields<
-							MergedAddonSchemas<O["use"]>,
-							"organization"
-						> &
-						GetAdditionalFields<O, "organization">
-				>;
-			};
-			member: {
-				modelName?: string;
-				fields: Prettify<
-					BaseMemberFields &
-						ExtractAddonModelFields<MergedAddonSchemas<O["use"]>, "member"> &
-						GetAdditionalFields<O, "member">
-				>;
-			};
-			invitation: {
-				modelName?: string;
-				fields: Prettify<
-					BaseInvitationFields &
-						ExtractAddonModelFields<
-							MergedAddonSchemas<O["use"]>,
-							"invitation"
-						> &
-						GetAdditionalFields<O, "invitation">
-				>;
-			};
-			session: {
-				fields: BaseSessionFields;
-			};
-		}
-	>;
+export type InferOrganizationSchema<O extends OrganizationOptions> = Prettify<
+	{
+		organization: {
+			modelName?: string;
+			fields: Prettify<
+				BaseOrganizationFields<Exclude<O["disableSlugs"], undefined>> &
+					ExtractAddonModelFields<
+						MergedAddonSchemas<Exclude<O["use"], undefined>>,
+						"organization"
+					> &
+					GetAdditionalFields<O, "organization">
+			>;
+		};
+		member: {
+			modelName?: string;
+			fields: Prettify<
+				BaseMemberFields &
+					ExtractAddonModelFields<
+						MergedAddonSchemas<Exclude<O["use"], undefined>>,
+						"member"
+					> &
+					GetAdditionalFields<O, "member">
+			>;
+		};
+		invitation: {
+			modelName?: string;
+			fields: Prettify<
+				BaseInvitationFields &
+					ExtractAddonModelFields<
+						MergedAddonSchemas<Exclude<O["use"], undefined>>,
+						"invitation"
+					> &
+					GetAdditionalFields<O, "invitation">
+			>;
+		};
+		session: {
+			fields: BaseSessionFields;
+		};
+	} & GetAddonExtraTables<MergedAddonSchemas<Exclude<O["use"], undefined>>>
+>;
 
-export const getSchema = <O extends ResolvedOrganizationOptions>(
+export const getSchema = <O extends OrganizationOptions>(
 	opts: O,
 ): InferOrganizationSchema<O> => {
-	const addonSchemas = opts.use
+	const addonSchemas = (opts?.use || [])
 		.map((addon) => addon.schema)
 		.filter((x) => x !== undefined)
 		.reduce((acc, curr) => {

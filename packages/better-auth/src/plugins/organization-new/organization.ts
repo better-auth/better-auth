@@ -12,7 +12,7 @@ export function organization<O extends OrganizationOptions>(
 ): {
 	id: "organization";
 	endpoints: InferOrganizationEndpoints<O>;
-	schema: InferOrganizationSchema<ReturnType<typeof resolveOrgOptions<O>>>;
+	schema: InferOrganizationSchema<O>;
 	$Infer: InferAllAddons<O>;
 	$ERROR_CODES: typeof $ERROR_CODES;
 	options: NoInfer<O>;

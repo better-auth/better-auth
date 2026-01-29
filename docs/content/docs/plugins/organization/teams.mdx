@@ -4,3 +4,39 @@ description: Learn how to create, update, and manage teams.
 ---
 
 Teams are a way to group members within an organization.
+
+## Removing a Team
+
+You can remove a team from an organization using the `organization.removeTeam` method.
+
+<APIMethod
+    path="/organization/remove-team"
+    method="POST"
+    requireSession>
+```ts
+type removeTeam = {
+    /**
+     * The team ID of the team to remove.
+     */
+    teamId: string = "team-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type Result = {
+    message: "Team removed successfully."
+}
+```
+
+<Callout type="warn">
+    By default, the last team in an organization cannot be removed.
+    To allow removing all teams, set `allowRemovingAllTeams: true` in the teams addon options.
+</Callout>
