@@ -10,7 +10,7 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, parsePrompt, storeToken } from "./utils";
+import { getClient, getJwtPlugin, parsePrompt, storeToken } from "./utils";
 
 /**
  * Formats an error url
@@ -20,12 +20,14 @@ export function formatErrorURL(
 	error: string,
 	description: string,
 	state?: string,
+	iss?: string,
 ) {
 	const searchParams = new URLSearchParams({
 		error,
 		error_description: description,
 	});
 	state && searchParams.append("state", state);
+	iss && searchParams.append("iss", iss);
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
@@ -40,6 +42,57 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 		throw ctx.redirect(uri);
 	}
 };
+
+/**
+ * Validates that the issuer 
+ * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
+ * - MUST NOT contain query components
+ * - MUST NOT contain fragment components
+ *
+ * @returns The validated issuer URL, or a sanitized version if invalid
+ */
+export function validateIssuerUrl(issuer: string): string {
+	try {
+		const url = new URL(issuer);
+
+		const isLocalhost =
+			url.hostname === "localhost" || url.hostname === "127.0.0.1";
+		if (url.protocol !== "https:" && !isLocalhost) {
+			url.protocol = "https:";
+		}
+
+		url.search = "";
+		url.hash = "";
+
+		return url.toString().replace(/\/$/, "");
+	} catch {
+		// If URL parsing fails, return as-is
+		return issuer;
+	}
+}
+
+/**
+ * Gets the issuer identifier
+ */
+export function getIssuer(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): string {
+	let issuer: string;
+
+	if (opts.disableJwtPlugin) {
+		issuer = ctx.context.baseURL;
+	} else {
+		try {
+			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+			issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
+		} catch {
+			issuer = ctx.context.baseURL;
+		}
+	}
+
+	return validateIssuerUrl(issuer);
+}
 
 /**
  * Error page url if redirect_uri has not been verified yet
@@ -154,6 +207,7 @@ export async function authorizeEndpoint(
 					"invalid_scope",
 					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
 					query.state,
+					getIssuer(ctx, opts),
 				),
 			);
 		}
@@ -171,6 +225,7 @@ export async function authorizeEndpoint(
 				"invalid_request",
 				"pkce is required",
 				query.state,
+				getIssuer(ctx, opts),
 			),
 		);
 	}
@@ -184,6 +239,7 @@ export async function authorizeEndpoint(
 				"invalid_request",
 				"invalid code_challenge method",
 				query.state,
+				getIssuer(ctx, opts),
 			),
 		);
 	}
@@ -353,6 +409,7 @@ async function redirectWithAuthorizationCode(
 			verificationValue.query.state,
 		);
 	}
+	redirectUriWithCode.searchParams.set("iss", getIssuer(ctx, opts));
 
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }
