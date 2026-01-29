@@ -1842,9 +1842,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
-      better-call:
-        specifier: 'catalog:'
-        version: 1.2.0(zod@4.3.6)
       stripe:
         specifier: ^20.2.0
         version: 20.2.0(@types/node@25.0.10)
