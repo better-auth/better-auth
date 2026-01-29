@@ -22,6 +22,7 @@ import {
 import {
 	acceptInvitation,
 	cancelInvitation,
+	createBulkInvitation,
 	createInvitation,
 	getInvitation,
 	listInvitations,
@@ -139,6 +140,7 @@ export type OrganizationEndpoints<O extends OrganizationOptions> = {
 	getFullOrganization: ReturnType<typeof getFullOrganization<O>>;
 	listOrganizations: ReturnType<typeof listOrganizations<O>>;
 	createInvitation: ReturnType<typeof createInvitation<O>>;
+	createBulkInvitation: ReturnType<typeof createBulkInvitation<O>>;
 	cancelInvitation: ReturnType<typeof cancelInvitation<O>>;
 	acceptInvitation: ReturnType<typeof acceptInvitation<O>>;
 	getInvitation: ReturnType<typeof getInvitation<O>>;
@@ -548,6 +550,22 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
 		 */
 		createInvitation: createInvitation(opts),
+		/**
+		 * ### Endpoint
+		 *
+		 * POST `/organization/invite-members`
+		 *
+		 * ### API Methods
+		 *
+		 * **server:**
+		 * `auth.api.createBulkInvitation`
+		 *
+		 * **client:**
+		 * `authClient.organization.inviteMembers`
+		 *
+		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-members)
+		 */
+		createBulkInvitation: createBulkInvitation(options as O),
 		/**
 		 * ### Endpoint
 		 *
