@@ -657,10 +657,18 @@ export const createInternalAdapter = (
 
 				await secondaryStorage.delete(token);
 
-				if (
-					!options.session?.storeSessionInDatabase ||
-					ctx.options.session?.preserveSessionInDatabase
-				) {
+				if (!options.session?.storeSessionInDatabase) {
+					return;
+				}
+
+				if (ctx.options.session?.preserveSessionInDatabase) {
+					// Update the session's expiresAt to mark it as expired instead of deleting
+					await updateWithHooks<Session>(
+						{ expiresAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000) }, // 2 days ago
+						[{ field: "token", value: token }],
+						"session",
+						undefined,
+					);
 					return;
 				}
 			}
