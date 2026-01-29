@@ -1075,6 +1075,7 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
+				select,
 				sortBy,
 				offset,
 				join: unsafeJoin,
@@ -1082,6 +1083,7 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
+				select?: string[] | undefined;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
 				join?: JoinOption;
@@ -1102,11 +1104,7 @@ export const createAdapterFactory =
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(
-						unsafeModel,
-						unsafeJoin,
-						undefined,
-					);
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
 					}
@@ -1129,6 +1127,7 @@ export const createAdapterFactory =
 					model,
 					where,
 					limit: limit,
+					select,
 					sortBy,
 					offset,
 					join: passJoinToAdapter ? join : undefined,
