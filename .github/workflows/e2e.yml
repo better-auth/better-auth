@@ -121,13 +121,25 @@ jobs:
         if: github.event_name != 'merge_group'
         run: docker compose down
   adapter-integration:
-    name: ${{ matrix.packages }} Integration Test
+    name: ${{ matrix.package }} Integration Test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
-        node-version: [ 22.x ]
+        node-version: [22.x]
+        include:
+          - package: "@better-auth-test/adapter-factory"
+            path: "packages/core/src/db/adapter/**"
+          - package: "@better-auth-test/drizzle-adapter"
+            path: "packages/drizzle-adapter/**"
+          - package: "@better-auth-test/kysely-prisma-adapter"
+            path: "packages/kysely-adapter/**"
+          - package: "@better-auth-test/memory-adapter"
+            path: "packages/memory-adapter/**"
+          - package: "@better-auth-test/mongo-adapter"
+            path: "packages/mongo-adapter/**"
+          - package: "@better-auth-test/prisma-adapter"
+            path: "packages/prisma-adapter/**"
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -138,8 +150,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Cache turbo build setup
+      - name: Check for changes
         if: github.event_name != 'merge_group'
+        id: changes
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            BASE_SHA="${{ github.event.before }}"
+            HEAD_SHA="${{ github.sha }}"
+          else
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+          fi
+          
+          # Check if any files matching the path pattern have changed
+          CHANGED=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" -- '${{ matrix.path }}' | head -1)
+          if [ -n "$CHANGED" ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in ${{ matrix.path }}"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes in ${{ matrix.path }}, skipping tests"
+          fi
+
+      - name: Cache turbo build setup
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
@@ -148,35 +182,35 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         with:
           node-version-file: '.nvmrc'
           registry-url: 'https://registry.npmjs.org'
           cache: pnpm
 
       - name: Install
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: pnpm install
 
       - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: pnpm exec playwright install --with-deps
         working-directory: e2e/integration
 
       - name: Start Docker Containers
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: |
           docker compose up -d
           # Wait for services to be ready (optional)
           sleep 10
 
       - name: Adapter Integration
-        if: github.event_name != 'merge_group'
-        run: pnpm e2e:integration --filter=${{ matrix.packages }}
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
+        run: pnpm e2e:integration --filter=${{ matrix.package }}
 
       - name: Stop Docker Containers
-        if: github.event_name != 'merge_group'
+        if: github.event_name != 'merge_group' && steps.changes.outputs.has_changes == 'true'
         run: docker compose down
