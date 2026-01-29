@@ -1,13 +1,11 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
-	Activity,
 	Binoculars,
 	Book,
 	CircleHelp,
 	Database,
 	Gauge,
-	IdCard,
 	Key,
 	KeyRound,
 	LucideAArrowDown,
@@ -16,7 +14,6 @@ import {
 	Phone,
 	ScanFace,
 	ShieldCheck,
-	ShieldPlusIcon,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
