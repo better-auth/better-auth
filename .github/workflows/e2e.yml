@@ -120,9 +120,73 @@ jobs:
       - name: Stop Docker Containers
         if: github.event_name != 'merge_group'
         run: docker compose down
+  changes:
+    name: Detect changed packages
+    runs-on: ubuntu-latest
+    outputs:
+      adapter-factory: ${{ steps.set-outputs.outputs.adapter-factory }}
+      drizzle-adapter: ${{ steps.set-outputs.outputs.drizzle-adapter }}
+      kysely-adapter: ${{ steps.set-outputs.outputs.kysely-adapter }}
+      memory-adapter: ${{ steps.set-outputs.outputs.memory-adapter }}
+      mongo-adapter: ${{ steps.set-outputs.outputs.mongo-adapter }}
+      prisma-adapter: ${{ steps.set-outputs.outputs.prisma-adapter }}
+      test-utils: ${{ steps.set-outputs.outputs.test-utils }}
+      test-files: ${{ steps.set-outputs.outputs.test-files }}
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        if: github.event_name != 'merge_group'
+        with:
+          fetch-depth: 0
+
+      - uses: dorny/paths-filter@v3
+        if: github.event_name != 'merge_group'
+        id: filter
+        with:
+          filters: |
+            adapter-factory:
+              - 'packages/core/src/db/adapter/**'
+            drizzle-adapter:
+              - 'packages/drizzle-adapter/**'
+            kysely-adapter:
+              - 'packages/kysely-adapter/**'
+            memory-adapter:
+              - 'packages/memory-adapter/**'
+            mongo-adapter:
+              - 'packages/mongo-adapter/**'
+            prisma-adapter:
+              - 'packages/prisma-adapter/**'
+            test-utils:
+              - 'packages/test-utils/**'
+            test-files:
+              - 'e2e/adapter/test/**'
+
+      - name: Set outputs with defaults
+        id: set-outputs
+        run: |
+          if [ "${{ github.event_name }}" = "merge_group" ]; then
+            echo "adapter-factory=false" >> $GITHUB_OUTPUT
+            echo "drizzle-adapter=false" >> $GITHUB_OUTPUT
+            echo "kysely-adapter=false" >> $GITHUB_OUTPUT
+            echo "memory-adapter=false" >> $GITHUB_OUTPUT
+            echo "mongo-adapter=false" >> $GITHUB_OUTPUT
+            echo "prisma-adapter=false" >> $GITHUB_OUTPUT
+            echo "test-utils=false" >> $GITHUB_OUTPUT
+            echo "test-files=false" >> $GITHUB_OUTPUT
+          else
+            echo "adapter-factory=${{ steps.filter.outputs.adapter-factory }}" >> $GITHUB_OUTPUT
+            echo "drizzle-adapter=${{ steps.filter.outputs.drizzle-adapter }}" >> $GITHUB_OUTPUT
+            echo "kysely-adapter=${{ steps.filter.outputs.kysely-adapter }}" >> $GITHUB_OUTPUT
+            echo "memory-adapter=${{ steps.filter.outputs.memory-adapter }}" >> $GITHUB_OUTPUT
+            echo "mongo-adapter=${{ steps.filter.outputs.mongo-adapter }}" >> $GITHUB_OUTPUT
+            echo "prisma-adapter=${{ steps.filter.outputs.prisma-adapter }}" >> $GITHUB_OUTPUT
+            echo "test-utils=${{ steps.filter.outputs.test-utils }}" >> $GITHUB_OUTPUT
+            echo "test-files=${{ steps.filter.outputs.test-files }}" >> $GITHUB_OUTPUT
+          fi
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
     runs-on: ubuntu-latest
+    if: github.event_name == 'merge_group' || (needs.changes.outputs.test-utils == 'true') || (needs.changes.outputs.test-files == 'true') || (matrix.packages == '@better-auth-test/adapter-factory' && needs.changes.outputs.adapter-factory == 'true') || (matrix.packages == '@better-auth-test/drizzle-adapter' && needs.changes.outputs.drizzle-adapter == 'true') || (matrix.packages == '@better-auth-test/kysely-prisma-adapter' && needs.changes.outputs.kysely-adapter == 'true') || (matrix.packages == '@better-auth-test/memory-adapter' && needs.changes.outputs.memory-adapter == 'true') || (matrix.packages == '@better-auth-test/mongo-adapter' && needs.changes.outputs.mongo-adapter == 'true') || (matrix.packages == '@better-auth-test/prisma-adapter' && needs.changes.outputs.prisma-adapter == 'true')
+    needs: [changes]
     strategy:
       fail-fast: false
       matrix:
@@ -150,39 +214,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if adapter package changed
-        if: github.event_name != 'merge_group'
-        id: changes
-        run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            # For PRs, use three-dot diff to find merge base automatically
-            BASE_REF="${{ github.event.pull_request.base.ref }}"
-            CHANGED_FILES=$(git diff --name-only origin/$BASE_REF...HEAD 2>/dev/null || git diff --name-only ${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }} 2>/dev/null || echo "")
-          else
-            # For pushes, check the last commit
-            CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || echo "")
-          fi
-
-          # Check if the adapter package or related test files changed
-          # Remove ** from path pattern and check if any file starts with the base path
-          BASE_PATH=$(echo "${{ matrix.paths }}" | sed 's/\*\*$//')
-          if echo "$CHANGED_FILES" | grep -qE "^$BASE_PATH"; then
-            echo "changed=true" >> $GITHUB_OUTPUT
-          elif echo "$CHANGED_FILES" | grep -qE "^e2e/adapter/test/"; then
-            # Also run if test files changed (they might affect all adapters)
-            echo "changed=true" >> $GITHUB_OUTPUT
-          elif echo "$CHANGED_FILES" | grep -qE "^packages/test-utils/"; then
-            # Also run if test-utils changed (used by all adapter tests)
-            echo "changed=true" >> $GITHUB_OUTPUT
-          elif [ "${{ matrix.packages }}" = "@better-auth-test/adapter-factory" ] && echo "$CHANGED_FILES" | grep -qE "^packages/core/"; then
-            # For adapter-factory, also check core changes
-            echo "changed=true" >> $GITHUB_OUTPUT
-          else
-            echo "changed=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Cache turbo build setup
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
         with:
           path: .turbo
@@ -191,35 +224,35 @@ jobs:
             ${{ runner.os }}-turbo-
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
 
       - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         with:
           node-version-file: ".nvmrc"
           registry-url: "https://registry.npmjs.org"
           cache: pnpm
 
       - name: Install
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         run: pnpm install
 
       - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         run: pnpm exec playwright install --with-deps
         working-directory: e2e/integration
 
       - name: Start Docker Containers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         run: |
           docker compose up -d
           # Wait for services to be ready (optional)
           sleep 10
 
       - name: Adapter Integration
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         run: pnpm e2e:integration --filter=${{ matrix.packages }}
 
       - name: Stop Docker Containers
-        if: github.event_name != 'merge_group' && steps.changes.outputs.changed == 'true'
+        if: github.event_name != 'merge_group'
         run: docker compose down
