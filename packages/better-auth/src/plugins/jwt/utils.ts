@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { exportJWK, generateKeyPair } from "jose";
+import { exportJWK, generateKeyPair, generateSecret } from "jose";
 import { symmetricEncrypt } from "../../crypto";
 import type { TimeString } from "../../utils/time";
 import { sec } from "../../utils/time";
@@ -35,6 +35,21 @@ export async function generateExportedKeyPair(
 		alg: "EdDSA",
 		crv: "Ed25519",
 	};
+
+	// Handle HS256 symmetric key generation
+	if (alg === "HS256") {
+		const secretKey = await generateSecret(alg, { extractable: true });
+		const secretWebKey = await exportJWK(secretKey);
+		// For symmetric keys, both public and private keys are the same (the secret)
+		// The public key is set to an empty object marker to indicate it's symmetric
+		return {
+			publicWebKey: { kty: "oct", symmetric: true } as Record<string, unknown>,
+			privateWebKey: secretWebKey,
+			alg,
+			cfg,
+		};
+	}
+
 	const { publicKey, privateKey } = await generateKeyPair(alg, {
 		...cfg,
 		extractable: true,
