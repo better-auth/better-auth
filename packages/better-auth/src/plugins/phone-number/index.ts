@@ -5,16 +5,24 @@ import { mergeSchema } from "../../db/schema";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { RequiredPhoneNumberOptions } from "./routes";
 import {
+	checkPhoneNumberVerificationOTP,
 	requestPasswordResetPhoneNumber,
 	resetPasswordPhoneNumber,
 	sendPhoneNumberOTP,
+	sendPhoneNumberVerificationOTP,
 	signInPhoneNumber,
+	signInPhoneNumberOTP,
 	verifyPhoneNumber,
+	verifyPhoneNumberNew,
 } from "./routes";
 import { schema } from "./schema";
-import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
+import type {
+	PhoneNumberOptions,
+	PhoneNumberOTPType,
+	UserWithPhoneNumber,
+} from "./types";
 
-export type { PhoneNumberOptions, UserWithPhoneNumber };
+export type { PhoneNumberOptions, PhoneNumberOTPType, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -57,7 +65,19 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 			sendPhoneNumberOTP: sendPhoneNumberOTP(
 				opts as RequiredPhoneNumberOptions,
 			),
+			sendPhoneNumberVerificationOTP: sendPhoneNumberVerificationOTP(
+				opts as RequiredPhoneNumberOptions,
+			),
+			checkPhoneNumberVerificationOTP: checkPhoneNumberVerificationOTP(
+				opts as RequiredPhoneNumberOptions,
+			),
+			signInPhoneNumberOTP: signInPhoneNumberOTP(
+				opts as RequiredPhoneNumberOptions,
+			),
 			verifyPhoneNumber: verifyPhoneNumber(opts as RequiredPhoneNumberOptions),
+			verifyPhoneNumberNew: verifyPhoneNumberNew(
+				opts as RequiredPhoneNumberOptions,
+			),
 			requestPasswordResetPhoneNumber: requestPasswordResetPhoneNumber(
 				opts as RequiredPhoneNumberOptions,
 			),
@@ -67,6 +87,34 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 		},
 		schema: mergeSchema(schema, options?.schema),
 		rateLimit: [
+			{
+				pathMatcher(path) {
+					return path === "/phone-number/send-verification-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/phone-number/check-verification-otp";
+				},
+				window: 60,
+				max: 5,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/phone-number/verify-phone-number";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/sign-in/phone-number-otp";
+				},
+				window: 60,
+				max: 3,
+			},
 			{
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
