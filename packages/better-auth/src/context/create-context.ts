@@ -7,7 +7,6 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
-import { deprecate } from "@better-auth/core/utils/deprecate";
 import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
@@ -80,11 +79,11 @@ function validateSecret(
 	}
 }
 
-export async function createAuthContext(
-	adapter: DBAdapter<BetterAuthOptions>,
-	options: BetterAuthOptions,
-	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
-): Promise<AuthContext> {
+export async function createAuthContext<Options extends BetterAuthOptions>(
+	adapter: DBAdapter,
+	options: Options,
+	getDatabaseType: (database: Options["database"]) => string,
+): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
 	if (!options.database) {
 		options = defu(options, {
@@ -99,7 +98,7 @@ export async function createAuthContext(
 				storeStateStrategy: "cookie" as const,
 				storeAccountCookie: true,
 			},
-		});
+		}) as Options;
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -109,6 +108,18 @@ export async function createAuthContext(
 	if (!baseURL) {
 		logger.warn(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
+
+	if (
+		adapter.id === "memory" &&
+		options.advanced?.database?.generateId === false
+	) {
+		logger.error(
+			`[better-auth] Misconfiguration detected.
+You are using the memory DB with generateId: false.
+This will cause no id to be generated for any model.
+Most of the features of Better Auth will not work correctly.`,
 		);
 	}
 
@@ -332,7 +343,7 @@ export async function createAuthContext(
 			}
 		},
 		getPlugin: getPluginFn,
-		hasPlugin: hasPluginFn,
+		hasPlugin: hasPluginFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
@@ -343,15 +354,5 @@ export async function createAuthContext(
 		({ context } = initOrPromise);
 	}
 
-	if (
-		typeof context.options.emailVerification?.onEmailVerification === "function"
-	) {
-		context.options.emailVerification.onEmailVerification = deprecate(
-			context.options.emailVerification.onEmailVerification,
-			"Use `afterEmailVerification` instead. This will be removed in 1.5",
-			context.logger,
-		);
-	}
-
-	return context;
+	return context as unknown as AuthContext<Options>;
 }

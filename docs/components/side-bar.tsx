@@ -7,6 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AsideLink } from "@/components/ui/aside-link";
 import { cn } from "@/lib/utils";
+import type { ContentListItem } from "./sidebar-content";
 import { contents, examples } from "./sidebar-content";
 import { Badge } from "./ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger } from "./ui/select";
@@ -19,7 +20,11 @@ export default function ArticleLayout() {
 
 	function getDefaultValue() {
 		const defaultValue = contents.findIndex((item) =>
-			item.list.some((listItem) => listItem.href === pathname),
+			item.list.some(
+				(listItem) =>
+					listItem.href === pathname ||
+					listItem.children?.some((child) => child.href === pathname),
+			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
 	}
@@ -73,6 +78,7 @@ export default function ArticleLayout() {
 										<item.Icon className="size-5" />
 										<span className="grow">{item.title}</span>
 										{item.isNew && <NewBadge />}
+										{item.isUpdated && <UpdatedBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
 										>
@@ -93,56 +99,11 @@ export default function ArticleLayout() {
 											>
 												<motion.div className="text-sm">
 													{item.list.map((listItem, j) => (
-														<div key={listItem.title}>
-															<Suspense
-																fallback={
-																	<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
-																		<div
-																			className="size-4 shrink-0 bg-muted rounded-full"
-																			aria-hidden="true"
-																		/>
-																		<div
-																			className="h-3 bg-muted rounded-md"
-																			style={{
-																				width: `${Math.random() * (70 - 30) + 30}%`,
-																			}}
-																			aria-hidden="true"
-																		/>
-																		<span className="sr-only">Loading...</span>
-																	</div>
-																}
-															>
-																{listItem.separator ? (
-																	<div className="flex flex-row items-center gap-2 mx-5 my-2">
-																		<p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-																			{listItem.title}
-																		</p>
-																		<div className="flex-grow h-px bg-border" />
-																	</div>
-																) : listItem.group ? (
-																	<div className="flex flex-row items-center gap-2 mx-5 my-1 ">
-																		<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
-																			{listItem.title}
-																		</p>
-																		<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
-																	</div>
-																) : (
-																	<AsideLink
-																		href={listItem.href}
-																		startWith="/docs"
-																		title={listItem.title}
-																		className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
-																		activeClassName="[&>div>div]:!bg-fd-muted"
-																	>
-																		<div className="min-w-4">
-																			<listItem.icon className="text-stone-950 dark:text-white" />
-																		</div>
-																		{listItem.title}
-																		{listItem.isNew && <NewBadge />}
-																	</AsideLink>
-																)}
-															</Suspense>
-														</div>
+														<SidebarListItem
+															key={listItem.title}
+															listItem={listItem}
+															pathname={pathname}
+														/>
 													))}
 												</motion.div>
 											</motion.div>
@@ -171,6 +132,171 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 				New
 			</Badge>
 		</div>
+	);
+}
+
+function UpdatedBadge({ isSelected }: { isSelected?: boolean }) {
+	return (
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className={cn(
+					" pointer-events-none !no-underline border-dashed !decoration-transparent",
+					isSelected && "!border-solid",
+				)}
+				variant={isSelected ? "default" : "outline"}
+			>
+				Updated
+			</Badge>
+		</div>
+	);
+}
+
+function SidebarListItem({
+	listItem,
+	pathname,
+}: {
+	listItem: ContentListItem;
+	pathname: string;
+}) {
+	const hasChildren = listItem.children && listItem.children.length > 0;
+	const isActive = pathname === listItem.href;
+	const hasActiveChild = listItem.children?.some(
+		(child) => child.href === pathname,
+	);
+
+	if (listItem.group) {
+		return (
+			<div className="flex flex-row items-center gap-2 mx-5 my-1">
+				<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
+					{listItem.title}
+				</p>
+				<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+			</div>
+		);
+	}
+
+	if (hasChildren) {
+		const showChildren = isActive || hasActiveChild;
+		return (
+			<div>
+				<AsideLink
+					hasSubpages={listItem.children && listItem.children.length > 0}
+					href={listItem.href}
+					startWith="/docs"
+					title={listItem.title}
+					className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
+					activeClassName="[&>div>div]:!bg-fd-muted"
+				>
+					<div className="min-w-4">
+						<listItem.icon className="text-stone-950 dark:text-white" />
+					</div>
+					{listItem.title}
+					{listItem.isNew && <NewBadge />}
+					{listItem.isUpdated && <UpdatedBadge />}
+				</AsideLink>
+				<AnimatePresence initial={false}>
+					{showChildren && (
+						<motion.div
+							initial={{ opacity: 0, height: 0 }}
+							animate={{ opacity: 1, height: "auto" }}
+							exit={{ opacity: 0, height: 0 }}
+							transition={{ duration: 0.2 }}
+							className="overflow-hidden"
+						>
+							<div className="relative">
+								{/* Vertical line overlay */}
+								<div className="absolute left-7 top-0 bottom-0 w-px bg-border pointer-events-none z-10" />
+								{listItem.children?.map((child) => {
+									const icon = child.icon({
+										className: "text-stone-950 dark:text-white",
+									});
+									return child.group ? (
+										<div
+											key={child.title}
+											className="flex flex-row items-center gap-2 mx-5 pl-6 my-1"
+										>
+											<p className="text-sm text-transparent bg-gradient-to-tr dark:from-gray-100 dark:to-stone-200 bg-clip-text from-gray-900 to-stone-900">
+												{child.title}
+											</p>
+											<div className="flex-grow h-px bg-gradient-to-r from-stone-800/90 to-stone-800/60" />
+										</div>
+									) : (
+										<Suspense
+											key={child.title}
+											fallback={
+												<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
+													<div
+														className="size-4 shrink-0 bg-muted rounded-full"
+														aria-hidden="true"
+													/>
+													<div
+														className="h-3 bg-muted rounded-md"
+														style={{
+															width: `${Math.random() * (70 - 30) + 30}%`,
+														}}
+														aria-hidden="true"
+													/>
+													<span className="sr-only">Loading...</span>
+												</div>
+											}
+										>
+											<AsideLink
+												href={child.href}
+												startWith="/docs"
+												title={child.title}
+												className="break-words pl-11 text-nowrap w-full [&>div>div]:hover:!bg-fd-muted"
+												activeClassName="[&>div>div]:!bg-fd-muted"
+											>
+												{icon && <div className="min-w-4">{icon}</div>}
+												{child.title}
+												{child.isNew && <NewBadge />}
+												{child.isUpdated && <UpdatedBadge />}
+											</AsideLink>
+										</Suspense>
+									);
+								})}
+							</div>
+						</motion.div>
+					)}
+				</AnimatePresence>
+			</div>
+		);
+	}
+
+	return (
+		<Suspense
+			fallback={
+				<div className="flex items-center gap-2 px-5 py-1.5 animate-pulse">
+					<div
+						className="size-4 shrink-0 bg-muted rounded-full"
+						aria-hidden="true"
+					/>
+					<div
+						className="h-3 bg-muted rounded-md"
+						style={{
+							width: `${Math.random() * (70 - 30) + 30}%`,
+						}}
+						aria-hidden="true"
+					/>
+					<span className="sr-only">Loading...</span>
+				</div>
+			}
+		>
+			<AsideLink
+				href={listItem.href}
+				startWith="/docs"
+				title={listItem.title}
+				className="break-words text-nowrap w-[--fd-sidebar-width] [&>div>div]:hover:!bg-fd-muted"
+				activeClassName="[&>div>div]:!bg-fd-muted"
+			>
+				<div className="min-w-4">
+					<listItem.icon className="text-stone-950 dark:text-white" />
+				</div>
+				{listItem.title}
+				{listItem.isNew && <NewBadge />}
+				{listItem.isUpdated && <UpdatedBadge />}
+			</AsideLink>
+		</Suspense>
 	);
 }
 

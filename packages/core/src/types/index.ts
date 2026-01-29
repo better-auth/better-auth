@@ -8,7 +8,10 @@ export type {
 	InternalAdapter,
 	PluginContext,
 } from "./context";
-export type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
+export type {
+	BetterAuthCookie,
+	BetterAuthCookies,
+} from "./cookie";
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,
@@ -17,8 +20,13 @@ export type {
 	BetterAuthRateLimitRule,
 	BetterAuthRateLimitStorage,
 	GenerateIdFn,
+	StoreIdentifierOption,
 } from "./init-options";
-export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";
+export type {
+	BetterAuthPlugin,
+	BetterAuthPluginErrorCodePart,
+	HookEndpointContext,
+} from "./plugin";
 export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,

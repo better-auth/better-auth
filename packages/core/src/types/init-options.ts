@@ -32,6 +32,11 @@ type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
 
+export type StoreIdentifierOption =
+	| "plain"
+	| "hashed"
+	| { hash: (identifier: string) => Promise<string> };
+
 export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
@@ -138,23 +143,11 @@ export type BetterAuthAdvancedOptions = {
 				disableIpTracking?: boolean;
 				/**
 				 * IPv6 subnet prefix length for rate limiting.
+				 * IPv6 addresses will be normalized to this subnet.
 				 *
-				 * IPv6 addresses can be grouped by subnet to prevent attackers from
-				 * bypassing rate limits by rotating through multiple addresses in
-				 * their allocation.
-				 *
-				 * Common values:
-				 * - 128 (default): Individual IPv6 address
-				 * - 64: /64 subnet (typical home/business allocation)
-				 * - 48: /48 subnet (larger network allocation)
-				 * - 32: /32 subnet (ISP allocation)
-				 *
-				 * Note: This only affects IPv6 addresses. IPv4 addresses are always
-				 * rate limited individually.
-				 *
-				 * @default 64 (/64 subnet)
+				 * @default 64
 				 */
-				ipv6Subnet?: 128 | 64 | 48 | 32 | undefined;
+				ipv6Subnet?: 128 | 64 | 48 | 32;
 		  }
 		| undefined;
 	/**
@@ -257,17 +250,6 @@ export type BetterAuthAdvancedOptions = {
 				 */
 				defaultFindManyLimit?: number;
 				/**
-				 * If your database auto increments number ids, set this to `true`.
-				 *
-				 * Note: If enabled, we will not handle ID generation (including if you use `generateId`), and it would be expected that your database will provide the ID automatically.
-				 *
-				 * @default false
-				 *
-				 * @deprecated Please use `generateId` instead. This will be removed in future
-				 * releases.
-				 */
-				useNumberId?: boolean;
-				/**
 				 * Custom generateId function.
 				 *
 				 * If not provided, random ids will be generated.
@@ -322,14 +304,17 @@ export type BetterAuthAdvancedOptions = {
 	 * }
 	 */
 	backgroundTasks?: {
-		handler: (promise: Promise<void>) => void;
+		handler: (promise: Promise<unknown>) => void;
 	};
 	/**
-	 * Skip trailing slash validation in route matching
+	 * Skip trailing slashes in API routes.
+	 *
+	 * When enabled, requests with trailing slashes (e.g., `/api/auth/session/`)
+	 * will be handled the same as requests without (e.g., `/api/auth/session`).
 	 *
 	 * @default false
 	 */
-	skipTrailingSlashes?: boolean | undefined;
+	skipTrailingSlashes?: boolean;
 };
 
 export type BetterAuthOptions = {
@@ -485,10 +470,13 @@ export type BetterAuthOptions = {
 					request?: Request,
 				) => Promise<void>;
 				/**
-				 * Send a verification email automatically
-				 * after sign up
+				 * Send a verification email automatically after sign up.
 				 *
-				 * @default false
+				 * - `true`: Always send verification email on sign up
+				 * - `false`: Never send verification email on sign up
+				 * - `undefined`: Follows `requireEmailVerification` behavior
+				 *
+				 * @default undefined
 				 */
 				sendOnSignUp?: boolean;
 				/**
@@ -508,13 +496,6 @@ export type BetterAuthOptions = {
 				 * @default 3600 seconds (1 hour)
 				 */
 				expiresIn?: number;
-				/**
-				 * A function that is called when a user verifies their email
-				 * @param user the user that verified their email
-				 * @param request the request object
-				 * @deprecated Use `beforeEmailVerification` or `afterEmailVerification` instead. This will be removed in 1.5
-				 */
-				onEmailVerification?: (user: User, request?: Request) => Promise<void>;
 				/**
 				 * A function that is called before a user verifies their email
 				 * @param user the user that verified their email
@@ -675,21 +656,6 @@ export type BetterAuthOptions = {
 					 */
 					enabled: boolean;
 					/**
-					 * Send a verification email when the user changes their email.
-					 * @param data the data object
-					 * @param request the request object
-					 * @deprecated Use `sendChangeEmailConfirmation` instead
-					 */
-					sendChangeEmailVerification?: (
-						data: {
-							user: User;
-							newEmail: string;
-							url: string;
-							token: string;
-						},
-						request?: Request,
-					) => Promise<void>;
-					/**
 					 * Send a confirmation email to the old email address when the user changes their email.
 					 * @param data the data object
 					 * @param request the request object
@@ -791,6 +757,14 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				disableSessionRefresh?: boolean;
+				/**
+				 * Defer session refresh writes to POST requests.
+				 * When enabled, GET is read-only and POST performs refresh.
+				 * Useful for read-replica database setups.
+				 *
+				 * @default false
+				 */
+				deferSessionRefresh?: boolean;
 				/**
 				 * Additional fields for the session
 				 */
@@ -942,6 +916,17 @@ export type BetterAuthOptions = {
 					 */
 					enabled?: boolean;
 					/**
+					 * Disable implicit account linking on sign-in.
+					 *
+					 * When enabled, accounts will not be automatically linked
+					 * during OAuth sign-in, even if the email is verified or
+					 * the provider is trusted. Users must explicitly link
+					 * accounts using `linkSocial()` while authenticated.
+					 *
+					 * @default false
+					 */
+					disableImplicitLinking?: boolean;
+					/**
 					 * List of trusted providers
 					 */
 					trustedProviders?: Array<
@@ -1034,6 +1019,24 @@ export type BetterAuthOptions = {
 				 * fetched
 				 */
 				disableCleanup?: boolean;
+				/**
+				 * How to store verification identifiers (tokens, OTPs, etc.)
+				 *
+				 * @example "hashed"
+				 *
+				 * @default "plain"
+				 */
+				storeIdentifier?:
+					| StoreIdentifierOption
+					| {
+							default: StoreIdentifierOption;
+							overrides?: Record<string, StoreIdentifierOption>;
+					  };
+				/**
+				 * Store verification data in database even when secondary storage is configured.
+				 * @default false
+				 */
+				storeInDatabase?: boolean;
 		  }
 		| undefined;
 	/**

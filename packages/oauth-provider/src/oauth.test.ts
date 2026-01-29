@@ -16,7 +16,15 @@ import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import type { Listener } from "listhen";
 import { listen } from "listhen";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import {
+	afterAll,
+	afterEach,
+	beforeAll,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
 import { oauthProvider } from "./oauth";
@@ -199,7 +207,9 @@ describe("oauth", async () => {
 	}
 
 	// Tests if it is oauth2 compatible
-	it("should sign in using generic oauth plugin", async () => {
+	it("should sign in using generic oauth plugin", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -241,13 +251,13 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let signInEmailRedirectUri = "";
@@ -275,7 +285,9 @@ describe("oauth", async () => {
 		expect(callbackUrl).toContain("/success");
 	});
 
-	it("should sign in using generic oauth discovery", async () => {
+	it("should sign in using generic oauth discovery", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -321,13 +333,13 @@ describe("oauth", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let signInEmailRedirectUri = "";
@@ -445,13 +457,10 @@ describe("oauth - prompt", async () => {
 
 	// Registers a confidential client application to work with
 	beforeAll(async () => {
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: undefined,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: undefined,
 			},
-			writable: true,
 		});
 
 		// Opens the authorization server for testing with genericOAuth
@@ -507,14 +516,7 @@ describe("oauth - prompt", async () => {
 
 	afterAll(async () => {
 		await server.close();
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: undefined,
-				},
-			},
-			writable: true,
-		});
+		vi.unstubAllGlobals();
 	});
 
 	async function createTestInstance(
@@ -702,7 +704,7 @@ describe("oauth - prompt", async () => {
 		isUserRegistered = true;
 	});
 
-	it("consent - should sign in", async () => {
+	it("consent - should sign in", async ({ onTestFinished }) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -751,13 +753,14 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Give consent and obtain redirect callback
@@ -773,13 +776,13 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.redirect).toBeTruthy();
 		expect(consentRes.uri).toContain(redirectUri);
 		expect(consentRes.uri).toContain(`code=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRes.uri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRes.uri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		let callbackURL = "";
@@ -795,7 +798,7 @@ describe("oauth - prompt", async () => {
 	});
 
 	it("consent - should sign in given previous consent (see previous test)", async ({
-		expect,
+		onTestFinished,
 	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
@@ -841,13 +844,13 @@ describe("oauth - prompt", async () => {
 		expect(callbackRedirectUrl).toContain(redirectUri);
 		expect(callbackRedirectUrl).toContain("code=");
 		expect(callbackRedirectUrl).toContain("state=");
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(callbackRedirectUrl, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(callbackRedirectUrl, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Code exchange should be successful
@@ -911,7 +914,9 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`state=`);
 	});
 
-	it("select_account - should sign in requesting account selection", async () => {
+	it("select_account - should sign in requesting account selection", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -960,13 +965,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Account selected, continue auth flow
@@ -987,7 +992,9 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
-	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async () => {
+	it("login+consent - should always redirect to login and force consent (notice consent previously given)", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1035,13 +1042,13 @@ describe("oauth - prompt", async () => {
 		expect(loginRedirectUri).toContain(
 			`redirect_uri=${encodeURIComponent(oauthClient?.redirect_uris?.at(0)!)}`,
 		);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(loginRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(loginRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Check for redirection to /consent after login
@@ -1061,7 +1068,9 @@ describe("oauth - prompt", async () => {
 		expect(signInEmailRedirectUri).toContain("prompt=consent");
 	});
 
-	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async () => {
+	it("select_account+consent - should always redirect to select_account and force consent (notice consent previously given)", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1113,13 +1122,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Account selected, continue auth flow
@@ -1142,7 +1151,9 @@ describe("oauth - prompt", async () => {
 		enableSelectAccount = false;
 	});
 
-	it("shall allow user to select an organization/team post login and consent", async () => {
+	it("shall allow user to select an organization/team post login and consent", async ({
+		onTestFinished,
+	}) => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -1192,13 +1203,13 @@ describe("oauth - prompt", async () => {
 		);
 		expect(selectAccountRedirectUri).toContain(`scope=`);
 		expect(selectAccountRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectAccountRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Select Account and continue auth flow
@@ -1229,13 +1240,13 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
-		Object.defineProperty(global, "window", {
-			value: {
-				location: {
-					search: new URL(consentRedirectUri, authServerBaseUrl).search,
-				},
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
 			},
-			writable: true,
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
 		});
 
 		// Give consent and obtain redirect callback
@@ -1725,4 +1736,266 @@ describe("oauth - config", () => {
 			expect(checkSignature).toBeDefined();
 		}
 	});
+});
+
+describe("oauth - rate limiting", () => {
+	it("should have default rate limits configured", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+		expect(plugin?.rateLimit).toBeDefined();
+		expect(plugin?.rateLimit?.length).toBe(6);
+
+		// Check token endpoint default
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule?.window).toBe(60);
+		expect(tokenRule?.max).toBe(20);
+
+		// Check authorize endpoint default
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule?.window).toBe(60);
+		expect(authorizeRule?.max).toBe(30);
+
+		// Check introspect endpoint default
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule?.window).toBe(60);
+		expect(introspectRule?.max).toBe(100);
+
+		// Check revoke endpoint default
+		const revokeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/revoke"),
+		);
+		expect(revokeRule?.window).toBe(60);
+		expect(revokeRule?.max).toBe(30);
+
+		// Check register endpoint default
+		const registerRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/register"),
+		);
+		expect(registerRule?.window).toBe(60);
+		expect(registerRule?.max).toBe(5);
+
+		// Check userinfo endpoint default
+		const userinfoRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/userinfo"),
+		);
+		expect(userinfoRule?.window).toBe(60);
+		expect(userinfoRule?.max).toBe(60);
+	});
+
+	it("should allow custom rate limit values", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					rateLimit: {
+						token: { window: 1, max: 4 },
+						introspect: { window: 1, max: 50 },
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+
+		// Check custom token values
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule?.window).toBe(1);
+		expect(tokenRule?.max).toBe(4);
+
+		// Check custom introspect values
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule?.window).toBe(1);
+		expect(introspectRule?.max).toBe(50);
+
+		// Other endpoints should still have defaults
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule?.window).toBe(60);
+		expect(authorizeRule?.max).toBe(30);
+	});
+
+	it("should allow disabling rate limit for specific endpoints", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					rateLimit: {
+						token: false,
+						introspect: false,
+					},
+				}),
+			],
+		});
+
+		const plugin = auth.options.plugins?.find((p) => p.id === "oauth-provider");
+
+		// Token and introspect should be disabled (not in array)
+		expect(plugin?.rateLimit?.length).toBe(4);
+
+		const tokenRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/token"),
+		);
+		expect(tokenRule).toBeUndefined();
+
+		const introspectRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/introspect"),
+		);
+		expect(introspectRule).toBeUndefined();
+
+		// Other endpoints should still exist
+		const authorizeRule = plugin?.rateLimit?.find((r) =>
+			r.pathMatcher("/oauth2/authorize"),
+		);
+		expect(authorizeRule).toBeDefined();
+	});
+
+	it("should enforce rate limits on token endpoint", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						rateLimit: {
+							token: { window: 60, max: 3 },
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+			},
+		});
+
+		const statuses: number[] = [];
+
+		// Make requests until rate limited
+		for (let i = 0; i < 5; i++) {
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client!.client_id,
+						client_secret: client!.client_secret!,
+					}).toString(),
+				},
+			);
+			statuses.push(response.status);
+		}
+
+		// First 3 requests should succeed (200), last 2 should be rate limited (429)
+		expect(statuses[0]).toBe(200);
+		expect(statuses[1]).toBe(200);
+		expect(statuses[2]).toBe(200);
+		expect(statuses[3]).toBe(429);
+		expect(statuses[4]).toBe(429);
+	});
+
+	it("should not rate limit when endpoint rate limit is disabled", async () => {
+		const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance(
+			{
+				rateLimit: {
+					enabled: true,
+				},
+				plugins: [
+					jwt(),
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						rateLimit: {
+							token: false, // Disable rate limiting for token endpoint
+						},
+					}),
+				],
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		const client = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: ["http://localhost:5000/callback"],
+			},
+		});
+
+		// Make 10 requests - none should be rate limited
+		for (let i = 0; i < 10; i++) {
+			const response = await customFetchImpl(
+				"http://localhost:3000/api/auth/oauth2/token",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						grant_type: "client_credentials",
+						client_id: client!.client_id,
+						client_secret: client!.client_secret!,
+					}).toString(),
+				},
+			);
+			expect(response.status).toBe(200);
+		}
+	});
+
+	// Note: Window expiry/reset behavior is tested in the core rate-limiter tests.
+	// See packages/better-auth/src/api/rate-limiter/rate-limiter.test.ts
 });

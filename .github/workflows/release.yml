@@ -9,6 +9,13 @@ permissions:
   contents: write
   id-token: write
 
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  TURBO_CACHE: remote:rw
+  TURBO_FORCE: true
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
+
 jobs:
   release:
     runs-on: ubuntu-latest
