@@ -71,6 +71,8 @@ export interface DrizzleAdapterConfig {
 }
 
 export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
+	const _an_extra_variable_unused_but_for_testing = 1;
+	_an_extra_variable_unused_but_for_testing;
 	let lazyOptions: BetterAuthOptions | null = null;
 	const createCustomAdapter =
 		(db: DB): AdapterFactoryCustomizeAdapterCreator =>
