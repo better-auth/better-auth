@@ -1811,9 +1811,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
-      better-call:
-        specifier: 'catalog:'
-        version: 1.2.0(zod@4.3.6)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
