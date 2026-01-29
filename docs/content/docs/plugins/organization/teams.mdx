@@ -5,6 +5,50 @@ description: Learn how to create, update, and manage teams.
 
 Teams are a way to group members within an organization.
 
+## Set Up 
+
+<Steps>
+    <Step>
+        ### 1. Add the teams addon
+       To add the teams addon, simply add the `teams()` addon into the `organization()` plugin.
+
+        ```ts title="auth.ts"
+        import { organization } from "better-auth/plugins";
+        import { teams } from "@better-auth/organization/addons"; // [!code highlight]
+
+        export const auth = betterAuth({
+            plugins: [
+                organization({
+                    use: [teams()], // [!code highlight]
+                }),
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### 2. Migrate the database
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+                ```bash
+                npx @better-auth/cli migrate
+                ```
+            </Tab>
+            <Tab value="generate">
+                ```bash
+                npx @better-auth/cli generate
+                ```
+            </Tab>
+        </Tabs>
+    </Step>
+</Steps>
+
+That's it! You can now start utilizing team functionality in your application.
+
+---
+
 ## Creating a Team
 
 You can create a team within an organization using the `organization.createTeam` method.
