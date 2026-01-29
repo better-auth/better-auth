@@ -1,0 +1,163 @@
+---
+title: Roles & Permissions
+description: Configure roles and permissions for fine-grained access control.
+---
+
+The organization plugin provides a flexible role-based access control (RBAC) system for managing permissions.
+
+## Default Roles
+
+The plugin comes with three built-in roles:
+
+| Role | Description |
+|------|-------------|
+| `owner` | Full access to all organization features |
+| `admin` | Can manage members, invitations, and settings |
+| `member` | Basic access to organization resources |
+
+## Custom Roles
+
+Define custom roles with specific permissions:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            roles: {
+                owner: {
+                    permissions: ["*"] // All permissions
+                },
+                admin: {
+                    permissions: [
+                        "member:read",
+                        "member:write",
+                        "invitation:read",
+                        "invitation:write",
+                        "organization:read",
+                        "organization:update"
+                    ]
+                },
+                member: {
+                    permissions: [
+                        "member:read",
+                        "organization:read"
+                    ]
+                },
+                viewer: {
+                    permissions: [
+                        "organization:read"
+                    ]
+                }
+            }
+        })
+    ]
+})
+```
+
+## Checking Permissions
+
+Check if the current user has a specific permission:
+
+```ts
+const hasPermission = await authClient.organization.hasPermission({
+    organizationId: "org_123",
+    permission: "member:write"
+})
+
+if (hasPermission) {
+    // User can manage members
+}
+```
+
+## Permission Format
+
+Permissions follow the `resource:action` format:
+
+- `organization:read` - View organization details
+- `organization:update` - Update organization settings
+- `organization:delete` - Delete the organization
+- `member:read` - View member list
+- `member:write` - Add/remove members
+- `invitation:read` - View invitations
+- `invitation:write` - Create/cancel invitations
+
+## Role Hierarchy
+
+You can define role inheritance:
+
+```ts
+organization({
+    roles: {
+        owner: {
+            permissions: ["*"]
+        },
+        admin: {
+            inherits: ["member"],
+            permissions: [
+                "member:write",
+                "invitation:write",
+                "organization:update"
+            ]
+        },
+        member: {
+            permissions: [
+                "member:read",
+                "invitation:read",
+                "organization:read"
+            ]
+        }
+    }
+})
+```
+
+## Protecting API Routes
+
+Use the `hasPermission` helper in your API routes:
+
+```ts title="api/members.ts"
+import { auth } from "@/lib/auth"
+
+export async function POST(request: Request) {
+    const session = await auth.api.getSession({
+        headers: request.headers
+    })
+    
+    if (!session) {
+        return new Response("Unauthorized", { status: 401 })
+    }
+    
+    const hasPermission = await auth.api.hasOrganizationPermission({
+        userId: session.user.id,
+        organizationId: "org_123",
+        permission: "member:write"
+    })
+    
+    if (!hasPermission) {
+        return new Response("Forbidden", { status: 403 })
+    }
+    
+    // Handle member creation...
+}
+```
+
+## Dynamic Permissions
+
+For complex permission logic, use a permission resolver:
+
+```ts
+organization({
+    resolvePermission: async ({ user, organization, permission }) => {
+        // Custom permission logic
+        if (user.id === organization.ownerId) {
+            return true // Owner has all permissions
+        }
+        
+        // Check against your permission system
+        return checkPermission(user, organization, permission)
+    }
+})
+```
+
