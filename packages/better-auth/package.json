@@ -501,6 +501,7 @@
     "@types/pg": "^8.15.5",
     "@types/react": "catalog:react19",
     "better-sqlite3": "^12.6.2",
+    "botid": "^1.5.10",
     "deepmerge": "^4.3.1",
     "happy-dom": "^20.4.0",
     "listhen": "^1.9.0",
@@ -525,6 +526,7 @@
     "@tanstack/react-start": "^1.0.0",
     "@tanstack/solid-start": "^1.0.0",
     "better-sqlite3": "^12.0.0",
+    "botid": "^1.0.0",
     "drizzle-kit": ">=0.31.4",
     "drizzle-orm": ">=0.41.0",
     "mongodb": "^6.0.0 || ^7.0.0",
@@ -553,6 +555,9 @@
       "optional": true
     },
     "@tanstack/solid-start": {
+      "optional": true
+    },
+    "botid": {
       "optional": true
     },
     "next": {

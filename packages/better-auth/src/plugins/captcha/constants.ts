@@ -11,6 +11,7 @@ export const Providers = {
 	GOOGLE_RECAPTCHA: "google-recaptcha",
 	HCAPTCHA: "hcaptcha",
 	CAPTCHAFOX: "captchafox",
+	VERCEL_BOTID: "vercel-botid",
 } as const;
 
 export const siteVerifyMap: Record<Provider, string> = {
@@ -20,4 +21,5 @@ export const siteVerifyMap: Record<Provider, string> = {
 		"https://www.google.com/recaptcha/api/siteverify",
 	[Providers.HCAPTCHA]: "https://api.hcaptcha.com/siteverify",
 	[Providers.CAPTCHAFOX]: "https://api.captchafox.com/siteverify",
+	[Providers.VERCEL_BOTID]: "",
 };
