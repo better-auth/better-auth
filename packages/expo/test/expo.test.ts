@@ -644,6 +644,61 @@ describe("expo with cookieCache", async () => {
 		expect(map.has("better-auth_session_token")).toBe(true);
 		expect(map.has("better-auth:session_token")).toBe(false);
 	});
+
+	it("should provide helpful error message when server plugin is missing", async () => {
+		const storage = new Map<string, string>();
+		const consoleErrorSpy = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => {});
+
+		const client = createAuthClient({
+			baseURL: "http://localhost:3000",
+			fetchOptions: {
+				customFetchImpl: async (url, init) => {
+					const headers = new Headers(init?.headers);
+					const hasExpoOrigin = headers.get("expo-origin") !== null;
+					const urlStr = url.toString();
+
+					if (hasExpoOrigin && urlStr.includes("/sign-in")) {
+						return new Response(
+							JSON.stringify({
+								message: "Invalid request",
+								error: "FORBIDDEN",
+							}),
+							{
+								status: 403,
+								headers: { "Content-Type": "application/json" },
+							},
+						);
+					}
+
+					return new Response(null, { status: 404 });
+				},
+			},
+			plugins: [
+				expoClient({
+					storage: {
+						getItem: (key) => storage.get(key) || null,
+						setItem: async (key, value) => storage.set(key, value),
+					},
+				}),
+			],
+		});
+
+		await client.signIn.email({
+			email: "test@example.com",
+			password: "password123",
+		});
+
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("[Better Auth Expo] Configuration Error"),
+		);
+		expect(consoleErrorSpy).toHaveBeenCalledWith(
+			expect.stringContaining("Make sure you have added the expo() plugin"),
+		);
+
+		consoleErrorSpy.mockRestore();
+	});
 });
 
 describe("expo with cookie storeStateStrategy", async () => {
