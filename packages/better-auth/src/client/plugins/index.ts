@@ -6,6 +6,7 @@ export * from "../../plugins/additional-fields/client";
 export * from "../../plugins/admin/client";
 export * from "../../plugins/anonymous/client";
 export * from "../../plugins/api-key/client";
+export * from "../../plugins/bearer/client";
 export * from "../../plugins/custom-session/client";
 export * from "../../plugins/device-authorization/client";
 export * from "../../plugins/email-otp/client";
