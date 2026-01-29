@@ -59,18 +59,17 @@
   "dependencies": {
     "@better-auth/core": "workspace:*",
     "@noble/hashes": "^2.0.0",
+    "bs58": "^6.0.0",
+    "tweetnacl": "^1.0.3",
     "zod": "^4.1.12"
   },
   "peerDependencies": {
     "better-auth": "workspace:*"
   },
   "devDependencies": {
-    "@types/bs58": "^5.0.0",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "bs58": "^6.0.0",
     "tsdown": "catalog:",
-    "tweetnacl": "^1.0.3",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"
   }
