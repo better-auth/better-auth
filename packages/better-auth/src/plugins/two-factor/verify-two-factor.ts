@@ -3,6 +3,7 @@ import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
 import { expireCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
@@ -78,23 +79,33 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				// Always clear the two factor cookie after successful verification
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
+					const plugin = ctx.context.getPlugin("two-factor");
+					const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
+					const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
-							maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							maxAge,
 						},
 					);
 					/**
-					 * create a token that will be used to
-					 * verify the device
+					 * Create a random identifier for the trust device record.
+					 * Store it in the verification table with an expiration
+					 * so the server can validate and revoke it.
 					 */
+					const trustIdentifier = `trust-device-${generateRandomString(32)}`;
 					const token = await createHMAC("SHA-256", "base64urlnopad").sign(
 						ctx.context.secret,
-						`${user.id}!${session.token}`,
+						`${user.id}!${trustIdentifier}`,
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: user.id,
+						identifier: trustIdentifier,
+						expiresAt: new Date(Date.now() + maxAge * 1000),
+					});
 					await ctx.setSignedCookie(
 						trustDeviceCookie.name,
-						`${token}!${session.token}`,
+						`${token}!${trustIdentifier}`,
 						ctx.context.secret,
 						trustDeviceCookie.attributes,
 					);

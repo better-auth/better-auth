@@ -30,18 +30,9 @@ export const adminClient = <O extends AdminClientOptions>(
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -81,7 +72,7 @@ export const adminClient = <O extends AdminClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},
