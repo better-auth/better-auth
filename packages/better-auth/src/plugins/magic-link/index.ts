@@ -208,7 +208,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 						: generateRandomString(32, "a-z", "A-Z");
 					const storedToken = await storeToken(ctx, verificationToken);
 					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: storedToken,
+						identifier: `magic-link:${storedToken}`,
 						value: JSON.stringify({ email, name: ctx.body.name }),
 						expiresAt: new Date(Date.now() + (opts.expiresIn || 60 * 5) * 1000),
 					});
@@ -339,10 +339,18 @@ export const magicLink = (options: MagicLinkOptions) => {
 						ctx.context.baseURL,
 					).toString();
 					const storedToken = await storeToken(ctx, token);
-					const tokenValue =
+					// Try prefixed identifier first (new format), then fallback to non-prefixed (backward compatibility)
+					let tokenValue =
 						await ctx.context.internalAdapter.findVerificationValue(
-							storedToken,
+							`magic-link:${storedToken}`,
 						);
+					if (!tokenValue) {
+						// Fallback to non-prefixed identifier for backward compatibility
+						tokenValue =
+							await ctx.context.internalAdapter.findVerificationValue(
+								storedToken,
+							);
+					}
 					if (!tokenValue) {
 						redirectWithError("INVALID_TOKEN");
 					}
