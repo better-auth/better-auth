@@ -57,7 +57,12 @@ describe("magic link", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expect(response.data).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -320,7 +325,12 @@ describe("magic link verify", async () => {
 				onSuccess: sessionSetter(headers),
 			},
 		});
-		expect(response.data?.token).toBeDefined();
+		expect(response.data).toBeDefined();
+		if (response.data && "token" in response.data) {
+			expect(response.data.token).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
+		}
 		const betterAuthCookie = headers.get("set-cookie");
 		expect(betterAuthCookie).toBeDefined();
 	});
@@ -372,6 +382,110 @@ describe("magic link verify origin validation", async () => {
 
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+});
+
+describe("magic link JSON response mode", async () => {
+	let verificationEmail: VerificationEmail = {
+		email: "",
+		token: "",
+		url: "",
+	};
+	const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+		plugins: [
+			magicLink({
+				async sendMagicLink(data) {
+					verificationEmail = data;
+				},
+			}),
+		],
+	});
+
+	const client = createAuthClient({
+		plugins: [magicLinkClient()],
+		fetchOptions: {
+			customFetchImpl,
+		},
+		baseURL: "http://localhost:3000",
+		basePath: "/api/auth",
+	});
+
+	it("should verify magic link with JSON response when disableRedirect is true", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token: new URL(verificationEmail.url).searchParams.get("token") || "",
+				disableRedirect: true,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		expect(response.data).toBeDefined();
+		if (response.data && "session" in response.data) {
+			expect(response.data.session).toBeDefined();
+			expect(response.data.session.token).toBeDefined();
+			expect(response.data.user).toBeDefined();
+			expect(response.data.user.email).toBe(testUser.email);
+			expect(response.data.isNewUser).toBeDefined();
+		} else {
+			throw new Error("Unexpected response format");
+		}
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
+	});
+
+	it("should return JSON error when disableRedirect is true and token is invalid", async () => {
+		const response = await client.magicLink.verify(
+			{
+				query: {
+					token: "invalid-token-12345",
+					disableRedirect: true,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(400);
+					expect(context.error).toBeDefined();
+					expect(context.error?.message).toContain("Invalid or expired token");
+				},
+			},
+		);
+
+		expect(response.error).toBeDefined();
+	});
+
+	it("should return JSON error when disableRedirect is true and token is expired", async () => {
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token = verificationEmail.token;
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
+
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+					disableRedirect: true,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(400);
+					expect(context.error).toBeDefined();
+					expect(context.error?.message).toContain("Token has expired");
+				},
+			},
+		);
+
+		vi.useRealTimers();
 	});
 });
 
