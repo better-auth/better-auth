@@ -163,6 +163,44 @@ const { data, error } = await authClient.siwe.verify({
   The `chainId` must match the Chain ID specified in your SIWE message. Verification will fail with a 401 error if there's a mismatch between the message's Chain ID and the `chainId` parameter.
 </Callout>
 
+## Account Linking
+
+When an authenticated user verifies a wallet, the SIWE plugin automatically links the wallet to their existing account instead of creating a new user. This allows users who signed up via email/password or social login to add wallet authentication to their account.
+
+### Configuration
+
+Account linking is controlled by Better Auth's `accountLinking` configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { siwe } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  account: {
+    accountLinking: {
+      enabled: true, // default
+      trustedProviders: ["siwe"], // optional: explicitly trust SIWE
+    },
+  },
+  plugins: [siwe({ /* ... */ })],
+});
+```
+
+### Behavior
+
+| User State        | `accountLinking` Config                              | Result                         |
+| ----------------- | ---------------------------------------------------- | ------------------------------ |
+| Not authenticated | Any                                                  | Creates new user               |
+| Authenticated     | `enabled: true` (default)                            | Links wallet to existing user  |
+| Authenticated     | `enabled: false`                                     | Creates new user               |
+| Authenticated     | `trustedProviders: ["google"]` (siwe not included)   | Creates new user               |
+
+### Security
+
+- A wallet address cannot be linked to multiple users, even across different chains
+- Attempting to link a wallet that belongs to another user returns a `WALLET_ALREADY_LINKED` error
+- Re-verifying an already-linked wallet is idempotent and returns success
+
 ## Configuration Options
 
 ### Server Options
