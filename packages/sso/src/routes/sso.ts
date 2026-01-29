@@ -1297,13 +1297,37 @@ export const signInSSO = (options?: SSOOptions) => {
 					allowCreate: true,
 				});
 
-				const idp = saml.IdentityProvider({
-					metadata: parsedSamlConfig.idpMetadata?.metadata,
-					entityID: parsedSamlConfig.idpMetadata?.entityID,
-					encryptCert: parsedSamlConfig.idpMetadata?.cert,
-					singleSignOnService:
-						parsedSamlConfig.idpMetadata?.singleSignOnService,
-				});
+				const idpData = parsedSamlConfig.idpMetadata;
+				let idp: ReturnType<typeof saml.IdentityProvider>;
+				if (!idpData?.metadata) {
+					// When no full metadata XML is provided, construct IdP from individual fields
+					// with fallbacks to top-level samlConfig values
+					idp = saml.IdentityProvider({
+						entityID: idpData?.entityID || parsedSamlConfig.issuer,
+						singleSignOnService: [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+								Location: parsedSamlConfig.entryPoint,
+							},
+						],
+						// Use signingCert (not encryptCert) - this is what samlify expects
+						// for validating SAML responses
+						signingCert: idpData?.cert || parsedSamlConfig.cert,
+						wantAuthnRequestsSigned:
+							parsedSamlConfig.wantAssertionsSigned || false,
+						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
+						encPrivateKey: idpData?.encPrivateKey,
+						encPrivateKeyPass: idpData?.encPrivateKeyPass,
+					});
+				} else {
+					// When full metadata XML is provided, let samlify parse it
+					idp = saml.IdentityProvider({
+						metadata: idpData.metadata,
+						isAssertionEncrypted: idpData.isAssertionEncrypted,
+						encPrivateKey: idpData.encPrivateKey,
+						encPrivateKeyPass: idpData.encPrivateKeyPass,
+					});
+				}
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
