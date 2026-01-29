@@ -165,7 +165,17 @@ export function toAuthEndpoints<
 						throw result.response;
 					}
 
-					const response = context?.asResponse
+					// For OAuth/OIDC HTTP requests, return Response objects for spec compliance
+					// For other API calls, respect the original asResponse/returnHeaders settings
+					const isOAuthOIDCEndpoint =
+						context?.path &&
+						(context.path.startsWith("/oauth2/") ||
+							context.path.startsWith("/.well-known/openid-configuration") ||
+							context.path === "/.well-known/openid-configuration");
+					const shouldReturnResponse =
+						(isOAuthOIDCEndpoint && context?.request) || context?.asResponse;
+
+					const response = shouldReturnResponse
 						? toResponse(result.response, {
 								headers: result.headers,
 								status: result.status,
