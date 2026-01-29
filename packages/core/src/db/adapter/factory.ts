@@ -71,9 +71,7 @@ export const createAdapterFactory =
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId === true ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		if (useNumberId && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
@@ -189,9 +187,7 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
+			const useNumberId = options.advanced?.database?.generateId === "serial";
 			fields.id = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
@@ -309,9 +305,7 @@ export const createAdapterFactory =
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				tableSchema[idKey ?? "id"] = {
 					type: useNumberId ? "number" : "string",
 				};
@@ -523,9 +517,7 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 
 				if (
 					defaultFieldName === "id" ||
@@ -1354,9 +1346,3 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
-
-/**
- * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
- * @alias
- */
-export const createAdapter = createAdapterFactory;

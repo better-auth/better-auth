@@ -1,7 +1,7 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
-import type { Session, User } from "@better-auth/core/db";
-import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
+import type { BetterFetch } from "@better-fetch/fetch";
 import type { WritableAtom } from "nanostores";
+import type { Session, User } from "../types";
 import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalFocusManager } from "./focus-manager";
 import { getGlobalOnlineManager } from "./online-manager";
@@ -32,6 +32,12 @@ interface SessionRefreshState {
 	unsubscribeBroadcast?: (() => void) | undefined;
 	unsubscribeFocus?: (() => void) | undefined;
 	unsubscribeOnline?: (() => void) | undefined;
+}
+
+interface SessionResponse {
+	session: Session | null;
+	user: User | null;
+	needsRefresh?: boolean;
 }
 
 export function createSessionRefreshManager(opts: SessionRefreshOptions) {
@@ -70,30 +76,41 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 
 		const currentSession = sessionAtom.get();
 
-		if (event?.event === "poll") {
+		const fetchSessionWithRefresh = () => {
 			state.lastSessionRequest = now();
-			$fetch<{
-				user: User;
-				session: Session;
-			}>("/get-session")
-				.then((res) => {
-					if (res.error) {
-						sessionAtom.set({
-							...currentSession,
-							data: null,
-							error: res.error as BetterFetchError | null,
-						});
-					} else {
-						sessionAtom.set({
-							...currentSession,
-							data: res.data,
-							error: null,
-						});
+			$fetch<SessionResponse>("/get-session")
+				.then(async (res) => {
+					let data = res.data;
+					let error = res.error || null;
+
+					if (data?.needsRefresh) {
+						try {
+							const refreshRes = await $fetch<SessionResponse>("/get-session", {
+								method: "POST",
+							});
+							data = refreshRes.data;
+							error = refreshRes.error || null;
+						} catch {}
 					}
+
+					const sessionData =
+						data?.session && data?.user
+							? { session: data.session, user: data.user }
+							: null;
+
+					sessionAtom.set({
+						...currentSession,
+						data: sessionData,
+						error: error as Parameters<typeof sessionAtom.set>[0]["error"],
+					});
 					state.lastSync = now();
 					sessionSignal.set(!sessionSignal.get());
 				})
 				.catch(() => {});
+		};
+
+		if (event?.event === "poll") {
+			fetchSessionWithRefresh();
 			return;
 		}
 
@@ -106,11 +123,12 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 			state.lastSessionRequest = now();
 		}
 
-		if (
-			currentSession?.data === null ||
-			currentSession?.data === undefined ||
-			event?.event === "visibilitychange"
-		) {
+		if (event?.event === "visibilitychange") {
+			fetchSessionWithRefresh();
+			return;
+		}
+
+		if (currentSession?.data === null || currentSession?.data === undefined) {
 			state.lastSync = now();
 			sessionSignal.set(!sessionSignal.get());
 		}

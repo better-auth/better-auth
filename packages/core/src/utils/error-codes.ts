@@ -44,21 +44,24 @@ type ValidateErrorCodes<T> = {
 		: T[K];
 };
 
-export function defineErrorCodes<const T extends Record<string, string>>(
-	codes: ValidateErrorCodes<T>,
-): {
-	[K in keyof T]: {
-		code: K;
-		message: T[K];
-	};
-} {
+export type RawError<K extends string = string> = {
+	readonly code: K;
+	message: string;
+};
+
+export function defineErrorCodes<
+	const T extends Record<string, string>,
+	R extends {
+		[K in keyof T & string]: RawError<K>;
+	},
+>(codes: ValidateErrorCodes<T>): R {
 	return Object.fromEntries(
 		Object.entries(codes).map(([key, value]) => [
 			key,
 			{
 				code: key,
 				message: value,
-				toString: () => value,
+				toString: () => key,
 			},
 		]),
 	) as any;
