@@ -80,6 +80,7 @@
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",
+    "better-call": "catalog:",
     "better-auth": "workspace:*"
   }
 }
