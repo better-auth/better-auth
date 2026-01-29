@@ -367,12 +367,6 @@ export const verifyEmail = createAuthEndpoint(
 							user: user.user,
 						};
 					}
-					if (ctx.context.options.emailVerification?.onEmailVerification) {
-						await ctx.context.options.emailVerification.onEmailVerification(
-							user.user,
-							ctx.request,
-						);
-					}
 					const updatedUser =
 						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
 							email: parsed.updateTo,
@@ -476,12 +470,6 @@ export const verifyEmail = createAuthEndpoint(
 		}
 		if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 			await ctx.context.options.emailVerification.beforeEmailVerification(
-				user.user,
-				ctx.request,
-			);
-		}
-		if (ctx.context.options.emailVerification?.onEmailVerification) {
-			await ctx.context.options.emailVerification.onEmailVerification(
 				user.user,
 				ctx.request,
 			);

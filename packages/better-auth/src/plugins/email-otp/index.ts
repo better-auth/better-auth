@@ -10,6 +10,7 @@ import {
 	createVerificationOTP,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
+	requestPasswordResetEmailOTP,
 	resetPasswordEmailOTP,
 	sendVerificationOTP,
 	signInEmailOTP,
@@ -74,6 +75,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			checkVerificationOTP: checkVerificationOTP(opts),
 			verifyEmailOTP: verifyEmailOTP(opts),
 			signInEmailOTP: signInEmailOTP(opts),
+			requestPasswordResetEmailOTP: requestPasswordResetEmailOTP(opts),
 			forgetPasswordEmailOTP: forgetPasswordEmailOTP(opts),
 			resetPasswordEmailOTP: resetPasswordEmailOTP(opts),
 		},
@@ -143,6 +145,27 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-password-reset";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/reset-password";
+				},
+				window: 60,
+				max: 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/forget-password/email-otp";
 				},
 				window: 60,
 				max: 3,
