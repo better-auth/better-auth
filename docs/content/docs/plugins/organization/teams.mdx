@@ -5,6 +5,55 @@ description: Learn how to create, update, and manage teams.
 
 Teams are a way to group members within an organization.
 
+## Creating a Team
+
+You can create a team within an organization using the `organization.createTeam` method.
+
+<APIMethod
+    path="/organization/create-team"
+    method="POST"
+    requireSession>
+```ts
+type createTeam = {
+    /**
+     * The name of the team.
+     */
+    name: string = "Engineering"
+    /**
+     * The organization ID which the team will belong to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The slug of the team.
+     * Only required if `enableSlugs` is set to true in the teams addon options.
+     */
+    slug?: string = "engineering"
+}
+```
+</APIMethod>
+
+Returns the created team:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `team:create` permission to create a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
+<Callout type="warn">
+    You can limit the maximum number of teams per organization using the `maximumTeams` option in the teams addon configuration.
+</Callout>
+
 ## Removing a Team
 
 You can remove a team from an organization using the `organization.removeTeam` method.
