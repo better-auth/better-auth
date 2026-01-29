@@ -614,6 +614,56 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	disableJwtPlugin?: boolean;
+	/**
+	 * Rate limit configuration for OAuth endpoints.
+	 *
+	 * Each endpoint can be configured with a `window` (in seconds) and `max` requests.
+	 * Set to `false` to disable rate limiting for a specific endpoint.
+	 *
+	 * @default
+	 * ```ts
+	 * {
+	 *   token: { window: 60, max: 20 },
+	 *   authorize: { window: 60, max: 30 },
+	 *   introspect: { window: 60, max: 100 },
+	 *   revoke: { window: 60, max: 30 },
+	 *   register: { window: 60, max: 5 },
+	 *   userinfo: { window: 60, max: 60 },
+	 * }
+	 * ```
+	 */
+	rateLimit?: {
+		/**
+		 * Rate limit for /oauth2/token endpoint
+		 * @default { window: 60, max: 20 }
+		 */
+		token?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/authorize endpoint
+		 * @default { window: 60, max: 30 }
+		 */
+		authorize?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/introspect endpoint
+		 * @default { window: 60, max: 100 }
+		 */
+		introspect?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/revoke endpoint
+		 * @default { window: 60, max: 30 }
+		 */
+		revoke?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/register endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/userinfo endpoint
+		 * @default { window: 60, max: 60 }
+		 */
+		userinfo?: { window: number; max: number } | false;
+	};
 }
 
 export interface OAuthAuthorizationQuery {
