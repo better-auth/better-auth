@@ -472,7 +472,7 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				existingRoleInDB.permission as never as string,
 			);
 
-			await ctx.context.adapter.delete({
+			await ctx.context.adapter.deleteMany({
 				model: "organizationRole",
 				where: [
 					{
@@ -750,7 +750,7 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				);
 			}
-			const role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -761,8 +761,9 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles || !roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -777,6 +778,8 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				);
 			}
+
+			const role = roles[0]!;
 
 			role.permission = JSON.parse(role.permission as never as string);
 
@@ -949,7 +952,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				);
 			}
-			const role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const roles = await ctx.context.adapter.findMany<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -960,8 +963,9 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					},
 					condition,
 				],
+				limit: 1,
 			});
-			if (!role) {
+			if (!roles || !roles.length) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The role name/id does not exist in the database.`,
 					{
@@ -976,6 +980,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
 				);
 			}
+			const role = roles[0]!;
 			role.permission = role.permission
 				? JSON.parse(role.permission as never as string)
 				: undefined;
@@ -1035,7 +1040,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					? { permission: JSON.stringify(updateData.permission) }
 					: {}),
 			};
-			await ctx.context.adapter.update<OrganizationRole>({
+			await ctx.context.adapter.updateMany({
 				model: "organizationRole",
 				where: [
 					{
