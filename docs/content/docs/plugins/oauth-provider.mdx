@@ -10,6 +10,7 @@ The plugin has a secured configuration by default providing ease to users unfami
 **Key Features**:
 
 - **OAuth 2.1**: Restricted security practices to [OAuth 2.1](https://oauth.net/2.1/)
+- **Issuer Validation**: Authorization responses include `iss` parameter to prevent [mix-up attacks](https://datatracker.ietf.org/doc/html/rfc9207)
 - **MCP Enabled**: Support with [MCP authentication](#mcp)
 - **OIDC compatibility**: [OIDC](https://openid.net/specs/openid-connect-core-1_0.html)-compliant with the `openid` scope
   - **UserInfo**: Endpoint providing current user details
@@ -425,6 +426,7 @@ The Authorization Endpoint is the entry point for initiating an OAuth 2.1 author
 Important notes:
 - In OAuth 2.1, only `response_type: "code"` is supported.
 - `code_challenge_method: "plain"` will not be supported since this is a security vulnerability.
+- All authorization responses (success and error) include the `iss` parameter for issuer validation ([RFC 9207](https://datatracker.ietf.org/doc/html/rfc9207)).
 
 **State**
 
