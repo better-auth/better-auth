@@ -54,11 +54,11 @@ The Admin plugin provides a set of administrative functions for user management 
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { adminClient } from "better-auth/client/plugins"
+    import { adminClient } from "better-auth/client/plugins"  // [!code highlight]
 
     export const authClient = createAuthClient({
         plugins: [
-            adminClient()
+            adminClient()  // [!code highlight]
         ]
     })
     ```
@@ -193,7 +193,9 @@ To paginate results, use the `total`, `limit`, and `offset` values to calculate:
 
 Fetching the second page with 10 users per page:
 
-```ts title="admin.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const pageSize = 10;
 const currentPage = 2;
 
@@ -615,7 +617,9 @@ type userHasPermission = {
 
 Example usage:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const canCreateProject = await authClient.admin.hasPermission({
   permissions: {
     project: ["create"],
@@ -635,8 +639,8 @@ If you want to check a user's permissions server-side, you can use the `userHasP
 
 
 
-```ts title="api.ts"
-import { auth } from "@/auth";
+```ts title="permission.ts"
+import { auth } from "@/lib/auth"
 
 await auth.api.userHasPermission({
   body: {
@@ -676,7 +680,9 @@ Use the `checkRolePermission` function on the client side to verify whether a gi
 
 Note that this function does **not** check the permissions of the currently logged-in user directly. Instead, it checks what permissions are assigned to a specified role. The function is synchronous, so you don't need to use `await` when calling it.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const canCreateProject = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
