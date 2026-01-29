@@ -21,6 +21,8 @@ declare module "@better-auth/core" {
 	}
 }
 
+export * from "./error-codes";
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
