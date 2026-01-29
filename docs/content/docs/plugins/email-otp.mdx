@@ -174,18 +174,22 @@ type verifyEmailOTP = {
 
 ### Reset Password with OTP
 
-To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP to the user's email address.
+To reset the user's password with OTP, use the `emailOtp.requestPasswordReset()` method to send a "forget-password" OTP to the user's email address.
 
-<APIMethod path="/forget-password/email-otp" method="POST">
+<APIMethod path="/email-otp/request-password-reset" method="POST">
 ```ts
-type forgetPasswordEmailOTP = {
+type requestPasswordResetEmailOTP = {
     /**
-     * Email address to send the OTP. 
+     * Email address to send the OTP.
      */
     email: string = "user@example.com"
 }
 ```
 </APIMethod>
+
+<Callout type="warn">
+The `/forget-password/email-otp` endpoint is deprecated. Please use `/email-otp/request-password-reset` instead.
+</Callout>
 
 Once the user provides the OTP, use the `checkVerificationOtp()` method to check if it's valid (optional).
 
