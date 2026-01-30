@@ -33,7 +33,9 @@
     "coverage:open": "open coverage/lcov-report/index.html",
     "e2e:smoke": "turbo e2e:smoke",
     "e2e:integration": "turbo e2e:integration",
-    "typecheck": "tsc --build"
+    "typecheck": "tsc --build",
+    "api-extractor:check": "turbo api-extractor:check --filter=./packages/*",
+    "api-extractor:update": "turbo api-extractor:update --filter=./packages/*"
   },
   "devDependencies": {
     "@arethetypeswrong/cli": "^0.18.2",
@@ -53,6 +55,7 @@
     "tinyglobby": "^0.2.15",
     "turbo": "^2.7.6",
     "typescript": "catalog:",
-    "vitest": "catalog:vitest"
+    "vitest": "catalog:vitest",
+    "@microsoft/api-extractor": "^7.56.0"
   }
 }

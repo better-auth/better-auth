@@ -1,0 +1,36 @@
+{
+  "$schema": "node_modules/@microsoft/api-extractor/lib/schemas/api-extractor.schema.json",
+  "mainEntryPointFilePath": "<projectFolder>/dist/index.d.mts",
+  "compiler": {
+    "skipLibCheck": true
+  },
+  "apiReport": {
+    "enabled": true,
+    "reportFolder": "<projectFolder>",
+    "reportTempFolder": "<projectFolder>/.temp",
+    "reportFileName": "api-extractor"
+  },
+  "docModel": {
+    "enabled": false
+  },
+  "dtsRollup": {
+    "enabled": false
+  },
+  "tsdocMetadata": {
+    "enabled": false
+  },
+  "messages": {
+    "tsdocMessageReporting": {
+      "default": { "logLevel": "none" }
+    },
+    "compilerMessageReporting": {
+      "default": { "logLevel": "warning" },
+      "TS6307": { "logLevel": "none" }
+    },
+    "extractorMessageReporting": {
+      "default": { "logLevel": "warning" },
+      "ae-missing-release-tag": { "logLevel": "none" },
+      "ae-wrong-input-file-type": { "logLevel": "none" }
+    }
+  }
+}

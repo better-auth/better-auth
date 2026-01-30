@@ -121,7 +121,9 @@
     "lint:types": "attw --profile esm-only --pack .",
     "typecheck": "tsc --project tsconfig.json",
     "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+    "coverage": "vitest run --coverage --coverage.provider=istanbul",
+    "api-extractor:check": "api-extractor run",
+    "api-extractor:update": "api-extractor run --local"
   },
   "devDependencies": {
     "@better-auth/utils": "catalog:",

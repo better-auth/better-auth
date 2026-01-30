@@ -103,6 +103,16 @@
     },
     "generate": {
       "cache": false
+    },
+    "api-extractor:check": {
+      "inputs": [
+        "dist/**/*.d.mts",
+        "api-extractor.json",
+        "api-extractor.api.md"
+      ]
+    },
+    "api-extractor:update": {
+      "cache": false
     }
   }
 }

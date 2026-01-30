@@ -55,6 +55,9 @@ jobs:
           TURBO_CACHE: remote:rw
         run: pnpm build
 
+      - name: Check API Extractor
+        run: pnpm api-extractor:check
+        
       - name: Lint
         env:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
