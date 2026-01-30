@@ -109,7 +109,7 @@ export type InferDBFieldsFromOptions<
 
 export type InferDBFieldsFromPluginsInput<
 	ModelName extends string,
-	Plugins extends BetterAuthOptions["plugins"],
+	Plugins extends unknown[] | undefined,
 > = Plugins extends []
 	? {}
 	: Plugins extends Array<infer P>
@@ -128,7 +128,7 @@ export type InferDBFieldsFromPluginsInput<
 
 export type InferDBFieldsFromPlugins<
 	ModelName extends string,
-	Plugins extends BetterAuthOptions["plugins"],
+	Plugins extends unknown[] | undefined,
 > = Plugins extends []
 	? {}
 	: Plugins extends Array<infer P>
