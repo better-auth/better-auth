@@ -7,8 +7,8 @@ import type {
 import type { RawError } from "@better-auth/core/utils/error-codes";
 import type {
 	BetterAuthPluginDBSchema,
+	InferDBFieldsOutput,
 	InferFieldsInputClient,
-	InferFieldsOutput,
 } from "../db";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
@@ -106,7 +106,7 @@ export type InferAdditionalFromClient<
 			? Schema extends BetterAuthPluginDBSchema
 				? Format extends "input"
 					? InferFieldsInputClient<Schema[Key]["fields"]>
-					: InferFieldsOutput<Schema[Key]["fields"]>
+					: InferDBFieldsOutput<Schema[Key]["fields"]>
 				: {}
 			: {}
 		: {}

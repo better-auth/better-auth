@@ -1,5 +1,10 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Awaitable, LiteralString } from "../types";
+import type {
+	Awaitable,
+	BetterAuthOptions,
+	LiteralString,
+	UnionToIntersection,
+} from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
 
@@ -7,6 +12,154 @@ export type ModelNames<T extends string = LiteralString> =
 	| BaseModelNames
 	| T
 	| "rate-limit";
+
+export type InferDBValueType<T extends DBFieldType> = T extends "string"
+	? string
+	: T extends "number"
+		? number
+		: T extends "boolean"
+			? boolean
+			: T extends "date"
+				? Date
+				: T extends "json"
+					? Record<string, any>
+					: T extends `${infer U}[]`
+						? U extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
+
+export type InferDBFieldOutput<T extends DBFieldAttribute> =
+	T["returned"] extends false
+		? never
+		: T["required"] extends false
+			? InferDBValueType<T["type"]> | undefined | null
+			: InferDBValueType<T["type"]>;
+
+export type InferDBFieldInput<T extends DBFieldAttribute> = InferDBValueType<
+	T["type"]
+>;
+
+export type InferDBFieldsInput<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["required"] extends false
+					? never
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? never
+						: Field[key]["input"] extends false
+							? never
+							: key]: InferDBFieldInput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["input"] extends false ? never : key]?:
+					| InferDBFieldInput<Field[key]>
+					| undefined
+					| null;
+			}
+		: {};
+
+export type InferDBFieldsOutput<
+	Fields extends Record<string, DBFieldAttribute>,
+> =
+	Fields extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? key
+							: never
+						: key]: InferDBFieldOutput<Fields[key]>;
+			} & {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? never
+							: key
+						: never]?: InferDBFieldOutput<Fields[key]> | null;
+			}
+		: never;
+
+export type InferDBFieldsFromOptionsInput<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferDBFieldsInput<DBOptions["additionalFields"]>
+	: {};
+
+export type InferDBFieldsFromOptions<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferDBFieldsOutput<DBOptions["additionalFields"]>
+	: {};
+
+export type InferDBFieldsFromPluginsInput<
+	ModelName extends string,
+	Plugins extends unknown[] | undefined,
+> = Plugins extends []
+	? {}
+	: Plugins extends [infer P, ...infer Rest]
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? UnionToIntersection<
+						InferDBFieldsInput<Fields> &
+							InferDBFieldsFromPluginsInput<ModelName, Rest>
+					>
+				: InferDBFieldsFromPluginsInput<ModelName, Rest>
+			: InferDBFieldsFromPluginsInput<ModelName, Rest>
+		: {};
+
+export type InferDBFieldsFromPlugins<
+	ModelName extends string,
+	Plugins extends unknown[] | undefined,
+> = Plugins extends []
+	? {}
+	: Plugins extends [infer P, ...infer Rest]
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? UnionToIntersection<
+						InferDBFieldsOutput<Fields> &
+							InferDBFieldsFromPlugins<ModelName, Rest>
+					>
+				: InferDBFieldsFromPlugins<ModelName, Rest>
+			: InferDBFieldsFromPlugins<ModelName, Rest>
+		: {};
 
 export type DBFieldType =
 	| "string"
