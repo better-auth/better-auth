@@ -594,6 +594,65 @@ describe("updateUser phone number update prevention", async () => {
 	});
 });
 
+describe("signUpOnVerification with additionalFields", async () => {
+	let otp = "";
+
+	const { client } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					lastName: {
+						type: "string",
+						required: true,
+					},
+					dateOfBirth: {
+						type: "date",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}@example.com`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const testPhoneNumber = "+1234567890";
+
+	it("should create user with additional fields from body", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: otp,
+			lastName: "Doe",
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.user).not.toBe(null);
+		// @ts-expect-error - additionalFields not yet inferred in plugin response type
+		expect(res.data?.user.lastName).toBe("Doe");
+	});
+});
+
 describe("custom verifyOTP", async () => {
 	const mockVerifyOTP = vi.fn();
 
