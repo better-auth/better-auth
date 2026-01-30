@@ -7,7 +7,7 @@ import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
 
 declare module "@better-auth/core" {
-	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+	interface BetterAuthPluginRegistry<_AuthOptions, _Options> {
 		"have-i-been-pwned": {
 			creator: typeof haveIBeenPwned;
 		};
