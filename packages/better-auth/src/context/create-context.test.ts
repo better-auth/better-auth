@@ -54,12 +54,14 @@ describe("base context creation", () => {
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
+		const set = new Set<object>();
 		const res = await initBase({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				{
 					id: "test",
-					init: () => {
+					init: (ctx) => {
+						set.add(ctx);
 						return {
 							context: {
 								baseURL: newBaseURL,
@@ -69,6 +71,8 @@ describe("base context creation", () => {
 				},
 			],
 		});
+		set.add(res);
+		expect(set.size).toBe(1);
 		expect(res.baseURL).toBe(newBaseURL);
 	});
 
