@@ -97,6 +97,22 @@ describe("sign-up with custom fields", async (it) => {
 		expect(session!.user.name).toBe("");
 	});
 
+	it("should succeed when name is not provided", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "no-name-field@test.com",
+				password: "password",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBeNull();
+	});
+
 	it("should get the ipAddress and userAgent from headers", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {

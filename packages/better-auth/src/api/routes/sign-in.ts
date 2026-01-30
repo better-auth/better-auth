@@ -275,7 +275,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						...userInfo.user,
 						email: userInfo.user.email,
 						id: String(userInfo.user.id),
-						name: userInfo.user.name || "",
+						name: userInfo.user.name,
 						image: userInfo.user.image,
 						emailVerified: userInfo.user.emailVerified || false,
 					},
