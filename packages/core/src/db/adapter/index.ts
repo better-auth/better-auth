@@ -405,6 +405,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where?: Where[] | undefined;
 		limit?: number | undefined;
+		select?: string[] | undefined;
 		sortBy?:
 			| {
 					field: string;
@@ -493,6 +494,7 @@ export interface CustomAdapter {
 		model,
 		where,
 		limit,
+		select,
 		sortBy,
 		offset,
 		join,
@@ -500,6 +502,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[] | undefined;
 		limit: number;
+		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
 		join?: JoinConfig | undefined;

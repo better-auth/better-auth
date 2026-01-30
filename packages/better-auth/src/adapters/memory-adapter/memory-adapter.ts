@@ -50,7 +50,7 @@ export const memoryAdapter = (
 				}
 			},
 		},
-		adapter: ({ getFieldName, options, getModelName }) => {
+		adapter: ({ getFieldName, getDefaultFieldName, options, getModelName }) => {
 			const applySortToRecords = (
 				records: any[],
 				sortBy: { field: string; direction: "asc" | "desc" } | undefined,
@@ -101,8 +101,9 @@ export const memoryAdapter = (
 				where: CleanedWhere[],
 				model: string,
 				join?: JoinConfig,
+				select?: string[],
 			): any[] {
-				const execute = (where: CleanedWhere[], model: string) => {
+				const baseRecords = (() => {
 					const table = db[model];
 					if (!table) {
 						logger.error(
@@ -148,7 +149,7 @@ export const memoryAdapter = (
 						}
 					};
 
-					return table.filter((record: any) => {
+					let records = table.filter((record: any) => {
 						if (!where.length || where.length === 0) {
 							return true;
 						}
@@ -166,11 +167,19 @@ export const memoryAdapter = (
 
 						return result;
 					});
-				};
+					if (select?.length && select.length > 0) {
+						records = records.map((record: any) =>
+							Object.fromEntries(
+								Object.entries(record).filter(([key]) =>
+									select.includes(getDefaultFieldName({ model, field: key })),
+								),
+							),
+						);
+					}
+					return records;
+				})();
 
-				if (!join) return execute(where, model);
-
-				const baseRecords = execute(where, model);
+				if (!join) return baseRecords;
 
 				// Group results by base model and nest joined data as arrays
 				const grouped = new Map<string, any>();
@@ -254,8 +263,8 @@ export const memoryAdapter = (
 					db[model]!.push(data);
 					return data;
 				},
-				findOne: async ({ model, where, join }) => {
-					const res = convertWhereClause(where, model, join);
+				findOne: async ({ model, where, select, join }) => {
+					const res = convertWhereClause(where, model, join, select);
 					if (join) {
 						// When join is present, res is an array of nested objects
 						const resArray = res as any[];
@@ -270,8 +279,16 @@ export const memoryAdapter = (
 					const record = resArray[0] || null;
 					return record;
 				},
-				findMany: async ({ model, where, sortBy, limit, offset, join }) => {
-					const res = convertWhereClause(where || [], model, join);
+				findMany: async ({
+					model,
+					where,
+					sortBy,
+					limit,
+					select,
+					offset,
+					join,
+				}) => {
+					const res = convertWhereClause(where || [], model, join, select);
 
 					if (join) {
 						// When join is present, res is an array of nested objects
