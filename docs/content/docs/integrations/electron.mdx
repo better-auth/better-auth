@@ -353,9 +353,10 @@ You can listen for user changes via the `onUserUpdated` bridge in the renderer p
 
 ```ts title="electron/App.tsx"
 useEffect(() => {
-  window.onUserUpdated((user) => {
+  const unsubscribe = window.onUserUpdated((user) => {
     console.log("User updated:", user);
   });
+  return () => unsubscribe();
 }, []);
 ```
 
