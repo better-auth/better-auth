@@ -1,10 +1,11 @@
+import type { Stats } from "node:fs";
 import {
-	readFileSync,
+	existsSync,
+	mkdirSync,
 	readdirSync,
+	readFileSync,
 	statSync,
 	writeFileSync,
-	mkdirSync,
-	existsSync,
 } from "node:fs";
 import { join, relative } from "node:path";
 import type { Plugin } from "rolldown";
@@ -49,10 +50,7 @@ export interface ErrorCodesExtractorOptions {
 	/**
 	 * Custom category resolver function
 	 */
-	getCategoryFromPath?: (
-		filePath: string,
-		constantName: string,
-	) => string;
+	getCategoryFromPath?: (filePath: string, constantName: string) => string;
 }
 
 /**
@@ -138,7 +136,9 @@ export function errorCodesExtractor(
 							if (trimmed.startsWith("@description")) {
 								inDescription = true;
 								// Get the description text on the same line
-								const descText = trimmed.substring("@description".length).trim();
+								const descText = trimmed
+									.substring("@description".length)
+									.trim();
 								if (descText) {
 									descriptionLines.push(descText);
 								}
@@ -187,7 +187,6 @@ export function errorCodesExtractor(
 
 				return { description, markdownContent };
 			}
-
 
 			function extractFromFile(filePath: string, content: string) {
 				const sourceFile = ts.createSourceFile(
@@ -271,10 +270,10 @@ export function errorCodesExtractor(
 					const files = readdirSync(dir);
 					for (const file of files) {
 						const fullPath = join(dir, file);
-						let stat;
+						let stat: Stats | undefined;
 						try {
 							stat = statSync(fullPath);
-						} catch (error) {
+						} catch (_error) {
 							continue;
 						}
 
@@ -424,7 +423,7 @@ function generateDocsIndex(
 			const existingContent = readFileSync(indexPath, "utf-8");
 			// Parse existing categories and error codes
 			const categoryRegex = /## (.+)\n\n([\s\S]*?)(?=\n## |$)/g;
-			let match;
+			let match: RegExpExecArray | null;
 
 			while ((match = categoryRegex.exec(existingContent)) !== null) {
 				const categoryName = match[1]!.trim();
@@ -438,7 +437,7 @@ function generateDocsIndex(
 				// Parse error codes from existing category
 				const errorRegex = /- \[`([^`]+)`\]\([^)]+\) - (.+)/g;
 				const errors: ErrorCodeEntry[] = [];
-				let errorMatch;
+				let errorMatch: RegExpExecArray | null;
 
 				while ((errorMatch = errorRegex.exec(categoryContent)) !== null) {
 					errors.push({
@@ -521,7 +520,9 @@ description: ${message}
 	content += `**Category:** ${category}\n\n`;
 
 	// Parse sections if we have markdown content
-	const sections = markdownContent ? parseMarkdownSections(markdownContent) : {};
+	const sections = markdownContent
+		? parseMarkdownSections(markdownContent)
+		: {};
 
 	// Add common causes section
 	if (sections.commonCauses) {
@@ -602,7 +603,9 @@ function parseMarkdownSections(markdown: string): {
 				} else if (currentSection === "debug") {
 					sections.debug = content;
 				} else {
-					sections.additional = (sections.additional || "") + `## ${currentSection}\n\n${content}\n\n`;
+					sections.additional =
+						(sections.additional || "") +
+						`## ${currentSection}\n\n${content}\n\n`;
 				}
 			}
 
@@ -629,7 +632,8 @@ function parseMarkdownSections(markdown: string): {
 		} else if (currentSection === "debug") {
 			sections.debug = content;
 		} else {
-			sections.additional = (sections.additional || "") + `## ${currentSection}\n\n${content}\n\n`;
+			sections.additional =
+				(sections.additional || "") + `## ${currentSection}\n\n${content}\n\n`;
 		}
 	}
 
@@ -649,9 +653,7 @@ function defaultGetCategoryFromPath(
 		}
 		return category
 			.split("_")
-			.map(
-				(word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
-			)
+			.map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
 			.join(" ");
 	}
 
@@ -660,7 +662,8 @@ function defaultGetCategoryFromPath(
 	if (parts.includes("plugins") && parts.length > 2) {
 		const pluginName = parts[parts.indexOf("plugins") + 1]!;
 		return (
-			pluginName.charAt(0).toUpperCase() + pluginName.slice(1).replace(/-/g, " ")
+			pluginName.charAt(0).toUpperCase() +
+			pluginName.slice(1).replace(/-/g, " ")
 		);
 	}
 
