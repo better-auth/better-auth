@@ -11,6 +11,14 @@ import { ELECTRON_ERROR_CODES } from "./error-codes";
 import { electronInitOAuthProxy, electronToken } from "./routes";
 import type { ElectronOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		electron: {
+			creator: typeof electron;
+		};
+	}
+}
+
 export const electron = (options?: ElectronOptions | undefined) => {
 	const opts = {
 		codeExpiresIn: 300, // 5 minutes
