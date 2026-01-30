@@ -7,7 +7,7 @@ import { APIError } from "../../api";
 import { isAPIError } from "../../utils/is-api-error";
 
 declare module "@better-auth/core" {
-	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+	interface BetterAuthPluginRegistry<_AuthOptions, _Options> {
 		"have-i-been-pwned": {
 			creator: typeof haveIBeenPwned;
 		};
@@ -85,6 +85,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 	return {
 		id: "have-i-been-pwned",
 		init(ctx) {
+			const originalHash = ctx.password.hash;
 			return {
 				context: {
 					password: {
@@ -92,13 +93,13 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 						async hash(password) {
 							const c = await getCurrentAuthContext();
 							if (!c.path || !paths.includes(c.path)) {
-								return ctx.password.hash(password);
+								return originalHash(password);
 							}
 							await checkPasswordCompromise(
 								password,
 								options?.customPasswordCompromisedMessage,
 							);
-							return ctx.password.hash(password);
+							return originalHash(password);
 						},
 					},
 				},
