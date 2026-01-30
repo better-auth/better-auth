@@ -1,4 +1,4 @@
-import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
 import type { User } from "better-auth";
@@ -7,10 +7,23 @@ import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
 import type { ElectronClientOptions } from "./client";
 
-const { ipcRenderer, ipcMain, contextBridge } = electron;
+const { ipcRenderer, ipcMain, contextBridge, webContents } = electron;
 
 function getNamespaceWithDelimiter(ns: string = "better-auth") {
 	return ns.length > 0 ? ns + ":" : ns;
+}
+
+function listenerFactory(
+	channel: string,
+	listener: (
+		event: Electron.IpcRendererEvent,
+		...args: any[]
+	) => void | Promise<void>,
+) {
+	ipcRenderer.on(channel, listener);
+	return () => {
+		ipcRenderer.off(channel, listener);
+	};
 }
 
 /**
@@ -39,31 +52,25 @@ export function exposeBridges(opts: ElectronClientOptions) {
 			callback: (user: User & Record<string, any>) => unknown,
 		) => {
 			const channel = `${prefix}authenticated`;
-			const listener: (
-				event: Electron.IpcRendererEvent,
-				...args: any[]
-			) => void = async (_evt, user) => {
+			return listenerFactory(channel, async (_evt, user) => {
 				await callback(user);
-			};
-			ipcRenderer.on(channel, listener);
-			return () => {
-				ipcRenderer.off(channel, listener);
-			};
+			});
+		},
+		onUserUpdated: (
+			callback: (user: (User & Record<string, any>) | null) => unknown,
+		) => {
+			const channel = `${prefix}user-updated`;
+			return listenerFactory(channel, async (_evt, user) => {
+				await callback(user);
+			});
 		},
 		onAuthError: (
 			callback: (context: BetterFetchError & { path: string }) => unknown,
 		) => {
 			const channel = `${prefix}error`;
-			const listener: (
-				event: Electron.IpcRendererEvent,
-				...args: any[]
-			) => void = async (_evt, context) => {
+			return listenerFactory(channel, async (_evt, context) => {
 				await callback(context);
-			};
-			ipcRenderer.on(channel, listener);
-			return () => {
-				ipcRenderer.off(channel, listener);
-			};
+			});
 		},
 	};
 
@@ -82,12 +89,21 @@ export function exposeBridges(opts: ElectronClientOptions) {
 export function setupBridges(
 	ctx: {
 		$fetch: BetterFetch;
+		$store: ClientStore | null;
 		getCookie: () => string;
 	},
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const prefix = getNamespaceWithDelimiter(opts.channelPrefix);
+
+	ctx.$store?.atoms.session?.subscribe((state) => {
+		if (state.isPending === true) return;
+
+		webContents
+			.getFocusedWebContents()
+			?.send(`${opts.channelPrefix}:user-updated`, state?.data?.user ?? null);
+	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
 		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(

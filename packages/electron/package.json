@@ -83,6 +83,7 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
+    "nanostores": "^1.0.1",
     "electron": ">=37.0.0",
     "conf": "^15.0.2"
   },
@@ -94,7 +95,8 @@
     "@types/better-sqlite3": "^7.6.13",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "nanostores": "^1.0.1"
   },
   "engines": {
     "node": ">=22.0.0"

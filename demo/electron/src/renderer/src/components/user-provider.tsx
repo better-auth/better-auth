@@ -10,9 +10,6 @@ import type { authClient } from "../../../lib/auth-client";
 const UserContext = createContext<{
 	loading: boolean;
 	user: (typeof authClient.$Infer.Session)["user"] | null;
-	setUser: React.Dispatch<
-		React.SetStateAction<(typeof authClient.$Infer.Session)["user"] | null>
-	>;
 } | null>(null);
 
 export function UserProvider({
@@ -32,8 +29,12 @@ export function UserProvider({
 		const unsubscribe = window.onAuthenticated((u) => {
 			setUser(u);
 		});
+		const unsubscribeUserUpdated = window.onUserUpdated((u) => {
+			setUser(u);
+		});
 		return () => {
 			unsubscribe();
+			unsubscribeUserUpdated();
 			setUser(null);
 		};
 	}, []);
@@ -43,7 +44,6 @@ export function UserProvider({
 			value={{
 				loading: !user && loading,
 				user,
-				setUser,
 			}}
 		>
 			{children}

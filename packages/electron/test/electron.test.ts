@@ -236,6 +236,29 @@ describe("Electron", () => {
 		);
 	});
 
+	it("should emit user-updated event when session atom updates", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+
+		client.setupMain();
+
+		const mockUser = {
+			id: "test-user",
+		};
+
+		client.$store.atoms.session!.set({
+			data: {
+				user: mockUser,
+			},
+		});
+
+		expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+			"better-auth:user-updated",
+			mockUser,
+		);
+	});
+
 	it("should reject expired tokens", async ({ setProcessType }) => {
 		setProcessType("browser");
 		const { user } = await auth.api.signInEmail({
