@@ -430,6 +430,30 @@ await auth.api.registerSSOProvider({
     </Tab>
 </Tabs>
 
+### IdP-Initiated SSO
+
+ For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
+
+ <Tabs items={["next-js-app-router"]}>
+   <Tab value="next-js-app-router">
+     Create this file to prevent 404 errors:
+
+     ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
+     import { auth } from "@/lib/auth";
+     import { NextResponse } from "next/server";
+
+     export async function POST(req: Request) {
+         return auth.handler(req);
+     }
+
+     export async function GET(req: Request) {
+         // Required: IdP-initiated flows redirect to this URL after POST
+         return NextResponse.redirect(new URL("/", req.url));
+     }
+     ```
+   </Tab>
+</Tabs>
+
 ### Get Service Provider Metadata
 
 For SAML providers, you can retrieve the Service Provider metadata XML that needs to be configured in your Identity Provider:
