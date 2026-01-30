@@ -687,7 +687,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			} catch {
 				return ctx.json({
-					users: [],
+					users: [] as UserWithRole[],
 					total: 0,
 				});
 			}
