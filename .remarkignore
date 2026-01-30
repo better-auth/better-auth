@@ -1,4 +1,6 @@
 packages/**/CHANGELOG.md
+**/*.api.md
+**/.temp/**
 **/dist/**
 **/.expo/**
 .expo/
