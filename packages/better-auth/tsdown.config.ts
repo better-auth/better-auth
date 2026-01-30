@@ -1,5 +1,5 @@
-import { defineConfig } from "tsdown";
 import { errorCodesExtractor } from "@better-auth/error-codes-extractor";
+import { defineConfig } from "tsdown";
 
 export default defineConfig({
 	dts: { build: true, incremental: true },
