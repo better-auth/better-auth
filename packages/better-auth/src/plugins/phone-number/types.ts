@@ -112,8 +112,6 @@ export interface PhoneNumberOptions {
 				 *
 				 * @param phoneNumber
 				 * @returns string (temporary name)
-				 *
-				 * @default phoneNumber - the phone number will be used as the name
 				 */
 				getTempName?: (phoneNumber: string) => string;
 		  }

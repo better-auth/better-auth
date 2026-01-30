@@ -564,9 +564,9 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 							email: opts.signUpOnVerification.getTempEmail(
 								ctx.body.phoneNumber,
 							),
-							name: opts.signUpOnVerification.getTempName
-								? opts.signUpOnVerification.getTempName(ctx.body.phoneNumber)
-								: ctx.body.phoneNumber,
+							name: opts.signUpOnVerification.getTempName?.(
+								ctx.body.phoneNumber,
+							),
 							[opts.phoneNumber]: ctx.body.phoneNumber,
 							[opts.phoneNumberVerified]: true,
 						});
