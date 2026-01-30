@@ -409,7 +409,7 @@ describe("email-otp-verify", async () => {
 		expect(successRes.error).toBeFalsy();
 	});
 
-	it("should not send OTP email for non-existent users when disableSignUp is enabled", async () => {
+	it("should throw USER_NOT_FOUND for non-existent users when disableSignUp is enabled and type is sign-in", async () => {
 		const sendOtpSpy = vi.fn();
 		const { client: testClient, testUser: existingUser } =
 			await getTestInstance(
@@ -432,14 +432,14 @@ describe("email-otp-verify", async () => {
 
 		sendOtpSpy.mockClear();
 
-		// Try to send OTP to non-existent user
+		// Try to send OTP to non-existent user with sign-in type - should throw USER_NOT_FOUND
 		const nonExistentResponse = await testClient.emailOtp.sendVerificationOtp({
 			email: "non-existent-user@example.com",
 			type: "sign-in",
 		});
 
-		// Should return success but not actually call sendVerificationOTP
-		expect(nonExistentResponse.data?.success).toBe(true);
+		expect(nonExistentResponse.error?.status).toBe(400);
+		expect(nonExistentResponse.error?.code).toBe("USER_NOT_FOUND");
 		expect(sendOtpSpy).not.toHaveBeenCalled();
 
 		// Now try with an existing user - should actually send OTP
@@ -448,7 +448,6 @@ describe("email-otp-verify", async () => {
 			type: "sign-in",
 		});
 
-		// Should return success AND call sendVerificationOTP
 		expect(existingResponse.data?.success).toBe(true);
 		expect(sendOtpSpy).toHaveBeenCalledTimes(1);
 		expect(sendOtpSpy).toHaveBeenCalledWith(
