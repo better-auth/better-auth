@@ -1,23 +1,4 @@
-import type { BetterAuthOptions } from "@better-auth/core";
-import type {
-	DBFieldAttribute,
-	DBFieldAttributeConfig,
-	DBFieldType,
-	InferDBValueType,
-} from "@better-auth/core/db";
-
-export const createFieldAttribute = <
-	T extends DBFieldType,
-	C extends DBFieldAttributeConfig,
->(
-	type: T,
-	config?: C | undefined,
-) => {
-	return {
-		type,
-		...config,
-	} satisfies DBFieldAttribute<T>;
-};
+import type { DBFieldAttribute, InferDBValueType } from "@better-auth/core/db";
 
 export type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 	Fields extends Record<infer Key, DBFieldAttribute>
@@ -47,24 +28,6 @@ export type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 						: never]?: InferFieldOutput<Fields[key]> | null;
 			}
 		: never;
-
-export type InferFieldsInput<Field> =
-	Field extends Record<infer Key, DBFieldAttribute>
-		? {
-				[key in Key as Field[key]["required"] extends false
-					? never
-					: Field[key]["defaultValue"] extends string | number | boolean | Date
-						? never
-						: Field[key]["input"] extends false
-							? never
-							: key]: InferFieldInput<Field[key]>;
-			} & {
-				[key in Key as Field[key]["input"] extends false ? never : key]?:
-					| InferFieldInput<Field[key]>
-					| undefined
-					| null;
-			}
-		: {};
 
 /**
  * For client will add "?" on optional fields
@@ -169,44 +132,3 @@ export type RemoveFieldsWithReturnedFalse<
 };
 
 type InferFieldInput<T extends DBFieldAttribute> = InferDBValueType<T["type"]>;
-
-export type PluginFieldAttribute = Omit<
-	DBFieldAttribute,
-	"transform" | "defaultValue" | "hashValue"
->;
-
-export type InferFieldsFromPlugins<
-	Options extends BetterAuthOptions,
-	Key extends string,
-	Format extends "output" | "input",
-> = Options["plugins"] extends []
-	? {}
-	: Options["plugins"] extends Array<infer T>
-		? T extends {
-				schema: {
-					[key in Key]: {
-						fields: infer Fields;
-					};
-				};
-			}
-			? Fields extends Record<string, DBFieldAttribute>
-				? Format extends "output"
-					? InferFieldsOutput<Fields>
-					: InferFieldsInput<Fields>
-				: {}
-			: {}
-		: {};
-
-export type InferFieldsFromOptions<
-	Options extends BetterAuthOptions,
-	Key extends "session" | "user",
-	Format extends "output" | "input",
-> = Options[Key] extends {
-	additionalFields: {
-		[key: string]: DBFieldAttribute;
-	};
-}
-	? Format extends "output"
-		? InferFieldsOutput<Options[Key]["additionalFields"]>
-		: InferFieldsInput<Options[Key]["additionalFields"]>
-	: {};

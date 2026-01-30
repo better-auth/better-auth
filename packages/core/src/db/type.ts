@@ -21,13 +21,38 @@ export type InferDBValueType<T extends DBFieldType> = T extends "string"
 							? T[number]
 							: never;
 
-type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
-	? never
-	: T["required"] extends false
-		? InferDBValueType<T["type"]> | undefined | null
-		: InferDBValueType<T["type"]>;
+export type InferDBFieldOutput<T extends DBFieldAttribute> =
+	T["returned"] extends false
+		? never
+		: T["required"] extends false
+			? InferDBValueType<T["type"]> | undefined | null
+			: InferDBValueType<T["type"]>;
 
-type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
+export type InferDBFieldInput<T extends DBFieldAttribute> = InferDBValueType<
+	T["type"]
+>;
+
+export type InferDBFieldsInput<Field> =
+	Field extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Field[key]["required"] extends false
+					? never
+					: Field[key]["defaultValue"] extends string | number | boolean | Date
+						? never
+						: Field[key]["input"] extends false
+							? never
+							: key]: InferDBFieldInput<Field[key]>;
+			} & {
+				[key in Key as Field[key]["input"] extends false ? never : key]?:
+					| InferDBFieldInput<Field[key]>
+					| undefined
+					| null;
+			}
+		: {};
+
+export type InferDBFieldsOutput<
+	Fields extends Record<string, DBFieldAttribute>,
+> =
 	Fields extends Record<infer Key, DBFieldAttribute>
 		? {
 				[key in Key as Fields[key]["returned"] extends false
@@ -40,7 +65,7 @@ type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 								| Date
 							? key
 							: never
-						: key]: InferFieldOutput<Fields[key]>;
+						: key]: InferDBFieldOutput<Fields[key]>;
 			} & {
 				[key in Key as Fields[key]["returned"] extends false
 					? never
@@ -52,9 +77,22 @@ type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 								| Date
 							? never
 							: key
-						: never]?: InferFieldOutput<Fields[key]> | null;
+						: never]?: InferDBFieldOutput<Fields[key]> | null;
 			}
 		: never;
+
+export type InferDBFieldsFromOptionsInput<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferDBFieldsInput<DBOptions["additionalFields"]>
+	: {};
 
 export type InferDBFieldsFromOptions<
 	DBOptions extends
@@ -66,8 +104,27 @@ export type InferDBFieldsFromOptions<
 > = DBOptions extends {
 	additionalFields: Record<string, DBFieldAttribute>;
 }
-	? InferFieldsOutput<DBOptions["additionalFields"]>
+	? InferDBFieldsOutput<DBOptions["additionalFields"]>
 	: {};
+
+export type InferDBFieldsFromPluginsInput<
+	ModelName extends string,
+	Plugins extends BetterAuthOptions["plugins"],
+> = Plugins extends []
+	? {}
+	: Plugins extends Array<infer P>
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? InferDBFieldsInput<Fields>
+				: {}
+			: {}
+		: {};
 
 export type InferDBFieldsFromPlugins<
 	ModelName extends string,
@@ -83,7 +140,7 @@ export type InferDBFieldsFromPlugins<
 				};
 			}
 			? Fields extends Record<string, DBFieldAttribute>
-				? InferFieldsOutput<Fields>
+				? InferDBFieldsOutput<Fields>
 				: {}
 			: {}
 		: {};
