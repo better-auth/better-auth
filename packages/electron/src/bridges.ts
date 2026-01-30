@@ -9,7 +9,7 @@ import type { ElectronClientOptions } from "./client";
 
 const { ipcRenderer, ipcMain, contextBridge, webContents } = electron;
 
-function getNamespaceWithDelimiter(ns: string = "better-auth") {
+export function getChannelPrefixWithDelimiter(ns: string = "better-auth") {
 	return ns.length > 0 ? ns + ":" : ns;
 }
 
@@ -36,7 +36,7 @@ export function exposeBridges(opts: ElectronClientOptions) {
 		);
 	}
 
-	const prefix = getNamespaceWithDelimiter(opts.channelPrefix);
+	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 	const bridges = {
 		getUser: async () => {
 			return (await ipcRenderer.invoke(`${prefix}getUser`)) as User &
@@ -95,14 +95,14 @@ export function setupBridges(
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
-	const prefix = getNamespaceWithDelimiter(opts.channelPrefix);
+	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
 	ctx.$store?.atoms.session?.subscribe((state) => {
 		if (state.isPending === true) return;
 
 		webContents
 			.getFocusedWebContents()
-			?.send(`${opts.channelPrefix}:user-updated`, state?.data?.user ?? null);
+			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {

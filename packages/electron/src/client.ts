@@ -5,7 +5,7 @@ import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
-import type { exposeBridges } from "./bridges";
+import { getChannelPrefixWithDelimiter, type exposeBridges } from "./bridges";
 import {
 	getCookie,
 	getSetCookie,
@@ -133,7 +133,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 					onError: async (context) => {
 						webContents
 							.getFocusedWebContents()
-							?.send(`${opts.channelPrefix}:error`, {
+							?.send(`${getChannelPrefixWithDelimiter(opts.channelPrefix)}error`, {
 								...context.error,
 								path: context.request.url,
 							});
