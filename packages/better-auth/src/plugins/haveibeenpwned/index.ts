@@ -15,6 +15,38 @@ declare module "@better-auth/core" {
 }
 
 const ERROR_CODES = defineErrorCodes({
+	/**
+ * @description This error occurs when a password is found in the Have I Been Pwned database of compromised passwords, indicating it has been exposed in data breaches and is unsafe to use.
+ *
+ * ## Common Causes
+ *
+ * - Password appeared in known data breaches
+ * - Password is commonly used and has been compromised
+ * - Password was found in leaked password databases
+ * - Using a weak or predictable password
+ *
+ * ## How to resolve
+ *
+ * - Choose a different, unique password that hasn't been compromised
+ * - Use a password manager to generate strong, unique passwords
+ * - Avoid reusing passwords across multiple services
+ * - Create a password with at least 12 characters using mixed case, numbers, and symbols
+ *
+ * ## Example
+ *
+ * ```typescript
+ * // This will be rejected if password is compromised
+ * await client.auth.signUp.email({
+ *   email: "user@example.com",
+ *   password: "password123" // Likely compromised - will fail
+ * });
+ * // Use a strong unique password instead
+ * await client.auth.signUp.email({
+ *   email: "user@example.com",
+ *   password: "T9$mK#pL@2nQ!vR8" // Strong, unique password
+ * });
+ * ```
+ */
 	PASSWORD_COMPROMISED:
 		"The password you entered has been compromised. Please choose a different password.",
 });

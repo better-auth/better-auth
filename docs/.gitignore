@@ -6,6 +6,9 @@
 .content-collections
 .source
 
+# auto-generated error documentation (source is in code files)
+/content/docs/reference/errors/*.mdx
+
 # test & build
 /coverage
 /.next/

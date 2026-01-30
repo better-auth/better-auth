@@ -491,6 +491,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/error-codes-extractor": "workspace:*",
     "@lynx-js/react": "^0.116.1",
     "@sveltejs/kit": "^2.50.1",
     "@tanstack/react-start": "^1.157.16",

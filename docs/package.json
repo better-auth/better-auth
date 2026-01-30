@@ -51,6 +51,7 @@
     "@vercel/analytics": "^1.6.1",
     "@vercel/og": "^0.8.6",
     "ai": "^6.0.57",
+    "better-auth": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "1.1.1",

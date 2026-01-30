@@ -1,4 +1,5 @@
 import { defineConfig } from "tsdown";
+import { errorCodesExtractor } from "@better-auth/error-codes-extractor";
 
 export default defineConfig({
 	dts: { build: true, incremental: true },
@@ -67,4 +68,11 @@ export default defineConfig({
 	treeshake: true,
 	clean: true,
 	unbundle: true,
+	plugins: [
+		errorCodesExtractor({
+			outputFormat: "docs",
+			srcDir: "src",
+			docsOutputDir: "../../docs/content/docs/reference/errors",
+		}),
+	],
 });
