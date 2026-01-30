@@ -1638,9 +1638,6 @@ importers:
       conf:
         specifier: ^15.0.2
         version: 15.0.2
-      electron:
-        specifier: '>=37.0.0'
-        version: 39.3.0
       zod:
         specifier: ^4.3.5
         version: 4.3.6
@@ -1657,9 +1654,6 @@ importers:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
-      nanostores:
-        specifier: ^1.0.1
-        version: 1.1.0
       tsdown:
         specifier: 'catalog:'
         version: 0.20.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.3)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
