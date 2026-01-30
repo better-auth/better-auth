@@ -12,7 +12,10 @@ export function Profile() {
 	return (
 		<div className="flex items-center gap-3 bg-background p-2.5 border border-border rounded-md drop-shadow-md">
 			<Avatar>
-				<AvatarImage src={user.image ?? undefined} alt={user.name} />
+				<AvatarImage
+					src={user.image ?? undefined}
+					alt={user.name || user.email}
+				/>
 				<AvatarFallback>
 					{(user.name || user.email)?.charAt(0).toUpperCase()}
 				</AvatarFallback>

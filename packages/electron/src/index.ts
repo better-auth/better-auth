@@ -195,4 +195,5 @@ export const electron = (options?: ElectronOptions | undefined) => {
 	} satisfies BetterAuthPlugin;
 };
 
+export { handleDeepLink } from "./setup";
 export type * from "./types";

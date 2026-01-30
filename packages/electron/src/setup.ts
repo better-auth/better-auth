@@ -6,9 +6,9 @@ import electron from "electron";
 import { authenticate } from "./authenticate";
 import { exposeBridges, setupBridges } from "./bridges";
 import type { ElectronClientOptions } from "./client";
-import { isProcessType } from "./utils";
+import { getWindowFn, isProcessType, parseProtocolScheme } from "./utils";
 
-const { app, session, protocol, BrowserWindow } = electron;
+const { app, session, protocol } = electron;
 
 export function setupRenderer(opts: ElectronClientOptions) {
 	if (!isProcessType("renderer")) {
@@ -43,13 +43,7 @@ export function setupMain(
 		setupCSP(clientOptions);
 	}
 	if (!cfg || cfg.scheme === true) {
-		const getWindow =
-			cfg?.getWindow ??
-			(() => {
-				const allWindows = BrowserWindow.getAllWindows();
-				return allWindows.length > 0 ? allWindows[0] : null;
-			});
-		registerProtocolScheme($fetch, opts, getWindow);
+		registerProtocolScheme($fetch, opts, cfg?.getWindow);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -64,17 +58,62 @@ export function setupMain(
 	}
 }
 
+/**
+ * Handles deep link URLs for authentication.
+ */
+export async function handleDeepLink(
+	$fetch: BetterFetch,
+	options: ElectronClientOptions,
+	url: string,
+	getWindow?: SetupMainConfig["getWindow"] | undefined,
+) {
+	let parsedURL: URL | null = null;
+	try {
+		parsedURL = new URL(url);
+	} catch {}
+	if (!parsedURL) {
+		return;
+	}
+
+	const { scheme } = parseProtocolScheme(options.protocol);
+
+	if (!url.startsWith(`${scheme}:/`)) {
+		return;
+	}
+	const { protocol, pathname, hostname, hash } = parsedURL;
+	if (protocol !== `${scheme}:`) {
+		return;
+	}
+
+	const path = "/" + hostname + pathname;
+
+	if (path !== (options.callbackPath || "/auth/callback")) {
+		return;
+	}
+
+	if (!hash.startsWith("#token=")) {
+		return;
+	}
+
+	const token = hash.substring("#token=".length);
+
+	await authenticate(
+		$fetch,
+		options,
+		{
+			token,
+		},
+		getWindowFn({ getWindow }),
+	);
+}
+
 function registerProtocolScheme(
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,
-	getWindow: () => electron.BrowserWindow | null | undefined,
+	getWin: SetupMainConfig["getWindow"] | undefined,
 ) {
-	const { scheme, privileges = {} } =
-		typeof options.protocol === "string"
-			? {
-					scheme: options.protocol,
-				}
-			: options.protocol;
+	const getWindow = getWindowFn({ getWindow: getWin });
+	const { scheme, privileges = {} } = parseProtocolScheme(options.protocol);
 
 	protocol.registerSchemesAsPrivileged([
 		{
@@ -106,47 +145,6 @@ function registerProtocolScheme(
 		);
 	}
 
-	const handleDeepLink = async (url: string) => {
-		let parsedURL: URL | null = null;
-		try {
-			parsedURL = new URL(url);
-		} catch {}
-		if (!parsedURL) {
-			return;
-		}
-		if (!url.startsWith(`${scheme}:/`)) {
-			return;
-		}
-		const { protocol, pathname, hostname, hash } = parsedURL;
-		if (protocol !== `${scheme}:`) {
-			return;
-		}
-
-		const path = "/" + hostname + pathname;
-		const callbackPath = options.callbackPath?.startsWith("/")
-			? options.callbackPath
-			: `/${options.callbackPath}`;
-
-		if (path !== callbackPath) {
-			return;
-		}
-
-		if (!hash.startsWith("#token=")) {
-			return;
-		}
-
-		const token = hash.substring("#token=".length);
-
-		await authenticate(
-			$fetch,
-			options,
-			{
-				token,
-			},
-			getWindow,
-		);
-	};
-
 	const gotTheLock = app.requestSingleInstanceLock();
 
 	if (!gotTheLock) {
@@ -172,13 +170,13 @@ function registerProtocolScheme(
 			}
 
 			if (process?.platform !== "darwin" && typeof url === "string") {
-				await handleDeepLink(url);
+				await handleDeepLink($fetch, options, url, getWindow);
 			}
 		});
 
 		app.on("open-url", async (_event, url) => {
 			if (process?.platform === "darwin") {
-				await handleDeepLink(url);
+				await handleDeepLink($fetch, options, url, getWindow);
 			}
 		});
 
@@ -187,7 +185,7 @@ function registerProtocolScheme(
 				process?.platform !== "darwin" &&
 				typeof process.argv[1] === "string"
 			) {
-				await handleDeepLink(process.argv[1]);
+				await handleDeepLink($fetch, options, process.argv[1], getWindow);
 			}
 		});
 	}
