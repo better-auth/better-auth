@@ -347,6 +347,18 @@ To sign out the user inside the renderer process, you can use the `signOut` brid
 <button onClick={() => window.signOut()}>Sign out</button>
 ```
 
+### Subscribing to User Updates
+
+You can listen for user changes via the `onUserUpdated` bridge in the renderer process:
+
+```ts title="electron/App.tsx"
+useEffect(() => {
+  window.onUserUpdated((user) => {
+    console.log("User updated:", user);
+  });
+}, []);
+```
+
 ### Handling Errors
 
 Listen for authentication errors via the `onAuthError` bridge in the renderer process. The bridge will receive error context forwarded from fetch hooks.
