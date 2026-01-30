@@ -347,12 +347,9 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
-	return context as unknown as AuthContext<Options>;
+	return ctx as unknown as AuthContext<Options>;
 }

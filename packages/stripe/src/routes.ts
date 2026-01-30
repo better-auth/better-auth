@@ -424,7 +424,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({
 								email: user.email,
-								name: user.name,
+								name: user.name ?? undefined,
 								metadata: customerMetadata.set(
 									{
 										userId: user.id,
