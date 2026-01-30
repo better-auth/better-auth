@@ -74,17 +74,17 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
+						const cookie = ctx.context.createAuthCookie("transfer_token", {
+  						maxAge: opts.codeExpiresIn,
+						});
 						// Refresh the transfer cookie to extend its validity
 						// Avoids expiration during multi-step auth flows on active usage
 						// Can still expire when no endpoint is hit within the valid period
 						await ctx.setSignedCookie(
-							`${opts.cookiePrefix}.transfer_token`,
+							cookie.name,
 							transferCookie,
 							ctx.context.secret,
-							{
-								...ctx.context.authCookies.sessionToken.attributes,
-								maxAge: opts.codeExpiresIn,
-							},
+							cookie.attributes,
 						);
 					}),
 				},
@@ -97,6 +97,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							code_challenge_method: z.string().optional().default("plain"),
 							state: z.string().nonempty(),
 						});
+						const cookie = ctx.context.createAuthCookie("transfer_token", {
+  						maxAge: opts.codeExpiresIn,
+						});
 						if (
 							ctx.query?.client_id === opts.clientID &&
 							(ctx.path.startsWith("/sign-in") ||
@@ -105,13 +108,10 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							const query = querySchema.safeParse(ctx.query);
 							if (query.success) {
 								await ctx.setSignedCookie(
-									`${opts.cookiePrefix}.transfer_token`,
+									cookie.name,
 									JSON.stringify(query.data),
 									ctx.context.secret,
-									{
-										...ctx.context.authCookies.sessionToken.attributes,
-										maxAge: opts.codeExpiresIn,
-									},
+									cookie.attributes,
 								);
 							}
 						}
@@ -121,11 +121,11 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						}
 
 						const transferCookie = await ctx.getSignedCookie(
-							`${opts.cookiePrefix}.transfer_token`,
+							cookie.name,
 							ctx.context.secret,
 						);
-						ctx.setCookie(`${opts.cookiePrefix}.transfer_token`, "", {
-							...ctx.context.authCookies.sessionToken.attributes,
+						ctx.setCookie(cookie.name, "", {
+							...cookie.attributes,
 							maxAge: 0,
 						});
 						let transferPayload: z.infer<typeof querySchema> | null = null;

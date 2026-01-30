@@ -205,3 +205,4 @@ export const electronClient = (options: ElectronClientOptions) => {
 };
 
 export * from "./types/client";
+export { handleDeepLink } from "./setup";

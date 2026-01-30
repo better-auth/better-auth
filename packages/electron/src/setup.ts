@@ -6,9 +6,16 @@ import electron from "electron";
 import { authenticate } from "./authenticate";
 import { exposeBridges, setupBridges } from "./bridges";
 import type { ElectronClientOptions } from "./client";
-import { isProcessType } from "./utils";
+import { isProcessType, parseProtocolScheme } from "./utils";
 
 const { app, session, protocol, BrowserWindow } = electron;
+
+export function withGetWindowFallback(win?: (() => Electron.BrowserWindow | null | undefined) | undefined) {
+  return win ?? (() => {
+    const allWindows = BrowserWindow.getAllWindows();
+    return allWindows.length > 0 ? allWindows[0] : null;
+  });
+}
 
 export function setupRenderer(opts: ElectronClientOptions) {
 	if (!isProcessType("renderer")) {
@@ -43,13 +50,7 @@ export function setupMain(
 		setupCSP(clientOptions);
 	}
 	if (!cfg || cfg.scheme === true) {
-		const getWindow =
-			cfg?.getWindow ??
-			(() => {
-				const allWindows = BrowserWindow.getAllWindows();
-				return allWindows.length > 0 ? allWindows[0] : null;
-			});
-		registerProtocolScheme($fetch, opts, getWindow);
+		registerProtocolScheme($fetch, opts, withGetWindowFallback(cfg?.getWindow));
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -62,6 +63,66 @@ export function setupMain(
 			clientOptions,
 		);
 	}
+}
+
+/**
+ * Handles the deep link URL for authentication.
+ */
+export async function handleDeepLink({
+  $fetch,
+  options,
+  url,
+  getWindow,
+}: {
+  $fetch: BetterFetch,
+  options: ElectronClientOptions,
+  url: string;
+  getWindow?: SetupMainConfig["getWindow"] | undefined;
+}) {
+  if (!isProcessType("browser")) {
+    throw new BetterAuthError(
+      "`handleDeepLink` can only be called in the main process.",
+    );
+  }
+
+  let parsedURL: URL | null = null;
+	try {
+		parsedURL = new URL(url);
+	} catch {}
+	if (!parsedURL) {
+		return;
+	}
+
+	const { scheme } = parseProtocolScheme(options.protocol);
+
+	if (!url.startsWith(`${scheme}:/`)) {
+		return;
+	}
+	const { protocol, pathname, hostname, hash } = parsedURL;
+	if (protocol !== `${scheme}:`) {
+		return;
+	}
+
+	const path = "/" + hostname + pathname;
+
+	if (path !== (options.callbackPath || "/auth/callback")) {
+		return;
+	}
+
+	if (!hash.startsWith("#token=")) {
+		return;
+	}
+
+	const token = hash.substring("#token=".length);
+
+	await authenticate(
+		$fetch,
+		options,
+		{
+			token,
+		},
+		withGetWindowFallback(getWindow),
+	);
 }
 
 function registerProtocolScheme(
@@ -106,47 +167,6 @@ function registerProtocolScheme(
 		);
 	}
 
-	const handleDeepLink = async (url: string) => {
-		let parsedURL: URL | null = null;
-		try {
-			parsedURL = new URL(url);
-		} catch {}
-		if (!parsedURL) {
-			return;
-		}
-		if (!url.startsWith(`${scheme}:/`)) {
-			return;
-		}
-		const { protocol, pathname, hostname, hash } = parsedURL;
-		if (protocol !== `${scheme}:`) {
-			return;
-		}
-
-		const path = "/" + hostname + pathname;
-		const callbackPath = options.callbackPath?.startsWith("/")
-			? options.callbackPath
-			: `/${options.callbackPath}`;
-
-		if (path !== callbackPath) {
-			return;
-		}
-
-		if (!hash.startsWith("#token=")) {
-			return;
-		}
-
-		const token = hash.substring("#token=".length);
-
-		await authenticate(
-			$fetch,
-			options,
-			{
-				token,
-			},
-			getWindow,
-		);
-	};
-
 	const gotTheLock = app.requestSingleInstanceLock();
 
 	if (!gotTheLock) {
@@ -172,13 +192,23 @@ function registerProtocolScheme(
 			}
 
 			if (process?.platform !== "darwin" && typeof url === "string") {
-				await handleDeepLink(url);
+				await handleDeepLink({
+				  $fetch,
+					options,
+  				url,
+          getWindow,
+				});
 			}
 		});
 
 		app.on("open-url", async (_event, url) => {
 			if (process?.platform === "darwin") {
-				await handleDeepLink(url);
+  			await handleDeepLink({
+  			  $fetch,
+  				options,
+    		  url,
+          getWindow,
+  			});
 			}
 		});
 
@@ -187,7 +217,12 @@ function registerProtocolScheme(
 				process?.platform !== "darwin" &&
 				typeof process.argv[1] === "string"
 			) {
-				await handleDeepLink(process.argv[1]);
+  			await handleDeepLink({
+  			  $fetch,
+  				options,
+    		  url: process.argv[1],
+          getWindow,
+  			});
 			}
 		});
 	}
