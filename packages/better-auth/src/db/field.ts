@@ -3,6 +3,7 @@ import type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
+	InferValueType,
 } from "@better-auth/core/db";
 
 export const createFieldAttribute = <
@@ -17,24 +18,6 @@ export const createFieldAttribute = <
 		...config,
 	} satisfies DBFieldAttribute<T>;
 };
-
-export type InferValueType<T extends DBFieldType> = T extends "string"
-	? string
-	: T extends "number"
-		? number
-		: T extends "boolean"
-			? boolean
-			: T extends "date"
-				? Date
-				: T extends "json"
-					? Record<string, any>
-					: T extends `${infer U}[]`
-						? U extends "string"
-							? string[]
-							: number[]
-						: T extends Array<any>
-							? T[number]
-							: never;
 
 export type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 	Fields extends Record<infer Key, DBFieldAttribute>

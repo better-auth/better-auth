@@ -13,6 +13,7 @@ export type {
 	DBFieldAttributeConfig,
 	DBFieldType,
 	DBPrimitive,
+	InferValueType,
 	ModelNames,
 	SecondaryStorage,
 } from "./type";

@@ -1,4 +1,6 @@
 import * as z from "zod";
+import type { BetterAuthOptions, Prettify } from "../../types";
+import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../type";
 import { coreSchema } from "./shared";
 
 export const sessionSchema = coreSchema.extend({
@@ -9,9 +11,16 @@ export const sessionSchema = coreSchema.extend({
 	userAgent: z.string().nullish(),
 });
 
+export type BaseSession = z.infer<typeof sessionSchema>;
+
 /**
  * Session schema type used by better-auth, note that it's possible that session could have additional fields
- *
- * todo: we should use generics to extend this type with additional fields from plugins and options in the future
  */
-export type Session = z.infer<typeof sessionSchema>;
+export type Session<
+	DBOptions extends BetterAuthOptions["session"] = BetterAuthOptions["session"],
+	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+> = Prettify<
+	z.infer<typeof sessionSchema> &
+		InferFieldsFromOptions<DBOptions> &
+		InferFieldsFromPlugins<"session", Plugins>
+>;

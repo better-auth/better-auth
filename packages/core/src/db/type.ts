@@ -1,7 +1,92 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Awaitable, LiteralString } from "../types";
+import type { Awaitable, BetterAuthOptions, LiteralString } from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
+
+export type InferValueType<T extends DBFieldType> = T extends "string"
+	? string
+	: T extends "number"
+		? number
+		: T extends "boolean"
+			? boolean
+			: T extends "date"
+				? Date
+				: T extends "json"
+					? Record<string, any>
+					: T extends `${infer U}[]`
+						? U extends "string"
+							? string[]
+							: number[]
+						: T extends Array<any>
+							? T[number]
+							: never;
+
+type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
+	? never
+	: T["required"] extends false
+		? InferValueType<T["type"]> | undefined | null
+		: InferValueType<T["type"]>;
+
+type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
+	Fields extends Record<infer Key, DBFieldAttribute>
+		? {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? key
+							: never
+						: key]: InferFieldOutput<Fields[key]>;
+			} & {
+				[key in Key as Fields[key]["returned"] extends false
+					? never
+					: Fields[key]["required"] extends false
+						? Fields[key]["defaultValue"] extends
+								| boolean
+								| string
+								| number
+								| Date
+							? never
+							: key
+						: never]?: InferFieldOutput<Fields[key]> | null;
+			}
+		: never;
+
+export type InferFieldsFromOptions<
+	DBOptions extends
+		| BetterAuthOptions["session"]
+		| BetterAuthOptions["user"]
+		| BetterAuthOptions["verification"]
+		| BetterAuthOptions["account"]
+		| BetterAuthOptions["rateLimit"],
+> = DBOptions extends {
+	additionalFields: Record<string, DBFieldAttribute>;
+}
+	? InferFieldsOutput<DBOptions["additionalFields"]>
+	: {};
+
+export type InferFieldsFromPlugins<
+	ModelName extends string,
+	Plugins extends BetterAuthOptions["plugins"],
+> = Plugins extends []
+	? {}
+	: Plugins extends Array<infer P>
+		? P extends {
+				schema: {
+					[key in ModelName]: {
+						fields: infer Fields;
+					};
+				};
+			}
+			? Fields extends Record<string, DBFieldAttribute>
+				? InferFieldsOutput<Fields>
+				: {}
+			: {}
+		: {};
 
 export type ModelNames<T extends string = LiteralString> =
 	| BaseModelNames
