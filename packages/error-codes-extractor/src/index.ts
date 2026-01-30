@@ -496,6 +496,32 @@ This section contains all error codes that can occur in Better Auth.
 	writeFileSync(indexPath, indexContent, "utf-8");
 }
 
+function escapeMdxContent(text: string): string {
+	// Escape curly braces outside of code blocks
+	// Split by code blocks (triple backticks)
+	const parts = text.split(/(```[\s\S]*?```)/);
+
+	return parts
+		.map((part, index) => {
+			// Don't escape content inside code blocks (odd indices after split)
+			if (part.startsWith("```")) {
+				return part;
+			}
+			// Also don't escape inline code
+			const inlineParts = part.split(/(`[^`]+`)/);
+			return inlineParts
+				.map((inlinePart, i) => {
+					if (inlinePart.startsWith("`") && inlinePart.endsWith("`")) {
+						return inlinePart;
+					}
+					// Escape curly braces in regular text
+					return inlinePart.replace(/\{/g, "\\{").replace(/\}/g, "\\}");
+				})
+				.join("");
+		})
+		.join("");
+}
+
 function generateErrorMdxFile(entry: ErrorCodeEntry, docsDir: string) {
 	const { code, message, description, markdownContent, category } = entry;
 	const slug = code.toLowerCase();
@@ -511,7 +537,7 @@ description: ${message}
 
 	// Add description if available
 	if (description) {
-		content += `${description}\n\n`;
+		content += `${escapeMdxContent(description)}\n\n`;
 	} else {
 		content += `This error occurs when: ${message.toLowerCase()}\n\n`;
 	}
@@ -526,7 +552,7 @@ description: ${message}
 
 	// Add common causes section
 	if (sections.commonCauses) {
-		content += `## Common Causes\n\n${sections.commonCauses}\n\n`;
+		content += `## Common Causes\n\n${escapeMdxContent(sections.commonCauses)}\n\n`;
 	} else {
 		content += `## Common Causes\n\n`;
 		content += `* Check the error message details for specific information about what went wrong\n`;
@@ -536,7 +562,7 @@ description: ${message}
 
 	// Add how to resolve section
 	if (sections.howToResolve) {
-		content += `## How to resolve\n\n${sections.howToResolve}\n\n`;
+		content += `## How to resolve\n\n${escapeMdxContent(sections.howToResolve)}\n\n`;
 	} else {
 		content += `## How to resolve\n\n`;
 		content += `* Verify the conditions that triggered this error\n`;
@@ -547,12 +573,13 @@ description: ${message}
 
 	// Add example section if available
 	if (sections.example) {
+		// Don't escape example section as it's typically code
 		content += `## Example\n\n${sections.example}\n\n`;
 	}
 
 	// Add debug section
 	if (sections.debug) {
-		content += `## Debug\n\n${sections.debug}\n`;
+		content += `## Debug\n\n${escapeMdxContent(sections.debug)}\n`;
 	} else {
 		content += `## Debug\n\n`;
 		content += `* Enable debug logging in Better Auth to get more detailed information\n`;
