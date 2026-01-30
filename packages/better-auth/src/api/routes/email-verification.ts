@@ -178,7 +178,13 @@ export const sendVerificationEmail = createAuthEndpoint(
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				//we're returning true to avoid leaking information about the user
+				// We're returning true to avoid leaking information about the user
+				return ctx.json({
+					status: true,
+				});
+			}
+			if (user.user.emailVerified) {
+				// We're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
 				});
