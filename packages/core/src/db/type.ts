@@ -1,7 +1,17 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
-import type { Awaitable, BetterAuthOptions, LiteralString } from "../types";
+import type {
+	Awaitable,
+	BetterAuthOptions,
+	LiteralString,
+	UnionToIntersection,
+} from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
+
+export type ModelNames<T extends string = LiteralString> =
+	| BaseModelNames
+	| T
+	| "rate-limit";
 
 export type InferDBValueType<T extends DBFieldType> = T extends "string"
 	? string
@@ -112,7 +122,7 @@ export type InferDBFieldsFromPluginsInput<
 	Plugins extends unknown[] | undefined,
 > = Plugins extends []
 	? {}
-	: Plugins extends Array<infer P>
+	: Plugins extends [infer P, ...infer Rest]
 		? P extends {
 				schema: {
 					[key in ModelName]: {
@@ -121,9 +131,12 @@ export type InferDBFieldsFromPluginsInput<
 				};
 			}
 			? Fields extends Record<string, DBFieldAttribute>
-				? InferDBFieldsInput<Fields>
-				: {}
-			: {}
+				? UnionToIntersection<
+						InferDBFieldsInput<Fields> &
+							InferDBFieldsFromPluginsInput<ModelName, Rest>
+					>
+				: InferDBFieldsFromPluginsInput<ModelName, Rest>
+			: InferDBFieldsFromPluginsInput<ModelName, Rest>
 		: {};
 
 export type InferDBFieldsFromPlugins<
@@ -131,7 +144,7 @@ export type InferDBFieldsFromPlugins<
 	Plugins extends unknown[] | undefined,
 > = Plugins extends []
 	? {}
-	: Plugins extends Array<infer P>
+	: Plugins extends [infer P, ...infer Rest]
 		? P extends {
 				schema: {
 					[key in ModelName]: {
@@ -140,15 +153,13 @@ export type InferDBFieldsFromPlugins<
 				};
 			}
 			? Fields extends Record<string, DBFieldAttribute>
-				? InferDBFieldsOutput<Fields>
-				: {}
-			: {}
+				? UnionToIntersection<
+						InferDBFieldsOutput<Fields> &
+							InferDBFieldsFromPlugins<ModelName, Rest>
+					>
+				: InferDBFieldsFromPlugins<ModelName, Rest>
+			: InferDBFieldsFromPlugins<ModelName, Rest>
 		: {};
-
-export type ModelNames<T extends string = LiteralString> =
-	| BaseModelNames
-	| T
-	| "rate-limit";
 
 export type DBFieldType =
 	| "string"

@@ -164,7 +164,7 @@ describe("lastLoginMethod", async () => {
 							);
 						},
 					}),
-				] as const,
+				],
 			},
 			{
 				clientOptions: {
