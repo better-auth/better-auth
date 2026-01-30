@@ -1,0 +1,8 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**", "$TURBO_ROOT$/docs/content/docs/reference/errors/**"]
+    }
+  }
+}

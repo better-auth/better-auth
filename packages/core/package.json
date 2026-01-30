@@ -143,6 +143,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/error-codes-extractor": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",

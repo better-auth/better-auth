@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { defineConfig } from "tsdown";
+import { errorCodesExtractor } from "@better-auth/error-codes-extractor";
 
 const packageJson = JSON.parse(
 	await readFile(new URL("./package.json", import.meta.url), "utf-8"),
@@ -32,4 +33,11 @@ export default defineConfig({
 	sourcemap: true,
 	unbundle: true,
 	clean: true,
+	plugins: [
+		errorCodesExtractor({
+			outputFormat: "docs",
+			srcDir: "src",
+			docsOutputDir: "../../docs/content/docs/reference/errors",
+		}),
+	]
 });
