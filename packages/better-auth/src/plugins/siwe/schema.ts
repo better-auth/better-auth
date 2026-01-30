@@ -31,5 +31,3 @@ export const schema = {
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
-
-export type WalletAddressSchema = typeof schema;
