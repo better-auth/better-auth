@@ -3,7 +3,7 @@ import type {
 	DBFieldAttribute,
 	DBFieldAttributeConfig,
 	DBFieldType,
-	InferValueType,
+	InferDBValueType,
 } from "@better-auth/core/db";
 
 export const createFieldAttribute = <
@@ -99,8 +99,8 @@ export type InferFieldsInputClient<
 type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined | null
-		: InferValueType<T["type"]>;
+		? InferDBValueType<T["type"]> | undefined | null
+		: InferDBValueType<T["type"]>;
 
 /**
  * Converts a Record<string, DBFieldAttribute> to an object type
@@ -110,7 +110,7 @@ export type FieldAttributeToObject<
 	Fields extends Record<string, DBFieldAttribute>,
 > = AddOptionalFields<
 	{
-		[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
+		[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
 	},
 	Fields
 >;
@@ -168,7 +168,7 @@ export type RemoveFieldsWithReturnedFalse<
 	[K in keyof T as T[K]["returned"] extends false ? never : K]: T[K];
 };
 
-type InferFieldInput<T extends DBFieldAttribute> = InferValueType<T["type"]>;
+type InferFieldInput<T extends DBFieldAttribute> = InferDBValueType<T["type"]>;
 
 export type PluginFieldAttribute = Omit<
 	DBFieldAttribute,

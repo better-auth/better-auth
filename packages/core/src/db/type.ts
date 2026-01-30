@@ -3,7 +3,7 @@ import type { Awaitable, BetterAuthOptions, LiteralString } from "../types";
 
 export type BaseModelNames = "user" | "account" | "session" | "verification";
 
-export type InferValueType<T extends DBFieldType> = T extends "string"
+export type InferDBValueType<T extends DBFieldType> = T extends "string"
 	? string
 	: T extends "number"
 		? number
@@ -24,8 +24,8 @@ export type InferValueType<T extends DBFieldType> = T extends "string"
 type InferFieldOutput<T extends DBFieldAttribute> = T["returned"] extends false
 	? never
 	: T["required"] extends false
-		? InferValueType<T["type"]> | undefined | null
-		: InferValueType<T["type"]>;
+		? InferDBValueType<T["type"]> | undefined | null
+		: InferDBValueType<T["type"]>;
 
 type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 	Fields extends Record<infer Key, DBFieldAttribute>
@@ -56,7 +56,7 @@ type InferFieldsOutput<Fields extends Record<string, DBFieldAttribute>> =
 			}
 		: never;
 
-export type InferFieldsFromOptions<
+export type InferDBFieldsFromOptions<
 	DBOptions extends
 		| BetterAuthOptions["session"]
 		| BetterAuthOptions["user"]
@@ -69,7 +69,7 @@ export type InferFieldsFromOptions<
 	? InferFieldsOutput<DBOptions["additionalFields"]>
 	: {};
 
-export type InferFieldsFromPlugins<
+export type InferDBFieldsFromPlugins<
 	ModelName extends string,
 	Plugins extends BetterAuthOptions["plugins"],
 > = Plugins extends []

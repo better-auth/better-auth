@@ -1,6 +1,9 @@
 import * as z from "zod";
 import type { BetterAuthOptions, Prettify } from "../../types";
-import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../type";
+import type {
+	InferDBFieldsFromOptions,
+	InferDBFieldsFromPlugins,
+} from "../type";
 
 export const rateLimitSchema = z.object({
 	/**
@@ -28,6 +31,6 @@ export type RateLimit<
 	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseRateLimit &
-		InferFieldsFromOptions<DBOptions> &
-		InferFieldsFromPlugins<"rateLimit", Plugins>
+		InferDBFieldsFromOptions<DBOptions> &
+		InferDBFieldsFromPlugins<"rateLimit", Plugins>
 >;

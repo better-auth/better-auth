@@ -1,7 +1,10 @@
 import * as z from "zod";
 import type { Prettify } from "../../types";
 import type { BetterAuthOptions } from "../../types/init-options";
-import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../type";
+import type {
+	InferDBFieldsFromOptions,
+	InferDBFieldsFromPlugins,
+} from "../type";
 import { coreSchema } from "./shared";
 
 export const accountSchema = coreSchema.extend({
@@ -39,6 +42,6 @@ export type Account<
 	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
 > = Prettify<
 	BaseAccount &
-		InferFieldsFromOptions<DBOptions> &
-		InferFieldsFromPlugins<"account", Plugins>
+		InferDBFieldsFromOptions<DBOptions> &
+		InferDBFieldsFromPlugins<"account", Plugins>
 >;

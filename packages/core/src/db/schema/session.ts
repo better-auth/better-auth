@@ -1,6 +1,9 @@
 import * as z from "zod";
 import type { BetterAuthOptions, Prettify } from "../../types";
-import type { InferFieldsFromOptions, InferFieldsFromPlugins } from "../type";
+import type {
+	InferDBFieldsFromOptions,
+	InferDBFieldsFromPlugins,
+} from "../type";
 import { coreSchema } from "./shared";
 
 export const sessionSchema = coreSchema.extend({
@@ -21,6 +24,6 @@ export type Session<
 	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
 > = Prettify<
 	z.infer<typeof sessionSchema> &
-		InferFieldsFromOptions<DBOptions> &
-		InferFieldsFromPlugins<"session", Plugins>
+		InferDBFieldsFromOptions<DBOptions> &
+		InferDBFieldsFromPlugins<"session", Plugins>
 >;
