@@ -51,6 +51,12 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 	return auth.handler(c.req.raw);
 });
 
+// On better-auth 1.4.18
+// app.on(["GET", "POST"], "/auth/*", (c) => {
+//  const req = new Request(c.req.raw.url, c.req.raw);
+//  return auth(c.env).handler(req);
+// });
+
 serve(app);
 ```
 
