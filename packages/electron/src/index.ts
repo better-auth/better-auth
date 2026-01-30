@@ -75,7 +75,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 						}
 
 						const cookie = ctx.context.createAuthCookie("transfer_token", {
-  						maxAge: opts.codeExpiresIn,
+							maxAge: opts.codeExpiresIn,
 						});
 						// Refresh the transfer cookie to extend its validity
 						// Avoids expiration during multi-step auth flows on active usage
@@ -98,7 +98,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							state: z.string().nonempty(),
 						});
 						const cookie = ctx.context.createAuthCookie("transfer_token", {
-  						maxAge: opts.codeExpiresIn,
+							maxAge: opts.codeExpiresIn,
 						});
 						if (
 							ctx.query?.client_id === opts.clientID &&

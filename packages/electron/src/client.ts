@@ -204,5 +204,5 @@ export const electronClient = (options: ElectronClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export * from "./types/client";
 export { handleDeepLink } from "./setup";
+export * from "./types/client";
