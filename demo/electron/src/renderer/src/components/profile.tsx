@@ -3,7 +3,7 @@ import { Button } from "./ui/button";
 import { useUser } from "./user-provider";
 
 export function Profile() {
-	const { user, setUser } = useUser();
+	const { user } = useUser();
 
 	if (!user) {
 		return null;
@@ -28,7 +28,6 @@ export function Profile() {
 				variant="outline"
 				onClick={() => {
 					void window.signOut();
-					setUser(null);
 				}}
 			>
 				<svg

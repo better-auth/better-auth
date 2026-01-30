@@ -1657,6 +1657,9 @@ importers:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
+      nanostores:
+        specifier: ^1.0.1
+        version: 1.1.0
       tsdown:
         specifier: 'catalog:'
         version: 0.20.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.16.3)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -2957,9 +2960,6 @@ packages:
     resolution: {integrity: sha512-5FTWeto6oZVhZRHvHiAEM0D6ifQKbjdVTBUidd9gUn5f+SSa1Zxn4qPtW+iWyJPDLWanXZNXoXGvggtj1TQn9w==}
     peerDependencies:
       better-auth: '>=1.4.0'
-
-  '@better-auth/utils@0.3.0':
-    resolution: {integrity: sha512-W+Adw6ZA6mgvnSnhOki270rwJ42t4XzSK6YWGF//BbVXL6SwCLWfyzBc1lN2m/4RM28KubdBKQ4X5VMoLRNPQw==}
 
   '@better-auth/utils@0.3.1':
     resolution: {integrity: sha512-+CGp4UmZSUrHHnpHhLPYu6cV+wSUSvVbZbNykxhUDocpVNTo9uFFxw/NqJlh1iC4wQ9HKKWGCKuZ5wUgS0v6Kg==}
@@ -17595,7 +17595,7 @@ snapshots:
 
   '@better-auth/dash@0.1.6(better-auth@packages+better-auth)(zod@4.3.6)':
     dependencies:
-      '@better-auth/utils': 0.3.0
+      '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       better-auth: link:packages/better-auth
       better-call: 1.2.0(zod@4.3.6)
@@ -17604,8 +17604,6 @@ snapshots:
       mailchecker: 6.0.19
     transitivePeerDependencies:
       - zod
-
-  '@better-auth/utils@0.3.0': {}
 
   '@better-auth/utils@0.3.1': {}
 

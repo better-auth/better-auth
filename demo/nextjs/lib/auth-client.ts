@@ -18,8 +18,6 @@ import { toast } from "sonner";
 import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
-	// Required for electron
-	baseURL: "http://localhost:3000",
 	plugins: [
 		dashClient(),
 		organizationClient(),

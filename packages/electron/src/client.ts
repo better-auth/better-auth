@@ -191,7 +191,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 					bridges?: boolean | undefined;
 					scheme?: boolean | undefined;
 					getWindow?: () => electron.BrowserWindow | null | undefined;
-				}) => setupMain($fetch, getCookieFn, opts, clientOptions, cfg),
+				}) => setupMain($fetch, store, getCookieFn, opts, clientOptions, cfg),
 				$Infer: {} as {
 					Bridges: ReturnType<typeof exposeBridges>["$InferBridges"];
 				},

@@ -1,5 +1,5 @@
 import { resolve } from "node:path";
-import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch } from "@better-fetch/fetch";
 import electron from "electron";
@@ -27,6 +27,7 @@ export type SetupMainConfig = {
 };
 export function setupMain(
 	$fetch: BetterFetch,
+	$store: ClientStore | null,
 	getCookie: () => string,
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
@@ -54,6 +55,7 @@ export function setupMain(
 		setupBridges(
 			{
 				$fetch,
+				$store,
 				getCookie,
 			},
 			opts,
