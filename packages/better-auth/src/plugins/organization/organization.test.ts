@@ -2379,7 +2379,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string;
 				};
 				memberRequiredField: string;
@@ -2443,7 +2443,7 @@ describe("Additional Fields", async () => {
 			user: {
 				id: string;
 				email: string;
-				name: string;
+				name?: string | undefined;
 				image?: string;
 			};
 			memberRequiredField: string;
@@ -2563,7 +2563,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string;
 					image?: string;
 				};
 				memberRequiredField: string;
@@ -2572,8 +2572,8 @@ describe("Additional Fields", async () => {
 			} & {
 				user: {
 					id: string;
-					name: string;
 					email: string;
+					name: string | null | undefined;
 					image: string | null | undefined;
 				};
 			})[];
@@ -2632,7 +2632,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string | undefined;
 				};
 				memberRequiredField: string;
