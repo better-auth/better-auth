@@ -124,8 +124,9 @@ export function errorCodesExtractor(
 								continue;
 							}
 
-							// Remove leading whitespace and asterisks
-							const trimmed = line.replace(/^\s*\*\s?/, "").trim();
+							// Remove leading whitespace and asterisk, preserve indentation after
+							const processed = line.replace(/^\s*\*\s?/, "");
+							const trimmed = processed.trim();
 
 							// Skip empty lines
 							if (trimmed === "") {
@@ -161,14 +162,14 @@ export function errorCodesExtractor(
 								if (trimmed.startsWith("#")) {
 									inDescription = false;
 									afterDescription = true;
-									markdownLines.push(trimmed);
+									markdownLines.push(processed);
 								} else {
 									descriptionLines.push(trimmed);
 								}
 							}
-							// Collect markdown lines after description
+							// Collect markdown lines after description (preserve indentation)
 							else if (afterDescription && !trimmed.startsWith("@")) {
-								markdownLines.push(trimmed);
+								markdownLines.push(processed);
 							}
 							// If no @description tag found, treat everything as markdown
 							else if (
@@ -176,7 +177,7 @@ export function errorCodesExtractor(
 								!afterDescription &&
 								!trimmed.startsWith("@")
 							) {
-								markdownLines.push(trimmed);
+								markdownLines.push(processed);
 							}
 						}
 
