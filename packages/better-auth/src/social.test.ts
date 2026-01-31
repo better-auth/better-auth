@@ -1643,7 +1643,8 @@ describe("Railway Provider", async () => {
 		expect(session.data?.user.image).toBe(
 			"https://avatars.githubusercontent.com/u/12345",
 		);
-		expect(session.data?.user.emailVerified).toBe(true);
+		// Railway does not provide email_verified claim, defaults to false
+		expect(session.data?.user.emailVerified).toBe(false);
 
 		const ctx = await auth.$context;
 		const accounts = await ctx.internalAdapter.findAccounts(
