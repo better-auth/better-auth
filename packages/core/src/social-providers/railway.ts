@@ -29,12 +29,7 @@ export const railway = (options: RailwayOptions) => {
 	return {
 		id: "railway",
 		name: "Railway",
-		createAuthorizationURL: async ({
-			state,
-			scopes,
-			codeVerifier,
-			redirectURI,
-		}) => {
+		createAuthorizationURL({ state, scopes, codeVerifier, redirectURI }) {
 			const _scopes = options.disableDefaultScope
 				? []
 				: ["openid", "email", "profile"];
@@ -46,16 +41,16 @@ export const railway = (options: RailwayOptions) => {
 				authorizationEndpoint,
 				scopes: _scopes,
 				state,
-				redirectURI,
 				codeVerifier,
+				redirectURI,
 			});
 		},
-		validateAuthorizationCode: async ({ code, redirectURI, codeVerifier }) => {
+		validateAuthorizationCode: async ({ code, codeVerifier, redirectURI }) => {
 			return validateAuthorizationCode({
 				code,
+				codeVerifier,
 				redirectURI,
 				options,
-				codeVerifier,
 				tokenEndpoint,
 				authentication: "basic",
 			});
@@ -85,13 +80,15 @@ export const railway = (options: RailwayOptions) => {
 				return null;
 			}
 			const userMap = await options.mapProfileToUser?.(profile);
+			// Railway does not provide an email_verified claim.
+			// We default to false for security consistency.
 			return {
 				user: {
 					id: profile.sub,
 					name: profile.name,
 					email: profile.email,
 					image: profile.picture,
-					emailVerified: true,
+					emailVerified: false,
 					...userMap,
 				},
 				data: profile,
