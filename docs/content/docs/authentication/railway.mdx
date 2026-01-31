@@ -66,15 +66,19 @@ For the full list of options supported by all social providers, check the [Provi
 
 Railway OAuth supports the following scopes:
 
-- `openid` (required): Required for all requests
-- `email` (default): Access user's email address
-- `profile` (default): Access user's name and picture
-- `offline_access`: Receive refresh tokens for long-lived access
-- `workspace:viewer`: Viewer access to user-selected workspaces
-- `workspace:member`: Member access to user-selected workspaces
-- `workspace:admin`: Admin access to user-selected workspaces
-- `project:viewer`: Viewer access to user-selected projects
-- `project:member`: Member access to user-selected projects
+| Scope | Description |
+|-------|-------------|
+| `openid` | Required for all requests (included by default) |
+| `email` | Access user's email address (included by default) |
+| `profile` | Access user's name and picture (included by default) |
+| `offline_access` | Receive refresh tokens for long-lived access |
+| `workspace:viewer` | Viewer access to user-selected workspaces |
+| `workspace:member` | Member access to user-selected workspaces |
+| `workspace:admin` | Admin access to user-selected workspaces |
+| `project:viewer` | Viewer access to user-selected projects |
+| `project:member` | Member access to user-selected projects |
+
+When requesting workspace or project scopes, users will select which specific workspaces or projects to share during the consent screen.
 
 You can specify additional scopes when configuring the provider:
 
@@ -86,12 +90,25 @@ export const auth = betterAuth({
         railway: {
             clientId: process.env.RAILWAY_CLIENT_ID as string,
             clientSecret: process.env.RAILWAY_CLIENT_SECRET as string,
-            scope: ["offline_access", "workspace:viewer"], // [!code highlight]
+            scope: ["workspace:viewer", "project:viewer"], // [!code highlight]
         },
     },
 })
 ```
 
-<Callout type="info">
-    When requesting `offline_access` scope, Railway requires `prompt=consent` to be set. For more information about Railway's OAuth implementation, refer to the [official Railway documentation](https://docs.railway.com/reference/oauth/login-with-railway).
+<Callout type="warn">
+    When requesting `offline_access` scope, Railway requires `prompt=consent` to be set in the authorization URL. You can do this using `authorizationParams`:
+
+    ```ts
+    railway: {
+        clientId: process.env.RAILWAY_CLIENT_ID as string,
+        clientSecret: process.env.RAILWAY_CLIENT_SECRET as string,
+        scope: ["offline_access"],
+        authorizationParams: { // [!code highlight]
+            prompt: "consent" // [!code highlight]
+        } // [!code highlight]
+    }
+    ```
 </Callout>
+
+For more information about Railway's OAuth implementation, refer to the [official Railway documentation](https://docs.railway.com/reference/oauth/login-with-railway).
