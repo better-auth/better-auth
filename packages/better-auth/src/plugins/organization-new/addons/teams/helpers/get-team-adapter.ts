@@ -1,12 +1,12 @@
 import type { AuthContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import { APIError } from "../../../../..";
 import { filterOutputFields } from "../../../helpers/filter-output-fields";
 import type { RealOrganizationId } from "../../../helpers/get-org-adapter";
 import type { Team, TeamMember } from "../schema";
 import type { InferTeam, InferTeamMember, TeamsOptions } from "../types";
-import { resolveTeamOptions } from "./resolve-team-options";
 import { TEAMS_ERROR_CODES } from "./errors";
-import { APIError } from "../../../../..";
+import { resolveTeamOptions } from "./resolve-team-options";
 
 export type RealTeamId = string & { __realTeamId: true };
 

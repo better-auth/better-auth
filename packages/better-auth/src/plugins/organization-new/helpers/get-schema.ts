@@ -4,12 +4,7 @@ import type {
 	DBFieldAttribute,
 } from "@better-auth/core/db";
 import defu from "defu";
-import type {
-	Addon,
-	OrganizationOptions,
-	ResolvedOrganizationOptions,
-} from "../types";
-import { teams } from "../addons";
+import type { Addon, OrganizationOptions } from "../types";
 
 /** Base organization fields */
 type BaseOrganizationFields<DisableSlugs extends boolean> = {
