@@ -180,6 +180,7 @@ function SidebarListItem({
 		return (
 			<div>
 				<AsideLink
+					hasSubpages={listItem.children && listItem.children.length > 0}
 					href={listItem.href}
 					startWith="/docs"
 					title={listItem.title}
@@ -205,8 +206,11 @@ function SidebarListItem({
 							<div className="relative">
 								{/* Vertical line overlay */}
 								<div className="absolute left-7 top-0 bottom-0 w-px bg-border pointer-events-none z-10" />
-								{listItem.children?.map((child) =>
-									child.group ? (
+								{listItem.children?.map((child) => {
+									const icon = child.icon({
+										className: "text-stone-950 dark:text-white",
+									});
+									return child.group ? (
 										<div
 											key={child.title}
 											className="flex flex-row items-center gap-2 mx-5 pl-6 my-1"
@@ -243,16 +247,14 @@ function SidebarListItem({
 												className="break-words pl-11 text-nowrap w-full [&>div>div]:hover:!bg-fd-muted"
 												activeClassName="[&>div>div]:!bg-fd-muted"
 											>
-												<div className="min-w-4">
-													<child.icon className="text-stone-950 dark:text-white" />
-												</div>
+												{icon && <div className="min-w-4">{icon}</div>}
 												{child.title}
 												{child.isNew && <NewBadge />}
 												{child.isUpdated && <UpdatedBadge />}
 											</AsideLink>
 										</Suspense>
-									),
-								)}
+									);
+								})}
 							</div>
 						</motion.div>
 					)}
