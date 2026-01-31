@@ -257,29 +257,49 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const { user, session, account } = payload.replicationData;
 
 						try {
-							// Check if user exists, create if not
-							const existingUser =
-								await ctx.context.internalAdapter.findUserById(user.id);
+							// Check if user exists by ID first, then by email
+							let existingUser = await ctx.context.internalAdapter.findUserById(
+								user.id,
+							);
 							if (!existingUser) {
-								await ctx.context.internalAdapter.createUser(user);
-							}
-
-							// Check if account exists, create if not
-							if (account) {
-								const existingAccount =
-									await ctx.context.internalAdapter.findAccount(
-										account.accountId,
-									);
-								if (!existingAccount) {
-									await ctx.context.internalAdapter.createAccount(account);
+								const userByEmail =
+									await ctx.context.internalAdapter.findUserByEmail(user.email);
+								if (userByEmail) {
+									existingUser = userByEmail.user;
 								}
 							}
 
-							// Create session with the same ID and token using adapter directly
-							// (internalAdapter.createSession ignores the ID)
+							// Create user if not exists, update session userId if user exists with different ID
+							let targetUserId = user.id;
+							if (!existingUser) {
+								await ctx.context.internalAdapter.createUser(user);
+							} else {
+								targetUserId = existingUser.id;
+							}
+
+							// Check if account exists, create if not (with updated userId)
+							if (account) {
+								const existingAccount =
+									await ctx.context.internalAdapter.findAccountByProviderId(
+										account.accountId,
+										account.providerId,
+									);
+								if (!existingAccount) {
+									await ctx.context.internalAdapter.createAccount({
+										...account,
+										userId: targetUserId,
+									});
+								}
+							}
+
+							// Create session with the correct userId
+							// Using adapter directly because internalAdapter.createSession ignores the ID
 							await ctx.context.adapter.create({
 								model: "session",
-								data: session,
+								data: {
+									...session,
+									userId: targetUserId,
+								},
 								forceAllowId: true,
 							});
 						} catch (e) {
