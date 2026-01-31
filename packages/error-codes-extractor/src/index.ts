@@ -543,9 +543,6 @@ description: ${message}
 		content += `This error occurs when: ${message.toLowerCase()}\n\n`;
 	}
 
-	// Add category context
-	content += `**Category:** ${category}\n\n`;
-
 	// Parse sections if we have markdown content
 	const sections = markdownContent
 		? parseMarkdownSections(markdownContent)
