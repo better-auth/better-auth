@@ -3,6 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Account, Session, User } from "@better-auth/core/db";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { originCheck } from "../../api";
@@ -47,11 +48,31 @@ export interface OAuthProxyOptions {
 	 * @default 60 (1 minute)
 	 */
 	maxAge?: number | undefined;
+	/**
+	 * Enable session replication for isolated database environments
+	 * (e.g., Convex preview deployments with separate databases).
+	 *
+	 * When enabled, `user`, `account`, and `session` data will be transferred
+	 * through the proxy callback and replicated to the target environment's
+	 * database.
+	 *
+	 * @default false
+	 */
+	replicateData?: boolean | undefined;
 }
 
 interface EncryptedCookiesPayload {
 	cookies: string;
 	timestamp: number;
+	/**
+	 * Session replication data for isolated database environments.
+	 * Contains the raw data from production to be replicated to the target database.
+	 */
+	replicationData?: {
+		user: User & Record<string, unknown>;
+		session: Session & Record<string, unknown>;
+		account: Account & Record<string, unknown>;
+	};
 }
 
 const oAuthProxyQuerySchema = z.object({
@@ -230,6 +251,42 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							};
 						},
 					);
+
+					// Replicate session data to local database if present
+					if (opts?.replicateData && payload.replicationData) {
+						const { user, session, account } = payload.replicationData;
+
+						try {
+							// Check if user exists, create if not
+							const existingUser =
+								await ctx.context.internalAdapter.findUserById(user.id);
+							if (!existingUser) {
+								await ctx.context.internalAdapter.createUser(user);
+							}
+
+							// Check if account exists, create if not
+							if (account) {
+								const existingAccount =
+									await ctx.context.internalAdapter.findAccount(
+										account.accountId,
+									);
+								if (!existingAccount) {
+									await ctx.context.internalAdapter.createAccount(account);
+								}
+							}
+
+							// Create session with the same ID and token using adapter directly
+							// (internalAdapter.createSession ignores the ID)
+							await ctx.context.adapter.create({
+								model: "session",
+								data: session,
+								forceAllowId: true,
+							});
+						} catch (e) {
+							ctx.context.logger.error("Failed to replicate session data:", e);
+							// Continue anyway - cookies will still be set
+						}
+					}
 
 					for (const cookie of processedCookies) {
 						// using `ctx.setHeader` overrides previous Set-Cookie headers
@@ -563,6 +620,28 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							cookies: setCookies,
 							timestamp: Date.now(),
 						};
+
+						// Include session replication data if enabled
+						if (opts?.replicateData && ctx.context.newSession) {
+							const { user, session } = ctx.context.newSession;
+							// Get provider ID from callback path (/callback/:id)
+							const providerId = ctx.params?.id;
+							if (providerId) {
+								const accounts = await ctx.context.internalAdapter.findAccounts(
+									user.id,
+								);
+								const matchingAccount = accounts.find(
+									(a) => a.providerId === providerId,
+								);
+								if (matchingAccount) {
+									payload.replicationData = {
+										user,
+										session,
+										account: matchingAccount,
+									};
+								}
+							}
+						}
 
 						const encryptedCookies = await symmetricEncrypt({
 							key: ctx.context.secret,

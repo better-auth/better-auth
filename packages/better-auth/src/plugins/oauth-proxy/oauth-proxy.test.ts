@@ -753,4 +753,350 @@ describe("oauth-proxy", async () => {
 			);
 		});
 	});
+
+	describe("replicateData", () => {
+		it("should include replicationData in payload when enabled", async () => {
+			// Use currentURL to simulate preview environment making request to production
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+						replicateData: true,
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedCookies: string | null = null;
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (location && location.includes("cookies=")) {
+						const url = new URL(location);
+						encryptedCookies = url.searchParams.get("cookies");
+					}
+				},
+			});
+
+			expect(encryptedCookies).toBeTruthy();
+
+			// Decrypt and verify replicationData is present
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedCookies!,
+			});
+			const payload = parseJSON<{
+				cookies: string;
+				timestamp: number;
+				replicationData?: {
+					user: unknown;
+					session: unknown;
+					account: unknown;
+				};
+			}>(decrypted);
+
+			expect(payload.replicationData).toBeDefined();
+			expect(payload.replicationData?.user).toBeDefined();
+			expect(payload.replicationData?.session).toBeDefined();
+			expect(payload.replicationData?.account).toBeDefined();
+		});
+
+		it("should replicate session data to separate database", async () => {
+			// Production instance - handles OAuth callback
+			const production = await getTestInstance(
+				{
+					plugins: [
+						oAuthProxy({
+							currentURL: "http://preview.example.com",
+							replicateData: true,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			// Preview instance with SEPARATE database
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							replicateData: true,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const { secret } = await production.auth.$context;
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			// Step 1: Start OAuth on production
+			const res = await production.client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			// Step 2: Complete OAuth callback on production
+			let encryptedCookies: string | null = null;
+			let callbackURL: string | null = null;
+			await production.client.$fetch(
+				`/callback/google?code=test&state=${state}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						if (location && location.includes("cookies=")) {
+							const url = new URL(location);
+							encryptedCookies = url.searchParams.get("cookies");
+							callbackURL = url.searchParams.get("callbackURL");
+						}
+					},
+				},
+			);
+
+			expect(encryptedCookies).toBeTruthy();
+
+			// Verify user was created in production DB
+			const productionCtx = await production.auth.$context;
+			const productionUsers = await productionCtx.internalAdapter.listUsers();
+			expect(productionUsers.length).toBe(1);
+			expect(productionUsers[0]?.email).toBe("user@email.com");
+
+			// Verify preview DB is empty before replication
+			const previewCtx = await preview.auth.$context;
+			const previewUsersBefore = await previewCtx.internalAdapter.listUsers();
+			expect(previewUsersBefore.length).toBe(0);
+
+			// Step 3: Call oauth-proxy-callback on preview instance
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedCookies!,
+			});
+			const payload = parseJSON<{
+				cookies: string;
+				timestamp: number;
+				replicationData?: unknown;
+			}>(decrypted);
+
+			// Re-encrypt for preview (using same secret for test)
+			const previewSecret = (await preview.auth.$context).secret;
+			const reEncrypted = await symmetricEncrypt({
+				key: previewSecret,
+				data: JSON.stringify(payload),
+			});
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL!)}&cookies=${encodeURIComponent(reEncrypted)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("/dashboard");
+					},
+				},
+			);
+
+			// Step 4: Verify data was replicated to preview DB
+			const previewUsersAfter = await previewCtx.internalAdapter.listUsers();
+			expect(previewUsersAfter.length).toBe(1);
+			expect(previewUsersAfter[0]?.email).toBe("user@email.com");
+
+			// Verify account was replicated
+			const previewAccounts = await previewCtx.internalAdapter.findAccounts(
+				previewUsersAfter[0]!.id,
+			);
+			expect(previewAccounts.length).toBe(1);
+			expect(previewAccounts[0]?.providerId).toBe("google");
+
+			// Verify session was replicated
+			const previewSessions = await previewCtx.internalAdapter.listSessions(
+				previewUsersAfter[0]!.id,
+			);
+			expect(previewSessions.length).toBe(1);
+		});
+
+		it("should not include replicationData when disabled", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+						// replicateData is not set (default false)
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const state = new URL(res.url!).searchParams.get("state");
+
+			let encryptedCookies: string | null = null;
+			await client.$fetch(`/callback/google?code=test&state=${state}`, {
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (location && location.includes("cookies=")) {
+						const url = new URL(location);
+						encryptedCookies = url.searchParams.get("cookies");
+					}
+				},
+			});
+
+			expect(encryptedCookies).toBeTruthy();
+
+			// Decrypt and verify replicationData is NOT present
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedCookies!,
+			});
+			const payload = parseJSON<{
+				cookies: string;
+				timestamp: number;
+				replicationData?: unknown;
+			}>(decrypted);
+
+			expect(payload.replicationData).toBeUndefined();
+		});
+
+		it("should skip user creation if user already exists", async () => {
+			// Create preview instance
+			const preview = await getTestInstance(
+				{
+					baseURL: "http://preview.example.com",
+					plugins: [
+						oAuthProxy({
+							replicateData: true,
+						}),
+					],
+					socialProviders: {
+						google: {
+							clientId: "test",
+							clientSecret: "test",
+						},
+					},
+				},
+				{
+					disableTestUser: true,
+				},
+			);
+
+			const previewCtx = await preview.auth.$context;
+			const { secret } = previewCtx;
+
+			// Pre-create user in preview DB
+			const existingUser = await previewCtx.internalAdapter.createUser({
+				id: "existing-user-id",
+				email: "existing@email.com",
+				name: "Existing User",
+				emailVerified: true,
+			});
+
+			// Create payload with replicationData for the SAME user id
+			const payload = {
+				cookies: "session_token=test123",
+				timestamp: Date.now(),
+				replicationData: {
+					user: {
+						id: existingUser.id,
+						email: "existing@email.com",
+						name: "New Name", // Different name
+						emailVerified: true,
+					},
+					session: {
+						id: "session-id",
+						userId: existingUser.id,
+						token: "test123",
+						expiresAt: new Date(Date.now() + 86400000).toISOString(),
+						createdAt: new Date().toISOString(),
+						updatedAt: new Date().toISOString(),
+					},
+					account: {
+						id: "account-id",
+						userId: existingUser.id,
+						accountId: "google-account-id",
+						providerId: "google",
+					},
+				},
+			};
+
+			const encrypted = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payload),
+			});
+
+			await preview.client.$fetch(
+				`/oauth-proxy-callback?callbackURL=/dashboard&cookies=${encodeURIComponent(encrypted)}`,
+				{
+					onError(context) {
+						expect(context.response.status).toBe(302);
+					},
+				},
+			);
+
+			// User should still have original name (not overwritten)
+			const users = await previewCtx.internalAdapter.listUsers();
+			expect(users.length).toBe(1);
+			expect(users[0]?.name).toBe("Existing User");
+		});
+	});
 });
