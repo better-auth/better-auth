@@ -188,5 +188,36 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 			});
 			return filterTeamMemberOutput(teamMember);
 		},
+		listTeamsByUser: async ({
+			userId,
+			limit,
+			offset,
+		}: {
+			userId: string;
+			limit?: number;
+			offset?: number;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			type TeamMemberWithTeam = InferTeamMember<O, false> & {
+				team: InferTeam<O, false>;
+			};
+			const results = await adapter.findMany<TeamMemberWithTeam>({
+				model: "teamMember",
+				where: [{ field: "userId", value: userId }],
+				join: {
+					team: true,
+				},
+				limit: limit,
+				offset: offset,
+			});
+			const total = await adapter.count({
+				model: "teamMember",
+				where: [{ field: "userId", value: userId }],
+			});
+			return {
+				teams: results.map((result) => filterTeamOutput(result.team)),
+				total,
+			};
+		},
 	};
 };

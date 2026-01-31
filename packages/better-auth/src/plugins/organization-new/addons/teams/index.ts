@@ -4,6 +4,7 @@ import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { createTeam } from "./routes/create-team";
 import { listOrganizationTeams } from "./routes/list-organization-teams";
+import { listUserTeams } from "./routes/list-user-teams";
 import { removeTeam } from "./routes/remove-team";
 import { setActiveTeam } from "./routes/set-active-team";
 import { updateTeam } from "./routes/update-team";
@@ -28,6 +29,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		endpoints: {
 			createTeam: createTeam(_options),
 			listTeams: listOrganizationTeams(_options),
+			listUserTeams: listUserTeams(_options),
 			removeTeam: removeTeam(_options),
 			setActiveTeam: setActiveTeam(_options),
 			updateTeam: updateTeam(_options),
