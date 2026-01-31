@@ -175,7 +175,8 @@ describe("accept invitation", async (it) => {
 		const session = await auth.api.getSession({
 			headers: invitedHeaders,
 		});
-		expect(session?.session.activeOrganizationId).toBe(testOrg.id);
+		//@ts-expect-error - session is not defined
+		expect(session?.session?.activeOrganizationId).toBe(testOrg.id);
 	});
 
 	it("should accept invitation with email case insensitively", async () => {

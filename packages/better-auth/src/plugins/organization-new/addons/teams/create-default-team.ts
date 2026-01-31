@@ -3,6 +3,7 @@ import type { User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import type { Organization } from "../../schema";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
+import type { RealTeamId } from "./helpers/get-team-adapter";
 import { getTeamAdapter } from "./helpers/get-team-adapter";
 import { getHook } from "./helpers/get-team-hook";
 import type { Team } from "./schema";
@@ -34,11 +35,14 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 				const result = await customCreateDefaultTeam(organization, ctx);
 				return result as unknown as Result;
 			}
-			const mutate = await teamHook.before({
-				team: teamData,
-				user,
-				organization,
-			});
+			const mutate = await teamHook.before(
+				{
+					team: teamData,
+					user,
+					organization,
+				},
+				ctx,
+			);
 			const result = await adapter.createTeam({
 				...teamData,
 				...(mutate ?? {}),
@@ -51,11 +55,11 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 	}
 
-	await teamHook.after({ organization, team, user });
+	await teamHook.after({ organization, team, user }, ctx);
 
 	try {
 		await adapter.createTeamMember({
-			teamId: team.id,
+			teamId: team.id as unknown as RealTeamId,
 			userId: user.id,
 		});
 	} catch (error) {
