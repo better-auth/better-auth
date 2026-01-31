@@ -30,23 +30,18 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			...options?.advanced,
 		},
 	};
-	const expirationTime = new Date(Date.now() + 1000 * 60 * 5);
-	const currentTime = new Date();
-	const maxAgeInSeconds = Math.floor(
-		(expirationTime.getTime() - currentTime.getTime()) / 1000,
-	);
+	const maxAgeInSeconds = 60 * 5; // 5 minutes
 
 	return {
 		id: "passkey",
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
 				opts,
-				{ maxAgeInSeconds, expirationTime },
+				{ maxAgeInSeconds },
 			),
 			generatePasskeyAuthenticationOptions:
 				generatePasskeyAuthenticationOptions(opts, {
 					maxAgeInSeconds,
-					expirationTime,
 				}),
 			verifyPasskeyRegistration: verifyPasskeyRegistration(opts),
 			verifyPasskeyAuthentication: verifyPasskeyAuthentication(opts),
