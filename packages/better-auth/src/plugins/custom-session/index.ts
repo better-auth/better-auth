@@ -7,9 +7,9 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
 import * as z from "zod";
 import { getSession } from "../../api";
-import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
 declare module "@better-auth/core" {
@@ -57,8 +57,8 @@ export const customSession = <
 >(
 	fn: (
 		session: {
-			user: InferUser<O>;
-			session: InferSession<O>;
+			user: User<O["user"], O["plugins"]>;
+			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
