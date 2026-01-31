@@ -5,6 +5,7 @@ import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { parseJSON } from "../../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import { getDate } from "../../../utils/date";
+import type { RealTeamId } from "../addons/teams/helpers/get-team-adapter";
 import type {
 	InvitationInput,
 	Member,
@@ -20,7 +21,6 @@ import type {
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
-import type { RealTeamId } from "../addons/teams/helpers/get-team-adapter";
 
 /**
  * This branded ID exists as a measure to prevent accidentally providing an un-checked organizationId that could be a slug
