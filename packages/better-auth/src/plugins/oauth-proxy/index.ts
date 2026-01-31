@@ -526,21 +526,40 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						// Extract state cookie from response headers
-						const headers = ctx.context.responseHeaders;
-						const setCookieHeader = headers?.get("set-cookie");
-						if (!setCookieHeader) {
-							return;
+						// Get state value based on storage strategy
+						let stateCookieValue: string | undefined;
+
+						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
+							// Cookie mode: extract from response headers
+							const headers = ctx.context.responseHeaders;
+							const setCookieHeader = headers?.get("set-cookie");
+							if (setCookieHeader) {
+								const stateCookie = ctx.context.createAuthCookie("oauth_state");
+								const parsedStateCookies =
+									parseSetCookieHeader(setCookieHeader);
+								const stateCookieAttrs = parsedStateCookies.get(
+									stateCookie.name,
+								);
+								stateCookieValue = stateCookieAttrs?.value;
+							}
+						} else if (opts?.replicateData) {
+							// Database mode with replicateData: read from DB
+							const verification =
+								await ctx.context.internalAdapter.findVerificationValue(
+									originalState,
+								);
+							if (verification) {
+								// Encrypt the verification value so it matches cookie mode format
+								stateCookieValue = await symmetricEncrypt({
+									key: ctx.context.secret,
+									data: verification.value,
+								});
+							}
 						}
 
-						const stateCookie = ctx.context.createAuthCookie("oauth_state");
-						const parsedStateCookies = parseSetCookieHeader(setCookieHeader);
-						const stateCookieAttrs = parsedStateCookies.get(stateCookie.name);
-						if (!stateCookieAttrs?.value) {
+						if (!stateCookieValue) {
 							return;
 						}
-
-						const stateCookieValue = stateCookieAttrs.value;
 
 						try {
 							// Create and encrypt state package
