@@ -660,8 +660,7 @@ describe("oauth-proxy", async () => {
 				{
 					onError(context) {
 						const location = context.response.headers.get("location");
-						expect(location).toContain("error");
-						expect(location).toContain("expired");
+						expect(location).toContain("error=PAYLOAD_EXPIRED");
 					},
 				},
 			);
@@ -712,8 +711,7 @@ describe("oauth-proxy", async () => {
 				{
 					onError(context) {
 						const location = context.response.headers.get("location");
-						expect(location).toContain("error");
-						expect(location).toContain("expired");
+						expect(location).toContain("error=PAYLOAD_EXPIRED");
 					},
 				},
 			);

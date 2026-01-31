@@ -71,3 +71,15 @@ export function checkSkipProxy(
 
 	return productionOrigin === currentOrigin;
 }
+
+/**
+ * Redirect to error URL with error code
+ */
+export function redirectOnError(
+	ctx: GenericEndpointContext,
+	errorURL: string,
+	error: string,
+): never {
+	const sep = errorURL.includes("?") ? "&" : "?";
+	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
+}

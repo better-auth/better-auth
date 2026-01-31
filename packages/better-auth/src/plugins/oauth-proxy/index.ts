@@ -15,8 +15,14 @@ import type { StateData } from "../../state";
 import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
+import { OAUTH_PROXY_ERROR_CODES } from "./error-codes";
 import type { OAuthProxyStatePackage } from "./types";
-import { checkSkipProxy, resolveCurrentURL, stripTrailingSlash } from "./utils";
+import {
+	checkSkipProxy,
+	redirectOnError,
+	resolveCurrentURL,
+	stripTrailingSlash,
+} from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -58,6 +64,7 @@ export interface OAuthProxyOptions {
  * Passthrough payload containing OAuth profile data.
  * Used to transfer OAuth credentials from production to preview
  * without creating user/session on production.
+ * @internal
  */
 interface PassthroughPayload {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
@@ -70,13 +77,18 @@ interface PassthroughPayload {
 	timestamp: number;
 }
 
-const oAuthProxyQuerySchema = z.object({
+const oauthProxyQuerySchema = z.object({
 	callbackURL: z.string().meta({
 		description: "The URL to redirect to after the proxy",
 	}),
 	profile: z.string().optional().meta({
-		description: "Encrypted OAuth profile data (passthrough mode)",
+		description: "Encrypted OAuth profile data",
 	}),
+});
+
+const oauthCallbackQuerySchema = z.object({
+	code: z.string().optional(),
+	error: z.string().optional(),
 });
 
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
@@ -91,7 +103,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				{
 					method: "GET",
 					operationId: "oauthProxyCallback",
-					query: oAuthProxyQuerySchema,
+					query: oauthProxyQuerySchema,
 					use: [originCheck((ctx) => ctx.query.callbackURL)],
 					metadata: {
 						openapi: {
@@ -108,8 +120,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 									in: "query",
 									name: "profile",
 									required: false,
-									description:
-										"Encrypted OAuth profile data (passthrough mode)",
+									description: "Encrypted OAuth profile data",
 								},
 							],
 							responses: {
@@ -129,18 +140,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
-					const encryptedProfile = ctx.query.profile;
+					const defaultErrorURL =
+						ctx.context.options.onAPIError?.errorURL ||
+						`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
 
+					const encryptedProfile = ctx.query.profile;
 					if (!encryptedProfile) {
 						ctx.context.logger.error(
-							"OAuth proxy callback missing profile data",
+							OAUTH_PROXY_ERROR_CODES.MISSING_PROFILE.message,
 						);
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
-
-						throw ctx.redirect(
-							`${errorURL}?error=OAuthProxy - Missing profile data`,
+						throw redirectOnError(
+							ctx,
+							defaultErrorURL,
+							OAUTH_PROXY_ERROR_CODES.MISSING_PROFILE.code,
 						);
 					}
 
@@ -153,15 +165,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						});
 					} catch (e) {
 						ctx.context.logger.error(
-							"Failed to decrypt OAuth proxy profile:",
+							OAUTH_PROXY_ERROR_CODES.INVALID_PROFILE.message,
 							e,
 						);
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
-
-						throw ctx.redirect(
-							`${errorURL}?error=OAuthProxy - Invalid profile or secret mismatch`,
+						throw redirectOnError(
+							ctx,
+							defaultErrorURL,
+							OAUTH_PROXY_ERROR_CODES.INVALID_PROFILE.code,
 						);
 					}
 
@@ -169,65 +179,57 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					try {
 						payload = parseJSON<PassthroughPayload>(decryptedPayload);
 					} catch (e) {
-						ctx.context.logger.error("Failed to parse OAuth proxy payload:", e);
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
-
-						throw ctx.redirect(
-							`${errorURL}?error=OAuthProxy - Invalid payload format`,
+						ctx.context.logger.error(
+							OAUTH_PROXY_ERROR_CODES.INVALID_PAYLOAD.message,
+							e,
+						);
+						throw redirectOnError(
+							ctx,
+							defaultErrorURL,
+							OAUTH_PROXY_ERROR_CODES.INVALID_PAYLOAD.code,
 						);
 					}
 
-					// Validate timestamp to prevent replay attacks
+					const errorURL = payload.errorURL || defaultErrorURL;
+
+					// Allow up to 10 seconds of future skew for clock skew
 					const now = Date.now();
 					const age = (now - payload.timestamp) / 1000;
-
-					// Allow up to 10 seconds of future skew for clock differences
 					if (age > maxAge || age < -10) {
 						ctx.context.logger.error(
-							`OAuth proxy payload expired or invalid (age: ${age}s, maxAge: ${maxAge}s)`,
+							`${OAUTH_PROXY_ERROR_CODES.PAYLOAD_EXPIRED.message} (age: ${age}s, maxAge: ${maxAge}s)`,
 						);
-						const errorURL =
-							ctx.context.options.onAPIError?.errorURL ||
-							`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
-
-						throw ctx.redirect(
-							`${errorURL}?error=OAuthProxy - Payload expired or invalid`,
+						throw redirectOnError(
+							ctx,
+							errorURL,
+							OAUTH_PROXY_ERROR_CODES.PAYLOAD_EXPIRED.code,
 						);
 					}
 
-					const errorURL =
-						payload.errorURL ||
-						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
-
-					// Create user/account/session locally using handleOAuthUserInfo
 					const result = await handleOAuthUserInfo(ctx, {
 						userInfo: payload.userInfo,
 						account: payload.account,
 						callbackURL: payload.callbackURL,
 						disableSignUp: payload.disableSignUp,
 					});
-
-					if (result.error) {
+					if (result.error || !result.data) {
 						ctx.context.logger.error(
-							"OAuth proxy user creation failed:",
+							OAUTH_PROXY_ERROR_CODES.USER_CREATION_FAILED.message,
 							result.error,
 						);
-						throw ctx.redirect(
-							`${errorURL}?error=${result.error.split(" ").join("_")}`,
+						throw redirectOnError(
+							ctx,
+							errorURL,
+							OAUTH_PROXY_ERROR_CODES.USER_CREATION_FAILED.code,
 						);
 					}
 
-					// Set session cookie
-					await setSessionCookie(ctx, result.data!);
+					await setSessionCookie(ctx, result.data);
 
-					// Clean up OAuth state (expires cookie and deletes verification)
 					try {
 						await parseGenericState(ctx, payload.state);
-					} catch {
-						// State may already be cleaned up or expired, ignore errors
+					} catch (e) {
+						ctx.context.logger.warn("Failed to clean up OAuth state", e);
 					}
 
 					// Redirect to final callback URL
@@ -306,20 +308,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						if (
-							!statePackage?.isOAuthProxy ||
-							!statePackage?.state ||
-							!statePackage?.stateCookie
+							!statePackage.isOAuthProxy ||
+							!statePackage.state ||
+							!statePackage.stateCookie
 						) {
+							ctx.context.logger.warn("Invalid OAuth proxy state package");
 							return;
 						}
 
-						// This is an OAuth proxy callback - handle passthrough
-						// Instead of letting the normal callback create user/session,
-						// we do token exchange here and redirect to preview with profile data
-
-						const code = ctx.query?.code;
-						const error = ctx.query?.error;
-						const errorDescription = ctx.query?.error_description;
+						const query = oauthCallbackQuerySchema.safeParse(ctx.query);
+						if (!query.success) {
+							ctx.context.logger.warn(
+								"Invalid OAuth callback query",
+								query.error,
+							);
+							return;
+						}
+						const { code, error } = query.data;
 
 						// Decrypt state to get codeVerifier and callbackURL
 						let stateData: StateData;
@@ -337,23 +342,21 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						const defaultErrorURL =
+						const errorURL =
 							stateData.errorURL ||
 							ctx.context.options.onAPIError?.errorURL ||
 							`${ctx.context.baseURL}/error`;
-
-						// Handle OAuth provider errors
 						if (error) {
-							const params = new URLSearchParams({ error });
-							if (errorDescription) {
-								params.set("error_description", errorDescription);
-							}
-							throw ctx.redirect(`${defaultErrorURL}?${params.toString()}`);
+							throw redirectOnError(ctx, errorURL, error);
 						}
 
-						if (!code || typeof code !== "string") {
-							ctx.context.logger.error("OAuth proxy: code not found");
-							throw ctx.redirect(`${defaultErrorURL}?error=no_code`);
+						if (!code) {
+							ctx.context.logger.error(OAUTH_PROXY_ERROR_CODES.NO_CODE.message);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.NO_CODE.code,
+							);
 						}
 
 						// Find the OAuth provider
@@ -361,11 +364,15 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const provider = ctx.context.socialProviders.find(
 							(p) => p.id === providerId,
 						);
-
 						if (!provider) {
-							ctx.context.logger.error("OAuth provider not found:", providerId);
-							throw ctx.redirect(
-								`${defaultErrorURL}?error=oauth_provider_not_found`,
+							ctx.context.logger.error(
+								OAUTH_PROXY_ERROR_CODES.PROVIDER_NOT_FOUND.message,
+								providerId,
+							);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.PROVIDER_NOT_FOUND.code,
 							);
 						}
 
@@ -379,14 +386,22 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							});
 						} catch (e) {
 							ctx.context.logger.error(
-								"OAuth proxy: failed to validate authorization code:",
+								OAUTH_PROXY_ERROR_CODES.INVALID_CODE.message,
 								e,
 							);
-							throw ctx.redirect(`${defaultErrorURL}?error=invalid_code`);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.INVALID_CODE.code,
+							);
 						}
 
 						if (!tokens) {
-							throw ctx.redirect(`${defaultErrorURL}?error=invalid_code`);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.INVALID_CODE.code,
+							);
 						}
 
 						// Get user info from provider
@@ -394,28 +409,32 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const userInfo = userInfoResult?.user;
 
 						if (!userInfo) {
-							ctx.context.logger.error("OAuth proxy: unable to get user info");
-							throw ctx.redirect(
-								`${defaultErrorURL}?error=unable_to_get_user_info`,
+							ctx.context.logger.error(
+								OAUTH_PROXY_ERROR_CODES.UNABLE_TO_GET_USER_INFO.message,
+							);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.UNABLE_TO_GET_USER_INFO.code,
 							);
 						}
 
 						if (!userInfo.email) {
 							ctx.context.logger.error(
-								"OAuth proxy: provider did not return email",
+								OAUTH_PROXY_ERROR_CODES.EMAIL_NOT_FOUND.message,
 							);
-							throw ctx.redirect(`${defaultErrorURL}?error=email_not_found`);
+							throw redirectOnError(
+								ctx,
+								errorURL,
+								OAUTH_PROXY_ERROR_CODES.EMAIL_NOT_FOUND.code,
+							);
 						}
 
-						// The stateData.callbackURL is the proxy callback URL:
-						// http://preview.example.com/api/auth/oauth-proxy-callback?callbackURL=<finalURL>
-						// Extract the final callbackURL from the query parameter
 						const proxyCallbackURL = new URL(stateData.callbackURL);
 						const finalCallbackURL =
 							proxyCallbackURL.searchParams.get("callbackURL") ||
 							stateData.callbackURL;
 
-						// Create passthrough payload with OAuth profile data
 						const payload: PassthroughPayload = {
 							userInfo: {
 								id: String(userInfo.id),
@@ -444,7 +463,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							timestamp: Date.now(),
 						};
 
-						// Encrypt the payload
 						const encryptedPayload = await symmetricEncrypt({
 							key: ctx.context.secret,
 							data: JSON.stringify(payload),
@@ -496,9 +514,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						// Get state value based on storage strategy
 						let stateCookieValue: string | undefined;
-
 						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
-							// Cookie mode: extract from response headers
+							// Cookie mode - extract from response headers
 							const headers = ctx.context.responseHeaders;
 							const setCookieHeader = headers?.get("set-cookie");
 							if (setCookieHeader) {
@@ -508,7 +525,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								stateCookieValue = stateCookieAttrs?.value;
 							}
 						} else {
-							// Database mode: read from DB
+							// Database mode - read from DB
 							const verification =
 								await ctx.context.internalAdapter.findVerificationValue(
 									originalState,
@@ -521,8 +538,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								});
 							}
 						}
-
 						if (!stateCookieValue) {
+							ctx.context.logger.warn("No OAuth state cookie value found");
 							return;
 						}
 
@@ -560,9 +577,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						return context.path === "/callback/:id";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
-						// This after hook handles same-origin callbacks
-						// For cross-origin, the before hook already redirected with passthrough
-
 						const headers = ctx.context.responseHeaders;
 						const location = headers?.get("location");
 
@@ -592,8 +606,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						// Cross-origin should have been handled by before hook (passthrough)
-						// If we reach here, something unexpected happened
+						// Cross-origin should have been handled by before hook
 						ctx.context.logger.warn(
 							"OAuth proxy: cross-origin callback reached after hook unexpectedly",
 						);
@@ -601,5 +614,6 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				},
 			],
 		},
+		$ERROR_CODES: OAUTH_PROXY_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
