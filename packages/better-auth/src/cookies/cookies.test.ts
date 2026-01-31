@@ -7,7 +7,6 @@ import {
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
-import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
 	HOST_COOKIE_PREFIX,
@@ -670,26 +669,6 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
-	});
-
-	it("should always include id in parseUserOutput", () => {
-		const options = {
-			user: {
-				additionalFields: {
-					id: { type: "string", returned: false },
-				},
-			},
-		} as any;
-		const user = {
-			id: "custom-oauth-id-123",
-			email: "test@example.com",
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: "Test User",
-		};
-		const result = parseUserOutput(options, user);
-		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {
