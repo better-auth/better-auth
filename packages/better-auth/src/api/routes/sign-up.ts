@@ -7,16 +7,16 @@ import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string(),
 		email: z.email(),
 		password: z.string().nonempty(),
+		name: z.string().nullish(),
 		image: z.string().optional(),
 		callbackURL: z.string().optional(),
 		rememberMe: z.boolean().optional(),
@@ -38,16 +38,16 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				],
 				$Infer: {
 					body: {} as {
-						name: string;
 						email: string;
 						password: string;
+						name?: string | null | undefined;
 						image?: string | undefined;
 						callbackURL?: string | undefined;
 						rememberMe?: boolean | undefined;
 					} & AdditionalUserFieldsInput<O>,
 					returned: {} as {
 						token: string | null;
-						user: InferUser<O>;
+						user: User<O["user"], O["plugins"]>;
 					},
 				},
 				openapi: {
@@ -86,7 +86,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												"If this is false, the session will not be remembered. Default is `true`.",
 										},
 									},
-									required: ["name", "email", "password"],
+									required: ["email", "password"],
 								},
 							},
 						},
@@ -118,6 +118,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 													},
 													name: {
 														type: "string",
+														nullable: true,
 														description: "The name of the user",
 													},
 													image: {
@@ -144,7 +145,6 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 												required: [
 													"id",
 													"email",
-													"name",
 													"emailVerified",
 													"createdAt",
 													"updatedAt",
@@ -325,10 +325,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					return ctx.json({
 						token: null,
-						user: parseUserOutput(
-							ctx.context.options,
-							createdUser,
-						) as InferUser<O>,
+						user: parseUserOutput(ctx.context.options, createdUser) as User<
+							O["user"],
+							O["plugins"]
+						>,
 					});
 				}
 
@@ -352,10 +352,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: parseUserOutput(
-						ctx.context.options,
-						createdUser,
-					) as InferUser<O>,
+					user: parseUserOutput(ctx.context.options, createdUser) as User<
+						O["user"],
+						O["plugins"]
+					>,
 				});
 			});
 		},
