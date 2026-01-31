@@ -77,7 +77,7 @@ export type FieldAttributeToObject<
 		? {}
 		: AddOptionalFields<
 				{
-					[K in keyof Fields]: InferValueType<Fields[K]["type"]>;
+					[K in keyof Fields]: InferDBValueType<Fields[K]["type"]>;
 				},
 				Fields
 			>;
