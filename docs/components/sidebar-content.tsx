@@ -2627,7 +2627,72 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
+<<<<<<< HEAD
 				group: true,
+=======
+				children: [
+					{
+						title: "invalid_callback_request",
+						href: "/docs/reference/errors/invalid_callback_request",
+						icon: () => null,
+					},
+					{
+						title: "state_not_found",
+						href: "/docs/reference/errors/state_not_found",
+						icon: () => null,
+					},
+					{
+						title: "state_mismatch",
+						href: "/docs/reference/errors/state_mismatch",
+						icon: () => null,
+					},
+					{
+						title: "no_code",
+						href: "/docs/reference/errors/no_code",
+						icon: () => null,
+					},
+					{
+						title: "no_callback_url",
+						href: "/docs/reference/errors/no_callback_url",
+						icon: () => null,
+					},
+					{
+						title: "oauth_provider_not_found",
+						href: "/docs/reference/errors/oauth_provider_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_not_found",
+						href: "/docs/reference/errors/email_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_doesn't_match",
+						href: "/docs/reference/errors/email_doesn't_match",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_get_user_info",
+						href: "/docs/reference/errors/unable_to_get_user_info",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_link_account",
+						href: "/docs/reference/errors/unable_to_link_account",
+						icon: () => null,
+					},
+					{
+						title: "account_already_linked_to_different_user",
+						href: "/docs/reference/errors/account_already_linked_to_different_user",
+						icon: () => null,
+					},
+					{
+						title: "signup_disabled",
+						href: "/docs/reference/errors/signup_disabled",
+						icon: () => null,
+					},
+				],
+>>>>>>> upstream/canary
 			},
 			{
 				title: "Contributing",
