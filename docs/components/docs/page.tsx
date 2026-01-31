@@ -208,7 +208,14 @@ function EditOnGitHub({
 	path,
 	...props
 }: EditOnGitHubOptions) {
-	const href = `https://github.com/${owner}/${repo}/blob/${branch}/${path.startsWith("/") ? path.slice(1) : path}`;
+	const isErrorPage = path.includes("/reference/errors/");
+	const errorCode = path.split("/").pop()!.split(".mdx")[0]!.toUpperCase();
+	const searchQuery = isErrorPage
+		? `repo:${owner}/${repo} defineErrorCodes ${errorCode}`
+		: path;
+	const href = isErrorPage
+		? `https://github.com/search?q=${searchQuery}&type=code`
+		: `https://github.com/${owner}/${repo}/blob/${branch}/${path.startsWith("/") ? path.slice(1) : path}`;
 
 	return (
 		<a
