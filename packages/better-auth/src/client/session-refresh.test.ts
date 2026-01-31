@@ -163,6 +163,7 @@ describe("session-refresh", () => {
 
 		// Now trigger a focus event (after rate limit window)
 		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
 
 		// Signal should change because rate limit has expired
 		expect(signalChangeCount).toBeGreaterThan(initialSignalCount);
@@ -208,6 +209,7 @@ describe("session-refresh", () => {
 
 		// Trigger a visibilitychange event with session data to set lastSessionRequest
 		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
 		const signalCountAfterFirstFocus = signalChangeCount;
 		expect(signalCountAfterFirstFocus).toBeGreaterThan(0);
 
@@ -222,6 +224,7 @@ describe("session-refresh", () => {
 
 		// Immediately trigger another focus event (within rate limit window)
 		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
 
 		// Signal should NOT change because rate limit should apply even when session is null
 		expect(signalChangeCount).toBe(signalCountAfterFirstFocus);
@@ -267,6 +270,7 @@ describe("session-refresh", () => {
 
 		// Trigger a visibilitychange event with session data to set lastSessionRequest
 		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
 		const signalCountAfterFirstFocus = signalChangeCount;
 		expect(signalCountAfterFirstFocus).toBeGreaterThan(0);
 
@@ -281,6 +285,7 @@ describe("session-refresh", () => {
 
 		// Immediately trigger another focus event (within rate limit window)
 		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
 
 		// Signal should NOT change because rate limit should apply even when session is undefined
 		expect(signalChangeCount).toBe(signalCountAfterFirstFocus);
@@ -390,5 +395,223 @@ describe("session-refresh", () => {
 		unsubscribeSignal();
 		manager.cleanup();
 		onlineManager.setOnline(true);
+	});
+
+	it("should call POST when server returns needsRefresh: true", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		const refreshedSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1", expiresAt: new Date() },
+		};
+
+		const mockFetch = vi.fn(
+			async (url: string, options?: { method?: string }) => {
+				if (options?.method === "POST") {
+					return {
+						data: refreshedSessionData,
+						error: null,
+					};
+				}
+				return {
+					data: {
+						user: { id: "1", email: "test@test.com" },
+						session: { id: "session-1" },
+						needsRefresh: true,
+					},
+					error: null,
+				};
+			},
+		);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetch).toHaveBeenCalledWith("/get-session");
+		expect(mockFetch).toHaveBeenCalledWith("/get-session", { method: "POST" });
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedSessionData);
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should not call POST when server returns needsRefresh: false", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		const mockFetch = vi.fn(async () => ({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+				needsRefresh: false,
+			},
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetch).toHaveBeenCalledWith("/get-session");
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should not call POST when needsRefresh is undefined (deferSessionRefresh not enabled)", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		const mockFetch = vi.fn(async () => ({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+		}));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchInterval: 5,
+				},
+			},
+		});
+
+		manager.init();
+
+		await vi.advanceTimersByTimeAsync(5000);
+
+		expect(mockFetch).toHaveBeenCalledWith("/get-session");
+		expect(mockFetch).toHaveBeenCalledTimes(1);
+
+		manager.cleanup();
+		vi.useRealTimers();
+	});
+
+	it("should call POST on visibilitychange when needsRefresh: true", async () => {
+		vi.useFakeTimers();
+
+		const sessionAtom: SessionAtom = atom({
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
+			error: null,
+			isPending: false,
+			isRefetching: false,
+		});
+		const sessionSignal = atom(false);
+
+		const refreshedSessionData = {
+			user: { id: "1", email: "test@test.com" },
+			session: { id: "session-1", expiresAt: new Date() },
+		};
+
+		const mockFetch = vi.fn(
+			async (url: string, options?: { method?: string }) => {
+				if (options?.method === "POST") {
+					return {
+						data: refreshedSessionData,
+						error: null,
+					};
+				}
+				return {
+					data: {
+						user: { id: "1", email: "test@test.com" },
+						session: { id: "session-1" },
+						needsRefresh: true,
+					},
+					error: null,
+				};
+			},
+		);
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {
+				sessionOptions: {
+					refetchOnWindowFocus: true,
+				},
+			},
+		});
+
+		manager.init();
+
+		manager.triggerRefetch({ event: "visibilitychange" });
+		await vi.runAllTimersAsync();
+
+		expect(mockFetch).toHaveBeenCalledWith("/get-session");
+		expect(mockFetch).toHaveBeenCalledWith("/get-session", { method: "POST" });
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+
+		const updatedSession = sessionAtom.get();
+		expect(updatedSession.data).toEqual(refreshedSessionData);
+
+		manager.cleanup();
+		vi.useRealTimers();
 	});
 });

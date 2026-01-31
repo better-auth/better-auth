@@ -274,9 +274,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -462,12 +460,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	const toBeIndexed: CreateIndexBuilder[] = [];
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
-	}
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {

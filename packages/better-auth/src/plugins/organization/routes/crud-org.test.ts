@@ -112,8 +112,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(403);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.code,
 		);
 	});
 
@@ -127,8 +127,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
 		);
 	});
 
