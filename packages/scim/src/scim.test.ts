@@ -841,7 +841,6 @@ describe("SCIM", () => {
 			const user = await response.json();
 			expect(user).toMatchObject({
 				active: true,
-				displayName: "the-username",
 				emails: [
 					{
 						primary: true,
@@ -856,14 +855,14 @@ describe("SCIM", () => {
 					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
-				name: {
-					formatted: "the-username",
-				},
 				schemas: expect.arrayContaining([
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "the-username",
 			});
+			// When no name is provided, displayName and name should be undefined
+			expect(user.displayName).toBeUndefined();
+			expect(user.name).toBeUndefined();
 		});
 
 		it("should create a new account linked to an existing user", async () => {
@@ -936,7 +935,6 @@ describe("SCIM", () => {
 
 			expect(user).toMatchObject({
 				active: true,
-				displayName: "the-username",
 				emails: [
 					{
 						primary: true,
@@ -951,14 +949,14 @@ describe("SCIM", () => {
 					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
-				name: {
-					formatted: "the-username",
-				},
 				schemas: expect.arrayContaining([
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "the-username",
 			});
+			// When no name is provided, displayName and name should be undefined
+			expect(user.displayName).toBeUndefined();
+			expect(user.name).toBeUndefined();
 		});
 
 		it("should create a new user with name parts", async () => {
@@ -1206,7 +1204,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name.formatted).toBe("Juan Perez");
+			expect(user.name?.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			const updatedUser = await auth.api.updateSCIMUser({
@@ -1333,7 +1331,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name.formatted).toBe("Juan Perez");
+			expect(user.name?.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			await auth.api.patchSCIMUser({
@@ -1409,7 +1407,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name.formatted).toBe("Juan Perez");
+			expect(user.name?.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			await auth.api.patchSCIMUser({
@@ -1505,7 +1503,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name.formatted).toBe("Updated Value");
+			expect(updatedUser.name?.formatted).toBe("Updated Value");
 		});
 
 		it.each([
@@ -1559,7 +1557,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name.formatted).toBe("Nested User");
+			expect(updatedUser.name?.formatted).toBe("Nested User");
 			expect(updatedUser.displayName).toBe("Nested User");
 			expect(updatedUser.userName).toBe("nested-test-user-updated");
 		});
@@ -1606,7 +1604,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name.formatted).toBe("No Path Name");
+			expect(updatedUser.name?.formatted).toBe("No Path Name");
 			expect(updatedUser.userName).toBe("username");
 		});
 
@@ -1646,7 +1644,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name.formatted).toBe("User Dot");
+			expect(updatedUser.name?.formatted).toBe("User Dot");
 			expect(updatedUser.userName).toBe("username");
 		});
 
@@ -1691,7 +1689,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name.formatted).toBe("user-case");
+			expect(updatedUser.name?.formatted).toBe("user-case");
 		});
 
 		it("should skip add operation when value already exists", async () => {

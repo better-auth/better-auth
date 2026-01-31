@@ -38,20 +38,20 @@ let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: DBAdapter<BetterAuthOptions>) =>
-	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
+	<Options extends BetterAuthOptions>(adapter: DBAdapter<Options>) =>
+	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (
-	options: BetterAuthOptions,
-) => DBAdapter<BetterAuthOptions>;
+export type AdapterFactory<Options extends BetterAuthOptions> = (
+	options: Options,
+) => DBAdapter<Options>;
 
 export const createAdapterFactory =
-	({
+	<Options extends BetterAuthOptions>({
 		adapter: customAdapter,
 		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+	(options: Options): DBAdapter<Options> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -785,10 +785,8 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction:
-			| DBAdapter<BetterAuthOptions>["transaction"]
-			| null = null;
-		const adapter: DBAdapter<BetterAuthOptions> = {
+		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
@@ -1075,6 +1073,7 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
+				select,
 				sortBy,
 				offset,
 				join: unsafeJoin,
@@ -1082,6 +1081,7 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
+				select?: string[] | undefined;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
 				join?: JoinOption;
@@ -1102,13 +1102,10 @@ export const createAdapterFactory =
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(
-						unsafeModel,
-						unsafeJoin,
-						undefined,
-					);
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
+						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					const experimentalJoins = options.experimental?.joins;
@@ -1129,6 +1126,7 @@ export const createAdapterFactory =
 					model,
 					where,
 					limit: limit,
+					select,
 					sortBy,
 					offset,
 					join: passJoinToAdapter ? join : undefined,

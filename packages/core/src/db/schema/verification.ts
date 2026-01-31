@@ -1,4 +1,9 @@
 import * as z from "zod";
+import type { BetterAuthOptions, Prettify } from "../../types";
+import type {
+	InferDBFieldsFromOptions,
+	InferDBFieldsFromPlugins,
+} from "../type";
 import { coreSchema } from "./shared";
 
 export const verificationSchema = coreSchema.extend({
@@ -7,9 +12,17 @@ export const verificationSchema = coreSchema.extend({
 	identifier: z.string(),
 });
 
+export type BaseVerification = z.infer<typeof verificationSchema>;
+
 /**
  * Verification schema type used by better-auth, note that it's possible that verification could have additional fields
- *
- * todo: we should use generics to extend this type with additional fields from plugins and options in the future
  */
-export type Verification = z.infer<typeof verificationSchema>;
+export type Verification<
+	DBOptions extends
+		BetterAuthOptions["verification"] = BetterAuthOptions["verification"],
+	Plugins extends BetterAuthOptions["plugins"] = BetterAuthOptions["plugins"],
+> = Prettify<
+	BaseVerification &
+		InferDBFieldsFromOptions<DBOptions> &
+		InferDBFieldsFromPlugins<"verification", Plugins>
+>;

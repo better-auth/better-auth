@@ -221,7 +221,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			}
 
 			const email = getUserPrimaryEmail(body.userName, body.emails);
-			const name = getUserFullName(email, body.name);
+			const name = getUserFullName(body.name);
 
 			const existingUser = await ctx.context.adapter.findOne<User>({
 				model: "user",
@@ -352,7 +352,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				await ctx.context.adapter.transaction<[User | null, Account | null]>(
 					async () => {
 						const email = getUserPrimaryEmail(body.userName, body.emails);
-						const name = getUserFullName(email, body.name);
+						const name = getUserFullName(body.name);
 
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							userId,

@@ -369,7 +369,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 							const newUser = await ctx.context.internalAdapter.createUser({
 								email: email,
 								emailVerified: true,
-								name: name || "",
+								name,
 							});
 							isNewUser = true;
 							user = newUser;

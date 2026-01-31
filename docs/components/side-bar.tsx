@@ -23,7 +23,7 @@ export default function ArticleLayout() {
 			item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
-					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)),
+					listItem.children?.some((child) => child.href === pathname),
 			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
@@ -78,6 +78,7 @@ export default function ArticleLayout() {
 										<item.Icon className="size-5" />
 										<span className="grow">{item.title}</span>
 										{item.isNew && <NewBadge />}
+										{item.isUpdated && <UpdatedBadge />}
 										<motion.div
 											animate={{ rotate: currentOpen === index ? 180 : 0 }}
 										>
@@ -134,6 +135,22 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 	);
 }
 
+function UpdatedBadge({ isSelected }: { isSelected?: boolean }) {
+	return (
+		<div className="flex items-center justify-end w-full">
+			<Badge
+				className={cn(
+					" pointer-events-none !no-underline border-dashed !decoration-transparent",
+					isSelected && "!border-solid",
+				)}
+				variant={isSelected ? "default" : "outline"}
+			>
+				Updated
+			</Badge>
+		</div>
+	);
+}
+
 function SidebarListItem({
 	listItem,
 	pathname,
@@ -163,6 +180,7 @@ function SidebarListItem({
 		return (
 			<div>
 				<AsideLink
+					hasSubpages={listItem.children && listItem.children.length > 0}
 					href={listItem.href}
 					startWith="/docs"
 					title={listItem.title}
@@ -174,6 +192,7 @@ function SidebarListItem({
 					</div>
 					{listItem.title}
 					{listItem.isNew && <NewBadge />}
+					{listItem.isUpdated && <UpdatedBadge />}
 				</AsideLink>
 				<AnimatePresence initial={false}>
 					{showChildren && (
@@ -187,8 +206,11 @@ function SidebarListItem({
 							<div className="relative">
 								{/* Vertical line overlay */}
 								<div className="absolute left-7 top-0 bottom-0 w-px bg-border pointer-events-none z-10" />
-								{listItem.children?.map((child) =>
-									child.group ? (
+								{listItem.children?.map((child) => {
+									const icon = child.icon({
+										className: "text-stone-950 dark:text-white",
+									});
+									return child.group ? (
 										<div
 											key={child.title}
 											className="flex flex-row items-center gap-2 mx-5 pl-6 my-1"
@@ -225,15 +247,14 @@ function SidebarListItem({
 												className="break-words pl-11 text-nowrap w-full [&>div>div]:hover:!bg-fd-muted"
 												activeClassName="[&>div>div]:!bg-fd-muted"
 											>
-												<div className="min-w-4">
-													<child.icon className="text-stone-950 dark:text-white" />
-												</div>
+												{icon && <div className="min-w-4">{icon}</div>}
 												{child.title}
 												{child.isNew && <NewBadge />}
+												{child.isUpdated && <UpdatedBadge />}
 											</AsideLink>
 										</Suspense>
-									),
-								)}
+									);
+								})}
 							</div>
 						</motion.div>
 					)}
@@ -273,6 +294,7 @@ function SidebarListItem({
 				</div>
 				{listItem.title}
 				{listItem.isNew && <NewBadge />}
+				{listItem.isUpdated && <UpdatedBadge />}
 			</AsideLink>
 		</Suspense>
 	);
