@@ -1,5 +1,5 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import type { EndpointContext } from "better-call";
 import { getOrigin } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
@@ -29,7 +29,7 @@ function getVendorBaseURL() {
  * Resolve the current URL from various sources
  */
 export function resolveCurrentURL(
-	ctx: EndpointContext<string, any>,
+	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
 	return new URL(
@@ -44,7 +44,7 @@ export function resolveCurrentURL(
  * Check if the proxy should be skipped for this request
  */
 export function checkSkipProxy(
-	ctx: EndpointContext<string, any>,
+	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
 	// If skip proxy header is set, we don't need to proxy
@@ -53,12 +53,15 @@ export function checkSkipProxy(
 		return true;
 	}
 
-	const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+	// Determine production URL (fallback to baseURL if not set)
+	const productionURL =
+		opts?.productionURL || env.BETTER_AUTH_URL || ctx.context.baseURL;
 	if (!productionURL) {
 		return false;
 	}
 
-	const currentURL = ctx.request?.url || getVendorBaseURL();
+	// Determine current URL from request or vendor env vars
+	const currentURL = opts?.currentURL || ctx.request?.url || getVendorBaseURL();
 	if (!currentURL) {
 		return false;
 	}
