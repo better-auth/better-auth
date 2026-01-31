@@ -398,37 +398,32 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							internalAdapter: ctx.context.internalAdapter,
 						};
 
-						// For cookie mode only: inject fake verification since it doesn't exist in DB
-						// For database mode, the verification exists in the DB, so we use the real adapter
-						if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
-							const originalAdapter = ctx.context.internalAdapter;
-							const capturedStatePackage = statePackage;
-							ctx.context.oauthConfig.storeStateStrategy = "database";
-							ctx.context.internalAdapter = {
-								...ctx.context.internalAdapter,
-								findVerificationValue: async (identifier: string) => {
-									if (identifier === capturedStatePackage.state) {
-										return {
-											id: `oauth-proxy-${capturedStatePackage.state}`,
-											identifier: capturedStatePackage.state,
-											value: stateCookieValue,
-											createdAt: new Date(),
-											updatedAt: new Date(),
-											// Align expiration time with `generateState` in oauth2
-											expiresAt: new Date(Date.now() + 10 * 60 * 1000),
-										};
-									}
-									return originalAdapter.findVerificationValue(identifier);
-								},
-								// Skip deletion for fake verification since it doesn't exist in DB
-								deleteVerificationValue: async (id: string) => {
-									if (id === `oauth-proxy-${capturedStatePackage.state}`) {
-										return;
-									}
-									return originalAdapter.deleteVerificationValue(id);
-								},
-							};
-						}
+						const originalAdapter = ctx.context.internalAdapter;
+						const capturedStatePackage = statePackage;
+						ctx.context.oauthConfig.storeStateStrategy = "database";
+						ctx.context.internalAdapter = {
+							...ctx.context.internalAdapter,
+							findVerificationValue: async (identifier: string) => {
+								if (identifier === capturedStatePackage.state) {
+									return {
+										id: `oauth-proxy-${capturedStatePackage.state}`,
+										identifier: capturedStatePackage.state,
+										value: stateCookieValue,
+										createdAt: new Date(),
+										updatedAt: new Date(),
+										// Align expiration time with `generateState` in oauth2
+										expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+									};
+								}
+								return originalAdapter.findVerificationValue(identifier);
+							},
+							deleteVerificationValue: async (id: string) => {
+								if (id === `oauth-proxy-${capturedStatePackage.state}`) {
+									return;
+								}
+								return originalAdapter.deleteVerificationValue(id);
+							},
+						};
 
 						// Restore original state parameter
 						if (ctx.query?.state) {
