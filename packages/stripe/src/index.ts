@@ -26,7 +26,6 @@ import type {
 import { escapeStripeSearchValue } from "./utils";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		stripe: {
 			creator: typeof stripe;
@@ -221,7 +220,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										const params = defu(
 											{
 												email: user.email,
-												name: user.name,
+												name: user.name ?? undefined,
 												metadata: customerMetadata.set(
 													{
 														userId: user.id,

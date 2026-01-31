@@ -6,6 +6,7 @@ export default defineConfig({
 	entry: {
 		adapter: "./src/adapter/index.ts",
 	},
+	sourcemap: true,
 	unbundle: true,
 	outDir: "./dist",
 	clean: true,

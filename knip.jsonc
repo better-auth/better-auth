@@ -113,6 +113,12 @@
 		},
 		"packages/test-utils": {
 			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
+			]
 		}
 	},
 	"vitest": {
