@@ -175,6 +175,7 @@ describe("accept invitation", async (it) => {
 		const session = await auth.api.getSession({
 			headers: invitedHeaders,
 		});
+		//@ts-expect-error - session type is not defined
 		expect(session?.session.activeOrganizationId).toBe(testOrg.id);
 	});
 
