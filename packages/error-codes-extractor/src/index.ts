@@ -524,7 +524,7 @@ function escapeMdxContent(text: string): string {
 }
 
 function generateErrorMdxFile(entry: ErrorCodeEntry, docsDir: string) {
-	const { code, message, description, markdownContent, category } = entry;
+	const { code, message, description, markdownContent } = entry;
 	const slug = code.toLowerCase();
 
 	let content = `---
