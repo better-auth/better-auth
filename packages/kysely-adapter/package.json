@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/kysely-adapter",
-  "version": "1.5.0-beta.10",
+  "version": "1.5.0-beta.11",
   "description": "Kysely adapter for Better Auth",
   "type": "module",
   "repository": {
