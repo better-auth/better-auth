@@ -1,9 +1,6 @@
+import { createAuthMiddleware } from "better-auth/api";
 import { magicLinkClient } from "better-auth/client/plugins";
-import {
-	createAuthMiddleware,
-	magicLink,
-	oAuthProxy,
-} from "better-auth/plugins";
+import { magicLink, oAuthProxy } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { expo } from "../src";

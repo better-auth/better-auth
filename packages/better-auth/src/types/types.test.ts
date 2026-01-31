@@ -1,6 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf } from "vitest";
-import { createAuthEndpoint, organization, twoFactor } from "../plugins";
+import { createAuthEndpoint } from "../api";
+import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 type TestTypeOptions = {
@@ -35,7 +36,6 @@ const createTestTypePlugin = <O extends TestTypeOptions>(options?: O) =>
 	}) satisfies BetterAuthPlugin;
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"test-type-plugin": {
 			creator: Options extends TestTypeOptions
@@ -66,7 +66,7 @@ describe("general types", async (it) => {
 				updatedAt: Date;
 				email: string;
 				emailVerified: boolean;
-				name: string;
+				name?: string | null | undefined;
 				image?: string | null | undefined;
 			};
 		}>();
@@ -159,7 +159,7 @@ describe("general types", async (it) => {
 			id: string;
 			email: string;
 			emailVerified: boolean;
-			name: string;
+			name?: string | undefined | null;
 			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;

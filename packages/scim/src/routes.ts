@@ -1,10 +1,13 @@
 import { base64Url } from "@better-auth/utils/base64";
 import type { Account, DBAdapter, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
-import { APIError, sessionMiddleware } from "better-auth/api";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import type { Member } from "better-auth/plugins";
-import { createAuthEndpoint } from "better-auth/plugins";
 import * as z from "zod";
 import { getAccountId, getUserFullName, getUserPrimaryEmail } from "./mappings";
 import type { AuthMiddleware } from "./middlewares";
@@ -218,7 +221,7 @@ export const createSCIMUser = (authMiddleware: AuthMiddleware) =>
 			}
 
 			const email = getUserPrimaryEmail(body.userName, body.emails);
-			const name = getUserFullName(email, body.name);
+			const name = getUserFullName(body.name);
 
 			const existingUser = await ctx.context.adapter.findOne<User>({
 				model: "user",
@@ -349,7 +352,7 @@ export const updateSCIMUser = (authMiddleware: AuthMiddleware) =>
 				await ctx.context.adapter.transaction<[User | null, Account | null]>(
 					async () => {
 						const email = getUserPrimaryEmail(body.userName, body.emails);
-						const name = getUserFullName(email, body.name);
+						const name = getUserFullName(body.name);
 
 						const updatedUser = await ctx.context.internalAdapter.updateUser(
 							userId,
