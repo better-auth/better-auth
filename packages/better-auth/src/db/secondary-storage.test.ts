@@ -123,7 +123,7 @@ describe("secondary storage - get returns already-parsed object", async () => {
 });
 
 describe("preserveSessionInDatabase - revokeSession", async () => {
-	let store = new Map<string, string>();
+	const store = new Map<string, string>();
 
 	const { client, signInWithTestUser, db } = await getTestInstance({
 		secondaryStorage: {
