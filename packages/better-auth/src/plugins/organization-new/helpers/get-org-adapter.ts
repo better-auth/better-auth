@@ -20,6 +20,7 @@ import type {
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
+import type { RealTeamId } from "../addons/teams/helpers/get-team-adapter";
 
 /**
  * This branded ID exists as a measure to prevent accidentally providing an un-checked organizationId that could be a slug
@@ -308,6 +309,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		) => {
 			const internalAdapter = context.internalAdapter;
 			const update = { activeOrganizationId: organizationId };
+			const session = await internalAdapter.updateSession(sessionToken, update);
+			return filterSessionOutput(session);
+		},
+		setActiveTeam: async (sessionToken: string, teamId: RealTeamId | null) => {
+			const internalAdapter = context.internalAdapter;
+			const update = { activeTeamId: teamId };
 			const session = await internalAdapter.updateSession(sessionToken, update);
 			return filterSessionOutput(session);
 		},

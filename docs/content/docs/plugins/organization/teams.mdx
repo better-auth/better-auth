@@ -241,3 +241,39 @@ type Result = {
 <Callout type="info">
     The user must be a member of the organization to list its teams.
 </Callout>
+
+## Setting the Active Team
+
+You can set a team as the active team for the current session using the `organization.setActiveTeam` method. This stores the active team ID in the session, making it available for subsequent API calls.
+
+<APIMethod
+    path="/organization/set-active-team"
+    method="POST"
+    requireSession>
+```ts
+type setActiveTeam = {
+    /**
+     * The team ID to set as active.
+     * Pass null to unset the active team.
+     */
+    teamId?: string | null = "team-id"
+}
+```
+</APIMethod>
+
+Returns the team that was set as active, or `null` if the active team was unset:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+} | null
+```
+
+<Callout type="info">
+    The user must be a member of the team to set it as active. An active organization must also be set before setting an active team.
+</Callout>

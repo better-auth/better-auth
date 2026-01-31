@@ -171,5 +171,22 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 			});
 			return filterTeamOutput(team);
 		},
+		findTeamMember: async ({
+			teamId,
+			userId,
+		}: {
+			teamId: RealTeamId;
+			userId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const teamMember = await adapter.findOne<InferTeamMember<O, false>>({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: teamId },
+					{ field: "userId", value: userId },
+				],
+			});
+			return filterTeamMemberOutput(teamMember);
+		},
 	};
 };
