@@ -327,7 +327,8 @@ describe("remove member - clear active organization", async (it) => {
 
 		// Verify active organization is set
 		const sessionBefore = await auth.api.getSession({ headers: memberHeaders });
-		expect(sessionBefore?.session.activeOrganizationId).toBe(org?.id);
+		//@ts-expect-error - session type is not defined
+		expect(sessionBefore?.session?.activeOrganizationId).toBe(org?.id);
 
 		// Member removes themselves (leave organization)
 		await auth.api.removeMember({
@@ -340,6 +341,7 @@ describe("remove member - clear active organization", async (it) => {
 
 		// Active organization should be cleared
 		const sessionAfter = await auth.api.getSession({ headers: memberHeaders });
-		expect(sessionAfter?.session.activeOrganizationId).toBeNull();
+		//@ts-expect-error - session type is not defined
+		expect(sessionAfter?.session?.activeOrganizationId).toBeNull();
 	});
 });
