@@ -792,6 +792,116 @@ describe("oauth-proxy", async () => {
 			expect(payload.account.providerId).toBe("google");
 		});
 
+		it("should reject payloads with missing required fields", async () => {
+			const { client, auth } = await getTestInstance({
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview.example.com",
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+			const { secret } = await auth.$context;
+
+			// Test missing timestamp
+			const payloadMissingTimestamp = {
+				userInfo: {
+					id: "123",
+					email: "user@email.com",
+					name: "Test User",
+					emailVerified: true,
+				},
+				account: {
+					providerId: "google",
+					accountId: "123",
+					accessToken: "test",
+				},
+				state: "test-state",
+				callbackURL: "/dashboard",
+				// timestamp intentionally missing
+			};
+
+			const encrypted1 = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payloadMissingTimestamp),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted1}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=INVALID_PAYLOAD");
+					},
+				},
+			);
+
+			// Test missing userInfo
+			const payloadMissingUserInfo = {
+				account: {
+					providerId: "google",
+					accountId: "123",
+					accessToken: "test",
+				},
+				state: "test-state",
+				callbackURL: "/dashboard",
+				timestamp: Date.now(),
+			};
+
+			const encrypted2 = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payloadMissingUserInfo),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted2}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=INVALID_PAYLOAD");
+					},
+				},
+			);
+
+			// Test non-numeric timestamp (should not bypass validation)
+			const payloadStringTimestamp = {
+				userInfo: {
+					id: "123",
+					email: "user@email.com",
+					name: "Test User",
+					emailVerified: true,
+				},
+				account: {
+					providerId: "google",
+					accountId: "123",
+					accessToken: "test",
+				},
+				state: "test-state",
+				callbackURL: "/dashboard",
+				timestamp: "not-a-number",
+			};
+
+			const encrypted3 = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(payloadStringTimestamp),
+			});
+
+			await client.$fetch(
+				`/oauth-proxy-callback?callbackURL=%2Fdashboard&profile=${encrypted3}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toContain("error=INVALID_PAYLOAD");
+					},
+				},
+			);
+		});
+
 		it("should handle existing user on preview", async () => {
 			// Preview instance
 			const preview = await getTestInstance(

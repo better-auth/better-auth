@@ -190,6 +190,23 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						);
 					}
 
+					// Validate required payload fields
+					if (
+						typeof payload.timestamp !== "number" ||
+						!payload.userInfo ||
+						!payload.account ||
+						!payload.callbackURL
+					) {
+						ctx.context.logger.error(
+							OAUTH_PROXY_ERROR_CODES.INVALID_PAYLOAD.message,
+						);
+						throw redirectOnError(
+							ctx,
+							defaultErrorURL,
+							OAUTH_PROXY_ERROR_CODES.INVALID_PAYLOAD.code,
+						);
+					}
+
 					const errorURL = payload.errorURL || defaultErrorURL;
 
 					// Allow up to 10 seconds of future skew for clock skew
