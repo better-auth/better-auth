@@ -496,8 +496,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							return;
 						}
 
-						// Only process in stateless mode
-						if (ctx.context.oauthConfig.storeStateStrategy !== "cookie") {
+						// Process in stateless mode or when replicateData is enabled
+						const needsStateProxy =
+							ctx.context.oauthConfig.storeStateStrategy === "cookie" ||
+							opts?.replicateData;
+						if (!needsStateProxy) {
 							return;
 						}
 
