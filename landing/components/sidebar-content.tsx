@@ -1,47 +1,35 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
-	AppWindow,
 	Binoculars,
 	Book,
 	CircleHelp,
 	Database,
-	FlaskConical,
 	Gauge,
 	Key,
 	KeyRound,
-	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
 	Phone,
 	ScanFace,
-	Server,
 	ShieldCheck,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
 	Users2,
-	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
-export interface SubpageItem {
-	title: string;
-	href?: string;
-	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
-	group?: boolean;
-}
-
-export interface ListItem {
+export interface ContentListItem {
 	title: string;
 	href: string;
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
-	separator?: boolean;
 	isNew?: boolean;
-	subpages?: SubpageItem[];
+	isUpdated?: boolean;
+	children?: ContentListItem[];
 }
 
 interface Content {
@@ -49,7 +37,8 @@ interface Content {
 	href?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
-	list: ListItem[];
+	isUpdated?: boolean;
+	list: ContentListItem[];
 }
 
 export function getPageTree(): Root {
@@ -75,6 +64,35 @@ export function getPageTree(): Root {
 	};
 }
 
+function contentListItemToPageTreeNode(
+	item: ContentListItem,
+): Folder | { type: "page"; url: string; name: string; icon: ReactNode } {
+	// If item has children, create a folder with nested pages
+	if (item.children && item.children.length > 0) {
+		return {
+			type: "folder",
+			name: item.title,
+			icon: <item.icon />,
+			index: {
+				type: "page",
+				url: item.href,
+				name: item.title,
+				icon: <item.icon />,
+			},
+			children: item.children
+				.filter((child) => !child.group && child.href)
+				.map((child) => contentListItemToPageTreeNode(child)),
+		};
+	}
+	// Regular page
+	return {
+		type: "page",
+		url: item.href,
+		name: item.title,
+		icon: <item.icon />,
+	};
+}
+
 function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
@@ -89,20 +107,8 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && (item.href || item.separator))
-			.map((item) =>
-				item.separator
-					? ({
-							type: "separator",
-							name: item.title,
-						} as const)
-					: ({
-							type: "page",
-							url: item.href,
-							name: item.title,
-							icon: <item.icon />,
-						} as const),
-			),
+			.filter((item) => !item.group && item.href)
+			.map((item) => contentListItemToPageTreeNode(item)),
 	};
 }
 
@@ -457,7 +463,6 @@ export const contents: Content[] = [
 			</svg>
 		),
 	},
-
 	{
 		title: "Authentication",
 		Icon: () => (
@@ -468,7 +473,7 @@ export const contents: Content[] = [
 				viewBox="0 0 24 24"
 			>
 				<path
-					fill="currentColor"
+					className="fill-foreground"
 					fillRule="evenodd"
 					d="M10 4h4c3.771 0 5.657 0 6.828 1.172C22 6.343 22 8.229 22 12c0 3.771 0 5.657-1.172 6.828C19.657 20 17.771 20 14 20h-4c-3.771 0-5.657 0-6.828-1.172C2 17.657 2 15.771 2 12c0-3.771 0-5.657 1.172-6.828C4.343 4 6.229 4 10 4m3.25 5a.75.75 0 0 1 .75-.75h5a.75.75 0 0 1 0 1.5h-5a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h4a.75.75 0 0 1 0 1.5h-4a.75.75 0 0 1-.75-.75m1 3a.75.75 0 0 1 .75-.75h3a.75.75 0 0 1 0 1.5h-3a.75.75 0 0 1-.75-.75M11 9a2 2 0 1 1-4 0a2 2 0 0 1 4 0m-2 8c4 0 4-.895 4-2s-1.79-2-4-2s-4 .895-4 2s0 2 4 2"
 					clipRule="evenodd"
@@ -663,28 +668,6 @@ export const contents: Content[] = [
 						<path
 							fill="currentColor"
 							d="m28.568 12.893l-.037-.094l-3.539-9.235a.92.92 0 0 0-.364-.439a.95.95 0 0 0-1.083.058a.95.95 0 0 0-.314.477l-2.39 7.31h-9.675l-2.39-7.31a.93.93 0 0 0-.313-.478a.95.95 0 0 0-1.083-.058a.93.93 0 0 0-.365.438L3.47 12.794l-.035.093a6.57 6.57 0 0 0 2.18 7.595l.011.01l.033.022l5.39 4.037l2.668 2.019l1.624 1.226c.39.297.931.297 1.322 0l1.624-1.226l2.667-2.019l5.424-4.061l.013-.01a6.574 6.574 0 0 0 2.177-7.588Z"
-						/>
-					</svg>
-				),
-			},
-			{
-				title: "Railway",
-				href: "/docs/authentication/railway",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						viewBox="0 0 1024 1024"
-						fill="none"
-					>
-						<path
-							d="M4.756 438.175A520.713 520.713 0 0 0 0 489.735h777.799c-2.716-5.306-6.365-10.09-10.045-14.772-132.97-171.791-204.498-156.896-306.819-161.26-34.114-1.403-57.249-1.967-193.037-1.967-72.677 0-151.688.185-228.628.39-9.96 26.884-19.566 52.942-24.243 74.14h398.571v51.909H4.756ZM783.93 541.696H.399c.82 13.851 2.112 27.517 3.978 40.999h723.39c32.248 0 50.299-18.297 56.162-40.999ZM45.017 724.306S164.941 1018.77 511.46 1024c207.112 0 385.071-123.006 465.907-299.694H45.017Z"
-							fill="currentColor"
-						/>
-						<path
-							d="M511.454 0C319.953 0 153.311 105.16 65.31 260.612c68.771-.144 202.704-.226 202.704-.226h.031v-.051c158.309 0 164.193.707 195.118 1.998l19.149.706c66.7 2.224 148.683 9.384 213.19 58.19 35.015 26.471 85.571 84.896 115.708 126.52 27.861 38.499 35.876 82.756 16.933 125.158-17.436 38.97-54.952 62.215-100.383 62.215H16.69s4.233 17.944 10.58 37.751h970.632A510.385 510.385 0 0 0 1024 512.218C1024.01 229.355 794.532 0 511.454 0Z"
-							fill="currentColor"
 						/>
 					</svg>
 				),
@@ -1445,10 +1428,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: Icons.astro,
 				href: "/docs/integrations/astro",
 			},
+
 			{
-				title: "React Router v7",
-				icon: Icons.reactRouter,
-				href: "/docs/integrations/react-router",
+				title: "Remix",
+				icon: Icons.remix,
+				href: "/docs/integrations/remix",
 			},
 			{
 				title: "Next",
@@ -1459,12 +1443,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Nuxt",
 				icon: Icons.nuxt,
 				href: "/docs/integrations/nuxt",
-			},
-			{
-				title: "Electron",
-				icon: Icons.electron,
-				href: "/docs/integrations/electron",
-				isNew: true,
 			},
 			{
 				title: "SvelteKit",
@@ -1529,6 +1507,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: LucideAArrowDown,
 			},
 			{
+				title: "Electron",
+				icon: Icons.electron,
+				href: "/docs/integrations/electron",
+				isNew: true,
+			},
+			{
 				title: "Expo",
 				icon: Icons.expo,
 				href: "/docs/integrations/expo",
@@ -1537,71 +1521,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Lynx",
 				icon: Icons.lynx,
 				href: "/docs/integrations/lynx",
-			},
-		],
-	},
-	{
-		title: "Infrastructure",
-		Icon: () => (
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				viewBox="0 0 24 24"
-				width="1.2em"
-				height="1.2em"
-			>
-				<path
-					fill="currentColor"
-					d="M2.25 5.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 6.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5zM2.25 14.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 15.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5z"
-				/>
-			</svg>
-		),
-		list: [
-			{
-				title: "Introduction",
-				href: "/docs/infrastructure/introduction",
-				icon: () => <Book className="size-4" />,
-			},
-			{
-				title: "Getting Started",
-				href: "/docs/infrastructure/getting-started",
-				icon: () => <Gauge className="size-4" />,
-			},
-			{
-				title: "Plugins",
-				group: true,
-				icon: () => <Server className="size-4" />,
-				href: "",
-			},
-			{
-				title: "Dashboard",
-				href: "/docs/infrastructure/plugins/dashboard",
-				icon: () => <AppWindow className="size-4" />,
-			},
-			{
-				title: "Audit Logs",
-				href: "/docs/infrastructure/plugins/audit-logs",
-				icon: () => <Logs className="size-4" />,
-			},
-			{
-				title: "Sentinel",
-				href: "/docs/infrastructure/plugins/sentinel",
-				icon: () => <ShieldCheck className="size-4" />,
-			},
-			{
-				title: "Services",
-				group: true,
-				icon: () => <Server className="size-4" />,
-				href: "",
-			},
-			{
-				title: "Email",
-				href: "/docs/infrastructure/services/email",
-				icon: () => <Mail className="size-4" />,
-			},
-			{
-				title: "SMS",
-				href: "/docs/infrastructure/services/sms",
-				icon: () => <Phone className="size-4" />,
 			},
 		],
 	},
@@ -1770,35 +1689,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "API Key",
 				href: "/docs/plugins/api-key",
 				icon: () => <KeyRound className="size-4" />,
-				subpages: [
-					{
-						href: "/docs/plugins/api-key/advanced",
-						title: "Advanced Features",
-						icon: () => <Zap className="size-4" />,
-					},
-					{
-						href: "/docs/plugins/api-key/reference",
-						title: "Reference",
-						icon: () => (
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								strokeWidth="2"
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								className="size-4"
-							>
-								<path d="M20 11v6" />
-								<path d="M20 13h2" />
-								<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
-								<circle cx="10" cy="7" r="4" />
-								<circle cx="20" cy="19" r="2" />
-							</svg>
-						),
-					},
-				],
 			},
 			{
 				title: "MCP",
@@ -2117,12 +2007,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				href: "/docs/plugins/jwt",
 			},
 			{
-				title: "Test Utils",
-				href: "/docs/plugins/test-utils",
-				icon: () => <FlaskConical className="w-4 h-4" />,
-				isNew: true,
-			},
-			{
 				title: "Payments",
 				group: true,
 				href: "",
@@ -2335,6 +2219,7 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 	},
 	{
 		title: "Guides",
+		href: "/docs/guides",
 		Icon: () => (
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -2679,53 +2564,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				subpages: [
-					{
-						title: "invalid_callback_request",
-						href: "/docs/reference/errors/invalid_callback_request",
-					},
-					{
-						title: "state_not_found",
-						href: "/docs/reference/errors/state_not_found",
-					},
-					{
-						title: "state_mismatch",
-						href: "/docs/reference/errors/state_mismatch",
-					},
-					{ title: "no_code", href: "/docs/reference/errors/no_code" },
-					{
-						title: "no_callback_url",
-						href: "/docs/reference/errors/no_callback_url",
-					},
-					{
-						title: "oauth_provider_not_found",
-						href: "/docs/reference/errors/oauth_provider_not_found",
-					},
-					{
-						title: "email_not_found",
-						href: "/docs/reference/errors/email_not_found",
-					},
-					{
-						title: "email_doesn't_match",
-						href: "/docs/reference/errors/email_doesn't_match",
-					},
-					{
-						title: "unable_to_get_user_info",
-						href: "/docs/reference/errors/unable_to_get_user_info",
-					},
-					{
-						title: "unable_to_link_account",
-						href: "/docs/reference/errors/unable_to_link_account",
-					},
-					{
-						title: "account_already_linked_to_different_user",
-						href: "/docs/reference/errors/account_already_linked_to_different_user",
-					},
-					{
-						title: "signup_disabled",
-						href: "/docs/reference/errors/signup_disabled",
-					},
-				],
 			},
 			{
 				title: "Contributing",
@@ -2804,9 +2642,9 @@ export const examples: Content[] = [
 				icon: Icons.astro,
 			},
 			{
-				title: "React Router v7",
-				href: "/docs/examples/react-router",
-				icon: Icons.reactRouter,
+				title: "Remix",
+				href: "/docs/examples/remix",
+				icon: Icons.remix,
 			},
 			{
 				title: "Next.js",
