@@ -77,6 +77,38 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 			});
 			return teams.map(filterTeamOutput);
 		},
+		listTeams: async ({
+			organizationId,
+			limit,
+			offset,
+			sortBy,
+			sortDirection,
+		}: {
+			organizationId: RealOrganizationId;
+			limit?: number;
+			offset?: number;
+			sortBy?: "createdAt" | "name" | "updatedAt";
+			sortDirection?: "asc" | "desc";
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const teams = await adapter.findMany<InferTeam<O, false>>({
+				model: "team",
+				where: [{ field: "organizationId", value: organizationId }],
+				limit: limit,
+				offset: offset,
+				sortBy: sortBy
+					? { field: sortBy, direction: sortDirection || "desc" }
+					: undefined,
+			});
+			const total = await adapter.count({
+				model: "team",
+				where: [{ field: "organizationId", value: organizationId }],
+			});
+			return {
+				teams: teams.map(filterTeamOutput),
+				total,
+			};
+		},
 		findTeamById: async ({
 			teamId,
 			organizationId,

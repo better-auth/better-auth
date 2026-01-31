@@ -182,3 +182,62 @@ type Result = {
     By default, the last team in an organization cannot be removed.
     To allow removing all teams, set `allowRemovingAllTeams: true` in the teams addon options.
 </Callout>
+
+## Listing Teams
+
+You can list all teams in an organization using the `organization.listTeams` method. This endpoint supports pagination and sorting.
+
+<APIMethod
+    path="/organization/list-teams"
+    method="GET"
+    requireSession>
+```ts
+type listOrganizationTeams = {
+    /**
+     * The organization ID which the teams belong to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Maximum number of teams to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of teams to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt", "name", "updatedAt"
+     */
+    sortBy?: "createdAt" | "name" | "updatedAt" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+}
+```
+</APIMethod>
+
+Returns a paginated result with teams and total count:
+
+```ts
+type Result = {
+    teams: Array<{
+        id: string;
+        name: string;
+        organizationId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of teams in the organization.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+    The user must be a member of the organization to list its teams.
+</Callout>
