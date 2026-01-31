@@ -80,8 +80,6 @@ export async function refreshAccessToken({
 	tokenEndpoint: string;
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
-	/** @deprecated always "refresh_token" */
-	grantType?: string | undefined;
 }): Promise<OAuth2Tokens> {
 	const { body, headers } = createRefreshAccessTokenRequest({
 		refreshToken,

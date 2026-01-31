@@ -220,9 +220,42 @@ betterAuth({
 });
 ```
 
-**Example: Redis Implementation**
+### Redis Storage
 
-Here's a basic example using Redis:
+Better Auth provides an official Redis storage package that uses [ioredis](https://github.com/redis/ioredis):
+
+```bash
+npm install @better-auth/redis-storage ioredis
+# or
+pnpm add @better-auth/redis-storage ioredis
+```
+
+**Usage:**
+
+```typescript
+import { betterAuth } from "better-auth";
+import { Redis } from "ioredis";
+import { redisStorage } from "@better-auth/redis-storage";
+
+const redis = new Redis({
+	host: "localhost",
+	port: 6379,
+});
+
+export const auth = betterAuth({
+	// ... other options
+	secondaryStorage: redisStorage({
+		client: redis,
+		kxeyPrefix: "better-auth:", // optional, defaults to "better-auth:"
+	}),
+});
+```
+
+The Redis storage supports all ioredis connection modes including standalone, cluster, and sentinel configurations.
+
+**Manual Implementation:**
+
+If you prefer to implement your own Redis secondary storage, here's a basic example:
 
 ```typescript
 import { createClient } from "redis";
@@ -239,8 +272,6 @@ export const auth = betterAuth({
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
-			// or for ioredis:
-			// if (ttl) await redis.set(key, value, 'EX', ttl)
 			else await redis.set(key, value);
 		},
 		delete: async (key) => {
@@ -269,11 +300,6 @@ Table Name: `user`
       isPrimaryKey: true,
     },
     {
-      name: "name",
-      type: "string",
-      description: "User's chosen display name",
-    },
-    {
       name: "email",
       type: "string",
       description: "User's email address for communication and login",
@@ -282,6 +308,12 @@ Table Name: `user`
       name: "emailVerified",
       type: "boolean",
       description: "Whether the user's email is verified",
+    },
+        {
+      name: "name",
+      type: "string",
+      description: "User's chosen display name",
+      isOptional: true,
     },
     {
       name: "image",
@@ -607,9 +639,10 @@ export const auth = betterAuth({
       clientId: "YOUR_GITHUB_CLIENT_ID",
       clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
       mapProfileToUser: (profile) => {
+        const nameParts = profile.name?.split(" ") ?? [];
         return {
-          firstName: profile.name.split(" ")[0],
-          lastName: profile.name.split(" ")[1],
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(" ") || undefined,
         };
       },
     },
@@ -808,12 +841,13 @@ export const auth = betterAuth({
       create: {
         before: async (user, ctx) => {
           // Modify the user object before it is created
+          const nameParts = user.name?.split(" ") ?? [];
           return {
             data: {
               // Ensure to return Better-Auth named fields, not the original field names in your database.
               ...user,
-              firstName: user.name.split(" ")[0],
-              lastName: user.name.split(" ")[1],
+              firstName: nameParts[0],
+              lastName: nameParts.slice(1).join(" ") || undefined,
             },
           };
         },

@@ -31,7 +31,6 @@ import { userInfoEndpoint } from "./userinfo";
 import { deleteFromPrompt, getJwtPlugin } from "./utils";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oauth-provider": {
 			creator: typeof oauthProvider;
@@ -342,6 +341,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						nonce: z.string().optional(),
 						prompt: z
 							.enum([
+								"none",
 								"consent",
 								"login",
 								"create",
@@ -1300,5 +1300,67 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
+		rateLimit: [
+			// Token endpoint - critical for preventing credential stuffing
+			...(opts.rateLimit?.token !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/token",
+							window: opts.rateLimit?.token?.window ?? 60,
+							max: opts.rateLimit?.token?.max ?? 20,
+						},
+					]
+				: []),
+			// Authorize endpoint - user-facing, prevent auth floods
+			...(opts.rateLimit?.authorize !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/authorize",
+							window: opts.rateLimit?.authorize?.window ?? 60,
+							max: opts.rateLimit?.authorize?.max ?? 30,
+						},
+					]
+				: []),
+			// Introspection - high traffic API endpoint
+			...(opts.rateLimit?.introspect !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/introspect",
+							window: opts.rateLimit?.introspect?.window ?? 60,
+							max: opts.rateLimit?.introspect?.max ?? 100,
+						},
+					]
+				: []),
+			// Revocation - moderate traffic
+			...(opts.rateLimit?.revoke !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/revoke",
+							window: opts.rateLimit?.revoke?.window ?? 60,
+							max: opts.rateLimit?.revoke?.max ?? 30,
+						},
+					]
+				: []),
+			// Dynamic registration - prevent spam
+			...(opts.rateLimit?.register !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/register",
+							window: opts.rateLimit?.register?.window ?? 60,
+							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// UserInfo - API endpoint
+			...(opts.rateLimit?.userinfo !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/userinfo",
+							window: opts.rateLimit?.userinfo?.window ?? 60,
+							max: opts.rateLimit?.userinfo?.max ?? 60,
+						},
+					]
+				: []),
+		],
 	} satisfies BetterAuthPlugin;
 };
