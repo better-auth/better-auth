@@ -483,6 +483,230 @@ describe("oauth-proxy", async () => {
 		});
 	});
 
+	describe("early redirect mode", () => {
+		it("should include earlyRedirect and previewBaseURL in state package", async () => {
+			const { client, auth } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+						earlyRedirect: true,
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Decrypt and verify state package contains earlyRedirect info
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedState!,
+			});
+
+			const statePackage = parseJSON<{
+				state: string;
+				stateCookie: string;
+				isOAuthProxy: boolean;
+				earlyRedirect?: boolean;
+				previewBaseURL?: string;
+			}>(decrypted);
+
+			expect(statePackage.isOAuthProxy).toBe(true);
+			expect(statePackage.earlyRedirect).toBe(true);
+			expect(statePackage.previewBaseURL).toBe("http://preview-localhost:3000");
+		});
+
+		it("should redirect to preview server on production callback with earlyRedirect", async () => {
+			// Simulate the production server receiving the callback
+			const { client, auth } = await getTestInstance({
+				baseURL: "https://production.example.com",
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "https://production.example.com", // We're on production
+						productionURL: "https://production.example.com",
+						earlyRedirect: true, // This needs to be enabled to process early redirect
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+
+			// Create an encrypted state package as if from preview server
+			const statePackage = {
+				state: "original-state-123",
+				stateCookie: await symmetricEncrypt({
+					key: secret,
+					data: JSON.stringify({
+						codeVerifier: "test-verifier",
+						callbackURL:
+							"http://preview-localhost:3000/api/auth/oauth-proxy-callback?callbackURL=%2Fdashboard",
+					}),
+				}),
+				isOAuthProxy: true,
+				earlyRedirect: true,
+				previewBaseURL: "http://preview-localhost:3000",
+			};
+
+			const encryptedState = await symmetricEncrypt({
+				key: secret,
+				data: JSON.stringify(statePackage),
+			});
+
+			// Simulate callback from OAuth provider to production server
+			await client.$fetch(
+				`/callback/google?code=test-code&state=${encodeURIComponent(encryptedState)}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toBeTruthy();
+
+						// Should redirect to preview server's callback endpoint
+						expect(location).toContain("http://preview-localhost:3000");
+						expect(location).toContain("/api/auth/callback/google");
+						expect(location).toContain("code=test-code");
+						expect(location).toContain(
+							`state=${encodeURIComponent(encryptedState)}`,
+						);
+					},
+				},
+			);
+		});
+
+		it("should process callback normally when on preview server (early redirect flow)", async () => {
+			const { client } = await getTestInstance({
+				baseURL: "http://preview-localhost:3000",
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000", // We're on preview
+						productionURL: "https://production.example.com",
+						earlyRedirect: true,
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			// First, initiate sign-in to get the encrypted state
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			// Now simulate the callback arriving at preview server (after early redirect from production)
+			// This should process the callback and redirect to the final destination
+			await client.$fetch(
+				`/callback/google?code=test&state=${encryptedState}`,
+				{
+					onError(context) {
+						const location = context.response.headers.get("location");
+						expect(location).toBeTruthy();
+
+						// Should redirect to final callback URL, not proxy callback
+						// (since we're already on the preview server)
+						expect(location).toContain("/dashboard");
+						// Should NOT redirect to oauth-proxy-callback since we're handling it directly
+						expect(location).not.toContain("&cookies=");
+					},
+				},
+			);
+		});
+
+		it("should not include earlyRedirect in state package when earlyRedirect is false", async () => {
+			const { client, auth } = await getTestInstance({
+				database: undefined, // Stateless mode
+				plugins: [
+					oAuthProxy({
+						currentURL: "http://preview-localhost:3000",
+						earlyRedirect: false, // Explicitly disabled
+					}),
+				],
+				socialProviders: {
+					google: {
+						clientId: "test",
+						clientSecret: "test",
+					},
+				},
+			});
+
+			const { secret } = await auth.$context;
+
+			const res = await client.signIn.social(
+				{
+					provider: "google",
+					callbackURL: "/dashboard",
+				},
+				{
+					throw: true,
+				},
+			);
+
+			const encryptedState = new URL(res.url!).searchParams.get("state");
+			expect(encryptedState).toBeTruthy();
+
+			const { symmetricDecrypt } = await import("../../crypto");
+			const { parseJSON } = await import("../../client/parser");
+
+			const decrypted = await symmetricDecrypt({
+				key: secret,
+				data: encryptedState!,
+			});
+
+			const statePackage = parseJSON<{
+				state: string;
+				stateCookie: string;
+				isOAuthProxy: boolean;
+				earlyRedirect?: boolean;
+				previewBaseURL?: string;
+			}>(decrypted);
+
+			expect(statePackage.isOAuthProxy).toBe(true);
+			expect(statePackage.earlyRedirect).toBeFalsy();
+			expect(statePackage.previewBaseURL).toBeUndefined();
+		});
+	});
+
 	describe("payload timestamp", () => {
 		it("should include timestamp in encrypted payload", async () => {
 			const { client, auth } = await getTestInstance({
