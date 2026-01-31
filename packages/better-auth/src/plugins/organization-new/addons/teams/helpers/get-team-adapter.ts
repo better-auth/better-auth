@@ -130,5 +130,14 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				where: [{ field: "id", value: teamId }],
 			});
 		},
+		updateTeam: async (teamId: RealTeamId, updates: Record<string, any>) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const team = await adapter.update<InferTeam<O, false>>({
+				model: "team",
+				where: [{ field: "id", value: teamId }],
+				update: updates,
+			});
+			return filterTeamOutput(team);
+		},
 	};
 };

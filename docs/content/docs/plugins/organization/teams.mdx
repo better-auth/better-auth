@@ -98,6 +98,55 @@ type Result = {
     You can limit the maximum number of teams per organization using the `maximumTeams` option in the teams addon configuration.
 </Callout>
 
+## Updating a Team
+
+You can update a team in an organization using the `organization.updateTeam` method.
+
+<APIMethod
+    path="/organization/update-team"
+    method="POST"
+    requireSession>
+```ts
+type updateTeam = {
+    /**
+     * The ID of the team to be updated.
+     */
+    teamId: string = "team-id"
+    /**
+     * The data to update the team with.
+     */
+    data: {
+        /**
+         * The new name of the team.
+         */
+        name?: string = "Updated Engineering"
+        /**
+         * The organization ID which the team belongs to.
+         * If not provided, uses the active organization.
+         */
+        organizationId?: string = "org-id"
+    }
+}
+```
+</APIMethod>
+
+Returns the updated team:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `team:update` permission to update a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
 ## Removing a Team
 
 You can remove a team from an organization using the `organization.removeTeam` method.

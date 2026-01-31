@@ -4,6 +4,7 @@ import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { createTeam } from "./routes/create-team";
 import { removeTeam } from "./routes/remove-team";
+import { updateTeam } from "./routes/update-team";
 import type { InferTeam, TeamsOptions } from "./types";
 
 export * from "./schema";
@@ -25,6 +26,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		endpoints: {
 			createTeam: createTeam(_options),
 			removeTeam: removeTeam(_options),
+			updateTeam: updateTeam(_options),
 		},
 		schema: {
 			team: {
