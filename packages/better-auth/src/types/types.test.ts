@@ -1,6 +1,49 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf } from "vitest";
-import { createAuthEndpoint, organization, twoFactor } from "../plugins";
+import { createAuthEndpoint } from "../api";
+import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
+
+type TestTypeOptions = {
+	test: boolean;
+};
+
+const pingEndpoint = createAuthEndpoint(
+	"/test-type-ping",
+	{
+		method: "GET",
+	},
+	async (ctx) => {
+		return ctx.json({
+			message: "pong",
+		});
+	},
+);
+
+const createTestTypePlugin = <O extends TestTypeOptions>(options?: O) =>
+	({
+		id: "test-type-plugin" as const,
+		endpoints: {
+			pingEndpoint,
+		} as O extends {
+			test: true;
+		}
+			? {
+					pingEndpoint: typeof pingEndpoint;
+				}
+			: {},
+		options: options as NoInfer<O>,
+	}) satisfies BetterAuthPlugin;
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"test-type-plugin": {
+			creator: Options extends TestTypeOptions
+				? typeof createTestTypePlugin<Options>
+				: never;
+		};
+	}
+}
 
 describe("general types", async (it) => {
 	it("should infer base session", async () => {
@@ -23,7 +66,7 @@ describe("general types", async (it) => {
 				updatedAt: Date;
 				email: string;
 				emailVerified: boolean;
-				name: string;
+				name?: string | null | undefined;
 				image?: string | null | undefined;
 			};
 		}>();
@@ -31,17 +74,29 @@ describe("general types", async (it) => {
 
 	it("should match plugin type", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [twoFactor()],
+			plugins: [
+				twoFactor(),
+				createTestTypePlugin({
+					test: true,
+				}),
+			],
 		});
 
 		const context = await auth.$context;
 		type TwoFactorPlugin = ReturnType<typeof twoFactor>;
 		const id = "two-factor";
 		const twoFactorPlugin = context.getPlugin(id)!;
+		const hasTwoFactorPlugin = context.hasPlugin(id);
+		const nonExistPlugin = context.hasPlugin("non-exist-plugin");
+		expectTypeOf(hasTwoFactorPlugin).toEqualTypeOf<true>();
+		expectTypeOf(nonExistPlugin).toEqualTypeOf<boolean>();
 		expect(twoFactorPlugin).toBeDefined();
 		expect(twoFactorPlugin.id).toBe(id);
 		type TwoFactorPluginFromContext = typeof twoFactorPlugin;
 		expectTypeOf<TwoFactorPluginFromContext>().toMatchObjectType<TwoFactorPlugin>();
+		const testTypePlugin = context.getPlugin("test-type-plugin")!;
+		type PingEndpointFromPlugin = typeof testTypePlugin.endpoints.pingEndpoint;
+		expectTypeOf<PingEndpointFromPlugin>().toEqualTypeOf(pingEndpoint);
 	});
 
 	it("should infer the types of server scoped endpoints", async () => {
@@ -76,14 +131,24 @@ describe("general types", async (it) => {
 							},
 							async () => "ok",
 						),
+						testNonAction: createAuthEndpoint(
+							"/test-non-action",
+							{
+								method: "GET",
+								metadata: {
+									isAction: false,
+								},
+							},
+							async () => "ok",
+						),
 					},
 				},
 			],
 		});
-
 		expectTypeOf<typeof auth.api>().toHaveProperty("testServerScoped");
 		expectTypeOf<typeof auth.api>().toHaveProperty("testVirtual");
-		expectTypeOf<typeof auth.api>().not.toHaveProperty("testHttpScoped");
+		expectTypeOf<typeof auth.api>().not.toHaveProperty("testHTTPScoped");
+		expectTypeOf<typeof auth.api>().not.toHaveProperty("testNonAction");
 	});
 
 	it("should infer additional fields from plugins", async () => {
@@ -94,7 +159,7 @@ describe("general types", async (it) => {
 			id: string;
 			email: string;
 			emailVerified: boolean;
-			name: string;
+			name?: string | undefined | null;
 			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;

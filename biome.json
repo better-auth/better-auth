@@ -33,6 +33,7 @@
           }
         },
         "useNodejsImportProtocol": "error",
+        "useConst": "error",
         "noRestrictedTypes": "off",
         "noRestrictedGlobals": "off"
       },

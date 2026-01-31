@@ -45,10 +45,10 @@ export interface AppleProfile {
 	 */
 	real_user_status: number;
 	/**
-	 * The user’s full name in the format provided during the authorization
-	 * process.
+	 * The user's full name in the format provided during the authorization
+	 * process. This may not always be provided by Apple.
 	 */
-	name: string;
+	name?: string;
 	/**
 	 * The URL to the user's profile picture.
 	 */
@@ -161,9 +161,17 @@ export const apple = (options: AppleOptions) => {
 			if (!profile) {
 				return null;
 			}
-			const name = token.user
-				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
-				: profile.name || profile.email;
+
+			let name: string | undefined;
+			if (token.user?.name) {
+				const firstName = token.user.name.firstName || "";
+				const lastName = token.user.name.lastName || "";
+				const fullName = `${firstName} ${lastName}`.trim();
+				name = fullName || undefined;
+			} else {
+				name = profile.name || undefined;
+			}
+
 			const emailVerified =
 				typeof profile.email_verified === "boolean"
 					? profile.email_verified

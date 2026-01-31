@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import type { stripe } from "./index";
 

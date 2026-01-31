@@ -36,7 +36,7 @@ const testimonials = [
 	},
 	{
 		name: "kitze",
-		profession: "http://sizzy.co",
+		profession: "Indie Developer",
 		link: "https://x.com/thekitze/status/1911524156115476831",
 		description:
 			"I rarely stumble upon a framework/library that makes me rethink things. @better_auth is a rare exception. it literally delayed @zerotoshipped for a week...",
@@ -57,7 +57,7 @@ const testimonials = [
 
 	{
 		name: "Dax",
-		profession: "Creator of SST",
+		profession: "Founder of Anomaly (Opencode)",
 		link: "https://x.com/thdxr/status/1866222656468705426",
 		description:
 			"between better-auth and openauth one of those options should cover how you want to do things for 95% of cases. the problem of defaulting to SaaS for auth in js is finally fixed...",
@@ -226,7 +226,7 @@ const TestimonialItem = ({
 										<img
 											src={testimonial.avatar}
 											className="w-10 h-10 rounded-full"
-											alt="avatar"
+											alt={`${testimonial.name} avatar`}
 										/>
 										<div className="flex flex-col items-start justify-start flex-1 gap-0">
 											<h5 className="text-base font-medium md:text-md">
@@ -239,7 +239,12 @@ const TestimonialItem = ({
 									</div>
 									<div className="w-[1px] bg-black/20 dark:bg-white/20" />
 									<div className="flex items-center justify-center max-w-full mx-auto">
-										<Link href={testimonial.link} target="_blank">
+										<Link
+											href={testimonial.link}
+											target="_blank"
+											rel="noopener noreferrer"
+											aria-label={`View ${testimonial.name}'s testimonial on X`}
+										>
 											{testimonial.social}
 										</Link>
 									</div>

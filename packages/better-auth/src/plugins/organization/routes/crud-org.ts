@@ -164,25 +164,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				...orgData
 			} = ctx.body;
 
-			if (options.organizationCreation?.beforeCreate) {
-				const response = await options.organizationCreation.beforeCreate(
-					{
-						organization: {
-							...orgData,
-							createdAt: new Date(),
-						},
-						user,
-					},
-					ctx.request,
-				);
-				if (response && typeof response === "object" && "data" in response) {
-					orgData = {
-						...ctx.body,
-						...response.data,
-					};
-				}
-			}
-
 			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
 					await options?.organizationHooks.beforeCreateOrganization({
@@ -281,17 +262,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization,
 					});
 				}
-			}
-
-			if (options.organizationCreation?.afterCreate) {
-				await options.organizationCreation.afterCreate(
-					{
-						organization,
-						user,
-						member,
-					},
-					ctx.request,
-				);
 			}
 
 			if (options?.organizationHooks?.afterCreateOrganization) {
@@ -578,14 +548,8 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const disableOrganizationDeletion =
-				ctx.context.orgOptions.organizationDeletion?.disabled ||
 				ctx.context.orgOptions.disableOrganizationDeletion;
 			if (disableOrganizationDeletion) {
-				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
-					ctx.context.logger.info(
-						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
-					);
-				}
 				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion is disabled",
 					code: "ORGANIZATION_DELETION_DISABLED",
@@ -681,7 +645,7 @@ const getFullOrganizationQuerySchema = z.optional(
 			.or(z.string().transform((val) => parseInt(val)))
 			.meta({
 				description:
-					"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
+					"The limit of members to get. By default, it uses the membershipLimit option.",
 			})
 			.optional(),
 	}),
@@ -758,14 +722,14 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);
@@ -823,7 +787,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
 			let organizationId = ctx.body.organizationId;
-			let organizationSlug = ctx.body.organizationSlug;
+			const organizationSlug = ctx.body.organizationSlug;
 
 			if (organizationId === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
@@ -881,7 +845,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				);
 			}
 
-			let organization = await adapter.findOrganizationById(organizationId);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -899,14 +863,14 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-						teams: InferTeam<O, false>[];
-					} & InferOrganization<O, false>
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+						teams: InferTeam<O>[];
+					} & InferOrganization<O>
 				: {
-						members: InferMember<O, false>[];
-						invitations: InferInvitation<O, false>[];
-					} & InferOrganization<O, false>;
+						members: InferMember<O>[];
+						invitations: InferInvitation<O>[];
+					} & InferOrganization<O>;
 			return ctx.json(organization as unknown as OrganizationReturn);
 		},
 	);

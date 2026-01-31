@@ -1,5 +1,6 @@
 import type { GenericEndpointContext, OAuth2Tokens, User } from "better-auth";
 import type { SSOOptions, SSOProvider } from "../types";
+import { domainMatches } from "../utils";
 import type { NormalizedSSOProfile } from "./types";
 
 export interface OrganizationProvisioningOptions {
@@ -39,11 +40,7 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 
@@ -105,11 +102,7 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-		(plugin) => plugin.id === "organization",
-	);
-
-	if (!isOrgPluginEnabled) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 
@@ -118,6 +111,8 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
+	// Support comma-separated domains for multi-domain SSO
+	// First try exact match (fast path)
 	const whereClause: { field: string; value: string | boolean }[] = [
 		{ field: "domain", value: domain },
 	];
@@ -126,12 +121,24 @@ export async function assignOrganizationByDomain(
 		whereClause.push({ field: "domainVerified", value: true });
 	}
 
-	const ssoProvider = await ctx.context.adapter.findOne<
-		SSOProvider<SSOOptions>
-	>({
+	let ssoProvider = await ctx.context.adapter.findOne<SSOProvider<SSOOptions>>({
 		model: "ssoProvider",
 		where: whereClause,
 	});
+
+	// If not found, search all providers for comma-separated domain match
+	if (!ssoProvider) {
+		const allProviders = await ctx.context.adapter.findMany<
+			SSOProvider<SSOOptions>
+		>({
+			model: "ssoProvider",
+			where: domainVerification?.enabled
+				? [{ field: "domainVerified", value: true }]
+				: [],
+		});
+		ssoProvider =
+			allProviders.find((p) => domainMatches(domain, p.domain)) ?? null;
+	}
 
 	if (!ssoProvider || !ssoProvider.organizationId) {
 		return;

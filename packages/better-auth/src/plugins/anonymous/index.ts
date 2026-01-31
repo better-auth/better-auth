@@ -3,7 +3,7 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { generateId } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
 	APIError,
@@ -15,7 +15,7 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -25,8 +25,7 @@ import type {
 } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		anonymous: {
 			creator: typeof anonymous;
 		};
@@ -138,14 +137,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: newUser.id,
-							email: newUser.email,
-							emailVerified: newUser.emailVerified,
-							name: newUser.name,
-							createdAt: newUser.createdAt,
-							updatedAt: newUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, newUser),
 					});
 				},
 			),
@@ -340,3 +332,5 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

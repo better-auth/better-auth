@@ -1,7 +1,7 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
@@ -16,13 +16,6 @@ describe("base context creation", () => {
 		const getDatabaseType = () => "memory";
 		return createAuthContext(adapter, opts, getDatabaseType);
 	};
-
-	it("should match config", async () => {
-		const res = await initBase({
-			baseURL: "http://localhost:3000",
-		});
-		expect(res).toMatchSnapshot();
-	});
 
 	it("should infer BASE_URL from env", async () => {
 		vi.stubEnv("BETTER_AUTH_URL", "http://localhost:5147");
@@ -61,12 +54,14 @@ describe("base context creation", () => {
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
+		const set = new Set<object>();
 		const res = await initBase({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				{
 					id: "test",
-					init: () => {
+					init: (ctx) => {
+						set.add(ctx);
 						return {
 							context: {
 								baseURL: newBaseURL,
@@ -76,6 +71,8 @@ describe("base context creation", () => {
 				},
 			],
 		});
+		set.add(res);
+		expect(set.size).toBe(1);
 		expect(res.baseURL).toBe(newBaseURL);
 	});
 
@@ -293,7 +290,7 @@ describe("base context creation", () => {
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
 			const res = await initBase({
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
 		});
@@ -336,7 +333,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
@@ -572,6 +569,50 @@ describe("base context creation", () => {
 			if (typeof id === "string") {
 				expect(id.length).toBeGreaterThan(0);
 			}
+		});
+
+		it("should return uuid when generateId is 'uuid'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(typeof id).toBe("string");
+			expect(id).toMatch(
+				/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+			);
+		});
+
+		it("should return false when generateId is 'serial'", async () => {
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: "serial",
+					},
+				},
+			});
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
+		});
+
+		it("should return false when generateId is false", async () => {
+			const fn = vi.spyOn(console, "error").mockImplementation(vi.fn());
+			const res = await initBase({
+				advanced: {
+					database: {
+						generateId: false,
+					},
+				},
+			});
+			expect(fn).toHaveBeenCalled();
+			const regex = /Misconfiguration detected/;
+			expect(fn).toHaveBeenCalledWith(expect.stringMatching(regex));
+			fn.mockRestore();
+			const id = res.generateId({ model: "user" });
+			expect(id).toBe(false);
 		});
 	});
 
@@ -1266,7 +1307,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,

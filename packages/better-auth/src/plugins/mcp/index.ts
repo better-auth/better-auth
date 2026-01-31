@@ -8,14 +8,14 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
 import { getBaseURL } from "../../utils/url";
@@ -32,8 +32,7 @@ import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		mcp: {
 			creator: typeof mcp;
 		};
@@ -205,8 +204,9 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -639,7 +639,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
+					const secretKey = {
 						alg: "HS256",
 						key: await getWebcryptoSubtle().generateKey(
 							{
@@ -650,9 +650,10 @@ export const mcp = (options: MCPOptions) => {
 							["sign", "verify"],
 						),
 					};
+					const nameParts = user.name?.split(" ") ?? [];
 					const profile = {
-						given_name: user.name.split(" ")[0]!,
-						family_name: user.name.split(" ")[1]!,
+						given_name: nameParts[0],
+						family_name: nameParts[1],
 						name: user.name,
 						profile: user.image,
 						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),

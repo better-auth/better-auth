@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const TWO_FACTOR_ERROR_CODES = defineErrorCodes({
 	OTP_NOT_ENABLED: "OTP not enabled",

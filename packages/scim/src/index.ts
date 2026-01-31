@@ -17,8 +17,7 @@ import {
 import type { SCIMOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		scim: {
 			creator: typeof scim;
 		};
@@ -72,3 +71,5 @@ export const scim = (options?: SCIMOptions) => {
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./types";

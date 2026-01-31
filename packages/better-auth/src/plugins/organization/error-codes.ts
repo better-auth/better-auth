@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION:

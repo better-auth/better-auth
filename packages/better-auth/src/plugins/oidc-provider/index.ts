@@ -13,7 +13,7 @@ import type { OpenAPIParameter } from "better-call";
 import { jwtVerify, SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx, sessionMiddleware } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import {
 	generateRandomString,
 	symmetricDecrypt,
@@ -36,8 +36,7 @@ import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oidc-provider": {
 			creator: typeof oidcProvider;
 		};
@@ -401,8 +400,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						if (!loginPromptCookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -580,8 +580,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					// Clear the cookie
-					ctx.setCookie("oidc_consent_prompt", "", {
-						maxAge: 0,
+					expireCookie(ctx, {
+						name: "oidc_consent_prompt",
+						attributes: { path: "/" },
 					});
 
 					const value = JSON.parse(verification.value) as CodeVerificationValue;
@@ -949,9 +950,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
+					const nameParts = user.name?.split(" ") ?? [];
 					const profile = {
-						given_name: user.name.split(" ")[0]!,
-						family_name: user.name.split(" ")[1]!,
+						given_name: nameParts[0],
+						family_name: nameParts[1],
 						name: user.name,
 						profile: user.image,
 						updated_at: new Date(user.updatedAt).toISOString(),
@@ -1193,6 +1195,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
+					const nameParts = user.name?.split(" ") ?? [];
 					const baseUserClaims = {
 						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
@@ -1201,10 +1204,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[0]!
+							? nameParts[0]
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? user.name.split(" ")[1]!
+							? nameParts[1]
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified
@@ -1725,14 +1728,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 						await ctx.context.internalAdapter.deleteSession(
 							session.session.token,
 						);
-						ctx.setSignedCookie(
-							ctx.context.authCookies.sessionToken.name,
-							"",
-							ctx.context.secret,
-							{
-								maxAge: 0,
-							},
-						);
+						expireCookie(ctx, ctx.context.authCookies.sessionToken);
 					}
 
 					if (post_logout_redirect_uri) {

@@ -35,23 +35,27 @@ export async function handleOAuthUserInfo(
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
 	let user = dbUser?.user;
-	let isRegister = !user;
+	const isRegister = !user;
 
 	if (dbUser) {
-		const hasBeenLinked = dbUser.accounts.find(
-			(a) =>
-				a.providerId === account.providerId &&
-				a.accountId === account.accountId,
-		);
-		if (!hasBeenLinked) {
+		const linkedAccount =
+			dbUser.linkedAccount ??
+			dbUser.accounts.find(
+				(acc) =>
+					acc.providerId === account.providerId &&
+					acc.accountId === account.accountId,
+			);
+		if (!linkedAccount) {
+			const accountLinking = c.context.options.account?.accountLinking;
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
 			const isTrustedProvider =
 				opts.isTrustedProvider ||
-				trustedProviders?.includes(account.providerId as "apple");
+				trustedProviders?.includes(account.providerId);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
-				c.context.options.account?.accountLinking?.enabled === false
+				accountLinking?.enabled === false ||
+				accountLinking?.disableImplicitLinking === true
 			) {
 				if (isDevelopment()) {
 					logger.warn(
@@ -93,30 +97,35 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		} else {
-			if (c.context.options.account?.updateAccountOnSignIn !== false) {
-				const updateData = Object.fromEntries(
-					Object.entries({
-						idToken: account.idToken,
-						accessToken: await setTokenUtil(account.accessToken, c.context),
-						refreshToken: await setTokenUtil(account.refreshToken, c.context),
-						accessTokenExpiresAt: account.accessTokenExpiresAt,
-						refreshTokenExpiresAt: account.refreshTokenExpiresAt,
-						scope: account.scope,
-					}).filter(([_, value]) => value !== undefined),
-				);
-				if (c.context.options.account?.storeAccountCookie) {
-					await setAccountCookie(c, {
-						...account,
-						...updateData,
-					});
-				}
+			const freshTokens =
+				c.context.options.account?.updateAccountOnSignIn !== false
+					? Object.fromEntries(
+							Object.entries({
+								idToken: account.idToken,
+								accessToken: await setTokenUtil(account.accessToken, c.context),
+								refreshToken: await setTokenUtil(
+									account.refreshToken,
+									c.context,
+								),
+								accessTokenExpiresAt: account.accessTokenExpiresAt,
+								refreshTokenExpiresAt: account.refreshTokenExpiresAt,
+								scope: account.scope,
+							}).filter(([_, value]) => value !== undefined),
+						)
+					: {};
 
-				if (Object.keys(updateData).length > 0) {
-					await c.context.internalAdapter.updateAccount(
-						hasBeenLinked.id,
-						updateData,
-					);
-				}
+			if (c.context.options.account?.storeAccountCookie) {
+				await setAccountCookie(c, {
+					...linkedAccount,
+					...freshTokens,
+				});
+			}
+
+			if (Object.keys(freshTokens).length > 0) {
+				await c.context.internalAdapter.updateAccount(
+					linkedAccount.id,
+					freshTokens,
+				);
 			}
 
 			if (

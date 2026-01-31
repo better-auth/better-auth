@@ -40,7 +40,7 @@ export async function createAuthorizationURL({
 	additionalParams?: Record<string, string> | undefined;
 	scopeJoiner?: string | undefined;
 }) {
-	const url = new URL(authorizationEndpoint);
+	const url = new URL(options.authorizationEndpoint || authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
 	const primaryClientId = Array.isArray(options.clientId)
 		? options.clientId[0]

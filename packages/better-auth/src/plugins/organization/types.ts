@@ -60,9 +60,14 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
+	 * You can also pass a function that returns the limit number
+	 *
 	 * @default 100
 	 */
-	membershipLimit?: number | undefined;
+	membershipLimit?:
+		| number
+		| ((user: User, organization: Organization) => Promise<number> | number)
+		| undefined;
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.
@@ -335,78 +340,6 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
-	/**
-	 * Configure how organization deletion is handled
-	 *
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationDeletion?:
-		| {
-				/**
-				 * disable deleting organization
-				 *
-				 * @deprecated Use `disableOrganizationDeletion` instead
-				 */
-				disabled?: boolean;
-				/**
-				 * A callback that runs before the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				beforeDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-				/**
-				 * A callback that runs after the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				afterDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
-	/**
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationCreation?:
-		| {
-				disabled?: boolean;
-				beforeCreate?: (
-					data: {
-						organization: Omit<Organization, "id"> & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void | {
-					data: Record<string, any>;
-				}>;
-				afterCreate?: (
-					data: {
-						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
 	/**
 	 * Hooks for organization
 	 */

@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ANONYMOUS_ERROR_CODES = defineErrorCodes({
 	INVALID_EMAIL_FORMAT: "Email was not generated in a valid format",

@@ -1,0 +1,15 @@
+{
+  "name": "@better-auth-test/mongo-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run"
+  },
+  "dependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "@prisma/client": "^5.22.0",
+    "better-auth": "workspace:*"
+  }
+}

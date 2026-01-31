@@ -29,6 +29,10 @@ export const twoFactorClient = (
 			"/two-factor/enable": "POST",
 			"/two-factor/send-otp": "POST",
 			"/two-factor/generate-backup-codes": "POST",
+			"/two-factor/get-totp-uri": "POST",
+			"/two-factor/verify-totp": "POST",
+			"/two-factor/verify-otp": "POST",
+			"/two-factor/verify-backup-code": "POST",
 		},
 		fetchPlugins: [
 			{

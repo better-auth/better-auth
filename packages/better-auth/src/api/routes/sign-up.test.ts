@@ -80,6 +80,39 @@ describe("sign-up with custom fields", async (it) => {
 		);
 	});
 
+	it("should succeed when passing empty name", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "noname@test.com",
+				password: "password",
+				name: "",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBe("");
+	});
+
+	it("should succeed when name is not provided", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "no-name-field@test.com",
+				password: "password",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBeNull();
+	});
+
 	it("should get the ipAddress and userAgent from headers", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -147,6 +180,23 @@ describe("sign-up with custom fields", async (it) => {
 		).rejects.toThrow("role is not allowed to be set");
 	});
 
+	it("should return additionalFields in signUpEmail response", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "additional-fields@test.com",
+				password: "password",
+				name: "Additional Fields Test",
+				newField: "custom-value",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("custom-value");
+		// defaultValue should also be applied and returned
+		expect(res.user.isAdmin).toBe(true);
+	});
+
 	it("should throw status code 400 when passing invalid body", async () => {
 		await expect(
 			auth.api.signUpEmail({
@@ -171,6 +221,9 @@ describe("sign-up CSRF protection", async (it) => {
 			trustedOrigins: ["http://localhost:3000"],
 			emailAndPassword: {
 				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
 			},
 		},
 		{
@@ -287,6 +340,9 @@ describe("sign-up with form data", async (it) => {
 			emailAndPassword: {
 				enabled: true,
 			},
+			advanced: {
+				disableCSRFCheck: false,
+			},
 		},
 		{
 			disableTestUser: true,
@@ -370,5 +426,93 @@ describe("sign-up with form data", async (it) => {
 
 		const response = await auth.handler(formRequest);
 		expect(response.status).toBe(200);
+	});
+});
+
+describe("sign-up sendOnSignUp option behavior", async (it) => {
+	it("should not send verification email when sendOnSignUp is false, even with requireEmailVerification", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "no-verification@test.com",
+				password: "password123",
+				name: "No Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should send verification email when sendOnSignUp is true", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "with-verification@test.com",
+				password: "password123",
+				name: "With Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("should send verification email when sendOnSignUp is not set but requireEmailVerification is true (default)", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "default-verification@test.com",
+				password: "password123",
+				name: "Default Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });

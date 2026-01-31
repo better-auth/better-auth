@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
@@ -6,7 +7,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
-import { deprecate } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -15,7 +16,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -79,11 +79,11 @@ function validateSecret(
 	}
 }
 
-export async function createAuthContext(
-	adapter: DBAdapter<BetterAuthOptions>,
-	options: BetterAuthOptions,
-	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
-): Promise<AuthContext> {
+export async function createAuthContext<Options extends BetterAuthOptions>(
+	adapter: DBAdapter,
+	options: Options,
+	getDatabaseType: (database: Options["database"]) => string,
+): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
 	if (!options.database) {
 		options = defu(options, {
@@ -98,7 +98,7 @@ export async function createAuthContext(
 				storeStateStrategy: "cookie" as const,
 				storeAccountCookie: true,
 			},
-		});
+		}) as Options;
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -108,6 +108,18 @@ export async function createAuthContext(
 	if (!baseURL) {
 		logger.warn(
 			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
+
+	if (
+		adapter.id === "memory" &&
+		options.advanced?.database?.generateId === false
+	) {
+		logger.error(
+			`[better-auth] Misconfiguration detected.
+You are using the memory DB with generateId: false.
+This will cause no id to be generated for any model.
+Most of the features of Better Auth will not work correctly.`,
 		);
 	}
 
@@ -158,8 +170,15 @@ export async function createAuthContext(
 		if (typeof (options.advanced as any)?.generateId === "function") {
 			return (options.advanced as any).generateId({ model, size });
 		}
-		if (typeof options?.advanced?.database?.generateId === "function") {
-			return options.advanced.database.generateId({ model, size });
+		const dbGenerateId = options?.advanced?.database?.generateId;
+		if (typeof dbGenerateId === "function") {
+			return dbGenerateId({ model, size });
+		}
+		if (dbGenerateId === "uuid") {
+			return crypto.randomUUID();
+		}
+		if (dbGenerateId === "serial" || dbGenerateId === false) {
+			return false;
 		}
 		return generateId(size);
 	};
@@ -179,8 +198,12 @@ export async function createAuthContext(
 
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
+	const trustedOrigins = await getTrustedOrigins(options);
+
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
+		baseURL: baseURL || "",
+		version: getBetterAuthVersion(),
 		socialProviders: providers,
 		options,
 		oauthConfig: {
@@ -190,7 +213,7 @@ export async function createAuthContext(
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: await getTrustedOrigins(options),
+		trustedOrigins,
 		isTrustedOrigin(
 			url: string,
 			settings?: {
@@ -201,7 +224,6 @@ export async function createAuthContext(
 				matchesOriginPattern(url, origin, settings),
 			);
 		},
-		baseURL: baseURL || "",
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined
@@ -321,26 +343,13 @@ export async function createAuthContext(
 			}
 		},
 		getPlugin: getPluginFn,
-		hasPlugin: hasPluginFn,
+		hasPlugin: hasPluginFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
-	if (
-		typeof context.options.emailVerification?.onEmailVerification === "function"
-	) {
-		context.options.emailVerification.onEmailVerification = deprecate(
-			context.options.emailVerification.onEmailVerification,
-			"Use `afterEmailVerification` instead. This will be removed in 1.5",
-			context.logger,
-		);
-	}
-
-	return context;
+	return ctx as unknown as AuthContext<Options>;
 }

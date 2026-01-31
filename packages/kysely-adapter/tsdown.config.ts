@@ -1,0 +1,8 @@
+import { defineConfig } from "tsdown";
+
+export default defineConfig({
+	dts: { build: true, incremental: true },
+	format: ["esm"],
+	entry: ["./src/index.ts", "./src/node-sqlite-dialect.ts"],
+	sourcemap: true,
+});

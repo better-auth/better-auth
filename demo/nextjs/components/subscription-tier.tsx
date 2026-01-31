@@ -15,7 +15,7 @@ const tierVariants = cva(
 	{
 		variants: {
 			variant: {
-				free: "bg-gray-500 text-white ring-gray-400 hover:bg-gray-600",
+				free: "dark:bg-zinc-950 bg-zinc-50 dark:text-white dark:ring-gray-700 hover:bg-gray-600",
 				plus: "bg-lime-700/40 text-white ring-lime-200/40 hover:bg-lime-600",
 				pro: "bg-purple-800/80 ring-purple-400 hover:bg-purple-700",
 			},

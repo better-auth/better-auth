@@ -1,5 +1,5 @@
+import { memoryAdapter } from "@better-auth/memory-adapter";
 import { describe, expect, it } from "vitest";
-import { memoryAdapter } from "../adapters/memory-adapter";
 import { initMinimal } from "./init-minimal";
 
 describe("init-minimal (without Kysely)", () => {

@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/test-utils",
+  "name": "@better-auth-test/test-utils",
   "type": "module",
   "exports": {
     "./playwright": "./src/playwright.ts"

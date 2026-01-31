@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const ADMIN_ERROR_CODES = defineErrorCodes({
 	FAILED_TO_CREATE_USER: "Failed to create user",
