@@ -401,7 +401,7 @@ export function errorCodesExtractor(
 				}
 
 				console.log(
-					`\n✓ Generated ${generatedCount} error documentation files in ${docsOutputDir}`,
+					`\n✓ Generated ${generatedCount} code documentation files in ${docsOutputDir}`,
 				);
 			}
 		},
