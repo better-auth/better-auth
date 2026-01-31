@@ -12,6 +12,7 @@ import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import type { StateData } from "../../state";
+import { parseGenericState } from "../../state";
 import type { Account, User } from "../../types";
 import { getOrigin } from "../../utils/url";
 import type { OAuthProxyStatePackage } from "./types";
@@ -61,6 +62,7 @@ export interface OAuthProxyOptions {
 interface PassthroughPayload {
 	userInfo: Omit<User, "createdAt" | "updatedAt">;
 	account: Omit<Account, "id" | "userId" | "createdAt" | "updatedAt">;
+	state: string;
 	callbackURL: string;
 	newUserURL?: string;
 	errorURL?: string;
@@ -220,6 +222,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 					// Set session cookie
 					await setSessionCookie(ctx, result.data!);
+
+					// Clean up OAuth state (expires cookie and deletes verification)
+					try {
+						await parseGenericState(ctx, payload.state);
+					} catch {
+						// State may already be cleaned up or expired, ignore errors
+					}
 
 					// Redirect to final callback URL
 					const finalURL = result.isRegister
@@ -425,6 +434,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
 								scope: tokens.scopes?.join(","),
 							},
+							state: statePackage.state,
 							callbackURL: finalCallbackURL,
 							newUserURL: stateData.newUserURL,
 							errorURL: stateData.errorURL,

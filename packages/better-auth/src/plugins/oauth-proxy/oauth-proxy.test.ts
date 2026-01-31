@@ -492,6 +492,7 @@ describe("oauth-proxy", async () => {
 					accessToken?: string;
 					refreshToken?: string;
 				};
+				state: string;
 				callbackURL: string;
 				timestamp: number;
 			}>(decrypted);
@@ -500,6 +501,7 @@ describe("oauth-proxy", async () => {
 			expect(payload.userInfo.email).toBe("user@email.com");
 			expect(payload.account).toBeDefined();
 			expect(payload.account.providerId).toBe("google");
+			expect(payload.state).toBeDefined();
 			expect(payload.timestamp).toBeDefined();
 		});
 
@@ -643,6 +645,7 @@ describe("oauth-proxy", async () => {
 					accountId: "123",
 					accessToken: "test",
 				},
+				state: "test-state",
 				callbackURL: "/dashboard",
 				timestamp: Date.now() - 120000, // 2 minutes ago
 			};
@@ -694,6 +697,7 @@ describe("oauth-proxy", async () => {
 					accountId: "123",
 					accessToken: "test",
 				},
+				state: "test-state",
 				callbackURL: "/dashboard",
 				timestamp: Date.now() - 10000, // 10 seconds ago
 			};
@@ -832,6 +836,7 @@ describe("oauth-proxy", async () => {
 					accountId: "google-user-id",
 					accessToken: "test123",
 				},
+				state: "test-state",
 				callbackURL: "/dashboard",
 				timestamp: Date.now(),
 			};
