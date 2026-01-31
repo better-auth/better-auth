@@ -2,8 +2,7 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { router } from "../api";
 import type { InferAPI } from "./api";
-import type { PrettifyDeep } from "./helper";
-import type { InferPluginTypes, InferSession, InferUser } from "./models";
+import type { InferPluginTypes, Session, User } from "./models";
 import type { InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
@@ -21,8 +20,8 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		? InferPluginTypes<Options>
 		: {
 				Session: {
-					session: PrettifyDeep<InferSession<Options>>;
-					user: PrettifyDeep<InferUser<Options>>;
+					session: Session<Options["session"], Options["plugins"]>;
+					user: User<Options["user"], Options["plugins"]>;
 				};
 			} & InferPluginTypes<Options>;
 };

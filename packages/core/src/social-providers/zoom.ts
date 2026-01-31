@@ -96,11 +96,6 @@ export interface ZoomProfile extends Record<string, any> {
 	login_types: LoginType[];
 	/** User's personal meeting URL (Example: "example.com") */
 	personal_meeting_url: string;
-	/** This field has been deprecated and will not be supported in the future.
-	 * Use the phone_numbers field instead of this field.
-	 * The user's phone number (Example: "+1 800000000") */
-	// @deprecated true
-	phone_number?: string | undefined;
 	/** The URL for user's profile picture (Example: "example.com") */
 	pic_url: string;
 	/** Personal Meeting ID (PMI) (Example: 3542471135) */
@@ -131,9 +126,6 @@ export interface ZoomProfile extends Record<string, any> {
 	employee_unique_id?: string | undefined;
 	/** The manager for the user (Example: "thill@example.com") */
 	manager?: string | undefined;
-	/** The user's country for the company phone number (Example: "US")
-	 * @deprecated true */
-	phone_country?: string | undefined;
 	/** The phone number's ISO country code (Example: "+1") */
 	phone_numbers?: PhoneNumber[] | undefined;
 	/** The user's plan type (Example: "1") */

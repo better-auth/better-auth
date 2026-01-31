@@ -392,6 +392,227 @@ describe("oauth2 - account linking without trustedProviders", async () => {
 	});
 });
 
+describe("oauth2 - disableImplicitLinking", async () => {
+	const { auth, client, cookieSetter } = await getTestInstance({
+		socialProviders: {
+			google: {
+				clientId: "test",
+				clientSecret: "test",
+				enabled: true,
+			},
+		},
+		emailAndPassword: {
+			enabled: true,
+		},
+		account: {
+			accountLinking: {
+				enabled: true,
+				disableImplicitLinking: true,
+				trustedProviders: ["google"],
+			},
+		},
+	});
+
+	const ctx = await auth.$context;
+
+	it("should block implicit linking on sign-in even for trusted providers", async () => {
+		const testEmail = "implicit-block@example.com";
+
+		await ctx.adapter.create({
+			model: "user",
+			data: {
+				id: "implicit-block-user",
+				email: testEmail,
+				name: "Existing User",
+				emailVerified: true,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			},
+		});
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Test User",
+					sub: "google_implicit_block_123",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).toContain("error=account_not_linked");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: "implicit-block-user" }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeUndefined();
+	});
+
+	it("should allow new user sign-up even with disableImplicitLinking", async () => {
+		const newUserEmail = "new-user-implicit@example.com";
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: newUserEmail,
+					email_verified: true,
+					name: "New User",
+					sub: "google_new_user_implicit_456",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const oAuthHeaders = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				onSuccess: cookieSetter(oAuthHeaders),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: oAuthHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+
+		const user = await ctx.adapter.findOne<{ id: string }>({
+			model: "user",
+			where: [{ field: "email", value: newUserEmail }],
+		});
+		expect(user).toBeTruthy();
+	});
+
+	it("should allow explicit linkSocial when disableImplicitLinking is true", async () => {
+		const testEmail = "explicit-link@example.com";
+
+		const sessionHeaders = new Headers();
+		const signUpRes = await client.signUp.email(
+			{
+				email: testEmail,
+				password: "password123",
+				name: "Test User",
+			},
+			{
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(signUpRes.data).toBeTruthy();
+		const userId = signUpRes.data!.user.id;
+
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async () => {
+				const profile = {
+					email: testEmail,
+					email_verified: true,
+					name: "Test User",
+					sub: "google_explicit_link_789",
+					iat: 1234567890,
+					exp: 1234567890,
+					aud: "test",
+					iss: "test",
+				};
+				const idToken = await signJWT(profile, DEFAULT_SECRET);
+				return HttpResponse.json({
+					access_token: "test_access_token",
+					refresh_token: "test_refresh_token",
+					id_token: idToken,
+				});
+			}),
+		);
+
+		const linkRes = await client.linkSocial(
+			{
+				provider: "google",
+				callbackURL: "/settings",
+			},
+			{
+				headers: sessionHeaders,
+				onSuccess: cookieSetter(sessionHeaders),
+			},
+		);
+
+		expect(linkRes.error).toBeNull();
+		expect(linkRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state = new URL(linkRes.data!.url!).searchParams.get("state") || "";
+		let redirectLocation = "";
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test_code" },
+			method: "GET",
+			headers: sessionHeaders,
+			onError(context) {
+				redirectLocation = context.response.headers.get("location") || "";
+			},
+		});
+
+		expect(redirectLocation).not.toContain("error");
+		expect(redirectLocation).toContain("/settings");
+
+		const accounts = await ctx.adapter.findMany<{ providerId: string }>({
+			model: "account",
+			where: [{ field: "userId", value: userId }],
+		});
+		const googleAccount = accounts.find((a) => a.providerId === "google");
+		expect(googleAccount).toBeTruthy();
+	});
+});
+
 describe("oauth2 - override user info on sign-in", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
