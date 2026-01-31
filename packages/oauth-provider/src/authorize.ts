@@ -32,12 +32,13 @@ export function formatErrorURL(
 }
 
 export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
+	const fromFetch = ctx.request?.headers.get("sec-fetch-mode") === "cors";
 	const acceptJson = ctx.headers?.get("accept")?.includes("application/json");
-	if (acceptJson) {
-		return {
+	if (fromFetch || acceptJson) {
+		return ctx.json({
 			redirect: true,
 			url: uri.toString(),
-		};
+		});
 	} else {
 		throw ctx.redirect(uri);
 	}
