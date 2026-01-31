@@ -21,6 +21,8 @@ declare module "@better-auth/core" {
 	}
 }
 
+const MAX_AGE_IN_SECONDS = 60 * 5; // 5 minutes
+
 export const passkey = (options?: PasskeyOptions | undefined) => {
 	const opts = {
 		origin: null,
@@ -30,18 +32,17 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 			...options?.advanced,
 		},
 	};
-	const maxAgeInSeconds = 60 * 5; // 5 minutes
 
 	return {
 		id: "passkey",
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
 				opts,
-				{ maxAgeInSeconds },
+				{ maxAgeInSeconds: MAX_AGE_IN_SECONDS },
 			),
 			generatePasskeyAuthenticationOptions:
 				generatePasskeyAuthenticationOptions(opts, {
-					maxAgeInSeconds,
+					maxAgeInSeconds: MAX_AGE_IN_SECONDS,
 				}),
 			verifyPasskeyRegistration: verifyPasskeyRegistration(opts),
 			verifyPasskeyAuthentication: verifyPasskeyAuthentication(opts),
