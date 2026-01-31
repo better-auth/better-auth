@@ -121,7 +121,7 @@ export const auth = betterAuth({
                 getTempEmail: (phoneNumber) => {
                     return `${phoneNumber}@my-site.com`
                 },
-                //optionally, you can also pass `getTempName` function to generate a temporary name for the user
+                // Optionally, you can also pass `getTempName` function to generate a temporary name for the user
                 getTempName: (phoneNumber) => {
                     return phoneNumber
                 }
