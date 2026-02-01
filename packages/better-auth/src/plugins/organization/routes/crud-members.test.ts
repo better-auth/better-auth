@@ -338,12 +338,10 @@ describe("updateMemberRole", async () => {
 				}),
 			},
 		);
-		await auth.api.addMember({
-			body: {
-				organizationId: newOrg.data?.id as string,
-				userId: user.id,
-				role: "admin",
-			},
+		await client.organization.addMember({
+			organizationId: newOrg.data?.id as string,
+			userId: user.id,
+			role: "admin",
 		});
 		const updatedMember = await client.organization.updateMemberRole(
 			{
