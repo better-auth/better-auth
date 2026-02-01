@@ -36,17 +36,26 @@ export type SymmetricEncryptOptions = {
 	data: string;
 };
 
+async function rawEncrypt(secret: string, data: string): Promise<string> {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const dataAsBytes = utf8ToBytes(data);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return bytesToHex(chacha.encrypt(dataAsBytes));
+}
+
+async function rawDecrypt(secret: string, hex: string): Promise<string> {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const dataAsBytes = hexToBytes(hex);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+}
+
 export const symmetricEncrypt = async ({
 	key,
 	data,
 }: SymmetricEncryptOptions) => {
 	if (typeof key === "string") {
-		const keyAsBytes = await createHash("SHA-256").digest(key);
-		const dataAsBytes = utf8ToBytes(data);
-		const chacha = managedNonce(xchacha20poly1305)(
-			new Uint8Array(keyAsBytes),
-		);
-		return bytesToHex(chacha.encrypt(dataAsBytes));
+		return rawEncrypt(key, data);
 	}
 	const secret = key.keys.get(key.currentVersion);
 	if (!secret) {
@@ -54,10 +63,7 @@ export const symmetricEncrypt = async ({
 			`Secret version ${key.currentVersion} not found in keys`,
 		);
 	}
-	const keyAsBytes = await createHash("SHA-256").digest(secret);
-	const dataAsBytes = utf8ToBytes(data);
-	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
-	const ciphertext = bytesToHex(chacha.encrypt(dataAsBytes));
+	const ciphertext = await rawEncrypt(secret, data);
 	return formatEnvelope(key.currentVersion, ciphertext);
 };
 
@@ -71,12 +77,7 @@ export const symmetricDecrypt = async ({
 	data,
 }: SymmetricDecryptOptions) => {
 	if (typeof key === "string") {
-		const keyAsBytes = await createHash("SHA-256").digest(key);
-		const dataAsBytes = hexToBytes(data);
-		const chacha = managedNonce(xchacha20poly1305)(
-			new Uint8Array(keyAsBytes),
-		);
-		return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+		return rawDecrypt(key, data);
 	}
 	const envelope = parseEnvelope(data);
 	if (envelope) {
@@ -86,21 +87,11 @@ export const symmetricDecrypt = async ({
 				`Secret version ${envelope.version} not found in keys (key may have been retired)`,
 			);
 		}
-		const keyAsBytes = await createHash("SHA-256").digest(secret);
-		const dataAsBytes = hexToBytes(envelope.ciphertext);
-		const chacha = managedNonce(xchacha20poly1305)(
-			new Uint8Array(keyAsBytes),
-		);
-		return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+		return rawDecrypt(secret, envelope.ciphertext);
 	}
 	// Legacy bare-hex payload
 	if (key.legacySecret) {
-		const keyAsBytes = await createHash("SHA-256").digest(key.legacySecret);
-		const dataAsBytes = hexToBytes(data);
-		const chacha = managedNonce(xchacha20poly1305)(
-			new Uint8Array(keyAsBytes),
-		);
-		return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+		return rawDecrypt(key.legacySecret, data);
 	}
 	throw new Error(
 		"Cannot decrypt legacy bare-hex payload: no legacy secret available. Set BETTER_AUTH_SECRET for backwards compatibility.",

@@ -87,7 +87,7 @@ function parseSecretsEnv(
 	envValue: string | undefined,
 ): Array<{ version: number; value: string }> | null {
 	if (!envValue) return null;
-	return envValue.split(",").map((entry) => {
+	const entries = envValue.split(",").map((entry) => {
 		const colonIdx = entry.indexOf(":");
 		if (colonIdx === -1) {
 			throw new BetterAuthError(
@@ -100,8 +100,50 @@ function parseSecretsEnv(
 				`Invalid version in BETTER_AUTH_SECRETS: "${entry.slice(0, colonIdx)}". Version must be a non-negative integer.`,
 			);
 		}
-		return { version, value: entry.slice(colonIdx + 1) };
+		const value = entry.slice(colonIdx + 1);
+		if (!value) {
+			throw new BetterAuthError(
+				`Empty secret value for version ${version} in BETTER_AUTH_SECRETS.`,
+			);
+		}
+		return { version, value };
 	});
+	if (entries.length === 0) {
+		throw new BetterAuthError(
+			"BETTER_AUTH_SECRETS is set but contains no entries.",
+		);
+	}
+	return entries;
+}
+
+function validateSecretsArray(
+	secrets: Array<{ version: number; value: string }>,
+	logger: ReturnType<typeof createLogger>,
+): void {
+	if (secrets.length === 0) {
+		throw new BetterAuthError(
+			"`secrets` array must contain at least one entry.",
+		);
+	}
+	for (const s of secrets) {
+		if (!s.value) {
+			throw new BetterAuthError(
+				`Empty secret value for version ${s.version} in \`secrets\`.`,
+			);
+		}
+	}
+	const current = secrets[0];
+	if (current.value.length < 32) {
+		logger.warn(
+			`[better-auth] Warning: the current secret (version ${current.version}) should be at least 32 characters long for adequate security.`,
+		);
+	}
+	const entropy = estimateEntropy(current.value);
+	if (entropy < 120) {
+		logger.warn(
+			"[better-auth] Warning: the current secret appears low-entropy. Use a randomly generated secret for production.",
+		);
+	}
 }
 
 function buildSecretConfig(
@@ -115,7 +157,7 @@ function buildSecretConfig(
 	return {
 		keys,
 		currentVersion: secrets[0].version,
-		legacySecret: legacySecret !== DEFAULT_SECRET ? legacySecret : undefined,
+		legacySecret: legacySecret || undefined,
 	};
 }
 
@@ -163,19 +205,24 @@ Most of the features of Better Auth will not work correctly.`,
 		);
 	}
 
-	const secret =
-		options.secret ||
-		env.BETTER_AUTH_SECRET ||
-		env.AUTH_SECRET ||
-		DEFAULT_SECRET;
-
-	validateSecret(secret, logger);
-
 	const secretsArray =
 		options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS);
-	const secretConfig: string | SecretConfig = secretsArray
-		? buildSecretConfig(secretsArray, secret)
-		: secret;
+
+	const legacySecret =
+		options.secret || env.BETTER_AUTH_SECRET || env.AUTH_SECRET || "";
+
+	let secret: string;
+	let secretConfig: string | SecretConfig;
+
+	if (secretsArray) {
+		validateSecretsArray(secretsArray, logger);
+		secret = secretsArray[0].value;
+		secretConfig = buildSecretConfig(secretsArray, legacySecret);
+	} else {
+		secret = legacySecret || DEFAULT_SECRET;
+		validateSecret(secret, logger);
+		secretConfig = secret;
+	}
 
 	options = {
 		...options,

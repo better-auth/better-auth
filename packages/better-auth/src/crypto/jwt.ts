@@ -108,6 +108,12 @@ export async function symmetricEncodeJWT<T extends Record<string, any>>(
 		.encrypt(encryptionSecret);
 }
 
+const jwtDecryptOpts = {
+	clockTolerance: 15,
+	keyManagementAlgorithms: [alg],
+	contentEncryptionAlgorithms: [enc, "A256GCM"],
+};
+
 export async function symmetricDecodeJWT<T = any>(
 	token: string,
 	secret: string | SecretConfig,
@@ -119,26 +125,48 @@ export async function symmetricDecodeJWT<T = any>(
 		const { payload } = await jwtDecrypt(
 			token,
 			async ({ kid }) => {
-				for (const s of secrets) {
-					const encryptionSecret = deriveEncryptionSecret(s.value, salt);
-					if (kid === undefined) return encryptionSecret;
-
-					const thumbprint = await calculateJwkThumbprint(
-						{ kty: "oct", k: base64url.encode(encryptionSecret) },
-						"sha256",
-					);
-					if (kid === thumbprint) return encryptionSecret;
+				if (kid !== undefined) {
+					for (const s of secrets) {
+						const encryptionSecret = deriveEncryptionSecret(s.value, salt);
+						const thumbprint = await calculateJwkThumbprint(
+							{ kty: "oct", k: base64url.encode(encryptionSecret) },
+							"sha256",
+						);
+						if (kid === thumbprint) return encryptionSecret;
+					}
+					throw new Error("no matching decryption secret");
 				}
-				throw new Error("no matching decryption secret");
+				// kid is undefined — single secret: use it directly
+				if (secrets.length === 1) {
+					return deriveEncryptionSecret(secrets[0].value, salt);
+				}
+				// kid is undefined with multiple secrets: cannot determine
+				// which key to use. Try the current (first) secret.
+				return deriveEncryptionSecret(secrets[0].value, salt);
 			},
-			{
-				clockTolerance: 15,
-				keyManagementAlgorithms: [alg],
-				contentEncryptionAlgorithms: [enc, "A256GCM"],
-			},
+			jwtDecryptOpts,
 		);
 		return payload as T;
 	} catch {
+		// If kid was undefined and first secret failed, try remaining secrets
+		const secrets = getAllSecrets(secret);
+		if (secrets.length <= 1) return null;
+		for (let i = 1; i < secrets.length; i++) {
+			try {
+				const encryptionSecret = deriveEncryptionSecret(
+					secrets[i].value,
+					salt,
+				);
+				const { payload } = await jwtDecrypt(
+					token,
+					encryptionSecret,
+					jwtDecryptOpts,
+				);
+				return payload as T;
+			} catch {
+				continue;
+			}
+		}
 		return null;
 	}
 }
