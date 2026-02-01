@@ -74,6 +74,19 @@ To sign in a user anonymously, use the `signIn.anonymous()` method.
 const user = await authClient.signIn.anonymous()
 ```
 
+You can optionally pass a `name` and `image` to set the user's profile:
+
+```ts title="example.ts"
+const user = await authClient.signIn.anonymous({
+    name: "Guest User",
+    image: "https://example.com/avatar.png"
+})
+```
+
+<Callout type="info">
+If both `name` is provided in the request body and `generateName` is configured, the body value takes priority.
+</Callout>
+
 ### Link Account
 
 If a user is already signed in anonymously and tries to `signIn` or `signUp` with another method,
@@ -181,6 +194,10 @@ and the `/delete-anonymous-user` endpoint will no longer be accessible to anonym
 ### `generateName`
 
 A callback function that is called to generate a name for the anonymous user. Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
+
+<Callout type="info">
+If a `name` is provided in the request body when calling `signIn.anonymous()`, it will take priority over `generateName`.
+</Callout>
 
 ## Schema
 
