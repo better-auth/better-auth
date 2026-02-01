@@ -360,13 +360,17 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								undefined;
 							try {
 								Browser = await import("expo-web-browser");
-							} catch (error) {
-								throw new Error(
-									'"expo-web-browser" is not installed as a dependency!',
-									{
-										cause: error,
-									},
-								);
+							} catch {
+								try {
+									Browser = require("expo-web-browser");
+								} catch (error) {
+									throw new Error(
+										'"expo-web-browser" is not installed as a dependency!',
+										{
+											cause: error,
+										},
+									);
+								}
 							}
 
 							if (Platform.OS === "android") {
