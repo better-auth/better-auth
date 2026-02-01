@@ -251,5 +251,21 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				total,
 			};
 		},
+		removeTeamMember: async ({
+			teamId,
+			userId,
+		}: {
+			teamId: RealTeamId;
+			userId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			await adapter.delete({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: teamId },
+					{ field: "userId", value: userId },
+				],
+			});
+		},
 	};
 };

@@ -289,6 +289,45 @@ type Result = {
     You can limit the maximum number of members per team using the `maximumMembersPerTeam` option in the teams addon configuration.
 </Callout>
 
+## Removing a Team Member
+
+You can remove a member from a team using the `organization.removeTeamMember` method. This only removes the user from the team, not from the organization.
+
+<APIMethod
+    path="/organization/remove-team-member"
+    method="POST"
+    requireSession>
+```ts
+type removeTeamMember = {
+    /**
+     * The team the user should be removed from.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user ID which represents the user to be removed from the team.
+     */
+    userId: string = "user-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type Result = {
+    message: "Team member removed successfully."
+}
+```
+
+<Callout type="info">
+    The user must have `member:delete` permission to remove members from a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
 ## Listing Team Members
 
 You can list all members of a specific team using the `organization.listTeamMembers` method.
