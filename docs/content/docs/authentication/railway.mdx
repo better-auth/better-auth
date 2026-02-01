@@ -1,0 +1,114 @@
+---
+title: Railway
+description: Railway provider setup and usage.
+---
+
+<Steps>
+    <Step> 
+        ### Get your Railway credentials
+        To use Railway sign in, you need a client ID and client secret. You can get them from the [Railway Developer Settings](https://railway.com/account/developer).
+
+        1. Go to your Railway account's Developer Settings
+        2. Click "Create OAuth App"
+        3. Set the Application Type to "Web Application"
+        4. Set the redirect URL to `http://localhost:3000/api/auth/callback/railway` for local development. For production, you should set it to the URL of your application.
+
+        Make sure to save your client ID and client secret securely. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        <Callout type="info">
+            Railway uses PKCE (Proof Key for Code Exchange) for enhanced security. This is automatically handled by Better Auth.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        
+        export const auth = betterAuth({
+            socialProviders: {
+                railway: { // [!code highlight]
+                    clientId: process.env.RAILWAY_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.RAILWAY_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+    </Step>
+</Steps>
+
+## Usage
+
+### Sign in with Railway
+
+To sign in with Railway, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+
+- `provider`: The provider to use. It should be set to `railway`.
+
+```ts title="auth-client.ts"  
+import { createAuthClient } from "better-auth/client"
+const authClient = createAuthClient()
+
+const signIn = async () => {
+    const data = await authClient.signIn.social({
+        provider: "railway"
+    })
+}
+```
+
+## Options
+
+For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Available Scopes
+
+Railway OAuth supports the following scopes:
+
+| Scope | Description |
+|-------|-------------|
+| `openid` | Required for all requests (included by default) |
+| `email` | Access user's email address (included by default) |
+| `profile` | Access user's name and picture (included by default) |
+| `offline_access` | Receive refresh tokens for long-lived access |
+| `workspace:viewer` | Viewer access to user-selected workspaces |
+| `workspace:member` | Member access to user-selected workspaces |
+| `workspace:admin` | Admin access to user-selected workspaces |
+| `project:viewer` | Viewer access to user-selected projects |
+| `project:member` | Member access to user-selected projects |
+
+When requesting workspace or project scopes, users will select which specific workspaces or projects to share during the consent screen.
+
+You can specify additional scopes when configuring the provider:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    socialProviders: {
+        railway: {
+            clientId: process.env.RAILWAY_CLIENT_ID as string,
+            clientSecret: process.env.RAILWAY_CLIENT_SECRET as string,
+            scope: ["workspace:viewer", "project:viewer"], // [!code highlight]
+        },
+    },
+})
+```
+
+<Callout type="warn">
+    When requesting `offline_access` scope, Railway requires `prompt=consent` to be set in the authorization URL. You can do this using `authorizationParams`:
+
+    ```ts
+    railway: {
+        clientId: process.env.RAILWAY_CLIENT_ID as string,
+        clientSecret: process.env.RAILWAY_CLIENT_SECRET as string,
+        scope: ["offline_access"],
+        authorizationParams: { // [!code highlight]
+            prompt: "consent" // [!code highlight]
+        } // [!code highlight]
+    }
+    ```
+</Callout>
+
+For more information about Railway's OAuth implementation, refer to the [official Railway documentation](https://docs.railway.com/reference/oauth/login-with-railway).
