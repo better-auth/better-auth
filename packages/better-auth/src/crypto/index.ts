@@ -60,9 +60,7 @@ export const symmetricEncrypt = async ({
 	}
 	const secret = key.keys.get(key.currentVersion);
 	if (!secret) {
-		throw new Error(
-			`Secret version ${key.currentVersion} not found in keys`,
-		);
+		throw new Error(`Secret version ${key.currentVersion} not found in keys`);
 	}
 	const ciphertext = await rawEncrypt(secret, data);
 	return formatEnvelope(key.currentVersion, ciphertext);

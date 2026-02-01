@@ -420,7 +420,12 @@ describe("secret rotation", () => {
 			it("rejects hex string versions", () => {
 				expect(() =>
 					validateSecretsArray(
-						[{ version: "0x10" as any, value: "secret-a-at-least-32-chars-long!!" }],
+						[
+						{
+							version: "0x10" as any,
+							value: "secret-a-at-least-32-chars-long!!",
+						},
+					],
 						mockLogger,
 					),
 				).toThrow("non-negative integer");
@@ -429,7 +434,12 @@ describe("secret rotation", () => {
 			it("rejects scientific notation versions", () => {
 				expect(() =>
 					validateSecretsArray(
-						[{ version: "1e2" as any, value: "secret-a-at-least-32-chars-long!!" }],
+						[
+						{
+							version: "1e2" as any,
+							value: "secret-a-at-least-32-chars-long!!",
+						},
+					],
 						mockLogger,
 					),
 				).toThrow("non-negative integer");
@@ -440,9 +450,9 @@ describe("secret rotation", () => {
 					validateSecretsArray(
 						[
 							{
-							version: "1" as any,
-							value: "secret-a-at-least-32-chars-long!!",
-						},
+								version: "1" as any,
+								value: "secret-a-at-least-32-chars-long!!",
+							},
 							{ version: 1, value: "secret-b-at-least-32-chars-long!!" },
 						],
 						mockLogger,
@@ -492,9 +502,9 @@ describe("secret rotation", () => {
 					{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
 				];
 				const config = buildSecretConfig(
-				secrets,
-				"better-auth-secret-12345678901234567890",
-			);
+					secrets,
+					"better-auth-secret-12345678901234567890",
+				);
 				expect(config.legacySecret).toBeUndefined();
 			});
 		});

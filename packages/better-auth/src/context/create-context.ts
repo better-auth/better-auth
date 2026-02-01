@@ -31,9 +31,9 @@ import {
 	runPluginInit,
 } from "./helpers";
 import {
+	buildSecretConfig,
 	parseSecretsEnv,
 	validateSecretsArray,
-	buildSecretConfig,
 } from "./secret-utils";
 
 /**

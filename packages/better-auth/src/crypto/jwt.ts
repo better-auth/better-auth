@@ -169,10 +169,7 @@ export async function symmetricDecodeJWT<T = any>(
 		for (let i = 1; i < secrets.length; i++) {
 			try {
 				const s = secrets[i]!;
-				const encryptionSecret = deriveEncryptionSecret(
-					s.value,
-					salt,
-				);
+				const encryptionSecret = deriveEncryptionSecret(s.value, salt);
 				const { payload } = await jwtDecrypt(
 					token,
 					encryptionSecret,
