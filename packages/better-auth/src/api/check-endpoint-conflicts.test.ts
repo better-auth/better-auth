@@ -466,4 +466,152 @@ describe("checkEndpointConflicts", () => {
 
 		expect(mockLogger.error).not.toHaveBeenCalled();
 	});
+
+	it("should detect conflicts when public endpoints use the same path and method", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			publicEndpoints: {
+				public1: endpoint(
+					"/.well-known/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			publicEndpoints: {
+				public2: endpoint(
+					"/.well-known/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).toHaveBeenCalledTimes(1);
+		const errorCall = mockLogger.error.mock.calls[0]![0];
+		expect(errorCall).toContain("Public endpoint path conflicts:");
+		expect(errorCall).toContain(
+			'"/.well-known/shared" [GET] used by plugins: plugin1, plugin2',
+		);
+	});
+
+	it("should NOT log errors when public endpoints use the same path with different methods", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			publicEndpoints: {
+				public1: endpoint(
+					"/.well-known/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			publicEndpoints: {
+				public2: endpoint(
+					"/.well-known/shared",
+					{
+						method: "POST",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).not.toHaveBeenCalled();
+	});
+
+	it("should report both regular and public endpoint conflicts when both exist", () => {
+		const plugin1: BetterAuthPlugin = {
+			id: "plugin1",
+			endpoints: {
+				endpoint1: endpoint(
+					"/api/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin2: BetterAuthPlugin = {
+			id: "plugin2",
+			endpoints: {
+				endpoint2: endpoint(
+					"/api/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin3: BetterAuthPlugin = {
+			id: "plugin3",
+			publicEndpoints: {
+				public1: endpoint(
+					"/.well-known/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const plugin4: BetterAuthPlugin = {
+			id: "plugin4",
+			publicEndpoints: {
+				public2: endpoint(
+					"/.well-known/shared",
+					{
+						method: "GET",
+					},
+					vi.fn(),
+				),
+			},
+		};
+
+		const options: BetterAuthOptions = {
+			plugins: [plugin1, plugin2, plugin3, plugin4],
+		};
+
+		checkEndpointConflicts(options, mockLogger);
+
+		expect(mockLogger.error).toHaveBeenCalledTimes(1);
+		const errorCall = mockLogger.error.mock.calls[0]![0];
+		expect(errorCall).toContain("Endpoint path conflicts:");
+		expect(errorCall).toContain("Public endpoint path conflicts:");
+		expect(errorCall).toContain(
+			'"/api/shared" [GET] used by plugins: plugin1, plugin2',
+		);
+		expect(errorCall).toContain(
+			'"/.well-known/shared" [GET] used by plugins: plugin3, plugin4',
+		);
+	});
 });

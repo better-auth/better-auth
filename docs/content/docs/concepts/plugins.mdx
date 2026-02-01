@@ -140,6 +140,35 @@ For other properties, you can check the <Link href="https://github.com/bekacru/b
 - Make sure to use the `createAuthEndpoint` function to create API endpoints.
 - Make sure your paths are unique to avoid conflicts with other plugins. If you're using a common path, add the plugin name as a prefix to the path. (`/my-plugin/hello-world` instead of `/hello-world`.)
 
+### Public endpoints
+
+Some specs (like OAuth/OIDC discovery) require `/.well-known/*` endpoints to live at the origin root. You can expose those by adding `publicEndpoints` to your plugin.
+
+```ts title="plugin.ts"
+import { createAuthEndpoint } from "better-auth/api";
+
+const myPlugin = () => {
+    return {
+        id: "my-plugin",
+        publicEndpoints: {
+            wellKnownConfig: createAuthEndpoint("/.well-known/my-config", {
+                method: "GET",
+            }, async () => {
+                return {
+                    issuer: "https://example.com",
+                };
+            }),
+        },
+    } satisfies BetterAuthPlugin
+}
+```
+
+**Notes**
+
+- The main `auth.handler` auto-routes only `/.well-known/*` paths to public endpoints.
+- If you register a public endpoint at any other root path, you must call it through `auth.publicHandler` or mount that handler separately.
+- Public endpoints share the same middleware list as regular endpoints; path-matched middleware will only apply when its `path` matches the incoming public route.
+
 ### Schema
 
 You can define a database schema for your plugin by passing a `schema` object. The schema object should have the table name as the key and the schema definition as the value.
