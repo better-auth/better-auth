@@ -3,11 +3,8 @@ import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
-import {
-	type SecretConfig,
-	symmetricDecrypt,
-	symmetricEncrypt,
-} from "../../../crypto";
+import type { SecretConfig } from "../../../crypto";
+import { symmetricDecrypt, symmetricEncrypt } from "../../../crypto";
 import { generateRandomString } from "../../../crypto/random";
 import { parseUserOutput } from "../../../db/schema";
 import { TWO_FACTOR_ERROR_CODES } from "../error-code";

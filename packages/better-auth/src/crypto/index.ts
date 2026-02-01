@@ -1,3 +1,4 @@
+import type { SecretConfig } from "@better-auth/core";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
@@ -8,9 +9,9 @@ import {
 	utf8ToBytes,
 } from "@noble/ciphers/utils.js";
 
-const algorithm = { name: "HMAC", hash: "SHA-256" };
+export type { SecretConfig };
 
-export type { SecretConfig } from "@better-auth/core";
+const algorithm = { name: "HMAC", hash: "SHA-256" };
 
 const ENVELOPE_PREFIX = "$ba$";
 

@@ -13,12 +13,12 @@ import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
-import type { SecretConfig } from "./secret";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
+import type { SecretConfig } from "./secret";
 
 /**
  * @internal

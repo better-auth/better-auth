@@ -54,7 +54,11 @@ export function validateSecretsArray(
 	const seen = new Set<number>();
 	for (const s of secrets) {
 		const version = parseInt(String(s.version), 10);
-		if (!Number.isInteger(version) || version < 0 || String(version) !== String(s.version).trim()) {
+		if (
+			!Number.isInteger(version) ||
+			version < 0 ||
+			String(version) !== String(s.version).trim()
+		) {
 			throw new BetterAuthError(
 				`Invalid version ${s.version} in \`secrets\`. Version must be a non-negative integer.`,
 			);
@@ -71,7 +75,7 @@ export function validateSecretsArray(
 		}
 		seen.add(version);
 	}
-	const current = secrets[0];
+	const current = secrets[0]!;
 	if (current.value.length < 32) {
 		logger.warn(
 			`[better-auth] Warning: the current secret (version ${current.version}) should be at least 32 characters long for adequate security.`,
@@ -95,7 +99,7 @@ export function buildSecretConfig(
 	}
 	return {
 		keys,
-		currentVersion: parseInt(String(secrets[0].version), 10),
+		currentVersion: parseInt(String(secrets[0]!.version), 10),
 		legacySecret:
 			legacySecret && legacySecret !== DEFAULT_SECRET
 				? legacySecret

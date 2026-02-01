@@ -134,7 +134,7 @@ export async function symmetricDecodeJWT<T = any>(
 		const secrets = getAllSecrets(secret);
 		const { payload } = await jwtDecrypt(
 			token,
-			async (protectedHeader) => {
+			async (protectedHeader: { kid?: string }) => {
 				const kid = protectedHeader.kid;
 				if (kid !== undefined) {
 					for (const s of secrets) {
@@ -149,11 +149,11 @@ export async function symmetricDecodeJWT<T = any>(
 				}
 				// kid is undefined — single secret: use it directly
 				if (secrets.length === 1) {
-					return deriveEncryptionSecret(secrets[0].value, salt);
+					return deriveEncryptionSecret(secrets[0]!.value, salt);
 				}
 				// kid is undefined with multiple secrets: cannot determine
 				// which key to use. Try the current (first) secret.
-				return deriveEncryptionSecret(secrets[0].value, salt);
+				return deriveEncryptionSecret(secrets[0]!.value, salt);
 			},
 			jwtDecryptOpts,
 		);
@@ -168,8 +168,9 @@ export async function symmetricDecodeJWT<T = any>(
 		if (secrets.length <= 1) return null;
 		for (let i = 1; i < secrets.length; i++) {
 			try {
+				const s = secrets[i]!;
 				const encryptionSecret = deriveEncryptionSecret(
-					secrets[i].value,
+					s.value,
 					salt,
 				);
 				const { payload } = await jwtDecrypt(

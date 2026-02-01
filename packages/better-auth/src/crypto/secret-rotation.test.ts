@@ -1,5 +1,10 @@
-import { describe, expect, it } from "vitest";
 import type { SecretConfig } from "@better-auth/core";
+import { describe, expect, it } from "vitest";
+import {
+	buildSecretConfig,
+	parseSecretsEnv,
+	validateSecretsArray,
+} from "../context/secret-utils";
 import {
 	formatEnvelope,
 	parseEnvelope,
@@ -7,11 +12,6 @@ import {
 	symmetricEncrypt,
 } from "./index";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "./jwt";
-import {
-	parseSecretsEnv,
-	validateSecretsArray,
-	buildSecretConfig,
-} from "../context/secret-utils";
 
 describe("secret rotation", () => {
 	const secretA = "secret-a-at-least-32-chars-long!!";

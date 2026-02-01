@@ -162,7 +162,7 @@ Most of the features of Better Auth will not work correctly.`,
 
 	if (secretsArray) {
 		validateSecretsArray(secretsArray, logger);
-		secret = secretsArray[0].value;
+		secret = secretsArray[0]!.value;
 		secretConfig = buildSecretConfig(secretsArray, legacySecret);
 	} else {
 		secret = legacySecret || DEFAULT_SECRET;
