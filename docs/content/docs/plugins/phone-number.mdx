@@ -149,6 +149,10 @@ await authClient.phoneNumber.verify({
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
 
+<Callout type="warn">
+To sign in with a phone number and password, the user must have a corresponding record in the `account` table with the `providerId` set specifically to `"credential"`. If you are migrating from another auth provider or seeding users manually, ensure this record exists.
+</Callout>
+
 <APIMethod path="/sign-in/phone-number" method="POST">
 ```ts
 type signInPhoneNumber = {
