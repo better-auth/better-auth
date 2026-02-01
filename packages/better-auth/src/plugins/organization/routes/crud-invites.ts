@@ -695,11 +695,17 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				createdAt: new Date(),
 			});
 
-			await adapter.setActiveOrganization(
+			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
 				invitation.organizationId,
 				ctx,
 			);
+
+			await setSessionCookie(ctx, {
+				session: updatedSession,
+				user: session.user,
+			});
+
 			if (!acceptedI) {
 				return ctx.json(null, {
 					status: 400,
