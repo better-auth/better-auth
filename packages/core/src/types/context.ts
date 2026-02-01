@@ -13,6 +13,7 @@ import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
 import type { Awaitable, LiteralString } from "./helper";
+import type { SecretConfig } from "./secret";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
@@ -325,6 +326,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
+			secretConfig: string | SecretConfig;
 			sessionConfig: {
 				updateAge: number;
 				expiresIn: number;

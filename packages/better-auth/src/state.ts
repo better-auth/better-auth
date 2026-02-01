@@ -60,7 +60,7 @@ export async function generateGenericState(
 		// Store state data in an encrypted cookie
 
 		const encryptedData = await symmetricEncrypt({
-			key: c.context.secret,
+			key: c.context.secretConfig,
 			data: JSON.stringify(stateData),
 		});
 
@@ -143,7 +143,7 @@ export async function parseGenericState(
 
 		try {
 			const decryptedData = await symmetricDecrypt({
-				key: c.context.secret,
+				key: c.context.secretConfig,
 				data: encryptedData,
 			});
 

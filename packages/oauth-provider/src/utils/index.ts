@@ -113,7 +113,7 @@ export async function decryptStoredClientSecret(
 ) {
 	if (storageMethod === "encrypted") {
 		return await symmetricDecrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: storedClientSecret,
 		});
 	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
@@ -207,7 +207,7 @@ export async function storeClientSecret(
 
 	if (storageMethod === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: clientSecret,
 		});
 	} else if (storageMethod === "hashed") {

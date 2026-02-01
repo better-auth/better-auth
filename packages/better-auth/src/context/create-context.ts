@@ -1,4 +1,8 @@
-import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	SecretConfig,
+} from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
@@ -79,6 +83,42 @@ function validateSecret(
 	}
 }
 
+function parseSecretsEnv(
+	envValue: string | undefined,
+): Array<{ version: number; value: string }> | null {
+	if (!envValue) return null;
+	return envValue.split(",").map((entry) => {
+		const colonIdx = entry.indexOf(":");
+		if (colonIdx === -1) {
+			throw new BetterAuthError(
+				`Invalid BETTER_AUTH_SECRETS entry: "${entry}". Expected format: "<version>:<secret>"`,
+			);
+		}
+		const version = parseInt(entry.slice(0, colonIdx), 10);
+		if (!Number.isInteger(version) || version < 0) {
+			throw new BetterAuthError(
+				`Invalid version in BETTER_AUTH_SECRETS: "${entry.slice(0, colonIdx)}". Version must be a non-negative integer.`,
+			);
+		}
+		return { version, value: entry.slice(colonIdx + 1) };
+	});
+}
+
+function buildSecretConfig(
+	secrets: Array<{ version: number; value: string }>,
+	legacySecret: string,
+): SecretConfig {
+	const keys = new Map<number, string>();
+	for (const s of secrets) {
+		keys.set(s.version, s.value);
+	}
+	return {
+		keys,
+		currentVersion: secrets[0].version,
+		legacySecret: legacySecret !== DEFAULT_SECRET ? legacySecret : undefined,
+	};
+}
+
 export async function createAuthContext<Options extends BetterAuthOptions>(
 	adapter: DBAdapter,
 	options: Options,
@@ -130,6 +170,12 @@ Most of the features of Better Auth will not work correctly.`,
 		DEFAULT_SECRET;
 
 	validateSecret(secret, logger);
+
+	const secretsArray =
+		options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS);
+	const secretConfig: string | SecretConfig = secretsArray
+		? buildSecretConfig(secretsArray, secret)
+		: secret;
 
 	options = {
 		...options,
@@ -270,6 +316,7 @@ Most of the features of Better Auth will not work correctly.`,
 			})(),
 		},
 		secret,
+		secretConfig,
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,

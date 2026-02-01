@@ -115,7 +115,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					let decryptedPayload: string | null = null;
 					try {
 						decryptedPayload = await symmetricDecrypt({
-							key: ctx.context.secret,
+							key: ctx.context.secretConfig,
 							data: ctx.query.cookies,
 						});
 					} catch (e) {
@@ -299,7 +299,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let statePackage: OAuthProxyStatePackage | undefined;
 						try {
 							const decryptedPackage = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: state,
 							});
 							statePackage =
@@ -321,7 +321,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let stateCookieValue: string;
 						try {
 							stateCookieValue = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: statePackage.stateCookie,
 							});
 							parseJSON(stateCookieValue);
@@ -490,7 +490,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								isOAuthProxy: true,
 							};
 							const encryptedPackage = await symmetricEncrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: JSON.stringify(statePackage),
 							});
 
@@ -565,7 +565,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						};
 
 						const encryptedCookies = await symmetricEncrypt({
-							key: ctx.context.secret,
+							key: ctx.context.secretConfig,
 							data: JSON.stringify(payload),
 						});
 						const locationWithCookies = `${location}&cookies=${encodeURIComponent(

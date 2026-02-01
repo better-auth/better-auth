@@ -368,6 +368,19 @@ export type BetterAuthOptions = {
 	 */
 	secret?: string | undefined;
 	/**
+	 * Versioned secrets for non-destructive secret rotation.
+	 * When set, encryption uses an envelope format with key IDs.
+	 * First entry is the current key used for new encryption.
+	 * Remaining entries are decryption-only (previous rotations).
+	 *
+	 * Can also be set via BETTER_AUTH_SECRETS env var:
+	 * `BETTER_AUTH_SECRETS=2:base64secret,1:base64secret`
+	 *
+	 * When set, `secret` is only used as legacy fallback
+	 * for decrypting bare-hex payloads that predate the envelope format.
+	 */
+	secrets?: Array<{ version: number; value: string }> | undefined;
+	/**
 	 * Database configuration
 	 */
 	database?:
