@@ -439,4 +439,48 @@ describe("captcha", async (it) => {
 			expect(res.error?.status).toBe(403);
 		});
 	});
+
+	describe("botid", async (it) => {
+		const { client: badBotClient } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "vercel-botid",
+					validateRequest({ request, verification }) {
+						return !verification.isBot;
+					},
+					checkBotIdOptions: { developmentOptions: { bypass: "BAD-BOT" } },
+				}),
+			],
+		});
+
+		const { client: humanClient } = await getTestInstance({
+			plugins: [
+				captcha({
+					provider: "vercel-botid",
+					validateRequest({ request, verification }) {
+						return !verification.isBot;
+					},
+					checkBotIdOptions: { developmentOptions: { bypass: "HUMAN" } },
+				}),
+			],
+		});
+
+		it("should have expected error details when request is a bot", async () => {
+			const response = await badBotClient.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(response.error?.status).toBe(403);
+		});
+
+		it("should successfully sign in a human user", async () => {
+			const response = await humanClient.signIn.email({
+				email: "test@test.com",
+				password: "test123456",
+			});
+
+			expect(response.data?.user).toBeDefined();
+		});
+	});
 });

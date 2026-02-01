@@ -45,7 +45,10 @@
 				"react-dom",
 				"solid-js",
 				"svelte",
-				"vue"
+				"vue",
+
+				// implicit plugins dependencies
+				"botid"
 			]
 		},
 		"packages/core": {
