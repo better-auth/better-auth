@@ -1,0 +1,103 @@
+---
+title: Plex
+description: Plex provider setup and usage.
+---
+
+<Steps>
+    <Step>
+        ### Get your Plex Client Identifier
+        To use Plex sign in, you need a unique client identifier for your application. Unlike traditional OAuth providers, Plex uses PIN-based authentication and doesn't require a client secret.
+
+        You can generate a unique identifier (UUID or random string) for your application. Store this identifier securely as it should remain consistent across your application's lifetime.
+
+        <Callout type="info">
+            - Plex uses a PIN-based authentication flow instead of traditional OAuth2
+            - No client secret is required
+            - The same client identifier should be used consistently for your application
+            - For production applications, consider generating a UUID v4 as your client identifier
+        </Callout>
+    </Step>
+
+  <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+
+        export const auth = betterAuth({
+            socialProviders: {
+                plex: { // [!code highlight]
+                    clientId: process.env.PLEX_CLIENT_ID as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+
+        #### Options
+        The Plex provider accepts the following options:
+
+        - `clientId`: `string` **(required)** - A unique identifier for your application
+        - `product`: `string` - The name of your application/product (default: `"better-auth"`)
+        - `version`: `string` - The version of your application (default: `"1.0"`)
+        - `platform`: `string` - The platform your application runs on, e.g., "Web", "iOS", "Android" (default: `"Web"`)
+        - `device`: `string` - The device name (default: `"Browser"`)
+
+        ```ts title="auth.ts"
+        export const auth = betterAuth({
+            socialProviders: {
+                plex: {
+                    clientId: process.env.PLEX_CLIENT_ID as string,
+                    product: "My App",
+                    version: "1.0.0",
+                    platform: "Web",
+                    device: "Browser",
+                },
+            },
+        })
+        ```
+    </Step>
+       <Step>
+        ### Sign In with Plex
+        To sign in with Plex, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        - `provider`: The provider to use. It should be set to `plex`.
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        const authClient =  createAuthClient()
+
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
+                provider: "plex"
+            })
+        }
+        ```
+
+        ### How Plex Authentication Works:
+        1. A PIN is generated from the Plex API
+        2. User is redirected to Plex's authentication page
+        3. User authorizes the application on Plex
+        4. Plex redirects back to your application with the PIN
+        5. The PIN is exchanged for an access token
+        6. User information is fetched from Plex
+
+        <Callout type="info">
+            - Plex authentication uses a PIN-based flow, not traditional OAuth2
+            - Users must have a Plex account to sign in
+            - The authentication flow works with both free and Plex Pass accounts
+        </Callout>
+
+        ### Additional Options:
+        - `product`: The name of your application/product.
+            - Default: `"better-auth"`
+        - `version`: The version of your application.
+            - Default: `"1.0"`
+        - `platform`: The platform your application runs on.
+            - Default: `"Web"`
+            - Options: `"Web"`, `"iOS"`, `"Android"`, etc.
+        - `device`: The device name.
+            - Default: `"Browser"`
+        - `mapProfileToUser`: Custom function to map Plex profile data to user object.
+        - `getUserInfo`: Custom function to retrieve user information.
+    </Step>
+</Steps>

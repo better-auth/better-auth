@@ -20,6 +20,7 @@ import { naver } from "./naver";
 import { notion } from "./notion";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
+import { plex } from "./plex";
 import { polar } from "./polar";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
@@ -65,6 +66,7 @@ export const socialProviders = {
 	line,
 	paybin,
 	paypal,
+	plex,
 	polar,
 	vercel,
 };
@@ -101,7 +103,6 @@ export * from "./google";
 export * from "./huggingface";
 export * from "./kakao";
 export * from "./kick";
-export * from "./kick";
 export * from "./line";
 export * from "./linear";
 export * from "./linkedin";
@@ -111,6 +112,7 @@ export * from "./naver";
 export * from "./notion";
 export * from "./paybin";
 export * from "./paypal";
+export * from "./plex";
 export * from "./polar";
 export * from "./reddit";
 export * from "./roblox";
