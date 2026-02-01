@@ -3,6 +3,7 @@ import { sha256 } from "@noble/hashes/sha2.js";
 import {
 	base64url,
 	calculateJwkThumbprint,
+	decodeProtectedHeader,
 	EncryptJWT,
 	jwtDecrypt,
 	jwtVerify,
@@ -120,11 +121,21 @@ export async function symmetricDecodeJWT<T = any>(
 	salt: string,
 ): Promise<T | null> {
 	if (!token) return null;
+	// Parse the JWT header to check if kid is present
+	let hasKid = false;
+	try {
+		const header = decodeProtectedHeader(token);
+		hasKid = header.kid !== undefined;
+	} catch {
+		return null;
+	}
+
 	try {
 		const secrets = getAllSecrets(secret);
 		const { payload } = await jwtDecrypt(
 			token,
-			async ({ kid }) => {
+			async (protectedHeader) => {
+				const kid = protectedHeader.kid;
 				if (kid !== undefined) {
 					for (const s of secrets) {
 						const encryptionSecret = deriveEncryptionSecret(s.value, salt);
@@ -148,6 +159,10 @@ export async function symmetricDecodeJWT<T = any>(
 		);
 		return payload as T;
 	} catch {
+		// Only try fallback if token has no kid
+		if (hasKid) {
+			return null;
+		}
 		// If kid was undefined and first secret failed, try remaining secrets
 		const secrets = getAllSecrets(secret);
 		if (secrets.length <= 1) return null;
