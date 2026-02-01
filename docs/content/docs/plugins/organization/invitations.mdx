@@ -1,0 +1,365 @@
+---
+title: Invitations
+description: Set up the invitation system for your organizations.
+---
+
+The invitation system allows organization admins to invite new members via email.
+When a user is invited, they receive an invitation that they can accept or reject.
+
+## Creating an Invitation
+
+To invite a user to an organization, use the `organization.inviteMember` method:
+
+<APIMethod
+    path="/organization/invite-member"
+    method="POST"
+    requireSession
+    note="Requires admin or owner permissions by default.">
+```ts
+type inviteMember = {
+    /**
+     * The email address of the user to invite.
+     */
+    email: string = "user@example.com"
+    /**
+     * The role(s) to assign to the user when they accept.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "member"
+    /**
+     * The organization ID to invite the user to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * If true, resends the invitation email for an existing
+     * pending invitation instead of creating a new one.
+     */
+    resend?: boolean = false
+}
+```
+</APIMethod>
+
+
+### Inviting with Multiple Roles
+
+You can assign multiple roles to an invited user:
+
+```ts
+await authClient.organization.inviteMember({
+    email: "newmember@example.com",
+    role: ["admin", "moderator"], // Multiple roles
+})
+```
+
+### Resending an Invitation
+
+If a user hasn't responded to an invitation, you can resend it:
+
+```ts
+await authClient.organization.inviteMember({
+    email: "existingInvite@example.com",
+    role: "member",
+    resend: true, // Reuses existing invitation and updates expiration
+})
+```
+
+<Callout type="info">
+    When `resend` is true, the existing invitation is reused and its expiration
+    date is updated. No duplicate invitation is created.
+</Callout>
+
+---
+
+## Getting an Invitation
+
+Before accepting or rejecting an invitation, users can retrieve the
+invitation details using the `organization.getInvitation` method.
+
+This returns information about the invitation including the organization name,
+inviter details, and assigned role.
+
+<APIMethod
+    path="/organization/get-invitation"
+    method="GET"
+    requireSession
+    note="The user's email must match the invitation email.">
+```ts
+type getInvitation = {
+    /**
+     * The ID of the invitation to retrieve.
+     */
+    id: string = "invitation-id"
+}
+```
+</APIMethod>
+
+## Accepting an Invitation
+
+When a user receives an invitation, they can accept it using the `organization.acceptInvitation` method:
+
+<APIMethod
+    path="/organization/accept-invitation"
+    method="POST"
+    requireSession
+    note="The user's email must match the invitation email.">
+```ts
+type acceptInvitation = {
+    /**
+     * The ID of the invitation to accept.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
+## Rejecting an Invitation
+
+If a user doesn't want to join an organization, they can reject the
+invitation using the `organization.rejectInvitation` method:
+
+<APIMethod
+    path="/organization/reject-invitation"
+    method="POST"
+    requireSession
+    note="The user's email must match the invitation email."
+>
+```ts
+type rejectInvitation = {
+    /**
+     * The ID of the invitation to reject.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
+## Canceling an Invitation
+
+Organization members with the appropriate permissions can cancel a pending
+invitation using the `organization.cancelInvitation` method:
+
+<APIMethod
+    path="/organization/cancel-invitation"
+    method="POST"
+    requireSession
+    note="Requires invitation:cancel permission. The caller must be a member of the organization."
+>
+```ts
+type cancelInvitation = {
+    /**
+     * The ID of the invitation to cancel.
+     */
+    invitationId: string = "invitation-id"
+}
+```
+</APIMethod>
+
+## Listing Invitations
+
+Organization members can retrieve all invitations for their organization
+using the `organization.listInvitations` method. This endpoint supports
+pagination, sorting, and filtering.
+
+<APIMethod
+    path="/organization/list-invitations"
+    method="GET"
+    requireSession
+    note="The caller must be a member of the organization."
+>
+```ts
+type listInvitations = {
+    /**
+     * The ID of the organization to list invitations for.
+     * If not provided, uses the active organization from the session.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Maximum number of invitations to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of invitations to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt", "expiresAt", "email", "status"
+     */
+    sortBy?: "createdAt" | "expiresAt" | "email" | "status" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+    /**
+     * Filter by invitation status.
+     */
+    status?: "pending" | "accepted" | "rejected" | "canceled"
+}
+```
+</APIMethod>
+
+The response includes the list of invitations and the total count for pagination:
+
+```ts
+type ListInvitationsResponse = {
+    invitations: Invitation[]
+    total: number
+}
+```
+
+## Listing User Invitations
+
+Users can retrieve all pending invitations they have received across all organizations
+using the `organization.listUserInvitations` method.
+
+<APIMethod
+    path="/organization/list-user-invitations"
+    method="GET"
+    requireSession
+    note="Returns only pending invitations. Server-side calls can optionally pass an email query parameter."
+>
+```ts
+type listUserInvitations = {
+    /**
+     * The email of the user to list invitations for.
+     * Only available for server-side API calls.
+     * If not provided, uses the authenticated user's email.
+     */
+    email?: string = "user@example.com"
+}
+```
+</APIMethod>
+
+The response is an array of pending invitations:
+
+```ts
+type ListUserInvitationsResponse = Array<{
+    id: string
+    email: string
+    role: string
+    organizationId: string
+    organizationName: string
+    inviterId: string
+    teamId: string | null
+    status: string
+    expiresAt: string
+    createdAt: string
+}>
+```
+
+## Configuration Options
+
+### `sendInvitationEmail`
+
+Configure how invitation emails are sent. This function is called whenever an invitation is created or resent.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization({
+            sendInvitationEmail: async (data, ctx) => {
+                const { email, organization, inviter, invitation } = data
+                
+                // Send email using your email provider
+                await sendEmail({
+                    to: email,
+                    subject: `You've been invited to ${organization.name}`,
+                    html: `
+                        <p>${inviter.user.name} invited you to join ${organization.name}</p>
+                        <p>Role: ${invitation.role}</p>
+                        <a href="https://yourapp.com/accept-invite?id=${invitation.id}">
+                            Accept Invitation
+                        </a>
+                    `
+                })
+            }
+        })
+    ]
+})
+```
+
+The `sendInvitationEmail` function receives:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | `string` | Invitation ID |
+| `email` | `string` | Invitee's email address |
+| `role` | `string` | Role(s) to be assigned |
+| `organization` | `Organization` | The organization object |
+| `invitation` | `Invitation` | The full invitation object |
+| `inviter` | `Member & { user: User }` | The member who sent the invitation |
+
+### `invitationExpiresIn`
+
+Set how long invitations remain valid (in seconds).
+
+```ts
+organization({
+    invitationExpiresIn: 60 * 60 * 24 * 7 // 7 days
+})
+```
+
+**Default:** `172800` (48 hours)
+
+### `invitationLimit`
+
+Limit the number of pending invitations per organization. Can be a number or an async function.
+
+```ts
+// Static limit
+organization({
+    invitationLimit: 10
+})
+
+// Dynamic limit based on organization
+organization({
+    invitationLimit: async ({ organization, member, user }, ctx) => {
+        // Premium orgs get more invitations
+        if (organization.metadata?.plan === "premium") {
+            return 100
+        }
+        return 10
+    }
+})
+```
+
+**Default:** `100`
+
+### `cancelPendingInvitationsOnReInvite`
+
+When `true`, cancels any existing pending invitations before creating a new one for the same email.
+
+```ts
+organization({
+    cancelPendingInvitationsOnReInvite: true
+})
+```
+
+**Default:** `false`
+
+<Callout type="info">
+    This differs from `resend`. With `cancelPendingInvitationsOnReInvite`, a new 
+    invitation is created and the old one is marked as canceled. With `resend`, 
+    the existing invitation is reused.
+</Callout>
+
+---
+
+## Invitation Schema
+
+The invitation table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `organizationId` | `string` | Organization reference |
+| `email` | `string` | Invitee's email address |
+| `role` | `string` | Role(s) to assign on acceptance |
+| `status` | `string` | `pending`, `accepted`, `rejected`, `canceled` |
+| `inviterId` | `string` | User who sent the invitation |
+| `expiresAt` | `Date` | Expiration timestamp |
+| `createdAt` | `Date` | Creation timestamp |

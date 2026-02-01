@@ -1,0 +1,511 @@
+---
+title: Teams
+description: Learn how to create, update, and manage teams.
+---
+
+Teams are a way to group members within an organization.
+
+## Set Up 
+
+<Steps>
+    <Step>
+        ### 1. Add the teams addon
+       To add the teams addon, simply add the `teams()` addon into the `organization()` plugin.
+
+        ```ts title="auth.ts"
+        import { organization } from "better-auth/plugins";
+        import { teams } from "@better-auth/organization/addons"; // [!code highlight]
+
+        export const auth = betterAuth({
+            plugins: [
+                organization({
+                    use: [teams()], // [!code highlight]
+                }),
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### 2. Migrate the database
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+                ```bash
+                npx @better-auth/cli migrate
+                ```
+            </Tab>
+            <Tab value="generate">
+                ```bash
+                npx @better-auth/cli generate
+                ```
+            </Tab>
+        </Tabs>
+    </Step>
+</Steps>
+
+That's it! You can now start utilizing team functionality in your application.
+
+---
+
+## Creating a Team
+
+You can create a team within an organization using the `organization.createTeam` method.
+
+<APIMethod
+    path="/organization/create-team"
+    method="POST"
+    requireSession>
+```ts
+type createTeam = {
+    /**
+     * The name of the team.
+     */
+    name: string = "Engineering"
+    /**
+     * The organization ID which the team will belong to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The slug of the team.
+     * Only required if `enableSlugs` is set to true in the teams addon options.
+     */
+    slug?: string = "engineering"
+}
+```
+</APIMethod>
+
+Returns the created team:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `team:create` permission to create a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
+<Callout type="warn">
+    You can limit the maximum number of teams per organization using the `maximumTeams` option in the teams addon configuration.
+</Callout>
+
+## Updating a Team
+
+You can update a team in an organization using the `organization.updateTeam` method.
+
+<APIMethod
+    path="/organization/update-team"
+    method="POST"
+    requireSession>
+```ts
+type updateTeam = {
+    /**
+     * The ID of the team to be updated.
+     */
+    teamId: string = "team-id"
+    /**
+     * The data to update the team with.
+     */
+    data: {
+        /**
+         * The new name of the team.
+         */
+        name?: string = "Updated Engineering"
+        /**
+         * The organization ID which the team belongs to.
+         * If not provided, uses the active organization.
+         */
+        organizationId?: string = "org-id"
+    }
+}
+```
+</APIMethod>
+
+Returns the updated team:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `team:update` permission to update a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
+## Removing a Team
+
+You can remove a team from an organization using the `organization.removeTeam` method.
+
+<APIMethod
+    path="/organization/remove-team"
+    method="POST"
+    requireSession>
+```ts
+type removeTeam = {
+    /**
+     * The team ID of the team to remove.
+     */
+    teamId: string = "team-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type Result = {
+    message: "Team removed successfully."
+}
+```
+
+<Callout type="warn">
+    By default, the last team in an organization cannot be removed.
+    To allow removing all teams, set `allowRemovingAllTeams: true` in the teams addon options.
+</Callout>
+
+## Listing Teams
+
+You can list all teams in an organization using the `organization.listTeams` method. This endpoint supports pagination and sorting.
+
+<APIMethod
+    path="/organization/list-teams"
+    method="GET"
+    requireSession>
+```ts
+type listOrganizationTeams = {
+    /**
+     * The organization ID which the teams belong to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Maximum number of teams to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of teams to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt", "name", "updatedAt"
+     */
+    sortBy?: "createdAt" | "name" | "updatedAt" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+}
+```
+</APIMethod>
+
+Returns a paginated result with teams and total count:
+
+```ts
+type Result = {
+    teams: Array<{
+        id: string;
+        name: string;
+        organizationId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of teams in the organization.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+    The user must be a member of the organization to list its teams.
+</Callout>
+
+## Getting a Team
+
+You can get a specific team by its ID or slug using the `organization.getTeam` method.
+
+<APIMethod
+    path="/organization/get-team"
+    method="GET"
+    requireSession>
+```ts
+type getTeam = {
+    /**
+     * The ID of the team to retrieve.
+     * Can be the team's id or slug based on the `defaultTeamIdField` configuration.
+     */
+    teamId: string = "team-id"
+    /**
+     * The organization ID which the team belongs to.
+     * Can be the organization's id or slug based on the `defaultOrganizationIdField` configuration.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns the team:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    slug?: string; // If slugs are enabled
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must be a member of the organization to get a team.
+</Callout>
+
+## Adding a Team Member
+
+You can add an existing organization member to a team using the `organization.addTeamMember` method. The user must already be a member of the organization before they can be added to a team.
+
+<APIMethod
+    path="/organization/add-team-member"
+    method="POST"
+    requireSession>
+```ts
+type addTeamMember = {
+    /**
+     * The team the user should be a member of.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user ID which represents the user to be added as a member.
+     */
+    userId: string = "user-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns the created team member:
+
+```ts
+type Result = {
+    id: string;
+    userId: string;
+    teamId: string;
+    createdAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `member:update` permission to add members to a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
+<Callout type="warn">
+    You can limit the maximum number of members per team using the `maximumMembersPerTeam` option in the teams addon configuration.
+</Callout>
+
+## Removing a Team Member
+
+You can remove a member from a team using the `organization.removeTeamMember` method. This only removes the user from the team, not from the organization.
+
+<APIMethod
+    path="/organization/remove-team-member"
+    method="POST"
+    requireSession>
+```ts
+type removeTeamMember = {
+    /**
+     * The team the user should be removed from.
+     */
+    teamId: string = "team-id"
+    /**
+     * The user ID which represents the user to be removed from the team.
+     */
+    userId: string = "user-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type Result = {
+    message: "Team member removed successfully."
+}
+```
+
+<Callout type="info">
+    The user must have `member:delete` permission to remove members from a team. By default, this permission is granted to `owner` and `admin` roles.
+</Callout>
+
+## Listing Team Members
+
+You can list all members of a specific team using the `organization.listTeamMembers` method.
+
+<APIMethod
+    path="/organization/list-team-members"
+    method="GET"
+    requireSession>
+```ts
+type listTeamMembers = {
+    /**
+     * The team whose members should be returned.
+     * If not provided, uses the active team from the session.
+     */
+    teamId?: string = "team-id"
+    /**
+     * Maximum number of members to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of members to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt"
+     */
+    sortBy?: "createdAt" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+}
+```
+</APIMethod>
+
+Returns a paginated result with team members and total count:
+
+```ts
+type Result = {
+    members: Array<{
+        id: string;
+        userId: string;
+        teamId: string;
+        createdAt: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of members in the team.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+    The user must be a member of the team to list its members.
+</Callout>
+
+## Listing User Teams
+
+You can list all teams that the current user is a member of using the `organization.listUserTeams` method. This returns teams across all organizations the user belongs to. This endpoint supports pagination.
+
+<APIMethod
+    path="/organization/list-user-teams"
+    method="GET"
+    requireSession>
+```ts
+type listUserTeams = {
+    /**
+     * Maximum number of teams to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of teams to skip for pagination.
+     */
+    offset?: number = 0
+}
+```
+</APIMethod>
+
+Returns a paginated result with teams and total count:
+
+```ts
+type Result = {
+    teams: Array<{
+        id: string;
+        name: string;
+        organizationId: string;
+        createdAt: Date;
+        updatedAt: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of teams the user is a member of.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+    This endpoint returns teams from all organizations the user is a member of, not just the active organization.
+</Callout>
+
+## Setting the Active Team
+
+You can set a team as the active team for the current session using the `organization.setActiveTeam` method. This stores the active team ID in the session, making it available for subsequent API calls.
+
+<APIMethod
+    path="/organization/set-active-team"
+    method="POST"
+    requireSession>
+```ts
+type setActiveTeam = {
+    /**
+     * The team ID to set as active.
+     * Pass null to unset the active team.
+     */
+    teamId?: string | null = "team-id"
+}
+```
+</APIMethod>
+
+Returns the team that was set as active, or `null` if the active team was unset:
+
+```ts
+type Result = {
+    id: string;
+    name: string;
+    organizationId: string;
+    createdAt: Date;
+    updatedAt: Date;
+    // Additional fields if configured in schema
+} | null
+```
+
+<Callout type="info">
+    The user must be a member of the team to set it as active. An active organization must also be set before setting an active team.
+</Callout>
