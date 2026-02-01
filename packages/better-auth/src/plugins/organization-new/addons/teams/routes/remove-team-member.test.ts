@@ -8,7 +8,7 @@ describe("remove team member", async (it) => {
 		use: [teams()],
 	});
 	const { auth, signInWithTestUser } = await defineInstance([plugin]);
-	const { headers: ownerHeaders, user: ownerUser } = await signInWithTestUser();
+	const { headers: ownerHeaders } = await signInWithTestUser();
 
 	let organizationId: string;
 	let defaultTeamId: string;
