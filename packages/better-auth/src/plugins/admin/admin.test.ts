@@ -437,6 +437,20 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
+	it("should allow to filter users by multiple roles", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: ["admin", "user"],
+				filterField: "role",
+				filterOperator: "in",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data?.users.length).toBe(3);
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{
