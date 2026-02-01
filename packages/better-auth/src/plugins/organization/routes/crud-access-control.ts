@@ -156,7 +156,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						field: "userId",
 						value: user.id,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -215,7 +214,6 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						field: "organizationId",
 						value: organizationId,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -348,7 +346,6 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						field: "userId",
 						value: user.id,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -419,14 +416,12 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
-					connector: "AND",
 				};
 			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
-					connector: "AND",
 				};
 			} else {
 				// shouldn't be able to reach here given the schema validation.
@@ -541,7 +536,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						field: "userId",
 						value: user.id,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -594,7 +588,6 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						field: "organizationId",
 						value: organizationId,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -680,7 +673,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						field: "userId",
 						value: user.id,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -737,7 +729,6 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 					field: "id",
 					value: ctx.query.roleId,
 					operator: "eq",
-					connector: "AND",
 				};
 			} else {
 				// shouldn't be able to reach here given the schema validation.
@@ -884,7 +875,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						field: "userId",
 						value: user.id,
 						operator: "eq",
-						connector: "AND",
 					},
 				],
 			});
@@ -936,7 +926,6 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
-					connector: "AND",
 				};
 			} else {
 				// shouldn't be able to reach here given the schema validation.
@@ -1220,7 +1209,6 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 				field: "role",
 				value: role,
 				operator: "eq",
-				connector: "AND",
 			},
 		],
 	});
