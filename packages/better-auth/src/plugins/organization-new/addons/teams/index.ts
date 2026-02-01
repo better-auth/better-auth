@@ -2,6 +2,7 @@ import type { Addon } from "../../types";
 import { createDefaultTeam } from "./create-default-team";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
+import { addTeamMember } from "./routes/add-team-member";
 import { createTeam } from "./routes/create-team";
 import { listOrganizationTeams } from "./routes/list-organization-teams";
 import { listTeamMembers } from "./routes/list-team-members";
@@ -28,6 +29,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 			Team: {} as InferTeam<O>,
 		},
 		endpoints: {
+			addTeamMember: addTeamMember(_options),
 			createTeam: createTeam(_options),
 			listTeams: listOrganizationTeams(_options),
 			listTeamMembers: listTeamMembers(_options),
