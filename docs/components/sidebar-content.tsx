@@ -1,11 +1,13 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	Activity,
 	Binoculars,
 	Book,
 	CircleHelp,
 	Database,
 	Gauge,
+	IdCard,
 	Key,
 	KeyRound,
 	LucideAArrowDown,
@@ -14,6 +16,7 @@ import {
 	Phone,
 	ScanFace,
 	ShieldCheck,
+	ShieldPlusIcon,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
@@ -1720,6 +1723,67 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Organization",
 				icon: () => <Users2 className="w-4 h-4" />,
 				href: "/docs/plugins/organization",
+				isUpdated: true,
+				children: [
+					{
+						title: "APIs",
+						group: true,
+						href: "",
+						icon: () => <LucideAArrowDown className="w-4 h-4" />,
+					},
+					{
+						title: "Organizations",
+						href: "/docs/plugins/organization/organizations",
+						icon: () => <Users2 className="w-4 h-4" />,
+					},
+					{
+						title: "Members",
+						href: "/docs/plugins/organization/members",
+						icon: () => <UserCircle className="w-4 h-4" />,
+					},
+					{
+						title: "Invitations",
+						href: "/docs/plugins/organization/invitations",
+						icon: () => <Mail className="w-4 h-4" />,
+					},
+					{
+						title: "Access Control",
+						href: "/docs/plugins/organization/access-control",
+						icon: () => <ShieldCheck className="w-4 h-4" />,
+					},
+					{
+						title: "Addons",
+						group: true,
+						href: "",
+						icon: () => <LucideAArrowDown className="w-4 h-4" />,
+					},
+					{
+						title: "Teams",
+						href: "/docs/plugins/organization/teams",
+						icon: () => <Users2 className="w-4 h-4" />,
+					},
+					{
+						title: "Dynamic Access Control",
+						href: "/docs/plugins/organization/dynamic-access-control",
+						icon: () => <ShieldPlusIcon className="w-4 h-4" />,
+					},
+					{
+						title: "Concepts",
+						group: true,
+						href: "",
+						icon: () => <LucideAArrowDown className="w-4 h-4" />,
+					},
+					{
+						title: "Organization Identifiers",
+						href: "/docs/plugins/organization/organization-identifiers",
+						icon: () => <IdCard className="w-4 h-4" />,
+					},
+					{
+						title: "Active Organizations",
+						href: "/docs/plugins/organization/active-organizations",
+						icon: () => <Activity className="w-4 h-4" />,
+					},
+				],
 			},
 			{
 				title: "Enterprise",

@@ -20,11 +20,7 @@ export default function ArticleLayout() {
 
 	function getDefaultValue() {
 		const defaultValue = contents.findIndex((item) =>
-			item.list.some(
-				(listItem) =>
-					listItem.href === pathname ||
-					listItem.children?.some((child) => child.href === pathname),
-			),
+			item.list.some((listItem) => listItem.href === pathname),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
 	}
