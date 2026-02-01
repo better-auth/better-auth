@@ -3224,6 +3224,8 @@ describe("api-key", async () => {
 			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result3.valid).toBe(false);
 			expect(result3.error?.code).toBe("RATE_LIMITED");
+			expect(result3.error).toHaveProperty("details");
+			expect((result3.error as any)?.details).toHaveProperty("tryAgainIn");
 		});
 
 		it("should defer remaining count updates", async () => {
