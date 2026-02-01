@@ -504,7 +504,7 @@ export const contents: Content[] = [
 				title: "Social Sign-On",
 				group: true,
 				icon: LucideAArrowDown,
-				href: "",
+				href: "/docs/authentication/apple",
 			},
 			{
 				title: "Apple",
