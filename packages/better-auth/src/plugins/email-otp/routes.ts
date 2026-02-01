@@ -271,7 +271,7 @@ export const getVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			let otp = storedOtp;
 			if (opts.storeOTP === "encrypted") {
 				otp = await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedOtp,
 				});
 			}

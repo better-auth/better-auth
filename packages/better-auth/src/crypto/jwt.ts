@@ -8,6 +8,7 @@ import {
 	jwtVerify,
 	SignJWT,
 } from "jose";
+import type { SecretConfig } from "./index";
 
 export async function signJWT(
 	payload: any,
@@ -47,19 +48,52 @@ const now = () => (Date.now() / 1000) | 0;
 const alg = "dir";
 const enc = "A256CBC-HS512"; // 64 bytes key
 
-export async function symmetricEncodeJWT<T extends Record<string, any>>(
-	payload: T,
-	secret: string,
-	salt: string,
-	expiresIn: number = 3600,
-): Promise<string> {
-	const encryptionSecret = hkdf(
+function deriveEncryptionSecret(secret: string, salt: string): Uint8Array {
+	return hkdf(
 		sha256,
 		new TextEncoder().encode(secret),
 		new TextEncoder().encode(salt),
 		info,
 		64,
 	);
+}
+
+function getCurrentSecret(secret: string | SecretConfig): string {
+	if (typeof secret === "string") return secret;
+	const value = secret.keys.get(secret.currentVersion);
+	if (!value) {
+		throw new Error(
+			`Secret version ${secret.currentVersion} not found in keys`,
+		);
+	}
+	return value;
+}
+
+function getAllSecrets(
+	secret: string | SecretConfig,
+): Array<{ version: number; value: string }> {
+	if (typeof secret === "string") return [{ version: 0, value: secret }];
+	const result: Array<{ version: number; value: string }> = [];
+	for (const [version, value] of secret.keys) {
+		result.push({ version, value });
+	}
+	if (
+		secret.legacySecret &&
+		!result.some((s) => s.value === secret.legacySecret)
+	) {
+		result.push({ version: -1, value: secret.legacySecret });
+	}
+	return result;
+}
+
+export async function symmetricEncodeJWT<T extends Record<string, any>>(
+	payload: T,
+	secret: string | SecretConfig,
+	salt: string,
+	expiresIn: number = 3600,
+): Promise<string> {
+	const currentSecret = getCurrentSecret(secret);
+	const encryptionSecret = deriveEncryptionSecret(currentSecret, salt);
 
 	const thumbprint = await calculateJwkThumbprint(
 		{ kty: "oct", k: base64url.encode(encryptionSecret) },
@@ -76,29 +110,25 @@ export async function symmetricEncodeJWT<T extends Record<string, any>>(
 
 export async function symmetricDecodeJWT<T = any>(
 	token: string,
-	secret: string,
+	secret: string | SecretConfig,
 	salt: string,
 ): Promise<T | null> {
 	if (!token) return null;
 	try {
+		const secrets = getAllSecrets(secret);
 		const { payload } = await jwtDecrypt(
 			token,
 			async ({ kid }) => {
-				const encryptionSecret = hkdf(
-					sha256,
-					new TextEncoder().encode(secret),
-					new TextEncoder().encode(salt),
-					info,
-					64,
-				);
-				if (kid === undefined) return encryptionSecret;
+				for (const s of secrets) {
+					const encryptionSecret = deriveEncryptionSecret(s.value, salt);
+					if (kid === undefined) return encryptionSecret;
 
-				const thumbprint = await calculateJwkThumbprint(
-					{ kty: "oct", k: base64url.encode(encryptionSecret) },
-					"sha256",
-				);
-				if (kid === thumbprint) return encryptionSecret;
-
+					const thumbprint = await calculateJwkThumbprint(
+						{ kty: "oct", k: base64url.encode(encryptionSecret) },
+						"sha256",
+					);
+					if (kid === thumbprint) return encryptionSecret;
+				}
 				throw new Error("no matching decryption secret");
 			},
 			{
