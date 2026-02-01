@@ -18,12 +18,12 @@ This plugin is still in the early stages of development. We are working on addin
     ### Add the plugin to your **auth** config
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
-    import { openAPI } from "better-auth/plugins"
+    import { openAPI } from "better-auth/plugins" // [!code highlight]
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
+        plugins: [
             openAPI(), // [!code highlight]
-        ] // [!code highlight]
+        ]
     })
     ```
     </Step>
@@ -51,7 +51,7 @@ The reference is generated using the [Scalar](https://scalar.com/) library. Scal
 To get the generated Open API schema directly as JSON, you can do `auth.api.generateOpenAPISchema()`. This will return the Open API schema as a JSON object.
 
 ```ts
-import { auth } from "~/lib/auth"
+import { auth } from "@/lib/auth"
 
 const openAPISchema = await auth.api.generateOpenAPISchema()
 console.log(openAPISchema)

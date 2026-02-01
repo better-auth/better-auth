@@ -66,7 +66,7 @@ await auth.api.linkSocialAccount({
   body: {
     provider: "google", // or any other provider id
   },
-  headers: // pass headers with authenticated token
+  headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -90,7 +90,7 @@ await auth.api.getAccessToken({
     accountId: "accountId", // optional, if you want to get the access token for a specific account
     userId: "userId", // optional, if you don't provide headers with authenticated token
   },
-  headers: // pass headers with authenticated token
+  headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -109,7 +109,7 @@ server-side usage:
 ```ts
 await auth.api.accountInfo({
   query: { accountId: "accountId" },
-  headers: // pass headers with authenticated token
+  headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -291,6 +291,7 @@ export const auth = betterAuth({
 Custom redirect URI for the provider. By default, it uses `/api/auth/callback/${providerName}`
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
   // Other configurations...

@@ -45,19 +45,24 @@ your database schema based on your Better Auth configuration and plugins.
   </thead>
   <tbody>
     <tr className="h-10">
-      <td>✅ Supported</td>
-      <td>✅ Supported</td>
+      <td>&#9989; Supported</td>
+      <td>&#9989; Supported</td>
     </tr>
   </tbody>
 </table>
 
-```package-install title="Schema Generation"
-npx @better-auth/cli@latest generate
-```
-
-```package-install title="Schema Migration"
-npx @better-auth/cli@latest migrate
-```
+   <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+      ```package-install
+      npx @better-auth/cli@latest migrate
+      ```
+      </Tab>
+      <Tab value="generate">
+      ```package-install
+      npx @better-auth/cli@latest generate
+      ```
+      </Tab>
+    </Tabs>
 
 ## Joins (Experimental)
 
@@ -69,6 +74,8 @@ The Kysely PostgreSQL dialect supports joins out of the box since version `1.4.0
 To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });

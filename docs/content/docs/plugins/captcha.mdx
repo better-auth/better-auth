@@ -21,15 +21,15 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { captcha } from "better-auth/plugins";
+    import { captcha } from "better-auth/plugins"; // [!code highlight]
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
+        plugins: [
             captcha({ // [!code highlight]
                 provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
-        ], // [!code highlight]
+        ],
     });
     ```
 
@@ -44,6 +44,8 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
     Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
 
     ```ts
+    import { authClient } from "@/lib/auth-client"
+    
     await authClient.signIn.email({
         email: "user@example.com",
         password: "secure-password",

@@ -12,15 +12,15 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
     ### Add the plugin to your **auth** config
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
-    import { oAuthProxy } from "better-auth/plugins"
+    import { oAuthProxy } from "better-auth/plugins" // [!code highlight]
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
+        plugins: [
             oAuthProxy({ // [!code highlight]
                 productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
                 currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight] 
             }), // [!code highlight]
-        ] // [!code highlight]
+        ]
     })
     ```
     </Step>
@@ -52,6 +52,8 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
 The plugin adds an endpoint to your server that proxies OAuth requests. When you initiate a social sign-in, it sets the redirect URL to this proxy endpoint. After the OAuth provider redirects back to your server, the plugin then forwards the user to the original callback URL.
 
 ```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.social({
     provider: "github",
     callbackURL: "/dashboard" // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"

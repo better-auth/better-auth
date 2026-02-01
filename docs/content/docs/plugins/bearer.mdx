@@ -28,7 +28,9 @@ export const auth = betterAuth({
 
 After a successful sign-in, you'll receive a session token in the response headers. Store this token securely (e.g., in `localStorage`):
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data } = await authClient.signIn.email({
     email: "user@example.com",
     password: "securepassword"
@@ -44,6 +46,8 @@ const { data } = await authClient.signIn.email({
 You can also set this up globally in your auth client:
 
 ```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
 export const authClient = createAuthClient({
     fetchOptions: {
         onSuccess: (ctx) => {
@@ -65,6 +69,8 @@ You may want to clear the token based on the response status code or other condi
 Set up your auth client to include the Bearer token in all requests:
 
 ```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
 export const authClient = createAuthClient({
     fetchOptions: {
         auth: {
@@ -79,7 +85,9 @@ export const authClient = createAuthClient({
 
 Now you can make authenticated API calls:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 // This request is automatically authenticated
 const { data } = await authClient.listSessions();
 ```
@@ -88,7 +96,9 @@ const { data } = await authClient.listSessions();
 
 You can also provide the token for individual requests:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data } = await authClient.listSessions({
     fetchOptions: {
         headers: {
@@ -118,8 +128,8 @@ On the server, you can authenticate requests using the `auth.api.getSession` fun
 as long as the Authorization Bearer token header is present in the request:
 
 
-```ts title="server.ts"
-import { auth } from "@/auth";
+```ts title="session.ts"
+import { auth } from "@/lib/auth"
 
 export async function handler(req, res) {
   // Make sure `req.headers` contains the Authorization Bearer token header!
