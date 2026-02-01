@@ -242,6 +242,64 @@ type Result = {
     The user must be a member of the organization to list its teams.
 </Callout>
 
+## Listing Team Members
+
+You can list all members of a specific team using the `organization.listTeamMembers` method.
+
+<APIMethod
+    path="/organization/list-team-members"
+    method="GET"
+    requireSession>
+```ts
+type listTeamMembers = {
+    /**
+     * The team whose members should be returned.
+     * If not provided, uses the active team from the session.
+     */
+    teamId?: string = "team-id"
+    /**
+     * Maximum number of members to return (1-100).
+     */
+    limit?: number = 10
+    /**
+     * Number of members to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by.
+     * Options: "createdAt"
+     */
+    sortBy?: "createdAt" = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "desc"
+}
+```
+</APIMethod>
+
+Returns a paginated result with team members and total count:
+
+```ts
+type Result = {
+    members: Array<{
+        id: string;
+        userId: string;
+        teamId: string;
+        createdAt: Date;
+        // Additional fields if configured in schema
+    }>;
+    /**
+     * Total count of members in the team.
+     */
+    total: number;
+}
+```
+
+<Callout type="info">
+    The user must be a member of the team to list its members.
+</Callout>
+
 ## Listing User Teams
 
 You can list all teams that the current user is a member of using the `organization.listUserTeams` method. This returns teams across all organizations the user belongs to. This endpoint supports pagination.
