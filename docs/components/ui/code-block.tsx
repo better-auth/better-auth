@@ -185,9 +185,8 @@ function CopyButton({
 					variant: "ghost",
 					size: "icon",
 				}),
-				"transition-opacity size-7 border-none  group-hover:opacity-100",
-				"opacity-0 group-hover:opacity-100",
-				"group-hover:opacity-100",
+				"transition-opacity size-7 border-none cursor-pointer",
+				"opacity-60 hover:opacity-100 group-hover:opacity-100",
 				className,
 			)}
 			aria-label="Copy Text"
