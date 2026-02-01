@@ -4961,8 +4961,6 @@ describe("stripe", () => {
 					referenceId: "org_123",
 					fetchOptions: { headers },
 				});
-
-				// expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
 			});
 
 			it("should reject when no referenceId or activeOrganizationId", async () => {

@@ -43,7 +43,7 @@ export const referenceMiddleware = (
 					`Organization subscriptions require authorizeReference to be defined in your stripe plugin config.`,
 				);
 				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
+					message: STRIPE_ERROR_CODES.AUTHORIZE_REFERENCE_REQUIRED,
 				});
 			}
 
