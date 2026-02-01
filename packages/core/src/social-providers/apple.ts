@@ -142,11 +142,7 @@ export const apple = (options: AppleOptions) => {
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
-						},
+						options,
 						tokenEndpoint: "https://appleid.apple.com/auth/token",
 					});
 				},

@@ -1,7 +1,31 @@
 import { base64Url } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
+export async function clientCredentialsTokenRequest({
+	options,
+	scope,
+	authentication,
+	resource,
+}: {
+	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
+	scope?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
+	options = typeof options === "function" ? await options() : options;
+	return createClientCredentialsTokenRequest({
+		options,
+		scope,
+		authentication,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd clientCredentialsTokenRequest instead
+ */
 export function createClientCredentialsTokenRequest({
 	options,
 	scope,
@@ -59,13 +83,13 @@ export async function clientCredentialsToken({
 	authentication,
 	resource,
 }: {
-	options: ProviderOptions & { clientSecret: string };
+	options: AwaitableFunction<ProviderOptions & { clientSecret: string }>;
 	tokenEndpoint: string;
 	scope: string;
 	authentication?: ("basic" | "post") | undefined;
 	resource?: (string | string[]) | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createClientCredentialsTokenRequest({
+	const { body, headers } = await clientCredentialsTokenRequest({
 		options,
 		scope,
 		authentication,

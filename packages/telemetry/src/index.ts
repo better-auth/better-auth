@@ -62,7 +62,7 @@ export async function createTelemetry(
 		anonymousId = await getProjectId(options.baseURL);
 
 		const payload = {
-			config: getTelemetryAuthConfig(options, context),
+			config: await getTelemetryAuthConfig(options, context),
 			runtime: detectRuntime(),
 			database: await detectDatabase(),
 			framework: await detectFramework(),
