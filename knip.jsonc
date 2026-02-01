@@ -11,6 +11,23 @@
 			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": ["@better-auth/core"]
 		},
+		"packages/drizzle-adapter": {
+			"project": [
+				"src/**/*.ts!",
+				"!src/test/**/*.prisma",
+				"!src/test/**/.tmp",
+				"!src/test/**/auth.ts"
+			],
+			"ignoreDependencies": [
+				// implicit adapter dependencies
+				"drizzle-kit",
+				"drizzle-orm",
+				// implicit core dependencies
+				"better-auth",
+				"@better-auth/core",
+				"prettier"
+			]
+		},
 		"packages/prisma-adapter": {
 			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},

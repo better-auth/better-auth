@@ -539,7 +539,6 @@ export const getNormalTestSuiteTests = (
 				select: ["email", "name"],
 				join: { oneToOneTable: true },
 			});
-
 			expect(result).toBeDefined();
 			expect(result?.email).toEqual(user.email);
 			expect(result?.name).toEqual(user.name);

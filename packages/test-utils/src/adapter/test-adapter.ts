@@ -144,11 +144,11 @@ export const testAdapter = async ({
 				usePlural: adapter.options?.adapterConfig?.usePlural,
 				schema: getAllModels,
 			});
+			const modelName = getModelName(model);
 			try {
-				const modelName = getModelName(model);
 				await adapter.deleteMany({ model: modelName, where: [] });
 			} catch (error) {
-				const msg = `Error while cleaning up all rows from ${model}`;
+				const msg = `Error while cleaning up all rows from \"${modelName}\":`;
 				log.error(msg, error);
 				throw new Error(msg, {
 					cause: error,

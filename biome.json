@@ -129,6 +129,7 @@
   "files": {
     "includes": [
       "**",
+      "!**/*.d.ts",
       "!**/dist",
       "!**/coverage",
       "!**/build",

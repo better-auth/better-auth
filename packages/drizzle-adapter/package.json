@@ -16,6 +16,11 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
+    },
+    "./relations-v2": {
+      "dev-source": "./src/relations-v2/index.ts",
+      "types": "./dist/relations-v2/index.d.mts",
+      "default": "./dist/relations-v2/index.mjs"
     }
   },
   "scripts": {
@@ -27,7 +32,8 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
-    "drizzle-orm": ">=0.41.0"
+    "drizzle-orm": ">=0.41.0",
+    "prettier": "^3.7.4"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
