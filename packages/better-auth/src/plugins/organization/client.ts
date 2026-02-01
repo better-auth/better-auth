@@ -239,7 +239,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 					return (
 						path === "/organization/create" ||
 						path === "/organization/delete" ||
-						path === "/organization/update"
+						path === "/organization/update" ||
+						path === "/organization/accept-invitation" ||
+						path === "/organization/remove-member" ||
+						path === "/organization/leave"
 					);
 				},
 				signal: "$listOrg",
