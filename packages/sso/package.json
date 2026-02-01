@@ -63,7 +63,7 @@
   "dependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
-    "fast-xml-parser": "^5.3.3",
+    "fast-xml-parser": "^5.3.4",
     "jose": "^6.1.0",
     "samlify": "^2.10.2",
     "zod": "^4.3.6"
