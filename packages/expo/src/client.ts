@@ -317,6 +317,28 @@ export const expoClient = (opts: ExpoClientOptions) => {
 				id: "expo",
 				name: "Expo",
 				hooks: {
+					async onError(context) {
+						if (isWeb) return;
+
+						const { error, request } = context;
+						const url = String(request.url);
+
+						if (error.status === 403) {
+							const isAuthEndpoint =
+								url.includes("/sign-in") ||
+								url.includes("/sign-up") ||
+								url.includes("/get-session");
+
+							if (isAuthEndpoint && request.headers?.get?.("expo-origin")) {
+								console.error(
+									"[Better Auth Expo] Configuration Error:\n" +
+										"It appears you're using the Expo client plugin but the server is rejecting Expo requests.\n\n" +
+										"Make sure you have added the expo() plugin to your server-side Better Auth configuration.\n\n" +
+										"Please see: https://www.better-auth.com/docs/integrations/expo",
+								);
+							}
+						}
+					},
 					async onSuccess(context) {
 						if (isWeb) return;
 						const setCookie = context.response.headers.get("set-cookie");
