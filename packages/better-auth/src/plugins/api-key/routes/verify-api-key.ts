@@ -3,10 +3,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { isAPIError } from "../../../utils/is-api-error";
-import { role } from "../../access";
+import type { PredefinedApiKeyOptions } from ".";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
+import { isAPIError } from "../../../utils/is-api-error";
+import { role } from "../../access";
 import {
 	deleteApiKey,
 	getApiKey,
@@ -16,7 +17,6 @@ import {
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
 
 export async function validateApiKey({
 	hashedKey,
@@ -169,12 +169,15 @@ export async function validateApiKey({
 		updatedAt: new Date(),
 	};
 
+	// Intentionally exclude immutable identifiers from updateData so they are not persisted/updated.
+	const { id: _id, userId: _userId, ...updateData } = updated;
+
 	const performUpdate = async (): Promise<ApiKey | null> => {
 		if (opts.storage === "database") {
 			return ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
+				update: updateData,
 			});
 		} else if (
 			opts.storage === "secondary-storage" &&
@@ -183,7 +186,7 @@ export async function validateApiKey({
 			const dbUpdated = await ctx.context.adapter.update<ApiKey>({
 				model: API_KEY_TABLE_NAME,
 				where: [{ field: "id", value: apiKey.id }],
-				update: { ...updated, id: undefined },
+				update: updateData,
 			});
 			if (dbUpdated) {
 				await setApiKey(ctx, dbUpdated, opts);
