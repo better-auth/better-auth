@@ -111,7 +111,7 @@ model Member {
   workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role           String    @db.Text
+  role           String    @default("member")
   createdAt      DateTime
 
   @@index([organizationId(length: 191)])
@@ -125,7 +125,7 @@ model WorkspaceInvitation {
   workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String    @db.Text
   role           String?   @db.Text
-  status         String    @db.Text
+  status         String    @default("pending")
   expiresAt      DateTime
   createdAt      DateTime  @default(now())
   inviterId      String

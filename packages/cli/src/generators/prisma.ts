@@ -312,7 +312,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						// custom logic within that function that might not work in prisma's context.
 					}
 				}
-
 				// This is a special handling for updatedAt fields
 				if (field === "updatedAt" && attr.onUpdate) {
 					fieldBuilder.attribute("updatedAt");
@@ -359,9 +358,28 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					!attr.unique &&
 					!attr.references &&
 					provider === "mysql" &&
-					attr.type === "string"
+					attr.type === "string" &&
+					typeof attr.defaultValue !== "function"
 				) {
-					builder.model(modelName).field(fieldName).attribute("db.Text");
+					if (
+						attr.defaultValue !== undefined &&
+						attr.defaultValue &&
+						JSON.stringify(attr.defaultValue).length > 255
+					)
+						builder
+							.model(modelName)
+							.field(fieldName)
+							.attribute(`default(dbgenerated("('${attr.defaultValue}')"))`)
+							.attribute("db.Text");
+					else if (
+						attr.defaultValue !== undefined &&
+						attr.defaultValue &&
+						JSON.stringify(attr.defaultValue).length < 255
+					)
+						fieldBuilder.attribute(
+							`default(${JSON.stringify(attr.defaultValue)})`,
+						);
+					else builder.model(modelName).field(fieldName).attribute("db.Text");
 				}
 			}
 
