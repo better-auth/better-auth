@@ -522,7 +522,7 @@ const listUsersQuerySchema = z.object({
 		description: 'The value to search for. Eg: "some name"',
 	}),
 	searchField: z
-		.enum(["email", "name"])
+		.union([z.enum(["email", "name"]), z.array(z.enum(["email", "name"]))])
 		.meta({
 			description:
 				'The field to search in, defaults to email. Can be `email` or `name`. Eg: "name"',
@@ -648,11 +648,28 @@ export const listUsers = (opts: AdminOptions) =>
 			const where: Where[] = [];
 
 			if (ctx.query?.searchValue) {
-				where.push({
-					field: ctx.query.searchField || "email",
-					operator: ctx.query.searchOperator || "contains",
-					value: ctx.query.searchValue,
-				});
+				const operator = ctx.query.searchOperator || "contains";
+				const value = ctx.query.searchValue;
+				let searchFields =
+					!ctx.query.searchField ||
+					(Array.isArray(ctx.query.searchField) &&
+						ctx.query.searchField.length === 0)
+						? ["email"]
+						: Array.isArray(ctx.query.searchField)
+							? ctx.query.searchField
+							: [ctx.query.searchField];
+
+				where.push(
+					...searchFields.map(
+						(field) =>
+							({
+								field,
+								operator,
+								value,
+								connector: "OR",
+							}) satisfies Where,
+					),
+				);
 			}
 
 			if (ctx.query?.filterValue) {
