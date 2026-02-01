@@ -155,7 +155,10 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (userId: string) => {
+		listSessions: async (
+			userId: string,
+			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+		) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -207,6 +210,15 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 			});
 			return sessions;
@@ -448,7 +460,14 @@ export const createInternalAdapter = (
 				user: parsedUser,
 			};
 		},
-		findSessions: async (sessionTokens: string[]) => {
+		findSessions: async (
+			sessionTokens: string[],
+			options?:
+				| {
+						onlyActiveSessions?: boolean | undefined;
+				  }
+				| undefined,
+		) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
@@ -466,7 +485,11 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s?.session) continue;
+              if (!s) return [];
+              const expiresAt = new Date(s.session.expiresAt);
+              if (options?.onlyActiveSessions && expiresAt <= new Date()) {
+                continue;
+              }
 							const session = {
 								session: {
 									...s.session,
@@ -501,6 +524,15 @@ export const createInternalAdapter = (
 						value: sessionTokens,
 						operator: "in",
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 				join: {
 					user: true,
