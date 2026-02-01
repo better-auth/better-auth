@@ -206,6 +206,47 @@ const token = 'your.jwt.token' // this is the token you get from the /api/auth/t
 const payload = await validateToken(token)
 ```
 
+### CORS Configuration
+
+The JWT plugin automatically adds the `set-auth-jwt` header to the `access-control-expose-headers` response header when calling `getSession`, allowing clients to read the JWT token from response headers in cross-origin scenarios.
+
+<Callout type="warning">
+**CORS `exposeHeaders` Configuration**: If you're using CORS middleware (such as Hono's `cors`, Express's `cors`, or similar) and need to configure the `exposeHeaders` option, you **must** include `set-auth-jwt` in the list. Otherwise, the JWT plugin's automatic header exposure will be overridden and clients won't be able to read the token.
+
+**Example with Hono:**
+
+```ts
+import { cors } from "hono/cors";
+
+app.use(
+	"/api/auth/*",
+	cors({
+		origin: "http://localhost:3001",
+		allowHeaders: ["Content-Type", "Authorization"],
+		allowMethods: ["POST", "GET", "OPTIONS"],
+		exposeHeaders: ["set-auth-jwt"], // Required for JWT plugin
+		credentials: true,
+	}),
+);
+```
+
+**Example with Express:**
+
+```ts
+import cors from "cors";
+
+app.use(
+	cors({
+		origin: "http://localhost:3001",
+		credentials: true,
+		exposedHeaders: ["set-auth-jwt"], // Required for JWT plugin
+	}),
+);
+```
+
+If you omit `exposeHeaders` from your CORS configuration, Better Auth will automatically handle exposing the `set-auth-jwt` header.
+</Callout>
+
 ### OAuth Provider Mode
 
 If you are making your system oAuth compliant (such as when utilizing the OIDC or MCP plugins), you **MUST** disable the `/token` endpoint (oAuth equivalent `/oauth2/token`) and disable setting the jwt header (oAuth equivalent `/oauth2/userinfo`).
