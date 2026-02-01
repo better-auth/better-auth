@@ -421,11 +421,11 @@ describe("secret rotation", () => {
 				expect(() =>
 					validateSecretsArray(
 						[
-						{
-							version: "0x10" as any,
-							value: "secret-a-at-least-32-chars-long!!",
-						},
-					],
+							{
+								version: "0x10" as any,
+								value: "secret-a-at-least-32-chars-long!!",
+							},
+						],
 						mockLogger,
 					),
 				).toThrow("non-negative integer");
@@ -435,11 +435,11 @@ describe("secret rotation", () => {
 				expect(() =>
 					validateSecretsArray(
 						[
-						{
-							version: "1e2" as any,
-							value: "secret-a-at-least-32-chars-long!!",
-						},
-					],
+							{
+								version: "1e2" as any,
+								value: "secret-a-at-least-32-chars-long!!",
+							},
+						],
 						mockLogger,
 					),
 				).toThrow("non-negative integer");
