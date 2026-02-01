@@ -2014,6 +2014,11 @@ describe("owner can update roles", async () => {
 		});
 	});
 
+		const member = await auth.api.getActiveMember({
+			headers: { cookie: adminCookie },
+		});
+		expect(member?.role).toBe("");
+	});
 	it("should throw error if sole org owner tries to remove creator role"),
 		async () => {
 			const userEmail = "user@email.com";
