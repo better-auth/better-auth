@@ -1401,6 +1401,7 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					status: stripeSubscription.status,
 					seats: subscriptionItem.quantity || 1,
 					plan: plan.name.toLowerCase(),
+					billingInterval: subscriptionItem.price.recurring?.interval,
 					periodEnd: new Date(subscriptionItem.current_period_end * 1000),
 					periodStart: new Date(subscriptionItem.current_period_start * 1000),
 					stripeSubscriptionId: stripeSubscription.id,

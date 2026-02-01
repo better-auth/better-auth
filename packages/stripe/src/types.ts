@@ -207,6 +207,12 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
 }
 
 export type SubscriptionOptions = {
