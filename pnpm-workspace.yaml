@@ -10,7 +10,7 @@ blockExoticSubdeps: true
 catalog:
   '@better-auth/utils': 0.3.1
   '@better-fetch/fetch': 1.1.21
-  better-call: 1.2.0
+  better-call: 1.2.1
   tsdown: ^0.20.1
   typescript: ^5.9.3
 
