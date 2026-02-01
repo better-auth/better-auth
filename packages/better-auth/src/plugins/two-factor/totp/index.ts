@@ -182,7 +182,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				);
 			}
 			const secret = await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: twoFactor.secret,
 			});
 			await ctx.context.password.checkPassword(user.id, ctx);
@@ -254,7 +254,7 @@ export const totp2fa = (options?: TOTPOptions | undefined) => {
 				);
 			}
 			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: twoFactor.secret,
 			});
 			const status = await createOTP(decrypted, {

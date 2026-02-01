@@ -28,6 +28,7 @@ export type {
 	BetterAuthPluginErrorCodePart,
 	HookEndpointContext,
 } from "./plugin";
+export type { SecretConfig } from "./secret";
 export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,

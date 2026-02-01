@@ -14,7 +14,7 @@ export async function storeOTP(
 ) {
 	if (opts.storeOTP === "encrypted") {
 		return await symmetricEncrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: otp,
 		});
 	}
@@ -39,7 +39,7 @@ export async function verifyStoredOTP(
 ): Promise<boolean> {
 	if (opts.storeOTP === "encrypted") {
 		const decryptedOtp = await symmetricDecrypt({
-			key: ctx.context.secret,
+			key: ctx.context.secretConfig,
 			data: storedOtp,
 		});
 		return constantTimeEqual(decryptedOtp, otp);
