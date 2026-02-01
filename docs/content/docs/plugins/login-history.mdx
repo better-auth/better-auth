@@ -1,0 +1,138 @@
+---
+title: Login History
+description: Track and view user login history for enhanced security and auditing.
+---
+
+The Login History plugin automatically records every time a user signs in or signs up, capturing details like their IP address and user agent. This provides a clear audit trail of account access, helping you monitor for suspicious activity and giving users visibility into their own login patterns.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugin to your auth config
+
+        Add the login history plugin to your auth configuration.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { loginHistory } from "better-auth/plugins" // [!code highlight]
+
+        export const auth = betterAuth({
+            // ... other config options
+            plugins: [
+                loginHistory() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+      <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary table to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```bash
+            npx @better-auth/cli migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```bash
+            npx @better-auth/cli generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the table manually.
+    </Step>
+
+        <Step>
+        ### Add the client plugin
+
+        Add the client plugin to your auth client configuration.
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { loginHistoryClient } from "better-auth/client/plugins"
+
+        export const authClient = createAuthClient({
+            plugins: [
+                loginHistoryClient()
+            ]
+        })
+        ```
+        </Step>
+</Steps>
+
+## Usage
+
+The plugin automatically records login history upon successful sign-in or sign-up events. You don't need to do anything extra to enable the tracking.
+
+### List Login History
+
+To retrieve the login history for the currently authenticated user, you can call the `loginHistory.list` method.
+
+<APIMethod
+  path="/login-history/list"
+  method="GET"
+  requireSession
+>
+```ts
+// Example client-side usage
+const { data: history, error } = await authClient.loginHistory.list();
+
+if (history) {
+  // Display the login history to the user
+  history.forEach(entry => {
+    console.log(`Logged in at ${new Date(entry.createdAt).toLocaleString()} from IP ${entry.ipAddress} using ${entry.userAgent}`);
+  });
+}
+```
+</APIMethod>
+
+The endpoint returns an array of login history records, sorted by the most recent login first.
+
+## Schema
+
+The plugin adds a `loginHistory` table to your database to store the login records.
+
+Table: `loginHistory`
+
+<DatabaseTable
+    fields={[
+        { name: "id", type: "string", description: "The unique ID for the login record.", isPrimaryKey: true },
+        { name: "userId", type: "string", description: "The ID of the user.", isForeignKey: true },
+        { name: "userAgent", type: "string", description: "The user agent of the client.", isOptional: false },
+        { name: "ipAddress", type: "string", description: "The IP address of the client.", isOptional: false },
+        { name: "createdAt", type: "Date", description: "The timestamp of the login event." },
+    ]}
+/>
+
+## Options
+
+### `ipHeader`
+
+By default, the plugin automatically detects the user's IP address by inspecting common headers like `x-forwarded-for`, `cf-connecting-ip`, and `x-real-ip`. If you need to use a specific header, you can specify it with this option.
+
+```ts title="auth.ts"
+loginHistory({
+    ipHeader: "x-real-ip" // [!code highlight]
+})
+```
+
+### `schema`
+
+You can customize the table and field names using the `schema` option.
+
+```ts title="auth.ts"
+loginHistory({
+    schema: {
+        loginHistory: {
+            modelName: "user_logins", // Use 'user_logins' as the table name
+            fields: {
+                ipAddress: "ip_addr" // Use 'ip_addr' as the column name for IP address
+            }
+        }
+    }
+})
+```
+Read more about custom schemas in the [database concept documentation](/docs/concepts/database#custom-table-names).
