@@ -37,6 +37,8 @@ export * from "./types";
 let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
+const kAvoidSpreadSymbol = Symbol("kAvoidSpread");
+
 const createAsIsTransaction =
 	<Options extends BetterAuthOptions>(adapter: DBAdapter<Options>) =>
 	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
@@ -376,6 +378,14 @@ export const createAdapterFactory =
 						transformedData[newFieldName] = newValue;
 					}
 				}
+
+				Object.defineProperty(transformedData, kAvoidSpreadSymbol, {
+					get: () => {
+						throw new Error("You are not allowed to spread this object");
+					},
+					enumerable: true,
+				});
+
 				return transformedData as any;
 			};
 
