@@ -217,6 +217,57 @@ export const auth = betterAuth({
   `organizationHooks.afterCreateOrganization` instead for new projects.
 </Callout>
 
+#### Role Hooks
+
+Control organization role lifecycle operations (create, update, delete) using these hooks:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      organizationHooks: {
+        // Before creating a role. Return `{ data: { ... } }` to modify the payload.
+        beforeCreateRole: async ({ role, organization, user }) => {
+          // role: { role: string, permission: Record<string,string[]>, ...additionalFields }
+          return { data: { role: "modified-role", permission: { project: ["read"] }, color: "#abc" } };
+        },
+
+        // After role created
+        afterCreateRole: async ({ role, organization, user }) => {
+          // post-creation actions
+        },
+
+        // Before updating a role. `updates` contains the proposed changes.
+        beforeUpdateRole: async ({ role, updates, organization, user }) => {
+          // validate or change updates
+          return { data: { ...updates, color: "#updated" } };
+        },
+
+        afterUpdateRole: async ({ role, organization, user }) => {
+          // post-update actions
+        },
+
+        // Before deleting a role. Throw to prevent deletion.
+        beforeDeleteRole: async ({ role, organization, user }) => {
+          if (role.role === "owner") throw new Error("Cannot delete owner role");
+        },
+
+        afterDeleteRole: async ({ role, organization, user }) => {
+          // cleanup after delete
+        },
+      },
+    }),
+  ],
+});
+```
+
+Notes
+- `before*` hooks may return `{ data: { ... } }` — top-level keys (`role`, `permission`, or any additional fields) will be merged into the payload saved to the database.
+- Additional fields must be declared via `schema.organizationRole.additionalFields` to be persisted.
+
 #### Member Hooks
 
 Control member operations within organizations:

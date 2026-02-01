@@ -6,11 +6,12 @@ import * as z from "zod";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
 import { toZodSchema } from "../../../db";
 import type { User } from "../../../types";
+import { deepEqual } from "../../../utils";
 import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import type { Member, Organization, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -103,8 +104,8 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 			let roleName = ctx.body.role;
-			const permission = ctx.body.permission;
-			const additionalFields = ctx.body.additionalFields;
+			let permission = ctx.body.permission;
+			let additionalFields = ctx.body.additionalFields;
 
 			const ac = options.ac;
 			if (!ac) {
@@ -252,6 +253,93 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				role: roleName,
 			});
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeCreateRole ||
+				options.organizationHooks?.afterCreateRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				if (!organization) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The organization associated with the role to be created does not exist in the database.`,
+						{
+							organizationId,
+						},
+					);
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
+				}
+			}
+
+			const originalPermissionForCreate = permission;
+			const originalRoleName = roleName;
+			if (options.organizationHooks?.beforeCreateRole) {
+				const hookRes = await options.organizationHooks.beforeCreateRole({
+					role: {
+						role: roleName,
+						permission,
+						...additionalFields,
+					},
+					organization: organization!,
+					user,
+				});
+				if (hookRes?.data) {
+					if (hookRes.data.role) roleName = hookRes.data.role as string;
+					if (hookRes.data.permission)
+						permission = hookRes.data.permission as Record<string, string[]>;
+					const { role, permission: _permission, ...rest } = hookRes.data;
+					// Filter to only declared additional fields
+					const validAdditionalFieldKeys = Object.keys(
+						additionalFieldsSchema.shape,
+					);
+					const filteredRest = Object.fromEntries(
+						Object.entries(rest).filter(([key]) =>
+							validAdditionalFieldKeys.includes(key),
+						),
+					);
+					additionalFields = { ...additionalFields, ...filteredRest };
+				}
+			}
+
+			// Re-validate permissions only if the beforeCreateRole hook actually modified them
+			if (!deepEqual(permission, originalPermissionForCreate)) {
+				await checkForInvalidResources({ ac, ctx, permission });
+				await checkIfMemberHasPermission({
+					ctx,
+					member,
+					options,
+					organizationId,
+					permissionRequired: permission,
+					user,
+					action: "create",
+				});
+			}
+
+			// Re-validate role name only if the beforeCreateRole hook actually modified it
+			if (roleName !== originalRoleName) {
+				await checkIfRoleNameIsTakenByPreDefinedRole({
+					role: roleName,
+					organizationId,
+					options,
+					ctx,
+				});
+				await checkIfRoleNameIsTakenByRoleInDB({
+					ctx,
+					organizationId,
+					role: roleName,
+				});
+			}
+
 			const newRole = ac.newRole(permission);
 
 			const newRoleInDB = await ctx.context.adapter.create<
@@ -271,6 +359,15 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				...newRoleInDB,
 				permission,
 			} as OrganizationRole & ReturnAdditionalFields;
+
+			if (options.organizationHooks?.afterCreateRole) {
+				await options.organizationHooks.afterCreateRole({
+					role: data,
+					organization: organization!,
+					user,
+				});
+			}
+
 			return ctx.json({
 				success: true,
 				roleData: data,
@@ -472,6 +569,42 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				existingRoleInDB.permission as never as string,
 			);
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeDeleteRole ||
+				options.organizationHooks?.afterDeleteRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				if (!organization) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The organization associated with the role to be deleted does not exist in the database.`,
+						{
+							organizationId,
+						},
+					);
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
+				}
+			}
+
+			if (options.organizationHooks?.beforeDeleteRole) {
+				await options.organizationHooks.beforeDeleteRole({
+					role: existingRoleInDB,
+					organization: organization!,
+					user,
+				});
+			}
+
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
 				where: [
@@ -484,6 +617,14 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 					condition,
 				],
 			});
+
+			if (options.organizationHooks?.afterDeleteRole) {
+				await options.organizationHooks.afterDeleteRole({
+					role: existingRoleInDB,
+					organization: organization!,
+					user,
+				});
+			}
 
 			return ctx.json({
 				success: true,
@@ -1027,6 +1168,113 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				updateData.role = newRoleName;
 			}
 
+			let organization: Organization | null = null;
+			if (
+				options.organizationHooks?.beforeUpdateRole ||
+				options.organizationHooks?.afterUpdateRole
+			) {
+				organization = await ctx.context.adapter.findOne<Organization>({
+					model: "organization",
+					where: [
+						{
+							field: "id",
+							value: organizationId,
+						},
+					],
+				});
+				if (!organization) {
+					ctx.context.logger.error(
+						`[Dynamic Access Control] The organization associated with the role to be updated does not exist in the database.`,
+						{
+							organizationId,
+						},
+					);
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
+				}
+			}
+
+			const originalPermissionForUpdate = updateData.permission
+				? updateData.permission
+				: undefined;
+			const originalRoleName = updateData.role;
+			if (options.organizationHooks?.beforeUpdateRole) {
+				const hookRes = await options.organizationHooks.beforeUpdateRole({
+					role: role as OrganizationRole,
+					updates: {
+						...additionalFields,
+						...(updateData.role ? { role: updateData.role } : {}),
+						...(updateData.permission
+							? {
+									permission: updateData.permission,
+								}
+							: {}),
+					},
+					organization: organization!,
+					user,
+				});
+
+				if (hookRes?.data) {
+					if (hookRes.data.role) updateData.role = hookRes.data.role;
+					if (hookRes.data.permission) {
+						updateData.permission = hookRes.data.permission;
+					}
+					const {
+						role: _role,
+						permission: _permission,
+						...rest
+					} = hookRes.data;
+					// Filter to only declared additional fields
+					const validAdditionalFieldKeys = Object.keys(
+						additionalFieldsSchema.shape,
+					);
+					const filteredRest = Object.fromEntries(
+						Object.entries(rest).filter(([key]) =>
+							validAdditionalFieldKeys.includes(key),
+						),
+					);
+					Object.assign(updateData, filteredRest);
+				}
+			}
+
+			// Re-validate permissions only if the beforeUpdateRole hook actually modified them
+			if (
+				updateData.permission &&
+				!deepEqual(updateData.permission, originalPermissionForUpdate)
+			) {
+				await checkForInvalidResources({
+					ac,
+					ctx,
+					permission: updateData.permission,
+				});
+				await checkIfMemberHasPermission({
+					ctx,
+					member,
+					options,
+					organizationId,
+					permissionRequired: updateData.permission,
+					user,
+					action: "update",
+				});
+			}
+
+			// Re-validate role name only if the beforeUpdateRole hook actually modified it
+			if (updateData.role && updateData.role !== originalRoleName) {
+				await checkIfRoleNameIsTakenByPreDefinedRole({
+					role: updateData.role,
+					organizationId,
+					options,
+					ctx,
+				});
+				await checkIfRoleNameIsTakenByRoleInDB({
+					role: updateData.role,
+					organizationId,
+					ctx,
+				});
+			}
+
 			// -----
 			// Apply the updates
 			const update = {
@@ -1049,15 +1297,25 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				update,
 			});
 
+			const updatedRole = {
+				...role,
+				...update,
+				permission: updateData.permission || role.permission || null,
+			} as OrganizationRole & ReturnAdditionalFields;
+
+			if (options.organizationHooks?.afterUpdateRole) {
+				await options.organizationHooks.afterUpdateRole({
+					role: updatedRole,
+					organization: organization!,
+					user,
+				});
+			}
+
 			// -----
 			// Return the updated role
 			return ctx.json({
 				success: true,
-				roleData: {
-					...role,
-					...update,
-					permission: updateData.permission || role.permission || null,
-				} as OrganizationRole & ReturnAdditionalFields,
+				roleData: updatedRole,
 			});
 		},
 	);
