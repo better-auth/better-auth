@@ -1605,3 +1605,215 @@ describe("oidc-jwt", async () => {
 		expect(decoded.alg).toBe(expected);
 	});
 });
+
+describe("Public Clients (PKCE)", async () => {
+	let server: Listener | null = null;
+
+	afterEach(async () => {
+		if (server) {
+			await server.close();
+			server = null;
+		}
+	});
+
+	it("should allow public client to exchange code for token WITHOUT client_secret", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+			db,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					useJWTPlugin: true,
+				}),
+				jwt(),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl, headers },
+		});
+
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		const registered = await serverClient.oauth2.register({
+			client_name: "Public Mobile App",
+			redirect_uris: ["myapp://callback"],
+			token_endpoint_auth_method: "none",
+		});
+
+		const clientId = registered.data!.client_id;
+
+		await db.update({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+			update: {
+				type: "public",
+				clientSecret: "",
+			},
+		});
+
+		const codeVerifier = "test-code-verifier-random-string-minimum-43-chars";
+		const codeChallenge = codeVerifier;
+
+		const authUrl = new URL("http://localhost:3000/api/auth/oauth2/authorize");
+		authUrl.searchParams.set("client_id", clientId);
+		authUrl.searchParams.set("redirect_uri", "myapp://callback");
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid profile");
+		authUrl.searchParams.set("code_challenge", codeChallenge);
+		authUrl.searchParams.set("code_challenge_method", "plain");
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+
+		await customFetchImpl(authUrl.toString(), {
+			method: "GET",
+			headers,
+			redirect: "manual",
+		}).then((res) => {
+			redirectURI = res.headers.get("Location") || "";
+		});
+
+		if (redirectURI.includes("consent_code")) {
+			redirectURI = await handleConsentFlow(
+				redirectURI,
+				serverClient,
+				headers,
+				consentHeaders,
+			);
+		}
+
+		const code = new URL(redirectURI).searchParams.get("code");
+		expect(code).toBeDefined();
+
+		const tokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					client_id: clientId,
+					redirect_uri: "myapp://callback",
+					code_verifier: codeVerifier,
+					// CRITICAL: NO client_secret here
+				}),
+			},
+		);
+
+		const tokenData = await tokenResponse.json();
+
+		expect(tokenResponse.status).toBe(200);
+		expect(tokenData.access_token).toBeDefined();
+
+		const header = decodeProtectedHeader(tokenData.id_token);
+		expect(header.alg).not.toBe("HS256");
+	});
+
+	it("should fail if public client is used WITHOUT jwt plugin (HS256 attempt)", async ({
+		expect,
+	}) => {
+		const {
+			auth: authorizationServer,
+			signInWithTestUser,
+			customFetchImpl,
+			db,
+		} = await getTestInstance({
+			baseURL: "http://localhost:3000",
+			plugins: [
+				oidcProvider({
+					loginPage: "/login",
+					consentPage: "/oauth2/authorize",
+					requirePKCE: true,
+					useJWTPlugin: false,
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const serverClient = createAuthClient({
+			plugins: [oidcClient()],
+			baseURL: "http://localhost:3000",
+			fetchOptions: { customFetchImpl, headers },
+		});
+
+		server = await listen(toNodeHandler(authorizationServer.handler), {
+			port: 3000,
+		});
+
+		const registered = await serverClient.oauth2.register({
+			client_name: "Broken Config App",
+			redirect_uris: ["myapp://callback"],
+		});
+
+		const clientId = registered.data!.client_id;
+
+		await db.update({
+			model: "oauthApplication",
+			where: [{ field: "clientId", value: clientId }],
+			update: { type: "public" },
+		});
+
+		const codeVerifier = "test-verifier-long-string-value-here-12345";
+		const authUrl = `http://localhost:3000/api/auth/oauth2/authorize?client_id=${clientId}&redirect_uri=myapp://callback&response_type=code&scope=openid&code_challenge=${codeVerifier}&code_challenge_method=plain`;
+
+		let redirectURI = "";
+		const consentHeaders = new Headers();
+
+		await customFetchImpl(authUrl, { headers, redirect: "manual" }).then(
+			(res) => {
+				redirectURI = res.headers.get("Location") || "";
+				const setCookie = res.headers.get("set-cookie");
+				if (setCookie) consentHeaders.append("Set-Cookie", setCookie);
+			},
+		);
+
+		if (redirectURI.includes("consent_code")) {
+			redirectURI = await handleConsentFlow(
+				redirectURI,
+				serverClient,
+				headers,
+				consentHeaders,
+			);
+		}
+
+		const code = new URL(redirectURI).searchParams.get("code");
+		expect(code).toBeDefined();
+
+		const tokenResponse = await customFetchImpl(
+			"http://localhost:3000/api/auth/oauth2/token",
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					grant_type: "authorization_code",
+					code,
+					client_id: clientId,
+					redirect_uri: "myapp://callback",
+					code_verifier: codeVerifier,
+				}),
+			},
+		);
+
+		expect(tokenResponse.status).toBe(500);
+		const error = await tokenResponse.json();
+		expect(error.error_description).toContain(
+			"Public clients (PKCE) require the 'jwt' plugin",
+		);
+	});
+});
