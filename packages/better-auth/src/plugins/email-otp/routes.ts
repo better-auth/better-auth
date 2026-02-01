@@ -115,7 +115,12 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
-					// allow
+					// allow sign-up flow to continue
+				} else if (ctx.body.type === "sign-in" && opts.disableSignUp) {
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`${ctx.body.type}-otp-${email}`,
+					);
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 				} else {
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 						`${ctx.body.type}-otp-${email}`,
