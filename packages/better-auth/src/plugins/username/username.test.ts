@@ -53,6 +53,27 @@ describe("username", async (it) => {
 		);
 		expect(res.data?.token).toBeDefined();
 	});
+
+	it("should return callbackURL when provided", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+			callbackURL: "/dashboard",
+		});
+		expect(res.error).toBeDefined();
+		expect(res.error?.status).toBe(302);
+		expect(res.error?.statusText).toBe("FOUND");
+	});
+
+	it("should return redirect false and undefined url when callbackURL is not provided", async () => {
+		const res = await client.signIn.username({
+			username: "new_username",
+			password: "new-password",
+		});
+		expect(res.data?.redirect).toBe(false);
+		expect(res.data?.url).toBeUndefined();
+		expect(res.data?.token).toBeDefined();
+	});
 	it("should update username", async () => {
 		await client.updateUser({
 			username: "new_username_2.1",
