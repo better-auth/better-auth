@@ -1,6 +1,7 @@
 import type { SecretConfig } from "@better-auth/core";
 import type { createLogger } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
+import { DEFAULT_SECRET } from "../utils/constants";
 
 /**
  * Estimates the entropy of a string in bits.
@@ -52,15 +53,15 @@ export function validateSecretsArray(
 	}
 	const seen = new Set<number>();
 	for (const s of secrets) {
-		const version = Number(s.version);
-		if (!Number.isInteger(version) || version < 0) {
+		const version = parseInt(String(s.version), 10);
+		if (!Number.isInteger(version) || version < 0 || String(version) !== String(s.version).trim()) {
 			throw new BetterAuthError(
 				`Invalid version ${s.version} in \`secrets\`. Version must be a non-negative integer.`,
 			);
 		}
 		if (!s.value) {
 			throw new BetterAuthError(
-				`Empty secret value for version ${s.version} in \`secrets\`.`,
+				`Empty secret value for version ${version} in \`secrets\`.`,
 			);
 		}
 		if (seen.has(version)) {
@@ -69,7 +70,6 @@ export function validateSecretsArray(
 			);
 		}
 		seen.add(version);
-		s.version = version;
 	}
 	const current = secrets[0];
 	if (current.value.length < 32) {
@@ -91,12 +91,11 @@ export function buildSecretConfig(
 ): SecretConfig {
 	const keys = new Map<number, string>();
 	for (const s of secrets) {
-		keys.set(s.version, s.value);
+		keys.set(parseInt(String(s.version), 10), s.value);
 	}
-	const DEFAULT_SECRET = "better_auth_secret_at_least_32_characters_long";
 	return {
 		keys,
-		currentVersion: secrets[0].version,
+		currentVersion: parseInt(String(secrets[0].version), 10),
 		legacySecret:
 			legacySecret && legacySecret !== DEFAULT_SECRET
 				? legacySecret

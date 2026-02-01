@@ -409,15 +409,30 @@ describe("secret rotation", () => {
 				).not.toThrow();
 			});
 
-			it("coerces string versions to numbers", () => {
+			it("accepts string versions that are valid integers", () => {
 				const secrets = [
 					{ version: "1" as any, value: "secret-a-at-least-32-chars-long!!" },
 					{ version: "2" as any, value: "secret-b-at-least-32-chars-long!!" },
 				];
 				expect(() => validateSecretsArray(secrets, mockLogger)).not.toThrow();
-				// After validation, versions should be coerced to numbers
-				expect(secrets[0].version).toBe(1);
-				expect(secrets[1].version).toBe(2);
+			});
+
+			it("rejects hex string versions", () => {
+				expect(() =>
+					validateSecretsArray(
+						[{ version: "0x10" as any, value: "secret-a-at-least-32-chars-long!!" }],
+						mockLogger,
+					),
+				).toThrow("non-negative integer");
+			});
+
+			it("rejects scientific notation versions", () => {
+				expect(() =>
+					validateSecretsArray(
+						[{ version: "1e2" as any, value: "secret-a-at-least-32-chars-long!!" }],
+						mockLogger,
+					),
+				).toThrow("non-negative integer");
 			});
 
 			it("detects duplicates after coercion", () => {
@@ -457,13 +472,23 @@ describe("secret rotation", () => {
 				expect(config.legacySecret).toBe("legacy-secret-at-least-32-chars!!");
 			});
 
+		it("normalizes string versions to numbers in output", () => {
+				const secrets = [
+					{ version: "2" as any, value: "secret-b-at-least-32-chars-long!!" },
+					{ version: "1" as any, value: "secret-a-at-least-32-chars-long!!" },
+				];
+				const config = buildSecretConfig(secrets, "");
+				expect(config.currentVersion).toBe(2);
+				expect(typeof config.currentVersion).toBe("number");
+				expect(config.keys.get(1)).toBe("secret-a-at-least-32-chars-long!!");
+				expect(config.keys.get(2)).toBe("secret-b-at-least-32-chars-long!!");
+			});
+
 			it("excludes DEFAULT_SECRET as legacySecret", () => {
 				const secrets = [
 					{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
 				];
-				// DEFAULT_SECRET value from constants
-				const DEFAULT_SECRET = "better_auth_secret_at_least_32_characters_long";
-				const config = buildSecretConfig(secrets, DEFAULT_SECRET);
+				const config = buildSecretConfig(secrets, "better-auth-secret-12345678901234567890");
 				expect(config.legacySecret).toBeUndefined();
 			});
 		});
