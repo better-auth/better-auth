@@ -21,6 +21,18 @@ export interface BearerOptions {
 	 * @default false
 	 */
 	requireSignature?: boolean | undefined;
+	/**
+	 * List of trusted origins that are allowed to receive tokens in redirect URLs.
+	 * Token will only be appended to same-origin redirects or URLs matching these origins.
+	 *
+	 * WARNING: Tokens in URLs can be logged in browser history and server logs.
+	 * Only specify trusted origins if you understand the security implications.
+	 *
+	 * Example: ['https://app.example.com', 'https://admin.example.com']
+	 *
+	 * @default []
+	 */
+	trustedRedirectOrigins?: string[] | undefined;
 }
 
 /**
@@ -111,6 +123,29 @@ export const bearer = (options?: BearerOptions | undefined) => {
 							return;
 						}
 						const token = sessionCookie.value;
+						const location = ctx.context.responseHeaders?.get("location");
+						if (location) {
+							try {
+								const requestOrigin = ctx.request?.url
+									? new URL(ctx.request.url).origin
+									: null;
+								const locationURL = requestOrigin
+									? new URL(location, requestOrigin)
+									: new URL(location);
+
+								// Only append token if redirect is to same origin or trusted origin
+								const isSameOrigin = locationURL.origin === requestOrigin;
+								const isTrustedOrigin =
+									options?.trustedRedirectOrigins?.includes(locationURL.origin);
+
+								if (isSameOrigin || isTrustedOrigin) {
+									locationURL.searchParams.set("set-auth-token", token);
+									ctx.setHeader("location", locationURL.toString());
+								}
+							} catch (_e) {
+								// ignore invalid URL
+							}
+						}
 						const exposedHeaders =
 							ctx.context.responseHeaders?.get(
 								"access-control-expose-headers",
