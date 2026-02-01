@@ -7,6 +7,11 @@ import {
 	symmetricEncrypt,
 } from "./index";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "./jwt";
+import {
+	parseSecretsEnv,
+	validateSecretsArray,
+	buildSecretConfig,
+} from "../context/secret-utils";
 
 describe("secret rotation", () => {
 	const secretA = "secret-a-at-least-32-chars-long!!";
@@ -311,6 +316,156 @@ describe("secret rotation", () => {
 				"test-salt",
 			);
 			expect(decoded).toBeNull();
+		});
+	});
+
+	describe("context secret helpers", () => {
+		describe("parseSecretsEnv", () => {
+			it("returns null for undefined/empty", () => {
+				expect(parseSecretsEnv(undefined)).toBeNull();
+				expect(parseSecretsEnv("")).toBeNull();
+			});
+
+			it("trims whitespace around entries and values", () => {
+				const result = parseSecretsEnv("1: foo , 2:bar ");
+				expect(result).toEqual([
+					{ version: 1, value: "foo" },
+					{ version: 2, value: "bar" },
+				]);
+			});
+
+			it("rejects entry without colon", () => {
+				expect(() => parseSecretsEnv("noseparator")).toThrow("Expected format");
+			});
+
+			it("rejects negative version", () => {
+				expect(() => parseSecretsEnv("-1:secret")).toThrow(
+					"non-negative integer",
+				);
+			});
+
+			it("rejects non-integer version", () => {
+				expect(() => parseSecretsEnv("abc:secret")).toThrow(
+					"non-negative integer",
+				);
+			});
+
+			it("rejects empty value", () => {
+				expect(() => parseSecretsEnv("1:")).toThrow("Empty secret value");
+			});
+		});
+
+		describe("validateSecretsArray", () => {
+			// validateSecretsArray needs a logger. Create a mock:
+			const mockLogger = {
+				warn: () => {},
+				error: () => {},
+				info: () => {},
+				debug: () => {},
+			} as any;
+
+			it("throws on empty array", () => {
+				expect(() => validateSecretsArray([], mockLogger)).toThrow(
+					"at least one entry",
+				);
+			});
+
+			it("throws on duplicate versions", () => {
+				expect(() =>
+					validateSecretsArray(
+						[
+							{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
+							{ version: 1, value: "secret-b-at-least-32-chars-long!!" },
+						],
+						mockLogger,
+					),
+				).toThrow("Duplicate version");
+			});
+
+			it("throws on negative version", () => {
+				expect(() =>
+					validateSecretsArray(
+						[{ version: -1, value: "secret-a-at-least-32-chars-long!!" }],
+						mockLogger,
+					),
+				).toThrow("non-negative integer");
+			});
+
+			it("throws on empty value", () => {
+				expect(() =>
+					validateSecretsArray([{ version: 1, value: "" }], mockLogger),
+				).toThrow("Empty secret value");
+			});
+
+			it("accepts valid config", () => {
+				expect(() =>
+					validateSecretsArray(
+						[
+							{ version: 2, value: "secret-b-at-least-32-chars-long!!" },
+							{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
+						],
+						mockLogger,
+					),
+				).not.toThrow();
+			});
+
+			it("coerces string versions to numbers", () => {
+				const secrets = [
+					{ version: "1" as any, value: "secret-a-at-least-32-chars-long!!" },
+					{ version: "2" as any, value: "secret-b-at-least-32-chars-long!!" },
+				];
+				expect(() => validateSecretsArray(secrets, mockLogger)).not.toThrow();
+				// After validation, versions should be coerced to numbers
+				expect(secrets[0].version).toBe(1);
+				expect(secrets[1].version).toBe(2);
+			});
+
+			it("detects duplicates after coercion", () => {
+				expect(() =>
+					validateSecretsArray(
+						[
+							{ version: "1" as any, value: "secret-a-at-least-32-chars-long!!" },
+							{ version: 1, value: "secret-b-at-least-32-chars-long!!" },
+						],
+						mockLogger,
+					),
+				).toThrow("Duplicate version");
+			});
+		});
+
+		describe("buildSecretConfig", () => {
+			it("builds config with keys map", () => {
+				const secrets = [
+					{ version: 2, value: "secret-b-at-least-32-chars-long!!" },
+					{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
+				];
+				const config = buildSecretConfig(secrets, "");
+				expect(config.currentVersion).toBe(2);
+				expect(config.keys.get(1)).toBe("secret-a-at-least-32-chars-long!!");
+				expect(config.keys.get(2)).toBe("secret-b-at-least-32-chars-long!!");
+				expect(config.legacySecret).toBeUndefined();
+			});
+
+			it("includes legacySecret when provided", () => {
+				const secrets = [
+					{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
+				];
+				const config = buildSecretConfig(
+					secrets,
+					"legacy-secret-at-least-32-chars!!",
+				);
+				expect(config.legacySecret).toBe("legacy-secret-at-least-32-chars!!");
+			});
+
+			it("excludes DEFAULT_SECRET as legacySecret", () => {
+				const secrets = [
+					{ version: 1, value: "secret-a-at-least-32-chars-long!!" },
+				];
+				// DEFAULT_SECRET value from constants
+				const DEFAULT_SECRET = "better_auth_secret_at_least_32_characters_long";
+				const config = buildSecretConfig(secrets, DEFAULT_SECRET);
+				expect(config.legacySecret).toBeUndefined();
+			});
 		});
 	});
 });
