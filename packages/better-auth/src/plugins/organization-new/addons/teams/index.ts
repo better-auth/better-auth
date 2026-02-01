@@ -8,6 +8,7 @@ import { listOrganizationTeams } from "./routes/list-organization-teams";
 import { listTeamMembers } from "./routes/list-team-members";
 import { listUserTeams } from "./routes/list-user-teams";
 import { removeTeam } from "./routes/remove-team";
+import { removeTeamMember } from "./routes/remove-team-member";
 import { setActiveTeam } from "./routes/set-active-team";
 import { updateTeam } from "./routes/update-team";
 import type { InferTeam, TeamsOptions } from "./types";
@@ -35,6 +36,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 			listTeamMembers: listTeamMembers(_options),
 			listUserTeams: listUserTeams(_options),
 			removeTeam: removeTeam(_options),
+			removeTeamMember: removeTeamMember(_options),
 			setActiveTeam: setActiveTeam(_options),
 			updateTeam: updateTeam(_options),
 		},
