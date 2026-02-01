@@ -179,6 +179,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
+							extraParams: c.refreshAccessTokenExtraParams,
 						});
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {
