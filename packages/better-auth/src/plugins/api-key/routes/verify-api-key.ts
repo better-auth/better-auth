@@ -292,6 +292,7 @@ export function verifyApiKey({
 					return ctx.json({
 						valid: false,
 						error: {
+							...error.body,
 							message: error.body?.message,
 							code: error.body?.code as string,
 						},
