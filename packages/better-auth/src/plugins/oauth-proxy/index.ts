@@ -47,6 +47,18 @@ export interface OAuthProxyOptions {
 	 * @default 60 (1 minute)
 	 */
 	maxAge?: number | undefined;
+	/**
+	 * When enabled, the production server will redirect to the preview/current
+	 * server BEFORE processing the OAuth callback. This allows the preview server
+	 * to run the full callback logic against its own database.
+	 *
+	 * This is useful when the production server and preview server have different
+	 * databases, as the session and user data need to be created in the preview
+	 * server's database.
+	 *
+	 * @default false
+	 */
+	earlyRedirect?: boolean | undefined;
 }
 
 interface EncryptedCookiesPayload {
@@ -283,6 +295,94 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					}),
 				},
 				{
+					// Early redirect hook: redirect to preview server before processing
+					matcher(context) {
+						return !!(
+							context.path?.startsWith("/callback") ||
+							context.path?.startsWith("/oauth2/callback")
+						);
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const state = ctx.query?.state || ctx.body?.state;
+						if (!state || typeof state !== "string") {
+							return;
+						}
+
+						// Try to decrypt and parse OAuth proxy state package
+						let statePackage: OAuthProxyStatePackage | undefined;
+						try {
+							const decryptedPackage = await symmetricDecrypt({
+								key: ctx.context.secret,
+								data: state,
+							});
+							statePackage =
+								parseJSON<OAuthProxyStatePackage>(decryptedPackage);
+						} catch {
+							// Not an OAuth proxy state, continue normally
+							return;
+						}
+
+						// Check if this is an early redirect request
+						if (
+							!statePackage.isOAuthProxy ||
+							!statePackage.earlyRedirect ||
+							!statePackage.previewBaseURL
+						) {
+							return;
+						}
+
+						// Check if we're on the production server (not the preview server)
+						// If we're already on the preview server, don't redirect again
+						const currentURL = resolveCurrentURL(ctx, opts);
+						const previewOrigin = getOrigin(statePackage.previewBaseURL);
+						const currentOrigin = currentURL.origin;
+
+						if (currentOrigin === previewOrigin) {
+							// We're on the preview server, continue processing normally
+							// Mark this as early redirect so we skip the after hook proxy redirect
+							(
+								ctx.context as AuthContextWithSnapshot
+							)._oauthProxyEarlyRedirect = true;
+							return;
+						}
+
+						// We're on the production server, redirect to preview server
+						// Build the redirect URL with all OAuth callback parameters
+						// Use the actual request path if available, falling back to resolving :id from params
+						let actualPath = ctx.path;
+						if (ctx.params?.id && ctx.path.includes(":id")) {
+							actualPath = ctx.path.replace(":id", ctx.params.id);
+						}
+						const previewCallbackURL = new URL(
+							`${statePackage.previewBaseURL}${ctx.context.options.basePath || "/api/auth"}${actualPath}`,
+						);
+
+						// Forward all query parameters
+						if (ctx.query) {
+							for (const [key, value] of Object.entries(ctx.query)) {
+								if (value !== undefined && value !== null) {
+									previewCallbackURL.searchParams.set(key, String(value));
+								}
+							}
+						}
+
+						// Also forward body parameters as query params if present (for POST callbacks)
+						if (ctx.body) {
+							for (const [key, value] of Object.entries(ctx.body)) {
+								if (
+									value !== undefined &&
+									value !== null &&
+									!previewCallbackURL.searchParams.has(key)
+								) {
+									previewCallbackURL.searchParams.set(key, String(value));
+								}
+							}
+						}
+
+						throw ctx.redirect(previewCallbackURL.toString());
+					}),
+				},
+				{
 					matcher(context) {
 						return !!(
 							context.path?.startsWith("/callback") ||
@@ -483,11 +583,17 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						const stateCookieValue = stateCookieAttrs.value;
 
 						try {
+							const currentURL = resolveCurrentURL(ctx, opts);
+
 							// Create and encrypt state package
 							const statePackage: OAuthProxyStatePackage = {
 								state: originalState,
 								stateCookie: stateCookieValue,
 								isOAuthProxy: true,
+								earlyRedirect: opts?.earlyRedirect,
+								previewBaseURL: opts?.earlyRedirect
+									? currentURL.origin
+									: undefined,
 							};
 							const encryptedPackage = await symmetricEncrypt({
 								key: ctx.context.secret,
@@ -519,6 +625,25 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
+						// Skip proxy redirect if this is an early redirect being processed on preview server
+						if (
+							(ctx.context as AuthContextWithSnapshot)._oauthProxyEarlyRedirect
+						) {
+							const headers = ctx.context.responseHeaders;
+							const location = headers?.get("location");
+
+							// If the location contains oauth-proxy-callback, extract the original callbackURL
+							if (location?.includes("/oauth-proxy-callback?callbackURL")) {
+								const locationURL = new URL(location);
+								const originalCallbackURL =
+									locationURL.searchParams.get("callbackURL");
+								if (originalCallbackURL) {
+									ctx.setHeader("location", originalCallbackURL);
+								}
+							}
+							return;
+						}
+
 						const headers = ctx.context.responseHeaders;
 						const location = headers?.get("location");
 

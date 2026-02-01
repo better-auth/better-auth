@@ -73,3 +73,40 @@ This plugin requires skipping the state cookie check. This has security implicat
 **productionURL**: If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.
 
 **maxAge**: Maximum age in seconds for encrypted cookie payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
+
+**earlyRedirect**: When enabled, the production server will redirect to the preview/current server BEFORE processing the OAuth callback. This allows the preview server to run the full callback logic against its own database. This is useful when the production server and preview server have different databases, as the session and user data need to be created in the preview server's database. Defaults to `false`.
+
+## Early Redirect Mode
+
+By default, the OAuth proxy processes the callback on the production server and then redirects to the preview server to set cookies. This works well when both servers share the same database.
+
+However, if your preview deployments have separate databases from production, you need the preview server to process the entire callback so that user and session data are created in the correct database.
+
+Enable `earlyRedirect` to handle this scenario:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { oAuthProxy } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        oAuthProxy({
+            productionURL: "https://my-main-app.com",
+            earlyRedirect: true, // [!code highlight]
+        }),
+    ]
+})
+```
+
+### How Early Redirect Works
+
+1. User initiates OAuth sign-in on the preview server
+2. Preview server redirects to OAuth provider (with callback URL pointing to production)
+3. OAuth provider redirects to production server with the authorization code
+4. Production server immediately redirects to preview server with the code (without processing)
+5. Preview server processes the callback, creating user and session in its own database
+6. User is redirected to the final callback URL with cookies set
+
+<Callout type="info">
+Both the production and preview servers must use the same `secret` in their Better Auth configuration for the encrypted state to be decrypted correctly.
+</Callout>
