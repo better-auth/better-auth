@@ -18,7 +18,7 @@ npm i better-auth
 Import `createAuthClient` from the package for your framework (e.g., "better-auth/react" for React). Call the function to create your client. Pass the base URL of your auth server. If the auth server is running on the same domain as your client, you can skip this step.
 
 <Callout type="info">
-If you're using a different base path other than `/api/auth`, make sure to pass the whole URL, including the path. (e.g., `http://localhost:3000/custom-path/auth`)
+If your auth server uses a different base path other than `/api/auth`, you can either pass the full URL including the path (e.g., `http://localhost:3000/custom-path/auth`), or use the `basePath` option separately.
 </Callout>
 
 
@@ -237,6 +237,54 @@ await authClient.signIn.email({
             //      
         }
     },
+})
+```
+
+### Session Options
+
+You can configure how the client handles session fetching and revalidation using the `sessionOptions` option.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchInterval: 0,
+        refetchOnWindowFocus: true,
+        refetchWhenOffline: false,
+    }
+})
+```
+
+<TypeTable
+  type={{
+    refetchInterval: {
+      description: "Polling interval in seconds. Set to 0 to disable",
+      type: "number",
+      default: "0",
+    },
+    refetchOnWindowFocus: {
+      description: "Automatically refetch session when the user switches back to the window/tab",
+      type: "boolean",
+      default: "true",
+    },
+    refetchWhenOffline: {
+      description: "Whether to refetch when the device has no internet access",
+      type: "boolean",
+      default: "false",
+    },
+  }}
+/>
+
+### Disable Default Fetch Plugins
+
+The client includes a default redirect plugin that handles authentication redirects. If you need to disable this behavior, you can set `disableDefaultFetchPlugins` to `true`.
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    disableDefaultFetchPlugins: true
 })
 ```
 
