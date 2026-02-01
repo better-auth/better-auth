@@ -298,3 +298,130 @@ describe("oauth authorize - authenticated", async () => {
 		expect(issParam).toBe(metadataIssuer);
 	});
 });
+
+describe("handleRedirect - fetch detection", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	beforeAll(async () => {
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		oauthClient = response;
+	});
+
+	it("should return JSON when sec-fetch-mode: cors header is set", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+			},
+			redirectURI: redirectUri,
+			state: "test-sec-fetch",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier: generateRandomString(64),
+		});
+
+		const response = await customFetchImpl(authUrl.toString(), {
+			headers: {
+				"sec-fetch-mode": "cors",
+			},
+		});
+
+		// Should return JSON with redirect info, not HTTP 302
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.redirect).toBe(true);
+		expect(data.url).toContain("/login");
+	});
+
+	it("should return JSON when accept: application/json header is set", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+			},
+			redirectURI: redirectUri,
+			state: "test-accept-json",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier: generateRandomString(64),
+		});
+
+		const response = await customFetchImpl(authUrl.toString(), {
+			headers: {
+				accept: "application/json",
+			},
+		});
+
+		// Should return JSON with redirect info
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.redirect).toBe(true);
+		expect(data.url).toContain("/login");
+	});
+
+	it("should return HTTP 302 redirect when no fetch headers are set", async () => {
+		if (!oauthClient?.client_id) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const authUrl = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret!,
+			},
+			redirectURI: redirectUri,
+			state: "test-no-headers",
+			scopes: ["openid"],
+			responseType: "code",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			codeVerifier: generateRandomString(64),
+		});
+
+		const response = await customFetchImpl(authUrl.toString(), {
+			redirect: "manual",
+		});
+
+		// Should return HTTP 302 redirect
+		expect(response.status).toBe(302);
+		expect(response.headers.get("Location")).toContain("/login");
+	});
+});
