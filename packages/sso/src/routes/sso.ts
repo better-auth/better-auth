@@ -14,7 +14,7 @@ import {
 	getSessionFromCtx,
 	sessionMiddleware,
 } from "better-auth/api";
-import { setSessionCookie } from "better-auth/cookies";
+import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
@@ -32,15 +32,7 @@ interface AuthnRequestRecord {
 	expiresAt: number;
 }
 
-import {
-	AUTHN_REQUEST_KEY_PREFIX,
-	DEFAULT_ASSERTION_TTL_MS,
-	DEFAULT_AUTHN_REQUEST_TTL_MS,
-	DEFAULT_CLOCK_SKEW_MS,
-	DEFAULT_MAX_SAML_METADATA_SIZE,
-	DEFAULT_MAX_SAML_RESPONSE_SIZE,
-	USED_ASSERTION_KEY_PREFIX,
-} from "../constants";
+import * as constants from "../constants";
 import { assignOrganizationFromProvider } from "../linking";
 import type { HydratedOIDCConfig } from "../oidc";
 import {
@@ -56,6 +48,12 @@ import {
 import { generateRelayState, parseRelayState } from "../saml-state";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { domainMatches, safeJsonParse, validateEmailDomain } from "../utils";
+import {
+	createIdP,
+	createSAMLPostForm,
+	createSP,
+	findSAMLProvider,
+} from "./helpers";
 
 export interface TimestampValidationOptions {
 	clockSkew?: number;
@@ -80,7 +78,7 @@ export function validateSAMLTimestamp(
 	conditions: SAMLConditions | undefined,
 	options: TimestampValidationOptions = {},
 ): void {
-	const clockSkew = options.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+	const clockSkew = options.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
 	const hasTimestamps = conditions?.notBefore || conditions?.notOnOrAfter;
 
 	if (!hasTimestamps) {
@@ -681,7 +679,8 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 
 			if (body.samlConfig?.idpMetadata?.metadata) {
 				const maxMetadataSize =
-					options?.saml?.maxMetadataSize ?? DEFAULT_MAX_SAML_METADATA_SIZE;
+					options?.saml?.maxMetadataSize ??
+					constants.DEFAULT_MAX_SAML_METADATA_SIZE;
 				if (
 					new TextEncoder().encode(body.samlConfig.idpMetadata.metadata)
 						.length > maxMetadataSize
@@ -1347,7 +1346,8 @@ export const signInSSO = (options?: SSOOptions) => {
 				const shouldSaveRequest =
 					loginRequest.id && options?.saml?.enableInResponseToValidation;
 				if (shouldSaveRequest) {
-					const ttl = options?.saml?.requestTTL ?? DEFAULT_AUTHN_REQUEST_TTL_MS;
+					const ttl =
+						options?.saml?.requestTTL ?? constants.DEFAULT_AUTHN_REQUEST_TTL_MS;
 					const record: AuthnRequestRecord = {
 						id: loginRequest.id,
 						providerId: provider.providerId,
@@ -1355,7 +1355,7 @@ export const signInSSO = (options?: SSOOptions) => {
 						expiresAt: Date.now() + ttl,
 					};
 					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `${AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
+						identifier: `${constants.AUTHN_REQUEST_KEY_PREFIX}${record.id}`,
 						value: JSON.stringify(record),
 						expiresAt: new Date(record.expiresAt),
 					});
@@ -1860,7 +1860,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const { SAMLResponse } = ctx.body;
 
 			const maxResponseSize =
-				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+				options?.saml?.maxResponseSize ??
+				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
 			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
@@ -2037,7 +2038,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 						);
 					if (verification) {
 						try {
@@ -2077,7 +2078,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						);
 
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 						);
 						const redirectUrl =
 							relayState?.callbackURL ||
@@ -2089,7 +2090,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
+						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 					);
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
@@ -2117,14 +2118,15 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				const conditions = (extract as any).conditions as
 					| SAMLConditions
 					| undefined;
-				const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+				const clockSkew =
+					options?.saml?.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
 				const expiresAt = conditions?.notOnOrAfter
 					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-					: Date.now() + DEFAULT_ASSERTION_TTL_MS;
+					: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
 
 				const existingAssertion =
 					await ctx.context.internalAdapter.findVerificationValue(
-						`${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
 					);
 
 				let isReplay = false;
@@ -2161,7 +2163,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 				}
 
 				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionId}`,
+					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionId}`,
 					value: JSON.stringify({
 						assertionId,
 						issuer,
@@ -2331,7 +2333,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const { providerId } = ctx.params;
 
 			const maxResponseSize =
-				options?.saml?.maxResponseSize ?? DEFAULT_MAX_SAML_RESPONSE_SIZE;
+				options?.saml?.maxResponseSize ??
+				constants.DEFAULT_MAX_SAML_RESPONSE_SIZE;
 			if (new TextEncoder().encode(SAMLResponse).length > maxResponseSize) {
 				throw new APIError("BAD_REQUEST", {
 					message: `SAML response exceeds maximum allowed size (${maxResponseSize} bytes)`,
@@ -2508,7 +2511,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
 						);
 					if (verification) {
 						try {
@@ -2545,7 +2548,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							},
 						);
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
 						);
 						const redirectUrl =
 							RelayState || parsedSamlConfig.callbackUrl || ctx.context.baseURL;
@@ -2555,7 +2558,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						`${AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
+						`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
 					);
 				} else if (!allowIdpInitiated) {
 					ctx.context.logger.error(
@@ -2581,14 +2584,15 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				const conditions = (extract as any).conditions as
 					| SAMLConditions
 					| undefined;
-				const clockSkew = options?.saml?.clockSkew ?? DEFAULT_CLOCK_SKEW_MS;
+				const clockSkew =
+					options?.saml?.clockSkew ?? constants.DEFAULT_CLOCK_SKEW_MS;
 				const expiresAt = conditions?.notOnOrAfter
 					? new Date(conditions.notOnOrAfter).getTime() + clockSkew
-					: Date.now() + DEFAULT_ASSERTION_TTL_MS;
+					: Date.now() + constants.DEFAULT_ASSERTION_TTL_MS;
 
 				const existingAssertion =
 					await ctx.context.internalAdapter.findVerificationValue(
-						`${USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
+						`${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
 					);
 
 				let isReplay = false;
@@ -2623,7 +2627,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				}
 
 				await ctx.context.internalAdapter.createVerificationValue({
-					identifier: `${USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
+					identifier: `${constants.USED_ASSERTION_KEY_PREFIX}${assertionIdAcs}`,
 					value: JSON.stringify({
 						assertionId: assertionIdAcs,
 						issuer,
@@ -2745,6 +2749,156 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			await setSessionCookie(ctx, { session, user });
 			throw ctx.redirect(callbackUrl);
+		},
+	);
+};
+
+interface SAMLSessionRecord {
+	sessionId: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
+const sloSchema = z.object({
+	SAMLRequest: z.string().optional(),
+	SAMLResponse: z.string().optional(),
+	RelayState: z.string().optional(),
+	SigAlg: z.string().optional(),
+	Signature: z.string().optional(),
+});
+
+export const sloEndpoint = (options?: SSOOptions) => {
+	return createAuthEndpoint(
+		"/sso/saml2/sp/slo/:providerId",
+		{
+			method: ["GET", "POST"],
+			body: sloSchema.optional(),
+			query: sloSchema.optional(),
+			metadata: {
+				...HIDE_METADATA,
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
+			},
+		},
+		async (ctx) => {
+			if (!options?.saml?.enableSingleLogout) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Single Logout is not enabled",
+				});
+			}
+
+			const { providerId } = ctx.params;
+			const samlRequest = ctx.body?.SAMLRequest || ctx.query?.SAMLRequest;
+			const relayState = ctx.body?.RelayState || ctx.query?.RelayState;
+			const binding =
+				ctx.method === "POST" && ctx.body?.SAMLRequest ? "post" : "redirect";
+
+			if (!samlRequest) {
+				throw new APIError("BAD_REQUEST", { message: "Missing SAMLRequest" });
+			}
+
+			const provider = await findSAMLProvider(
+				providerId,
+				options,
+				ctx.context.adapter,
+			);
+			if (!provider?.samlConfig) {
+				throw new APIError("NOT_FOUND", { message: "SAML provider not found" });
+			}
+
+			const config = provider.samlConfig as SAMLConfig;
+			const sp = createSP(config, ctx.context.baseURL, providerId);
+			const idp = createIdP(config);
+
+			const parsed = await sp.parseLogoutRequest(idp, binding, {
+				body: ctx.body,
+				query: ctx.query,
+			});
+			if (!parsed?.extract) {
+				throw new APIError("BAD_REQUEST", { message: "Invalid LogoutRequest" });
+			}
+
+			const { nameID } = parsed.extract;
+			const sessionIndex = (parsed.extract as { sessionIndex?: string })
+				.sessionIndex;
+
+			// Look up stored SAML session by nameID (and optionally sessionIndex)
+			const key = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${nameID}`;
+			const stored =
+				await ctx.context.internalAdapter.findVerificationValue(key);
+
+			if (stored) {
+				try {
+					const data = safeJsonParse<SAMLSessionRecord>(stored.value);
+					if (data) {
+						// Only delete session if SessionIndex matches (or one side doesn't have it)
+						if (
+							!sessionIndex ||
+							!data.sessionIndex ||
+							sessionIndex === data.sessionIndex
+						) {
+							await ctx.context.internalAdapter
+								.deleteSession(data.sessionId)
+								.catch(() => {});
+						} else {
+							ctx.context.logger.warn(
+								"SessionIndex mismatch in LogoutRequest - skipping session deletion",
+								{
+									providerId,
+									requestedSessionIndex: sessionIndex,
+									storedSessionIndex: data.sessionIndex,
+								},
+							);
+						}
+					}
+				} catch (error) {
+					ctx.context.logger.warn(
+						"Failed to parse stored SAML session record",
+						{
+							key,
+							error: error instanceof Error ? error.message : String(error),
+						},
+					);
+				}
+				await ctx.context.internalAdapter
+					.deleteVerificationValue(key)
+					.catch(() => {});
+			}
+
+			const currentSession = await getSessionFromCtx(ctx);
+			if (currentSession?.session) {
+				await ctx.context.internalAdapter.deleteSession(
+					currentSession.session.id,
+				);
+			}
+
+			// Clear the session cookie
+			deleteSessionCookie(ctx);
+
+			const requestId = parsed.extract.request?.id || "";
+			const res = sp.createLogoutResponse(
+				idp,
+				null,
+				binding,
+				relayState || "",
+				(template: string) =>
+					template
+						.replace("{InResponseTo}", requestId)
+						.replace("{StatusCode}", constants.SAML_STATUS_SUCCESS),
+			) as { context: string; entityEndpoint?: string };
+
+			if (binding === "post" && res.entityEndpoint) {
+				return createSAMLPostForm(
+					res.entityEndpoint,
+					"SAMLResponse",
+					res.context,
+					relayState,
+				);
+			}
+			throw ctx.redirect(res.context);
 		},
 	);
 };

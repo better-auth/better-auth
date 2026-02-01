@@ -14,6 +14,9 @@ export const AUTHN_REQUEST_KEY_PREFIX = "saml-authn-request:";
 /** Prefix for used Assertion IDs used in replay protection */
 export const USED_ASSERTION_KEY_PREFIX = "saml-used-assertion:";
 
+/** Prefix for SAML session data (NameID + SessionIndex) for SLO */
+export const SAML_SESSION_KEY_PREFIX = "saml-session:";
+
 // ============================================================================
 // Time-To-Live (TTL) Defaults
 // ============================================================================
@@ -56,3 +59,9 @@ export const DEFAULT_MAX_SAML_RESPONSE_SIZE = 256 * 1024;
  * Protects against oversized metadata documents.
  */
 export const DEFAULT_MAX_SAML_METADATA_SIZE = 100 * 1024;
+
+// ============================================================================
+// SAML Status Codes
+// ============================================================================
+
+export const SAML_STATUS_SUCCESS = "urn:oasis:names:tc:SAML:2.0:status:Success";
