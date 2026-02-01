@@ -15,7 +15,7 @@ import {
 	parseSetCookieHeader,
 	setSessionCookie,
 } from "../../cookies";
-import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { mergeSchema, parseUserInput, parseUserOutput } from "../../db/schema";
 import { ANONYMOUS_ERROR_CODES } from "./error-codes";
 import { schema } from "./schema";
 import type {
@@ -63,9 +63,35 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				"/sign-in/anonymous",
 				{
 					method: "POST",
+					body: z
+						.object({
+							name: z.string().optional(),
+							image: z.string().optional(),
+						})
+						.and(z.record(z.string(), z.any())),
 					metadata: {
 						openapi: {
 							description: "Sign in anonymously",
+							requestBody: {
+								content: {
+									"application/json": {
+										schema: {
+											type: "object",
+											properties: {
+												name: {
+													type: "string",
+													description: "The name of the anonymous user",
+												},
+												image: {
+													type: "string",
+													description:
+														"The profile image URL of the anonymous user",
+												},
+											},
+										},
+									},
+								},
+							},
 							responses: {
 								200: {
 									description: "Sign in anonymously",
@@ -104,13 +130,20 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						);
 					}
 
+					const { name, image, ...rest } = ctx.body;
 					const email = await getAnonUserEmail(options);
-					const name = (await options?.generateName?.(ctx)) || "Anonymous";
+					const additionalFields = parseUserInput(
+						ctx.context.options,
+						rest,
+						"create",
+					);
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
 						emailVerified: false,
+						name: name ?? (await options?.generateName?.(ctx)) ?? "Anonymous",
+						image,
+						...additionalFields,
 						isAnonymous: true,
-						name,
 						createdAt: new Date(),
 						updatedAt: new Date(),
 					});

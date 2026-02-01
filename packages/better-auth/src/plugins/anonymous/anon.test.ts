@@ -179,6 +179,75 @@ describe("anonymous", async () => {
 		expect(res.data?.user.name).toBe("i-am-anonymous");
 	});
 
+	it("should accept name in the body", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			name: "custom-name",
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.name).toBe("custom-name");
+	});
+
+	it("should accept image in the body", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [anonymous()],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			image: "https://example.com/avatar.png",
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.image).toBe("https://example.com/avatar.png");
+	});
+
+	it("should prioritize body name over generateName option", async () => {
+		const testHeaders = new Headers();
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					anonymous({
+						generateName() {
+							return "generated-name";
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [anonymousClient()],
+				},
+			},
+		);
+		const res = await client.signIn.anonymous({
+			name: "body-name",
+			fetchOptions: {
+				onSuccess: sessionSetter(testHeaders),
+			},
+		});
+		expect(res.data?.user.name).toBe("body-name");
+	});
+
 	it("should work with generateRandomEmail", async () => {
 		const testHeaders = new Headers();
 		const { client, sessionSetter } = await getTestInstance(
