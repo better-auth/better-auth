@@ -70,6 +70,33 @@ await auth.api.linkSocialAccount({
 });
 ```
 
+#### Login Hint
+
+You can provide a login hint (such as an email address) to pre-fill or suggest an account to the OAuth provider. This is particularly useful when linking accounts to ensure the user selects the correct account:
+
+<Tabs items={["client", "server"]}>
+    <Tab value="client">
+```ts
+await authClient.linkSocial({
+  provider: "google",
+  loginHint: user.email, // filter the accounts to only show the one with the given email
+})
+```
+    </Tab>
+
+    <Tab value="server">
+```ts
+await auth.api.linkSocialAccount({
+  body: {
+    provider: "google",
+    loginHint: user.email,
+  },
+  headers: // pass headers with authenticated token
+});
+```
+    </Tab>
+</Tabs>
+
 ### Get Access Token
 
 To get the access token for a social provider, you can use the `getAccessToken` function with the `authClient` or `auth.api` for server-side usage. When you use this endpoint, if the access token is expired, it will be refreshed.

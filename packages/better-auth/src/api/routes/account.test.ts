@@ -215,6 +215,30 @@ describe("account", async () => {
 		});
 	});
 
+	it("should pass loginHint to authorization URL", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const testEmail = "user@example.com";
+			const linkAccountRes = await client.linkSocial({
+				provider: "google",
+				callbackURL: "/callback",
+				loginHint: testEmail,
+			});
+
+			expect(linkAccountRes.data).toMatchObject({
+				url: expect.stringContaining("google.com"),
+				redirect: true,
+			});
+
+			const url =
+				linkAccountRes.data && "url" in linkAccountRes.data
+					? new URL(linkAccountRes.data.url)
+					: new URL("");
+			const loginHintParam = url.searchParams.get("login_hint");
+			expect(loginHintParam).toBe(testEmail);
+		});
+	});
+
 	it("should link second account from the same provider", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async (headers) => {

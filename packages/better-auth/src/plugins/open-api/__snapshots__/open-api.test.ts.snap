@@ -1957,6 +1957,13 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                       "null",
                     ],
                   },
+                  "loginHint": {
+                    "description": "The login hint to use for the authorization code request",
+                    "type": [
+                      "string",
+                      "null",
+                    ],
+                  },
                   "provider": {
                     "description": undefined,
                     "type": "string",

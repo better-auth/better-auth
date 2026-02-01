@@ -168,6 +168,13 @@ export const linkSocialAccount = createAuthEndpoint(
 						"Disable automatic redirection to the provider. Useful for handling the redirection yourself",
 				})
 				.optional(),
+			loginHint: z
+				.string()
+				.meta({
+					description:
+						"The login hint to use for the authorization code request",
+				})
+				.optional(),
 			/**
 			 * Any additional data to pass through the oauth flow.
 			 */
@@ -370,6 +377,7 @@ export const linkSocialAccount = createAuthEndpoint(
 			codeVerifier: state.codeVerifier,
 			redirectURI: `${c.context.baseURL}/callback/${provider.id}`,
 			scopes: c.body.scopes,
+			loginHint: c.body.loginHint,
 		});
 
 		if (!c.body.disableRedirect) {
