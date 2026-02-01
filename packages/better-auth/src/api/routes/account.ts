@@ -522,7 +522,7 @@ export const getAccessToken = createAuthEndpoint(
 		if (
 			accountData &&
 			providerId === accountData.providerId &&
-			(!accountId || accountData.id === accountId)
+			(!accountId || accountData.accountId === accountId)
 		) {
 			account = accountData;
 		} else {
@@ -552,8 +552,8 @@ export const getAccessToken = createAuthEndpoint(
 				new Date(account.accessTokenExpiresAt).getTime() - Date.now() < 5_000;
 			if (
 				account.refreshToken &&
-				accessTokenExpired &&
-				provider.refreshAccessToken
+				provider.refreshAccessToken &&
+				(accessTokenExpired || !account.accessTokenExpiresAt)
 			) {
 				const refreshToken = await decryptOAuthToken(
 					account.refreshToken,
@@ -568,10 +568,15 @@ export const getAccessToken = createAuthEndpoint(
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {
-					updatedAccount = await ctx.context.internalAdapter.updateAccount(
-						account.id,
-						updatedData,
-					);
+					try {
+						updatedAccount = await ctx.context.internalAdapter.updateAccount(
+							account.id,
+							updatedData,
+						);
+					} catch {
+						// In stateless or multi-instance setups the account may not exist in this instance's store.
+						// Still update the account cookie with refreshed tokens so the client gets a valid token.
+					}
 				}
 				if (ctx.context.options.account?.storeAccountCookie) {
 					await setAccountCookie(ctx, {
