@@ -927,7 +927,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					responses: {
 						200: {
 							description: "Success",
-							contnt: {
+							content: {
 								"application/json": {
 									schema: {
 										type: "object",
