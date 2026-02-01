@@ -1,0 +1,352 @@
+---
+title: Members
+description: Manage organization members and their roles.
+---
+
+Members are users who belong to an organization.
+Each member has a role that determines their permissions within the organization.
+
+## Adding a Member
+
+You can add a user directly to an organization using the `organization.addMember` method.
+This is useful for server-side operations where you want to add a member without sending an invitation.
+
+<APIMethod
+    path="/organization/add-member"
+    method="POST"
+    note="This is a server-only API. Use invitations for client-side member additions.">
+```ts
+type addMember = {
+    /**
+     * The user ID of the user to add as a member.
+     */
+    userId: string = "user-id"
+    /**
+     * The role(s) to assign to the new member.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "member"
+    /**
+     * The organization ID to add the member to.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Adding a Member with Multiple Roles
+
+You can assign multiple roles to a member:
+
+```ts
+await auth.api.addMember({
+    body: {
+        userId: "user-id",
+        role: ["admin", "moderator"], // Multiple roles
+        organizationId: "org-id",
+    },
+})
+```
+
+### Adding a Member with Additional Fields
+
+If you have defined additional fields in the member schema, you can include them when adding a member:
+
+```ts
+await auth.api.addMember({
+    body: {
+        userId: "user-id",
+        role: "member",
+        organizationId: "org-id",
+        department: "Engineering", // Custom additional field
+    },
+})
+```
+
+<Callout type="info">
+    The `addMember` API is intended for server-side use only. For client-side 
+    member additions, use the [invitation system](/docs/plugins/organization/invitations) instead.
+</Callout>
+
+## Removing a Member
+
+You can remove a member from an organization using the `organization.removeMember` method.
+The member can be identified by their member ID or email address.
+
+<APIMethod
+    path="/organization/remove-member"
+    method="POST">
+```ts
+type removeMember = {
+    /**
+     * The member ID or email address of the member to remove.
+     */
+    memberIdOrEmail: string = "member-id-or-email"
+    /**
+     * The organization ID to remove the member from.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+    The last owner of an organization cannot be removed. If you need to remove the owner,
+    first assign the owner role to another member.
+</Callout>
+
+## Leaving an Organization
+
+A member can leave an organization using the `organization.leave` method.
+This is different from `removeMember` in that it allows a user to remove themselves from an organization.
+
+<APIMethod
+    path="/organization/leave"
+    method="POST">
+```ts
+type leaveOrganization = {
+    /**
+     * The organization ID to leave.
+     */
+    organizationId: string = "org-id"
+}
+```
+</APIMethod>
+
+<Callout type="warn">
+    The last owner of an organization cannot leave. If you need to leave as the only owner,
+    first assign the owner role to another member.
+</Callout>
+
+## Updating a Member's Role
+
+You can update a member's role using the `organization.updateMemberRole` method.
+
+<APIMethod
+    path="/organization/update-member-role"
+    method="POST">
+```ts
+type updateMemberRole = {
+    /**
+     * The new role(s) to assign to the member.
+     * Can be a single role or an array of roles.
+     */
+    role: string | string[] = "admin"
+    /**
+     * The member ID to update.
+     */
+    memberId: string = "member-id"
+    /**
+     * The organization ID. If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+### Updating to Multiple Roles
+
+You can assign multiple roles to a member:
+
+```ts
+await auth.api.updateMemberRole({
+    headers,
+    body: {
+        memberId: "member-id",
+        role: ["admin", "moderator"], // Multiple roles
+        organizationId: "org-id",
+    },
+})
+```
+
+<Callout type="warn">
+    The last owner of an organization cannot have their owner role removed. 
+    If you need to change the owner's role, first assign the owner role to another member.
+</Callout>
+
+## Getting the Active Member
+
+You can get the current user's member details for the active organization using the `organization.getActiveMember` method.
+
+<APIMethod
+    path="/organization/get-active-member"
+    method="GET">
+```ts
+type getActiveMember = {
+    // No parameters required
+    // Uses the session's active organization
+}
+```
+</APIMethod>
+
+
+Returns:
+
+```ts
+type Member = {
+    id: string
+    userId: string
+    organizationId: string
+    role: string
+}
+```
+
+## Getting a Member's Role
+
+Get the role of a member in an organization. If no `userId` is provided, returns the current user's role.
+
+<APIMethod
+    path="/organization/get-active-member-role"
+    method="GET">
+```ts
+type getActiveMemberRole = {
+    /**
+     * The user ID to get the role for.
+     * If not provided, returns the current user's role.
+     */
+    userId?: string = "user-id"
+    /**
+     * The organization ID to get the member's role from.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type GetActiveMemberRoleResponse = {
+    role: string
+}
+```
+
+## Listing Members
+
+List all members of an organization with pagination, sorting, and filtering support.
+
+<APIMethod
+    path="/organization/list-members"
+    method="GET">
+```ts
+type listMembers = {
+    /**
+     * The organization ID to list members for.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The organization slug to list members for.
+     * If not provided, uses the active organization.
+     */
+    organizationSlug?: string = "org-slug"
+    /**
+     * Maximum number of members to return.
+     */
+    limit?: number = 10
+    /**
+     * Number of members to skip for pagination.
+     */
+    offset?: number = 0
+    /**
+     * Field to sort by (e.g., "createdAt", "role").
+     */
+    sortBy?: string = "createdAt"
+    /**
+     * Sort direction.
+     */
+    sortDirection?: "asc" | "desc" = "asc"
+    /**
+     * Field to filter by.
+     */
+    filterField?: string = "role"
+    /**
+     * Value to filter by.
+     */
+    filterValue?: string | number | boolean = "admin"
+    /**
+     * Filter operator.
+     */
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains" = "eq"
+}
+```
+</APIMethod>
+
+Returns:
+
+```ts
+type ListMembersResponse = {
+    members: Array<{
+        id: string
+        userId: string
+        organizationId: string
+        role: string
+        createdAt: Date
+        user: {
+            id: string
+            name: string
+            email: string
+            image: string | null
+        }
+    }>
+    total: number
+    limit: number | null
+    offset: number | null
+}
+```
+
+---
+
+## Configuration Options
+
+### `membershipLimit`
+
+The maximum number of members allowed in an organization. Can be a number or an async function.
+
+```ts
+// Static limit
+organization({
+    membershipLimit: 50
+})
+
+// Dynamic limit based on organization
+organization({
+    membershipLimit: async (user, organization, ctx) => {
+        // Premium orgs get more members
+        if (organization.metadata?.plan === "premium") {
+            return 500
+        }
+        return 50
+    }
+})
+```
+
+**Default:** `100`
+
+---
+
+## Member Schema
+
+The member table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier |
+| `organizationId` | string | Organization reference |
+| `userId` | string | User reference |
+| `role` | string | Member's role |
+| `createdAt` | Date | When the member joined |
+
+## Default Roles
+
+The plugin comes with three default roles:
+
+- **owner**: Full access, can delete organization and manage all settings
+- **admin**: Can manage members, invitations, and most settings
+- **member**: Basic access to organization resources
+
+See [Roles & Permissions](/docs/plugins/organization-new/roles-permissions) for customizing roles.
+
