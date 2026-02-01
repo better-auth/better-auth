@@ -1317,13 +1317,34 @@ export const signInSSO = (options?: SSOOptions) => {
 					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 				});
 
-				const idp = saml.IdentityProvider({
-					metadata: parsedSamlConfig.idpMetadata?.metadata,
-					entityID: parsedSamlConfig.idpMetadata?.entityID,
-					encryptCert: parsedSamlConfig.idpMetadata?.cert,
-					singleSignOnService:
-						parsedSamlConfig.idpMetadata?.singleSignOnService,
-				});
+				const idpData = parsedSamlConfig.idpMetadata;
+				let idp: IdentityProvider;
+				if (!idpData?.metadata) {
+					idp = saml.IdentityProvider({
+						entityID: idpData?.entityID || parsedSamlConfig.issuer,
+						singleSignOnService: idpData?.singleSignOnService || [
+							{
+								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+								Location: parsedSamlConfig.entryPoint,
+							},
+						],
+						signingCert: idpData?.cert || parsedSamlConfig.cert,
+						wantAuthnRequestsSigned:
+							parsedSamlConfig.wantAssertionsSigned || false,
+						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
+						encPrivateKey: idpData?.encPrivateKey,
+						encPrivateKeyPass: idpData?.encPrivateKeyPass,
+					});
+				} else {
+					idp = saml.IdentityProvider({
+						metadata: idpData.metadata,
+						privateKey: idpData.privateKey,
+						privateKeyPass: idpData.privateKeyPass,
+						isAssertionEncrypted: idpData.isAssertionEncrypted,
+						encPrivateKey: idpData.encPrivateKey,
+						encPrivateKeyPass: idpData.encPrivateKeyPass,
+					});
+				}
 				const loginRequest = sp.createLoginRequest(
 					idp,
 					"redirect",
