@@ -4962,7 +4962,7 @@ describe("stripe", () => {
 					fetchOptions: { headers },
 				});
 
-				expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+				expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 			});
 
 			it("should reject when no referenceId or activeOrganizationId", async () => {

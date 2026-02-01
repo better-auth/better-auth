@@ -832,7 +832,7 @@ describe("stripe - organization customer", () => {
 		expect(cancelRes.error?.code).toBe("UNAUTHORIZED");
 	});
 
-	it("should reject organization subscription when organization.enabled is false", async () => {
+	it("should reject organization subscription when authorizeReference is not configured", async () => {
 		const stripeOptionsWithoutOrg: StripeOptions = {
 			...baseOrgStripeOptions,
 			organization: undefined, // Disable organization support
@@ -878,7 +878,7 @@ describe("stripe - organization customer", () => {
 			fetchOptions: { headers },
 		});
 
-		expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+		expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 	});
 
 	it("should keep user and organization subscriptions separate", async () => {
