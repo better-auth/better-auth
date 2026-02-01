@@ -240,6 +240,32 @@ describe("secret rotation", () => {
 			expect(decoded?.foo).toBe("bar");
 		});
 
+		it("decode kid-less JWT tries all secrets (fallback)", async () => {
+			// Simulate a legacy JWT without kid by encoding with plain string
+			const token = await symmetricEncodeJWT(
+				{ foo: "bar" },
+				secretA,
+				"test-salt",
+				3600,
+			);
+
+			// Config where secretA is NOT the first/current secret
+			const config: SecretConfig = {
+				keys: new Map([
+					[2, secretB],
+					[1, secretA],
+				]),
+				currentVersion: 2,
+				legacySecret: secretA,
+			};
+			const decoded = await symmetricDecodeJWT<{ foo: string }>(
+				token,
+				config,
+				"test-salt",
+			);
+			expect(decoded?.foo).toBe("bar");
+		});
+
 		it("decode legacy string-encoded JWT with SecretConfig legacySecret", async () => {
 			const token = await symmetricEncodeJWT(
 				{ foo: "bar" },
