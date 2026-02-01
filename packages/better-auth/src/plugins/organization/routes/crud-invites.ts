@@ -71,7 +71,6 @@ const baseInvitationSchema = z.object({
 export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.invitation?.additionalFields || {},
-		isClientSide: true,
 	});
 
 	return createAuthEndpoint(

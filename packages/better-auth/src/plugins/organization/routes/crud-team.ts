@@ -29,7 +29,6 @@ const teamBaseSchema = z.object({
 export const createTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.team?.additionalFields ?? {},
-		isClientSide: true,
 	});
 	return createAuthEndpoint(
 		"/organization/create-team",
@@ -360,7 +359,6 @@ export const removeTeam = <O extends OrganizationOptions>(options: O) =>
 export const updateTeam = <O extends OrganizationOptions>(options: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.team?.additionalFields ?? {},
-		isClientSide: true,
 	});
 
 	type Body = {

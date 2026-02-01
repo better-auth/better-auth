@@ -59,7 +59,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
-		isClientSide: true,
 	});
 
 	type Body = InferAdditionalFieldsFromPluginOptions<"organization", O> &
@@ -185,9 +184,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				},
 			});
 
-			let member:
-				| (Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>)
-				| undefined;
+			let member: (Omit<InferMember<O, false>, "user"> & Member) | undefined;
 			let teamMember: TeamMember | null = null;
 			let data = {
 				userId: user.id,
@@ -369,7 +366,6 @@ export const updateOrganization = <O extends OrganizationOptions>(
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
-		isClientSide: true,
 	});
 	type Body = {
 		data: {

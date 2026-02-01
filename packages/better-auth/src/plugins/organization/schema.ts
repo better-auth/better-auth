@@ -399,7 +399,7 @@ type InferAdditionalFieldsOutput<
 
 export type InferMember<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
 	(O["teams"] extends {
 		enabled: true;
@@ -431,24 +431,40 @@ export type InferMember<
 					image?: string | undefined;
 				};
 			}) &
-		InferAdditionalFieldsOutput<"member", O, isClientSide>
+		InferAdditionalFieldsFromPluginOptions<
+			"member",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
-	Organization & InferAdditionalFieldsOutput<"organization", O, isClientSide>
+	Organization &
+		InferAdditionalFieldsFromPluginOptions<
+			"organization",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;
 
 export type InferTeam<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
-> = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
+> = Prettify<
+	Team &
+		InferAdditionalFieldsFromPluginOptions<
+			"team",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
+>;
 
 export type InferInvitation<
 	O extends OrganizationOptions,
-	isClientSide extends boolean = true,
+	ShouldRemoveFieldsWithInputFalse extends boolean = true,
 > = Prettify<
 	(O["teams"] extends {
 		enabled: true;
@@ -474,5 +490,9 @@ export type InferInvitation<
 				expiresAt: Date;
 				createdAt: Date;
 			}) &
-		InferAdditionalFieldsOutput<"invitation", O, isClientSide>
+		InferAdditionalFieldsFromPluginOptions<
+			"invitation",
+			O,
+			ShouldRemoveFieldsWithInputFalse
+		>
 >;

@@ -222,9 +222,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const result = await adapter.findOne<
-				InferMember<O, false> & { user: User }
-			>({
+			const result = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -255,9 +253,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		findMemberById: async (memberId: string) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const result = await adapter.findOne<
-				InferMember<O, false> & { user: User }
-			>({
+			const result = await adapter.findOne<InferMember<O, false>>({
 				model: "member",
 				where: [
 					{
@@ -275,14 +271,14 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const { user, ...member } = result;
 
 			return {
-				...(member as unknown as InferMember<O, false>),
+				...member,
 				user: {
 					id: user.id,
 					name: user.name,
 					email: user.email,
 					image: user.image,
 				},
-			};
+			} as InferMember<O, false>;
 		},
 		createMember: async (
 			data: Omit<MemberInput, "id"> &
@@ -292,7 +288,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const member = await adapter.create<
 				typeof data,
-				Member & InferAdditionalFieldsFromPluginOptions<"member", O, false>
+				Member & Omit<InferMember<O, false>, "user">
 			>({
 				model: "member",
 				data: {
@@ -507,9 +503,9 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findOne<
 				InferOrganization<O, false> & {
-					invitation: InferInvitation<O>[];
-					member: InferMember<O>[];
-					team: InferTeam<O>[] | undefined;
+					invitation: InferInvitation<O, false>[];
+					member: InferMember<O, false>[];
+					team: InferTeam<O, false>[] | undefined;
 				}
 			>({
 				model: "organization",
@@ -616,10 +612,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		createTeam: async (data: Omit<TeamInput, "id">) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const team = await adapter.create<
-				Omit<TeamInput, "id">,
-				InferTeam<O, false>
-			>({
+			const team = await adapter.create<Omit<TeamInput, "id">, InferTeam<O>>({
 				model: "team",
 				data,
 			});
@@ -634,13 +627,13 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			organizationId?: string | undefined;
 			includeTeamMembers?: IncludeMembers | undefined;
 		}): Promise<
-			| (InferTeam<O> &
+			| (InferTeam<O, false> &
 					(IncludeMembers extends true ? { members: TeamMember[] } : {}))
 			| null
 		> => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const result = await adapter.findOne<
-				InferTeam<O> & { teamMember: TeamMember[] }
+				InferTeam<O, false> & { teamMember: TeamMember[] }
 			>({
 				model: "team",
 				where: [

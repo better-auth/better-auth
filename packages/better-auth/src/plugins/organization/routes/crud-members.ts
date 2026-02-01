@@ -44,7 +44,6 @@ const baseMemberSchema = z.object({
 export const addMember = <O extends OrganizationOptions>(option: O) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: option?.schema?.member?.additionalFields || {},
-		isClientSide: true,
 	});
 	return createAuthEndpoint(
 		{
