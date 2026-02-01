@@ -523,3 +523,118 @@ export const auth = betterAuth({
     ],
 });
 ```
+
+## Client Side Session Management
+
+By default, Better Auth automatically manages session synchronization on the client side.
+This includes polling, refetching on window focus, cross-tab synchronization, and handling
+online/offline states.
+
+### Session Options
+
+You can configure client-side session management behavior by passing `sessionOptions` to `createAuthClient`:
+
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/react"
+
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchInterval: 60, // Poll every 60 seconds. Default: 0 (disabled)
+        refetchOnWindowFocus: true, // Refetch when window regains focus. Default: true
+        refetchWhenOffline: false, // Don't refetch when offline. Default: false
+    }
+})
+```
+
+### Polling
+
+Better Auth can automatically poll the session at a specified interval to keep it fresh.
+This is useful for preventing session expiry during idle periods.
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchInterval: 60, // Poll every 60 seconds (in seconds)
+    }
+})
+```
+
+**Notes:**
+- Set to `0` (default) to disable polling
+- Polling only occurs when a session exists (`data` is not null)
+- The interval is specified in seconds
+
+### Refetch on Window Focus
+
+By default, Better Auth automatically refetches the session when the user switches back
+to the window or tab. This prevents expired sessions when users switch tabs and come back later.
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchOnWindowFocus: true, // Default: true
+    }
+})
+```
+
+**Rate Limiting:**
+- To prevent excessive requests, focus refetch is rate-limited to once every 5 seconds
+- If a session request was made within the last 5 seconds, focus refetch is skipped
+- This only applies when a valid session already exists
+
+### Refetch When Offline
+
+By default, Better Auth stops polling and refetching when the device goes offline
+(determined by `navigator.onLine`). You can enable refetching when offline:
+
+```ts title="auth-client.ts"
+const authClient = createAuthClient({
+    sessionOptions: {
+        refetchWhenOffline: true, // Default: false
+    }
+})
+```
+
+<Callout>
+    **Note:** When `refetchWhenOffline` is `false`, all refetch operation
+    (polling, focus, etc.) are skipped when the device is offline.
+</Callout>
+
+### Cross-Tab Synchronization
+
+Better Auth automatically synchronizes session state across browser tabs using the Broadcast Channel API
+(with localStorage fallback). When you sign in, sign out, or update the session in one tab, all other
+tabs are notified and their session state is updated accordingly.
+
+This synchronization happens automatically - no configuration needed. The broadcast channel listens
+for session events:
+- `signout`: When a user signs out
+- `getSession`: When the session is fetched
+- `updateUser`: When user data is updated
+
+**How it works:**
+- Uses `BroadcastChannel` API when available
+- Falls back to `localStorage` events for cross-tab communication
+- Automatically triggers session refetch in other tabs when events occur
+
+### Manual Refetch
+
+You can manually trigger a session refetch using the `refetch` method from `useSession`:
+
+```ts title="auth-client.ts"
+const { refetch } = authClient.useSession()
+
+// Manually refetch the session
+await refetch()
+```
+
+You can also pass query parameters to the refetch:
+
+```ts title="auth-client.ts"
+await refetch({
+    query: {
+        disableCookieCache: true // Force fetch from database
+    }
+})
+```
