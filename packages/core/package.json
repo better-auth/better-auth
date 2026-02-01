@@ -124,6 +124,7 @@
     "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "devDependencies": {
+    "@better-auth/error-codes-extractor": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
     "better-call": "catalog:",

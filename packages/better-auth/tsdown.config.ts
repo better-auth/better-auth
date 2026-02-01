@@ -1,3 +1,4 @@
+import { errorCodesExtractor } from "@better-auth/error-codes-extractor";
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
@@ -67,4 +68,11 @@ export default defineConfig({
 	treeshake: true,
 	clean: true,
 	unbundle: true,
+	plugins: [
+		errorCodesExtractor({
+			outputFormat: "docs",
+			srcDir: "src",
+			docsOutputDir: "../../docs/content/docs/reference/errors",
+		}),
+	],
 });
