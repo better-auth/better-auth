@@ -6,6 +6,8 @@ export interface BaseCaptchaOptions {
 	secretKey: string;
 	endpoints?: string[] | undefined;
 	siteVerifyURLOverride?: string | undefined;
+	captchaResponseHeader?: string | undefined;
+	includeUserIP?: boolean;
 }
 
 export interface GoogleRecaptchaOptions extends BaseCaptchaOptions {
