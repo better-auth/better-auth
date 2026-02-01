@@ -1052,6 +1052,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			// -----
 			// Update members role if the role name was changed
 			if (updateData.role && updateData.role !== role.role) {
+				const oldRoleName = role.role;
+				const newRoleName = updateData.role;
+
+				// Batch update - members with exactly this single role
 				await ctx.context.adapter.update<Member>({
 					model: "member",
 					where: [
@@ -1063,14 +1067,54 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						},
 						{
 							field: "role",
-							value: role.role,
+							value: oldRoleName,
 							operator: "eq",
 						},
 					],
 					update: {
-						role: updateData.role,
+						role: newRoleName,
 					},
 				});
+
+				// Individual updates - members with multiple roles
+				const membersInOrg = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+						},
+					],
+				});
+
+				const membersWithMultipleRoles = membersInOrg.filter((member) => {
+					if (!member.role.includes(",")) return false;
+					const memberRoles = member.role.split(",").map((r) => r.trim());
+					return memberRoles.includes(oldRoleName);
+				});
+
+				await Promise.all(
+					membersWithMultipleRoles.map((member) => {
+						const memberRoles = member.role.split(",").map((r) => r.trim());
+						const updatedRoles = memberRoles.map((r) =>
+							r === oldRoleName ? newRoleName : r,
+						);
+						return ctx.context.adapter.update<Member>({
+							model: "member",
+							where: [
+								{
+									field: "id",
+									value: member.id,
+									operator: "eq",
+								},
+							],
+							update: {
+								role: updatedRoles.join(","),
+							},
+						});
+					}),
+				);
 			}
 
 			// -----

@@ -653,6 +653,88 @@ describe("dynamic access control", async (it) => {
 		expect(targetMemberAfter?.role).toBe(newRoleName);
 	});
 
+	it("should update member's role when member has multiple roles", async () => {
+		// Create two dynamic roles
+		const role1 = await authClient.organization.createRole(
+			{
+				role: "update-multi-1",
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		const role2 = await authClient.organization.createRole(
+			{
+				role: "update-multi-2",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#111111" },
+			},
+			{ headers },
+		);
+		if (!role1.data || !role2.data) throw new Error("Roles not created");
+
+		// Create a member with multiple roles
+		const memberDetails = {
+			email: `multi-role-update-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: ["update-multi-1", "update-multi-2"],
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify member has both roles
+		const memberBefore = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetBefore = memberBefore.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetBefore?.role).toBe("update-multi-1,update-multi-2");
+
+		// Update role1's name
+		await auth.api.updateOrgRole({
+			body: {
+				roleName: "update-multi-1",
+				data: { roleName: "updated-multi-1" },
+			},
+			headers,
+		});
+
+		// Verify the member's role is updated (only role1 should change)
+		const memberAfter = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetAfter = memberAfter.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetAfter?.role).toBe("updated-multi-1,update-multi-2");
+
+		// Clean up
+		const memberId = targetAfter?.id!;
+		await auth.api.updateMemberRole({
+			body: { memberId, role: "member" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "updated-multi-1" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "update-multi-2" },
+			headers,
+		});
+	});
+
 	it("should not be allowed to update a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
