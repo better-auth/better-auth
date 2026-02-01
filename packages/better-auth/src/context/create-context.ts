@@ -108,11 +108,6 @@ function parseSecretsEnv(
 		}
 		return { version, value };
 	});
-	if (entries.length === 0) {
-		throw new BetterAuthError(
-			"BETTER_AUTH_SECRETS is set but contains no entries.",
-		);
-	}
 	return entries;
 }
 
@@ -157,7 +152,10 @@ function buildSecretConfig(
 	return {
 		keys,
 		currentVersion: secrets[0].version,
-		legacySecret: legacySecret || undefined,
+		legacySecret:
+			legacySecret && legacySecret !== DEFAULT_SECRET
+				? legacySecret
+				: undefined,
 	};
 }
 

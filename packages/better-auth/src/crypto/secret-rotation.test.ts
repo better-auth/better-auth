@@ -286,5 +286,31 @@ describe("secret rotation", () => {
 			);
 			expect(decoded?.foo).toBe("bar");
 		});
+
+		it("rejects token with mismatched kid (no fallback)", async () => {
+			// Encode with secretA using a SecretConfig (so it gets a kid)
+			const configA: SecretConfig = {
+				keys: new Map([[1, secretA]]),
+				currentVersion: 1,
+			};
+			const token = await symmetricEncodeJWT(
+				{ foo: "bar" },
+				configA,
+				"test-salt",
+				3600,
+			);
+
+			// Try to decode with a config that only has secretB (different key, kid won't match)
+			const configB: SecretConfig = {
+				keys: new Map([[2, secretB]]),
+				currentVersion: 2,
+			};
+			const decoded = await symmetricDecodeJWT<{ foo: string }>(
+				token,
+				configB,
+				"test-salt",
+			);
+			expect(decoded).toBeNull();
+		});
 	});
 });
