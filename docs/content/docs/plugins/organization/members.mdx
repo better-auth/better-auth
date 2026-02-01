@@ -1,0 +1,37 @@
+---
+title: Members
+description: Manage organization members and their roles.
+---
+
+Members are users who belong to an organization.
+Each member has a role that determines their permissions within the organization.
+
+
+---
+
+## Member related options
+
+//TODO: config options for members
+
+## Member Schema
+
+The member table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique identifier |
+| `organizationId` | string | Organization reference |
+| `userId` | string | User reference |
+| `role` | string | Member's role |
+| `createdAt` | Date | When the member joined |
+
+## Default Roles
+
+The plugin comes with three default roles:
+
+- **owner**: Full access, can delete organization and manage all settings
+- **admin**: Can manage members, invitations, and most settings
+- **member**: Basic access to organization resources
+
+See [Roles & Permissions](/docs/plugins/organization-new/roles-permissions) for customizing roles.
+
