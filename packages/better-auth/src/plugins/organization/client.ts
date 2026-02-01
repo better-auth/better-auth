@@ -258,13 +258,19 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.includes("/organization/update-member-role");
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/update-role")
+					);
 				},
 				signal: "$activeMemberSignal",
 			},
 			{
 				matcher(path) {
-					return path.includes("/organization/update-member-role");
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.includes("/organization/update-role")
+					);
 				},
 				signal: "$activeMemberRoleSignal",
 			},

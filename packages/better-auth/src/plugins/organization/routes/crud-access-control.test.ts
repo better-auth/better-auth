@@ -588,6 +588,268 @@ describe("dynamic access control", async (it) => {
 		expect(res2.role).toBe(`updated-${roleName}`);
 	});
 
+	it("should update member's role when role name is changed", async () => {
+		// Create a new dynamic role
+		const roleName = `dynamic-role-${crypto.randomUUID()}`;
+		const testRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Create a new member with the dynamic role
+		const memberDetails = {
+			email: `member-role-update-test-${crypto.randomUUID()}@email.com`,
+			name: `test-member`,
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: roleName,
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify the member has the original role
+		const memberBefore = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetMemberBefore = memberBefore.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetMemberBefore?.role).toBe(roleName);
+
+		// Update the role name
+		const newRoleName = `updated-${roleName}`;
+		await auth.api.updateOrgRole({
+			body: {
+				roleName,
+				data: { roleName: newRoleName },
+			},
+			headers,
+		});
+
+		// Verify the member's role is updated to the new name
+		const memberAfter = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetMemberAfter = memberAfter.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetMemberAfter?.role).toBe(newRoleName);
+	});
+
+	it("should update member's role when member has multiple roles", async () => {
+		// Create two dynamic roles
+		const role1 = await authClient.organization.createRole(
+			{
+				role: "update-multi-1",
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		const role2 = await authClient.organization.createRole(
+			{
+				role: "update-multi-2",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#111111" },
+			},
+			{ headers },
+		);
+		if (!role1.data || !role2.data) throw new Error("Roles not created");
+
+		// Create a member with multiple roles
+		const memberDetails = {
+			email: `multi-role-update-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: ["update-multi-1", "update-multi-2"],
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify member has both roles
+		const memberBefore = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetBefore = memberBefore.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetBefore?.role).toBe("update-multi-1,update-multi-2");
+
+		// Update role1's name
+		await auth.api.updateOrgRole({
+			body: {
+				roleName: "update-multi-1",
+				data: { roleName: "updated-multi-1" },
+			},
+			headers,
+		});
+
+		// Verify the member's role is updated (only role1 should change)
+		const memberAfter = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetAfter = memberAfter.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetAfter?.role).toBe("updated-multi-1,update-multi-2");
+
+		// Clean up
+		const memberId = targetAfter?.id!;
+		await auth.api.updateMemberRole({
+			body: { memberId, role: "member" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "updated-multi-1" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "update-multi-2" },
+			headers,
+		});
+	});
+
+	it("should update pending invitation's role when role name is changed", async () => {
+		// Create a dynamic role
+		const roleName = `invite-role-${crypto.randomUUID()}`;
+		const testRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Create a pending invitation with the dynamic role
+		const inviteEmail = `invite-role-test-${crypto.randomUUID()}@email.com`;
+		await auth.api.createInvitation({
+			body: {
+				email: inviteEmail,
+				// @ts-expect-error - for testing purposes
+				role: roleName,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify the invitation has the original role
+		const invitationsBefore = await auth.api.listInvitations({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetInviteBefore = invitationsBefore.find(
+			(i) => i.email === inviteEmail,
+		);
+		expect(targetInviteBefore?.role).toBe(roleName);
+		expect(targetInviteBefore?.status).toBe("pending");
+
+		// Update the role name
+		const newRoleName = `updated-${roleName}`;
+		await auth.api.updateOrgRole({
+			body: {
+				roleName,
+				data: { roleName: newRoleName },
+			},
+			headers,
+		});
+
+		// Verify the pending invitation's role is updated
+		const invitationsAfter = await auth.api.listInvitations({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetInviteAfter = invitationsAfter.find(
+			(i) => i.email === inviteEmail,
+		);
+		expect(targetInviteAfter?.role).toBe(newRoleName);
+	});
+
+	it("should update pending invitation's role when invitation has multiple roles", async () => {
+		// Create two dynamic roles
+		const role1 = await authClient.organization.createRole(
+			{
+				role: "invite-multi-1",
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		const role2 = await authClient.organization.createRole(
+			{
+				role: "invite-multi-2",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#111111" },
+			},
+			{ headers },
+		);
+		if (!role1.data || !role2.data) throw new Error("Roles not created");
+
+		// Create a pending invitation with multiple roles
+		const inviteEmail = `invite-multi-role-${crypto.randomUUID()}@email.com`;
+		await auth.api.createInvitation({
+			body: {
+				email: inviteEmail,
+				// @ts-expect-error - for testing purposes
+				role: ["invite-multi-1", "invite-multi-2"],
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify the invitation has both roles
+		const invitationsBefore = await auth.api.listInvitations({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetBefore = invitationsBefore.find((i) => i.email === inviteEmail);
+		expect(targetBefore?.role).toBe("invite-multi-1,invite-multi-2");
+
+		// Update role1's name
+		await auth.api.updateOrgRole({
+			body: {
+				roleName: "invite-multi-1",
+				data: { roleName: "updated-invite-multi-1" },
+			},
+			headers,
+		});
+
+		// Verify the invitation's role is updated (only role1 should change)
+		const invitationsAfter = await auth.api.listInvitations({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetAfter = invitationsAfter.find((i) => i.email === inviteEmail);
+		expect(targetAfter?.role).toBe("updated-invite-multi-1,invite-multi-2");
+	});
+
 	it("should not be allowed to update a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{

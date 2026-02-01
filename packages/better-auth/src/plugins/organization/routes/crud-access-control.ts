@@ -10,7 +10,7 @@ import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
-import type { Member, OrganizationRole } from "../schema";
+import type { Invitation, Member, OrganizationRole } from "../schema";
 import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
@@ -1048,6 +1048,155 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				],
 				update,
 			});
+
+			// -----
+			// Update members role if the role name was changed
+			if (updateData.role && updateData.role !== role.role) {
+				const oldRoleName = role.role;
+				const newRoleName = updateData.role;
+
+				// Batch update - members with exactly this single role
+				await ctx.context.adapter.update<Member>({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "role",
+							value: oldRoleName,
+							operator: "eq",
+						},
+					],
+					update: {
+						role: newRoleName,
+					},
+				});
+
+				// Individual updates - members with multiple roles
+				const membersInOrg = await ctx.context.adapter.findMany<Member>({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+						},
+					],
+				});
+
+				const membersWithMultipleRoles = membersInOrg.filter((member) => {
+					if (!member.role.includes(",")) return false;
+					const memberRoles = member.role.split(",").map((r) => r.trim());
+					return memberRoles.includes(oldRoleName);
+				});
+
+				await Promise.all(
+					membersWithMultipleRoles.map((member) => {
+						const memberRoles = member.role.split(",").map((r) => r.trim());
+						const updatedRoles = memberRoles.map((r) =>
+							r === oldRoleName ? newRoleName : r,
+						);
+						return ctx.context.adapter.update<Member>({
+							model: "member",
+							where: [
+								{
+									field: "id",
+									value: member.id,
+									operator: "eq",
+								},
+							],
+							update: {
+								role: updatedRoles.join(","),
+							},
+						});
+					}),
+				);
+
+				// Batch update - pending invitations with exactly this single role
+				await ctx.context.adapter.update<Invitation>({
+					model: "invitation",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "role",
+							value: oldRoleName,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "status",
+							value: "pending",
+							operator: "eq",
+						},
+					],
+					update: {
+						role: newRoleName,
+					},
+				});
+
+				// Individual updates - pending invitations with multiple roles
+				const invitationsInOrg = await ctx.context.adapter.findMany<Invitation>(
+					{
+						model: "invitation",
+						where: [
+							{
+								field: "organizationId",
+								value: organizationId,
+								operator: "eq",
+								connector: "AND",
+							},
+							{
+								field: "status",
+								value: "pending",
+								operator: "eq",
+							},
+						],
+					},
+				);
+
+				const invitationsWithMultipleRoles = invitationsInOrg.filter(
+					(invitation) => {
+						if (!invitation.role.includes(",")) return false;
+						const invitationRoles = invitation.role
+							.split(",")
+							.map((r) => r.trim());
+						return invitationRoles.includes(oldRoleName);
+					},
+				);
+
+				await Promise.all(
+					invitationsWithMultipleRoles.map((invitation) => {
+						const invitationRoles = invitation.role
+							.split(",")
+							.map((r) => r.trim());
+						const updatedRoles = invitationRoles.map((r) =>
+							r === oldRoleName ? newRoleName : r,
+						);
+						return ctx.context.adapter.update<Invitation>({
+							model: "invitation",
+							where: [
+								{
+									field: "id",
+									value: invitation.id,
+									operator: "eq",
+								},
+							],
+							update: {
+								role: updatedRoles.join(","),
+							},
+						});
+					}),
+				);
+			}
 
 			// -----
 			// Return the updated role
