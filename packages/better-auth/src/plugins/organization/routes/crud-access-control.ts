@@ -1050,6 +1050,30 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 			});
 
 			// -----
+			// Update members role if the role name was changed
+			if (updateData.role && updateData.role !== role.role) {
+				await ctx.context.adapter.update<Member>({
+					model: "member",
+					where: [
+						{
+							field: "organizationId",
+							value: organizationId,
+							operator: "eq",
+							connector: "AND",
+						},
+						{
+							field: "role",
+							value: role.role,
+							operator: "eq",
+						},
+					],
+					update: {
+						role: updateData.role,
+					},
+				});
+			}
+
+			// -----
 			// Return the updated role
 			return ctx.json({
 				success: true,

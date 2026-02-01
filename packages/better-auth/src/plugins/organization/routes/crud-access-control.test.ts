@@ -588,6 +588,71 @@ describe("dynamic access control", async (it) => {
 		expect(res2.role).toBe(`updated-${roleName}`);
 	});
 
+	it("should update member's role when role name is changed", async () => {
+		// Create a new dynamic role
+		const roleName = `dynamic-role-${crypto.randomUUID()}`;
+		const testRole = await authClient.organization.createRole(
+			{
+				role: roleName,
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Create a new member with the dynamic role
+		const memberDetails = {
+			email: `member-role-update-test-${crypto.randomUUID()}@email.com`,
+			name: `test-member`,
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: roleName,
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Verify the member has the original role
+		const memberBefore = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetMemberBefore = memberBefore.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetMemberBefore?.role).toBe(roleName);
+
+		// Update the role name
+		const newRoleName = `updated-${roleName}`;
+		await auth.api.updateOrgRole({
+			body: {
+				roleName,
+				data: { roleName: newRoleName },
+			},
+			headers,
+		});
+
+		// Verify the member's role is updated to the new name
+		const memberAfter = await auth.api.listMembers({
+			query: { organizationId: org.data?.id },
+			headers,
+		});
+		const targetMemberAfter = memberAfter.members?.find(
+			(m) => m.userId === memberUser.user.id,
+		);
+		expect(targetMemberAfter?.role).toBe(newRoleName);
+	});
+
 	it("should not be allowed to update a role without the right ac resource permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
