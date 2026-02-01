@@ -1,0 +1,88 @@
+---
+title: Organization (New)
+description: The new organization plugin with improved APIs for managing organizations, members, and permissions.
+---
+
+Organizations simplify user access and permissions management. Assign roles and permissions to streamline project management, team coordination, and partnerships.
+
+This is the new organization plugin documentation with improved structure and APIs.
+
+## Overview
+
+The organization plugin provides:
+
+- **Organizations**: Create and manage organizations with customizable settings
+- **Members**: Add, remove, and manage organization members
+- **Invitations**: Invite users to join organizations via email or direct links
+- **Roles & Permissions**: Define custom roles and fine-grained permissions
+
+## Quick Links
+
+<Cards>
+  <Card title="Organizations" href="/docs/plugins/organization-new/organizations">
+    Learn how to create, update, and delete organizations
+  </Card>
+  <Card title="Members" href="/docs/plugins/organization-new/members">
+    Manage organization members and their roles
+  </Card>
+  <Card title="Invitations" href="/docs/plugins/organization-new/invitations">
+    Set up the invitation system for your organizations
+  </Card>
+  <Card title="Roles & Permissions" href="/docs/plugins/organization-new/roles-permissions">
+    Configure roles and permissions for access control
+  </Card>
+</Cards>
+
+## Installation
+
+<Steps>
+<Step>
+### Add the plugin to your **auth** config
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        organization()
+    ]
+})
+```
+</Step>
+
+<Step>
+### Migrate the database
+
+Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```bash
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```bash
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
+</Step>
+
+<Step>
+### Add the client plugin
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+import { organizationClient } from "better-auth/client/plugins"
+
+export const authClient = createAuthClient({
+    plugins: [
+        organizationClient()
+    ]
+})
+```
+</Step>
+</Steps>
+

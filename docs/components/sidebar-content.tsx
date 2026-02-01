@@ -28,8 +28,9 @@ export interface ContentListItem {
 	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	group?: boolean;
 	isNew?: boolean;
-	isUpdated?: boolean;
 	children?: ContentListItem[];
+	hasSubpages?: boolean;
+	isUpdated?: boolean;
 }
 
 interface Content {
@@ -1720,6 +1721,50 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Organization",
 				icon: () => <Users2 className="w-4 h-4" />,
 				href: "/docs/plugins/organization",
+			},
+			{
+				title: "Organization",
+				icon: () => <Users2 className="w-4 h-4" />,
+				href: "/docs/plugins/organization-new",
+				isNew: true,
+				children: [
+					{
+						title: "Organizations",
+						href: "/docs/plugins/organization-new/organizations",
+						icon: () => <Users2 className="w-4 h-4" />,
+					},
+					{
+						title: "Members",
+						href: "/docs/plugins/organization-new/members",
+						icon: () => <UserCircle className="w-4 h-4" />,
+					},
+					{
+						title: "Invitations",
+						href: "/docs/plugins/organization-new/invitations",
+						icon: () => <Mail className="w-4 h-4" />,
+					},
+					{
+						title: "Roles & Permissions",
+						href: "/docs/plugins/organization-new/roles-permissions",
+						icon: () => <ShieldCheck className="w-4 h-4" />,
+					},
+					{
+						title: "Addons",
+						group: true,
+						href: "",
+						icon: () => <LucideAArrowDown className="w-4 h-4" />,
+					},
+					{
+						title: "Teams",
+						href: "/docs/plugins/organization-new/teams",
+						icon: () => <Users2 className="w-4 h-4" />,
+					},
+					{
+						title: "Dynamic Access Control",
+						href: "/docs/plugins/organization-new/dynamic-access-control",
+						icon: () => <ShieldCheck className="w-4 h-4" />,
+					},
+				],
 			},
 			{
 				title: "Enterprise",
