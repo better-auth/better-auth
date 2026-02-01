@@ -248,6 +248,158 @@ describe("team", async (it) => {
 		}
 	});
 
+	it("should update a team with explicit organizationId in data", async () => {
+		// Get current session to ensure new org is different from active org
+		const currentSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		const currentActiveOrgId = (currentSession.data?.session as any)
+			.activeOrganizationId;
+
+		// Create a new organization
+		const newOrg = await client.organization.create({
+			name: "New Test Organization",
+			slug: "new-test-org",
+			fetchOptions: { headers },
+		});
+
+		expect(newOrg.data?.id).toBeDefined();
+		const newOrgId = newOrg.data?.id as string;
+
+		// Ensure the new org is different from the session's active org
+		expect(newOrgId).not.toBe(currentActiveOrgId);
+
+		// Create a team in the new organization
+		const newTeam = await client.organization.createTeam(
+			{
+				name: "Team in New Org",
+				organizationId: newOrgId,
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(newTeam.data?.id).toBeDefined();
+		expect(newTeam.data?.organizationId).toBe(newOrgId);
+		const newTeamId = newTeam.data?.id as string;
+
+		// Update the team with explicit organizationId in data
+		const updatedTeam = await client.organization.updateTeam({
+			teamId: newTeamId,
+			data: {
+				name: "Updated Team Name",
+				organizationId: newOrgId,
+			},
+			fetchOptions: { headers },
+		});
+
+		expect(updatedTeam.data?.name).toBe("Updated Team Name");
+		expect(updatedTeam.data?.id).toBe(newTeamId);
+		expect(updatedTeam.data?.organizationId).toBe(newOrgId);
+	});
+
+	it("should add and remove team member with explicit organizationId", async () => {
+		const testOrgId = organizationId;
+
+		// Create a new team specifically for this test
+		const newTeamRes = await client.organization.createTeam(
+			{
+				name: "Team for Member Test",
+				organizationId: testOrgId,
+			},
+			{
+				headers,
+			},
+		);
+		expect(newTeamRes.data?.id).toBeDefined();
+		const testTeamId = newTeamRes.data?.id as string;
+
+		// Get the current user's ID
+		const currentSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		const currentUserId = currentSession.data?.user.id as string;
+
+		// Add current user to the team so they can list members
+		await auth.api.addTeamMember({
+			headers,
+			body: {
+				userId: currentUserId,
+				teamId: testTeamId,
+				organizationId: testOrgId,
+			},
+		});
+
+		// Create and add a new user
+		const newUserHeaders = new Headers();
+		const newUserRes = await client.signUp.email(
+			{
+				email: "teamuser@email.com",
+				password: "password",
+				name: "Team User",
+			},
+			{
+				onSuccess: cookieSetter(newUserHeaders),
+			},
+		);
+
+		expect(newUserRes.data?.user.id).toBeDefined();
+		const newUserId = newUserRes.data?.user.id as string;
+
+		// Add user to organization first
+		await auth.api.addMember({
+			body: {
+				organizationId: testOrgId,
+				userId: newUserId,
+				role: "member",
+			},
+		});
+
+		// Add team member with explicit organizationId
+		const addedMember = await auth.api.addTeamMember({
+			headers,
+			body: {
+				userId: newUserId,
+				teamId: testTeamId,
+				organizationId: testOrgId,
+			},
+		});
+
+		expect(addedMember.teamId).toBe(testTeamId);
+		expect(addedMember.userId).toBe(newUserId);
+
+		// Verify team member was added by listing team members
+		const teamMembersBefore = await auth.api.listTeamMembers({
+			headers,
+			query: {
+				teamId: testTeamId,
+			},
+		});
+		expect(teamMembersBefore.some((m) => m.userId === newUserId)).toBe(true);
+
+		// Remove team member with explicit organizationId
+		const removeRes = await auth.api.removeTeamMember({
+			headers,
+			body: {
+				userId: newUserId,
+				teamId: testTeamId,
+				organizationId: testOrgId,
+			},
+		});
+
+		expect(removeRes.message).toBe("Team member removed successfully.");
+
+		// Verify team member was removed by listing team members again
+		const teamMembersAfter = await auth.api.listTeamMembers({
+			headers,
+			query: {
+				teamId: testTeamId,
+			},
+		});
+		expect(teamMembersAfter.some((m) => m.userId === newUserId)).toBe(false);
+	});
+
 	it("should not be allowed to invite a member to a team that's reached maximum members", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			user: {
