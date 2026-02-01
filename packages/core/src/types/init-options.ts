@@ -670,6 +670,17 @@ export type BetterAuthOptions = {
 					 * @default false
 					 */
 					updateEmailWithoutVerification?: boolean;
+					/**
+					 * Whether to require verification on the old email address before
+					 * allowing the email change.
+					 *
+					 * When set to `false`, the verification email will be sent directly
+					 * to the new email address, skipping the confirmation step on the old email.
+					 * This is useful when users no longer have access to their old email address.
+					 *
+					 * @default true
+					 */
+					requireVerificationOnOldEmail?: boolean;
 				};
 				/**
 				 * User deletion configuration

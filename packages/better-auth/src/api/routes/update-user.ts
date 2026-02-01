@@ -809,7 +809,11 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
+		const requireVerificationOnOldEmail =
+			ctx.context.options.user.changeEmail.requireVerificationOnOldEmail !==
+			false;
 		const sendConfirmationToOldEmail =
+			requireVerificationOnOldEmail &&
 			ctx.context.session.user.emailVerified &&
 			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
