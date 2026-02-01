@@ -81,6 +81,16 @@
 				"react-native"
 			]
 		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
 		"packages/stripe": {
 			"ignoreDependencies": [
 				// implicit dependencies
