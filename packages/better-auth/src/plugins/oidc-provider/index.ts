@@ -668,7 +668,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 					let { client_id, client_secret } = body;
 					const authorization =
-						ctx.request?.headers.get("authorization") || null;
+						ctx.headers?.get("authorization") || null;
 					if (
 						authorization &&
 						!client_id &&
@@ -1018,7 +1018,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 											userId: user.id,
 											expiresAt: accessTokenExpiresAt,
 											token: accessToken,
-											ipAddress: ctx.request?.headers.get("x-forwarded-for"),
+											ipAddress: ctx.headers?.get("x-forwarded-for"),
 										},
 										user,
 									},
@@ -1140,13 +1140,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					},
 				},
 				async (ctx) => {
-					if (!ctx.request) {
-						throw new APIError("UNAUTHORIZED", {
-							error_description: "request not found",
-							error: "invalid_request",
-						});
-					}
-					const authorization = ctx.request.headers.get("authorization");
+					const authorization = ctx.headers?.get("authorization");
 					if (!authorization) {
 						throw new APIError("UNAUTHORIZED", {
 							error_description: "authorization header not found",
