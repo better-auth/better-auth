@@ -55,6 +55,46 @@ export const getAuthTables = (
 	const { user, session, account, verification, ...pluginTables } =
 		pluginSchema;
 
+	const verificationTable = {
+		verification: {
+			modelName: options.verification?.modelName || "verification",
+			fields: {
+				identifier: {
+					type: "string",
+					required: true,
+					fieldName: options.verification?.fields?.identifier || "identifier",
+					index: true,
+				},
+				value: {
+					type: "string",
+					required: true,
+					fieldName: options.verification?.fields?.value || "value",
+				},
+				expiresAt: {
+					type: "date",
+					required: true,
+					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
+				},
+				createdAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					fieldName: options.verification?.fields?.createdAt || "createdAt",
+				},
+				updatedAt: {
+					type: "date",
+					required: true,
+					defaultValue: () => new Date(),
+					onUpdate: () => new Date(),
+					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
+				},
+				...verification?.fields,
+				...options.verification?.additionalFields,
+			},
+			order: 4,
+		},
+	} satisfies BetterAuthDBSchema;
+
 	const sessionTable = {
 		session: {
 			modelName: options.session?.modelName || "session",
@@ -114,12 +154,6 @@ export const getAuthTables = (
 		user: {
 			modelName: options.user?.modelName || "user",
 			fields: {
-				name: {
-					type: "string",
-					required: true,
-					fieldName: options.user?.fields?.name || "name",
-					sortable: true,
-				},
 				email: {
 					type: "string",
 					unique: true,
@@ -133,6 +167,12 @@ export const getAuthTables = (
 					required: true,
 					fieldName: options.user?.fields?.emailVerified || "emailVerified",
 					input: false,
+				},
+				name: {
+					type: "string",
+					required: false,
+					fieldName: options.user?.fields?.name || "name",
+					sortable: true,
 				},
 				image: {
 					type: "string",
@@ -247,43 +287,9 @@ export const getAuthTables = (
 			},
 			order: 3,
 		},
-		verification: {
-			modelName: options.verification?.modelName || "verification",
-			fields: {
-				identifier: {
-					type: "string",
-					required: true,
-					fieldName: options.verification?.fields?.identifier || "identifier",
-					index: true,
-				},
-				value: {
-					type: "string",
-					required: true,
-					fieldName: options.verification?.fields?.value || "value",
-				},
-				expiresAt: {
-					type: "date",
-					required: true,
-					fieldName: options.verification?.fields?.expiresAt || "expiresAt",
-				},
-				createdAt: {
-					type: "date",
-					required: true,
-					defaultValue: () => new Date(),
-					fieldName: options.verification?.fields?.createdAt || "createdAt",
-				},
-				updatedAt: {
-					type: "date",
-					required: true,
-					defaultValue: () => new Date(),
-					onUpdate: () => new Date(),
-					fieldName: options.verification?.fields?.updatedAt || "updatedAt",
-				},
-				...verification?.fields,
-				...options.verification?.additionalFields,
-			},
-			order: 4,
-		},
+		...(!options.secondaryStorage || options.verification?.storeInDatabase
+			? verificationTable
+			: {}),
 		...pluginTables,
 		...(shouldAddRateLimitTable ? rateLimitTable : {}),
 	} satisfies BetterAuthDBSchema;

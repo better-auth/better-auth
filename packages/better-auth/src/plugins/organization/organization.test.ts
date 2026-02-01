@@ -272,8 +272,8 @@ describe("organization", async (it) => {
 
 		// This should fail with duplicate slug error
 		expect(organization.error?.status).toBe(400);
-		expect(organization.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+		expect(organization.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN.code,
 		);
 	});
 
@@ -1596,7 +1596,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateProjectLegacy = await checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				project: ["create"],
 			},
 		});
@@ -2379,7 +2379,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string;
 				};
 				memberRequiredField: string;
@@ -2443,7 +2443,7 @@ describe("Additional Fields", async () => {
 			user: {
 				id: string;
 				email: string;
-				name: string;
+				name?: string | undefined;
 				image?: string;
 			};
 			memberRequiredField: string;
@@ -2563,7 +2563,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string;
 					image?: string;
 				};
 				memberRequiredField: string;
@@ -2572,8 +2572,8 @@ describe("Additional Fields", async () => {
 			} & {
 				user: {
 					id: string;
-					name: string;
 					email: string;
+					name: string | null | undefined;
 					image: string | null | undefined;
 				};
 			})[];
@@ -2632,7 +2632,7 @@ describe("Additional Fields", async () => {
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string | undefined;
 				};
 				memberRequiredField: string;

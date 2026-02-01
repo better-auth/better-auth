@@ -4,6 +4,7 @@ import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
 	CleanedWhere,
+	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -21,10 +22,10 @@ The rest are just edge cases.
 
 */
 
-async function createTestAdapter(
+async function createTestAdapter<Options extends BetterAuthOptions>(
 	props: {
 		config?: Partial<AdapterFactoryConfig>;
-		options?: BetterAuthOptions;
+		options?: Options;
 		adapter?: (
 			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
 		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
@@ -38,7 +39,7 @@ async function createTestAdapter(
 			supportsDates: true,
 			supportsBooleans: true,
 		},
-		options: {},
+		options: {} as never,
 		adapter: () => ({}),
 	},
 ) {
@@ -130,7 +131,7 @@ async function createTestAdapter(
 		database: testAdapter,
 	});
 
-	return (await auth.$context).adapter;
+	return (await auth.$context).adapter as DBAdapter<Options>;
 }
 
 describe("Create Adapter Helper", async () => {
@@ -173,7 +174,7 @@ describe("Create Adapter Helper", async () => {
 			config: {},
 			options: {
 				advanced: {
-					database: { generateId: false, useNumberId: false },
+					database: { generateId: false },
 				},
 			},
 			adapter(args_0) {
@@ -229,27 +230,6 @@ describe("Create Adapter Helper", async () => {
 			ids.add(result.id);
 		}
 		expect(ids.size).toBe(10);
-	});
-
-	test("Should throw an error if the database doesn't support numeric ids and the user has enabled `useNumberId`", async () => {
-		let error: any | null = null;
-		try {
-			await createTestAdapter({
-				config: {
-					supportsNumericIds: false,
-				},
-				options: {
-					advanced: {
-						database: {
-							useNumberId: true,
-						},
-					},
-				},
-			});
-		} catch (err) {
-			error = err;
-		}
-		expect(error).not.toBeNull();
 	});
 
 	describe("Checking for the results of an adapter call, as well as the parameters passed into the adapter call", () => {
@@ -328,7 +308,7 @@ describe("Create Adapter Helper", async () => {
 						],
 						advanced: {
 							database: {
-								useNumberId: true,
+								generateId: "serial",
 							},
 						},
 					},
@@ -1654,14 +1634,14 @@ describe("Create Adapter Helper", async () => {
 				expect(parameters.where?.[0]!.field).toEqual("email_address");
 			});
 
-			test("findOne: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findOne: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
 				const parameters: { where: Where[]; model: string; select?: string[] } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
 									database: {
-										useNumberId: true,
+										generateId: "serial",
 									},
 								},
 							},
@@ -1690,17 +1670,17 @@ describe("Create Adapter Helper", async () => {
 						expect(res).toHaveProperty("id");
 						expect(res?.id).toEqual("1");
 					});
-				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `generateId` is serial.
 				expect(parameters.where[0]!.value).toEqual(1);
 			});
-			test("findMany: Should receive an integer id in where clause if the user has enabled `useNumberId`", async () => {
+			test("findMany: Should receive an integer id in where clause if the user has enabled `serial`", async () => {
 				const parameters: { where: Where[] | undefined; model: string } =
 					await new Promise(async (r) => {
 						const adapter = await createTestAdapter({
 							options: {
 								advanced: {
 									database: {
-										useNumberId: true,
+										generateId: "serial",
 									},
 								},
 							},
@@ -1731,7 +1711,7 @@ describe("Create Adapter Helper", async () => {
 						expect(res[0]).toHaveProperty("id");
 						expect(res[0]!.id).toEqual("1");
 					});
-				// The where clause should convert the string id value of `"1"` to an int since `useNumberId` is true
+				// The where clause should convert the string id value of `"1"` to an int since `serial` is enabled.
 				expect(parameters.where?.[0]!.value).toEqual(1);
 			});
 		});

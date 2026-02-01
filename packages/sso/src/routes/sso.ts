@@ -229,6 +229,7 @@ export const spMetadata = () => {
 							},
 						],
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
+						authnRequestsSigned: parsedSamlConfig.authnRequestsSigned || false,
 						nameIDFormat: parsedSamlConfig.identifierFormat
 							? [parsedSamlConfig.identifierFormat]
 							: undefined,
@@ -390,6 +391,7 @@ const ssoProviderBodySchema = z.object({
 				encPrivateKeyPass: z.string().optional(),
 			}),
 			wantAssertionsSigned: z.boolean().optional(),
+			authnRequestsSigned: z.boolean().optional(),
 			signatureAlgorithm: z.string().optional(),
 			digestAlgorithm: z.string().optional(),
 			identifierFormat: z.string().optional(),
@@ -835,6 +837,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 								idpMetadata: body.samlConfig.idpMetadata,
 								spMetadata: body.samlConfig.spMetadata,
 								wantAssertionsSigned: body.samlConfig.wantAssertionsSigned,
+								authnRequestsSigned: body.samlConfig.authnRequestsSigned,
 								signatureAlgorithm: body.samlConfig.signatureAlgorithm,
 								digestAlgorithm: body.samlConfig.digestAlgorithm,
 								identifierFormat: body.samlConfig.identifierFormat,
@@ -1266,6 +1269,17 @@ export const signInSSO = (options?: SSOOptions) => {
 					});
 				}
 
+				if (
+					parsedSamlConfig.authnRequestsSigned &&
+					!parsedSamlConfig.spMetadata?.privateKey &&
+					!parsedSamlConfig.privateKey
+				) {
+					ctx.context.logger.warn(
+						"authnRequestsSigned is enabled but no privateKey provided - AuthnRequests will not be signed",
+						{ providerId: provider.providerId },
+					);
+				}
+
 				let metadata = parsedSamlConfig.spMetadata.metadata;
 
 				if (!metadata) {
@@ -1285,6 +1299,8 @@ export const signInSSO = (options?: SSOOptions) => {
 								],
 								wantMessageSigned:
 									parsedSamlConfig.wantAssertionsSigned || false,
+								authnRequestsSigned:
+									parsedSamlConfig.authnRequestsSigned || false,
 								nameIDFormat: parsedSamlConfig.identifierFormat
 									? [parsedSamlConfig.identifierFormat]
 									: undefined,
@@ -1295,6 +1311,10 @@ export const signInSSO = (options?: SSOOptions) => {
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
+					privateKey:
+						parsedSamlConfig.spMetadata?.privateKey ||
+						parsedSamlConfig.privateKey,
+					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
 				});
 
 				const idp = saml.IdentityProvider({

@@ -32,7 +32,6 @@ import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		mcp: {
 			creator: typeof mcp;
@@ -651,9 +650,10 @@ export const mcp = (options: MCPOptions) => {
 							["sign", "verify"],
 						),
 					};
+					const nameParts = user.name?.split(" ") ?? [];
 					const profile = {
-						given_name: user.name.split(" ")[0]!,
-						family_name: user.name.split(" ")[1]!,
+						given_name: nameParts[0],
+						family_name: nameParts[1],
 						name: user.name,
 						profile: user.image,
 						updated_at: Math.floor(new Date(user.updatedAt).getTime() / 1000),
