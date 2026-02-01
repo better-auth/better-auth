@@ -88,6 +88,7 @@ function parseSecretsEnv(
 ): Array<{ version: number; value: string }> | null {
 	if (!envValue) return null;
 	const entries = envValue.split(",").map((entry) => {
+		entry = entry.trim();
 		const colonIdx = entry.indexOf(":");
 		if (colonIdx === -1) {
 			throw new BetterAuthError(
@@ -100,7 +101,7 @@ function parseSecretsEnv(
 				`Invalid version in BETTER_AUTH_SECRETS: "${entry.slice(0, colonIdx)}". Version must be a non-negative integer.`,
 			);
 		}
-		const value = entry.slice(colonIdx + 1);
+		const value = entry.slice(colonIdx + 1).trim();
 		if (!value) {
 			throw new BetterAuthError(
 				`Empty secret value for version ${version} in BETTER_AUTH_SECRETS.`,
@@ -120,12 +121,24 @@ function validateSecretsArray(
 			"`secrets` array must contain at least one entry.",
 		);
 	}
+	const seen = new Set<number>();
 	for (const s of secrets) {
+		if (!Number.isInteger(s.version) || s.version < 0) {
+			throw new BetterAuthError(
+				`Invalid version ${s.version} in \`secrets\`. Version must be a non-negative integer.`,
+			);
+		}
 		if (!s.value) {
 			throw new BetterAuthError(
 				`Empty secret value for version ${s.version} in \`secrets\`.`,
 			);
 		}
+		if (seen.has(s.version)) {
+			throw new BetterAuthError(
+				`Duplicate version ${s.version} in \`secrets\`. Each version must be unique.`,
+			);
+		}
+		seen.add(s.version);
 	}
 	const current = secrets[0];
 	if (current.value.length < 32) {
