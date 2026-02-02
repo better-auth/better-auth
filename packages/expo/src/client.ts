@@ -375,7 +375,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 
 							if (Platform.OS === "android") {
 								try {
-									Browser.dismissAuthSession();
+									Browser!.dismissAuthSession();
 								} catch {}
 							}
 
@@ -391,7 +391,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								params.append("oauthState", oauthStateValue);
 							}
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
-							const result = await Browser.openAuthSessionAsync(
+							const result = await Browser!.openAuthSessionAsync(
 								proxyURL,
 								to,
 								opts?.webBrowserOptions,
