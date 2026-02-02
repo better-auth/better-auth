@@ -27,25 +27,23 @@ const lowerCase = (user: User, op: Operation, resources: Resources) => {
 };
 
 const givenName = (user: User, op: Operation, resources: Resources) => {
-	const currentName =
-		(resources.user.name as string | null | undefined) ?? user.name;
-	const familyName = currentName?.split(" ").slice(1).join(" ").trim();
+	const currentName = (resources.user.name as string) ?? user.name;
+	const familyName = currentName.split(" ").slice(1).join(" ").trim();
 	const givenName = op.value;
 
-	return getUserFullName({
+	return getUserFullName(user.email, {
 		givenName,
 		familyName,
 	});
 };
 
 const familyName = (user: User, op: Operation, resources: Resources) => {
-	const currentName =
-		(resources.user.name as string | null | undefined) ?? user.name;
-	const givenName = currentName
-		? (currentName.split(" ").slice(0, -1).join(" ") || currentName).trim()
-		: undefined;
+	const currentName = (resources.user.name as string) ?? user.name;
+	const givenName = (
+		currentName.split(" ").slice(0, -1).join(" ") || currentName
+	).trim();
 	const familyName = op.value;
-	return getUserFullName({
+	return getUserFullName(user.email, {
 		givenName,
 		familyName,
 	});
