@@ -1152,5 +1152,6 @@ export const createInternalAdapter = (
 			);
 			return verification;
 		},
+		refreshUserSessions,
 	};
 };
