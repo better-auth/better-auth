@@ -87,45 +87,121 @@ const signIn = async () => {
 }
 ```
 
-### Middleware
+### Protecting Resources
 
-You can use TanStack Start's middleware to protect routes that require authentication. Create a middleware that checks for a valid session and redirects unauthenticated users to the login page.
+To protect resources that require authentication, use `beforeLoad` with a server function. This ensures authentication is checked on every navigation, including client-side navigation via `<Link>` components.
 
-```ts title="src/middleware/auth.ts"
-import { redirect } from "@tanstack/react-router";
-import { createMiddleware } from "@tanstack/react-start";
+First, create server-side helpers to check the session:
+
+```ts title="src/lib/auth.server.ts"
+import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { auth } from "@/lib/auth";
 
-export const authMiddleware = createMiddleware().server(
-    async ({ next, request }) => {
-        const headers = getRequestHeaders();
-        const session = await auth.api.getSession({ headers })
+export const getSession = createServerFn({ method: "GET" }).handler(async () => {
+    const headers = getRequestHeaders();
+    const session = await auth.api.getSession({ headers });
 
-        if (!session) {
-            throw redirect({ to: "/login" })
-        }
+    return session;
+});
 
-        return await next()
+export const ensureSession = createServerFn({ method: "GET" }).handler(async () => {
+    const headers = getRequestHeaders();
+    const session = await auth.api.getSession({ headers });
+
+    if (!session) {
+        throw new Error("Unauthorized");
     }
-);
+
+    return session;
+});
 ```
 
-You can then use this middleware in your route definitions to protect specific routes:
+#### Protecting Routes
+
+Use `beforeLoad` in your route definitions:
 
 ```tsx title="src/routes/dashboard.tsx"
-import { createFileRoute } from '@tanstack/react-router'
-import { authMiddleware } from '@/lib/middleware'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { getSession } from '@/lib/auth.server'
 
 export const Route = createFileRoute('/dashboard')({
-  component: RouteComponent,
-  server: {
-    middleware: [authMiddleware],
+  beforeLoad: async () => {
+    const session = await getSession();
+
+    if (!session) {
+      throw redirect({ to: "/login" });
+    }
+
+    return { user: session.user };
   },
+  component: Dashboard,
 })
 
-function RouteComponent() {
-  return <div>Hello "/dashboard"!</div>
+function Dashboard() {
+  const { user } = Route.useRouteContext();
+  
+  return <div>Welcome, {user.name}!</div>
 }
 ```
 
+#### Protecting Multiple Routes (Layout)
+
+For protecting multiple routes, use a pathless layout route:
+
+```tsx title="src/routes/_protected.tsx"
+import { createFileRoute, redirect, Outlet } from '@tanstack/react-router'
+import { getSession } from '@/lib/auth.server'
+
+export const Route = createFileRoute('/_protected')({
+  beforeLoad: async ({ location }) => {
+    const session = await getSession();
+
+    if (!session) {
+      throw redirect({
+        to: "/login",
+        search: { redirect: location.href },
+      });
+    }
+
+    return { user: session.user };
+  },
+  component: () => <Outlet />,
+})
+```
+
+Then nest protected routes under `_protected`:
+
+<Files>
+  <Folder name="src" defaultOpen>
+    <Folder name="routes" defaultOpen>
+      <Folder name="_protected" defaultOpen>
+        <File name="dashboard.tsx" />
+        <File name="settings.tsx" />
+      </Folder>
+      <File name="_protected.tsx" />
+      <File name="login.tsx" />
+    </Folder>
+  </Folder>
+</Files>
+
+#### Protecting Server Functions
+
+Use `ensureSession` helper to protect server functions:
+
+```ts title="src/lib/posts.server.ts"
+import { createServerFn } from "@tanstack/react-start";
+import { ensureSession } from "./auth.server";
+
+export const createPost = createServerFn({ method: "POST" })
+  .inputValidator((data: { title: string }) => data)
+  .handler(async ({ data }) => {
+    const session = await ensureSession();
+    const post = await db.posts.create({
+      title: data.title,
+      authorId: session.user.id,
+    });
+    
+    return post;
+  });
+```
