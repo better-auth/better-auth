@@ -29,15 +29,27 @@ export const nextCookies = () => {
 			before: [
 				{
 					matcher(ctx) {
-						const headers = ctx.request?.headers || ctx.headers;
-						if (!headers) return false;
-						// RSC can read but not set cookies - skip refresh to prevent DB/cookie mismatch
-						const rscHeader = headers.get("RSC");
-						const nextActionHeader = headers.get("Next-Action");
-						return rscHeader === "1" && !nextActionHeader;
+						return ctx.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async () => {
-						await setShouldSkipSessionRefresh(true);
+						// Detect Server Component by testing if cookies can be modified.
+						// In Server Components, `cookies().set()` throws an error.
+						// In Server Actions or Route Handlers, it succeeds.
+						let cookieStore: Awaited<
+							ReturnType<typeof import("next/headers").cookies>
+						>;
+						try {
+							const { cookies } = await import("next/headers");
+							cookieStore = await cookies();
+						} catch {
+							// import failed or not in request context
+							return;
+						}
+						try {
+							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
+						} catch {
+							await setShouldSkipSessionRefresh(true);
+						}
 					}),
 				},
 			],
