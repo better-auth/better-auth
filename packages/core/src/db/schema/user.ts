@@ -9,7 +9,7 @@ import { coreSchema } from "./shared";
 export const userSchema = coreSchema.extend({
 	email: z.string().transform((val) => val.toLowerCase()),
 	emailVerified: z.boolean().default(false),
-	name: z.string().nullish(),
+	name: z.string(),
 	image: z.string().nullish(),
 });
 

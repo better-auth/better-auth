@@ -24,8 +24,10 @@ export const createUserResource = (
 		// See https://datatracker.ietf.org/doc/html/rfc7643#section-4.1
 
 		userName: user.email,
-		name: user.name ? { formatted: user.name } : undefined,
-		displayName: user.name ?? undefined,
+		name: {
+			formatted: user.name,
+		},
+		displayName: user.name,
 		active: true,
 		emails: [{ primary: true, value: user.email }],
 		schemas: [SCIMUserResourceSchema.id],

@@ -31,11 +31,10 @@ describe("Custom Session Plugin Tests", async () => {
 						const newData = {
 							message: "Hello, World!",
 						};
-						const nameParts = user.name?.split(" ") ?? [];
 						return {
 							user: {
-								firstName: nameParts[0],
-								lastName: nameParts[1],
+								firstName: user.name.split(" ")[0],
+								lastName: user.name.split(" ")[1],
 							},
 							newData,
 							session,
