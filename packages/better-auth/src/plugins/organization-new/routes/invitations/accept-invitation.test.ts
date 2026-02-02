@@ -136,6 +136,10 @@ describe("accept invitation", async (it) => {
 		expect(result!.member).toBeDefined();
 		expect(result!.member.organizationId).toBe(testOrg.id);
 		expect(result!.member.role).toBe("member");
+		expect(result!.organization).toBeDefined();
+		expect(result!.organization.id).toBe(testOrg.id);
+		expect(result!.organization.name).toBe(testOrg.name);
+		expect(result!.organization.slug).toBe(testOrg.slug);
 	});
 
 	it("should set active organization after accepting invitation", async () => {
@@ -216,6 +220,8 @@ describe("accept invitation", async (it) => {
 
 		expect(result).not.toBeNull();
 		expect(result!.invitation.status).toBe("accepted");
+		expect(result!.organization).toBeDefined();
+		expect(result!.organization.id).toBe(testOrg.id);
 	});
 
 	it("should not accept already accepted invitation", async () => {
@@ -457,6 +463,9 @@ describe("accept invitation - membership limit function", async (it) => {
 		expect(result).not.toBeNull();
 		expect(result!.invitation.status).toBe("accepted");
 		expect(result!.member.organizationId).toBe(org.id);
+		expect(result!.organization).toBeDefined();
+		expect(result!.organization.id).toBe(org.id);
+		expect(result!.organization.name).toBe(orgData.name);
 	});
 });
 
@@ -635,5 +644,7 @@ describe("accept invitation - multiple roles", async (it) => {
 		expect(result).not.toBeNull();
 		expect(result!.invitation.status).toBe("accepted");
 		expect(result!.member.role).toBe("admin,member");
+		expect(result!.organization).toBeDefined();
+		expect(result!.organization.id).toBe(org.id);
 	});
 });
