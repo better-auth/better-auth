@@ -8,7 +8,7 @@ describe("remove team member", async (it) => {
 		use: [teams()],
 	});
 	const { auth, signInWithTestUser } = await defineInstance([plugin]);
-	const { headers: ownerHeaders } = await signInWithTestUser();
+	const { headers: ownerHeaders, user: ownerUser } = await signInWithTestUser();
 
 	let organizationId: string;
 	let defaultTeamId: string;
@@ -100,6 +100,139 @@ describe("remove team member", async (it) => {
 			(m: any) => m.userId === secondUserId,
 		);
 		expect(memberExists).toBe(false);
+	});
+
+	it("should remove a member from each team they belong to", async () => {
+		const teamOne = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: {
+				name: `team-one-${Date.now()}`,
+				organizationId,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamOne.id,
+				userId: ownerUser.id,
+			},
+		});
+
+		const teamTwo = await auth.api.createTeam({
+			headers: ownerHeaders,
+			body: {
+				name: `team-two-${Date.now()}`,
+				organizationId,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamTwo.id,
+				userId: ownerUser.id,
+			},
+		});
+
+		const { user: multiTeamUser } = await auth.api.signUpEmail({
+			body: {
+				email: `multi-team-user-${Date.now()}@example.com`,
+				password: "password123",
+				name: "Multi Team User",
+			},
+		});
+
+		await auth.api.addMember({
+			headers: ownerHeaders,
+			body: {
+				userId: multiTeamUser.id,
+				role: "member",
+				organizationId,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamOne.id,
+				userId: multiTeamUser.id,
+			},
+		});
+
+		await auth.api.addTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamTwo.id,
+				userId: multiTeamUser.id,
+			},
+		});
+
+		const teamOneMembersBefore = await auth.api.listTeamMembers({
+			headers: ownerHeaders,
+			query: { teamId: teamOne.id },
+		});
+		expect(
+			teamOneMembersBefore.members.some(
+				(m: any) => m.userId === multiTeamUser.id,
+			),
+		).toBe(true);
+
+		const teamTwoMembersBefore = await auth.api.listTeamMembers({
+			headers: ownerHeaders,
+			query: { teamId: teamTwo.id },
+		});
+		expect(
+			teamTwoMembersBefore.members.some(
+				(m: any) => m.userId === multiTeamUser.id,
+			),
+		).toBe(true);
+
+		await auth.api.removeTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamOne.id,
+				userId: multiTeamUser.id,
+			},
+		});
+
+		const teamOneMembersAfter = await auth.api.listTeamMembers({
+			headers: ownerHeaders,
+			query: { teamId: teamOne.id },
+		});
+		expect(
+			teamOneMembersAfter.members.some(
+				(m: any) => m.userId === multiTeamUser.id,
+			),
+		).toBe(false);
+
+		const teamTwoMembersAfterFirstRemoval = await auth.api.listTeamMembers({
+			headers: ownerHeaders,
+			query: { teamId: teamTwo.id },
+		});
+		expect(
+			teamTwoMembersAfterFirstRemoval.members.some(
+				(m: any) => m.userId === multiTeamUser.id,
+			),
+		).toBe(true);
+
+		await auth.api.removeTeamMember({
+			headers: ownerHeaders,
+			body: {
+				teamId: teamTwo.id,
+				userId: multiTeamUser.id,
+			},
+		});
+
+		const teamTwoMembersAfter = await auth.api.listTeamMembers({
+			headers: ownerHeaders,
+			query: { teamId: teamTwo.id },
+		});
+		expect(
+			teamTwoMembersAfter.members.some(
+				(m: any) => m.userId === multiTeamUser.id,
+			),
+		).toBe(false);
 	});
 
 	it("should return error when trying to remove a non-team member", async () => {
