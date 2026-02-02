@@ -221,6 +221,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			return ctx.json({
 				invitation: acceptedI,
 				member,
+				organization,
 			});
 		},
 	);
