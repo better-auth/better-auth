@@ -86,28 +86,25 @@ After the OTP is sent, users can verify their phone number by providing the code
 ```ts
 type verifyPhoneNumber = {
     /**
-     * Phone number to verify. 
+     * Phone number to verify.
      */
     phoneNumber: string = "+1234567890"
     /**
-     * OTP code. 
+     * OTP code.
      */
     code: string = "123456"
     /**
-     * Disable session creation after verification. 
+     * Disable session creation after verification.
      */
     disableSession?: boolean = false
     /**
-     * Check if there is a session and update the phone number. 
+     * Update the phone number of an existing logged-in user.
+     * Requires an active session.
      */
-    updatePhoneNumber?: boolean = true
+    updatePhoneNumber?: boolean = false
 }
 ```
 </APIMethod>
-
-<Callout>
-When the phone number is verified, the `phoneNumberVerified` field in the user table is set to `true`. If `disableSession` is not set to `true`, a session is created for the user. Additionally, if `callbackOnVerification` is provided, it will be called.
-</Callout>
 
 ### Allow Sign-Up with Phone Number
 
@@ -138,6 +135,16 @@ export const auth = betterAuth({
 We highly recommend not awaiting the `sendOTP` function. If you await it, it'll slow down the request and could cause timing attacks. For serverless platforms, you can use `waitUntil` to ensure the OTP is sent.
 </Callout>
 
+If you have additional required fields in your user schema, you can pass them in the verify request body:
+
+```ts title="auth-client.ts"
+await authClient.phoneNumber.verify({
+    phoneNumber: "+1234567890",
+    code: "123456",
+    customField: "custom-value", // additional field [!code highlight]
+})
+```
+
 ### Sign In with Phone Number
 
 In addition to signing in a user using send-verify flow, you can also use phone number as an identifier and sign in a user using phone number and password.
@@ -163,7 +170,7 @@ type signInPhoneNumber = {
 
 ### Update Phone Number
 
-Updating phone number uses the same process as verifying a phone number. The user will receive an OTP code to verify the new phone number.
+Already logged-in users can change their phone number to a new one. First, send an OTP to the new phone number:
 
 ```ts title="auth-client.ts"
 await authClient.phoneNumber.sendOtp({
@@ -171,18 +178,15 @@ await authClient.phoneNumber.sendOtp({
 })
 ```
 
-Then verify the new phone number with the OTP code. 
+Then verify the new phone number with `updatePhoneNumber: true`:
 
 ```ts title="auth-client.ts"
 const isVerified = await authClient.phoneNumber.verify({
     phoneNumber: "+1234567890",
     code: "123456",
-    updatePhoneNumber: true // Set to true to update the phone number [!code highlight]
+    updatePhoneNumber: true // [!code highlight]
 })
 ```
-
-If a user session exist the phone number will be updated automatically.
-
 
 ### Disable Session Creation
 

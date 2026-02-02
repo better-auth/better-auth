@@ -414,7 +414,7 @@ export type InferMember<
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string | undefined;
 				};
 			}
@@ -427,7 +427,7 @@ export type InferMember<
 				user: {
 					id: string;
 					email: string;
-					name: string;
+					name?: string | undefined;
 					image?: string | undefined;
 				};
 			}) &
