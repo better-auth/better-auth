@@ -213,6 +213,8 @@ export interface InternalAdapter<
 		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	refreshUserSessions(user: User): Promise<void>;
 }
 
 type CreateCookieGetterFn = (
