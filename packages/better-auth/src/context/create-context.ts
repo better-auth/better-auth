@@ -112,7 +112,7 @@ export async function createAuthContext(
 
 	if (!baseURL) {
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
 	}
 
