@@ -16,6 +16,8 @@ import type { InferTeam, TeamsOptions } from "./types";
 
 export * from "./schema";
 
+export type TeamsAddon = ReturnType<typeof teams<TeamsOptions>>;
+
 export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 	const options = resolveTeamOptions(_options);
 	return {
@@ -30,6 +32,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		Infer: {
 			Team: {} as InferTeam<O>,
 		},
+		options,
 		endpoints: {
 			addTeamMember: addTeamMember(_options),
 			createTeam: createTeam(_options),

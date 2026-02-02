@@ -1,4 +1,5 @@
-import { describe, expect } from "vitest";
+import { describe, expect, expectTypeOf } from "vitest";
+import { teams } from "../../addons";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
 import { defineInstance, getOrganizationData } from "../../test/utils";
@@ -22,6 +23,8 @@ describe("get full organization", async (it) => {
 			headers,
 		});
 		expect(org?.members.length).toBe(1);
+		expect(Array.isArray(org?.invitations)).toBe(true);
+		expect(org).not.toHaveProperty("teams");
 	});
 
 	it("should throw FORBIDDEN when user is not a member of the organization", async () => {
@@ -106,6 +109,84 @@ describe("get full organization", async (it) => {
 					},
 				});
 			}).rejects.toThrow("Organization not found");
+		});
+	});
+
+	describe("should work with teams addon", async (it) => {
+		const teamsAddon = teams({ enableSlugs: true });
+		const plugin = organization({ use: [teamsAddon] });
+		const { auth, signInWithTestUser } = await defineInstance([plugin]);
+		const { headers } = await signInWithTestUser();
+
+		it("should return teams when teams addon is enabled", async () => {
+			const orgData = getOrganizationData();
+			const createdOrg = await auth.api.createOrganization({
+				headers,
+				body: orgData,
+			});
+
+			const org = await auth.api.getFullOrganization({
+				headers,
+				query: {
+					organizationId: createdOrg.id,
+				},
+			})!;
+
+			expect(org).not.toBeNull();
+			expect(org).toHaveProperty("teams");
+			expect(org).toHaveProperty("members");
+			expect(org).toHaveProperty("invitations");
+			expect(Array.isArray(org?.teams)).toBe(true);
+			expect(Array.isArray(org?.members)).toBe(true);
+			expect(Array.isArray(org?.invitations)).toBe(true);
+			expect(org!.teams[0]);
+
+			type NonNullOrg = NonNullable<typeof org>;
+			type Teams = NonNullOrg["teams"];
+			type Expected = {
+				id: string;
+				name: string;
+				organizationId: string;
+				createdAt: Date;
+				updatedAt?: Date | undefined;
+				slug: string;
+			};
+			expectTypeOf<Teams>().toEqualTypeOf<Expected[]>();
+
+			const team = org!.teams[0]!;
+			expect(team).toBeDefined();
+			expect(team.id).toBeDefined();
+			expect(team.name).toBeDefined();
+			expect(team.organizationId).toBeDefined();
+			expect(team.createdAt).toBeDefined();
+			expect(team.slug).toBeDefined();
+			expect(team.updatedAt).toBeDefined();
+		});
+	});
+
+	describe("should not return teams when teams addon is not enabled", async (it) => {
+		const plugin = organization();
+		const { auth, signInWithTestUser } = await defineInstance([plugin]);
+		const { headers } = await signInWithTestUser();
+
+		it("should not have team property when teams addon is disabled", async () => {
+			const orgData = getOrganizationData();
+			const createdOrg = await auth.api.createOrganization({
+				headers,
+				body: orgData,
+			});
+
+			const org = await auth.api.getFullOrganization({
+				headers,
+				query: {
+					organizationId: createdOrg.id,
+				},
+			});
+
+			expect(org).not.toBeNull();
+			// Team should not be present when teams addon is not enabled
+			// Access via bracket notation to bypass type checking for runtime assertion
+			expect((org as Record<string, unknown>)["team"]).toBeUndefined();
 		});
 	});
 });
