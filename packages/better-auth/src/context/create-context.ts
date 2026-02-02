@@ -107,7 +107,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 
 	if (!baseURL) {
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
 	}
 
@@ -347,12 +347,9 @@ Most of the features of Better Auth will not work correctly.`,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
-	return context as unknown as AuthContext<Options>;
+	return ctx as unknown as AuthContext<Options>;
 }

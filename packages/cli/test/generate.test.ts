@@ -390,6 +390,24 @@ describe("generate", async () => {
 		);
 	});
 
+	it("should generate kysely schema with uuid id", async () => {
+		const schema = await generateKyselySchema({
+			file: "test.sql",
+			options: {
+				database: new Database(":memory:"),
+				advanced: {
+					database: {
+						generateId: "uuid",
+					},
+				},
+			},
+			adapter: {} as any,
+		});
+		await expect(schema.code).toMatchFileSnapshot(
+			"./__snapshots__/migrations-uuid.sql",
+		);
+	});
+
 	it("should throw for unsupported additionalFields type in migrations", async () => {
 		await expect(
 			generateKyselySchema({

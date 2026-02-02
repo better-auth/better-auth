@@ -66,7 +66,7 @@ describe("general types", async (it) => {
 				updatedAt: Date;
 				email: string;
 				emailVerified: boolean;
-				name: string;
+				name?: string | null | undefined;
 				image?: string | null | undefined;
 			};
 		}>();
@@ -159,7 +159,7 @@ describe("general types", async (it) => {
 			id: string;
 			email: string;
 			emailVerified: boolean;
-			name: string;
+			name?: string | undefined | null;
 			image?: string | undefined | null;
 			createdAt: Date;
 			updatedAt: Date;

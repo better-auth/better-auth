@@ -10,9 +10,9 @@ datasource db {
 
 model User {
   id               String      @id
-  name             String      @db.Text
   email            String
   emailVerified    Boolean     @default(false)
+  name             String?     @db.Text
   image            String?     @db.Text
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
