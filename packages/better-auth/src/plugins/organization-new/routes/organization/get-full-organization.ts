@@ -6,7 +6,7 @@ import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { orgSessionMiddleware } from "../../middleware";
 import { orgMiddleware } from "../../middleware/org-middleware";
-import type { OrganizationOptions } from "../../types";
+import type { Addon, OrganizationOptions } from "../../types";
 
 const getFullOrganizationQuerySchema = z.optional(
 	z.object({
@@ -70,11 +70,18 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				return ctx.json(null, { status: 200 });
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
-			// TODO: Include teams. meaning we need addon hook for this case.
-			// Also the types must be inferred for the endpoint return type to be correct.
+			const isTeamsEnabled =
+				(options?.use && options.use.some((addon) => addon.id === "teams")) ??
+				false;
+			type IsEnabled = O["use"] extends readonly Addon[]
+				? O["use"][number] extends { id: "teams" }
+					? true
+					: false
+				: false;
 			const organization = await adapter.findFullOrganization({
 				organizationId,
 				membersLimit: ctx.query?.membersLimit,
+				includeTeams: isTeamsEnabled as IsEnabled,
 			});
 
 			if (!organization) {

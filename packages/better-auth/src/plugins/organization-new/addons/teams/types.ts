@@ -6,6 +6,7 @@ import type {
 import type { DBFieldAttribute, Session, User } from "@better-auth/core/db";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../../../db";
 import type { Organization } from "../../schema";
+import type { FindAddonFromOrgOptions, OrganizationOptions } from "../../types";
 import type { Team, TeamMember } from "./schema";
 
 export interface TeamsOptions {
@@ -153,6 +154,18 @@ export interface ResolvedTeamsOptions extends TeamsOptions {
 	allowRemovingAllTeams: boolean;
 	hooks?: TeamHooks;
 }
+
+export type InferTeamFromOrgOptions<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = false,
+> = FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
+	string,
+	any
+>
+	? T["options"] extends TeamsOptions
+		? InferTeam<T["options"], isClientSide>
+		: undefined
+	: undefined;
 
 export type InferTeam<
 	TO extends TeamsOptions,

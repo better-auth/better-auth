@@ -6,5 +6,6 @@ export const dynamicAccessControl = <O extends DynamicAccessControlOptions>(
 ) => {
 	return {
 		id: "dynamic-access-control",
+		options,
 	} satisfies Addon<O>;
 };

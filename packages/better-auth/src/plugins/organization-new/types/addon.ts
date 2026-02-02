@@ -1,7 +1,11 @@
+import type { LiteralString } from "@better-auth/core";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Endpoint } from "better-call";
 import type { AddonHook } from "./addon-hooks";
-import type { ResolvedOrganizationOptions } from "./organization-options";
+import type {
+	OrganizationOptions,
+	ResolvedOrganizationOptions,
+} from "./organization-options";
 
 /**
  * Context provided to addon hooks for inter-addon communication
@@ -70,7 +74,7 @@ export interface Addon<TOptions = unknown> {
 	/**
 	 * Unique identifier for the addon
 	 */
-	id: string;
+	id: LiteralString;
 	/**
 	 * Hook priority - lower numbers run first.
 	 * When multiple addons hook into the same lifecycle event,
@@ -108,3 +112,12 @@ export interface Addon<TOptions = unknown> {
 	 */
 	Infer?: Record<string, any>;
 }
+
+export type FindAddonFromOrgOptions<
+	O extends OrganizationOptions,
+	AddonId extends string,
+> = O["use"] extends readonly (infer U)[]
+	? U extends { id: AddonId }
+		? U
+		: never
+	: never;

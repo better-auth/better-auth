@@ -7,6 +7,10 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../db/field";
 import { getDate } from "../../../utils/date";
 import type { RealTeamId } from "../addons/teams/helpers/get-team-adapter";
 import type {
+	InferTeamFromOrgOptions,
+	TeamsOptions,
+} from "../addons/teams/types";
+import type {
 	InvitationInput,
 	Member,
 	MemberInput,
@@ -49,6 +53,16 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 	) => {
 		const memberAdditionalFields = schema.member?.additionalFields;
 		const result = filterOutputFields(member, memberAdditionalFields);
+		return result;
+	};
+
+	const filterTeamOutput = <Team extends Record<string, any> | null>(
+		team: Team,
+	) => {
+		const teamSchema = opts?.use?.find((addon) => addon.id === "teams")
+			?.options as TeamsOptions | undefined;
+		const teamAdditionalFields = teamSchema?.schema?.team?.additionalFields;
+		const result = filterOutputFields(team, teamAdditionalFields);
 		return result;
 	};
 
@@ -461,33 +475,43 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		/**
 		 * @requires db
 		 */
-		findFullOrganization: async ({
+		findFullOrganization: async <IncludeTeams extends boolean = false>({
 			organizationId,
 			membersLimit,
+			includeTeams,
 		}: {
 			organizationId: string;
 			membersLimit?: number | undefined;
+			includeTeams?: IncludeTeams;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			const isSlug = options.defaultOrganizationIdField === "slug";
-			const result = await adapter.findOne<
-				InferOrganization<O, false> & {
-					invitation: InferInvitation<O, false>[];
-					member: InferMember<O, false>[];
-				}
-			>({
+			type Result = InferOrganization<O, false> & {
+				invitation: InferInvitation<O, false>[];
+				member: InferMember<O, false>[];
+			} & (IncludeTeams extends true
+					? { team: InferTeamFromOrgOptions<O, false>[] }
+					: {});
+			const result = await adapter.findOne<Result>({
 				model: "organization",
 				where: [{ field: isSlug ? "slug" : "id", value: organizationId }],
 				join: {
 					invitation: true,
 					member: membersLimit ? { limit: membersLimit } : true,
+					...(includeTeams ? { team: true } : {}),
 				},
 			});
 			if (!result) {
 				return null;
 			}
 
-			const { invitation: invitations, member: members, ...org } = result;
+			const {
+				invitation: invitations,
+				member: members,
+				//@ts-expect-error - team is only included if includeTeams is true
+				team: teams,
+				...org
+			} = result;
 			const userIds = members.map((member) => member.userId);
 			const users =
 				userIds.length > 0
@@ -520,10 +544,19 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				};
 			});
 
+			type TeamsResult = IncludeTeams extends true
+				? { teams: InferTeamFromOrgOptions<O, false>[] }
+				: {};
+
+			const teamsResult = (
+				includeTeams ? { teams: teams.map(filterTeamOutput) } : {}
+			) as TeamsResult;
+
 			return {
 				...filterOrgOutput(org),
 				invitations: invitations.map(filterInvitationOutput),
 				members: membersWithUsers.map(filterMemberOutput),
+				...teamsResult,
 			};
 		},
 		getMember: async ({
