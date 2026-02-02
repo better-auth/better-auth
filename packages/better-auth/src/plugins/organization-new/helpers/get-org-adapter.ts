@@ -25,6 +25,7 @@ import type {
 import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import { filterOutputFields } from "./filter-output-fields";
 import { resolveOrgOptions } from "./resolve-org-options";
+import type { Team } from "../addons";
 
 /**
  * This branded ID exists as a measure to prevent accidentally providing an un-checked organizationId that could be a slug
@@ -910,21 +911,39 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 		},
 		/**
 		 * Delete a member from an organization.
-		 * @param data - The member ID, organization ID, and optionally user ID.
+		 * @param data - The member ID, organization ID, and user ID.
 		 * @returns The deleted member ID.
 		 */
 		deleteMember: async (data: {
 			memberId: string;
 			organizationId: RealOrganizationId;
-			userId?: string;
+			userId: string;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			await adapter.delete({
 				model: "member",
 				where: [{ field: "id", value: data.memberId }],
 			});
-			//TODO: Add team support
-			// Remove member from all teams they're part of
+
+			const isTeamsEnabled = options.use.some((x) => x.id === "teams");
+			if (isTeamsEnabled) {
+				const teams = await adapter.findMany<Team>({
+					model: "team",
+					where: [{ field: "organizationId", value: data.organizationId }],
+				});
+				await Promise.all(
+					teams.map((team) =>
+						adapter.deleteMany({
+							model: "teamMember",
+							where: [
+								{ field: "teamId", value: team.id },
+								{ field: "userId", value: data.userId },
+							],
+						}),
+					),
+				);
+			}
+
 			return data.memberId;
 		},
 		/**
