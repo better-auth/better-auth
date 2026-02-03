@@ -22,8 +22,12 @@ import {
 } from "../../cookies";
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
-import { parseSessionOutput, parseUserOutput } from "../../db";
-import type { Prettify, Session, User } from "../../types";
+import {
+	parseAccountOutput,
+	parseSessionOutput,
+	parseUserOutput,
+} from "../../db";
+import type { Account, Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
@@ -48,6 +52,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 										type: "object",
 										nullable: true,
 										properties: {
+											account: {
+												$ref: "#/components/schemas/Account",
+											},
 											session: {
 												$ref: "#/components/schemas/Session",
 											},
@@ -55,7 +62,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 												$ref: "#/components/schemas/User",
 											},
 										},
-										required: ["session", "user"],
+										required: ["account", "session", "user"],
 									},
 								},
 							},
@@ -67,6 +74,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		async (
 			ctx,
 		): Promise<{
+			account: Account<Option["account"], Option["plugins"]>;
 			session: Session<Option["session"], Option["plugins"]>;
 			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
@@ -98,6 +106,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 				let sessionDataPayload: {
 					session: {
+						account: Account;
 						session: Session;
 						user: User;
 						updatedAt: number;
@@ -113,6 +122,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					if (strategy === "jwe") {
 						// Decode JWE (encrypted)
 						const payload = await symmetricDecodeJWT<{
+							account: Account;
 							session: Session;
 							user: User;
 							updatedAt: number;
@@ -123,6 +133,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
 								session: {
+									account: payload.account,
 									session: payload.session,
 									user: payload.user,
 									updatedAt: payload.updatedAt,
@@ -137,6 +148,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					} else if (strategy === "jwt") {
 						// Decode JWT (signed with HMAC, not encrypted)
 						const payload = await verifyJWT<{
+							account: Account;
 							session: Session;
 							user: User;
 							updatedAt: number;
@@ -144,9 +156,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							exp?: number;
 						}>(sessionDataCookie, ctx.context.secret);
 
-						if (payload && payload.session && payload.user) {
+						if (payload && payload.account && payload.session && payload.user) {
 							sessionDataPayload = {
 								session: {
+									account: payload.account,
 									session: payload.session,
 									user: payload.user,
 									updatedAt: payload.updatedAt,
@@ -162,6 +175,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						// Decode compact format (or legacy base64-hmac)
 						const parsed = safeJSONParse<{
 							session: {
+								account: Account;
 								session: Session;
 								user: User;
 								updatedAt: number;
@@ -247,6 +261,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								ctx.context.session = session;
 								// Parse session and user to ensure additionalFields are included
 								// Rehydrate date fields from JSON strings before parsing
+								const parsedAccount = parseAccountOutput(ctx.context.options, {
+									...session.account,
+									createdAt: new Date(session.account.createdAt),
+									updatedAt: new Date(session.account.updatedAt),
+								});
 								const parsedSession = parseSessionOutput(ctx.context.options, {
 									...session.session,
 									expiresAt: new Date(session.session.expiresAt),
@@ -259,9 +278,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									updatedAt: new Date(session.user.updatedAt),
 								});
 								return ctx.json({
+									account: parsedAccount,
 									session: parsedSession,
 									user: parsedUser,
 								} as {
+									account: Account<Option["account"], Option["plugins"]>;
 									session: Session<Option["session"], Option["plugins"]>;
 									user: User<Option["user"], Option["plugins"]>;
 								});
@@ -275,6 +296,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
 								const newExpiresAt = getDate(cookieMaxAge, "sec");
 								const refreshedSession = {
+									account: session.account,
 									session: {
 										...session.session,
 										expiresAt: newExpiresAt,
@@ -288,6 +310,14 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 								// Parse session and user to ensure additionalFields are included
 								// Rehydrate date fields from JSON strings before parsing
+								const parsedRefreshedAccount = parseAccountOutput(
+									ctx.context.options,
+									{
+										...refreshedSession.account,
+										createdAt: new Date(refreshedSession.account.createdAt),
+										updatedAt: new Date(refreshedSession.account.updatedAt),
+									},
+								);
 								const parsedRefreshedSession = parseSessionOutput(
 									ctx.context.options,
 									{
@@ -306,19 +336,27 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									},
 								);
 								ctx.context.session = {
+									account: parsedRefreshedAccount,
 									session: parsedRefreshedSession,
 									user: parsedRefreshedUser,
 								};
 								return ctx.json({
+									account: parsedRefreshedAccount,
 									session: parsedRefreshedSession,
 									user: parsedRefreshedUser,
 								} as {
+									account: Account<Option["account"], Option["plugins"]>;
 									session: Session<Option["session"], Option["plugins"]>;
 									user: User<Option["user"], Option["plugins"]>;
 								});
 							}
 
 							// Parse session and user to ensure additionalFields are included
+							const parsedAccount = parseAccountOutput(ctx.context.options, {
+								...session.account,
+								createdAt: new Date(session.account.createdAt),
+								updatedAt: new Date(session.account.updatedAt),
+							});
 							const parsedSession = parseSessionOutput(ctx.context.options, {
 								...session.session,
 								expiresAt: new Date(session.session.expiresAt),
@@ -331,13 +369,16 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								updatedAt: new Date(session.user.updatedAt),
 							});
 							ctx.context.session = {
+								account: parsedAccount,
 								session: parsedSession,
 								user: parsedUser,
 							};
 							return ctx.json({
+								account: parsedAccount,
 								session: parsedSession,
 								user: parsedUser,
 							} as {
+								account: Account<Option["account"], Option["plugins"]>;
 								session: Session<Option["session"], Option["plugins"]>;
 								user: User<Option["user"], Option["plugins"]>;
 							});
@@ -369,15 +410,21 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 */
 				if (dontRememberMe || ctx.query?.disableRefresh) {
 					// Parse session and user to ensure additionalFields are included
+					const parsedAccount = parseAccountOutput(
+						ctx.context.options,
+						session.account,
+					);
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
 						session.session,
 					);
 					const parsedUser = parseUserOutput(ctx.context.options, session.user);
 					return ctx.json({
+						account: parsedAccount,
 						session: parsedSession,
 						user: parsedUser,
 					} as {
+						account: Account<Option["account"], Option["plugins"]>;
 						session: Session<Option["session"], Option["plugins"]>;
 						user: User<Option["user"], Option["plugins"]>;
 					});
@@ -410,16 +457,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 				 */
 				if (deferSessionRefresh && !isPostRequest) {
 					await setCookieCache(ctx, session, !!dontRememberMe);
+					const parsedAccount = parseAccountOutput(
+						ctx.context.options,
+						session.account,
+					);
 					const parsedSession = parseSessionOutput(
 						ctx.context.options,
 						session.session,
 					);
 					const parsedUser = parseUserOutput(ctx.context.options, session.user);
 					return ctx.json({
+						account: parsedAccount,
 						session: parsedSession,
 						user: parsedUser,
 						needsRefresh,
 					} as unknown as {
+						account: Account<Option["account"], Option["plugins"]>;
 						session: Session<Option["session"], Option["plugins"]>;
 						user: User<Option["user"], Option["plugins"]>;
 					});
@@ -446,6 +499,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					await setSessionCookie(
 						ctx,
 						{
+							account: session.account,
 							session: updatedSession,
 							user: session.user,
 						},
@@ -456,30 +510,42 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					);
 
 					// Parse session and user to ensure additionalFields are included
+					const parsedUpdatedAccount = parseAccountOutput(
+						ctx.context.options,
+						session.account,
+					);
 					const parsedUpdatedSession = parseSessionOutput(
 						ctx.context.options,
 						updatedSession,
 					);
 					const parsedUser = parseUserOutput(ctx.context.options, session.user);
 					return ctx.json({
+						account: parsedUpdatedAccount,
 						session: parsedUpdatedSession,
 						user: parsedUser,
 					} as unknown as {
+						account: Account<Option["account"], Option["plugins"]>;
 						session: Session<Option["session"], Option["plugins"]>;
 						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 				await setCookieCache(ctx, session, !!dontRememberMe);
 				// Parse session and user to ensure additionalFields are included
+				const parsedAccount = parseAccountOutput(
+					ctx.context.options,
+					session.account,
+				);
 				const parsedSession = parseSessionOutput(
 					ctx.context.options,
 					session.session,
 				);
 				const parsedUser = parseUserOutput(ctx.context.options, session.user);
 				return ctx.json({
+					account: parsedAccount,
 					session: parsedSession,
 					user: parsedUser,
 				} as {
+					account: Account<Option["account"], Option["plugins"]>;
 					session: Session<Option["session"], Option["plugins"]>;
 					user: User<Option["user"], Option["plugins"]>;
 				});
@@ -494,6 +560,7 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 	);
 
 export const getSessionFromCtx = async <
+	A extends Record<string, any> = Record<string, any>,
 	U extends Record<string, any> = Record<string, any>,
 	S extends Record<string, any> = Record<string, any>,
 >(
@@ -507,6 +574,7 @@ export const getSessionFromCtx = async <
 ) => {
 	if (ctx.context.session) {
 		return ctx.context.session as {
+			account: A & Account;
 			session: S & Session;
 			user: U & User;
 		};
@@ -528,6 +596,7 @@ export const getSessionFromCtx = async <
 	});
 	ctx.context.session = session;
 	return session as {
+		account: A & Account;
 		session: S & Session;
 		user: U & User;
 	} | null;
