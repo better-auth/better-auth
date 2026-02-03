@@ -7,69 +7,47 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
 
 ## Installation
 
-<Steps>
-    <Step>
-    ### Add the plugin to your **auth** config
-    ```ts title="auth.ts"
-    import { betterAuth } from "better-auth"
-    import { oAuthProxy } from "better-auth/plugins"
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { oAuthProxy } from "better-auth/plugins"
 
-    export const auth = betterAuth({
-        plugins: [ // [!code highlight]
-            oAuthProxy({ // [!code highlight]
-                productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
-                currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight] 
-            }), // [!code highlight]
-        ] // [!code highlight]
-    })
-    ```
-    </Step>
-    <Step>
-    ### Add redirect URL to your OAuth provider
-
-   For the proxy server to work properly, you’ll need to pass the redirect URL of your main production app registered with the OAuth provider in your social provider config. This needs to be done for each social provider you want to proxy requests for.
-
-    ```ts
-    export const auth = betterAuth({
-       plugins: [
-           oAuthProxy(),
-       ], 
-       socialProviders: {
-            github: {
-                clientId: "your-client-id",
-                clientSecret: "your-client-secret",
-                redirectURI: "https://my-main-app.com/api/auth/callback/github" // [!code highlight]
-            }
-       }
-    })
-    ```
-    </Step>
-</Steps>    
+export const auth = betterAuth({
+    plugins: [
+        oAuthProxy({ // [!code highlight]
+            productionURL: "https://my-app.com", // [!code highlight]
+        }), // [!code highlight]
+    ]
+})
+```    
 
 
 ## How it works
 
-The plugin adds an endpoint to your server that proxies OAuth requests. When you initiate a social sign-in, it sets the redirect URL to this proxy endpoint. After the OAuth provider redirects back to your server, the plugin then forwards the user to the original callback URL.
+The plugin allows you to use a single OAuth client (registered with your production URL) across multiple environments like preview deployments or local development.
+
+1. Preview server initiates OAuth, redirecting to the OAuth provider with production's redirect URI
+2. OAuth provider callbacks to production server
+3. Production server exchanges the code for tokens and fetches user info
+4. Production server encrypts the profile data and redirects to preview server (**no database write on production**)
+5. Preview server decrypts the profile, creates user/session in its own database, and sets the session cookie
 
 ```ts
 await authClient.signIn.social({
     provider: "github",
-    callbackURL: "/dashboard" // the plugin will override this to something like "http://localhost:3000/api/auth/oauth-proxy?callbackURL=/dashboard"
+    callbackURL: "/dashboard"
 })
 ```
 
-When the OAuth provider returns the user to your server, the plugin automatically redirects them to the intended callback URL.
+The encrypted profile data is passed via URL query parameters and can only be decrypted by servers sharing the same secret. This also allows preview deployments to use separate databases from production if needed.
 
-To share cookies between the proxy server and your main server it uses URL query parameters to pass the cookies encrypted in the URL. This is secure as the cookies are encrypted and can only be decrypted by the server.
-
-<Callout type="warn">
-This plugin requires skipping the state cookie check. This has security implications and should only be used in dev or staging environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
+<Callout type="info">
+This plugin is intended for development and preview environments. If `baseURL` and `productionURL` are the same, the plugin will not proxy the request.
 </Callout>
 
 ## Options
 
-**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn't inferred correctly, you can specify it manually here.
-
 **productionURL**: If this value matches the `baseURL` in your auth config, requests will not be proxied. Defaults to the `BETTER_AUTH_URL` environment variable.
 
-**maxAge**: Maximum age in seconds for encrypted cookie payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
+**currentURL**: The application's current URL is automatically determined by the plugin. It first checks for the request URL if invoked by a client, then it checks the base URL from popular hosting providers, and finally falls back to the `baseURL` in your auth config. If the URL isn't inferred correctly, you can specify it manually here.
+
+**maxAge**: Maximum age in seconds for encrypted profile payloads. Payloads older than this will be rejected to prevent replay attacks. Keep this value short (e.g., 30-60 seconds) to minimize the window for potential replay attacks while still allowing normal OAuth flows. Defaults to `60` seconds.
