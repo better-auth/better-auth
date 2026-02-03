@@ -103,6 +103,7 @@ export * from "./google";
 export * from "./huggingface";
 export * from "./kakao";
 export * from "./kick";
+export * from "./kick";
 export * from "./line";
 export * from "./linear";
 export * from "./linkedin";
