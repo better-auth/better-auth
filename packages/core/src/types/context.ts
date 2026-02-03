@@ -35,15 +35,16 @@ type InferPluginID<O extends BetterAuthOptions> =
 type InferPluginOptions<
 	O extends BetterAuthOptions,
 	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
-> = O["plugins"] extends Array<infer P>
-	? P extends BetterAuthPlugin
-		? P["id"] extends ID
-			? P extends { options: infer O }
-				? O
+> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"] extends ID
+				? P extends { options: infer O }
+					? O
+					: never
 				: never
 			: never
-		: never
-	: never;
+		: never;
 
 /**
  * Mutators are defined in each plugin

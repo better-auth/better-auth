@@ -100,17 +100,18 @@ export type InferAdditionalFromClient<
 	Options extends BetterAuthClientOptions,
 	Key extends string,
 	Format extends "input" | "output" = "output",
-> = Options["plugins"] extends Array<infer Plugin>
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
-			? Schema extends BetterAuthPluginDBSchema
-				? Format extends "input"
-					? InferFieldsInputClient<Schema[Key]["fields"]>
-					: InferDBFieldsOutput<Schema[Key]["fields"]>
+> =
+	Options["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
+				? Schema extends BetterAuthPluginDBSchema
+					? Format extends "input"
+						? InferFieldsInputClient<Schema[Key]["fields"]>
+						: InferDBFieldsOutput<Schema[Key]["fields"]>
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
 export type SessionQueryParams = {
 	disableCookieCache?: boolean | undefined;
