@@ -664,6 +664,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				const newUser = await ctx.context.internalAdapter.createUser({
 					email,
 					emailVerified: true,
+					name: "",
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
