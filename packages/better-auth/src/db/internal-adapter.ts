@@ -16,6 +16,7 @@ import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
+	parseAccountOutput,
 	parseSessionInput,
 	parseSessionOutput,
 	parseUserOutput,
@@ -68,7 +69,11 @@ export const createInternalAdapter = (
 			validSessions.map(async ({ token }) => {
 				const cached = await secondaryStorage.get(token);
 				if (!cached) return;
-				const parsed = safeJSONParse<{ session: Session; user: User }>(cached);
+				const parsed = safeJSONParse<{
+					account: Account;
+					session: Session;
+					user: User;
+				}>(cached);
 				if (!parsed) return;
 
 				const sessionTTL = getTTLSeconds(parsed.session.expiresAt, now);
@@ -76,6 +81,7 @@ export const createInternalAdapter = (
 				await secondaryStorage.set(
 					token,
 					JSON.stringify({
+						account: parsed.account,
 						session: parsed.session,
 						user,
 					}),
@@ -390,6 +396,7 @@ export const createInternalAdapter = (
 		findSession: async (
 			token: string,
 		): Promise<{
+			account: Account & Record<string, any>;
 			session: Session & Record<string, any>;
 			user: User & Record<string, any>;
 		} | null> => {
@@ -400,10 +407,16 @@ export const createInternalAdapter = (
 				}
 				if (sessionStringified) {
 					const s = safeJSONParse<{
+						account: Account;
 						session: Session;
 						user: User;
 					}>(sessionStringified);
 					if (!s) return null;
+					const parsedAccount = parseAccountOutput(ctx.options, {
+						...s.account,
+						createdAt: new Date(s.account.createdAt),
+						updatedAt: new Date(s.account.updatedAt),
+					});
 					const parsedSession = parseSessionOutput(ctx.options, {
 						...s.session,
 						expiresAt: new Date(s.session.expiresAt),
@@ -416,6 +429,7 @@ export const createInternalAdapter = (
 						updatedAt: new Date(s.user.updatedAt),
 					});
 					return {
+						account: parsedAccount,
 						session: parsedSession,
 						user: parsedUser,
 					};
@@ -424,7 +438,7 @@ export const createInternalAdapter = (
 
 			const currentAdapter = await getCurrentAdapter(adapter);
 			const result = await currentAdapter.findOne<
-				Session & { user: User | null }
+				Session & { user: User | null; account: Account | null }
 			>({
 				model: "session",
 				where: [
@@ -435,15 +449,18 @@ export const createInternalAdapter = (
 				],
 				join: {
 					user: true,
+					account: true,
 				},
 			});
 			if (!result) return null;
 
-			const { user, ...session } = result;
-			if (!user) return null;
+			const { user, account, ...session } = result;
+			if (!user || !account) return null;
+			const parsedAccount = parseAccountOutput(ctx.options, account);
 			const parsedSession = parseSessionOutput(ctx.options, session);
 			const parsedUser = parseUserOutput(ctx.options, user);
 			return {
+				account: parsedAccount,
 				session: parsedSession,
 				user: parsedUser,
 			};
@@ -451,6 +468,7 @@ export const createInternalAdapter = (
 		findSessions: async (sessionTokens: string[]) => {
 			if (secondaryStorage) {
 				const sessions: {
+					account: Account;
 					session: Session;
 					user: User;
 				}[] = [];
@@ -463,11 +481,17 @@ export const createInternalAdapter = (
 									? JSON.parse(sessionStringified)
 									: sessionStringified
 							) as {
+								account: Account;
 								session: Session;
 								user: User;
 							};
 							if (!s?.session) continue;
 							const session = {
+								account: {
+									...s.account,
+									createdAt: new Date(s.account.createdAt),
+									updatedAt: new Date(s.account.updatedAt),
+								},
 								session: {
 									...s.session,
 									expiresAt: new Date(s.session.expiresAt),
@@ -478,6 +502,7 @@ export const createInternalAdapter = (
 									updatedAt: new Date(s.user.updatedAt),
 								},
 							} as {
+								account: Account;
 								session: Session;
 								user: User;
 							};
@@ -492,7 +517,7 @@ export const createInternalAdapter = (
 			}
 
 			const sessions = await (await getCurrentAdapter(adapter)).findMany<
-				Session & { user: User | null }
+				Session & { user: User | null; account: Account | null }
 			>({
 				model: "session",
 				where: [
@@ -504,6 +529,7 @@ export const createInternalAdapter = (
 				],
 				join: {
 					user: true,
+					account: true,
 				},
 			});
 
@@ -511,8 +537,9 @@ export const createInternalAdapter = (
 			if (sessions.some((session) => !session.user)) return [];
 
 			return sessions.map((_session) => {
-				const { user, ...session } = _session;
+				const { user, account, ...session } = _session;
 				return {
+					account: account!,
 					session,
 					user: user!,
 				};
@@ -535,6 +562,7 @@ export const createInternalAdapter = (
 								}
 
 								const parsedSession = safeJSONParse<{
+									account: Account;
 									session: Session;
 									user: User;
 								}>(currentSession);
