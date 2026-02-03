@@ -97,16 +97,14 @@ export const auth = betterAuth({
 ```
 
 <Callout type="warn">
-    When requesting `offline_access` scope, Railway requires `prompt=consent` to be set in the authorization URL. You can do this using `authorizationParams`:
+    When requesting `offline_access` scope, Railway requires `prompt=consent` to be set in the authorization URL:
 
     ```ts
     railway: {
         clientId: process.env.RAILWAY_CLIENT_ID as string,
         clientSecret: process.env.RAILWAY_CLIENT_SECRET as string,
         scope: ["offline_access"],
-        authorizationParams: { // [!code highlight]
-            prompt: "consent" // [!code highlight]
-        } // [!code highlight]
+        prompt: "consent", // [!code highlight]
     }
     ```
 </Callout>
