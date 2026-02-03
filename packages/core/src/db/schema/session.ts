@@ -8,6 +8,7 @@ import { coreSchema } from "./shared";
 
 export const sessionSchema = coreSchema.extend({
 	userId: z.coerce.string(),
+	accountId: z.coerce.string(),
 	expiresAt: z.date(),
 	token: z.string(),
 	ipAddress: z.string().nullish(),
