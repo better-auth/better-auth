@@ -267,8 +267,9 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error(result.error.split(" ").join("_"));
 			return redirectOnError(result.error.split(" ").join("_"));
 		}
-		const { session, user } = result.data!;
+		const { account, session, user } = result.data!;
 		await setSessionCookie(c, {
+			account,
 			session,
 			user,
 		});

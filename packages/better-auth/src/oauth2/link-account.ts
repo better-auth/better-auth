@@ -34,8 +34,11 @@ export async function handleOAuthUserInfo(
 				c.context.options.onAPIError?.errorURL || `${c.context.baseURL}/error`;
 			throw c.redirect(`${errorURL}?error=internal_server_error`);
 		});
+
 	let user = dbUser?.user;
 	const isRegister = !user;
+
+	let fullAccount: Account;
 
 	if (dbUser) {
 		const linkedAccount =
@@ -68,7 +71,7 @@ export async function handleOAuthUserInfo(
 				};
 			}
 			try {
-				await c.context.internalAdapter.linkAccount({
+				const linkedAccount = await c.context.internalAdapter.linkAccount({
 					providerId: account.providerId,
 					accountId: userInfo.id.toString(),
 					userId: dbUser.user.id,
@@ -79,6 +82,7 @@ export async function handleOAuthUserInfo(
 					refreshTokenExpiresAt: account.refreshTokenExpiresAt,
 					scope: account.scope,
 				});
+				fullAccount = linkedAccount;
 			} catch (e) {
 				logger.error("Unable to link account", e);
 				return {
@@ -97,6 +101,7 @@ export async function handleOAuthUserInfo(
 				});
 			}
 		} else {
+			fullAccount = linkedAccount!;
 			const freshTokens =
 				c.context.options.account?.updateAccountOnSignIn !== false
 					? Object.fromEntries(
@@ -178,6 +183,7 @@ export async function handleOAuthUserInfo(
 					},
 					accountData,
 				);
+			fullAccount = createdAccount;
 			user = createdUser;
 			if (c.context.options.account?.storeAccountCookie) {
 				await setAccountCookie(c, createdAccount);
@@ -230,7 +236,11 @@ export async function handleOAuthUserInfo(
 		};
 	}
 
-	const session = await c.context.internalAdapter.createSession(user.id);
+	const session = await c.context.internalAdapter.createSession(
+		user.id,
+		false,
+		{ accountId: fullAccount.id },
+	);
 	if (!session) {
 		return {
 			error: "unable to create session",
@@ -241,6 +251,7 @@ export async function handleOAuthUserInfo(
 
 	return {
 		data: {
+			account: fullAccount, // added this line
 			session,
 			user,
 		},
