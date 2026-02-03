@@ -2,7 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import { betterFetch } from "@better-fetch/fetch";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -1666,6 +1666,174 @@ describe("oauth2", async () => {
 		expect(session.data).not.toBeNull();
 		expect(session.data?.user.name).toBe(customUserInfo.display_name);
 		expect(session.data?.user.image).toBe(customUserInfo.avatar_url);
+	});
+
+	describe("Duplicate Provider ID Detection", () => {
+		it("should warn when duplicate provider IDs are detected", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "duplicate-id",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "duplicate-id",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Duplicate provider IDs found: duplicate-id",
+			);
+
+			warnSpy.mockRestore();
+		});
+
+		it("should warn about multiple duplicate provider IDs", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "dup-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "dup-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+							{
+								providerId: "dup-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-3",
+								clientSecret: "secret-3",
+							},
+							{
+								providerId: "dup-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-4",
+								clientSecret: "secret-4",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				expect.stringContaining("Duplicate provider IDs found:"),
+			);
+			const warningMessage = warnSpy.mock.calls[0]?.[0] as string;
+			expect(warningMessage).toContain("dup-1");
+			expect(warningMessage).toContain("dup-2");
+
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn when all provider IDs are unique", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "unique-1",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "unique-2",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).not.toHaveBeenCalled();
+
+			warnSpy.mockRestore();
+		});
+
+		it("should not warn when only one provider is configured", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "single-provider",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).not.toHaveBeenCalled();
+
+			warnSpy.mockRestore();
+		});
+
+		it("should warn when provider ID appears more than twice", async () => {
+			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+			await getTestInstance({
+				plugins: [
+					genericOAuth({
+						config: [
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-1",
+								clientSecret: "secret-1",
+							},
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-2",
+								clientSecret: "secret-2",
+							},
+							{
+								providerId: "triple-dup",
+								discoveryUrl: `http://localhost:${port}/.well-known/openid-configuration`,
+								clientId: "client-3",
+								clientSecret: "secret-3",
+							},
+						],
+					}),
+				],
+			});
+
+			expect(warnSpy).toHaveBeenCalledWith(
+				"Duplicate provider IDs found: triple-dup",
+			);
+
+			warnSpy.mockRestore();
+		});
 	});
 
 	describe("RFC 9207 Issuer Validation", () => {
