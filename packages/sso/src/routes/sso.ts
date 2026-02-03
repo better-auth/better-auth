@@ -2329,7 +2329,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 		async (ctx) => {
 			const { SAMLResponse } = ctx.body;
 			const { providerId } = ctx.params;
-			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/acs/${providerId}`;
+			const currentCallbackPath = `${ctx.context.baseURL}/sso/saml2/sp/acs/${providerId}`;
 			const appOrigin = new URL(ctx.context.baseURL).origin;
 
 			const maxResponseSize =
