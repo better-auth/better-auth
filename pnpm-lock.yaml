@@ -1425,9 +1425,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
-      better-sqlite3:
-        specifier: ^12.6.2
-        version: 12.6.2
       c12:
         specifier: ^3.3.3
         version: 3.3.3(magicast@0.5.1)
@@ -1477,6 +1474,9 @@ importers:
       '@types/semver':
         specifier: ^7.7.1
         version: 7.7.1
+      better-sqlite3:
+        specifier: ^12.6.2
+        version: 12.6.2
       jiti:
         specifier: ^2.6.0
         version: 2.6.1
