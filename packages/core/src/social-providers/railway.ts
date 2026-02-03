@@ -66,6 +66,7 @@ export const railway = (options: RailwayOptions) => {
 							clientSecret: options.clientSecret,
 						},
 						tokenEndpoint,
+						authentication: "basic",
 					});
 				},
 		async getUserInfo(token) {
