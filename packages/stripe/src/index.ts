@@ -220,7 +220,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 										const params = defu(
 											{
 												email: user.email,
-												name: user.name ?? undefined,
+												name: user.name,
 												metadata: customerMetadata.set(
 													{
 														userId: user.id,
