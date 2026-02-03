@@ -664,6 +664,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				const newUser = await ctx.context.internalAdapter.createUser({
 					email,
 					emailVerified: true,
+					name: "",
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
@@ -927,7 +928,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 					responses: {
 						200: {
 							description: "Success",
-							contnt: {
+							content: {
 								"application/json": {
 									schema: {
 										type: "object",
