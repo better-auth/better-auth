@@ -88,4 +88,6 @@ export const ORGANIZATION_ERROR_CODES = defineErrorCodes({
 	INVALID_RESOURCE: "The provided permission includes an invalid resource",
 	ROLE_NAME_IS_ALREADY_TAKEN: "That role name is already taken",
 	CANNOT_DELETE_A_PRE_DEFINED_ROLE: "Cannot delete a pre-defined role",
+	ROLE_IS_ASSIGNED_TO_MEMBERS:
+		"Cannot delete a role that is assigned to members. Please reassign the members to a different role first",
 });
