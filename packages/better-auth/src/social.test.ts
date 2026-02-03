@@ -1520,6 +1520,11 @@ describe("Railway Provider", async () => {
 					expect(params.get("code")).toBeDefined();
 					expect(params.get("redirect_uri")).toBeDefined();
 
+					// Verify PKCE code_verifier is present (Better Auth uses PKCE by default)
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
 					return HttpResponse.json({
 						access_token: "railway_access_token",
 						token_type: "Bearer",
@@ -1556,7 +1561,7 @@ describe("Railway Provider", async () => {
 		expect(railwayProvider?.name).toBe("Railway");
 	});
 
-	it("should initiate Railway OAuth flow", async () => {
+	it("should initiate Railway OAuth flow with PKCE", async () => {
 		const { client } = await getTestInstance({
 			socialProviders: {
 				railway: {
@@ -1579,6 +1584,10 @@ describe("Railway Provider", async () => {
 		expect(authUrl.searchParams.get("scope")).toContain("openid");
 		expect(authUrl.searchParams.get("scope")).toContain("email");
 		expect(authUrl.searchParams.get("scope")).toContain("profile");
+
+		// Verify PKCE parameters are present (Better Auth uses PKCE by default)
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
 	});
 
 	it("should complete Railway OAuth flow and create user", async () => {
