@@ -123,6 +123,7 @@ export interface InternalAdapter<
 	): Promise<Session>;
 
 	findSession(token: string): Promise<{
+		account: Account & Record<string, any>;
 		session: Session & Record<string, any>;
 		user: User & Record<string, any>;
 	} | null>;
@@ -296,15 +297,18 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			 * by `setNewSession` method.
 			 */
 			newSession: {
+				account: Account & Record<string, any>;
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
 			session: {
+				account: Account & Record<string, any>;
 				session: Session & Record<string, any>;
 				user: User & Record<string, any>;
 			} | null;
 			setNewSession: (
 				session: {
+					account: Account & Record<string, any>;
 					session: Session & Record<string, any>;
 					user: User & Record<string, any>;
 				} | null,
