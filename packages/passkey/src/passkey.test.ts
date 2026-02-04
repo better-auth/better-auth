@@ -1,5 +1,5 @@
-import { APIError } from "@better-auth/core/error";
 import type { Verification } from "better-auth";
+import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
 import {
@@ -14,6 +14,14 @@ import {
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
+
+vi.mock("@simplewebauthn/server", async (importOriginal) => {
+	const mod = await importOriginal<typeof import("@simplewebauthn/server")>();
+	return {
+		...mod,
+		verifyAuthenticationResponse: vi.fn(mod.verifyAuthenticationResponse),
+	};
+});
 
 describe("passkey", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
