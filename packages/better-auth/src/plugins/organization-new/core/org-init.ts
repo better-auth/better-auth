@@ -2,6 +2,7 @@ import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Team, TeamMember, TeamsAddon } from "../addons";
 import { getHook as getTeamHook } from "../addons/teams/helpers/get-team-hook";
 import { resolveTeamOptions } from "../addons/teams/helpers/resolve-team-options";
+import { getHook as getOrgHook } from "../helpers/get-hook";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import type { Member, Organization } from "../schema";
 import type { OrganizationOptions } from "../types";
@@ -17,21 +18,39 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 						create: {
 							after: async (user, ctx) => {
 								const now = new Date();
-								const data = await options.createOrgOnSignUp({ user, ctx });
-								if (!data) return;
+								const providedData = await options.createOrgOnSignUp({
+									user,
+									ctx,
+								});
+								if (!providedData) return;
+
+								const orgHook = getOrgHook("CreateOrganization", options);
+
+								const customData = await (async () => {
+									const slug = options.disableSlugs
+										? undefined
+										: `org-${user.id}`;
+
+									const data = {
+										createdAt: now,
+										name: `${user.name}'s Organization`,
+										slug,
+										...providedData,
+									} as Omit<Organization, "id">;
+									const mutate = await orgHook.before(
+										{ organization: data, user },
+										null,
+									);
+									return { ...data, ...(mutate ?? {}) };
+								})();
 
 								// Create organization
 								const organization = await adapter.create<Organization>({
-									data: {
-										createdAt: now,
-										name: `${user.name}'s Organization`,
-										slug: `org-${user.id}`,
-										...data,
-									},
+									data: customData,
 									model: "organization",
 									forceAllowId: true,
 								});
-								await adapter.create<Member>({
+								const member = await adapter.create<Member>({
 									data: {
 										userId: user.id,
 										organizationId: organization.id,
@@ -41,6 +60,15 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									model: "member",
 									forceAllowId: true,
 								});
+
+								await orgHook.after(
+									{
+										organization,
+										member,
+										user,
+									},
+									null,
+								);
 
 								// Team support
 								type T = TeamsAddon | undefined;
@@ -56,18 +84,24 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 
 									// Get custom team data if provided, otherwise use empty object
 									const customData = await (async () => {
-										const data = customCreateDefaultTeam
-											? await customCreateDefaultTeam(organization)
-											: {};
+										const slug = teamOptions.enableSlugs
+											? `${organization.name}s-team`
+											: undefined;
+
+										const data = {
+											...(customCreateDefaultTeam
+												? await customCreateDefaultTeam(organization)
+												: {}),
+											organizationId: organization.id,
+											slug,
+											name: `${organization.name}'s Team`,
+											createdAt: now,
+										} satisfies Omit<Team & { slug?: string }, "id">;
 
 										const mutate = await teamHook.before(
 											{
 												organization,
-												team: {
-													organizationId: organization.id,
-													slug: `${organization.name}s-team`,
-													name: `${organization.name}'s Team`,
-												},
+												team: data,
 											},
 											null,
 										);
@@ -79,13 +113,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 
 									// Create default team
 									const team = await adapter.create<Team & { slug?: string }>({
-										data: {
-											organizationId: organization.id,
-											slug: `${organization.name}s-team`,
-											name: `${organization.name}'s Team`,
-											createdAt: now,
-											...customData,
-										},
+										data: customData,
 										model: "team",
 										forceAllowId: true,
 									});
