@@ -88,7 +88,7 @@ export interface EmailOTPOptions {
 	 * }
 	 */
 	rateLimit?: {
-		window :number,
-		max :number
+		window: number;
+		max: number;
 	};
 }
