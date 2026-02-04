@@ -4,6 +4,7 @@ import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
@@ -218,9 +219,9 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					user: User<O["user"], O["plugins"]>;
 			  }
 		> => {
-			const provider = c.context.socialProviders.find(
-				(p) => p.id === c.body.provider,
-			);
+			const provider = await getAwaitableValue(c.context.socialProviders, {
+				value: c.body.provider,
+			});
 			if (!provider) {
 				c.context.logger.error(
 					"Provider not found. Make sure to add the provider in your auth config",
