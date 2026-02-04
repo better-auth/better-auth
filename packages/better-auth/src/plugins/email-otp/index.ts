@@ -126,7 +126,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 					return path === "/email-otp/send-verification-otp";
 				},
 				window: opts.rateLimit?.window || 60,
-				max: opts.rateLimit?.max ?? 3,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
@@ -153,22 +153,22 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				pathMatcher(path) {
 					return path === "/email-otp/request-password-reset";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/reset-password";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/forget-password/email-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 		],
 		options,
