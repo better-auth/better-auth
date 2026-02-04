@@ -258,6 +258,33 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
+	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
+		const verification = await internalAdapter.createVerificationValue({
+			identifier: "missing-entity-test",
+			value: "test-value",
+			expiresAt: new Date(Date.now() + 60000),
+		});
+
+		// Remove the DB record so the entity no longer exists
+		await authContext.adapter.deleteMany({
+			model: "verification",
+			where: [{ field: "identifier", value: verification.identifier }],
+		});
+
+		const deleteSpy = vi.spyOn(authContext.adapter, "delete");
+
+		await internalAdapter.deleteVerificationByIdentifier("missing-entity-test");
+
+		// adapter.delete should NOT have been called because
+		// deleteWithHooks skips deletion when the entity is not found
+		const verificationDeleteCalls = deleteSpy.mock.calls.filter(
+			(call) => call[0].model === "verification",
+		);
+		expect(verificationDeleteCalls.length).toBe(0);
+
+		deleteSpy.mockRestore();
+	});
+
 	describe("verification token storage", () => {
 		it("should hash identifier when storeIdentifier is 'hashed'", async () => {
 			const hashedOpts = {
