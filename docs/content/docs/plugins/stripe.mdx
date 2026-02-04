@@ -131,7 +131,7 @@ The Stripe plugin integrates Stripe's payment and subscription functionality wit
 
 You can use this plugin solely for customer management without enabling subscriptions. This is useful if you just want to link Stripe customers to your users.
 
-By default, when a user signs up, a Stripe customer is automatically created if you set `createCustomerOnSignUp: true`. This customer is linked to the user in your database.
+When you set `createCustomerOnSignUp: true`, a Stripe customer is automatically created on signup and linked to the user in your database.
 You can customize the customer creation process:
 
 ```ts title="auth.ts"

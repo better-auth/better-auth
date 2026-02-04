@@ -53,7 +53,7 @@ async function handleCursorAction() {
 	const encodedRemote = base64.encode(
 		new TextEncoder().encode(JSON.stringify(remoteConfig)),
 	);
-	const remoteDeeplink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent("better-auth-docs")}&config=${encodedRemote}`;
+	const remoteDeeplink = `cursor://anysphere.cursor-deeplink/mcp/install?name=${encodeURIComponent("better-auth")}&config=${encodedRemote}`;
 
 	try {
 		const cmd =
@@ -87,7 +87,7 @@ async function handleCursorAction() {
 function handleClaudeCodeAction() {
 	console.log(chalk.bold.blue("🤖 Adding Better Auth MCP to Claude Code..."));
 
-	const command = `claude mcp add --transport http better-auth-docs ${REMOTE_MCP_URL}`;
+	const command = `claude mcp add --transport http better-auth ${REMOTE_MCP_URL}`;
 
 	try {
 		execSync(command, { stdio: "inherit" });
@@ -120,7 +120,7 @@ function handleOpenCodeAction() {
 	const openCodeConfig = {
 		$schema: "https://opencode.ai/config.json",
 		mcp: {
-			"better-auth-docs": {
+			"better-auth": {
 				type: "remote",
 				url: REMOTE_MCP_URL,
 				enabled: true,
@@ -174,7 +174,7 @@ function handleManualAction() {
 	console.log(chalk.bold.blue("📝 Better Auth MCP Configuration..."));
 
 	const manualConfig = {
-		"better-auth-docs": {
+		"better-auth": {
 			url: REMOTE_MCP_URL,
 		},
 	};
@@ -233,7 +233,7 @@ function showAllOptions() {
 	console.log(chalk.bold.white("Server:"));
 	console.log(
 		chalk.gray("  • ") +
-			chalk.white("better-auth-docs") +
+			chalk.white("better-auth") +
 			chalk.gray(" - Search documentation, code examples, setup assistance"),
 	);
 	console.log();

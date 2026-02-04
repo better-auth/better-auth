@@ -584,43 +584,43 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
-		).toEqualTypeOf<"Organization not found">();
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
+		).toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.message,
-		).toEqualTypeOf<"OTP has expired">();
+			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
+		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL.message,
-		).toEqualTypeOf<"Invalid email">();
+			client.$ERROR_CODES.INVALID_EMAIL.code,
+		).toEqualTypeOf<"INVALID_EMAIL">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.message,
-		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.code,
+		).toEqualTypeOf<"YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN.message,
-		).toEqualTypeOf<"Invalid session token">();
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
+		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.message,
-		).toEqualTypeOf<"Provider not found">();
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
+		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE.message,
-		).toEqualTypeOf<"Invalid device code">();
+			client.$ERROR_CODES.INVALID_DEVICE_CODE.code,
+		).toEqualTypeOf<"INVALID_DEVICE_CODE">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND.message,
-		).toEqualTypeOf<"User not found">();
+			client.$ERROR_CODES.USER_NOT_FOUND.code,
+		).toEqualTypeOf<"USER_NOT_FOUND">();
 	});
 });
 

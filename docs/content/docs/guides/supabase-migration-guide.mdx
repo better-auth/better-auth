@@ -9,6 +9,10 @@ In this guide, we'll walk through the steps to migrate a project from Supabase A
 This migration will invalidate all active sessions. While this guide doesn't currently cover migrating two-factor (2FA) or Row Level Security (RLS) configurations, both should be possible with additional steps.
 </Callout>
 
+<Callout type="error">
+**Back up your database before running any migration scripts.** This guide modifies production data. Create a full backup of both your Supabase database and target database before proceeding.
+</Callout>
+
 
 ## Before You Begin
 
@@ -51,17 +55,15 @@ export const auth = betterAuth({
     database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
-	emailVerification: {
-		sendEmailVerification: async(user)=>{
-			// send email verification email
-			// implement your own logic here
-		}
-	},
     emailAndPassword: { // [!code highlight]
         enabled: true, // [!code highlight]
     } // [!code highlight]
 })
 ```
+
+<Callout type="info">
+If you want to require email verification, add the `emailVerification` config separately. See the [Email Verification docs](/docs/authentication/email-password#email-verification) for details.
+</Callout>
 </Step>
 
 <Step>
@@ -91,9 +93,17 @@ export const auth = betterAuth({
 </Step>
 
 <Step>
-### Add admin, anonymous and phoneNumber plugins
+### Add plugins based on your Supabase features
 
-Add the [admin](/docs/plugins/admin), [anonymous](/docs/plugins/anonymous) and [phoneNumber](/docs/plugins/phone-number) plugins to your auth config. To minimize data loss from Supabase Auth during migration, these plugins must be included in the auth config.
+Add plugins that match the features you used in Supabase. Include only what you need:
+
+- **[admin](/docs/plugins/admin)**: If you have users with `is_super_admin` or `banned_until` fields
+- **[anonymous](/docs/plugins/anonymous)**: If you used anonymous authentication (`signInAnonymously`)
+- **[phoneNumber](/docs/plugins/phone-number)**: If you have users who signed up with phone numbers
+
+<Callout type="info">
+Only include plugins for features you actually used in Supabase. The migration script will automatically detect which plugins are enabled and migrate data accordingly.
+</Callout>
 
 ```ts title="auth.ts"
 import { betterAuth } from 'better-auth';
@@ -191,9 +201,13 @@ Now that we have the necessary tables in our database, we can run the migration 
 First, set up the environment variables used by the script.
 
 ```dotenv title=".env"
-FROM_DATABASE_URL= # Supabase database connection string
-TO_DATABASE_URL= # Target Postgres database connection string
+FROM_DATABASE_URL= # Supabase database connection string (reads from auth.users)
+TO_DATABASE_URL= # Target Postgres database connection string (writes to public.user)
 ```
+
+<Callout type="info">
+**Same database?** If you're migrating within the same Supabase Postgres database (from `auth` schema to `public` schema), both URLs can be the same `DATABASE_URL`. If you're migrating to a different database (e.g., PlanetScale, separate Postgres), use different URLs.
+</Callout>
 
 And then copy and paste the following code into the file.
 
@@ -446,20 +460,21 @@ const toDB = new Pool({
 async function validateAuthConfig() {
   const ctx = await auth.$context;
   const errors: string[] = [];
+  const warnings: string[] = [];
 
-  // Check emailAndPassword
+  // Check emailAndPassword (required)
   if (!ctx.options.emailAndPassword?.enabled) {
     errors.push('emailAndPassword.enabled must be true');
   }
 
-  // Check required plugins
-  const requiredPlugins = ['admin', 'anonymous', 'phone-number'];
+  // Check optional plugins - warn if missing, migration will skip related data
+  const optionalPlugins = ['admin', 'anonymous', 'phone-number'];
   const plugins = ctx.options.plugins || [];
   const pluginIds = plugins.map((p: any) => p.id);
 
-  for (const required of requiredPlugins) {
-    if (!pluginIds.includes(required)) {
-      errors.push(`Missing required plugin: ${required}`);
+  for (const plugin of optionalPlugins) {
+    if (!pluginIds.includes(plugin)) {
+      warnings.push(`Plugin '${plugin}' not found - related Supabase data will be skipped`);
     }
   }
 
@@ -495,14 +510,21 @@ async function validateAuthConfig() {
     }
   }
 
+  // Show warnings (non-blocking)
+  if (warnings.length > 0) {
+    console.warn('\n⚠️  Migration Warnings:\n');
+    warnings.forEach((warn) => console.warn(`   ${warn}`));
+    console.warn('\n   Add plugins for features you used in Supabase to migrate that data.\n');
+  }
+
+  // Show errors (blocking)
   if (errors.length > 0) {
     console.error('\n🟧 Better Auth Configuration Errors:\n');
     errors.forEach((err) => console.error(`   ${err}`));
     console.error('\n🟧 Please update your Better Auth configuration to include:\n');
     console.error('   1. emailAndPassword: { enabled: true }');
-    console.error('   2. plugins: [admin(), anonymous(), phoneNumber()]');
     console.error(
-      '   3. user.additionalFields: { userMetadata, appMetadata, invitedAt, lastSignInAt }\n',
+      '   2. user.additionalFields: { userMetadata, appMetadata, invitedAt, lastSignInAt }\n',
     );
     process.exit(1);
   }
@@ -681,7 +703,7 @@ async function processBatch(
         `
         INSERT INTO "user" (${fields.map((f) => `"${f}"`).join(', ')})
         VALUES ${placeholders.join(', ')}
-        ON CONFLICT (id) DO NOTHING
+        ON CONFLICT ("id") DO NOTHING
       `,
         values,
       );
@@ -930,15 +952,17 @@ You can configure the script using `CONFIG` inside the script.
 <Step>
 ### Run the migration script
 
-<Callout type="warning">
-  **Large Datasets (100k+ users)**: Use streaming/pagination with [`pg-cursor`](https://www.npmjs.com/package/pg-cursor) or [keyset pagination](https://use-the-index-luke.com/no-offset) to avoid OOM errors. Process in batches of 1000 rows with concurrency limit of 8. Add `NODE_OPTIONS="--max-old-space-size=8192"` as temporary fix.
+<Callout type="info">
+The migration script uses **keyset pagination** (cursor-based) which efficiently handles large datasets without loading everything into memory. For very large migrations (500k+ users), you may need to increase Node's memory limit with `NODE_OPTIONS="--max-old-space-size=8192"`.
 </Callout>
 
 Run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 ```bash title="Terminal"
-bun migration.ts # or use node, ts-node, etc.
+npx tsx migration.ts
 ```
+
+You can also use other TypeScript runners like `bun migration.ts`, `ts-node migration.ts`, or compile to JS first.
 </Step>
 <Step>
  ### Change password hashing algorithm
@@ -947,28 +971,46 @@ bun migration.ts # or use node, ts-node, etc.
 
  First, install bcrypt:
 
- ```bash
+ ```package-install
  npm install bcrypt
+ ```
+
+ ```bash title="Terminal"
  npm install -D @types/bcrypt
  ```
 
- Then update your auth configuration:
+ Then add the password configuration to your existing auth config:
 
  ```ts title="auth.ts"
  import { betterAuth } from "better-auth";
- import bcrypt from "bcrypt";
+ import { Pool } from "pg";
+ import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
+ import bcrypt from "bcrypt"; // [!code highlight]
  
  export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
     emailAndPassword: {
-        password: {
-            hash: async (password) => {
-                return await bcrypt.hash(password, 10);
-            },
-            verify: async ({ hash, password }) => {
-                return await bcrypt.compare(password, hash);
-            }
-        }
-    }
+        enabled: true,
+        password: { // [!code highlight]
+            hash: async (password) => { // [!code highlight]
+                return await bcrypt.hash(password, 10); // [!code highlight]
+            }, // [!code highlight]
+            verify: async ({ hash, password }) => { // [!code highlight]
+                return await bcrypt.compare(password, hash); // [!code highlight]
+            } // [!code highlight]
+        } // [!code highlight]
+    },
+    socialProviders: {
+        // ... your social providers
+    },
+    plugins: [admin(), anonymous(), phoneNumber()],
+    user: {
+        additionalFields: {
+            // ... your additional fields
+        },
+    },
  })
  ```
 </Step>
@@ -996,6 +1038,442 @@ Learn more:
 - [Next.js](/docs/integrations/next): Learn how to use the auth client in a Next.js project.
 </Step>
 </Steps>
+
+## Migrating Enterprise SSO
+
+<Callout type="info">
+**Skip this section** if you're not using Supabase's Enterprise SSO feature. This section is only for users who have SAML SSO providers configured in Supabase.
+</Callout>
+
+If you're using Supabase's Enterprise SSO (SAML), follow these additional steps to migrate your SSO providers and users.
+
+<Callout type="warn">
+SSO migration requires updating your Identity Provider (IdP) configuration with new callback URLs. Plan for a brief cutover window as existing SSO sessions will be invalidated.
+</Callout>
+
+<Steps>
+
+<Step>
+### Install the SSO plugin
+
+Install the Better Auth SSO package:
+
+```package-install
+npm install @better-auth/sso
+```
+
+Add the SSO plugin to your auth configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
+import { sso } from '@better-auth/sso'; // [!code highlight]
+
+export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+    emailAndPassword: { 
+        enabled: true,
+    },
+    plugins: [
+        admin(), 
+        anonymous(), 
+        phoneNumber(),
+        sso(), // [!code highlight]
+    ],
+})
+```
+</Step>
+
+<Step>
+### Run the SSO database migration
+
+Run the migration to create the `ssoProvider` table:
+
+```bash title="Terminal"
+npx @better-auth/cli migrate
+```
+</Step>
+
+<Step>
+### Export your Supabase SSO providers
+
+List and export your existing SSO providers from Supabase using the CLI:
+
+```bash title="Terminal"
+# List all SSO providers
+supabase sso list --project-ref <your-project-ref>
+
+# Export each provider's details to a JSON file
+supabase sso show <provider-id> --project-ref <your-project-ref> -o json > sso-provider.json
+```
+
+A typical Supabase SSO provider export looks like this:
+
+```json title="sso-provider.json"
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "saml": {
+    "entity_id": "https://idp.example.com/saml",
+    "metadata_url": "https://idp.example.com/saml/metadata",
+    "attribute_mapping": {
+      "keys": {
+        "email": { "name": "mail" },
+        "first_name": { "name": "givenName" },
+        "last_name": { "name": "surname" }
+      }
+    }
+  },
+  "domains": [
+    { "id": "domain-uuid", "domain": "company.com" }
+  ]
+}
+```
+
+<Callout type="info">
+If you have multiple SSO providers, export each one separately. You'll need all of them for the migration script.
+</Callout>
+</Step>
+
+<Step>
+### Add SSO types to the migration script
+
+Add these type definitions to your migration script:
+
+```ts title="migration.ts"
+// ============================================================================
+// SSO MIGRATION TYPES
+// ============================================================================
+
+type SupabaseSSOProvider = {
+  id: string;
+  saml: {
+    entity_id: string;
+    metadata_url?: string;
+    metadata_xml?: string;
+    attribute_mapping?: {
+      keys: Record<string, { name: string }>;
+    };
+    name_id_format?: string;
+  };
+  domains: Array<{ id: string; domain: string }>;
+};
+
+type SSOProviderInsertData = {
+  id: string;
+  providerId: string;
+  issuer: string;
+  domain: string;
+  oidcConfig: null;
+  samlConfig: string;
+  organizationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+</Step>
+
+<Step>
+### Add the SSO provider migration function
+
+Add this function to migrate your SSO providers:
+
+```ts title="migration.ts"
+// ============================================================================
+// SSO PROVIDER MIGRATION
+// ============================================================================
+
+/**
+ * Migrates Supabase SSO providers to Better Auth format
+ * 
+ * @param providers - Array of exported Supabase SSO providers
+ * @param betterAuthUrl - Your Better Auth base URL (e.g., https://app.example.com)
+ */
+async function migrateSSOProviders(
+  providers: SupabaseSSOProvider[], 
+  betterAuthUrl: string
+) {
+  console.log(`\n[SSO] Migrating ${providers.length} SSO provider(s)...\n`);
+
+  for (const provider of providers) {
+    // Create a unique provider ID that references the original Supabase ID
+    const providerId = `sso-${provider.id}`;
+    
+    // Combine all domains into a comma-separated string
+    const domains = provider.domains.map(d => d.domain).join(',');
+    
+    // Transform Supabase attribute mapping to Better Auth format
+    const mapping = provider.saml.attribute_mapping?.keys || {};
+    
+    const samlConfig = {
+      issuer: provider.saml.entity_id,
+      // These will be auto-populated from metadata
+      entryPoint: '',
+      cert: '',
+      // Callback URL for SAML responses
+      callbackUrl: `${betterAuthUrl}/api/auth/sso/saml2/callback/${providerId}`,
+      // IdP metadata - Better Auth will fetch and parse this
+      idpMetadata: provider.saml.metadata_url 
+        ? { metadataUrl: provider.saml.metadata_url }
+        : { metadata: provider.saml.metadata_xml },
+      // SP metadata configuration
+      spMetadata: {
+        entityID: `${betterAuthUrl}/api/auth/sso/saml2/sp/metadata`,
+      },
+      // Name ID format from Supabase config
+      identifierFormat: provider.saml.name_id_format || 
+        'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      // Map Supabase attribute names to Better Auth fields
+      mapping: {
+        id: 'nameID',
+        email: mapping.email?.name || 'email',
+        name: mapping.name?.name || 'displayName',
+        firstName: mapping.first_name?.name || 'givenName',
+        lastName: mapping.last_name?.name || 'surname',
+      },
+    };
+
+    const ssoProviderData: SSOProviderInsertData = {
+      id: generateId(),
+      providerId,
+      issuer: provider.saml.entity_id,
+      domain: domains,
+      oidcConfig: null,
+      samlConfig: JSON.stringify(samlConfig),
+      organizationId: null, // Set this if linking to a Better Auth organization
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await toDB.query(`
+        INSERT INTO "ssoProvider" (
+          "id", "providerId", "issuer", "domain", 
+          "oidcConfig", "samlConfig", "organizationId",
+          "createdAt", "updatedAt"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT ("providerId") DO UPDATE SET
+          "issuer" = EXCLUDED."issuer",
+          "domain" = EXCLUDED."domain",
+          "samlConfig" = EXCLUDED."samlConfig",
+          "updatedAt" = EXCLUDED."updatedAt"
+      `, [
+        ssoProviderData.id,
+        ssoProviderData.providerId,
+        ssoProviderData.issuer,
+        ssoProviderData.domain,
+        ssoProviderData.oidcConfig,
+        ssoProviderData.samlConfig,
+        ssoProviderData.organizationId,
+        ssoProviderData.createdAt,
+        ssoProviderData.updatedAt,
+      ]);
+
+      console.log(`[SSO] ✓ Migrated provider: ${providerId}`);
+      console.log(`      Domains: ${domains}`);
+      console.log(`      Issuer: ${provider.saml.entity_id}\n`);
+    } catch (error: any) {
+      console.error(`[SSO] ✗ Failed to migrate provider ${providerId}:`, error.message);
+    }
+  }
+
+  console.log('[SSO] Provider migration complete.\n');
+}
+```
+</Step>
+
+<Step>
+### Update user migration to link SSO accounts
+
+In the `processBatch` function, add handling for SSO identities. Find the section that processes identities and add:
+
+```ts title="migration.ts"
+// Inside the identity processing loop in processBatch()
+for (const identity of user.identities ?? []) {
+  // ... existing email and social provider handling ...
+
+  // Handle SSO identities // [!code highlight]
+  if (identity.provider.startsWith('sso:')) { // [!code highlight]
+    const supabaseProviderId = identity.provider.replace('sso:', ''); // [!code highlight]
+    
+    accountsData.push({ // [!code highlight]
+      id: generateId(), // [!code highlight]
+      userId: user.id, // [!code highlight]
+      providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
+      accountId: identity.identity_data?.sub || identity.provider_id, // [!code highlight]
+      password: null, // [!code highlight]
+      createdAt: identity.created_at ?? user.created_at, // [!code highlight]
+      updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]
+    }); // [!code highlight]
+  } // [!code highlight]
+}
+```
+
+This ensures that users who previously signed in via SSO will have their accounts linked to the migrated SSO provider.
+</Step>
+
+<Step>
+### Run the SSO migration
+
+Create a separate script or add to your main migration to run the SSO provider migration:
+
+```ts title="run-sso-migration.ts"
+import { readFileSync } from 'fs';
+
+// Load your exported Supabase SSO providers
+const providers: SupabaseSSOProvider[] = [
+  JSON.parse(readFileSync('./sso-provider-1.json', 'utf-8')),
+  // Add more providers if you have multiple
+];
+
+// Your Better Auth application URL
+const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || 'https://app.example.com';
+
+async function main() {
+  // First, migrate users (including SSO user accounts)
+  await migrateFromSupabase();
+  
+  // Then, migrate SSO providers
+  await migrateSSOProviders(providers, BETTER_AUTH_URL);
+}
+
+main();
+```
+
+Run the migration:
+
+```bash title="Terminal"
+npx tsx run-sso-migration.ts
+```
+</Step>
+
+<Step>
+### Update your Identity Provider
+
+After migrating, you need to update your IdP (Okta, Azure AD, Google Workspace, etc.) with the new Better Auth endpoints.
+
+**Update these settings in your IdP:**
+
+| Setting | Old Value (Supabase) | New Value (Better Auth) |
+|---------|----------------------|-------------------------|
+| ACS URL / Reply URL | `https://<project>.supabase.co/auth/v1/sso/saml/acs` | `https://yourapp.com/api/auth/sso/saml2/callback/<providerId>` |
+| Entity ID / Audience | `https://<project>.supabase.co/auth/v1/sso/saml/metadata` | `https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=<providerId>` |
+
+Replace `<providerId>` with your migrated provider ID (e.g., `sso-550e8400-e29b-41d4-a716-446655440000`).
+
+<Callout type="info">
+You can retrieve the SP metadata for your provider at:
+`GET https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=<providerId>`
+
+Share this URL with your IdP administrator if they need the full metadata XML.
+</Callout>
+</Step>
+
+<Step>
+### Update your client code
+
+Replace Supabase SSO authentication calls with Better Auth:
+
+```ts title="Before (Supabase)"
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Sign in with SSO
+await supabase.auth.signInWithSSO({ 
+  domain: 'company.com' 
+});
+```
+
+```ts title="After (Better Auth)"
+import { createAuthClient } from 'better-auth/client';
+import { ssoClient } from '@better-auth/sso/client'; // [!code highlight]
+
+const authClient = createAuthClient({
+  plugins: [ssoClient()], // [!code highlight]
+});
+
+// Sign in with SSO by domain // [!code highlight]
+await authClient.signIn.sso({  // [!code highlight]
+  domain: 'company.com', // [!code highlight]
+  callbackURL: '/dashboard', // [!code highlight]
+}); // [!code highlight]
+```
+
+You can also initiate SSO by email (the domain is extracted automatically):
+
+```ts title="auth-client.ts"
+// Sign in by email - domain is extracted from email
+await authClient.signIn.sso({ 
+  email: 'user@company.com',
+  callbackURL: '/dashboard',
+});
+
+// Or sign in by provider ID directly
+await authClient.signIn.sso({ 
+  providerId: 'sso-550e8400-e29b-41d4-a716-446655440000',
+  callbackURL: '/dashboard',
+});
+```
+</Step>
+
+<Step>
+### Test the SSO flow
+
+Before going live, test the complete SSO flow:
+
+1. **Test SP-initiated SSO**: Start from your app's login page, enter an SSO-enabled email domain
+2. **Verify user attributes**: Check that name, email, and other attributes are mapped correctly
+3. **Test existing users**: Ensure users who previously logged in via SSO can still access their accounts
+4. **Test new users**: Verify that new SSO users are created correctly
+
+```ts title="test-sso.ts"
+// Quick test - check if SSO provider is configured correctly
+const response = await fetch(
+  'https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=sso-your-provider-id'
+);
+const metadata = await response.text();
+console.log('SP Metadata:', metadata);
+```
+</Step>
+
+</Steps>
+
+### SSO Migration Checklist
+
+Use this checklist to ensure a complete SSO migration:
+
+```
+- [ ] SSO plugin installed and configured
+- [ ] Database migration run (`ssoProvider` table created)
+- [ ] Supabase SSO providers exported
+- [ ] Providers migrated to Better Auth database
+- [ ] User accounts linked to SSO providers
+- [ ] IdP settings updated (ACS URL, Entity ID)
+- [ ] Client code updated to use Better Auth SSO
+- [ ] SP-initiated SSO flow tested
+- [ ] Existing SSO users can log in
+- [ ] New SSO users can be created
+```
+
+### Troubleshooting SSO
+
+<Callout type="warn">
+**SAML Signature Errors**: If you see signature validation errors, ensure your IdP's certificate is current. Some IdPs rotate certificates periodically—check the metadata URL for the latest certificate.
+</Callout>
+
+<Callout type="info">
+**Attribute Mapping Issues**: If user attributes aren't populating correctly, inspect the SAML assertion from your IdP using browser developer tools. Update the `mapping` field in your `samlConfig` to match the exact attribute names your IdP sends.
+</Callout>
+
+<Callout type="info">
+**Multiple Domains**: If you have multiple domains for a single SSO provider, separate them with commas in the `domain` field: `"company.com,company.org"`.
+</Callout>
+
+Learn more about SSO configuration in the [SSO Plugin Documentation](/docs/plugins/sso).
 
 ### Auth Protection
 

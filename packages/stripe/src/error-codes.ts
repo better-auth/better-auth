@@ -23,6 +23,8 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	ORGANIZATION_NOT_FOUND: "Organization not found",
 	ORGANIZATION_SUBSCRIPTION_NOT_ENABLED:
 		"Organization subscription is not enabled",
+	AUTHORIZE_REFERENCE_REQUIRED:
+		"Organization subscriptions require authorizeReference callback to be configured",
 	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
 		"Cannot delete organization with active subscription",
 	ORGANIZATION_REFERENCE_ID_REQUIRED:

@@ -276,23 +276,6 @@ export async function setSessionCookie(
 	}
 	await setCookieCache(ctx, session, dontRememberMe);
 	ctx.context.setNewSession(session);
-	/**
-	 * If secondary storage is enabled, store the session data in the secondary storage
-	 * This is useful if the session got updated and we want to update the session data in the
-	 * secondary storage
-	 */
-	if (ctx.context.options.secondaryStorage) {
-		await ctx.context.secondaryStorage?.set(
-			session.session.token,
-			JSON.stringify({
-				user: session.user,
-				session: session.session,
-			}),
-			Math.floor(
-				(new Date(session.session.expiresAt).getTime() - Date.now()) / 1000,
-			),
-		);
-	}
 }
 
 /**
@@ -376,7 +359,10 @@ export const getSessionCookie = (
 			config.cookiePrefix = `${config.cookiePrefix}.`;
 		}
 	}
-	const headers = "headers" in request ? request.headers : request;
+	const headers =
+		request instanceof Headers || !("headers" in request)
+			? request
+			: request.headers;
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
@@ -424,7 +410,10 @@ export const getCookieCache = async <
 		  }
 		| undefined,
 ) => {
-	const headers = request instanceof Headers ? request : request.headers;
+	const headers =
+		request instanceof Headers || !("headers" in request)
+			? request
+			: request.headers;
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

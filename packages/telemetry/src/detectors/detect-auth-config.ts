@@ -15,7 +15,8 @@ export function getTelemetryAuthConfig(
 			autoSignInAfterVerification:
 				!!options.emailVerification?.autoSignInAfterVerification,
 			expiresIn: options.emailVerification?.expiresIn,
-			onEmailVerification: !!options.emailVerification?.onEmailVerification,
+			beforeEmailVerification:
+				!!options.emailVerification?.beforeEmailVerification,
 			afterEmailVerification:
 				!!options.emailVerification?.afterEmailVerification,
 		},
@@ -64,8 +65,8 @@ export function getTelemetryAuthConfig(
 			additionalFields: options.user?.additionalFields,
 			changeEmail: {
 				enabled: options.user?.changeEmail?.enabled,
-				sendChangeEmailVerification:
-					!!options.user?.changeEmail?.sendChangeEmailVerification,
+				sendChangeEmailConfirmation:
+					!!options.user?.changeEmail?.sendChangeEmailConfirmation,
 			},
 		},
 		verification: {
@@ -117,9 +118,6 @@ export function getTelemetryAuthConfig(
 					options.advanced?.crossSubDomainCookies?.additionalCookies,
 			},
 			database: {
-				useNumberId:
-					!!options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial",
 				generateId: options.advanced?.database?.generateId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},

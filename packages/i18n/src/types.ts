@@ -1,9 +1,38 @@
-import type { AuthContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
+	UnionToIntersection,
+} from "@better-auth/core";
+
+type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
+	{
+		[Key in Exclude<
+			BetterAuthPluginRegistryIdentifier,
+			"i18n"
+		>]: BetterAuthPluginRegistry<unknown, unknown>[Key] extends {
+			creator: infer C;
+		}
+			? C extends (...args: any[]) => infer P
+				? P extends {
+						$ERROR_CODES: infer E;
+					}
+					? E
+					: {}
+				: {}
+			: {};
+	}[Exclude<BetterAuthPluginRegistryIdentifier, "i18n">]
+>;
+
+type InternalTranslationDictionary = Partial<{
+	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
+}>;
 
 /**
  * Translation dictionary mapping error codes to translated messages
  */
-export type TranslationDictionary = Record<string, string>;
+export type TranslationDictionary = InternalTranslationDictionary &
+	Record<string, string>;
 
 /**
  * Locale detection strategy

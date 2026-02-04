@@ -412,3 +412,91 @@ describe("sign-up with form data", async (it) => {
 		expect(response.status).toBe(200);
 	});
 });
+
+describe("sign-up sendOnSignUp option behavior", async (it) => {
+	it("should not send verification email when sendOnSignUp is false, even with requireEmailVerification", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "no-verification@test.com",
+				password: "password123",
+				name: "No Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should send verification email when sendOnSignUp is true", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "with-verification@test.com",
+				password: "password123",
+				name: "With Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("should send verification email when sendOnSignUp is not set but requireEmailVerification is true (default)", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "default-verification@test.com",
+				password: "password123",
+				name: "Default Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+});

@@ -1,6 +1,6 @@
 import { APIError } from "better-call";
 import { describe, expect, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
+import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
 describe("forget password", async (it) => {
