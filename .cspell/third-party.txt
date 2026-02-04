@@ -39,3 +39,4 @@ authjs
 vite
 electronjs
 Authy
+grecaptcha
