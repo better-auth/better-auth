@@ -1,8 +1,16 @@
 import { APIError } from "@better-auth/core/error";
-import { base64 } from "@better-auth/utils/base64";
+import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	assert,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
@@ -162,112 +170,69 @@ describe("passkey", async () => {
 	});
 });
 
-describe("passkey with secondary storage", async () => {
-	const store = new Map<string, string>();
-
-	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
-		plugins: [passkey()],
-		secondaryStorage: {
-			set(key, value, ttl) {
-				store.set(key, value);
-			},
-			get(key) {
-				return store.get(key) || null;
-			},
-			delete(key) {
-				store.delete(key);
-			},
-		},
-		rateLimit: {
-			enabled: false,
-		},
+describe("passkey expirationTime per-request", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
 	});
 
-	it("should clean up verification from secondary storage after passkey authentication", async () => {
-		const { verifyAuthenticationResponse } = await import(
-			"@simplewebauthn/server"
-		);
-		vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
-			verified: true,
-			authenticationInfo: {
-				newCounter: 1,
-				credentialID: "cleanup-test-credential",
-				credentialDeviceType: "singleDevice",
-				credentialBackedUp: false,
-				origin: "http://localhost:3000",
-				rpID: "localhost",
-				userVerified: true,
-				authenticatorExtensionResults: undefined,
-			},
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should compute expirationTime per-request, not at init time", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
 		});
 
-		const { headers, user } = await signInWithTestUser();
-		const ctx = await auth.$context;
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
 
-		await ctx.adapter.create<Omit<Passkey, "id">, Passkey>({
-			model: "passkey",
-			data: {
-				userId: user.id,
-				credentialID: "cleanup-test-credential",
-				publicKey: base64.encode(new Uint8Array(32)),
-				counter: 0,
-				deviceType: "singleDevice",
-				backedUp: false,
-				transports: "internal",
-				createdAt: new Date(),
-				aaguid: "00000000-0000-0000-0000-000000000000",
-				name: "Test Passkey",
-			} satisfies Omit<Passkey, "id">,
+		const { headers } = await signInWithTestUser();
+		await auth.api.generatePasskeyRegistrationOptions({
+			headers,
 		});
 
-		// Generate authentication options — creates verification in secondary storage
-		const generateRes = await customFetchImpl(
-			"http://localhost:3000/api/auth/passkey/generate-authenticate-options",
-			{ method: "GET", headers },
-		);
-		const setCookie = generateRes.headers.get("set-cookie");
-		const passkeyCookie = setCookie?.split(";")[0] || "";
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
 
-		// Verification should exist in secondary storage
-		const verificationKeys = [...store.keys()].filter((k) =>
-			k.startsWith("verification:"),
-		);
-		expect(verificationKeys.length).toBe(1);
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
 
-		// Verify authentication
-		const sessionCookie = headers.get("cookie") || "";
-		const verifyRes = await customFetchImpl(
-			"http://localhost:3000/api/auth/passkey/verify-authentication",
-			{
-				method: "POST",
-				headers: {
-					cookie: `${passkeyCookie}; ${sessionCookie}`,
-					origin: "http://localhost:3000",
-					"content-type": "application/json",
-				},
-				body: JSON.stringify({
-					response: {
-						id: "cleanup-test-credential",
-						rawId: "cleanup-test-credential",
-						response: {
-							authenticatorData: "mock",
-							clientDataJSON: "mock",
-							signature: "mock",
-						},
-						type: "public-key",
-						authenticatorAttachment: "platform",
-						clientExtensionResults: {},
-					},
-				}),
-			},
-		);
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
 
-		expect(verifyRes.status).toBe(200);
+		expect(expiresAt).toBeGreaterThan(currentTime);
+	});
 
-		// Verification should be cleaned up from secondary storage
-		const remainingKeys = [...store.keys()].filter((k) =>
-			k.startsWith("verification:"),
-		);
-		expect(remainingKeys.length).toBe(0);
+	it("should compute expirationTime per-request for authentication options", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
+
+		await auth.api.generatePasskeyAuthenticationOptions({});
+
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
+
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
+
+		expect(expiresAt).toBeGreaterThan(currentTime);
 	});
 });
