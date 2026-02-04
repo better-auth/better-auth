@@ -3,10 +3,12 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
+	MicrosoftEntraIDProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
 import Database from "better-sqlite3";
+import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
 import { OAuth2Server } from "oauth2-mock-server";
@@ -1500,5 +1502,380 @@ describe("Vercel Provider", async () => {
 				expect(location).not.toContain("/welcome");
 			},
 		});
+	});
+});
+
+describe("Microsoft Provider", async () => {
+	const rsaKeyPair = await generateKeyPair("RS256");
+	const rsaJwk = await exportJWK(rsaKeyPair.publicKey);
+	const msKid = "test-microsoft-kid";
+	rsaJwk.kid = msKid;
+	rsaJwk.alg = "RS256";
+	rsaJwk.use = "sig";
+
+	it("should support verifyIdToken with custom function", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-user-123",
+			email: "msuser@outlook.com",
+			name: "Microsoft User",
+			oid: "ms-oid-123",
+			tid: "ms-tenant-123",
+		};
+
+		mswServer.use(
+			http.post(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				async () => {
+					const idToken = await signJWT(microsoftProfile, DEFAULT_SECRET);
+					return HttpResponse.json({
+						access_token: "ms_access_token",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client",
+						clientSecret: "test-ms-secret",
+						verifyIdToken: async () => true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/microsoft", {
+			query: {
+				state,
+				code: "ms_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.email).toBe("msuser@outlook.com");
+		expect(session.data?.user.name).toBe("Microsoft User");
+	});
+
+	it("should verify id token using JWKS endpoint", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-jwks-user-456",
+			email: "jwksuser@outlook.com",
+			name: "JWKS User",
+			oid: "ms-oid-456",
+			tid: "ms-tenant-456",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-jwks")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.post(
+				"https://login.microsoftonline.com/common/oauth2/v2.0/token",
+				async () => {
+					return HttpResponse.json({
+						access_token: "ms_access_token_jwks",
+						id_token: idToken,
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client, cookieSetter } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-jwks",
+						clientSecret: "test-ms-secret-jwks",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/microsoft", {
+			query: {
+				state,
+				code: "ms_test_code_jwks",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data?.user.email).toBe("jwksuser@outlook.com");
+		expect(session.data?.user.name).toBe("JWKS User");
+	});
+
+	it("should support id token sign in", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-id-token-user-789",
+			email: "id-tokenuser@outlook.com",
+			name: "IdToken User",
+			oid: "ms-oid-789",
+			tid: "ms-tenant-789",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-id-token")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+			http.get("https://graph.microsoft.com/v1.0/me/photos/*", async () => {
+				return new HttpResponse(null, { status: 404 });
+			}),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-id-token",
+						clientSecret: "test-ms-secret-id-token",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.data).toBeDefined();
+		expect(res.data!.redirect).toBe(false);
+		const data = res.data as {
+			token: string;
+			user: { email: string; name: string };
+		};
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("id-tokenuser@outlook.com");
+		expect(data.user.name).toBe("IdToken User");
+	});
+
+	it("should return false when disableIdTokenSignIn is true", async () => {
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-disabled-user",
+			email: "disabled@outlook.com",
+			name: "Disabled User",
+		};
+
+		const idToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setAudience("test-ms-client-disabled")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				"https://login.microsoftonline.com/common/discovery/v2.0/keys",
+				async () => {
+					return HttpResponse.json({
+						keys: [rsaJwk],
+					});
+				},
+			),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-disabled",
+						clientSecret: "test-ms-secret-disabled",
+						disableIdTokenSignIn: true,
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const res = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: {
+				token: idToken,
+			},
+		});
+
+		expect(res.error?.status).toBe(401);
+	});
+
+	it("should verify issuer when specific tenant is configured", async () => {
+		const tenantId = "my-specific-tenant-id";
+		const microsoftProfile: Partial<MicrosoftEntraIDProfile> = {
+			sub: "ms-tenant-user",
+			email: "tenant@outlook.com",
+			name: "Tenant User",
+		};
+
+		const validToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer(`https://login.microsoftonline.com/${tenantId}/v2.0`)
+			.setAudience("test-ms-client-tenant")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		const wrongIssuerToken = await new SignJWT(
+			microsoftProfile as unknown as Record<string, unknown>,
+		)
+			.setProtectedHeader({ alg: "RS256", kid: msKid })
+			.setIssuedAt()
+			.setIssuer("https://login.microsoftonline.com/wrong-tenant/v2.0")
+			.setAudience("test-ms-client-tenant")
+			.setExpirationTime("1h")
+			.sign(rsaKeyPair.privateKey);
+
+		mswServer.use(
+			http.get(
+				`https://login.microsoftonline.com/${tenantId}/discovery/v2.0/keys`,
+				async () => {
+					return HttpResponse.json({ keys: [rsaJwk] });
+				},
+			),
+			http.get(
+				"https://graph.microsoft.com/v1.0/me/photos/*",
+				async () => new HttpResponse(null, { status: 404 }),
+			),
+		);
+
+		const { client } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-tenant",
+						clientSecret: "test-ms-secret-tenant",
+						tenantId,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const validRes = await client.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: { token: validToken },
+		});
+		expect(validRes.data).toBeDefined();
+		expect(validRes.data!.redirect).toBe(false);
+
+		const { client: client2 } = await getTestInstance(
+			{
+				socialProviders: {
+					microsoft: {
+						clientId: "test-ms-client-tenant",
+						clientSecret: "test-ms-secret-tenant",
+						tenantId,
+					},
+				},
+			},
+			{ disableTestUser: true },
+		);
+
+		const invalidRes = await client2.signIn.social({
+			provider: "microsoft",
+			callbackURL: "/callback",
+			idToken: { token: wrongIssuerToken },
+		});
+		expect(invalidRes.error?.status).toBe(401);
 	});
 });
