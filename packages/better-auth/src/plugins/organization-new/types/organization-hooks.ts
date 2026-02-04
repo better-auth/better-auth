@@ -35,13 +35,13 @@ export type OrganizationHooks =
 					organization: {
 						name?: string;
 						slug?: string;
-						logo?: string;
+						logo?: string | null;
 						metadata?: Record<string, any>;
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
 				},
-				ctx: GenericEndpointContext,
+				ctx: GenericEndpointContext | null,
 			) => Promise<void | {
 				data: Record<string, any>;
 			}>;
@@ -54,7 +54,7 @@ export type OrganizationHooks =
 					member: Member & Record<string, any>;
 					user: User & Record<string, any>;
 				},
-				ctx: GenericEndpointContext,
+				ctx: GenericEndpointContext | null,
 			) => Promise<void>;
 			/**
 			 * A callback that runs before the organization is updated
