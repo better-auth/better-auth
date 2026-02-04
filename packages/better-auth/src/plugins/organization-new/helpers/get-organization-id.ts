@@ -16,7 +16,8 @@ import { getOrgAdapter } from "./get-org-adapter";
  * However in the end, an organization id **MUST** be resolved.
  *
  * @param ctx - The endpoint context containing request data and session information
- * @returns A union of either `slug:${string}` or `id:${string}` representing the type of ID used
+ * @param shouldGetOrganization - If `true`, returns the full `Organization` object; if `false` (default), returns the organization ID as a string
+ * @returns The organization ID as a string, or the full `Organization` object if `shouldGetOrganization` is `true`
  * @throws {APIError} `UNAUTHORIZED` - If called from a client without a valid session
  * @throws {APIError} `BAD_REQUEST` with `ORGANIZATION_NOT_FOUND` - If the provided organization ID is invalid
  * @throws {APIError} `BAD_REQUEST` with `NO_ACTIVE_ORGANIZATION` - If no organization ID could be resolved
