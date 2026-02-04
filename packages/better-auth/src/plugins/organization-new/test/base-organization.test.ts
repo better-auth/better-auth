@@ -394,6 +394,6 @@ describe("createOrgOnSignUp with teams addon", async (it) => {
 			where: [{ field: "organizationId", value: organizationId }],
 		});
 		expect(allTeams.length).toBe(1);
-		expect(allTeams[0]!.name).toBe(customTeamName);
+		expect(allTeams[0]!.name).toBe(`${user.name}'s Team`);
 	});
 });

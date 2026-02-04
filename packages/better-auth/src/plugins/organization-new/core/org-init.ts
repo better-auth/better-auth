@@ -85,7 +85,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									// Get custom team data if provided, otherwise use empty object
 									const customData = await (async () => {
 										const slug = teamOptions.enableSlugs
-											? `${organization.name}s-team`
+											? `${user.name}s-team`
 											: undefined;
 
 										const data = {
@@ -94,7 +94,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 												: {}),
 											organizationId: organization.id,
 											slug,
-											name: `${organization.name}'s Team`,
+											name: `${user.name}'s Team`,
 											createdAt: now,
 										} satisfies Omit<Team & { slug?: string }, "id">;
 
