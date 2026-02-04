@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import type { Team, TeamMember, TeamsAddon } from "../addons";
+import { getHook as getTeamHook } from "../addons/teams/helpers/get-team-hook";
 import { resolveTeamOptions } from "../addons/teams/helpers/resolve-team-options";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import type { Member, Organization } from "../schema";
@@ -46,22 +47,49 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 								const teamAddon = options.use.find((a) => a.id == "teams") as T;
 
 								if (teamAddon) {
-									const { defaultTeam } = resolveTeamOptions(teamAddon.options);
+									const teamOptions = resolveTeamOptions(teamAddon.options);
+									const { defaultTeam } = teamOptions;
 									const { customCreateDefaultTeam, enabled } = defaultTeam;
 									if (!enabled) return;
-									const data = await customCreateDefaultTeam(organization);
+
+									const teamHook = getTeamHook("CreateTeam", teamOptions);
+
+									// Get custom team data if provided, otherwise use empty object
+									const customData = await (async () => {
+										const data = customCreateDefaultTeam
+											? await customCreateDefaultTeam(organization)
+											: {};
+
+										const mutate = await teamHook.before(
+											{
+												organization,
+												team: {
+													organizationId: organization.id,
+													slug: `${organization.name}s-team`,
+													name: `${organization.name}'s Team`,
+												},
+											},
+											null,
+										);
+										return {
+											...data,
+											...(mutate ?? {}),
+										};
+									})();
 
 									// Create default team
-									const team = await adapter.create<Team>({
+									const team = await adapter.create<Team & { slug?: string }>({
 										data: {
 											organizationId: organization.id,
-											name: `${organization.name}`,
+											slug: `${organization.name}s-team`,
+											name: `${organization.name}'s Team`,
 											createdAt: now,
-											...data,
+											...customData,
 										},
 										model: "team",
 										forceAllowId: true,
 									});
+
 									await adapter.create<TeamMember>({
 										data: {
 											teamId: team.id,
@@ -71,6 +99,15 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 										model: "teamMember",
 										forceAllowId: true,
 									});
+
+									await teamHook.after(
+										{
+											organization,
+											team,
+											user,
+										},
+										null,
+									);
 								}
 							},
 						},

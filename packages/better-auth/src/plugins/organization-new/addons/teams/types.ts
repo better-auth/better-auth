@@ -134,12 +134,14 @@ export interface ResolvedTeamsOptions extends TeamsOptions {
 		 */
 		enabled: boolean;
 		/**
-		 * Pass a custom default team creator function
+		 * Pass a custom default team creator function.
+		 * This function can return partial team data which will be merged
+		 * with defaults and used to create the team via the adapter.
 		 */
 		customCreateDefaultTeam?: (
 			organization: Organization & Record<string, any>,
 			ctx?: GenericEndpointContext,
-		) => Promise<Team & Record<string, any>>;
+		) => Promise<Partial<Team> & Record<string, any>>;
 	};
 	maximumTeams: (
 		data: {
@@ -207,7 +209,7 @@ export type TeamHooks =
 					user?: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				},
-				ctx: GenericEndpointContext,
+				ctx: GenericEndpointContext | null,
 			) => Promise<void | {
 				data: Record<string, any>;
 			}>;
@@ -221,7 +223,7 @@ export type TeamHooks =
 					user?: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				},
-				ctx: GenericEndpointContext,
+				ctx: GenericEndpointContext | null,
 			) => Promise<void>;
 
 			/**
