@@ -40,3 +40,5 @@ MMDD
 ABCDEFGHJKLMNPQRSTUVWXYZ23456789
 setex
 kxeyPrefix
+dyld
+nsis
