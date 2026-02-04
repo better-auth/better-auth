@@ -99,10 +99,12 @@ type InferOptionalSchemaTypeForGetBody<
 	? {}
 	: Fields extends readonly (infer Item)[]
 		? UnionToIntersection<
-				Item extends { schema: infer S }
-					? S extends z.ZodObject<any>
-						? Partial<z.infer<S>>
-						: never
+				Item extends { condition: infer C; schema: infer S }
+					? C extends false
+						? never
+						: S extends z.ZodObject<any>
+							? Partial<z.infer<S>>
+							: never
 					: never
 			> extends infer Result
 			? [Result] extends [never]
