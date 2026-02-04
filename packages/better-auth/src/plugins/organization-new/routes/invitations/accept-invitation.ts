@@ -151,11 +151,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				const onlyOne = teamIds.length === 1;
 
 				for (const teamId of teamIds) {
-					await teamAdapter.findOrCreateTeamMember({
-						teamId: teamId,
-						userId: session.user.id,
-					});
-
 					const maxMembers = await teamOptions.maximumMembersPerTeam({
 						teamId,
 						session: session,
@@ -169,6 +164,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 						const msg = ORGANIZATION_ERROR_CODES[code];
 						throw APIError.from("FORBIDDEN", msg);
 					}
+
+					await teamAdapter.findOrCreateTeamMember({
+						teamId: teamId,
+						userId: session.user.id,
+					});
 				}
 
 				if (onlyOne) {
