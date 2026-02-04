@@ -1,8 +1,14 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod/v4";
-import { APIError } from "../../../../api";
+import { APIError, getSessionFromCtx } from "../../../../api";
 import { parseRoles } from "../../access";
+import type { TeamsAddon } from "../../addons";
+import { TEAMS_ERROR_CODES } from "../../addons/teams/helpers/errors";
+import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
+import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
+import { getHook as getTeamHook } from "../../addons/teams/helpers/get-team-hook";
+import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
@@ -68,15 +74,17 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 			const realOrgId = await adapter.getRealOrganizationId(orgId);
 
-			// TODO: Add team support
-			// const teamId =
-			// 	"teamId" in body ? (body.teamId as string) : undefined;
-			// if (teamId && !ctx.context.orgOptions.teams?.enabled) {
-			// 	ctx.context.logger.error("Teams are not enabled");
-			// 	throw APIError.fromStatus("BAD_REQUEST", {
-			// 		message: "Teams are not enabled",
-			// 	});
-			// }
+			// Check if teams addon is enabled when teamId is provided
+			const teamId = "teamId" in body ? (body.teamId as string) : undefined;
+			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
+				| TeamsAddon
+				| undefined;
+
+			if (teamId && !teamsAddon) {
+				ctx.context.logger.error("Teams are not enabled");
+				const msg = TEAMS_ERROR_CODES.TEAMS_ARE_NOT_ENABLED;
+				throw APIError.from("BAD_REQUEST", msg);
+			}
 
 			const user = await ctx.context.internalAdapter.findUserById(body.userId);
 
@@ -95,19 +103,44 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			// TODO: Add team support
-			// if (teamId) {
-			// 	const team = await adapter.findTeamById({
-			// 		teamId,
-			// 		organizationId: orgId,
-			// 	});
-			// 	if (!team || team.organizationId !== orgId) {
-			// 		throw APIError.from(
-			// 			"BAD_REQUEST",
-			// 			ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
-			// 		);
-			// 	}
-			// }
+			// Validate team exists and check team member limits if teamId is provided
+			let team: Awaited<
+				ReturnType<ReturnType<typeof getTeamAdapter>["findTeamById"]>
+			> = null;
+			let realTeamId: RealTeamId | undefined;
+
+			if (teamId && teamsAddon) {
+				const teamOptions = resolveTeamOptions(teamsAddon.options);
+				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
+
+				realTeamId = await teamAdapter.getRealTeamId(teamId);
+				team = await teamAdapter.findTeamById({
+					teamId,
+					organizationId: realOrgId,
+				});
+
+				if (!team) {
+					const msg = ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND;
+					throw APIError.from("BAD_REQUEST", msg);
+				}
+
+				// Check maximum members per team limit
+				const session = await getSessionFromCtx(ctx);
+				if (session) {
+					const memberCount = await teamAdapter.countTeamMembers(realTeamId);
+					const maxMembers = await teamOptions.maximumMembersPerTeam({
+						teamId: realTeamId,
+						session,
+						organizationId: realOrgId,
+					});
+
+					if (memberCount >= maxMembers) {
+						const code = "TEAM_MEMBER_LIMIT_REACHED";
+						const msg = ORGANIZATION_ERROR_CODES[code];
+						throw APIError.from("FORBIDDEN", msg);
+					}
+				}
+			}
 
 			const membershipLimit = options.membershipLimit;
 			const count = await adapter.countMembers({ organizationId: realOrgId });
@@ -130,6 +163,7 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 				role: _,
 				userId: __,
 				organizationId: ___,
+				teamId: ____,
 				...additionalFields
 			} = body;
 
@@ -166,13 +200,50 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 
 			const createdMember = await adapter.createMember(memberData);
 
-			// TODO: Add team support
-			// if (teamId) {
-			// 	await adapter.findOrCreateTeamMember({
-			// 		userId: user.id,
-			// 		teamId,
-			// 	});
-			// }
+			// Add user to team if teamId is provided and teams addon is enabled
+			if (teamId && teamsAddon && realTeamId && team) {
+				const teamOptions = resolveTeamOptions(teamsAddon.options);
+				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
+				const addTeamMemberHook = getTeamHook("AddTeamMember", teamOptions);
+
+				let teamMemberData = {
+					teamId: realTeamId,
+					userId: user.id,
+				};
+
+				const teamModify = await addTeamMemberHook.before(
+					{
+						teamMember: teamMemberData,
+						team,
+						user,
+						organization,
+					},
+					ctx,
+				);
+
+				if (teamModify) {
+					teamMemberData = {
+						...teamMemberData,
+						...teamModify,
+					};
+				}
+
+				const teamMember = await teamAdapter.createTeamMember(
+					teamMemberData as { teamId: RealTeamId; userId: string },
+				);
+
+				if (teamMember) {
+					await addTeamMemberHook.after(
+						{
+							teamMember,
+							team,
+							user,
+							organization,
+						},
+						ctx,
+					);
+				}
+			}
 
 			await addMemberHook.after(
 				{
