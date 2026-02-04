@@ -70,6 +70,14 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 		},
 		async (ctx) => {
 			const body = getBody(ctx);
+
+			const roleIsEmpty =
+				!body.role || (Array.isArray(body.role) && body.role.length === 0);
+
+			if (roleIsEmpty) {
+				throw APIError.fromStatus("BAD_REQUEST");
+			}
+
 			const orgId = await getOrganizationId({ ctx });
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 			const realOrgId = await adapter.getRealOrganizationId(orgId);
