@@ -1,7 +1,16 @@
+import { APIError } from "@better-auth/core/error";
+import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
-import { describe, expect, it } from "vitest";
+import {
+	afterEach,
+	assert,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
@@ -150,5 +159,72 @@ describe("passkey", async () => {
 			},
 		});
 		expect(deleteResult.status).toBe(true);
+	});
+});
+
+describe("passkey expirationTime per-request", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should compute expirationTime per-request, not at init time", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
+
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
+
+		expect(expiresAt).toBeGreaterThan(currentTime);
+	});
+
+	it("should compute expirationTime per-request for authentication options", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
+
+		await auth.api.generatePasskeyAuthenticationOptions({});
+
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
+
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
+
+		expect(expiresAt).toBeGreaterThan(currentTime);
 	});
 });
