@@ -7,7 +7,7 @@ import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
-	return `${
+	return `${url}${
 		url.includes("?") ? "&" : "?"
 	}error=${error}&error_description=${description}`;
 }

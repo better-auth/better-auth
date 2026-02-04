@@ -1467,7 +1467,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=provider not found`,
+					}?error=invalid_provider&error_description=provider not found`,
 				);
 			}
 
@@ -1486,7 +1486,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=provider not found`,
+					}?error=invalid_provider&error_description=provider not found`,
 				);
 			}
 
@@ -1513,7 +1513,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=token_endpoint_not_found`,
+					}?error=invalid_provider&error_description=token_endpoint_not_found`,
 				);
 			}
 
@@ -1544,7 +1544,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=token_response_not_found`,
+					}?error=invalid_provider&error_description=token_response_not_found`,
 				);
 			}
 			let userInfo: {
@@ -1561,7 +1561,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 					throw ctx.redirect(
 						`${
 							errorURL || callbackURL
-						}/error?error=invalid_provider&error_description=jwks_endpoint_not_found`,
+						}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
 					);
 				}
 				const verified = await validateToken(
@@ -1575,14 +1575,14 @@ export const callbackSSO = (options?: SSOOptions) => {
 					throw ctx.redirect(
 						`${
 							errorURL || callbackURL
-						}/error?error=invalid_provider&error_description=token_not_verified`,
+						}?error=invalid_provider&error_description=token_not_verified`,
 					);
 				}
 				if (verified.payload.iss !== provider.issuer) {
 					throw ctx.redirect(
 						`${
 							errorURL || callbackURL
-						}/error?error=invalid_provider&error_description=issuer_mismatch`,
+						}?error=invalid_provider&error_description=issuer_mismatch`,
 					);
 				}
 
@@ -1615,7 +1615,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 					throw ctx.redirect(
 						`${
 							errorURL || callbackURL
-						}/error?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+						}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
 					);
 				}
 				const userInfoResponse = await betterFetch<{
@@ -1633,7 +1633,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 					throw ctx.redirect(
 						`${
 							errorURL || callbackURL
-						}/error?error=invalid_provider&error_description=${
+						}?error=invalid_provider&error_description=${
 							userInfoResponse.error.message
 						}`,
 					);
@@ -1645,7 +1645,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				throw ctx.redirect(
 					`${
 						errorURL || callbackURL
-					}/error?error=invalid_provider&error_description=missing_user_info`,
+					}?error=invalid_provider&error_description=missing_user_info`,
 				);
 			}
 			const isTrustedProvider =
@@ -1679,9 +1679,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 				isTrustedProvider,
 			});
 			if (linked.error) {
-				throw ctx.redirect(
-					`${errorURL || callbackURL}/error?error=${linked.error}`,
-				);
+				throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
 			}
 			const { session, user } = linked.data!;
 

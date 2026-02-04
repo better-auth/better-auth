@@ -10,7 +10,7 @@ import type {
 } from "../oidc-provider/types";
 
 function redirectErrorURL(url: string, error: string, description: string) {
-	return `${
+	return `${url}${
 		url.includes("?") ? "&" : "?"
 	}error=${error}&error_description=${description}`;
 }
