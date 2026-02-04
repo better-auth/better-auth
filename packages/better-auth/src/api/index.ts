@@ -379,7 +379,7 @@ export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
-export { getOAuthState } from "./state/oauth";
+export { getOAuthState, setOAuthState } from "./state/oauth";
 export {
 	getShouldSkipSessionRefresh,
 	setShouldSkipSessionRefresh,

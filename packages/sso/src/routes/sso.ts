@@ -13,6 +13,7 @@ import {
 	createAuthEndpoint,
 	getSessionFromCtx,
 	sessionMiddleware,
+	setOAuthState,
 } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
@@ -970,6 +971,12 @@ const signInSSOBodySchema = z.object({
 		})
 		.optional(),
 	providerType: z.enum(["oidc", "saml"]).optional(),
+	additionalData: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "Additional data to be passed through the SSO flow",
+		})
+		.optional(),
 });
 
 export const signInSSO = (options?: SSOOptions) => {
@@ -1228,7 +1235,11 @@ export const signInSSO = (options?: SSOOptions) => {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const state = await generateState(ctx, undefined, false);
+				const state = await generateState(
+					ctx,
+					undefined,
+					ctx.body.additionalData,
+				);
 				const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
 				const authorizationURL = await createAuthorizationURL({
 					id: provider.issuer,
@@ -1341,7 +1352,7 @@ export const signInSSO = (options?: SSOOptions) => {
 				const { state: relayState } = await generateRelayState(
 					ctx,
 					undefined,
-					false,
+					ctx.body.additionalData,
 				);
 
 				const shouldSaveRequest =
@@ -1708,6 +1719,19 @@ export const callbackSSO = (options?: SSOOptions) => {
 				token: tokenResponse,
 				provisioningOptions: options?.organizationProvisioning,
 			});
+
+			// If state contains OAuth query params (from oauth-provider flow),
+			// set the OAuth state so the oauth-provider's after hook can continue the flow
+			if ((stateData as Record<string, unknown>).query) {
+				await setOAuthState({
+					callbackURL: stateData.callbackURL,
+					codeVerifier: stateData.codeVerifier,
+					errorURL: stateData.errorURL,
+					newUserURL: stateData.newUserURL,
+					expiresAt: stateData.expiresAt,
+					query: (stateData as Record<string, unknown>).query as string,
+				});
+			}
 
 			await setSessionCookie(ctx, {
 				session,
@@ -2742,6 +2766,19 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				provider,
 				provisioningOptions: options?.organizationProvisioning,
 			});
+
+			// If RelayState contains OAuth query params (from oauth-provider flow),
+			// set the OAuth state so the oauth-provider's after hook can continue the flow
+			if (relayState?.query) {
+				await setOAuthState({
+					callbackURL: relayState.callbackURL,
+					codeVerifier: relayState.codeVerifier,
+					errorURL: relayState.errorURL,
+					newUserURL: relayState.newUserURL,
+					expiresAt: relayState.expiresAt,
+					query: relayState.query,
+				});
+			}
 
 			await setSessionCookie(ctx, { session, user });
 			throw ctx.redirect(callbackUrl);
