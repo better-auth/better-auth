@@ -1,4 +1,5 @@
 import { describe, expect, expectTypeOf } from "vitest";
+import { teams } from "../../addons";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
 import { defineInstance, getOrganizationData } from "../../test/utils";
@@ -527,5 +528,142 @@ describe("add member - additional fields", async (it) => {
 			where: [{ field: "id", value: member.id }],
 		});
 		expect(dbMember?.memberHiddenField).toBe("secret");
+	});
+});
+
+describe("add member - with teams", async (it) => {
+	const teamsAddon = teams();
+	const plugin = organization({
+		use: [teamsAddon],
+		async sendInvitationEmail() {},
+	});
+	const { auth, signInWithTestUser, adapter } = await defineInstance([plugin]);
+	const { headers } = await signInWithTestUser();
+
+	it("should add member and add them to a team", async () => {
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+		});
+
+		// Create a team in the organization
+		const team = await auth.api.createTeam({
+			headers,
+			body: {
+				name: "Test Team",
+				organizationId: org.id,
+			},
+		});
+
+		// Create a new user
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: `team-member-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "Team Member",
+			},
+		});
+
+		// Add member with teamId
+		const member = await auth.api.addMember({
+			body: {
+				organizationId: org.id,
+				userId: newUser.user.id,
+				role: "member",
+				teamId: team.id,
+			},
+		});
+
+		expect(member).not.toBeNull();
+		expect(member?.role).toBe("member");
+		// teamId should NOT be in the member record
+		expect((member as any)?.teamId).toBeUndefined();
+
+		// Verify team member was created
+		const teamMember = await adapter.findOne<{
+			id: string;
+			teamId: string;
+			userId: string;
+		}>({
+			model: "teamMember",
+			where: [
+				{ field: "teamId", value: team.id },
+				{ field: "userId", value: newUser.user.id },
+			],
+		});
+		expect(teamMember).not.toBeNull();
+		expect(teamMember?.teamId).toBe(team.id);
+		expect(teamMember?.userId).toBe(newUser.user.id);
+	});
+
+	it("should fail when teamId provided but teams not enabled", async () => {
+		const pluginNoTeams = organization({
+			async sendInvitationEmail() {},
+		});
+		const { auth: authNoTeams, signInWithTestUser: signInNoTeams } =
+			await defineInstance([pluginNoTeams]);
+		const { headers: headersNoTeams } = await signInNoTeams();
+
+		const orgData = getOrganizationData();
+		const org = await authNoTeams.api.createOrganization({
+			headers: headersNoTeams,
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+		});
+
+		const newUser = await authNoTeams.api.signUpEmail({
+			body: {
+				email: `no-teams-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "No Teams User",
+			},
+		});
+
+		await expect(
+			authNoTeams.api.addMember({
+				body: {
+					organizationId: org.id,
+					userId: newUser.user.id,
+					role: "member",
+					teamId: "some-team-id",
+				},
+			}),
+		).rejects.toThrow("Teams are not enabled");
+	});
+
+	it("should fail when team does not exist", async () => {
+		const orgData = getOrganizationData();
+		const org = await auth.api.createOrganization({
+			headers,
+			body: {
+				name: orgData.name,
+				slug: orgData.slug,
+			},
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: `no-team-${crypto.randomUUID()}@email.com`,
+				password: "password",
+				name: "No Team User",
+			},
+		});
+
+		await expect(
+			auth.api.addMember({
+				body: {
+					organizationId: org.id,
+					userId: newUser.user.id,
+					role: "member",
+					teamId: "non-existent-team-id",
+				},
+			}),
+		).rejects.toThrow(ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND.message);
 	});
 });

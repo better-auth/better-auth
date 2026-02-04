@@ -1,6 +1,7 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const TEAMS_ERROR_CODES = defineErrorCodes({
+	TEAMS_ARE_NOT_ENABLED: "Teams are not enabled",
 	TEAM_NOT_FOUND: "Team not found",
 	SLUG_IS_REQUIRED: "Team slug is required",
 	SLUG_ALREADY_TAKEN: "That team slug already taken",
