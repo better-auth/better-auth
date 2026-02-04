@@ -184,6 +184,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 				{
 					model: "organization",
 					where: [{ field: "id", value: paginatedOrgIds, operator: "in" }],
+					// Use paginatedOrgIds.length to ensure all requested organizations are retrieved
+					limit: paginatedOrgIds.length,
 				},
 			);
 
@@ -519,10 +521,8 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					? await adapter.findMany<User>({
 							model: "user",
 							where: [{ field: "id", value: userIds, operator: "in" }],
-							limit:
-								(typeof options?.membershipLimit === "number"
-									? options.membershipLimit
-									: 100) || 100,
+							// Use userIds.length as the limit to ensure all users for fetched members are retrieved
+							limit: userIds.length,
 						})
 					: [];
 
