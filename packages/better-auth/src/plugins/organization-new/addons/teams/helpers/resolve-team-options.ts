@@ -10,8 +10,18 @@ export const resolveTeamOptions = <O extends TeamsOptions>(
 		...options,
 		defaultTeam: {
 			enabled: options.defaultTeam?.enabled ?? true,
-			customCreateDefaultTeam:
-				options.defaultTeam?.customCreateDefaultTeam ?? undefined,
+			customCreateDefaultTeam: async (organization, ctx) => {
+				const defaultTeam = options.defaultTeam;
+				const customCreateDefaultTeam = defaultTeam?.customCreateDefaultTeam;
+				if (customCreateDefaultTeam) {
+					return await customCreateDefaultTeam(organization, ctx);
+				}
+				return {
+					organizationId: organization.id,
+					name: `${organization.name}'s Team`,
+					createdAt: new Date(),
+				};
+			},
 		},
 		allowRemovingAllTeams: options.allowRemovingAllTeams ?? false,
 		maximumMembersPerTeam: async (data) => {

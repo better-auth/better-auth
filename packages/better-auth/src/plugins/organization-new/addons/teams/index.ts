@@ -118,6 +118,24 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 					...(options.schema?.teamMember?.additionalFields || {}),
 				},
 			},
+			invitation: {
+				fields: {
+					teamId: {
+						type: "string",
+						required: false,
+						fieldName: (options.schema as any)?.invitation?.fields?.teamId,
+					},
+				},
+			},
+			session: {
+				fields: {
+					activeTeamId: {
+						type: "string",
+						required: false,
+						fieldName: options.schema?.session?.fields?.activeTeamId,
+					},
+				},
+			},
 		},
 	} satisfies Addon<O>;
 };

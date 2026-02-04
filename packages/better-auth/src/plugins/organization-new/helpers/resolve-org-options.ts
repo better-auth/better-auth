@@ -75,6 +75,22 @@ export const resolveOrgOptions = <O extends OrganizationOptions>(
 			}
 			return orgLimit ?? DEFAULT_ORGANIZATION_LIMIT;
 		},
+		createOrgOnSignUp: async (...args) => {
+			const createOrgOnSignUp = opts?.createOrgOnSignUp;
+			if (typeof createOrgOnSignUp === "function") {
+				const result = await createOrgOnSignUp(...args);
+				return result;
+			}
+			if (createOrgOnSignUp === true) {
+				return {
+					name: `${args[0].user.name}'s Organization`,
+					createdAt: new Date(),
+					slug: `org-${args[0].user.id.substring(0, 8)}`,
+					userId: args[0].user.id,
+				};
+			}
+			return false;
+		},
 	} satisfies ResolvedOrganizationOptions;
 
 	if (options.disableSlugs && options.defaultOrganizationIdField === "slug") {

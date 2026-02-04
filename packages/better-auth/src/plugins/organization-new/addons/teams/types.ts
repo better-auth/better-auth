@@ -27,7 +27,7 @@ export interface TeamsOptions {
 		customCreateDefaultTeam?: (
 			organization: Organization & Record<string, any>,
 			ctx?: GenericEndpointContext,
-		) => Promise<Team & Record<string, any>>;
+		) => Promise<Partial<Team> & Record<string, any>>;
 	};
 	/**
 	 * Maximum number of teams an organization can have.
@@ -111,6 +111,11 @@ export interface TeamsOptions {
 						[key in string]: DBFieldAttribute;
 					};
 				};
+				invitation?: {
+					fields?: {
+						teamId?: string;
+					};
+				};
 				session?: {
 					fields?: {
 						activeTeamId?: string;
@@ -158,14 +163,15 @@ export interface ResolvedTeamsOptions extends TeamsOptions {
 export type InferTeamFromOrgOptions<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = false,
-> = FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
-	string,
-	any
->
-	? T["options"] extends TeamsOptions
-		? InferTeam<T["options"], isClientSide>
-		: undefined
-	: undefined;
+> =
+	FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
+		string,
+		any
+	>
+		? T["options"] extends TeamsOptions
+			? InferTeam<T["options"], isClientSide>
+			: undefined
+		: undefined;
 
 export type InferTeam<
 	TO extends TeamsOptions,

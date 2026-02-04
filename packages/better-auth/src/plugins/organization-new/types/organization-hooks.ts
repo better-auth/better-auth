@@ -269,7 +269,9 @@ export type OrganizationHooks =
 						teamId?: string;
 						[key: string]: any;
 					};
-					inviter: User & Record<string, any>;
+					inviter: Member & {
+						user: User & Record<string, any>;
+					} & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				},
 				ctx: GenericEndpointContext,
@@ -283,7 +285,9 @@ export type OrganizationHooks =
 			afterCreateInvitation?: (
 				data: {
 					invitation: Invitation & Record<string, any>;
-					inviter: User & Record<string, any>;
+					inviter: Member & {
+						user: User & Record<string, any>;
+					} & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				},
 				ctx: GenericEndpointContext,

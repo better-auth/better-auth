@@ -33,6 +33,15 @@ export type ResolvedOrganizationOptions = {
 	) => Awaitable<number>;
 	cancelPendingInvitationsOnReInvite: boolean;
 	requireEmailVerificationOnInvitation: boolean;
+	createOrgOnSignUp: (props: {
+		user: User;
+		ctx: GenericEndpointContext | null;
+	}) => Promise<
+		| Partial<
+				Omit<Organization, "id"> & { slug?: string } & Record<string, any>
+		  >
+		| false
+	>;
 	sendInvitationEmail: (
 		data: {
 			id: string;
@@ -137,7 +146,7 @@ type OrgOptions = {
 	 *
 	 * @default false
 	 */
-	disableSlugs?: boolean;
+	disableSlugs?: boolean | undefined;
 	/**
 	 * Endpoint parameters or return value's `organizationId` field to reference either `id` or `slug`.
 	 *
@@ -150,6 +159,30 @@ type OrgOptions = {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
+	/**
+	 * Create an organization upon user sign-up.
+	 *
+	 * You can also pass a function that returns the partial organization data to create.
+	 * You can also return `false` to prevent the organization from being created.
+	 *
+	 * @example
+	 * ```ts
+	 * createOrgOnSignUp: async ({ user }) => ({
+	 * 	name: `${user.name}'s Organization`,
+	 * });
+	 * ```
+	 */
+	createOrgOnSignUp?:
+		| boolean
+		| ((props: {
+				user: User;
+				ctx: GenericEndpointContext | null;
+		  }) => Awaitable<
+				| Partial<
+						Omit<Organization, "id"> & { slug?: string } & Record<string, any>
+				  >
+				| false
+		  >);
 };
 
 type InvitationOptions = {
