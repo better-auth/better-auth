@@ -38,3 +38,4 @@ WorkOS
 authjs
 vite
 electronjs
+Authy
