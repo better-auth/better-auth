@@ -321,6 +321,7 @@ export const getSchema = <O extends OrganizationOptions>(
 				required: false,
 				fieldName: opts.schema?.session?.fields?.activeOrganizationId,
 			},
+			...(addonSchemas.session?.fields || {}),
 		},
 	} satisfies BetterAuthPluginDBSchema["session"];
 

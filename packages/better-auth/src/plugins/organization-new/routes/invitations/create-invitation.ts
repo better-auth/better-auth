@@ -5,6 +5,10 @@ import type { InferAdditionalFieldsFromPluginOptions } from "../../../../db";
 import { getDate } from "../../../../utils/date";
 import type { InferOrganizationRolesFromOption } from "../../access";
 import { hasPermission, parseRoles } from "../../access";
+import type { TeamsAddon } from "../../addons";
+import { TEAMS_ERROR_CODES } from "../../addons/teams/helpers/errors";
+import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
+import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
@@ -113,6 +117,10 @@ export const createInvitation = <O extends OrganizationOptions>(
 						 * the user is already invited
 						 */
 						resend?: boolean | undefined;
+						/**
+						 * The team ID to invite the user to
+						 */
+						teamId?: string | string[] | undefined;
 					} & InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
 				},
 				openapi: {
@@ -205,10 +213,9 @@ export const createInvitation = <O extends OrganizationOptions>(
 			);
 
 			if (!canInvite) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION,
-				);
+				const code = "YOU_ARE_NOT_ALLOWED_TO_INVITE_USERS_TO_THIS_ORGANIZATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
 			}
 
 			const creatorRole = ctx.context.orgOptions.creatorRole || "owner";
@@ -349,78 +356,71 @@ export const createInvitation = <O extends OrganizationOptions>(
 			});
 
 			if (pendingInvitations.length >= invitationLimit) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ORGANIZATION_ERROR_CODES.INVITATION_LIMIT_REACHED,
-				);
+				const code = "INVITATION_LIMIT_REACHED";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
 			}
 
-			// TODO: Support for teams is not implemented yet
-			// if (
-			// 	ctx.context.orgOptions.teams &&
-			// 	ctx.context.orgOptions.teams.enabled &&
-			// 	typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-			// 		"undefined" &&
-			// 	"teamId" in ctx.body &&
-			// 	ctx.body.teamId
-			// ) {
-			// 	const teamIds =
-			// 		typeof ctx.body.teamId === "string"
-			// 			? [ctx.body.teamId as string]
-			// 			: (ctx.body.teamId as string[]);
+			// Team support: validate teams exist and check member limits
+			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
+				| TeamsAddon
+				| undefined;
+			let teamIds: string[] = [];
 
-			// 	for (const teamId of teamIds) {
-			// 		const team = await adapter.findTeamById({
-			// 			teamId,
-			// 			organizationId: organizationId,
-			// 			includeTeamMembers: true,
-			// 		});
+			if ("teamId" in ctx.body && ctx.body.teamId) {
+				teamIds =
+					typeof ctx.body.teamId === "string"
+						? [ctx.body.teamId as string]
+						: ((ctx.body.teamId as string[]) ?? []);
+			}
 
-			// 		if (!team) {
-			// 			throw APIError.from(
-			// 				"BAD_REQUEST",
-			// 				ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND,
-			// 			);
-			// 		}
+			if (teamsAddon && teamIds.length > 0) {
+				const teamOptions = resolveTeamOptions(teamsAddon.options);
+				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
 
-			// 		const maximumMembersPerTeam =
-			// 			typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-			// 			"function"
-			// 				? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-			// 						teamId,
-			// 						session: session,
-			// 						organizationId: organizationId,
-			// 					})
-			// 				: ctx.context.orgOptions.teams.maximumMembersPerTeam;
-			// 		if (team.members.length >= maximumMembersPerTeam) {
-			// 			throw APIError.from(
-			// 				"FORBIDDEN",
-			// 				ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-			// 			);
-			// 		}
-			// 	}
-			// }
-			//
-			// const teamIds: string[] =
-			// 	"teamId" in ctx.body
-			// 		? typeof ctx.body.teamId === "string"
-			// 			? [ctx.body.teamId as string]
-			// 			: ((ctx.body.teamId as string[]) ?? [])
-			// 		: [];
+				for (const teamId of teamIds) {
+					const realTeamId = await teamAdapter.getRealTeamId(teamId);
+					const team = await teamAdapter.findTeamById({
+						teamId,
+						organizationId,
+					});
+
+					if (!team) {
+						const code = "TEAM_NOT_FOUND";
+						const msg = TEAMS_ERROR_CODES[code];
+						throw APIError.from("BAD_REQUEST", msg);
+					}
+
+					// Check if team has reached maximum members limit
+					const memberCount = await teamAdapter.countTeamMembers(realTeamId);
+					const maxMembers = await teamOptions.maximumMembersPerTeam({
+						teamId: realTeamId,
+						session,
+						organizationId,
+					});
+
+					if (memberCount >= maxMembers) {
+						const code = "TEAM_MEMBER_LIMIT_REACHED";
+						const msg = ORGANIZATION_ERROR_CODES[code];
+						throw APIError.from("FORBIDDEN", msg);
+					}
+				}
+			}
 
 			const {
 				email: _,
 				role: __,
 				organizationId: ___,
 				resend: ____,
+				teamId: _____,
 				...additionalFields
-			} = ctx.body;
+			} = ctx.body as typeof ctx.body & { teamId?: string | string[] };
 
 			let invitationData = {
 				role: roles,
 				email: email,
 				organizationId: organizationId,
-				// teamIds, // TODO: Support for teams is not implemented yet
+				teamIds,
 				...(additionalFields ? additionalFields : {}),
 			};
 
@@ -430,9 +430,9 @@ export const createInvitation = <O extends OrganizationOptions>(
 					invitation: {
 						...invitationData,
 						inviterId: session.user.id,
-						teamId: undefined, // TODO: Support for teams is not implemented yet
+						teamId: teamIds.length > 0 ? teamIds.join(",") : undefined,
 					},
-					inviter: session.user,
+					inviter: { ...member, user: session.user },
 					organization,
 				},
 				ctx,
@@ -448,7 +448,7 @@ export const createInvitation = <O extends OrganizationOptions>(
 			const invitation = await adapter.createInvitation({
 				invitation: {
 					...invitationData,
-					teamIds: [], // TODO: Support for teams is not implemented yet
+					teamIds,
 				},
 				user: session.user,
 			});
@@ -471,7 +471,14 @@ export const createInvitation = <O extends OrganizationOptions>(
 			);
 
 			await invitationHooks.after(
-				{ invitation, inviter: session.user, organization },
+				{
+					invitation,
+					inviter: {
+						...member,
+						user: session.user,
+					},
+					organization,
+				},
 				ctx,
 			);
 

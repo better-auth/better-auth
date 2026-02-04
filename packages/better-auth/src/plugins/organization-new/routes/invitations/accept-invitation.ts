@@ -1,6 +1,11 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
+import { setSessionCookie } from "../../../../cookies";
+import type { TeamsAddon } from "../../addons";
+import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
+import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
+import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
@@ -68,13 +73,14 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				invitation.expiresAt < new Date() ||
 				invitation.status !== "pending"
 			) {
-				const msg = ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND;
+				const code = "INVITATION_NOT_FOUND";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
-				const msg =
-					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION;
+				const code = "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
@@ -82,8 +88,9 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				ctx.context.orgOptions.requireEmailVerificationOnInvitation &&
 				!session.user.emailVerified
 			) {
-				const msg =
-					ORGANIZATION_ERROR_CODES.EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION;
+				const code =
+					"EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
@@ -98,15 +105,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				"id",
 			);
 			if (!organization) {
-				const msg = ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND;
+				const code = "ORGANIZATION_NOT_FOUND";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
 			const limit = await membershipLimit(session.user, organization, ctx);
 
 			if (membersCount >= limit) {
-				const msg =
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED;
+				const code = "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
@@ -126,65 +134,58 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				status: "accepted",
 			});
 			if (!acceptedI) {
-				const msg = ORGANIZATION_ERROR_CODES.FAILED_TO_RETRIEVE_INVITATION;
+				const code = "FAILED_TO_RETRIEVE_INVITATION";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			// TODO: Team support not implemented yet
-			// if (
-			// 	ctx.context.orgOptions.teams &&
-			// 	ctx.context.orgOptions.teams.enabled &&
-			// 	"teamId" in acceptedI &&
-			// 	acceptedI.teamId
-			// ) {
-			// 	const teamIds = (acceptedI.teamId as string).split(",");
-			// 	const onlyOne = teamIds.length === 1;
+			// Team support: add user to teams if teams addon is enabled and invitation has teamId
+			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
+				| TeamsAddon
+				| undefined;
+			if (teamsAddon && "teamId" in acceptedI && acceptedI.teamId) {
+				const teamOptions = resolveTeamOptions(teamsAddon.options);
+				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
 
-			// 	for (const teamId of teamIds) {
-			// 		await adapter.findOrCreateTeamMember({
-			// 			teamId: teamId,
-			// 			userId: session.user.id,
-			// 		});
+				const teamIds = acceptedI.teamId.split(",") as RealTeamId[];
+				const onlyOne = teamIds.length === 1;
 
-			// 		if (
-			// 			typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-			// 			"undefined"
-			// 		) {
-			// 			const members = await adapter.countTeamMembers({ teamId });
+				for (const teamId of teamIds) {
+					await teamAdapter.findOrCreateTeamMember({
+						teamId: teamId,
+						userId: session.user.id,
+					});
 
-			// 			const maximumMembersPerTeam =
-			// 				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-			// 				"function"
-			// 					? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-			// 							teamId,
-			// 							session: session,
-			// 							organizationId: invitation.organizationId,
-			// 						})
-			// 					: ctx.context.orgOptions.teams.maximumMembersPerTeam;
+					const maxMembers = await teamOptions.maximumMembersPerTeam({
+						teamId,
+						session: session,
+						organizationId: invitation.organizationId,
+					});
 
-			// 			if (members >= maximumMembersPerTeam) {
-			// 				throw APIError.from(
-			// 					"FORBIDDEN",
-			// 					ORGANIZATION_ERROR_CODES.TEAM_MEMBER_LIMIT_REACHED,
-			// 				);
-			// 			}
-			// 		}
-			// 	}
+					const members = await teamAdapter.countTeamMembers(teamId);
 
-			// 	if (onlyOne) {
-			// 		const teamId = teamIds[0]!;
-			// 		const updatedSession = await adapter.setActiveTeam(
-			// 			session.session.token,
-			// 			teamId,
-			// 			ctx,
-			// 		);
+					if (members >= maxMembers) {
+						const code = "TEAM_MEMBER_LIMIT_REACHED";
+						const msg = ORGANIZATION_ERROR_CODES[code];
+						throw APIError.from("FORBIDDEN", msg);
+					}
+				}
 
-			// 		await setSessionCookie(ctx, {
-			// 			session: updatedSession,
-			// 			user: session.user,
-			// 		});
-			// 	}
-			// }
+				if (onlyOne) {
+					const teamId = teamIds[0]!;
+					const updatedSession = await adapter.setActiveTeam(
+						session.session.token,
+						teamId,
+					);
+
+					if (updatedSession) {
+						await setSessionCookie(ctx, {
+							session: updatedSession,
+							user: session.user,
+						});
+					}
+				}
+			}
 
 			const member = await adapter.createMember({
 				organizationId: invitation.organizationId,
@@ -199,11 +200,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			);
 
 			if (!acceptedI) {
-				const message = ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND.message;
+				const code = "INVITATION_NOT_FOUND";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				return ctx.json(null, {
 					status: 400,
 					body: {
-						message: message,
+						message: msg.message,
 					},
 				});
 			}

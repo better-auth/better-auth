@@ -219,6 +219,14 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				total,
 			};
 		},
+		countTeamMembers: async (teamId: RealTeamId) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const count = await adapter.count({
+				model: "teamMember",
+				where: [{ field: "teamId", value: teamId }],
+			});
+			return count;
+		},
 		listTeamMembers: async ({
 			teamId,
 			limit,
@@ -266,6 +274,37 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 					{ field: "userId", value: userId },
 				],
 			});
+		},
+		findOrCreateTeamMember: async (data: {
+			teamId: RealTeamId;
+			userId: string;
+		}) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const member = await adapter.findOne<TeamMember>({
+				model: "teamMember",
+				where: [
+					{
+						field: "teamId",
+						value: data.teamId,
+					},
+					{
+						field: "userId",
+						value: data.userId,
+					},
+				],
+			});
+
+			if (member) return filterTeamMemberOutput(member);
+
+			const result = await adapter.create<Omit<TeamMember, "id">>({
+				model: "teamMember",
+				data: {
+					teamId: data.teamId,
+					userId: data.userId,
+					createdAt: new Date(),
+				},
+			});
+			return filterTeamMemberOutput(result);
 		},
 	};
 };
