@@ -21,7 +21,7 @@
     "@better-auth/electron": "workspace:*",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/kysely-libsql": "^0.4.1",
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "@number-flow/react": "^0.5.11",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
