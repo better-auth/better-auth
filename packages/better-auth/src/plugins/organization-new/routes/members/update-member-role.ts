@@ -80,7 +80,11 @@ export const updateMemberRole = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = ctx.context.session;
 
-			if (!ctx.body.role) {
+			const roleIsEmpty =
+				!ctx.body.role ||
+				(Array.isArray(ctx.body.role) && ctx.body.role.length === 0);
+
+			if (roleIsEmpty) {
 				throw APIError.fromStatus("BAD_REQUEST");
 			}
 
