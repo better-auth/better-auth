@@ -908,7 +908,7 @@ describe("accept invitation - team member limit function", async (it) => {
 	});
 	const { auth, signInWithTestUser, signInWithUser, adapter } =
 		await defineInstance([plugin]);
-	const { headers, user: ownerUser } = await signInWithTestUser();
+	const { user: ownerUser } = await signInWithTestUser();
 
 	it("should respect dynamic team member limit function", async () => {
 		// Clear all relevant tables
@@ -1034,7 +1034,7 @@ describe("accept invitation - team member limit function", async (it) => {
 
 		// Create a new user who will try to accept an invitation
 		const invitedEmail = `team-func-invited-${crypto.randomUUID()}@test.com`;
-		const invitedSignup = await auth.api.signUpEmail({
+		const _invitedSignup = await auth.api.signUpEmail({
 			body: {
 				email: invitedEmail,
 				password: "test123456",
