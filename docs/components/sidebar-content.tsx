@@ -1450,12 +1450,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: Icons.astro,
 				href: "/docs/integrations/astro",
 			},
-
-			{
-				title: "Remix",
-				icon: Icons.remix,
-				href: "/docs/integrations/remix",
-			},
 			{
 				title: "Next",
 				icon: Icons.nextJS,
@@ -1465,6 +1459,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Nuxt",
 				icon: Icons.nuxt,
 				href: "/docs/integrations/nuxt",
+			},
+			{
+				title: "React Router v7",
+				icon: Icons.reactRouter,
+				href: "/docs/integrations/react-router",
 			},
 			{
 				title: "SvelteKit",
@@ -1527,6 +1526,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Mobile & Desktop",
 				href: "",
 				icon: LucideAArrowDown,
+			},
+			{
+				title: "Electron",
+				icon: Icons.electron,
+				href: "/docs/integrations/electron",
+				isNew: true,
 			},
 			{
 				title: "Expo",
@@ -2720,11 +2725,6 @@ export const examples: Content[] = [
 				icon: Icons.astro,
 			},
 			{
-				title: "Remix",
-				href: "/docs/examples/remix",
-				icon: Icons.remix,
-			},
-			{
 				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
@@ -2733,6 +2733,11 @@ export const examples: Content[] = [
 				title: "Nuxt",
 				href: "/docs/examples/nuxt",
 				icon: Icons.nuxt,
+			},
+			{
+				title: "React Router v7",
+				href: "/docs/examples/react-router",
+				icon: Icons.reactRouter,
 			},
 			{
 				title: "SvelteKit",

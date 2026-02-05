@@ -7,19 +7,44 @@ A proxy plugin, that allows you to proxy OAuth requests. Useful for development 
 
 ## Installation
 
-```ts title="auth.ts"
-import { betterAuth } from "better-auth"
-import { oAuthProxy } from "better-auth/plugins"
+<Steps>
+  <Step>
+    ### Add the plugin to your **auth** config
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { oAuthProxy } from "better-auth/plugins" // [!code highlight]
 
-export const auth = betterAuth({
+    export const auth = betterAuth({
     plugins: [
-        oAuthProxy({ // [!code highlight]
-            productionURL: "https://my-app.com", // [!code highlight]
-        }), // [!code highlight]
+    oAuthProxy({ // [!code highlight]
+    productionURL: "https://my-main-app.com", // Optional - if the URL isn't inferred correctly // [!code highlight]
+    currentURL: "http://localhost:3000", // Optional - if the URL isn't inferred correctly // [!code highlight]
+  }), // [!code highlight]
     ]
-})
-```    
+  })
+    ```
+  </Step>
+  <Step>
+    ### Add redirect URL to your OAuth provider
 
+    For the proxy server to work properly, you’ll need to pass the redirect URL of your main production app registered with the OAuth provider in your social provider config. This needs to be done for each social provider you want to proxy requests for.
+
+    ```ts
+    export const auth = betterAuth({
+    plugins: [
+    oAuthProxy(),
+    ],
+    socialProviders: {
+    github: {
+    clientId: "your-client-id",
+    clientSecret: "your-client-secret",
+    redirectURI: "https://my-main-app.com/api/auth/callback/github" // [!code highlight]
+  }
+  }
+  })
+    ```
+  </Step>
+</Steps>
 
 ## How it works
 
@@ -32,6 +57,8 @@ The plugin allows you to use a single OAuth client (registered with your product
 5. Preview server decrypts the profile, creates user/session in its own database, and sets the session cookie
 
 ```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.social({
     provider: "github",
     callbackURL: "/dashboard"
