@@ -25,8 +25,12 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		priority: 10, // Run early to create default teams before other addons
 		errorCodes: TEAMS_ERROR_CODES,
 		hooks: {
-			async afterCreateOrganization({ organization, user }, ctx) {
-				return await createDefaultTeam({ user, organization }, ctx, options);
+			async afterCreateOrganization({ organization, user }, context) {
+				return await createDefaultTeam(
+					{ user, organization },
+					context,
+					options,
+				);
 			},
 		},
 		Infer: {

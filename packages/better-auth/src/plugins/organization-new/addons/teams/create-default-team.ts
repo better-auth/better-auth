@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import type { Organization } from "../../schema";
@@ -11,10 +11,10 @@ import type { InferTeam, ResolvedTeamsOptions } from "./types";
 
 export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 	{ user, organization }: { user: User; organization: Organization },
-	ctx: GenericEndpointContext,
+	authContext: AuthContext,
 	options: O,
 ) => {
-	const adapter = getTeamAdapter(ctx.context, options);
+	const adapter = getTeamAdapter(authContext, options);
 	const { customCreateDefaultTeam, enabled } = options.defaultTeam;
 	if (!enabled) return;
 
@@ -32,7 +32,7 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 		team = await (async () => {
 			type Result = InferTeam<O> & Record<string, any>;
 			if (customCreateDefaultTeam) {
-				const result = await customCreateDefaultTeam(organization, ctx);
+				const result = await customCreateDefaultTeam(organization);
 				return result as unknown as Result;
 			}
 			const mutate = await teamHook.before(
@@ -41,7 +41,7 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 					user,
 					organization,
 				},
-				ctx,
+				null,
 			);
 			const result = await adapter.createTeam({
 				...teamData,
@@ -50,12 +50,12 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 			return result as unknown as Result;
 		})();
 	} catch (error) {
-		ctx.context.logger.error("Failed to create default team:", error);
+		authContext.logger.error("Failed to create default team:", error);
 		const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM;
 		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 	}
 
-	await teamHook.after({ organization, team, user }, ctx);
+	await teamHook.after({ organization, team, user }, null);
 
 	try {
 		await adapter.createTeamMember({
@@ -63,7 +63,7 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 			userId: user.id,
 		});
 	} catch (error) {
-		ctx.context.logger.error("Failed to create team member:", error);
+		authContext.logger.error("Failed to create team member:", error);
 		const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM_MEMBER;
 		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 	}

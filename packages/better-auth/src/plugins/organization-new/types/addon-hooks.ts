@@ -1,4 +1,4 @@
-import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
+import type { AuthContext, Awaitable } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import type { Member, Organization } from "../schema";
 import type { AddonContext } from "./addon";
@@ -19,7 +19,7 @@ export type AddonHook =
 					user: User;
 					member: Member;
 				},
-				ctx: GenericEndpointContext,
+				ctx: AuthContext,
 				addonCtx: AddonContext,
 			) => Awaitable<void>;
 	  }

@@ -26,7 +26,6 @@ export interface TeamsOptions {
 		 */
 		customCreateDefaultTeam?: (
 			organization: Organization & Record<string, any>,
-			ctx?: GenericEndpointContext,
 		) => Promise<Partial<Team> & Record<string, any>>;
 	};
 	/**
@@ -140,7 +139,6 @@ export interface ResolvedTeamsOptions extends TeamsOptions {
 		 */
 		customCreateDefaultTeam?: (
 			organization: Organization & Record<string, any>,
-			ctx?: GenericEndpointContext,
 		) => Promise<Partial<Team> & Record<string, any>>;
 	};
 	maximumTeams: (

@@ -1,7 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { Team, TeamMember, TeamsAddon } from "../addons";
-import { getHook as getTeamHook } from "../addons/teams/helpers/get-team-hook";
-import { resolveTeamOptions } from "../addons/teams/helpers/resolve-team-options";
+import { getAddonHook } from "../helpers/get-addon-hook";
 import { getHook as getOrgHook } from "../helpers/get-hook";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import type { Member, Organization } from "../schema";
@@ -11,6 +9,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 	return (async (authContext) => {
 		const options = resolveOrgOptions(opts);
 		const adapter = authContext.adapter;
+
 		return {
 			options: {
 				databaseHooks: {
@@ -23,7 +22,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									ctx,
 								});
 								if (!providedData) return;
-
+								const addonHooks = getAddonHook("CreateOrganization", options);
 								const orgHook = getOrgHook("CreateOrganization", options);
 
 								const customData = await (async () => {
@@ -37,11 +36,19 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 										slug,
 										...providedData,
 									} as Omit<Organization, "id">;
+
 									const mutate = await orgHook.before(
 										{ organization: data, user },
-										null,
+										ctx,
 									);
-									return { ...data, ...(mutate ?? {}) };
+									const addonMutate = await addonHooks.before(
+										{
+											organization: data,
+											user,
+										},
+										ctx,
+									);
+									return { ...data, ...(mutate ?? {}), ...(addonMutate ?? {}) };
 								})();
 
 								// Create organization
@@ -61,82 +68,22 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									forceAllowId: true,
 								});
 
+								await addonHooks.after(
+									{
+										organization,
+										member,
+										user,
+									},
+									ctx,
+								);
 								await orgHook.after(
 									{
 										organization,
 										member,
 										user,
 									},
-									null,
+									ctx,
 								);
-
-								// Team support
-								type T = TeamsAddon | undefined;
-								const teamAddon = options.use.find((a) => a.id == "teams") as T;
-
-								if (teamAddon) {
-									const teamOptions = resolveTeamOptions(teamAddon.options);
-									const { defaultTeam } = teamOptions;
-									const { customCreateDefaultTeam, enabled } = defaultTeam;
-									if (!enabled) return;
-
-									const teamHook = getTeamHook("CreateTeam", teamOptions);
-
-									// Get custom team data if provided, otherwise use empty object
-									const customData = await (async () => {
-										const slug = teamOptions.enableSlugs
-											? `${user.name}s-team`
-											: undefined;
-
-										const data = {
-											...(customCreateDefaultTeam
-												? await customCreateDefaultTeam(organization)
-												: {}),
-											organizationId: organization.id,
-											slug,
-											name: `${user.name}'s Team`,
-											createdAt: now,
-										} satisfies Omit<Team & { slug?: string }, "id">;
-
-										const mutate = await teamHook.before(
-											{
-												organization,
-												team: data,
-											},
-											null,
-										);
-										return {
-											...data,
-											...(mutate ?? {}),
-										};
-									})();
-
-									// Create default team
-									const team = await adapter.create<Team & { slug?: string }>({
-										data: customData,
-										model: "team",
-										forceAllowId: true,
-									});
-
-									await adapter.create<TeamMember>({
-										data: {
-											teamId: team.id,
-											userId: user.id,
-											createdAt: now,
-										},
-										model: "teamMember",
-										forceAllowId: true,
-									});
-
-									await teamHook.after(
-										{
-											organization,
-											team,
-											user,
-										},
-										null,
-									);
-								}
 							},
 						},
 					},
