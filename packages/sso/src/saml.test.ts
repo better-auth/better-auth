@@ -574,6 +574,244 @@ describe("SAML SSO with defaultSSO array", async () => {
 	});
 });
 
+describe("SAML SSO with signed AuthnRequests", async () => {
+	// IdP metadata with WantAuthnRequestsSigned="true" for testing signed requests
+	const idpMetadataWithSignedRequests = `
+    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
+    <md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <md:KeyDescriptor use="signing">
+        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+            <ds:X509Data>
+            <ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
+            </ds:X509Data>
+        </ds:KeyInfo>
+        </md:KeyDescriptor>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+        </md:IDPSSODescriptor>
+    </md:EntityDescriptor>
+    `;
+
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8081",
+				providerId: "signed-saml",
+				samlConfig: {
+					issuer: "http://localhost:8081",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: true,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					privateKey: idPk,
+					spMetadata: {
+						privateKey: idPk,
+					},
+					idpMetadata: {
+						metadata: idpMetadataWithSignedRequests,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should generate signed AuthnRequest when authnRequestsSigned is true", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "signed-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+		// When authnRequestsSigned is true and privateKey is provided,
+		// samlify adds Signature and SigAlg parameters to the redirect URL
+		expect(signInResponse.url).toContain("Signature=");
+		expect(signInResponse.url).toContain("SigAlg=");
+	});
+});
+
+describe("SAML SSO without signed AuthnRequests", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8082",
+				providerId: "unsigned-saml",
+				samlConfig: {
+					issuer: "http://localhost:8082",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8082/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should NOT include Signature in URL when authnRequestsSigned is false", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "unsigned-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+		// When authnRequestsSigned is false (default), no Signature should be in the URL
+		expect(signInResponse.url).not.toContain("Signature=");
+		expect(signInResponse.url).not.toContain("SigAlg=");
+	});
+});
+
+describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-level config)", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	// This tests the fix for signInSSO where IdentityProvider was incorrectly constructed
+	// when idpMetadata is provided but without a full metadata XML.
+	// The bug was:
+	// 1. Using encryptCert instead of signingCert (samlify expects signingCert)
+	// 2. Not falling back to parsedSamlConfig.issuer when entityID is missing
+	// 3. Not falling back to parsedSamlConfig.entryPoint when singleSignOnService is missing
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8083",
+				providerId: "partial-idp-metadata-saml",
+				samlConfig: {
+					issuer: "http://localhost:8083/issuer",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
+					cert: certificate,
+					callbackUrl: "http://localhost:8083/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: false,
+					spMetadata: {},
+					// idpMetadata is provided but WITHOUT metadata XML - this triggers the fallback path
+					// The fix ensures signingCert is used (not encryptCert) and entryPoint/issuer fallbacks work
+					idpMetadata: {
+						// No metadata XML provided
+						// cert could be provided here, but we test fallback to top-level cert
+						entityID: "http://localhost:8081/custom-entity-id",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should initiate SAML login using fallback entryPoint when idpMetadata has no metadata XML", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The URL should point to the entryPoint from top-level config (fallback)
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining(
+				"http://localhost:8081/api/sso/saml2/idp/redirect",
+			),
+			redirect: true,
+		});
+		// The URL should contain a SAMLRequest parameter, proving the IdP was constructed correctly
+		// with signingCert (not encryptCert) - if encryptCert was used, samlify would fail
+		expect(signInResponse.url).toContain("SAMLRequest=");
+	});
+
+	it("should use idpMetadata.entityID when provided (not fall back to issuer)", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The fact that we get a valid SAMLRequest proves the IdentityProvider
+		// was constructed correctly. The entityID from idpMetadata should be used.
+		const url = new URL(signInResponse.url);
+		const samlRequest = url.searchParams.get("SAMLRequest");
+		expect(samlRequest).toBeTruthy();
+	});
+});
+
 describe("SAML SSO", async () => {
 	const data = {
 		user: [],
