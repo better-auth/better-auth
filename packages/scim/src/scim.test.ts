@@ -108,10 +108,7 @@ const createSqlTestInstance = async (
 ) => {
 	const { auth, client, signInWithTestUser } = await getTestInstance(
 		{
-			plugins: [
-				scim(scimOptions),
-				organization()
-			],
+			plugins: [scim(scimOptions), organization()],
 		},
 		{
 			testWith,
@@ -2015,7 +2012,8 @@ describe("SCIM", () => {
 		});
 
 		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
-			const { auth, getSCIMToken, registerOrganization } = await createSqlTestInstance("postgres");
+			const { auth, getSCIMToken, registerOrganization } =
+				await createSqlTestInstance("postgres");
 			const scimToken = await getSCIMToken();
 
 			const createUser = (userName: string, scimToken: string) => {
@@ -2036,7 +2034,6 @@ describe("SCIM", () => {
 					},
 				});
 			};
-
 
 			const users = await listUsers(scimToken);
 
@@ -2060,7 +2057,7 @@ describe("SCIM", () => {
 
 			await createUser("user-a", scimTokenOrgA);
 			const orgBUsers = await listUsers(scimTokenOrgB);
-			
+
 			expect(orgBUsers).toMatchObject({
 				itemsPerPage: 0,
 				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
