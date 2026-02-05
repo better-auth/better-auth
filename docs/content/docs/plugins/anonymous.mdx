@@ -66,13 +66,35 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
 ## Usage
 
-### Sign In
+### Sign In Anonymously
 
-To sign in a user anonymously, use the `signIn.anonymous()` method.
+To sign in a user anonymously, use the `signIn.anonymous()` method. This creates a new user with an auto-generated email and name, and establishes a session.
+
+<APIMethod path="/sign-in/anonymous" method="POST">
+```ts
+type signInAnonymous = {
+    // No parameters required
+}
+```
+</APIMethod>
+
+**Client Example:**
 
 ```ts title="example.ts"
-const user = await authClient.signIn.anonymous()
+const { data, error } = await authClient.signIn.anonymous()
+
+if (error) {
+    // Handle error (e.g., already signed in as anonymous user)
+    console.error(error.message)
+} else {
+    // User is now signed in anonymously
+    console.log(data.user) // { id: "...", email: "temp-xxx@...", isAnonymous: true, ... }
+}
 ```
+
+<Callout type="info">
+If you're already signed in as an anonymous user, calling `signIn.anonymous()` will return an error. You must first sign out or link to a real account.
+</Callout>
 
 ### Link Account
 
