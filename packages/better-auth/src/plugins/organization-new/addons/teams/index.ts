@@ -1,5 +1,6 @@
 import type { Addon } from "../../types";
-import { createDefaultTeam } from "./create-default-team";
+import { getTeamAddonSchema } from "..";
+import { afterCreateOrganization } from "./events/after-create-organization";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { addTeamMember } from "./routes/add-team-member";
@@ -26,7 +27,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		errorCodes: TEAMS_ERROR_CODES,
 		hooks: {
 			async afterCreateOrganization({ organization, user }, context) {
-				return await createDefaultTeam(
+				return await afterCreateOrganization(
 					{ user, organization },
 					context,
 					options,
@@ -49,97 +50,6 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 			setActiveTeam: setActiveTeam(_options),
 			updateTeam: updateTeam(_options),
 		},
-		schema: {
-			team: {
-				modelName: options.schema?.team?.modelName,
-				fields: {
-					name: {
-						type: "string",
-						required: true,
-						fieldName: options.schema?.team?.fields?.name,
-					},
-					organizationId: {
-						type: "string",
-						required: true,
-						references: {
-							model: "organization",
-							field: "id",
-						},
-						fieldName: options.schema?.team?.fields?.organizationId,
-						index: true,
-					},
-					createdAt: {
-						type: "date",
-						required: true,
-						fieldName: options.schema?.team?.fields?.createdAt,
-					},
-					updatedAt: {
-						type: "date",
-						required: false,
-						fieldName: options.schema?.team?.fields?.updatedAt,
-						onUpdate: () => new Date(),
-					},
-					...(options.enableSlugs
-						? {
-								slug: {
-									type: "string",
-									required: false,
-									fieldName: options.schema?.team?.fields?.slug,
-								},
-							}
-						: {}),
-					...(options.schema?.team?.additionalFields || {}),
-				},
-			},
-			teamMember: {
-				modelName: options.schema?.teamMember?.modelName,
-				fields: {
-					teamId: {
-						type: "string",
-						required: true,
-						references: {
-							model: "team",
-							field: "id",
-						},
-						fieldName: options.schema?.teamMember?.fields?.teamId,
-						index: true,
-					},
-					userId: {
-						type: "string",
-						required: true,
-						references: {
-							model: "user",
-							field: "id",
-						},
-						fieldName: options.schema?.teamMember?.fields?.userId,
-						index: true,
-					},
-					createdAt: {
-						type: "date",
-						required: false,
-						fieldName: options.schema?.teamMember?.fields?.createdAt,
-					},
-					...(options.schema?.teamMember?.additionalFields || {}),
-				},
-			},
-			invitation: {
-				fields: {
-					teamId: {
-						type: "string",
-						required: false,
-						fieldName: (options.schema as any)?.invitation?.fields?.teamId,
-					},
-				},
-			},
-			session: {
-				fields: {
-					activeTeamId: {
-						type: "string",
-						required: false,
-						fieldName: options.schema?.session?.fields?.activeTeamId,
-					},
-				},
-			},
-		},
+		schema: getTeamAddonSchema<O>(options),
 	} satisfies Addon<O>;
 };

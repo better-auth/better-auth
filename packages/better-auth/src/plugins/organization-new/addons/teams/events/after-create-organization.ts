@@ -1,15 +1,18 @@
 import type { AuthContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
-import type { Organization } from "../../schema";
-import { TEAMS_ERROR_CODES } from "./helpers/errors";
-import type { RealTeamId } from "./helpers/get-team-adapter";
-import { getTeamAdapter } from "./helpers/get-team-adapter";
-import { getHook } from "./helpers/get-team-hook";
-import type { Team } from "./schema";
-import type { InferTeam, ResolvedTeamsOptions } from "./types";
+import type { Organization } from "../../../schema";
+import { TEAMS_ERROR_CODES } from "../helpers/errors";
+import type { RealTeamId } from "../helpers/get-team-adapter";
+import { getTeamAdapter } from "../helpers/get-team-adapter";
+import { getHook } from "../helpers/get-team-hook";
+import type { Team } from "../schema";
+import type { InferTeam, ResolvedTeamsOptions } from "../types";
 
-export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
+/**
+ * This event will create a default team after an org is created.
+ */
+export const afterCreateOrganization = async <O extends ResolvedTeamsOptions>(
 	{ user, organization }: { user: User; organization: Organization },
 	authContext: AuthContext,
 	options: O,
