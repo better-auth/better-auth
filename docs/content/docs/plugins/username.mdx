@@ -13,7 +13,7 @@ The username plugin is a lightweight plugin that adds username support to the em
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { username } from "better-auth/plugins"
+        import { username } from "better-auth/plugins" // [!code highlight]
 
         export const auth = betterAuth({
             emailAndPassword: { // [!code highlight]
@@ -49,7 +49,7 @@ The username plugin is a lightweight plugin that adds username support to the em
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { usernameClient } from "better-auth/client/plugins"
+        import { usernameClient } from "better-auth/client/plugins" // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [ // [!code highlight]

@@ -26,7 +26,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
   "vanilla"]} defaultValue="react">
     <Tab value="vanilla">
             ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/client"
+            import { createAuthClient } from "better-auth/client" // [!code highlight]
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
@@ -34,7 +34,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
     <Tab value="react" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts"  
-            import { createAuthClient } from "better-auth/react"
+            import { createAuthClient } from "better-auth/react" // [!code highlight]
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
@@ -42,7 +42,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
     <Tab value="vue" title="lib/auth-client.ts">
             ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/vue"
+            import { createAuthClient } from "better-auth/vue" // [!code highlight]
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
@@ -50,7 +50,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
     <Tab value="svelte" title="lib/auth-client.ts"> 
             ```ts  title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/svelte"
+            import { createAuthClient } from "better-auth/svelte" // [!code highlight]
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
@@ -58,7 +58,7 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
     <Tab value="solid" title="lib/auth-client.ts">
             ```ts title="lib/auth-client.ts" 
-            import { createAuthClient } from "better-auth/solid"
+            import { createAuthClient } from "better-auth/solid" // [!code highlight]
             export const authClient = createAuthClient({
                 baseURL: "http://localhost:3000" // The base URL of your auth server // [!code highlight]
             })
@@ -217,7 +217,9 @@ const authClient = createAuthClient({
 
 You can also pass fetch options to most of the client functions. Either as the second argument or as a property in the object.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234",
@@ -250,7 +252,9 @@ For example, when updating user preferences that don't affect the session, or wh
 
 You can disable hook rerenders for a specific endpoint call by setting `disableSignal: true` in the fetch options:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 // As the second argument
 await authClient.updateUser({
     name: "New Name"
@@ -270,7 +274,9 @@ await authClient.updateUser({
 When `disableSignal` is set to `true`, the endpoint call will complete successfully,
 but hooks like `useSession` won't automatically rerender. You can manually trigger a refetch if needed:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { refetch } = authClient.useSession()
 
 await authClient.updateUser({
@@ -295,7 +301,9 @@ The error object contains the following properties:
 - `status`: The HTTP status code.
 - `statusText`: The HTTP status text.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data, error } = await authClient.signIn.email({
     email: "email@email.com",
     password: "password1234"
@@ -307,7 +315,8 @@ if (error) {
 
 If the action accepts a `fetchOptions` option, you can pass an `onError` callback to handle errors.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
 
 await authClient.signIn.email({
     email: "email@email.com",
@@ -332,7 +341,9 @@ await authClient.signIn.email({
 
 Hooks like `useSession` also return an error object if there was an error fetching the session. On top of that, they also return an `isPending` property to indicate if the request is still pending.
 
-```ts title="auth-client.ts"
+```ts
+import { useSession } from "@/lib/auth-client"
+
 const { data, error, isPending } = useSession()
 if (error) {
     //handle error
@@ -399,7 +410,9 @@ const authClient = createAuthClient({
 
 once you've added the plugin, you can use the new functions provided by the plugin.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.magicLink({
     email: "test@email.com"
 })

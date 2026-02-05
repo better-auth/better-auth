@@ -114,6 +114,8 @@ This utilities allows you to get request information and to send response from a
 Use `ctx.json` to send JSON responses:
 
 ```ts
+import { createAuthMiddleware } from "better-auth/api";
+
 const hook = createAuthMiddleware(async (ctx) => {
     return ctx.json({
         message: "Hello World",
@@ -179,6 +181,8 @@ The `ctx` object contains another `context` object inside that's meant to hold c
 The newly created session after an endpoint is run. This only exist in after hook.
 
 ```ts title="auth.ts"
+import { createAuthMiddleware } from "better-auth/api";
+
 createAuthMiddleware(async (ctx) => {
     const newSession = ctx.context.newSession
 });
@@ -189,6 +193,8 @@ createAuthMiddleware(async (ctx) => {
 The returned value from the hook is passed to the next hook in the chain.
 
 ```ts title="auth.ts"
+import { createAuthMiddleware } from "better-auth/api";
+
 createAuthMiddleware(async (ctx) => {
     const returned = ctx.context.returned; //this could be a successful response or an APIError
 });
@@ -199,6 +205,8 @@ createAuthMiddleware(async (ctx) => {
 The response headers added by endpoints and hooks that run before this hook.
 
 ```ts title="auth.ts"
+import { createAuthMiddleware } from "better-auth/api";
+
 createAuthMiddleware(async (ctx) => {
     const responseHeaders = ctx.context.responseHeaders;
 });
@@ -209,6 +217,8 @@ createAuthMiddleware(async (ctx) => {
 Access BetterAuth’s predefined cookie properties:
 
 ```ts title="auth.ts"
+import { createAuthMiddleware } from "better-auth/api";
+
 createAuthMiddleware(async (ctx) => {
     const cookieName = ctx.context.authCookies.sessionToken.name;
 });
@@ -243,4 +253,3 @@ You can use `ctx.context.generateId` to generate Id for various reasons.
 ## Reusable Hooks
 
 If you need to reuse a hook across multiple endpoints, consider creating a plugin. Learn more in the [Plugins Documentation](/docs/concepts/plugins).
-

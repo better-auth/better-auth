@@ -11,7 +11,7 @@ The Device Authorization plugin implements the OAuth 2.0 Device Authorization Gr
 
 You can test the device authorization flow right now using the Better Auth CLI:
 
-```bash
+```package-install
 npx @better-auth/cli login
 ```
 
@@ -121,6 +121,8 @@ type deviceCode = {
 
 Example usage:
 ```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
@@ -420,7 +422,7 @@ Here's a complete example for a CLI application based on the actual demo:
   To use the access token for API requests, ensure you have added the [Bearer plugin](/docs/plugins/bearer) to your auth instance.
 </Callout>
 
-```ts title="cli-auth.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import open from "open";

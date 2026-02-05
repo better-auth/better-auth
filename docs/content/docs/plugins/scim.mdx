@@ -12,8 +12,8 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
     <Step>
         ### Install the plugin
 
-        ```bash
-        npm install @better-auth/scim
+        ```package-install
+        @better-auth/scim
         ```
     </Step>
     <Step>
@@ -24,9 +24,9 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
         import { scim } from "@better-auth/scim"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 scim() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -139,6 +139,9 @@ See the [hooks](#hooks) documentation for more details about supported hooks.
 We also provide a way for you to specify a `SCIM` token to use by default. This allows you to test a SCIM connection without setting up providers in the database:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { scim } from "@better-auth/scim"; 
+
 const auth = betterAuth({
     plugins: [
         scim({

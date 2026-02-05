@@ -53,11 +53,11 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { anonymousClient } from "better-auth/client/plugins"
+    import { anonymousClient } from "better-auth/client/plugins" // [!code highlight]
     
     export const authClient = createAuthClient({
         plugins: [
-            anonymousClient()
+            anonymousClient() // [!code highlight]
         ]
     })
     ```
@@ -70,7 +70,9 @@ The Anonymous plugin allows users to have an authenticated experience without re
 
 To sign in a user anonymously, use the `signIn.anonymous()` method.
 
-```ts title="example.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const user = await authClient.signIn.anonymous()
 ```
 
@@ -83,6 +85,7 @@ To do that you first need to provide `onLinkAccount` callback to the plugin.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -96,7 +99,9 @@ export const auth = betterAuth({
 
 Then when you call `signIn` or `signUp` with another method, the `onLinkAccount` callback will be called. And the `anonymousUser` will be deleted by default.
 
-```ts title="example.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const user = await authClient.signIn.email({
     email,
 })
@@ -131,6 +136,7 @@ The domain name to use when generating an email address for anonymous users. If 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -147,6 +153,7 @@ A custom function to generate email addresses for anonymous users. This allows y
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { anonymous } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [

@@ -30,8 +30,10 @@ await auth.api.getSession({
 Unlike the client, the server needs the values to be passed as an object with the key `body` for the body, `headers` for the headers, and `query` for query parameters.
 
 ```ts title="server.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.getSession({
-    headers: await headers()
+    headers: await headers() // headers containing the user's session token
 })
 
 await auth.api.signInEmail({
@@ -63,7 +65,9 @@ But there are times when you might want to get the `headers` or the `Response` o
 
 To get the `headers`, you can pass the `returnHeaders` option to the endpoint.
 
-```ts
+```ts title="server.ts"
+import { auth } from "@/lib/auth"
+
 const { headers, response } = await auth.api.signUpEmail({
 	returnHeaders: true,
 	body: {
@@ -86,6 +90,8 @@ const headers = headers.get("x-custom-header");
 To get the `Response` object, you can pass the `asResponse` option to the endpoint.
 
 ```ts title="server.ts"
+import { auth } from "@/lib/auth"
+
 const response = await auth.api.signInEmail({
     body: {
         email: "",
@@ -100,6 +106,7 @@ const response = await auth.api.signInEmail({
 When you call an API endpoint on the server, it will throw an error if the request fails. You can catch the error and handle it as you see fit. The error instance is an instance of `APIError`.
 
 ```ts title="server.ts"
+import { auth } from "@/lib/auth"
 import { APIError, isAPIError } from "better-auth/api";
 
 try {
