@@ -104,13 +104,13 @@ export const getAddonHook = <H extends AddonHookOptions>(
 
 	type BeforeReturnT = (
 		data: Parameters<Before>[0],
-		ctx: GenericEndpointContext,
+		ctx: GenericEndpointContext | null,
 		addonContext?: AddonContext,
 	) => Promise<Record<string, any> | null>;
 
 	type AfterReturnT = (
 		data: Parameters<After>[0],
-		ctx: GenericEndpointContext,
+		ctx: GenericEndpointContext | null,
 		addonContext?: AddonContext,
 	) => Promise<void>;
 
@@ -175,7 +175,7 @@ export const getAddonHook = <H extends AddonHookOptions>(
 			const contextToUse = addonContext ?? addonCtx;
 			for (const { hookFn } of hooks) {
 				try {
-					await hookFn(data, ctx, contextToUse);
+					await hookFn(data, ctx.context, contextToUse);
 				} catch (error) {
 					// Re-throw errors to allow hooks to signal failures
 					throw error;

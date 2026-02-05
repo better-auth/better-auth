@@ -18,18 +18,18 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 	const options = resolveTeamOptions(_options);
 	const schema = options.schema || {};
 
-	const filterTeamOutput = (team: Record<string, any> | null) => {
-		if (!team) return null;
+	const filterTeamOutput = <T extends Record<string, any> | null>(team: T) => {
 		const teamAdditionalFields = schema.team?.additionalFields;
 		const result = filterOutputFields(team, teamAdditionalFields);
-		return result as InferTeam<O, false> | null;
+		return result;
 	};
 
-	const filterTeamMemberOutput = (teamMember: Record<string, any> | null) => {
-		if (!teamMember) return null;
+	const filterTeamMemberOutput = <T extends Record<string, any> | null>(
+		teamMember: T,
+	) => {
 		const teamMemberAdditionalFields = schema.teamMember?.additionalFields;
 		const result = filterOutputFields(teamMember, teamMemberAdditionalFields);
-		return result as InferTeamMember<O, false> | null;
+		return result;
 	};
 
 	return {
@@ -75,7 +75,8 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				model: "team",
 				where: [{ field: "organizationId", value: organizationId }],
 			});
-			return teams.map(filterTeamOutput);
+			const result = teams.map(filterTeamOutput);
+			return result;
 		},
 		listTeams: async ({
 			organizationId,
