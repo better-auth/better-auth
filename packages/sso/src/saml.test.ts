@@ -586,6 +586,25 @@ describe("SAML SSO with defaultSSO array", async () => {
 			redirect: true,
 		});
 	});
+
+	it("should accept additionalData in SAML sign-in request", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "default-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+				additionalData: {
+					client_id: "test-oauth-client",
+					redirect_uri: "http://localhost:3001/callback",
+					response_type: "code",
+				},
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+	});
 });
 
 describe("SAML SSO with signed AuthnRequests", async () => {

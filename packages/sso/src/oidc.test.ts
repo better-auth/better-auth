@@ -254,6 +254,26 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should accept additionalData in sign-in request", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "test",
+			callbackURL: "/dashboard",
+			additionalData: {
+				client_id: "test-oauth-client",
+				redirect_uri: "http://localhost:3001/callback",
+				response_type: "code",
+			},
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		expect(callbackURL).toContain("/dashboard");
+	});
+
 	it("should normalize email to lowercase in OIDC authentication", async () => {
 		const { headers } = await signInWithTestUser();
 
