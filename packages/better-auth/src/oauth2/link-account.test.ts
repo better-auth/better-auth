@@ -231,6 +231,9 @@ describe("oauth2 - email verification on link", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7806
+ */
 describe("oauth2 - account linking with case insensitive email", async () => {
 	const { auth, client, cookieSetter } = await getTestInstance({
 		socialProviders: {
