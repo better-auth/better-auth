@@ -37,11 +37,12 @@ export const oauthProviderClient = () => {
 							typeof ctx.url === "string"
 								? new URL(ctx.url).pathname
 								: ctx.url.pathname;
-						// Should only need to run for /sign-in/email, /sign-in/social, /sign-in/oauth2, /oauth2/consent, /oauth2/continue
+						// Should only need to run for /sign-in/email, /sign-in/social, /sign-in/oauth2, /sign-in/sso, /oauth2/consent, /oauth2/continue
 						if (
 							pathname.endsWith("/sign-in/email") ||
 							pathname.endsWith("/sign-in/social") ||
 							pathname.endsWith("/sign-in/oauth2") ||
+							pathname.endsWith("/sign-in/sso") ||
 							pathname.endsWith("/oauth2/consent") ||
 							pathname.endsWith("/oauth2/continue")
 						) {
