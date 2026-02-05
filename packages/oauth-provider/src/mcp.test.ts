@@ -135,27 +135,31 @@ describe("mcp - server-client flows", async () => {
 		name: "demo-server",
 		version: "1.0.0",
 	};
-	const mcpServer = new McpServer(serverImplementation);
-	mcpServer.registerResource(
-		"greeting",
-		"greet://me",
-		{
-			title: "Greeting Resource", // Display name for UI
-			description: "Dynamic greeting generator",
-		},
-		async (uri, extra) => {
-			const authInfo = extra.authInfo;
-			const jwt = authInfo?.extra?.jwt as JWTPayload;
-			return {
-				contents: [
-					{
-						uri: uri.href,
-						text: `Welcome ${jwt.sub} to ${authInfo?.clientId}`,
-					},
-				],
-			};
-		},
-	);
+
+	function createMcpServer() {
+		const mcpServer = new McpServer(serverImplementation);
+		mcpServer.registerResource(
+			"greeting",
+			"greet://me",
+			{
+				title: "Greeting Resource", // Display name for UI
+				description: "Dynamic greeting generator",
+			},
+			async (uri, extra) => {
+				const authInfo = extra.authInfo;
+				const jwt = authInfo?.extra?.jwt as JWTPayload;
+				return {
+					contents: [
+						{
+							uri: uri.href,
+							text: `Welcome ${jwt.sub} to ${authInfo?.clientId}`,
+						},
+					],
+				};
+			},
+		);
+		return mcpServer;
+	}
 
 	const mcpClient = new Client({
 		name: "example-client",
@@ -213,11 +217,13 @@ describe("mcp - server-client flows", async () => {
 					res.end(JSON.stringify(config));
 				} else if (req.url === "/mcp") {
 					await verifyAccessToken(req, res);
+					const mcpServer = createMcpServer();
 					const transport = new StreamableHTTPServerTransport({
 						sessionIdGenerator: undefined,
 						enableJsonResponse: true,
 					});
-					res.on("close", () => {
+					res.on("close", async () => {
+						await mcpServer.close();
 						transport.close();
 					});
 					await mcpServer.connect(transport);
@@ -240,7 +246,6 @@ describe("mcp - server-client flows", async () => {
 
 	afterAll(async () => {
 		await mcpClient.close();
-		await mcpServer.close();
 		await apiServer.close();
 		await authServer.close();
 	});
