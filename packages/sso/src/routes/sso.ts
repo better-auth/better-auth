@@ -1718,19 +1718,6 @@ export const callbackSSO = (options?: SSOOptions) => {
 				provisioningOptions: options?.organizationProvisioning,
 			});
 
-			// If state contains OAuth query params (from oauth-provider flow),
-			// set the OAuth state so the oauth-provider's after hook can continue the flow
-			if ((stateData as Record<string, unknown>).query) {
-				await setOAuthState({
-					callbackURL: stateData.callbackURL,
-					codeVerifier: stateData.codeVerifier,
-					errorURL: stateData.errorURL,
-					newUserURL: stateData.newUserURL,
-					expiresAt: stateData.expiresAt,
-					query: (stateData as Record<string, unknown>).query as string,
-				});
-			}
-
 			await setSessionCookie(ctx, {
 				session,
 				user,
