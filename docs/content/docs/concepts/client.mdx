@@ -213,6 +213,18 @@ const authClient = createAuthClient({
         //any better-fetch options
     },
 })
+```
+
+### Disabling Default Fetch Plugins
+
+The auth client includes default fetch plugins that handle browser-specific behaviors like automatic redirects. For non-browser environments (e.g., React Native/Expo), you can disable these by setting `disableDefaultFetchPlugins` to `true`:
+
+```ts title="auth-client.ts"
+import { createAuthClient } from "better-auth/client"
+
+const authClient = createAuthClient({
+    disableDefaultFetchPlugins: true,
+})
 ```         
 
 You can also pass fetch options to most of the client functions. Either as the second argument or as a property in the object.
