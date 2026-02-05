@@ -4,6 +4,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
@@ -98,6 +99,56 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		registerOrganization,
 		getSCIMToken,
 		getAuthCookieHeaders,
+	};
+};
+
+const createSqlTestInstance = async (
+	testWith: "sqlite" | "postgres",
+	scimOptions?: SCIMOptions,
+) => {
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [scim(scimOptions), organization()],
+		},
+		{
+			testWith,
+		},
+	);
+
+	async function getSCIMToken(
+		providerId: string = "the-saml-provider-1",
+		organizationId?: string,
+	) {
+		const { headers } = await signInWithTestUser();
+		const { scimToken } = await auth.api.generateSCIMToken({
+			body: {
+				providerId,
+				organizationId,
+			},
+			headers,
+		});
+
+		return scimToken;
+	}
+
+	async function registerOrganization(org: string) {
+		const { headers } = await signInWithTestUser();
+
+		return await auth.api.createOrganization({
+			body: {
+				slug: `the-${org}`,
+				name: `the organization ${org}`,
+			},
+			headers,
+		});
+	}
+
+	return {
+		auth,
+		client,
+		registerOrganization,
+		getSCIMToken,
+		signInWithTestUser,
 	};
 };
 
@@ -1957,6 +2008,62 @@ describe("SCIM", () => {
 				startIndex: 1,
 				totalResults: 2,
 				Resources: [userA, userB],
+			});
+		});
+
+		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
+			const { auth, getSCIMToken, registerOrganization } =
+				await createSqlTestInstance("postgres");
+			const scimToken = await getSCIMToken();
+
+			const createUser = (userName: string, scimToken: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const listUsers = (scimToken: string) => {
+				return auth.api.listSCIMUsers({
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const users = await listUsers(scimToken);
+
+			expect(users).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
+			});
+
+			const [organizationA, organizationB] = await Promise.all([
+				registerOrganization("org-a"),
+				registerOrganization("org-b"),
+			]);
+
+			const [scimTokenOrgA, scimTokenOrgB] = await Promise.all([
+				getSCIMToken("provider-org-a", organizationA?.id),
+				getSCIMToken("provider-org-b", organizationB?.id),
+			]);
+
+			await createUser("user-a", scimTokenOrgA);
+			const orgBUsers = await listUsers(scimTokenOrgB);
+
+			expect(orgBUsers).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
 			});
 		});
 
