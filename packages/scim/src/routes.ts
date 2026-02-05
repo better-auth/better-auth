@@ -429,6 +429,14 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			use: [authMiddleware],
 		},
 		async (ctx) => {
+			const emptyListResponse = {
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				totalResults: 0,
+				startIndex: 1,
+				itemsPerPage: 0,
+				Resources: [],
+			} as const;
+
 			const apiFilters: DBFilter[] = parseSCIMAPIUserFilter(ctx.query?.filter);
 
 			ctx.context.logger.info("Querying result with filters: ", apiFilters);
@@ -440,6 +448,13 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 			});
 
 			const accountUserIds = accounts.map((account) => account.userId);
+
+			// No accounts exist for this provider
+
+			if (accountUserIds.length === 0) {
+				return ctx.json(emptyListResponse);
+			}
+
 			let userFilters: DBFilter[] = [
 				{ field: "id", value: accountUserIds, operator: "in" },
 			];
@@ -455,6 +470,13 @@ export const listSCIMUsers = (authMiddleware: AuthMiddleware) =>
 				});
 
 				const memberUserIds = members.map((member) => member.userId);
+
+				// No members exist for this organization
+
+				if (memberUserIds.length === 0) {
+					return ctx.json(emptyListResponse);
+				}
+
 				userFilters = [{ field: "id", value: memberUserIds, operator: "in" }];
 			}
 
