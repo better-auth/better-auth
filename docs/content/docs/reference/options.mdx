@@ -544,7 +544,8 @@ export const auth = betterAuth({
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
 		},
-		skipTrailingSlashes: true
+		skipTrailingSlashes: true,
+		trustedProxyHeaders: true
 	},
 })
 ```
@@ -559,7 +560,66 @@ export const auth = betterAuth({
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
 - `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
+- `trustedProxyHeaders`: Trust proxy headers for base URL inference. (default: `false`)
 - OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+### `trustedProxyHeaders`
+
+When enabled, Better Auth will use the `X-Forwarded-Host` and `X-Forwarded-Proto` headers to infer the base URL if no explicit `baseURL` is configured. This is useful when running behind a reverse proxy (such as nginx, Cloudflare, AWS ALB, or other load balancers) that sets these headers.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	advanced: {
+		trustedProxyHeaders: true,
+	},
+})
+```
+
+**When to use:**
+- Your application runs behind a reverse proxy or load balancer
+- The proxy sets `X-Forwarded-Host` and `X-Forwarded-Proto` headers
+- You cannot set a static `baseURL` (e.g., dynamic environments)
+
+**How it works:**
+
+1. If `baseURL` is explicitly configured, it takes precedence
+2. If `BETTER_AUTH_URL` environment variable is set, it takes precedence
+3. If `trustedProxyHeaders` is `true`, Better Auth reads:
+   - `X-Forwarded-Host` for the hostname
+   - `X-Forwarded-Proto` for the protocol (http/https)
+4. The headers are validated to prevent malicious values
+
+<Callout type="warn">
+**Security Warning**
+
+Enabling `trustedProxyHeaders` can expose your application to security vulnerabilities if not used correctly:
+
+- **Only enable this** if your application is behind a trusted reverse proxy that sets these headers
+- **Ensure your proxy** overwrites (not appends) these headers from upstream requests
+- **Never enable this** if your server is directly exposed to the internet without a proxy
+
+If an attacker can forge these headers, they could potentially redirect OAuth callbacks or manipulate URL-dependent authentication flows.
+</Callout>
+
+**Example with nginx:**
+
+```nginx
+location / {
+    proxy_pass http://localhost:3000;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+For most production deployments, we recommend setting `baseURL` explicitly instead of relying on proxy headers:
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	baseURL: "https://example.com",
+})
+```
 
 ## `logger`
 
