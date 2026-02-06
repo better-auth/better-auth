@@ -1,48 +1,30 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, test, vi } from "vitest";
+import { vol } from "memfs";
+import { describe, expect, vi } from "vitest";
+import { testWithTmpDir } from "./test-utils";
+
+vi.mock("node:fs", () => ({
+	...vol,
+	default: vol,
+}));
+vi.mock("node:fs/promises", () => ({
+	...vol.promises,
+	default: vol.promises,
+}));
+
 import { getConfig } from "../src/utils/get-config";
 
-interface TmpDirFixture {
-	tmpdir: string;
-}
-
-async function createTempDir() {
-	const tmpdir = path.join(process.cwd(), "test", "getConfig_test-");
-	return await fs.mkdtemp(tmpdir);
-}
-
-export const tmpdirTest = test.extend<TmpDirFixture>({
-	tmpdir: async ({}, use) => {
-		const directory = await createTempDir();
-
-		await use(directory);
-
-		await fs.rm(directory, { recursive: true });
-	},
-});
-
-let tmpDir = ".";
-
 describe("getConfig", async () => {
-	beforeEach(async () => {
-		const tmp = path.join(process.cwd(), "getConfig_test-");
-		tmpDir = await fs.mkdtemp(tmp);
-	});
-
-	afterEach(async () => {
-		await fs.rm(tmpDir, { recursive: true });
-	});
-
-	it("should resolve resolver type alias", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const dbPath = path.join(tmpDir, "server", "db");
+	testWithTmpDir("should resolve resolver type alias", async ({ tmp }) => {
+		const authPath = path.join(tmp, "server", "auth");
+		const dbPath = path.join(tmp, "server", "db");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(dbPath, { recursive: true });
 
 		//create dummy tsconfig.json
 		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
+			path.join(tmp, "tsconfig.json"),
 			`{
               "compilerOptions": {
                 /* Path Aliases */
@@ -81,22 +63,22 @@ describe("getConfig", async () => {
 		);
 
 		const config = await getConfig({
-			cwd: tmpDir,
+			cwd: tmp,
 			configPath: "server/auth/auth.ts",
 		});
 
 		expect(config).not.toBe(null);
 	});
 
-	it("should resolve direct alias", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const dbPath = path.join(tmpDir, "server", "db");
+	testWithTmpDir("should resolve direct alias", async ({ tmp }) => {
+		const authPath = path.join(tmp, "server", "auth");
+		const dbPath = path.join(tmp, "server", "db");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(dbPath, { recursive: true });
 
 		//create dummy tsconfig.json
 		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
+			path.join(tmp, "tsconfig.json"),
 			`{
               "compilerOptions": {
                 /* Path Aliases */
@@ -135,23 +117,25 @@ describe("getConfig", async () => {
 		);
 
 		const config = await getConfig({
-			cwd: tmpDir,
+			cwd: tmp,
 			configPath: "server/auth/auth.ts",
 		});
 
 		expect(config).not.toBe(null);
 	});
 
-	it("should resolve resolver type alias with relative path", async () => {
-		const authPath = path.join(tmpDir, "test", "server", "auth");
-		const dbPath = path.join(tmpDir, "test", "server", "db");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(dbPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve resolver type alias with relative path",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "test", "server", "auth");
+			const dbPath = path.join(tmp, "test", "server", "db");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(dbPath, { recursive: true });
 
-		//create dummy tsconfig.json
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			//create dummy tsconfig.json
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
               "compilerOptions": {
                 /* Path Aliases */
                 "baseUrl": "./test",
@@ -160,12 +144,12 @@ describe("getConfig", async () => {
                 }
               }
 					}`,
-		);
+			);
 
-		//create dummy auth.ts
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			//create dummy auth.ts
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 			 import {prismaAdapter} from "better-auth/adapters/prisma";			
 			 import {db} from "@server/db/db";
 
@@ -177,36 +161,39 @@ describe("getConfig", async () => {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		//create dummy db.ts
-		await fs.writeFile(
-			path.join(dbPath, "db.ts"),
-			`class PrismaClient {
+			//create dummy db.ts
+			await fs.writeFile(
+				path.join(dbPath, "db.ts"),
+				`class PrismaClient {
 				constructor() {}
 			}
 			
 			export const db = new PrismaClient()`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "test/server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "test/server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
+			expect(config).not.toBe(null);
+		},
+	);
 
-	it("should resolve direct alias with relative path", async () => {
-		const authPath = path.join(tmpDir, "test", "server", "auth");
-		const dbPath = path.join(tmpDir, "test", "server", "db");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(dbPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve direct alias with relative path",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "test", "server", "auth");
+			const dbPath = path.join(tmp, "test", "server", "db");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(dbPath, { recursive: true });
 
-		//create dummy tsconfig.json
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			//create dummy tsconfig.json
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
               "compilerOptions": {
                 /* Path Aliases */
                 "baseUrl": "./test",
@@ -215,12 +202,12 @@ describe("getConfig", async () => {
                 }
               }
 					}`,
-		);
+			);
 
-		//create dummy auth.ts
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			//create dummy auth.ts
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 			 import {prismaAdapter} from "better-auth/adapters/prisma";			
 			 import {db} from "prismaDbClient";
 
@@ -232,35 +219,36 @@ describe("getConfig", async () => {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		//create dummy db.ts
-		await fs.writeFile(
-			path.join(dbPath, "db.ts"),
-			`class PrismaClient {
+			//create dummy db.ts
+			await fs.writeFile(
+				path.join(dbPath, "db.ts"),
+				`class PrismaClient {
 				constructor() {}
 			}
 			
 			export const db = new PrismaClient()`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "test/server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "test/server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
+			expect(config).not.toBe(null);
+		},
+	);
 
-	it("should resolve with relative import", async () => {
-		const authPath = path.join(tmpDir, "test", "server", "auth");
-		const dbPath = path.join(tmpDir, "test", "server", "db");
+	testWithTmpDir("should resolve with relative import", async ({ tmp }) => {
+		const authPath = path.join(tmp, "test", "server", "auth");
+		const dbPath = path.join(tmp, "test", "server", "db");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(dbPath, { recursive: true });
 
 		//create dummy tsconfig.json
 		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
+			path.join(tmp, "tsconfig.json"),
 			`{
               "compilerOptions": {
                 /* Path Aliases */
@@ -300,22 +288,22 @@ describe("getConfig", async () => {
 		);
 
 		const config = await getConfig({
-			cwd: tmpDir,
+			cwd: tmp,
 			configPath: "test/server/auth/auth.ts",
 		});
 
 		expect(config).not.toBe(null);
 	});
 
-	it("should error with invalid alias", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const dbPath = path.join(tmpDir, "server", "db");
+	testWithTmpDir("should error with invalid alias", async ({ tmp }) => {
+		const authPath = path.join(tmp, "server", "auth");
+		const dbPath = path.join(tmp, "server", "db");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(dbPath, { recursive: true });
 
 		//create dummy tsconfig.json
 		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
+			path.join(tmp, "tsconfig.json"),
 			`{
               "compilerOptions": {
                 /* Path Aliases */
@@ -358,7 +346,7 @@ describe("getConfig", async () => {
 			.mockImplementation(() => {});
 
 		await expect(() =>
-			getConfig({ cwd: tmpDir, configPath: "server/auth/auth.ts" }),
+			getConfig({ cwd: tmp, configPath: "server/auth/auth.ts" }),
 		).rejects.toThrowError();
 
 		expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -369,9 +357,9 @@ describe("getConfig", async () => {
 		);
 	});
 
-	it("should resolve js config", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const dbPath = path.join(tmpDir, "server", "db");
+	testWithTmpDir("should resolve js config", async ({ tmp }) => {
+		const authPath = path.join(tmp, "server", "auth");
+		const dbPath = path.join(tmp, "server", "db");
 		await fs.mkdir(authPath, { recursive: true });
 		await fs.mkdir(dbPath, { recursive: true });
 
@@ -387,7 +375,7 @@ describe("getConfig", async () => {
 			 })`,
 		);
 		const config = await getConfig({
-			cwd: tmpDir,
+			cwd: tmp,
 			configPath: "server/auth/auth.js",
 		});
 		expect(config).toMatchObject({
@@ -395,51 +383,53 @@ describe("getConfig", async () => {
 		});
 	});
 
-	it("should resolve path aliases from referenced tsconfig files", async () => {
-		const authPath = path.join(tmpDir, "apps", "web", "server", "auth");
-		const dbPath = path.join(tmpDir, "packages", "shared", "db");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(dbPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve path aliases from referenced tsconfig files",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "apps", "web", "server", "auth");
+			const dbPath = path.join(tmp, "packages", "shared", "db");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(dbPath, { recursive: true });
 
-		// Create root tsconfig.json with references
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			// Create root tsconfig.json with references
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"references": [
 					{ "path": "./apps/web" },
 					{ "path": "./packages/shared" }
 				]
 			}`,
-		);
+			);
 
-		// Create web app tsconfig.json with aliases
-		await fs.writeFile(
-			path.join(tmpDir, "apps", "web", "tsconfig.json"),
-			`{
+			// Create web app tsconfig.json with aliases
+			await fs.writeFile(
+				path.join(tmp, "apps", "web", "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@web/*": ["./server/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create shared package tsconfig.json with aliases
-		await fs.writeFile(
-			path.join(tmpDir, "packages", "shared", "tsconfig.json"),
-			`{
+			// Create shared package tsconfig.json with aliases
+			await fs.writeFile(
+				path.join(tmp, "packages", "shared", "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@shared/*": ["./db/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create dummy auth.ts using both aliases
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			// Create dummy auth.ts using both aliases
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 			 import {prismaAdapter} from "better-auth/adapters/prisma";			
 			 import {db} from "@shared/db";
 
@@ -451,39 +441,42 @@ describe("getConfig", async () => {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		// Create dummy db.ts
-		await fs.writeFile(
-			path.join(dbPath, "db.ts"),
-			`class PrismaClient {
+			// Create dummy db.ts
+			await fs.writeFile(
+				path.join(dbPath, "db.ts"),
+				`class PrismaClient {
 				constructor() {}
 			}
 			
 			export const db = new PrismaClient()`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "apps/web/server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "apps/web/server/auth/auth.ts",
+			});
 
-		expect(config).toMatchObject({
-			emailAndPassword: { enabled: true },
-			database: expect.objectContaining({
-				// This proves the @shared/db alias was resolved correctly
-			}),
-		});
-	});
+			expect(config).toMatchObject({
+				emailAndPassword: { enabled: true },
+				database: expect.objectContaining({
+					// This proves the @shared/db alias was resolved correctly
+				}),
+			});
+		},
+	);
 
-	it("should handle missing referenced tsconfig files gracefully", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		await fs.mkdir(authPath, { recursive: true });
+	testWithTmpDir(
+		"should handle missing referenced tsconfig files gracefully",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "server", "auth");
+			await fs.mkdir(authPath, { recursive: true });
 
-		// Create root tsconfig.json with reference to non-existent file
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			// Create root tsconfig.json with reference to non-existent file
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@server/*": ["./server/*"]
@@ -493,38 +486,41 @@ describe("getConfig", async () => {
 					{ "path": "./non-existent" }
 				]
 			}`,
-		);
+			);
 
-		// Create dummy auth.ts
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			// Create dummy auth.ts
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 
 			 export const auth = betterAuth({
 					emailAndPassword: {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
+			expect(config).not.toBe(null);
+		},
+	);
 
-	it("should handle circular references in tsconfig files", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const appPath = path.join(tmpDir, "app");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(appPath, { recursive: true });
+	testWithTmpDir(
+		"should handle circular references in tsconfig files",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "server", "auth");
+			const appPath = path.join(tmp, "app");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(appPath, { recursive: true });
 
-		// Create root tsconfig.json that references app tsconfig
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			// Create root tsconfig.json that references app tsconfig
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@root/*": ["./server/*"]
@@ -534,12 +530,12 @@ describe("getConfig", async () => {
 					{ "path": "./app" }
 				]
 			}`,
-		);
+			);
 
-		// Create app tsconfig.json that references back to root
-		await fs.writeFile(
-			path.join(tmpDir, "app", "tsconfig.json"),
-			`{
+			// Create app tsconfig.json that references back to root
+			await fs.writeFile(
+				path.join(tmp, "app", "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@app/*": ["./src/*"]
@@ -549,73 +545,76 @@ describe("getConfig", async () => {
 					{ "path": ".." }
 				]
 			}`,
-		);
+			);
 
-		// Create dummy auth.ts
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			// Create dummy auth.ts
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 
 			 export const auth = betterAuth({
 					emailAndPassword: {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
+			expect(config).not.toBe(null);
+		},
+	);
 
-	it("should resolve direct tsconfig file references", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		const sharedPath = path.join(tmpDir, "shared", "db");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(sharedPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve direct tsconfig file references",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "server", "auth");
+			const sharedPath = path.join(tmp, "shared", "db");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(sharedPath, { recursive: true });
 
-		// Create root tsconfig.json with direct file references
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			// Create root tsconfig.json with direct file references
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"references": [
 					{ "path": "./tsconfig.app.json" },
 					{ "path": "./tsconfig.shared.json" }
 				]
 			}`,
-		);
+			);
 
-		// Create tsconfig.app.json with app-specific aliases
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.app.json"),
-			`{
+			// Create tsconfig.app.json with app-specific aliases
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.app.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@app/*": ["./server/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create tsconfig.shared.json with shared aliases
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.shared.json"),
-			`{
+			// Create tsconfig.shared.json with shared aliases
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.shared.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@shared/*": ["./shared/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create dummy auth.ts using both aliases
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			// Create dummy auth.ts using both aliases
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 			 import {prismaAdapter} from "better-auth/adapters/prisma";			
 			 import {db} from "@shared/db/db";
 
@@ -627,119 +626,125 @@ describe("getConfig", async () => {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		// Create dummy db.ts
-		await fs.writeFile(
-			path.join(sharedPath, "db.ts"),
-			`class PrismaClient {
+			// Create dummy db.ts
+			await fs.writeFile(
+				path.join(sharedPath, "db.ts"),
+				`class PrismaClient {
 				constructor() {}
 			}
 			
 			export const db = new PrismaClient()`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
+			expect(config).not.toBe(null);
+		},
+	);
 
-	it("should handle mixed directory and file references", async () => {
-		const authPath = path.join(tmpDir, "apps", "web", "server", "auth");
-		const utilsPath = path.join(tmpDir, "packages", "utils");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(utilsPath, { recursive: true });
+	testWithTmpDir(
+		"should handle mixed directory and file references",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "apps", "web", "server", "auth");
+			const utilsPath = path.join(tmp, "packages", "utils");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(utilsPath, { recursive: true });
 
-		// Create root tsconfig.json with mixed references
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			// Create root tsconfig.json with mixed references
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"references": [
 					{ "path": "./apps/web" },
 					{ "path": "./tsconfig.utils.json" }
 				]
 			}`,
-		);
+			);
 
-		// Create web app directory-based tsconfig
-		await fs.writeFile(
-			path.join(tmpDir, "apps", "web", "tsconfig.json"),
-			`{
+			// Create web app directory-based tsconfig
+			await fs.writeFile(
+				path.join(tmp, "apps", "web", "tsconfig.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@web/*": ["./server/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create utils file-based tsconfig
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.utils.json"),
-			`{
+			// Create utils file-based tsconfig
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.utils.json"),
+				`{
 				"compilerOptions": {
 					"paths": {
 						"@utils/*": ["./packages/utils/*"]
 					}
 				}
 			}`,
-		);
+			);
 
-		// Create dummy auth.ts
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import {betterAuth} from "better-auth";
+			// Create dummy auth.ts
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import {betterAuth} from "better-auth";
 
 			 export const auth = betterAuth({
 					emailAndPassword: {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		// Create dummy utils file
-		await fs.writeFile(
-			path.join(utilsPath, "index.ts"),
-			`export const utils = {}`,
-		);
+			// Create dummy utils file
+			await fs.writeFile(
+				path.join(utilsPath, "index.ts"),
+				`export const utils = {}`,
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "apps/web/server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "apps/web/server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-	});
-	it("should resolve SvelteKit $lib/server imports correctly", async () => {
-		const authPath = path.join(tmpDir, "src");
-		const libServerPath = path.join(tmpDir, "src", "lib", "server");
-		await fs.mkdir(authPath, { recursive: true });
-		await fs.mkdir(libServerPath, { recursive: true });
+			expect(config).not.toBe(null);
+		},
+	);
+	testWithTmpDir(
+		"should resolve SvelteKit $lib/server imports correctly",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "src");
+			const libServerPath = path.join(tmp, "src", "lib", "server");
+			await fs.mkdir(authPath, { recursive: true });
+			await fs.mkdir(libServerPath, { recursive: true });
 
-		await fs.writeFile(
-			path.join(tmpDir, "package.json"),
-			JSON.stringify({
-				name: "test-sveltekit",
-				devDependencies: {
-					"@sveltejs/kit": "^2.0.0",
-				},
-			}),
-		);
+			await fs.writeFile(
+				path.join(tmp, "package.json"),
+				JSON.stringify({
+					name: "test-sveltekit",
+					devDependencies: {
+						"@sveltejs/kit": "^2.0.0",
+					},
+				}),
+			);
 
-		await fs.writeFile(
-			path.join(libServerPath, "database.ts"),
-			`export const db = {
+			await fs.writeFile(
+				path.join(libServerPath, "database.ts"),
+				`export const db = {
 				// Mock database client
 				connect: () => console.log('Connected to database')
 			};`,
-		);
+			);
 
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import { betterAuth } from "better-auth";
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import { betterAuth } from "better-auth";
 			 import { db } from "$lib/server/database";
 
 			 export const auth = betterAuth({
@@ -747,21 +752,22 @@ describe("getConfig", async () => {
 						enabled: true,
 					}
 			 })`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "src/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "src/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-		expect(config).toMatchObject({
-			emailAndPassword: { enabled: true },
-		});
-	});
+			expect(config).not.toBe(null);
+			expect(config).toMatchObject({
+				emailAndPassword: { enabled: true },
+			});
+		},
+	);
 
-	it("should resolve export default auth", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
+	testWithTmpDir("should resolve export default auth", async ({ tmp }) => {
+		const authPath = path.join(tmp, "server", "auth");
 		await fs.mkdir(authPath, { recursive: true });
 
 		await fs.writeFile(
@@ -784,7 +790,7 @@ describe("getConfig", async () => {
 		);
 
 		const config = await getConfig({
-			cwd: tmpDir,
+			cwd: tmp,
 			configPath: "server/auth/auth.ts",
 		});
 
@@ -800,13 +806,15 @@ describe("getConfig", async () => {
 		});
 	});
 
-	it("should resolve export default auth with named export", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		await fs.mkdir(authPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve export default auth with named export",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "server", "auth");
+			await fs.mkdir(authPath, { recursive: true });
 
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import { betterAuth } from "better-auth";
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import { betterAuth } from "better-auth";
 
 			 const auth = betterAuth({
 					emailAndPassword: {
@@ -823,32 +831,35 @@ describe("getConfig", async () => {
 			 export { auth };
 
 			 export default auth;`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-		expect(config).toMatchObject({
-			emailAndPassword: { enabled: true },
-			socialProviders: {
-				github: {
-					clientId: "test-id",
-					clientSecret: "test-secret",
+			expect(config).not.toBe(null);
+			expect(config).toMatchObject({
+				emailAndPassword: { enabled: true },
+				socialProviders: {
+					github: {
+						clientId: "test-id",
+						clientSecret: "test-secret",
+					},
 				},
-			},
-		});
-	});
+			});
+		},
+	);
 
-	it("should resolve export default with inline betterAuth call", async () => {
-		const authPath = path.join(tmpDir, "server", "auth");
-		await fs.mkdir(authPath, { recursive: true });
+	testWithTmpDir(
+		"should resolve export default with inline betterAuth call",
+		async ({ tmp }) => {
+			const authPath = path.join(tmp, "server", "auth");
+			await fs.mkdir(authPath, { recursive: true });
 
-		await fs.writeFile(
-			path.join(authPath, "auth.ts"),
-			`import { betterAuth } from "better-auth";
+			await fs.writeFile(
+				path.join(authPath, "auth.ts"),
+				`import { betterAuth } from "better-auth";
 
 			 export default betterAuth({
 					emailAndPassword: {
@@ -856,30 +867,33 @@ describe("getConfig", async () => {
 					},
 					trustedOrigins: ["http://localhost:3000"]
 			 });`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "server/auth/auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "server/auth/auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-		expect(config).toMatchObject({
-			emailAndPassword: { enabled: true },
-			trustedOrigins: ["http://localhost:3000"],
-		});
-	});
-	it("should load configs importing cloudflare workers", async () => {
-		await fs.writeFile(
-			path.join(tmpDir, "tsconfig.json"),
-			`{
+			expect(config).not.toBe(null);
+			expect(config).toMatchObject({
+				emailAndPassword: { enabled: true },
+				trustedOrigins: ["http://localhost:3000"],
+			});
+		},
+	);
+	testWithTmpDir(
+		"should load configs importing cloudflare workers",
+		async ({ tmp }) => {
+			await fs.writeFile(
+				path.join(tmp, "tsconfig.json"),
+				`{
 				"compilerOptions": {}
 			}`,
-		);
+			);
 
-		await fs.writeFile(
-			path.join(tmpDir, "auth.ts"),
-			`import { betterAuth } from "better-auth";
+			await fs.writeFile(
+				path.join(tmp, "auth.ts"),
+				`import { betterAuth } from "better-auth";
 			 import { env } from "cloudflare:workers";
 
 			 export const auth = betterAuth({
@@ -887,14 +901,15 @@ describe("getConfig", async () => {
 						enabled: !!env.FLAG,
 					},
 			 });`,
-		);
+			);
 
-		const config = await getConfig({
-			cwd: tmpDir,
-			configPath: "auth.ts",
-		});
+			const config = await getConfig({
+				cwd: tmp,
+				configPath: "auth.ts",
+			});
 
-		expect(config).not.toBe(null);
-		expect(config?.emailAndPassword?.enabled).toBe(true);
-	});
+			expect(config).not.toBe(null);
+			expect(config?.emailAndPassword?.enabled).toBe(true);
+		},
+	);
 });

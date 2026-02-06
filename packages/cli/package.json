@@ -58,6 +58,7 @@
     "better-sqlite3": "^12.6.2",
     "@types/semver": "^7.7.1",
     "jiti": "^2.6.0",
+    "memfs": "^4.56.10",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
     "type-fest": "^5.4.2",
