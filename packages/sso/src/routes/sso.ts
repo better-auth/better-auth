@@ -66,7 +66,7 @@ function getOIDCRedirectURI(
 	providerId: string,
 	options?: SSOOptions,
 ): string {
-	if (options?.redirectURI) {
+	if (options?.redirectURI?.trim()) {
 		try {
 			// Full URL — use as-is
 			new URL(options.redirectURI);
@@ -1260,7 +1260,9 @@ export const signInSSO = (options?: SSOOptions) => {
 				const state = await generateState(
 					ctx,
 					undefined,
-					options?.redirectURI ? { ssoProviderId: provider.providerId } : false,
+					options?.redirectURI?.trim()
+						? { ssoProviderId: provider.providerId }
+						: false,
 				);
 				const redirectURI = getOIDCRedirectURI(
 					ctx.context.baseURL,
@@ -1827,7 +1829,7 @@ export const callbackSSOShared = (options?: SSOOptions) => {
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
 
-			const providerId = (stateData as any).ssoProviderId as string | undefined;
+			const providerId = stateData.ssoProviderId as string | undefined;
 			if (!providerId) {
 				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(
