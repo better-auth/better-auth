@@ -610,6 +610,13 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
+	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce) {
+		throw new APIError("BAD_REQUEST", {
+			error_description: "Either code_verifier or client_secret is required",
+			error: "invalid_request",
+		});
+	}
+
 	/** Get and check Verification Value */
 	const verificationValue = await checkVerificationValue(
 		ctx,
