@@ -17,6 +17,7 @@ import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
+	callbackSSOShared,
 	registerSSOProvider,
 	signInSSO,
 	spMetadata,
@@ -96,6 +97,7 @@ type SSOEndpoints<O extends SSOOptions> = {
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	listSSOProviders: ReturnType<typeof listSSOProviders>;
@@ -151,6 +153,7 @@ export function sso<O extends SSOOptions>(
 		registerSSOProvider: registerSSOProvider(optionsWithStore),
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOShared: callbackSSOShared(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
 		listSSOProviders: listSSOProviders(),
