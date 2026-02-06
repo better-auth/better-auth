@@ -1,7 +1,6 @@
 import type { LiteralString } from "@better-auth/core";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { Endpoint } from "better-call";
-import type { AddonHook } from "./addon-hooks";
 import type {
 	OrganizationOptions,
 	ResolvedOrganizationOptions,
@@ -49,16 +48,15 @@ export const DEFAULT_ADDON_PRIORITY = 50;
 
 /**
  * Interface for organization addons that extend the organization plugin
- * with additional functionality, endpoints, schema, and lifecycle hooks.
+ * with additional functionality, endpoints, schema, and events.
  *
  * @example
  * ```ts
  * export const teams = (options?: TeamsOptions) => {
  *   return {
  *     id: "teams",
- *     priority: 10, // Run early to create default teams
- *     hooks: {
- *       async afterCreateOrganization({ organization, member }, ctx, addonCtx) {
+ *     events: {
+ *       async createDefaultTeam({ organization, user }, ctx, addonCtx) {
  *         // Check if access-control addon is present
  *         if (addonCtx.hasAddon("access-control")) {
  *           // Inter-addon communication
@@ -94,10 +92,10 @@ export interface Addon<TOptions = unknown> {
 	 */
 	schema?: BetterAuthPluginDBSchema;
 	/**
-	 * Lifecycle hooks that subscribe to organization plugin events.
-	 * Hooks receive an additional `addonCtx` parameter for inter-addon communication.
+	 * Event handlers provided by the addon.
+	 * Events can be any functions that the addon exposes for use by the organization plugin or other addons.
 	 */
-	hooks?: AddonHook;
+	events?: Record<string, (...args: any[]) => any>;
 	/**
 	 * Addon-specific options for type inference.
 	 * This allows consumers to get proper type inference for addon configuration.

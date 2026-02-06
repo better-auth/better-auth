@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { getAddonHook } from "../helpers/get-addon-hook";
+import type { TeamsAddon } from "../addons";
+import { getAddon } from "../helpers/get-addon";
 import { getHook as getOrgHook } from "../helpers/get-hook";
 import { resolveOrgOptions } from "../helpers/resolve-org-options";
 import type { Member, Organization } from "../schema";
@@ -22,7 +23,6 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									ctx,
 								});
 								if (!providedData) return;
-								const addonHooks = getAddonHook("CreateOrganization", options);
 								const orgHook = getOrgHook("CreateOrganization", options);
 
 								const customData = await (async () => {
@@ -41,14 +41,7 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 										{ organization: data, user },
 										ctx,
 									);
-									const addonMutate = await addonHooks.before(
-										{
-											organization: data,
-											user,
-										},
-										ctx,
-									);
-									return { ...data, ...(mutate ?? {}), ...(addonMutate ?? {}) };
+									return { ...data, ...(mutate ?? {}) };
 								})();
 
 								// Create organization
@@ -68,14 +61,16 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 									forceAllowId: true,
 								});
 
-								await addonHooks.after(
-									{
-										organization,
-										member,
-										user,
-									},
-									ctx,
-								);
+								const $TA = {} as TeamsAddon;
+								const [teamsAddon] = getAddon(options, "teams", $TA);
+
+								if (teamsAddon) {
+									await teamsAddon.events.createDefaultTeam(
+										{ organization, user },
+										ctx,
+									);
+								}
+
 								await orgHook.after(
 									{
 										organization,
