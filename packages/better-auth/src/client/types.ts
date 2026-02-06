@@ -7,8 +7,8 @@ import type {
 import type { RawError } from "@better-auth/core/utils/error-codes";
 import type {
 	BetterAuthPluginDBSchema,
+	InferDBFieldsOutput,
 	InferFieldsInputClient,
-	InferFieldsOutput,
 } from "../db";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
@@ -100,17 +100,18 @@ export type InferAdditionalFromClient<
 	Options extends BetterAuthClientOptions,
 	Key extends string,
 	Format extends "input" | "output" = "output",
-> = Options["plugins"] extends Array<infer Plugin>
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
-			? Schema extends BetterAuthPluginDBSchema
-				? Format extends "input"
-					? InferFieldsInputClient<Schema[Key]["fields"]>
-					: InferFieldsOutput<Schema[Key]["fields"]>
+> =
+	Options["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
+				? Schema extends BetterAuthPluginDBSchema
+					? Format extends "input"
+						? InferFieldsInputClient<Schema[Key]["fields"]>
+						: InferDBFieldsOutput<Schema[Key]["fields"]>
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
 export type SessionQueryParams = {
 	disableCookieCache?: boolean | undefined;

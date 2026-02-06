@@ -4,6 +4,7 @@ import type {
 	AdapterFactoryConfig,
 	AdapterFactoryCustomizeAdapterCreator,
 	CleanedWhere,
+	DBAdapter,
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
@@ -21,10 +22,10 @@ The rest are just edge cases.
 
 */
 
-async function createTestAdapter(
+async function createTestAdapter<Options extends BetterAuthOptions>(
 	props: {
 		config?: Partial<AdapterFactoryConfig>;
-		options?: BetterAuthOptions;
+		options?: Options;
 		adapter?: (
 			...args: Parameters<AdapterFactoryCustomizeAdapterCreator>
 		) => Partial<ReturnType<AdapterFactoryCustomizeAdapterCreator>>;
@@ -38,7 +39,7 @@ async function createTestAdapter(
 			supportsDates: true,
 			supportsBooleans: true,
 		},
-		options: {},
+		options: {} as never,
 		adapter: () => ({}),
 	},
 ) {
@@ -130,7 +131,7 @@ async function createTestAdapter(
 		database: testAdapter,
 	});
 
-	return (await auth.$context).adapter;
+	return (await auth.$context).adapter as DBAdapter<Options>;
 }
 
 describe("Create Adapter Helper", async () => {

@@ -34,7 +34,7 @@ Read more about [cookie caching](/docs/concepts/session-management#cookie-cache)
 
 Here are examples of how you can do caching in different frameworks and environments:
 
-<Tabs items={["Next", "Remix", "SolidStart", "TanStack Query"]}>
+<Tabs items={["Next", "react-router", "SolidStart", "TanStack Query"]}>
   <Tab value="Next">
     Since Next v15, we can use the `"use cache"` directive to cache the response of a server function.
 
@@ -49,24 +49,29 @@ Here are examples of how you can do caching in different frameworks and environm
     Learn more about NextJS use cache directive <Link href="https://nextjs.org/docs/app/api-reference/directives/use-cache">here</Link>.
 
   </Tab>
-    <Tab value="Remix">
-    In Remix, you can use the `cache` option in the `loader` function to cache responses on the server. Here’s an example:
+    <Tab value="react-router">
+    In React Router v7, you use HTTP `Cache-Control` headers in the loader function to cache responses. You must also export a headers function to send these headers. Here's an example:
 
     ```ts
-    import { json } from '@remix-run/node';
-
-    export const loader = async () => {
-    const { users } = await auth.api.listUsers();
-    return json(users, {
+    import { data } from 'react-router';
+    import type { Route } from './+types/your-route-name';
+    
+    export const loader = async ({ request }: Route.LoaderArgs) => {
+      const { users } = await auth.api.listUsers();
+      
+      return data(users, {
         headers: {
-        'Cache-Control': 'max-age=3600', // Cache for 1 hour
+          'Cache-Control': 'max-age=3600', // Cache for 1 hour
         },
-    });
+      });
     };
+    
+    export function headers({ loaderHeaders }: Route.HeadersArgs) {
+      return loaderHeaders;
+    }
     ```
 
 
-    You can read a nice guide on Loader vs Route Cache Headers in Remix <Link href="https://sergiodxa.com/articles/loader-vs-route-cache-headers-in-remix">here</Link>.
 
   </Tab>
 

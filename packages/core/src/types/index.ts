@@ -15,6 +15,7 @@ export type {
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,
+	BetterAuthDBOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 	BetterAuthRateLimitRule,
