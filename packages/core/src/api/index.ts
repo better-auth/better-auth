@@ -1,9 +1,12 @@
+import type { StandardSchemaV1 } from "@standard-schema/spec";
 import type {
+	EndpointBodyMethodOptions,
 	EndpointContext,
 	EndpointOptions,
 	StrictEndpoint,
 } from "better-call";
 import { createEndpoint, createMiddleware } from "better-call";
+import type { output } from "zod";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
 
@@ -33,6 +36,93 @@ export const createAuthMiddleware = createMiddleware.create({
 
 const use = [optionsMiddleware];
 
+type ExtractInferredMetadata<E extends EndpointOptions> = E extends {
+	metadata: infer M;
+}
+	? {
+			metadata: {
+				[K in keyof M]: K extends "$Infer"
+					? {
+							[P in keyof M[K]]: M[K][P] extends StandardSchemaV1<infer S>
+								? StandardSchemaV1<S>
+								: M[K][P] extends output<infer T>
+									? T
+									: M[K][P];
+						}
+					: M[K];
+			};
+		}
+	: {};
+
+//#region Copy from better-call
+type ExtractBody<E extends EndpointBodyMethodOptions> = E extends {
+	method: ("POST" | "PUT" | "DELETE" | "PATCH" | "GET" | "HEAD")[];
+	body?: StandardSchemaV1<infer B>;
+}
+	? E extends {
+			method: infer M;
+			body?: StandardSchemaV1<B>;
+		}
+		? { method: M; body: StandardSchemaV1<B> }
+		: never
+	: E extends {
+				method:
+					| "POST"
+					| "PUT"
+					| "DELETE"
+					| "PATCH"
+					| ("POST" | "PUT" | "DELETE" | "PATCH")[];
+				body?: StandardSchemaV1<infer B>;
+			}
+		? E extends {
+				method: infer M;
+				body?: StandardSchemaV1<B>;
+			}
+			? { method: M; body: StandardSchemaV1<B> }
+			: never
+		: E extends {
+					method: "*";
+					body?: StandardSchemaV1<infer B>;
+				}
+			? {
+					method: "*";
+					body?: StandardSchemaV1<B>;
+				}
+			: E extends {
+						method: "GET" | "HEAD" | ("GET" | "HEAD")[];
+						body?: never;
+					}
+				? E extends { method: infer M }
+					? { method: M }
+					: never
+				: never;
+type ExtractError<E extends EndpointOptions> = E extends {
+	error?: StandardSchemaV1<infer Err>;
+}
+	? {
+			error: StandardSchemaV1<Err>;
+		}
+	: {};
+type ExtractQuery<E extends EndpointOptions> = E extends {
+	query?: StandardSchemaV1<infer Q>;
+}
+	? {
+			query: StandardSchemaV1<Q>;
+		}
+	: {};
+
+type ExtractOthers<E extends EndpointOptions> = Pick<
+	E,
+	Exclude<keyof E, "method" | "body" | "query" | "error" | "metadata">
+>;
+
+type PrettifyEndpointOptions<E extends EndpointOptions> = ExtractOthers<E> &
+	ExtractBody<E> &
+	ExtractQuery<E> &
+	ExtractError<E> &
+	ExtractInferredMetadata<E>;
+//#endregion
+
 type EndpointHandler<
 	Path extends string,
 	Options extends EndpointOptions,
@@ -47,7 +137,7 @@ export function createAuthEndpoint<
 	path: Path,
 	options: Options,
 	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
+): StrictEndpoint<Path, PrettifyEndpointOptions<Options>, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -56,7 +146,7 @@ export function createAuthEndpoint<
 >(
 	options: Options,
 	handler: EndpointHandler<Path, Options, R>,
-): StrictEndpoint<Path, Options, R>;
+): StrictEndpoint<Path, PrettifyEndpointOptions<Options>, R>;
 
 export function createAuthEndpoint<
 	Path extends string,
@@ -84,7 +174,8 @@ export function createAuthEndpoint<
 				use: [...(options?.use || []), ...use],
 			},
 			// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-			async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+			async (ctx) =>
+				runWithEndpointContext(ctx as any, () => handler(ctx as any)),
 		);
 	}
 
@@ -94,7 +185,8 @@ export function createAuthEndpoint<
 			use: [...(options?.use || []), ...use],
 		},
 		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		async (ctx) =>
+			runWithEndpointContext(ctx as any, () => handler(ctx as any)),
 	);
 }
 

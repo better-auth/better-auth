@@ -13,8 +13,8 @@ catalogs:
       specifier: 1.1.21
       version: 1.1.21
     better-call:
-      specifier: 1.3.0
-      version: 1.3.0
+      specifier: 1.3.1
+      version: 1.3.1
     tsdown:
       specifier: ^0.20.1
       version: 0.20.1
@@ -1355,7 +1355,7 @@ importers:
         version: 5.22.0(prisma@5.22.0)
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1592,7 +1592,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       jose:
         specifier: ^6.1.0
         version: 6.1.3
@@ -1665,7 +1665,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1879,7 +1879,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1929,7 +1929,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1960,7 +1960,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 1.3.0(zod@4.3.6)
+        version: 1.3.1(zod@4.3.6)
       stripe:
         specifier: ^20.2.0
         version: 20.2.0(@types/node@25.2.0)
@@ -8629,8 +8629,8 @@ packages:
       zod:
         optional: true
 
-  better-call@1.3.0:
-    resolution: {integrity: sha512-ONCrU4kLRDN8mM9AiLJvMf+CfBWrEQVcdZG+JQHA2pS5jK/nPnSkU6syRV7A2n+1XVJs7MuqrDRtm+rgA7n4dw==}
+  better-call@1.3.1:
+    resolution: {integrity: sha512-Wtv4Z/pNTaG3KBpba6TEBAIRm0c6GyxlwsvnDiI8eDNdx+/OrLOc09EU4BtL8a/RSfEJcSlYpnn0W9w9mMBIVg==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -25085,7 +25085,7 @@ snapshots:
     optionalDependencies:
       zod: 4.3.6
 
-  better-call@1.3.0(zod@4.3.6):
+  better-call@1.3.1(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
@@ -33479,7 +33479,7 @@ snapshots:
 
   solid-refresh@0.6.3(solid-js@1.9.11):
     dependencies:
-      '@babel/generator': 7.29.0
+      '@babel/generator': 7.29.1
       '@babel/helper-module-imports': 7.28.6
       '@babel/types': 7.29.0
       solid-js: 1.9.11
