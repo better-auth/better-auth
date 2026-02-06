@@ -1019,7 +1019,7 @@ importers:
         version: 0.30.6
       drizzle-orm:
         specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       mongodb:
         specifier: ^7.0.0
         version: 7.0.0(socks@2.8.7)
@@ -1103,7 +1103,7 @@ importers:
         version: link:../../../../packages/test-utils
       '@prisma/client':
         specifier: ^5.22.0
-        version: 5.22.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 5.22.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
@@ -1217,7 +1217,7 @@ importers:
         version: link:../../../../../packages/better-auth
       drizzle-orm:
         specifier: ^0.45.1
-        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       hono:
         specifier: ^4.11.6
         version: 4.11.7
@@ -1507,6 +1507,9 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
+      boxen:
+        specifier: ^8.0.1
+        version: 8.0.1
       c12:
         specifier: ^3.3.3
         version: 3.3.3(magicast@0.5.1)
@@ -1619,7 +1622,7 @@ importers:
         version: 0.3.1
       drizzle-orm:
         specifier: '>=0.41.0'
-        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       tsdown:
         specifier: 'catalog:'
         version: 0.20.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.17.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -19661,7 +19664,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.32(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.6))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.32(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.83.1(@babel/core@7.29.0)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.29.0))(@types/react@19.2.10)(react@19.2.4))(react@19.2.4)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -19742,7 +19745,7 @@ snapshots:
       '@expo/json-file': 10.0.8
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3
-      expo: 54.0.32(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.6))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.32(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.83.1(@babel/core@7.29.0)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.29.0))(@types/react@19.2.10)(react@19.2.4))(react@19.2.4)
       resolve-from: 5.0.0
       semver: 7.7.3
       xml2js: 0.6.0
@@ -21111,10 +21114,6 @@ snapshots:
     optionalDependencies:
       prisma: 5.22.0
 
-  '@prisma/client@5.22.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))':
-    optionalDependencies:
-      prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-
   '@prisma/client@5.22.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))':
     optionalDependencies:
       prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
@@ -21124,6 +21123,14 @@ snapshots:
       '@prisma/client-runtime-utils': 7.2.0
     optionalDependencies:
       prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      typescript: 5.9.3
+    optional: true
+
+  '@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@prisma/client-runtime-utils': 7.2.0
+    optionalDependencies:
+      prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       typescript: 5.9.3
     optional: true
 
@@ -22839,9 +22846,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/metro-config@0.83.1(@babel/core@7.29.0)':
@@ -22852,9 +22857,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -26626,6 +26629,25 @@ snapshots:
       pg: 8.16.3
       postgres: 3.4.8
       prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+    optional: true
+
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
+    optionalDependencies:
+      '@cloudflare/workers-types': 4.20260127.0
+      '@electric-sql/pglite': 0.3.14
+      '@libsql/client': 0.17.0(encoding@0.1.13)
+      '@opentelemetry/api': 1.9.0
+      '@prisma/client': 7.2.0(prisma@7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
+      '@types/better-sqlite3': 7.6.13
+      '@types/pg': 8.16.0
+      better-sqlite3: 12.6.2
+      bun-types: 1.3.8
+      gel: 2.2.0
+      kysely: 0.28.10
+      mysql2: 3.16.2
+      pg: 8.16.3
+      postgres: 3.4.8
+      prisma: 7.2.0(@types/react@19.2.10)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
   dts-resolver@2.1.3(oxc-resolver@11.17.0):
     optionalDependencies:

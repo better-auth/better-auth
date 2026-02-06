@@ -23,6 +23,11 @@ const flagsMap = {
 		peer: "--peer",
 		optional: "--optional",
 	},
+	yarn: {
+		dev: "--dev",
+		peer: "--peer",
+		optional: "--optional",
+	},
 };
 
 export function installDependencies({
@@ -67,7 +72,7 @@ export function installDependencies({
 			throw new Error(`Catalog flag is not supported by "${packageManager}"`);
 		}
 	} else {
-		const flag = flagMap[type as keyof typeof flagMap];
+		const flag = flagMap?.[type as keyof typeof flagMap];
 		if (flag) {
 			flags.push(flag);
 		}

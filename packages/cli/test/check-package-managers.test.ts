@@ -3,8 +3,14 @@ import { fs } from "memfs";
 import type { PackageJson } from "type-fest";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("node:fs", () => fs);
-vi.mock("node:fs/promises", () => fs.promises);
+vi.mock("node:fs", () => ({
+	...fs,
+	default: fs,
+}));
+vi.mock("node:fs/promises", () => ({
+	...fs.promises,
+	default: fs.promises,
+}));
 
 import { env } from "@better-auth/core/env";
 import {
