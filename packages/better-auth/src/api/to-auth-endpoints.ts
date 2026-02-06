@@ -64,10 +64,12 @@ export function toAuthEndpoints<
 		api[key] = async (context?: UserInputContext) => {
 			const run = async () => {
 				const authContext = await ctx;
+				const userContext = context?.context || {};
 				let internalContext: InternalContext = {
 					...context,
 					context: {
 						...authContext,
+						...userContext,
 						returned: undefined,
 						responseHeaders: undefined,
 						session: null,
