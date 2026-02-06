@@ -221,7 +221,7 @@ export async function authorizeEndpoint(
 	}
 
 	// Check if PKCE is required for this client and scope
-	const pkceRequired = isPKCERequired(opts, client, requestedScopes);
+	const pkceRequired = isPKCERequired(client, requestedScopes);
 
 	// Validate PKCE parameters if required
 	if (pkceRequired) {
@@ -230,7 +230,7 @@ export async function authorizeEndpoint(
 				formatErrorURL(
 					query.redirect_uri,
 					"invalid_request",
-					"pkce is required for this client",
+					pkceRequired.valueOf(),
 					query.state,
 					getIssuer(ctx, opts),
 				),

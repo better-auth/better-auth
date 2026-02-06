@@ -640,7 +640,7 @@ async function handleAuthorizationCodeGrant(
 		(verificationValue.query?.scope as string)?.split(" ") || [];
 
 	// Check if PKCE is required for this client
-	const pkceRequired = isPKCERequired(opts, client, requestedScopes);
+	const pkceRequired = isPKCERequired(client, requestedScopes);
 
 	// Validate credentials based on requirements
 	if (pkceRequired) {

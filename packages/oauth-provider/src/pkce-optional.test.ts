@@ -97,7 +97,7 @@ describe("PKCE optional - default behavior", async () => {
 		});
 
 		expect(errorRedirect).toContain("error=invalid_request");
-		expect(errorRedirect).toContain("pkce+is+required+for+this+client");
+		expect(errorRedirect).toContain("pkce+is+required+for+public+clients");
 	});
 
 	it("confidential client without PKCE should fail with default settings", async () => {
@@ -225,7 +225,7 @@ describe("PKCE optional - per-client opt-out", async () => {
 		});
 
 		expect(errorRedirect).toContain("error=invalid_request");
-		expect(errorRedirect).toContain("pkce+is+required+for+this+client");
+		expect(errorRedirect).toContain("pkce+is+required+for+public+clients");
 	});
 
 	it("confidential client without PKCE should succeed", async () => {
@@ -339,7 +339,9 @@ describe("PKCE optional - offline_access scope", async () => {
 		});
 
 		expect(errorRedirect).toContain("error=invalid_request");
-		expect(errorRedirect).toContain("pkce+is+required+for+this+client");
+		expect(errorRedirect).toContain(
+			"pkce+is+required+when+requesting+offline_access+scope",
+		);
 	});
 
 	it("offline_access with PKCE should succeed", async () => {
@@ -493,6 +495,9 @@ describe("PKCE optional - consistency checks", async () => {
 		});
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as any).error_description).toContain(
+			"code_verifier required because PKCE was used in authorization",
+		);
 	});
 
 	it("PKCE not in auth but in token should fail", async () => {
@@ -538,6 +543,9 @@ describe("PKCE optional - consistency checks", async () => {
 		});
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as any).error_description).toContain(
+			"code_verifier provided but PKCE was not used in authorization",
+		);
 	});
 
 	it("mismatched PKCE challenge should fail", async () => {
@@ -581,15 +589,21 @@ describe("PKCE optional - consistency checks", async () => {
 			},
 		});
 
-		const tokenResponse = await authenticatedClient.$fetch("/oauth2/token", {
-			method: "POST",
-			body,
-			headers,
-			onError(context) {
-				expect(context.response.status).toBe(401);
+		const tokenResponse = await authenticatedClient.$fetch<"string", "string">(
+			"/oauth2/token",
+			{
+				method: "POST",
+				body,
+				headers,
+				onError(context) {
+					expect(context.response.status).toBe(401);
+				},
 			},
-		});
+		);
 
 		expect(tokenResponse.error).toBeDefined();
+		expect((tokenResponse.error as any).error_description).toContain(
+			"code verification failed",
+		);
 	});
 });
