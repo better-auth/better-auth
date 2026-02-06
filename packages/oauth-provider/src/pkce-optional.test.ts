@@ -607,3 +607,91 @@ describe("PKCE optional - consistency checks", async () => {
 		);
 	});
 });
+
+describe("PKCE optional - registration restrictions", async () => {
+	const authServerBaseUrl = "http://localhost:3004";
+	const rpBaseUrl = "http://localhost:5004";
+	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
+		baseURL: authServerBaseUrl,
+		plugins: [
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				allowDynamicClientRegistration: true,
+				silenceWarnings: {
+					oauthAuthServerConfig: true,
+					openidConfig: true,
+				},
+			}),
+			jwt(),
+		],
+	});
+	const { headers } = await signInWithTestUser();
+	const authenticatedClient = createAuthClient({
+		plugins: [oauthProviderClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+
+	it("admin create endpoint should persist require_pkce", async () => {
+		const pkceDisabledClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				require_pkce: false,
+			},
+		});
+		expect(pkceDisabledClient.require_pkce).toBe(false);
+
+		const pkceRequiredClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				require_pkce: true,
+			},
+		});
+		expect(pkceRequiredClient.require_pkce).toBe(true);
+	});
+
+	it.each([
+		["dynamic registration", "/oauth2/register"],
+		["non-admin create-client", "/oauth2/create-client"],
+	])("should ignore require_pkce false (%s)", async (_, endpoint) => {
+		// require_pkce isn't a parameter for this endpoint, so it should be ignored and default to true.
+		// The client should be created successfully, but PKCE should still be required.
+
+		const response = await authenticatedClient.$fetch<OAuthClient>(endpoint, {
+			method: "POST",
+			body: {
+				redirect_uris: [redirectUri],
+				require_pkce: false,
+			},
+		});
+
+		expect(response.data?.client_id).toBeDefined();
+		expect(response.data?.require_pkce).not.toBe(true);
+
+		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
+		authUrl.searchParams.set("client_id", response.data!.client_id);
+		authUrl.searchParams.set("redirect_uri", redirectUri);
+		authUrl.searchParams.set("response_type", "code");
+		authUrl.searchParams.set("scope", "openid");
+		authUrl.searchParams.set("state", "123");
+
+		let errorRedirect = "";
+		await authenticatedClient.$fetch(authUrl.toString(), {
+			onError(context) {
+				errorRedirect = context.response.headers.get("Location") || "";
+			},
+		});
+
+		expect(errorRedirect).toContain("error=invalid_request");
+		expect(errorRedirect).toContain("pkce+is+required+for+this+client");
+	});
+});

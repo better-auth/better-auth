@@ -195,6 +195,11 @@ export const adminCreateOAuthClient = (opts: OAuthOptions<Scope[]>) =>
 												type: "boolean",
 												description: "Whether the client is disabled",
 											},
+											require_pkce: {
+												type: "boolean",
+												description: "Whether the client requires PKCE",
+												default: true,
+											},
 											metadata: {
 												type: "object",
 												additionalProperties: true,

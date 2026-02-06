@@ -128,6 +128,13 @@ export async function checkOAuthClient(
 			}
 		}
 	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
