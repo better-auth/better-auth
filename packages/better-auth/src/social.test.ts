@@ -4,8 +4,8 @@ import { runWithEndpointContext } from "@better-auth/core/context";
 import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
-	RailwayProfile,
 	MicrosoftEntraIDProfile,
+	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
@@ -2075,4 +2075,3 @@ describe("Railway Provider", async () => {
 		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });
-
