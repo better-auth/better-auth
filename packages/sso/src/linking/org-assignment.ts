@@ -108,12 +108,14 @@ export async function assignOrganizationFromProvider(
       });
 
       if (customData) {
-        memberData = { ...defaultData, ...customData };
+        // Prevent overriding identity fields while allowing custom fields
+        const { organizationId: _, userId: __, ...safeCustomData } = customData;
+        memberData = { ...defaultData, ...safeCustomData };
       }
     }
   }
 
-  const createdMember = await ctx.context.adapter.create({
+  await ctx.context.adapter.create({
     model: "member",
     data: memberData,
   });
@@ -243,7 +245,9 @@ export async function assignOrganizationByDomain(
       });
 
       if (customData) {
-        memberData = { ...defaultData, ...customData };
+        // Prevent overriding identity fields while allowing custom fields
+        const { organizationId: _, userId: __, ...safeCustomData } = customData;
+        memberData = { ...defaultData, ...safeCustomData };
       }
     }
   }
