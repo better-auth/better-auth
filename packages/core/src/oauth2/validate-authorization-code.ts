@@ -1,6 +1,6 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
@@ -124,31 +124,18 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
-export async function validateToken(token: string, jwksEndpoint: string) {
-	const { data, error } = await betterFetch<{
-		keys: {
-			kid: string;
-			kty: string;
-			use: string;
-			n: string;
-			e: string;
-			x5c: string[];
-		}[];
-	}>(jwksEndpoint, {
-		method: "GET",
-		headers: {
-			accept: "application/json",
-		},
+export async function validateToken(
+	token: string,
+	jwksEndpoint: string,
+	options?: {
+		audience?: string | string[];
+		issuer?: string | string[];
+	},
+) {
+	const jwks = createRemoteJWKSet(new URL(jwksEndpoint));
+	const verified = await jwtVerify(token, jwks, {
+		audience: options?.audience,
+		issuer: options?.issuer,
 	});
-	if (error) {
-		throw error;
-	}
-	const keys = data["keys"];
-	const header = JSON.parse(atob(token.split(".")[0]!));
-	const key = keys.find((key) => key.kid === header.kid);
-	if (!key) {
-		throw new Error("Key not found");
-	}
-	const verified = await jwtVerify(token, key);
 	return verified;
 }
