@@ -1614,6 +1614,10 @@ async function handleOIDCCallback(
 		const verified = await validateToken(
 			tokenResponse.idToken,
 			config.jwksEndpoint,
+			{
+				audience: config.clientId,
+				issuer: provider.issuer,
+			},
 		).catch((e) => {
 			ctx.context.logger.error(e);
 			return null;
@@ -1623,13 +1627,6 @@ async function handleOIDCCallback(
 				`${
 					errorURL || callbackURL
 				}?error=invalid_provider&error_description=token_not_verified`,
-			);
-		}
-		if (verified.payload.iss !== provider.issuer) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=issuer_mismatch`,
 			);
 		}
 
