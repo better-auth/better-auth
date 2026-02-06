@@ -2,7 +2,7 @@ import type { GenericEndpointContext, User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sso } from "..";
 import { assignOrganizationByDomain } from "./org-assignment";
 
@@ -21,13 +21,14 @@ describe("assignOrganizationByDomain", () => {
 				organizationId: string | null;
 				userId: string;
 			}[],
-			member: [] as {
-				id: string;
-				organizationId: string;
-				userId: string;
-				role: string;
-				createdAt: Date;
-			}[],
+		member: [] as {
+			id: string;
+			organizationId: string;
+			userId: string;
+			role: string;
+			createdAt: Date;
+			[key: string]: any;
+		}[],
 			organization: [] as {
 				id: string;
 				name: string;
@@ -321,5 +322,121 @@ describe("assignOrganizationByDomain", () => {
 		const members = data.member.filter((m) => m.userId === user.id);
 		expect(members).toHaveLength(1);
 		expect(members[0]?.organizationId).toBe(legitOrg.id);
+	});
+
+	it("should use getMemberData hook to add additional fields to member", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: true, organizationId: org.id }),
+		);
+
+		const user = createUser({ name: "Alice Smith" });
+		data.user.push(user);
+
+		const getMemberDataSpy = vi.fn(
+			async ({
+				user,
+				organization,
+				defaultData,
+			}: {
+				user: User & Record<string, any>;
+				organization: Record<string, any>;
+				defaultData: Record<string, any>;
+			}) => {
+				return {
+					...defaultData,
+					customField: "custom-value",
+					memberName: user.name,
+					orgName: organization.name,
+				};
+			},
+		);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+			provisioningOptions: {
+				getMemberData: getMemberDataSpy,
+			},
+		});
+
+		// Verify the hook was called with correct arguments
+		expect(getMemberDataSpy).toHaveBeenCalledTimes(1);
+		const callArgs = getMemberDataSpy.mock.calls[0]?.[0];
+		expect(callArgs?.user.id).toBe(user.id);
+		expect(callArgs?.user.name).toBe("Alice Smith");
+		expect(callArgs?.organization.id).toBe(org.id);
+		expect(callArgs?.organization.name).toBe("Test Org");
+		expect(callArgs?.defaultData.organizationId).toBe(org.id);
+		expect(callArgs?.defaultData.userId).toBe(user.id);
+		expect(callArgs?.defaultData.role).toBe("member");
+
+		// Verify a member was created
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
+	});
+
+	it("should use default data when getMemberData returns undefined", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: true, organizationId: org.id }),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+			provisioningOptions: {
+				getMemberData: async () => {
+					return undefined;
+				},
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.organizationId).toBe(org.id);
+		expect(members[0]?.role).toBe("member");
+	});
+
+	it("should respect defaultRole when using getMemberData", async () => {
+		const { data, createContext } = createTestContext();
+
+		const org = createOrg();
+		data.organization.push(org);
+		data.ssoProvider.push(
+			createProvider({ domainVerified: true, organizationId: org.id }),
+		);
+
+		const user = createUser();
+		data.user.push(user);
+
+		const ctx = (await createContext()) as GenericEndpointContext;
+		await assignOrganizationByDomain(ctx, {
+			user,
+			domainVerification: { enabled: true },
+			provisioningOptions: {
+				defaultRole: "admin",
+				getMemberData: async ({ defaultData }) => {
+					// defaultData should have role: "admin"
+					return defaultData;
+				},
+			},
+		});
+
+		const members = data.member.filter((m) => m.userId === user.id);
+		expect(members).toHaveLength(1);
+		expect(members[0]?.role).toBe("admin");
 	});
 });
