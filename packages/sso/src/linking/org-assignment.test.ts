@@ -21,14 +21,14 @@ describe("assignOrganizationByDomain", () => {
 				organizationId: string | null;
 				userId: string;
 			}[],
-		member: [] as {
-			id: string;
-			organizationId: string;
-			userId: string;
-			role: string;
-			createdAt: Date;
-			[key: string]: any;
-		}[],
+			member: [] as {
+				id: string;
+				organizationId: string;
+				userId: string;
+				role: string;
+				createdAt: Date;
+				[key: string]: any;
+			}[],
 			organization: [] as {
 				id: string;
 				name: string;

@@ -252,9 +252,10 @@ export interface SSOOptions {
 						role: string;
 						createdAt: Date;
 					};
-				}) => Promise<Record<string, any> | undefined>
-				| Record<string, any>
-				| undefined;
+				}) =>
+					| Promise<Record<string, any> | undefined>
+					| Record<string, any>
+					| undefined;
 		  }
 		| undefined;
 	/**
