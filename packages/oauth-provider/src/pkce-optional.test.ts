@@ -51,8 +51,8 @@ describe("PKCE optional - default behavior", async () => {
 		},
 	});
 
-	let confidentialClient: OAuthClient | null;
-	let publicClient: OAuthClient | null;
+	let confidentialClient: OAuthClient;
+	let publicClient: OAuthClient;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
@@ -80,10 +80,6 @@ describe("PKCE optional - default behavior", async () => {
 	});
 
 	it("public client without PKCE should fail", async () => {
-		if (!publicClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Try to authorize without PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", publicClient.client_id);
@@ -105,10 +101,6 @@ describe("PKCE optional - default behavior", async () => {
 	});
 
 	it("confidential client without PKCE should fail with default settings", async () => {
-		if (!confidentialClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Try to authorize without PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
@@ -130,10 +122,6 @@ describe("PKCE optional - default behavior", async () => {
 	});
 
 	it("confidential client with PKCE should succeed", async () => {
-		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
 		const codeVerifier = generateRandomString(64);
 		const authUrl = await createAuthorizationURL({
 			id: providerId,
@@ -190,8 +178,8 @@ describe("PKCE optional - per-client opt-out", async () => {
 		},
 	});
 
-	let confidentialClient: OAuthClient | null;
-	let publicClient: OAuthClient | null;
+	let confidentialClient: OAuthClient;
+	let publicClient: OAuthClient;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
@@ -220,10 +208,6 @@ describe("PKCE optional - per-client opt-out", async () => {
 	});
 
 	it("public client without PKCE should always fail", async () => {
-		if (!publicClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Try to authorize without PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", publicClient.client_id);
@@ -245,10 +229,6 @@ describe("PKCE optional - per-client opt-out", async () => {
 	});
 
 	it("confidential client without PKCE should succeed", async () => {
-		if (!confidentialClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Authorize without PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
@@ -326,7 +306,7 @@ describe("PKCE optional - offline_access scope", async () => {
 		},
 	});
 
-	let confidentialClient: OAuthClient | null;
+	let confidentialClient: OAuthClient;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
@@ -343,10 +323,6 @@ describe("PKCE optional - offline_access scope", async () => {
 	});
 
 	it("offline_access without PKCE should fail even with requirePKCE: false", async () => {
-		if (!confidentialClient?.client_id) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Try to authorize with offline_access but without PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
@@ -367,10 +343,6 @@ describe("PKCE optional - offline_access scope", async () => {
 	});
 
 	it("offline_access with PKCE should succeed", async () => {
-		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
 		const codeVerifier = generateRandomString(64);
 		const authUrl = await createAuthorizationURL({
 			id: providerId,
@@ -455,7 +427,7 @@ describe("PKCE optional - consistency checks", async () => {
 		},
 	});
 
-	let confidentialClient: OAuthClient | null;
+	let confidentialClient: OAuthClient;
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
@@ -472,10 +444,6 @@ describe("PKCE optional - consistency checks", async () => {
 	});
 
 	it("PKCE in auth but not in token should fail", async () => {
-		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Authorize WITH PKCE
 		const codeVerifier = generateRandomString(64);
 		const authUrl = await createAuthorizationURL({
@@ -528,10 +496,6 @@ describe("PKCE optional - consistency checks", async () => {
 	});
 
 	it("PKCE not in auth but in token should fail", async () => {
-		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Authorize WITHOUT PKCE
 		const authUrl = new URL(`${authServerBaseUrl}/api/auth/oauth2/authorize`);
 		authUrl.searchParams.set("client_id", confidentialClient.client_id);
@@ -577,10 +541,6 @@ describe("PKCE optional - consistency checks", async () => {
 	});
 
 	it("mismatched PKCE challenge should fail", async () => {
-		if (!confidentialClient?.client_id || !confidentialClient?.client_secret) {
-			throw Error("beforeAll not run properly");
-		}
-
 		// Authorize with PKCE
 		const codeVerifier = generateRandomString(64);
 		const authUrl = await createAuthorizationURL({
