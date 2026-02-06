@@ -703,8 +703,8 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 			if (!acceptedI) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND
-				)
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
 			}
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
