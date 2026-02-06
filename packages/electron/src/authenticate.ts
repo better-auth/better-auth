@@ -11,7 +11,6 @@ import * as z from "zod";
 import { getChannelPrefixWithDelimiter } from "./bridges";
 import type { ElectronClientOptions } from "./types/client";
 import { isProcessType } from "./utils";
-import { getChannelPrefixWithDelimiter } from "./bridges";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 export const kState = Symbol.for("better-auth:state");
@@ -126,7 +125,7 @@ export async function authenticate(
 		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
-				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
+				`${options.channelPrefix || "better-auth"}:authenticated`,
 				ctx.data.user,
 			);
 		},
