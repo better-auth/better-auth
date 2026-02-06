@@ -353,6 +353,13 @@ export const getSessionCookie = (
 		| undefined,
 ) => {
 	const headers = "headers" in request ? request.headers : request;
+	if (config?.cookiePrefix) {
+		if (config.cookieName) {
+			config.cookiePrefix = `${config.cookiePrefix}-`;
+		} else {
+			config.cookiePrefix = `${config.cookiePrefix}.`;
+		}
+	}
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
@@ -399,7 +406,10 @@ export const getCookieCache = async <
 		  }
 		| undefined,
 ) => {
-	const headers = request instanceof Headers ? request : request.headers;
+	const headers =
+		request instanceof Headers || !("headers" in request)
+			? request
+			: request.headers;
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

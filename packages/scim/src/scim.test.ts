@@ -4,6 +4,7 @@ import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
@@ -98,6 +99,56 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		registerOrganization,
 		getSCIMToken,
 		getAuthCookieHeaders,
+	};
+};
+
+const createSqlTestInstance = async (
+	testWith: "sqlite" | "postgres",
+	scimOptions?: SCIMOptions,
+) => {
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [scim(scimOptions), organization()],
+		},
+		{
+			testWith,
+		},
+	);
+
+	async function getSCIMToken(
+		providerId: string = "the-saml-provider-1",
+		organizationId?: string,
+	) {
+		const { headers } = await signInWithTestUser();
+		const { scimToken } = await auth.api.generateSCIMToken({
+			body: {
+				providerId,
+				organizationId,
+			},
+			headers,
+		});
+
+		return scimToken;
+	}
+
+	async function registerOrganization(org: string) {
+		const { headers } = await signInWithTestUser();
+
+		return await auth.api.createOrganization({
+			body: {
+				slug: `the-${org}`,
+				name: `the organization ${org}`,
+			},
+			headers,
+		});
+	}
+
+	return {
+		auth,
+		client,
+		registerOrganization,
+		getSCIMToken,
+		signInWithTestUser,
 	};
 };
 
@@ -841,6 +892,7 @@ describe("SCIM", () => {
 			const user = await response.json();
 			expect(user).toMatchObject({
 				active: true,
+				displayName: "the-username",
 				emails: [
 					{
 						primary: true,
@@ -855,14 +907,14 @@ describe("SCIM", () => {
 					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
+				name: {
+					formatted: "the-username",
+				},
 				schemas: expect.arrayContaining([
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "the-username",
 			});
-			// When no name is provided, displayName and name should be undefined
-			expect(user.displayName).toBeUndefined();
-			expect(user.name).toBeUndefined();
 		});
 
 		it("should create a new account linked to an existing user", async () => {
@@ -935,6 +987,7 @@ describe("SCIM", () => {
 
 			expect(user).toMatchObject({
 				active: true,
+				displayName: "the-username",
 				emails: [
 					{
 						primary: true,
@@ -949,14 +1002,14 @@ describe("SCIM", () => {
 					location: expect.stringContaining("/api/auth/scim/v2/Users/"),
 					resourceType: "User",
 				}),
+				name: {
+					formatted: "the-username",
+				},
 				schemas: expect.arrayContaining([
 					"urn:ietf:params:scim:schemas:core:2.0:User",
 				]),
 				userName: "the-username",
 			});
-			// When no name is provided, displayName and name should be undefined
-			expect(user.displayName).toBeUndefined();
-			expect(user.name).toBeUndefined();
 		});
 
 		it("should create a new user with name parts", async () => {
@@ -1204,7 +1257,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name?.formatted).toBe("Juan Perez");
+			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			const updatedUser = await auth.api.updateSCIMUser({
@@ -1331,7 +1384,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name?.formatted).toBe("Juan Perez");
+			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			await auth.api.patchSCIMUser({
@@ -1407,7 +1460,7 @@ describe("SCIM", () => {
 			expect(user).toBeTruthy();
 			expect(user.externalId).toBe("the-username");
 			expect(user.userName).toBe("primary-email@test.com");
-			expect(user.name?.formatted).toBe("Juan Perez");
+			expect(user.name.formatted).toBe("Juan Perez");
 			expect(user.emails[0]?.value).toBe("primary-email@test.com");
 
 			await auth.api.patchSCIMUser({
@@ -1503,7 +1556,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name?.formatted).toBe("Updated Value");
+			expect(updatedUser.name.formatted).toBe("Updated Value");
 		});
 
 		it.each([
@@ -1557,7 +1610,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name?.formatted).toBe("Nested User");
+			expect(updatedUser.name.formatted).toBe("Nested User");
 			expect(updatedUser.displayName).toBe("Nested User");
 			expect(updatedUser.userName).toBe("nested-test-user-updated");
 		});
@@ -1604,7 +1657,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name?.formatted).toBe("No Path Name");
+			expect(updatedUser.name.formatted).toBe("No Path Name");
 			expect(updatedUser.userName).toBe("username");
 		});
 
@@ -1644,7 +1697,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name?.formatted).toBe("User Dot");
+			expect(updatedUser.name.formatted).toBe("User Dot");
 			expect(updatedUser.userName).toBe("username");
 		});
 
@@ -1689,7 +1742,7 @@ describe("SCIM", () => {
 				},
 			});
 
-			expect(updatedUser.name?.formatted).toBe("user-case");
+			expect(updatedUser.name.formatted).toBe("user-case");
 		});
 
 		it("should skip add operation when value already exists", async () => {
@@ -1955,6 +2008,62 @@ describe("SCIM", () => {
 				startIndex: 1,
 				totalResults: 2,
 				Resources: [userA, userB],
+			});
+		});
+
+		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
+			const { auth, getSCIMToken, registerOrganization } =
+				await createSqlTestInstance("postgres");
+			const scimToken = await getSCIMToken();
+
+			const createUser = (userName: string, scimToken: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const listUsers = (scimToken: string) => {
+				return auth.api.listSCIMUsers({
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const users = await listUsers(scimToken);
+
+			expect(users).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
+			});
+
+			const [organizationA, organizationB] = await Promise.all([
+				registerOrganization("org-a"),
+				registerOrganization("org-b"),
+			]);
+
+			const [scimTokenOrgA, scimTokenOrgB] = await Promise.all([
+				getSCIMToken("provider-org-a", organizationA?.id),
+				getSCIMToken("provider-org-b", organizationB?.id),
+			]);
+
+			await createUser("user-a", scimTokenOrgA);
+			const orgBUsers = await listUsers(scimTokenOrgB);
+
+			expect(orgBUsers).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
 			});
 		});
 
