@@ -12,7 +12,7 @@ import type { InferTeam, ResolvedTeamsOptions } from "../types";
 /**
  * This event will create a default team after an org is created.
  */
-export const afterCreateOrganization = async <O extends ResolvedTeamsOptions>(
+export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 	{ user, organization }: { user: User; organization: Organization },
 	authContext: AuthContext,
 	options: O,
