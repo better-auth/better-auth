@@ -371,9 +371,25 @@ describe("Admin plugin", async () => {
 		});
 	});
 
+	it("should allow filtering with falsy filterValue", async () => {
+	    const res = await client.admin.listUsers({
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+
+	    expect(res.data?.users.length).toBeGreaterThan(0);
+	    expect(res.data?.users.every((u) => u.banned === false)).toBe(true);
+	});
+
 	it("should filter users by id with ne operator", async () => {
 		const allUsers = await client.admin.listUsers({
-			query: {},
+		 	query: {},
 			fetchOptions: {
 				headers: adminHeaders,
 			},
