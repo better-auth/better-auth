@@ -131,6 +131,7 @@ Better Auth provides pre-configured helper functions for popular OAuth providers
 
 ### Supported Providers
 
+- **Asgardeo** - `asgardeo(options)`
 - **Auth0** - `auth0(options)`
 - **HubSpot** - `hubspot(options)`
 - **Keycloak** - `keycloak(options)`
@@ -148,6 +149,7 @@ import {
 	// genericOAuth plugin
 	genericOAuth,
 	// providers
+  asgardeo,
 	auth0,
 	gumroad,
 	hubspot,
@@ -163,6 +165,11 @@ export const auth = betterAuth({
 	plugins: [
 		genericOAuth({
 			config: [
+        asgardeo({
+          clientId: process.env.ASGARDEO_CLIENT_ID,
+          clientSecret: process.env.ASGARDEO_CLIENT_SECRET,
+          issuer: process.env.ASGARDEO_ISSUER,
+        }),
 				auth0({
 					clientId: process.env.AUTH0_CLIENT_ID,
 					clientSecret: process.env.AUTH0_CLIENT_SECRET,
@@ -219,6 +226,7 @@ export const auth = betterAuth({
 
 Each provider helper accepts common OAuth options (extending `BaseOAuthProviderOptions`) plus provider-specific fields:
 
+- **Asgardeo**: Requires `issuer` (e.g., `https://api.asgardeo.io/t/{organization_name}`)
 - **Auth0**: Requires `domain` (e.g., `dev-xxx.eu.auth0.com`)
 - **HubSpot**: No additional required fields. Optional `scopes` (defaults to `["oauth"]`)
 - **Keycloak**: Requires `issuer` (e.g., `https://my-domain/realms/MyRealm`)
