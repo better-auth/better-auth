@@ -5,11 +5,12 @@ export const redirectPlugin = {
 	name: "Redirect",
 	hooks: {
 		onSuccess(context) {
-			if (context.data?.url && context.data?.redirect) {
+			const redirectUri = context.data?.url ?? context.data?.uri;
+			if (redirectUri && context.data?.redirect) {
 				if (typeof window !== "undefined" && window.location) {
 					if (window.location) {
 						try {
-							window.location.href = context.data.url;
+							window.location.href = redirectUri;
 						} catch {}
 					}
 				}
