@@ -3,8 +3,8 @@ import { join } from "node:path";
 import type { Awaitable, LiteralString } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import type { PackageJson } from "type-fest";
-import { exec } from "./exec";
 import { findMonorepoRoot } from "./get-package-info";
+import { exec } from "node:child_process";
 
 export async function checkPackageManagers() {
 	const hasPnpm = await getVersion("pnpm");
