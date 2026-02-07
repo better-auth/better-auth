@@ -100,6 +100,13 @@
       "types": "./dist/client/lynx/index.d.mts",
       "default": "./dist/client/lynx/index.mjs"
     },
+    "./repl": {
+      "dev-source": "./src/integrations/repl.ts",
+      "types": "./dist/integrations/repl.d.mts",
+      "require": "./dist/integrations/repl.cjs",
+      "import": "./dist/integrations/repl.mjs",
+      "default": "./dist/integrations/repl.mjs"
+    },
     "./test": {
       "dev-source": "./src/test-utils/index.ts",
       "types": "./dist/test-utils/index.d.mts",
@@ -485,6 +492,7 @@
     "@noble/hashes": "^2.0.1",
     "better-call": "catalog:",
     "defu": "^6.1.4",
+    "dotenv": "^17.2.3",
     "jose": "^6.1.0",
     "kysely": "^0.28.10",
     "nanostores": "^1.1.0",

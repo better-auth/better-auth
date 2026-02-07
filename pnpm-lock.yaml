@@ -1359,6 +1359,9 @@ importers:
       defu:
         specifier: ^6.1.4
         version: 6.1.4
+      dotenv:
+        specifier: ^17.2.3
+        version: 17.2.3
       drizzle-kit:
         specifier: '>=0.31.4'
         version: 0.31.4
@@ -19531,7 +19534,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.32(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.6))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.32(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.83.1(@babel/core@7.29.0)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.29.0))(@types/react@19.2.10)(react@19.2.4))(react@19.2.4)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -19612,7 +19615,7 @@ snapshots:
       '@expo/json-file': 10.0.8
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3
-      expo: 54.0.32(@babel/core@7.28.6)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.81.5(@babel/core@7.28.6)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.28.6))(@types/react@19.1.17)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.32(@babel/core@7.29.0)(@expo/metro-runtime@6.1.2)(expo-router@6.0.22)(graphql@16.12.0)(react-native@0.83.1(@babel/core@7.29.0)(@react-native-community/cli@20.0.2(typescript@5.9.3))(@react-native/metro-config@0.83.1(@babel/core@7.29.0))(@types/react@19.2.10)(react@19.2.4))(react@19.2.4)
       resolve-from: 5.0.0
       semver: 7.7.3
       xml2js: 0.6.0
@@ -22582,9 +22585,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/metro-config@0.83.1(@babel/core@7.29.0)':
@@ -22595,9 +22596,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
