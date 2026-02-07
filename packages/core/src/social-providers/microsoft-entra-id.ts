@@ -273,10 +273,19 @@ export const microsoft = (options: MicrosoftOptions) => {
 								user.verified_secondary_email?.includes(user.email))
 						? true
 						: false;
+			// Personal Microsoft accounts may not include `name` in the ID token.
+			// Fallback: name → given_name + family_name → email → preferred_username
+			const resolvedName =
+				user.name ||
+				[user.given_name, user.family_name].filter(Boolean).join(" ") ||
+				user.email ||
+				user.preferred_username ||
+				undefined;
+
 			return {
 				user: {
 					id: user.sub,
-					name: user.name,
+					name: resolvedName,
 					email: user.email,
 					image: user.picture,
 					emailVerified,

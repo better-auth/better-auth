@@ -1203,6 +1203,142 @@ describe("oauth2", async () => {
 			expect(msConfig.pkce).toBe(true);
 			expect(msConfig.disableImplicitSignUp).toBe(true);
 		});
+
+		describe("getUserInfo name resolution for personal accounts", () => {
+			const createConfig = () =>
+				microsoftEntraId({
+					clientId: "ms-client-id",
+					clientSecret: "ms-client-secret",
+					tenantId: "common",
+				});
+
+			it("should use profile.name when available (work account)", async () => {
+				const msConfig = createConfig();
+				const originalFetch = globalThis.fetch;
+				globalThis.fetch = vi.fn().mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							sub: "user-1",
+							name: "John Doe",
+							email: "john@contoso.com",
+							given_name: "John",
+							family_name: "Doe",
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+				try {
+					const result = await msConfig.getUserInfo!({
+						accessToken: "test-token",
+						tokenType: "Bearer",
+					});
+					expect(result).not.toBeNull();
+					expect(result!.name).toBe("John Doe");
+				} finally {
+					globalThis.fetch = originalFetch;
+				}
+			});
+
+			it("should fall back to given_name + family_name when name is missing", async () => {
+				const msConfig = createConfig();
+				const originalFetch = globalThis.fetch;
+				globalThis.fetch = vi.fn().mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							sub: "user-2",
+							email: "jane@contoso.com",
+							given_name: "Jane",
+							family_name: "Smith",
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+				try {
+					const result = await msConfig.getUserInfo!({
+						accessToken: "test-token",
+						tokenType: "Bearer",
+					});
+					expect(result).not.toBeNull();
+					expect(result!.name).toBe("Jane Smith");
+				} finally {
+					globalThis.fetch = originalFetch;
+				}
+			});
+
+			it("should fall back to givenname + familyname for personal accounts (no underscore)", async () => {
+				const msConfig = createConfig();
+				const originalFetch = globalThis.fetch;
+				globalThis.fetch = vi.fn().mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							sub: "user-3",
+							email: "personal@outlook.com",
+							givenname: "Alice",
+							familyname: "Wonder",
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+				try {
+					const result = await msConfig.getUserInfo!({
+						accessToken: "test-token",
+						tokenType: "Bearer",
+					});
+					expect(result).not.toBeNull();
+					expect(result!.name).toBe("Alice Wonder");
+				} finally {
+					globalThis.fetch = originalFetch;
+				}
+			});
+
+			it("should fall back to email when no name fields are present", async () => {
+				const msConfig = createConfig();
+				const originalFetch = globalThis.fetch;
+				globalThis.fetch = vi.fn().mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							sub: "user-4",
+							email: "noname@outlook.com",
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+				try {
+					const result = await msConfig.getUserInfo!({
+						accessToken: "test-token",
+						tokenType: "Bearer",
+					});
+					expect(result).not.toBeNull();
+					expect(result!.name).toBe("noname@outlook.com");
+				} finally {
+					globalThis.fetch = originalFetch;
+				}
+			});
+
+			it("should fall back to preferred_username when no name or email", async () => {
+				const msConfig = createConfig();
+				const originalFetch = globalThis.fetch;
+				globalThis.fetch = vi.fn().mockResolvedValue(
+					new Response(
+						JSON.stringify({
+							sub: "user-5",
+							preferred_username: "user5@outlook.com",
+						}),
+						{ status: 200, headers: { "content-type": "application/json" } },
+					),
+				);
+				try {
+					const result = await msConfig.getUserInfo!({
+						accessToken: "test-token",
+						tokenType: "Bearer",
+					});
+					expect(result).not.toBeNull();
+					expect(result!.name).toBe("user5@outlook.com");
+				} finally {
+					globalThis.fetch = originalFetch;
+				}
+			});
+		});
 	});
 
 	describe("Slack Provider Helper", () => {

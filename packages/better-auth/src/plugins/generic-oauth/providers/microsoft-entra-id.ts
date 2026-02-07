@@ -18,6 +18,10 @@ interface MicrosoftEntraIdProfile {
 	picture?: string;
 	given_name?: string;
 	family_name?: string;
+	/** Personal Microsoft accounts may return `givenname` (no underscore) */
+	givenname?: string;
+	/** Personal Microsoft accounts may return `familyname` (no underscore) */
+	familyname?: string;
 	email_verified?: boolean;
 }
 
@@ -69,12 +73,21 @@ export function microsoftEntraId(
 			return null;
 		}
 
+		// Personal Microsoft accounts may return `givenname`/`familyname` (no underscore)
+		// instead of `given_name`/`family_name`. We handle both variants.
+		const givenName = profile.given_name ?? profile.givenname;
+		const familyName = profile.family_name ?? profile.familyname;
+		const resolvedName =
+			profile.name ??
+			([givenName, familyName].filter(Boolean).join(" ") || undefined);
+
 		return {
 			id: profile.sub,
 			name:
-				profile.name ??
-				(`${profile.given_name ?? ""} ${profile.family_name ?? ""}`.trim() ||
-					undefined),
+				resolvedName ??
+				profile.email ??
+				profile.preferred_username ??
+				undefined,
 			email: profile.email ?? profile.preferred_username ?? undefined,
 			image: profile.picture,
 			// Note: Microsoft Entra ID does NOT include email_verified claim by default.
