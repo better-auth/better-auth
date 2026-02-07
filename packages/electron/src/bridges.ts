@@ -102,7 +102,7 @@ export function setupBridges(
 		if (state.isPending === true) return;
 
 		const user = state?.data?.user
-			? await normalizeUser(state.data.user)
+			? await normalizeUser(ctx.$fetch, state.data.user)
 			: null;
 		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
@@ -119,7 +119,9 @@ export function setupBridges(
 			},
 		);
 
-		return result.data?.user ? await normalizeUser(result.data.user) : null;
+		return result.data?.user
+			? await normalizeUser(ctx.$fetch, result.data.user)
+			: null;
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,

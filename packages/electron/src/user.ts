@@ -1,5 +1,6 @@
 import type { User } from "@better-auth/core/db";
 import { base64 } from "@better-auth/utils/base64";
+import type { BetterFetch } from "@better-fetch/fetch";
 
 const MAX_BYTES = 1024 * 1024 * 5; // 5MB
 const MAX_CACHE_SIZE = 100;
@@ -19,7 +20,10 @@ function setUserImageCache(
 	map.set(key, value);
 }
 
-async function fetchUserImage(url: string): Promise<string | null> {
+async function fetchUserImage(
+	$fetch: BetterFetch,
+	url: string,
+): Promise<string | null> {
 	if (isValidDataImageUrl(url)) return url;
 
 	const cached = userImageCache.get(url);
@@ -35,39 +39,44 @@ async function fetchUserImage(url: string): Promise<string | null> {
 		return null;
 	}
 
-	const response = await fetch(url, {
+	let result: string | null = null;
+	await $fetch(url, {
 		method: "GET",
 		headers: { accept: "image/*" },
+		async onSuccess({ data, response }) {
+			const contentLength = response.headers.get("content-length");
+			if (contentLength && Number(contentLength) > MAX_BYTES) {
+				return;
+			}
+			const buffer =
+				data instanceof ArrayBuffer
+					? new Uint8Array(data)
+					: new Uint8Array(await (data as Blob).arrayBuffer());
+			if (buffer.byteLength > MAX_BYTES) return;
+
+			const imageType = detectImageType(buffer);
+			if (!imageType) return;
+			const contentType =
+				response.headers.get("content-type")?.split(";")[0] ||
+				`image/${imageType}`;
+
+			const encoded = base64.encode(buffer);
+			const dataUrl = `data:${contentType};base64,${encoded}`;
+
+			setUserImageCache(userImageCache, url, dataUrl);
+			result = dataUrl;
+		},
 	});
 
-	if (!response.ok) return null;
-
-	const contentLength = response.headers.get("content-length");
-	if (contentLength && Number(contentLength) > MAX_BYTES) {
-		return null;
-	}
-
-	const buffer = new Uint8Array(await response.arrayBuffer());
-	if (buffer.byteLength > MAX_BYTES) return null;
-
-	const imageType = detectImageType(buffer);
-	if (!imageType) return null;
-
-	const contentType =
-		response.headers.get("content-type")?.split(";")[0] || `image/${imageType}`;
-
-	const encoded = base64.encode(buffer);
-	const dataUrl = `data:${contentType};base64,${encoded}`;
-
-	setUserImageCache(userImageCache, url, dataUrl);
-	return dataUrl;
+	return result;
 }
 
 export async function normalizeUser<U extends User & Record<string, any>>(
+	$fetch: BetterFetch,
 	user: U,
 ): Promise<U> {
 	if (user.image) {
-		user.image = await fetchUserImage(user.image).catch(() => null);
+		user.image = await fetchUserImage($fetch, user.image);
 	}
 
 	return user;
