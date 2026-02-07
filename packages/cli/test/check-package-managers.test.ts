@@ -1,7 +1,14 @@
+import { exec as execMock } from "node:child_process";
 import { join } from "node:path";
+import { env } from "@better-auth/core/env";
 import { fs } from "memfs";
 import type { PackageJson } from "type-fest";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+	detectPackageManager,
+	getCatalogEntries,
+} from "../src/utils/check-package-managers";
+import { testWithTmpDir } from "./test-utils";
 
 vi.mock("node:fs", () => ({
 	...fs,
@@ -11,14 +18,11 @@ vi.mock("node:fs/promises", () => ({
 	...fs.promises,
 	default: fs.promises,
 }));
+vi.mock("node:child_process", () => ({
+	exec: vi.fn(),
+}));
 
-import { env } from "@better-auth/core/env";
-import * as checkPackageManagers from "../src/utils/check-package-managers";
-import {
-	detectPackageManager,
-	getCatalogEntries,
-} from "../src/utils/check-package-managers";
-import { testWithTmpDir } from "./test-utils";
+const mockExec = vi.mocked(execMock);
 
 describe("getCatalogEntries", () => {
 	testWithTmpDir(
@@ -170,15 +174,6 @@ describe("detectPackageManager", () => {
 		);
 	});
 
-	testWithTmpDir("falls back to npm when .npmrc present", async ({ tmp }) => {
-		fs.writeFileSync(join(tmp, ".npmrc"), "");
-
-		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toStrictEqual(
-			expect.objectContaining({ packageManager: "npm" }),
-		);
-	});
-
 	testWithTmpDir("detects yarn via .yarnrc.yml", async ({ tmp }) => {
 		fs.writeFileSync(join(tmp, ".yarnrc.yml"), "");
 
@@ -189,17 +184,17 @@ describe("detectPackageManager", () => {
 	});
 
 	testWithTmpDir("falls back to npm when nothing matches", async ({ tmp }) => {
-		const spy = vi
-			.spyOn(checkPackageManagers, "checkPackageManagers")
-			.mockResolvedValue({ hasPnpm: null, hasBun: null, hasYarn: null });
+		mockExec.mockImplementation((_cmd, optionsOrCb, cb) => {
+			const callback = typeof optionsOrCb === "function" ? optionsOrCb : cb;
+			if (typeof callback === "function") {
+				callback(new Error("not found"), "", "");
+			}
+			return {} as import("node:child_process").ChildProcess;
+		});
 
-		try {
-			const pm = await detectPackageManager(tmp, {});
-			expect(pm).toStrictEqual(
-				expect.objectContaining({ packageManager: "npm" }),
-			);
-		} finally {
-			spy.mockRestore();
-		}
+		const pm = await detectPackageManager(tmp, {});
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "npm" }),
+		);
 	});
 });

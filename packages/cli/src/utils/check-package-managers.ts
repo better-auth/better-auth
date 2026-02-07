@@ -1,9 +1,9 @@
-import { exec } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Awaitable, LiteralString } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
 import type { PackageJson } from "type-fest";
+import { exec } from "./exec";
 import { findMonorepoRoot } from "./get-package-info";
 
 export async function checkPackageManagers() {
@@ -24,7 +24,10 @@ export type PackageManager = (typeof PACKAGE_MANAGER)[number];
 export async function detectPackageManager(
 	cwd: string,
 	packageJson: PackageJson,
-) {
+): Promise<{
+	packageManager: PackageManager;
+	version?: string | undefined;
+}> {
 	const monorepoRoot = await findMonorepoRoot(cwd);
 	for (const strategy of [
 		envStrategy,
@@ -40,10 +43,7 @@ export async function detectPackageManager(
 				result.packageManager.toLowerCase() as PackageManager,
 			)
 		) {
-			return result as {
-				packageManager: PackageManager;
-				version?: string | undefined;
-			};
+			return result as { packageManager: PackageManager };
 		}
 	}
 	return { packageManager: "npm" };
