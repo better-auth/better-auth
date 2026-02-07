@@ -15,15 +15,15 @@ Magic link or email link is a way to authenticate users without a password. When
 
     ```ts title="server.ts"
     import { betterAuth } from "better-auth";
-    import { magicLink } from "better-auth/plugins";
+    import { magicLink } from "better-auth/plugins";  // [!code highlight]
 
     export const auth = betterAuth({
         plugins: [
-            magicLink({
-                sendMagicLink: async ({ email, token, url }, ctx) => {
-                    // send email to user
-                }
-            })
+            magicLink({ // [!code highlight]
+                sendMagicLink: async ({ email, token, url }, ctx) => { // [!code highlight]
+                    // send email to user // [!code highlight]
+                } // [!code highlight]
+            }) // [!code highlight]
         ]
     })
     ```
@@ -36,10 +36,11 @@ Magic link or email link is a way to authenticate users without a password. When
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
-    import { magicLinkClient } from "better-auth/client/plugins";
+    import { magicLinkClient } from "better-auth/client/plugins"; // [!code highlight]
+    
     export const authClient = createAuthClient({
         plugins: [
-            magicLinkClient()
+            magicLinkClient() // [!code highlight]
         ]
     });
     ```
