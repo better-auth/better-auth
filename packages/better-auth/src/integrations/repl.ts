@@ -43,8 +43,11 @@ config({
 			possiblePaths.map(async (it): Promise<string | false> => {
 				try {
 					const path = join(dir, it);
-					await stat(path);
-					return path;
+					const s = await stat(path);
+					if (s.isFile() || s.isSymbolicLink()) {
+						return path;
+					}
+					return false;
 				} catch (_e) {
 					return false;
 				}
