@@ -1,13 +1,17 @@
 import { randomBytes } from "node:crypto";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import type { BetterFetch } from "@better-fetch/fetch";
+import { betterFetch } from "@better-fetch/fetch";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
-import { describe, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
 import { electron } from "../src/index";
+import { normalizeUser } from "../src/user";
 import { it, testUtils } from "./utils";
 
 const mockElectron = vi.hoisted(() => {
@@ -252,6 +256,9 @@ describe("Electron", () => {
 				user: mockUser,
 			},
 		});
+
+		// flush
+		await Promise.resolve();
 
 		expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
 			"better-auth:user-updated",
@@ -1208,5 +1215,269 @@ describe("Electron", () => {
 		);
 
 		await expect(client.requestAuth()).rejects.toThrow();
+	});
+
+	describe("user normalization", () => {
+		const MINIMAL_PNG_BASE64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+		const makeImageBytes = (magic: number[]) =>
+			new Uint8Array([...magic, ...new Array(20).fill(0)]);
+		const customFetchImpl = vi.fn(async (input, init) => {
+			input = input.toString();
+			if (input.endsWith(".jpg")) {
+				return new Response(makeImageBytes([0xff, 0xd8, 0xff, 0xe0]).buffer, {
+					headers: new Headers({ "content-type": "image/jpeg" }),
+				});
+			} else if (input.endsWith(".png") && !input.endsWith("avatar-fail.png")) {
+				return new Response(
+					makeImageBytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+						.buffer,
+					{
+						headers: new Headers({ "content-type": "image/png" }),
+					},
+				);
+			} else if (input.endsWith(".gif")) {
+				return new Response(
+					makeImageBytes([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]).buffer,
+					{
+						headers: new Headers({ "content-type": "image/gif" }),
+					},
+				);
+			} else if (input.endsWith(".webp")) {
+				return new Response(
+					makeImageBytes([
+						0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42,
+						0x50,
+					]).buffer,
+					{
+						headers: new Headers({ "content-type": "image/webp" }),
+					},
+				);
+			} else if (input.endsWith(".bmp")) {
+				return new Response(makeImageBytes([0x42, 0x4d]).buffer, {
+					headers: new Headers({ "content-type": "image/bmp" }),
+				});
+			} else if (input.endsWith(".ico")) {
+				return new Response(makeImageBytes([0x00, 0x00, 0x01, 0x00]).buffer, {
+					headers: new Headers({ "content-type": "image/x-icon" }),
+				});
+			}
+			return new Response(null, { status: 404 });
+		});
+
+		const $fetch = (async (input, init) => {
+			return await betterFetch(input, {
+				...init,
+				customFetchImpl,
+			});
+		}) as BetterFetch;
+
+		beforeEach(() => {
+			vi.clearAllMocks();
+		});
+
+		afterEach(() => {
+			vi.restoreAllMocks();
+		});
+
+		it("should pass through valid data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const dataUrl = `data:image/png;base64,${MINIMAL_PNG_BASE64}`;
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: dataUrl,
+			} as User);
+
+			expect(user.image).toBe(dataUrl);
+		});
+
+		it("should reject SVG data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image:
+					"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==",
+			} as User);
+
+			expect(user.image).toBeNull();
+		});
+
+		it("should reject invalid base64 data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "data:image/png;base64,!!!invalid!!!",
+			} as User);
+
+			expect(user.image).toBeNull();
+		});
+
+		it("should fetch http URL and convert to data URL", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.png",
+			} as User);
+
+			expect(customFetchImpl).toHaveBeenCalledWith(
+				expect.toSatisfy(
+					(value) => `${value}` === "https://example.com/avatar.png",
+				),
+				expect.objectContaining({
+					method: "GET",
+					headers: expect.toSatisfy(
+						(headers: Headers) => headers.get("accept") === "image/*",
+					),
+				}),
+			);
+			expect(user.image).toMatch(/^data:image\/png;base64,/);
+		});
+
+		it("should return null when fetch fails", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const fetchSpy = vi
+				.spyOn(globalThis, "fetch")
+				.mockRejectedValue(new Error("Network error"));
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar-fail.png",
+			} as any);
+
+			expect(user.image).toBeNull();
+
+			fetchSpy.mockRestore();
+		});
+
+		it("should return null when fetched content is not a valid image", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/page.html",
+			} as any);
+
+			expect(user.image).toBeNull();
+		});
+
+		it("should leave user unchanged when image is null", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: null,
+			} as any);
+
+			expect(user.image).toBeNull();
+		});
+
+		it("should convert JPEG to data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.jpg",
+			} as User);
+
+			expect(user.image).toMatch(/^data:image\/jpeg;base64,/);
+		});
+
+		it("should convert GIF to data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.gif",
+			} as User);
+
+			expect(user.image).toMatch(/^data:image\/gif;base64,/);
+		});
+
+		it("should convert WebP to data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.webp",
+			} as User);
+
+			expect(user.image).toMatch(/^data:image\/webp;base64,/);
+		});
+
+		it("should convert BMP to data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.bmp",
+			} as User);
+
+			expect(user.image).toMatch(/^data:image\/bmp;base64,/);
+		});
+
+		it("should convert ICO to data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/favicon.ico",
+			} as User);
+
+			expect(user.image).toMatch(/^data:image\/x-icon;base64,/);
+		});
+
+		it("should pass through valid GIF87a data URL", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const gif87aBytes = makeImageBytes([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]);
+			const dataUrl = `data:image/gif;base64,${Buffer.from(gif87aBytes).toString("base64")}`;
+
+			const user = await normalizeUser($fetch, {
+				id: "1",
+				name: "Test",
+				email: "test@test.com",
+				image: dataUrl,
+			} as User);
+
+			expect(user.image).toBe(dataUrl);
+		});
 	});
 });
