@@ -25,10 +25,6 @@ export async function detectPackageManager(
 	cwd: string,
 	packageJson: PackageJson,
 ) {
-	let packageManager: {
-		packageManager: PackageManager;
-		version?: string | undefined;
-	} = { packageManager: "npm" };
 	const monorepoRoot = await findMonorepoRoot(cwd);
 	for (const strategy of [
 		envStrategy,
@@ -44,14 +40,13 @@ export async function detectPackageManager(
 				result.packageManager.toLowerCase() as PackageManager,
 			)
 		) {
-			packageManager = result as {
+			return result as {
 				packageManager: PackageManager;
 				version?: string | undefined;
 			};
-			break;
 		}
 	}
-	return packageManager;
+	return { packageManager: "npm" };
 }
 
 type Strategy = (ctx: { cwd: string; packageJson: PackageJson }) => Awaitable<{

@@ -13,6 +13,7 @@ vi.mock("node:fs/promises", () => ({
 }));
 
 import { env } from "@better-auth/core/env";
+import * as checkPackageManagers from "../src/utils/check-package-managers";
 import {
 	detectPackageManager,
 	getCatalogEntries,
@@ -96,7 +97,9 @@ describe("detectPackageManager", () => {
 		async ({ tmp }) => {
 			env.npm_config_user_agent = "pnpm/10.0.0 someinfo";
 			const pm = await detectPackageManager(tmp, {});
-			expect(pm).toBe("pnpm");
+			expect(pm).toStrictEqual(
+				expect.objectContaining({ packageManager: "pnpm" }),
+			);
 		},
 	);
 
@@ -106,7 +109,9 @@ describe("detectPackageManager", () => {
 			const pm = await detectPackageManager(tmp, {
 				packageManager: "yarn@1.22.0",
 			} as any);
-			expect(pm).toBe("yarn");
+			expect(pm).toStrictEqual(
+				expect.objectContaining({ packageManager: "yarn" }),
+			);
 		},
 	);
 
@@ -120,7 +125,9 @@ describe("detectPackageManager", () => {
 				packageManager: "pnpm@7.0.0",
 			} as any);
 			// packageJsonStrategy runs before lockFileStrategy, so packageManager should be pnpm
-			expect(pm).toBe("pnpm");
+			expect(pm).toStrictEqual(
+				expect.objectContaining({ packageManager: "pnpm" }),
+			);
 		},
 	);
 
@@ -128,7 +135,9 @@ describe("detectPackageManager", () => {
 		fs.writeFileSync(join(tmp, "yarn.lock"), "");
 
 		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBe("yarn");
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "yarn" }),
+		);
 	});
 
 	testWithTmpDir(
@@ -137,7 +146,9 @@ describe("detectPackageManager", () => {
 			fs.writeFileSync(join(tmp, "pnpm-workspace.yaml"), "packages: []");
 
 			const pm = await detectPackageManager(tmp, {});
-			expect(pm).toBe("pnpm");
+			expect(pm).toStrictEqual(
+				expect.objectContaining({ packageManager: "pnpm" }),
+			);
 		},
 	);
 
@@ -145,32 +156,50 @@ describe("detectPackageManager", () => {
 		fs.writeFileSync(join(tmp, "bun.lockb"), "");
 
 		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBe("bun");
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "bun" }),
+		);
 	});
 
 	testWithTmpDir("detects bun via bunfig.toml", async ({ tmp }) => {
 		fs.writeFileSync(join(tmp, "bunfig.toml"), "");
 
 		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBe("bun");
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "bun" }),
+		);
 	});
 
 	testWithTmpDir("falls back to npm when .npmrc present", async ({ tmp }) => {
 		fs.writeFileSync(join(tmp, ".npmrc"), "");
 
 		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBe("npm");
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "npm" }),
+		);
 	});
 
 	testWithTmpDir("detects yarn via .yarnrc.yml", async ({ tmp }) => {
 		fs.writeFileSync(join(tmp, ".yarnrc.yml"), "");
 
 		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBe("yarn");
+		expect(pm).toStrictEqual(
+			expect.objectContaining({ packageManager: "yarn" }),
+		);
 	});
 
-	testWithTmpDir("returns undefined when nothing matches", async ({ tmp }) => {
-		const pm = await detectPackageManager(tmp, {});
-		expect(pm).toBeUndefined();
+	testWithTmpDir("falls back to npm when nothing matches", async ({ tmp }) => {
+		const spy = vi
+			.spyOn(checkPackageManagers, "checkPackageManagers")
+			.mockResolvedValue({ hasPnpm: null, hasBun: null, hasYarn: null });
+
+		try {
+			const pm = await detectPackageManager(tmp, {});
+			expect(pm).toStrictEqual(
+				expect.objectContaining({ packageManager: "npm" }),
+			);
+		} finally {
+			spy.mockRestore();
+		}
 	});
 });

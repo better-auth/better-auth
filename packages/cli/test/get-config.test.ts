@@ -1,9 +1,9 @@
-import fs from "node:fs/promises";
 import path from "node:path";
 import { vol } from "memfs";
 import { describe, expect, vi } from "vitest";
 import { testWithTmpDir } from "./test-utils";
 
+const fs = vol.promises;
 vi.mock("node:fs", () => ({
 	...vol,
 	default: vol,
