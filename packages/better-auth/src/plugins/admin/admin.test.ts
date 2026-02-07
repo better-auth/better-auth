@@ -437,6 +437,57 @@ describe("Admin plugin", async () => {
 		expect(res.data?.users[0]!.email).toBe("test@test.com");
 	});
 
+	it("should handle falsy filter values (false, 0, empty string)", async () => {
+		// filterValue = false should apply the filter, not be ignored
+		const resFalse = await client.admin.listUsers({
+			query: {
+				filterValue: false,
+				filterField: "emailVerified",
+				filterOperator: "eq",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		// The filter should be applied (not ignored), so we get a filtered result
+		expect(resFalse.data).toBeDefined();
+		expect(resFalse.data?.users).toBeDefined();
+		// All returned users should have emailVerified === false
+		for (const user of resFalse.data?.users || []) {
+			expect(user.emailVerified).toBe(false);
+		}
+
+		// filterValue = 0 should apply the filter, not be ignored
+		const resZero = await client.admin.listUsers({
+			query: {
+				filterValue: 0,
+				filterField: "emailVerified",
+				filterOperator: "eq",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(resZero.data).toBeDefined();
+		expect(resZero.data?.users).toBeDefined();
+
+		// filterValue = "" (empty string) should apply the filter, not be ignored
+		const resEmpty = await client.admin.listUsers({
+			query: {
+				filterValue: "",
+				filterField: "name",
+				filterOperator: "eq",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(resEmpty.data).toBeDefined();
+		expect(resEmpty.data?.users).toBeDefined();
+		// No users should have an empty name, so we expect 0 results
+		expect(resEmpty.data?.users.length).toBe(0);
+	});
+
 	it("should allow to set user role", async () => {
 		const res = await client.admin.setRole(
 			{

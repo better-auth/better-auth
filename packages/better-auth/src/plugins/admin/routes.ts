@@ -647,7 +647,7 @@ export const listUsers = (opts: AdminOptions) =>
 
 			const where: Where[] = [];
 
-			if (ctx.query?.searchValue) {
+			if (ctx.query?.searchValue !== undefined && ctx.query?.searchValue !== null) {
 				where.push({
 					field: ctx.query.searchField || "email",
 					operator: ctx.query.searchOperator || "contains",
@@ -655,7 +655,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			if (ctx.query?.filterValue) {
+			if (ctx.query?.filterValue !== undefined && ctx.query?.filterValue !== null) {
 				where.push({
 					field: ctx.query.filterField || "email",
 					operator: ctx.query.filterOperator || "eq",
