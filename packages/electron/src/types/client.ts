@@ -48,6 +48,12 @@ export interface ElectronClientOptions {
 	 */
 	storagePrefix?: string | undefined;
 	/**
+	 * The maximum size of user images in bytes.
+	 *
+	 * @default 1024 * 1024 * 5 (5MB)
+	 */
+	userImageMaxSize?: number | undefined;
+	/**
 	 * Prefix(es) for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent
 	 * infinite refetching when third-party cookies are set.

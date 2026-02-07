@@ -101,10 +101,13 @@ export function setupBridges(
 	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
+		const target = webContents.getFocusedWebContents();
+		if (!target) return;
+
 		const user = state?.data?.user
 			? await normalizeUser(ctx.$fetch, state.data.user)
 			: null;
-		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
+		target.send(`${prefix}user-updated`, user);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {

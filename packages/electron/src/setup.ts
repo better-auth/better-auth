@@ -282,6 +282,8 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 					values.push("data:");
 				}
 				csp.set("img-src", values);
+			} else {
+				csp.set("img-src", ["'self'", "data:"]);
 			}
 
 			callback({

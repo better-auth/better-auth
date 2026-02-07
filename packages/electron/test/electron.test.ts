@@ -1351,10 +1351,6 @@ describe("Electron", () => {
 		it("should return null when fetch fails", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const fetchSpy = vi
-				.spyOn(globalThis, "fetch")
-				.mockRejectedValue(new Error("Network error"));
-
 			const user = await normalizeUser($fetch, {
 				id: "1",
 				name: "Test",
@@ -1363,8 +1359,6 @@ describe("Electron", () => {
 			} as any);
 
 			expect(user.image).toBeNull();
-
-			fetchSpy.mockRestore();
 		});
 
 		it("should return null when fetched content is not a valid image", async ({
@@ -1478,6 +1472,45 @@ describe("Electron", () => {
 			} as User);
 
 			expect(user.image).toBe(dataUrl);
+		});
+
+		describe("isLocalOrigin (SSRF mitigation)", () => {
+			it.each([
+				["http://localhost/avatar.png"],
+				["http://127.0.0.1/avatar.png"],
+				["http://10.0.0.1/avatar.png"],
+				["http://172.16.0.1/avatar.png"],
+				["http://192.168.1.1/avatar.png"],
+				["http://169.254.169.254/avatar.png"],
+				["http://[::1]/avatar.png"],
+				["http://[fe80::1]/avatar.png"],
+			])("should reject local origin %s", async (imageUrl) => {
+				const user = await normalizeUser($fetch, {
+					id: "1",
+					name: "Test",
+					email: "test@test.com",
+					image: imageUrl,
+				} as User);
+
+				expect(user.image).toBeNull();
+				expect(customFetchImpl).not.toHaveBeenCalled();
+			});
+
+			it.each([
+				["https://example.com/avatar.png"],
+				["https://gravatar.com/avatar/abc.png"],
+				["https://8.8.8.8/avatar.png"],
+			])("should allow public origin %s", async (imageUrl) => {
+				const user = await normalizeUser($fetch, {
+					id: "1",
+					name: "Test",
+					email: "test@test.com",
+					image: imageUrl,
+				} as User);
+
+				expect(customFetchImpl).toHaveBeenCalled();
+				expect(user.image).not.toBeNull();
+			});
 		});
 	});
 });
