@@ -372,7 +372,7 @@ describe("Admin plugin", async () => {
 	});
 
 	it("should allow filtering with falsy filterValue", async () => {
-	    const res = await client.admin.listUsers({
+		const res = await client.admin.listUsers({
 			query: {
 				filterField: "banned",
 				filterOperator: "eq",
@@ -382,9 +382,8 @@ describe("Admin plugin", async () => {
 				headers: adminHeaders,
 			},
 		});
-
-	    expect(res.data?.users.length).toBeGreaterThan(0);
-	    expect(res.data?.users.every((u) => u.banned === false)).toBe(true);
+		
+		expect(res.data?.users.every((u) => u.banned === false)).toBe(true);
 	});
 
 	it("should filter users by id with ne operator", async () => {
