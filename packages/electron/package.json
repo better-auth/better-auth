@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/electron",
-  "version": "1.5.0-beta.1",
+  "version": "1.5.0-beta.12",
   "type": "module",
   "description": "Better Auth integration for Electron applications.",
   "main": "dist/index.mjs",
