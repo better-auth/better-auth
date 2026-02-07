@@ -852,6 +852,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
+				process.stdout.write(JSON.stringify(question, null, 2) + "\n");
+
 				if (question.name === "shouldInstallBetterAuth") {
 					return { shouldInstallBetterAuth: false };
 				}
@@ -885,7 +887,9 @@ describe("initAction", () => {
 				) {
 					authClientPromptCalled = true;
 					// Return absolute path to ensure it works
-					return { filePath: path.join(tmp, "src/lib/auth-client.ts") };
+					return {
+						filePath: path.resolve(path.join(tmp, "src/lib/auth-client.ts")),
+					};
 				}
 
 				return {};
