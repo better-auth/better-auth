@@ -8,6 +8,7 @@ import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
+import { getChannelPrefixWithDelimiter } from "./bridges";
 import type { ElectronClientOptions } from "./types/client";
 import { isProcessType } from "./utils";
 
@@ -124,7 +125,7 @@ export async function authenticate(
 		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
-				`${options.channelPrefix || "better-auth"}:authenticated`,
+				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
 				ctx.data.user,
 			);
 		},
