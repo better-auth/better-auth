@@ -276,6 +276,14 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 				csp.set("connect-src", ["'self'", origin]);
 			}
 
+			if (csp.has("img-src")) {
+				const values = csp.get("img-src") || [];
+				if (!values.includes("data:")) {
+					values.push("data:");
+				}
+				csp.set("img-src", values);
+			}
+
 			callback({
 				responseHeaders: {
 					...details.responseHeaders,

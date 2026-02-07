@@ -6,6 +6,7 @@ import electron from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
 import type { ElectronClientOptions } from "./client";
+import { normalizeUser } from "./user";
 
 const { ipcRenderer, ipcMain, contextBridge, webContents } = electron;
 
@@ -97,12 +98,13 @@ export function setupBridges(
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
-	ctx.$store?.atoms.session?.subscribe((state) => {
+	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
-		webContents
-			.getFocusedWebContents()
-			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
+		const user = state?.data?.user
+			? await normalizeUser(state.data.user)
+			: null;
+		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
@@ -117,7 +119,7 @@ export function setupBridges(
 			},
 		);
 
-		return result.data?.user ?? null;
+		return result.data?.user ? await normalizeUser(result.data.user) : null;
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,

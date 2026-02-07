@@ -10,6 +10,7 @@ import { shell } from "electron";
 import * as z from "zod";
 import { getChannelPrefixWithDelimiter } from "./bridges";
 import type { ElectronClientOptions } from "./types/client";
+import { normalizeUser } from "./user";
 import { isProcessType } from "./utils";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
@@ -123,10 +124,11 @@ export async function authenticate(
 			state,
 			code_verifier: codeVerifier,
 		},
-		onSuccess: (ctx) => {
+		onSuccess: async (ctx) => {
+			const user = ctx.data.user ? await normalizeUser(ctx.data.user) : null;
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
-				ctx.data.user,
+				user,
 			);
 		},
 		throw: true,
