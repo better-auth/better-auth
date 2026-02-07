@@ -102,10 +102,18 @@
     },
     "./repl": {
       "dev-source": "./src/integrations/repl.ts",
-      "types": "./dist/integrations/repl.d.mts",
-      "require": "./dist/integrations/repl.cjs",
-      "import": "./dist/integrations/repl.mjs",
-      "default": "./dist/integrations/repl.mjs"
+      "require": {
+        "types": "./dist/integrations/repl.d.cts",
+        "default": "./dist/integrations/repl.cjs"
+      },
+      "import": {
+        "types": "./dist/integrations/repl.d.mts",
+        "default": "./dist/integrations/repl.mjs"
+      },
+      "default": {
+        "types": "./dist/integrations/repl.d.mts",
+        "default": "./dist/integrations/repl.mjs"
+      }
     },
     "./test": {
       "dev-source": "./src/test-utils/index.ts",
