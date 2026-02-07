@@ -125,7 +125,7 @@ export async function authenticate(
 		},
 		onSuccess: (ctx) => {
 			getWindow()?.webContents.send(
-				`${options.channelPrefix || "better-auth"}:authenticated`,
+				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
 				ctx.data.user,
 			);
 		},
