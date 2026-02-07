@@ -85,7 +85,7 @@ export interface I18nOptions<Locales extends string[]> {
 
 	/**
 	 * Custom locale detection function (when "callback" strategy is used)
-	 * Receives request and AuthContext, return locale code or null.
+	 * Receives a request and an AuthContext, returns a locale code or null.
 	 * Note: `request` may be undefined for non-HTTP calls.
 	 */
 	getLocale?:
