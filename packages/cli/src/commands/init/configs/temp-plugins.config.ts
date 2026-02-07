@@ -1734,7 +1734,7 @@ export const tempPluginsConfig = {
 			],
 			arguments: [
 				{
-					flag: "sso-domain-verification",
+					flag: "sso-client-domain-verification",
 					question: "Do you want to setup domain verification?",
 					description: "Setup domain verification.",
 					skip: "prompt",
@@ -1749,7 +1749,7 @@ export const tempPluginsConfig = {
 					},
 					isNestedObject: [
 						{
-							flag: "sso-domain-verification-enabled",
+							flag: "sso-client-domain-verification-enabled",
 							question: "Do you want to enable domain verification?",
 							description: "Enable domain verification.",
 							skip: "prompt",
