@@ -188,8 +188,8 @@ describe("i18n plugin", async () => {
 						defaultLocale: "en",
 						detection: ["callback"],
 						getLocale: (request, _ctx) => {
-							// Use a custom header for locale detection
-							return request?.headers.get("X-Custom-Locale") ?? null;
+							if (!request) return null;
+							return request.headers.get("X-Custom-Locale") ?? null;
 						},
 					}),
 				],

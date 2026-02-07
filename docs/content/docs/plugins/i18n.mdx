@@ -133,7 +133,8 @@ i18n({
     detection: ["callback", "header"],
     getLocale: (request, ctx) => {
         // Custom logic: use query param, custom header, etc.
-        const url = new URL(request?.url ?? ctx.baseURL);
+        if (!request) return null;
+        const url = new URL(request.url);
         return url.searchParams.get("lang");
     },
 })
