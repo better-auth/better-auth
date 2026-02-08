@@ -68,8 +68,9 @@ async function fetchUserImage(
 			const imageType = detectImageType(buffer);
 			if (!imageType) return;
 
+			const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || imageType;
 			const encoded = base64.encode(buffer);
-			const dataUrl = `data:image/${imageType};base64,${encoded}`;
+			const dataUrl = `data:${mimeType};base64,${encoded}`;
 
 			setUserImageCache(userImageCache, url, dataUrl);
 			result = dataUrl;
@@ -140,16 +141,16 @@ function isValidDataImageUrl(
 }
 
 type SupportedImageType =
-	| "png"
-	| "jpg"
-	| "gif"
-	| "bmp"
-	| "webp"
-	| "avif"
-	| "heic"
-	| "heif"
-	| "tiff"
-	| "ico";
+	| "image/png"
+	| "image/jpg"
+	| "image/gif"
+	| "image/bmp"
+	| "image/webp"
+	| "image/avif"
+	| "image/heic"
+	| "image/heif"
+	| "image/tiff"
+	| "image/x-icon";
 
 function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 	if (bytes.length < 12) return null;
@@ -164,11 +165,11 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 		bytes[6] === 0x1a &&
 		bytes[7] === 0x0a
 	) {
-		return "png";
+		return "image/png";
 	}
 
 	if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
-		return "jpg";
+		return "image/jpg";
 	}
 
 	if (
@@ -179,7 +180,7 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 		(bytes[4] === 0x37 || bytes[4] === 0x39) &&
 		bytes[5] === 0x61
 	) {
-		return "gif";
+		return "image/gif";
 	}
 
 	if (
@@ -193,11 +194,11 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 		bytes[10] === 0x42 &&
 		bytes[11] === 0x50
 	) {
-		return "webp";
+		return "image/webp";
 	}
 
 	if (bytes[0] === 0x42 && bytes[1] === 0x4d) {
-		return "bmp";
+		return "image/bmp";
 	}
 
 	if (
@@ -210,7 +211,7 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 			bytes[2] === 0x00 &&
 			bytes[3] === 0x2a)
 	) {
-		return "tiff";
+		return "image/tiff";
 	}
 
 	if (
@@ -219,7 +220,7 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 		bytes[2] === 0x01 &&
 		bytes[3] === 0x00
 	) {
-		return "ico";
+		return "image/x-icon";
 	}
 
 	// avif, heic, heif
@@ -231,7 +232,7 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 	const brand = String.fromCharCode(...bytes.slice(8, 12));
 
 	if (brand === "avif" || brand === "heic" || brand === "heif") {
-		return brand;
+		return `image/${brand}`;
 	}
 	if (
 		brand === "heix" ||
@@ -239,7 +240,7 @@ function detectImageType(bytes: Uint8Array): SupportedImageType | null {
 		brand === "mif1" ||
 		brand === "msf1"
 	) {
-		return "heic";
+		return "image/heic";
 	}
 
 	return null;

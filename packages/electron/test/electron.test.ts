@@ -1497,7 +1497,7 @@ describe("Electron", () => {
 			});
 
 			it.each([
-				["https://example.com/avatar.png"],
+				["https://example.com/avatar/abc.png"],
 				["https://gravatar.com/avatar/abc.png"],
 				["https://8.8.8.8/avatar.png"],
 			])("should allow public origin %s", async (imageUrl) => {
