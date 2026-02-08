@@ -7,6 +7,7 @@ import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
 import type { OAuthErrorCode, OAuthRedirectOnError } from "./oauth-endpoint";
+import { checkResource } from "./token";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -471,6 +472,26 @@ export async function authorizeEndpoint(
 		}
 	}
 
+	// Validate the resource sent to the authorize endpoint
+	const resource = query.resource;
+	try {
+		await checkResource(ctx, opts, resource, requestedScopes);
+	} catch (err) {
+		if (err instanceof APIError) {
+			return handleRedirect(
+				ctx,
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_target",
+					err?.message ?? err.body?.message ?? "invalid_resource",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+		throw err;
+	}
+
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
 	if (!session || promptSet?.has("login") || promptSet?.has("create")) {
@@ -615,6 +636,28 @@ export async function authorizeEndpoint(
 	if (
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
+	) {
+		if (promptNone) {
+			return redirectWithPromptNoneError(
+				ctx,
+				opts,
+				query,
+				"consent_required",
+				"End-User consent is required",
+			);
+		}
+		return redirectWithPromptCode(ctx, opts, "consent");
+	}
+
+	// Consent should be given for that resource if different than original consent
+	const consentedResources = consent?.resources;
+	const requestedResources =
+		typeof resource === "string" ? [resource] : resource;
+	if (
+		consentedResources &&
+		(!requestedResources ||
+			requestedResources.length === 0 ||
+			!requestedResources.every((v) => consentedResources.includes(v)))
 	) {
 		if (promptNone) {
 			return redirectWithPromptNoneError(

@@ -562,7 +562,9 @@ export interface OAuthOptions<
 		referenceId?: string;
 		/** Scopes granted for this token */
 		scopes: Scopes;
-		/** The resource requesting. Provided by the token endpoint. */
+		/** The resources requested. */
+		resources?: string[];
+		/** The resource requesting. Provided by the token endpoint. @deprecated */
 		resource?: string;
 		/** oAuthClient metadata */
 		metadata?: Record<string, any>;
@@ -907,6 +909,10 @@ export interface OAuthAuthorizationQuery {
 	 * with the Claim Value being the nonce value sent in the Authentication Request.
 	 */
 	nonce?: string;
+	/**
+	 * Resource parameter as specified by [RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)
+	 */
+	resource?: string | string[];
 }
 
 /**
@@ -921,6 +927,7 @@ export interface VerificationValue {
 	query: OAuthAuthorizationQuery;
 	sessionId: string;
 	userId: string;
+	resource?: string | string[];
 	referenceId?: string;
 	authTime?: number;
 }
@@ -1103,6 +1110,10 @@ export interface OAuthOpaqueAccessToken<
 	 * Shall match the refreshId.scopes if refreshId is provided.
 	 */
 	scopes: Scopes;
+	/**
+	 * Resources allowed for this access token.
+	 */
+	resources?: string[];
 }
 
 /**
@@ -1112,7 +1123,7 @@ export interface OAuthRefreshToken<
 	Scopes extends readonly Scope[] = InternallySupportedScopes[],
 > {
 	token: string;
-	sessionId: string;
+	sessionId?: string;
 	userId: string;
 	referenceId?: string;
 	clientId?: string;
@@ -1133,6 +1144,10 @@ export interface OAuthRefreshToken<
 	 * Considered Immutable once granted.
 	 */
 	scopes: Scopes;
+	/**
+	 * Resources allowed for this refresh token
+	 */
+	resources?: string[];
 }
 
 /**
@@ -1144,6 +1159,7 @@ export type OAuthConsent<
 	id: string;
 	clientId: string;
 	userId: string;
+	resources?: string[];
 	referenceId?: string;
 	scopes: Scopes;
 	createdAt: Date;
