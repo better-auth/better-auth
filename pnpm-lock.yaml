@@ -1638,9 +1638,6 @@ importers:
       conf:
         specifier: ^15.0.2
         version: 15.1.0
-      electron:
-        specifier: '>=38.0.0'
-        version: 39.5.1
       zod:
         specifier: ^4.3.5
         version: 4.3.6
@@ -1657,6 +1654,9 @@ importers:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
+      electron:
+        specifier: ^38.8.0
+        version: 38.8.0
       tsdown:
         specifier: 'catalog:'
         version: 0.20.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.17.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -9946,6 +9946,11 @@ packages:
   electron-winstaller@5.4.0:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
+
+  electron@38.8.0:
+    resolution: {integrity: sha512-cMvNuIFdXXDr4pJd5xD+F8FDjQhin9vyJ5hGSb5cZRIUb1VqfvRyP2nLBzU2Iazj0z3L686AUOkykp6Xd8bT1w==}
+    engines: {node: '>= 12.20.55'}
+    hasBin: true
 
   electron@39.5.1:
     resolution: {integrity: sha512-6s/sBQar+bbW59XSqohZj04MPic+kdVUAWjLbfQB/uLOeNw9jWX5FHaTxpHK29Xp3mKOHef7wErsjwMyCuWltg==}
@@ -26483,6 +26488,14 @@ snapshots:
       temp: 0.9.4
     optionalDependencies:
       '@electron/windows-sign': 1.2.2
+    transitivePeerDependencies:
+      - supports-color
+
+  electron@38.8.0:
+    dependencies:
+      '@electron/get': 2.0.3
+      '@types/node': 22.19.8
+      extract-zip: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
