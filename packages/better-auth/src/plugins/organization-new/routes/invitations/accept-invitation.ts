@@ -3,10 +3,8 @@ import { APIError } from "@better-auth/core/error";
 import * as z from "zod/v4";
 import { setSessionCookie } from "../../../../cookies";
 import type { TeamsAddon } from "../../addons";
-import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
-import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
-import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getAddon } from "../../helpers/get-addon";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
@@ -140,50 +138,26 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			}
 
 			// Team support: add user to teams if teams addon is enabled and invitation has teamId
-			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
-				| TeamsAddon
-				| undefined;
+			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
 			if (teamsAddon && "teamId" in acceptedI && acceptedI.teamId) {
-				const teamOptions = resolveTeamOptions(teamsAddon.options);
-				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
-
-				const teamIds = acceptedI.teamId.split(",") as RealTeamId[];
-				const onlyOne = teamIds.length === 1;
-
-				for (const teamId of teamIds) {
-					const maxMembers = await teamOptions.maximumMembersPerTeam({
-						teamId,
-						session: session,
-						organizationId: invitation.organizationId,
-					});
-
-					const members = await teamAdapter.countTeamMembers(teamId);
-
-					if (members >= maxMembers) {
-						const code = "TEAM_MEMBER_LIMIT_REACHED";
-						const msg = ORGANIZATION_ERROR_CODES[code];
-						throw APIError.from("FORBIDDEN", msg);
-					}
-
-					await teamAdapter.findOrCreateTeamMember({
-						teamId: teamId,
-						userId: session.user.id,
-					});
-				}
-
-				if (onlyOne) {
-					const teamId = teamIds[0]!;
-					const updatedSession = await adapter.setActiveTeam(
-						session.session.token,
-						teamId,
+				const { updatedSession } =
+					await teamsAddon.events.acceptInvitationForTeams(
+						{
+							invitation: acceptedI as Invitation & { teamId: string },
+							user: session.user,
+							session: session.session,
+							organizationId: invitation.organizationId,
+							setActiveTeam: adapter.setActiveTeam,
+						},
+						ctx.context,
+						teamsAddon.options,
 					);
 
-					if (updatedSession) {
-						await setSessionCookie(ctx, {
-							session: updatedSession,
-							user: session.user,
-						});
-					}
+				if (updatedSession) {
+					await setSessionCookie(ctx, {
+						session: updatedSession,
+						user: session.user,
+					});
 				}
 			}
 
