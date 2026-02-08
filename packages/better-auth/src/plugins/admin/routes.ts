@@ -576,6 +576,7 @@ const listUsersQuerySchema = z.object({
 		.or(z.number())
 		.or(z.boolean())
 		.or(z.array(z.string()))
+		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
 		.enum(whereOperators)
