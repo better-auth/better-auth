@@ -1144,6 +1144,8 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 			},
 		});
 		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
 		oauthClient = response;
 
 		const jwksResult = await client.jwks();
@@ -1182,11 +1184,18 @@ describe("oauth token - customIdTokenClaims precedence", async () => {
 				callbackRedirectUrl = context.response.headers.get("Location") || "";
 			},
 		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
 		const callbackUrl = new URL(callbackRedirectUrl);
-		const code = callbackUrl.searchParams.get("code")!;
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
 
 		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
-			code,
+			code: code!,
 			codeVerifier,
 			redirectURI: redirectUri,
 			options: {
