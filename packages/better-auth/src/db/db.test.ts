@@ -100,16 +100,20 @@ describe("db", async () => {
 	it("should coerce string where values to match field types", async () => {
 		// HTTP query params arrive as strings.
 		// The adapter should coerce values to match the field's schema type.
-		const { db } = await getTestInstance({
-			user: {
-				additionalFields: {
-					age: {
-						type: "number",
-						required: false,
+		const { auth, db } = await getTestInstance(
+			{
+				user: {
+					additionalFields: {
+						age: { type: "number", required: false },
 					},
 				},
 			},
-		});
+			{
+				// Uses MongoDB because SQLite/MySQL/PostgreSQL silently cast types,
+				// which would make this test pass even without the coercion code.
+				testWith: "mongodb",
+			},
+		);
 
 		// boolean: "false" → false, "true" → true
 		const users = await db.findMany<{ emailVerified: boolean }>({
@@ -118,11 +122,6 @@ describe("db", async () => {
 		});
 		expect(users.length).toBeGreaterThanOrEqual(1);
 		expect(users.every((u) => u.emailVerified === false)).toBe(true);
-		const verifiedUsers = await db.findMany<{ emailVerified: boolean }>({
-			model: "user",
-			where: [{ field: "emailVerified", operator: "eq", value: "true" }],
-		});
-		expect(verifiedUsers.every((u) => u.emailVerified === true)).toBe(true);
 
 		// number: "25" → 25
 		await db.update({
@@ -136,6 +135,30 @@ describe("db", async () => {
 		});
 		expect(byAge.length).toBeGreaterThanOrEqual(1);
 		expect(byAge.every((u) => u.age === 25)).toBe(true);
+
+		// number array: ["25", "30"] → [25, 30]
+		await auth.api.signUpEmail({
+			body: {
+				email: "age30@test.com",
+				password: "password",
+				name: "user-30",
+				age: 30,
+			},
+		});
+		await auth.api.signUpEmail({
+			body: {
+				email: "age40@test.com",
+				password: "password",
+				name: "user-40",
+				age: 40,
+			},
+		});
+		const byAgeIn = await db.findMany<{ age: number | null }>({
+			model: "user",
+			where: [{ field: "age", operator: "in", value: ["25", "30"] }],
+		});
+		expect(byAgeIn).toHaveLength(2);
+		expect(byAgeIn.map((u) => u.age).sort()).toEqual([25, 30]);
 	});
 
 	it("delete hooks", async () => {

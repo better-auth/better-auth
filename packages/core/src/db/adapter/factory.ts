@@ -544,10 +544,19 @@ export const createAdapterFactory =
 					newValue = newValue === "true";
 				}
 
-				if (fieldAttr.type === "number" && typeof newValue === "string") {
-					const parsed = Number(newValue);
-					if (!Number.isNaN(parsed)) {
-						newValue = parsed;
+				if (fieldAttr.type === "number") {
+					if (typeof newValue === "string" && newValue.trim() !== "") {
+						const parsed = Number(newValue);
+						if (!Number.isNaN(parsed)) {
+							newValue = parsed;
+						}
+					} else if (Array.isArray(newValue)) {
+						const parsed = newValue.map((v) =>
+							typeof v === "string" && v.trim() !== "" ? Number(v) : NaN,
+						);
+						if (parsed.every((n) => !Number.isNaN(n))) {
+							newValue = parsed;
+						}
 					}
 				}
 
