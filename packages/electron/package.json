@@ -83,6 +83,7 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
+    "electron": ">=38.0.0",
     "conf": "^15.0.2"
   },
   "dependencies": {
