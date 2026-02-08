@@ -173,6 +173,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			expiresAt: {
 				type: "date",
 			},
@@ -245,6 +249,10 @@ export const schema = {
 				type: "string",
 				required: false,
 			},
+			resources: {
+				type: "string[]",
+				required: false,
+			},
 			refreshId: {
 				type: "string",
 				required: false,
@@ -287,6 +295,10 @@ export const schema = {
 			},
 			referenceId: {
 				type: "string",
+				required: false,
+			},
+			resources: {
+				type: "string[]",
 				required: false,
 			},
 			scopes: {

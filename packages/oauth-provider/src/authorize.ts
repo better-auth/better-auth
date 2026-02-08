@@ -4,6 +4,7 @@ import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
 import { oAuthState } from "./oauth";
+import { checkResource } from "./token";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -243,6 +244,22 @@ export async function authorizeEndpoint(
 		}
 	}
 
+	// Validate the resource sent to the authorize endpoint
+	const resource = query.resource;
+	await checkResource(ctx, opts, resource, requestedScopes);
+
+	if (!query.code_challenge || !query.code_challenge_method) {
+		throw ctx.redirect(
+			formatErrorURL(
+				query.redirect_uri,
+				"invalid_request",
+				"pkce is required",
+				query.state,
+				getIssuer(ctx, opts),
+			),
+		);
+	}
+
 	// If PKCE parameters are provided, validate them (even if not required)
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
@@ -381,6 +398,17 @@ export async function authorizeEndpoint(
 	if (
 		!consent ||
 		!requestedScopes.every((val) => consent.scopes.includes(val))
+	) {
+		return redirectWithPromptCode(ctx, opts, "consent");
+	}
+
+	// Consent should be given for that resource if different than original consent
+	const consentedResources = consent?.resources;
+	const requestedResources =
+		typeof resource === "string" ? [resource] : resource;
+	if (
+		consentedResources &&
+		!requestedResources?.every((v) => consentedResources.includes(v))
 	) {
 		return redirectWithPromptCode(ctx, opts, "consent");
 	}
