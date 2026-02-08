@@ -41,6 +41,7 @@ declare module "@better-auth/core" {
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
 );
+export const getOAuthProviderState = oAuthState.get;
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -341,6 +342,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						nonce: z.string().optional(),
 						prompt: z
 							.enum([
+								"none",
 								"consent",
 								"login",
 								"create",

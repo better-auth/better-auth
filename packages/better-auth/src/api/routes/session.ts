@@ -23,13 +23,7 @@ import {
 import { getSessionQuerySchema } from "../../cookies/session-store";
 import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
-import type {
-	InferSession,
-	InferUser,
-	Prettify,
-	Session,
-	User,
-} from "../../types";
+import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
@@ -73,8 +67,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 		async (
 			ctx,
 		): Promise<{
-			session: InferSession<Option>;
-			user: InferUser<Option>;
+			session: Session<Option["session"], Option["plugins"]>;
+			user: User<Option["user"], Option["plugins"]>;
 		} | null> => {
 			const deferSessionRefresh =
 				ctx.context.options.session?.deferSessionRefresh;
@@ -268,15 +262,17 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									session: parsedSession,
 									user: parsedUser,
 								} as {
-									session: InferSession<Option>;
-									user: InferUser<Option>;
+									session: Session<Option["session"], Option["plugins"]>;
+									user: User<Option["user"], Option["plugins"]>;
 								});
 							}
 
 							const timeUntilExpiry = sessionDataPayload.expiresAt - Date.now();
 							const updateAge = cookieRefreshCache.updateAge * 1000; // Convert to milliseconds
+							const shouldSkipSessionRefresh =
+								await getShouldSkipSessionRefresh();
 
-							if (timeUntilExpiry < updateAge) {
+							if (timeUntilExpiry < updateAge && !shouldSkipSessionRefresh) {
 								const cookieMaxAge =
 									ctx.context.options.session?.cookieCache?.maxAge || 60 * 5;
 								const newExpiresAt = getDate(cookieMaxAge, "sec");
@@ -319,8 +315,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 									session: parsedRefreshedSession,
 									user: parsedRefreshedUser,
 								} as {
-									session: InferSession<Option>;
-									user: InferUser<Option>;
+									session: Session<Option["session"], Option["plugins"]>;
+									user: User<Option["user"], Option["plugins"]>;
 								});
 							}
 
@@ -344,8 +340,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								session: parsedSession,
 								user: parsedUser,
 							} as {
-								session: InferSession<Option>;
-								user: InferUser<Option>;
+								session: Session<Option["session"], Option["plugins"]>;
+								user: User<Option["user"], Option["plugins"]>;
 							});
 						}
 					}
@@ -384,8 +380,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						session: parsedSession,
 						user: parsedUser,
 					} as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 				const expiresIn = ctx.context.sessionConfig.expiresIn;
@@ -426,8 +422,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						user: parsedUser,
 						needsRefresh,
 					} as unknown as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 
@@ -471,8 +467,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						session: parsedUpdatedSession,
 						user: parsedUser,
 					} as unknown as {
-						session: InferSession<Option>;
-						user: InferUser<Option>;
+						session: Session<Option["session"], Option["plugins"]>;
+						user: User<Option["user"], Option["plugins"]>;
 					});
 				}
 				await setCookieCache(ctx, session, !!dontRememberMe);
@@ -486,8 +482,8 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					session: parsedSession,
 					user: parsedUser,
 				} as {
-					session: InferSession<Option>;
-					user: InferUser<Option>;
+					session: Session<Option["session"], Option["plugins"]>;
+					user: User<Option["user"], Option["plugins"]>;
 				});
 			} catch (error) {
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
@@ -667,7 +663,9 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 				return ctx.json(
 					activeSessions.map((session) =>
 						parseSessionOutput(ctx.context.options, session),
-					) as unknown as Prettify<InferSession<Option>>[],
+					) as unknown as Prettify<
+						Session<Option["session"], Option["plugins"]>
+					>[],
 				);
 			} catch (e: any) {
 				ctx.context.logger.error(e);

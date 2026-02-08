@@ -5,6 +5,7 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
+import { getAwaitableValue } from "./helpers";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -54,12 +55,14 @@ describe("base context creation", () => {
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
+		const set = new Set<object>();
 		const res = await initBase({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				{
 					id: "test",
-					init: () => {
+					init: (ctx) => {
+						set.add(ctx);
 						return {
 							context: {
 								baseURL: newBaseURL,
@@ -69,6 +72,8 @@ describe("base context creation", () => {
 				},
 			],
 		});
+		set.add(res);
+		expect(set.size).toBe(1);
 		expect(res.baseURL).toBe(newBaseURL);
 	});
 
@@ -168,12 +173,14 @@ describe("base context creation", () => {
 			],
 		});
 		expect(ctx.socialProviders).toHaveLength(2);
-		const testProvider = ctx.socialProviders.find(
-			(p) => p.id === "test-oauth-provider",
-		);
+		const testProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "test-oauth-provider",
+		});
 		expect(testProvider).toBeDefined();
 		expect(testProvider?.refreshAccessToken).toBeDefined();
-		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
+		const githubProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "github",
+		});
 		expect(githubProvider).toBeDefined();
 	});
 
@@ -516,7 +523,10 @@ describe("base context creation", () => {
 					},
 				},
 			});
-			const github = res.socialProviders.find((p) => p.id === "github");
+
+			const github = await getAwaitableValue(res.socialProviders, {
+				value: "github",
+			});
 			expect(github?.disableImplicitSignUp).toBe(true);
 		});
 	});
@@ -1602,9 +1612,21 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.socialProviders).toHaveLength(3);
-			expect(ctx.socialProviders.find((p) => p.id === "github")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "google")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "discord")).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "github",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "google",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "discord",
+				}),
+			).toBeDefined();
 		});
 
 		it("should handle secondaryStorage configuration", async () => {
