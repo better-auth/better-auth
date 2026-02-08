@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
-import { APIError } from "@better-auth/core/error";
 import type { Session, User } from "@better-auth/core/db";
-import type { Invitation } from "../../../schema";
+import { APIError } from "@better-auth/core/error";
 import { ORGANIZATION_ERROR_CODES } from "../../../helpers/error-codes";
+import type { Invitation } from "../../../schema";
 import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import type { ResolvedTeamsOptions } from "../types";
