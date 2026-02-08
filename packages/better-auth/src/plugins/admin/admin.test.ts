@@ -374,7 +374,7 @@ describe("Admin plugin", async () => {
 	/**
 	 * @see https://github.com/better-auth/better-auth/issues/7837
 	 */
-	it("should allow filtering with falsy filterValue", async () => {
+	it("should apply filter when filterValue is defined", async () => {
 		// Create a dedicated user for this test to avoid invalidating shared sessions
 		const { data: tempUser } = await client.signUp.email({
 			email: "falsy-filter-test@test.com",
