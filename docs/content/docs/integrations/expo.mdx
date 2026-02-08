@@ -327,17 +327,28 @@ For social sign-in, you can use the `authClient.signIn.social` method with the p
 
 ```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
+import { router } from "expo-router";
+import { authClient } from "@/lib/auth-client";
 
 export default function SocialSignIn() {
     const handleLogin = async () => {
-        await authClient.signIn.social({
+        const { error } = await authClient.signIn.social({
             provider: "google",
-            callbackURL: "/dashboard" // [!code highlight] automatically converted to a deep link via Linking.createURL
+            callbackURL: "/dashboard" // [!code highlight]
         })
+        if (error) {
+            // handle error
+            return;
+        }
+        router.replace("/dashboard"); // [!code highlight]
     };
     return <Button title="Login with Google" onPress={handleLogin} />;
 }
 ```
+
+<Callout type="info">
+On native (iOS/Android), `signIn.social` does not navigate automatically. Handle navigation yourself after it resolves. Note that the underlying browser behavior differs by platform. For more information, see [here](https://docs.expo.dev/versions/latest/sdk/webbrowser/#webbrowseropenauthsessionasyncurl-redirecturl-options).
+</Callout>
 
 #### IdToken Sign-In
 
