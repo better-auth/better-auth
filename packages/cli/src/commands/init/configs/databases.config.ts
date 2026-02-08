@@ -309,8 +309,8 @@ export const databasesConfig = [
 		imports: [
 			{
 				path: "bun:sqlite",
-				imports: createImport({ name: "Database" }),
-				isNamedImport: true,
+				imports: [createImport({ name: "Database" })],
+				isNamedImport: false,
 			},
 		],
 		preCode: `const database = new Database("auth.db")`,
@@ -324,8 +324,8 @@ export const databasesConfig = [
 		imports: [
 			{
 				path: "node:sqlite",
-				imports: createImport({ name: "DatabaseSync" }),
-				isNamedImport: true,
+				imports: [createImport({ name: "DatabaseSync" })],
+				isNamedImport: false,
 			},
 		],
 		preCode: `const database = new DatabaseSync("auth.db")`,

@@ -15,7 +15,10 @@ import {
 	getPkgManagerStr,
 	PACKAGE_MANAGER,
 } from "../../utils/check-package-managers";
-import { possibleAuthConfigPaths } from "../../utils/config-paths";
+import {
+	possibleAuthConfigPaths,
+	possibleClientConfigPaths,
+} from "../../utils/config-paths";
 import { getPackageInfo, hasDependency } from "../../utils/get-package-info";
 import { generateSecretHash, tryCatch } from "../../utils/helper";
 import { installDependencies } from "../../utils/install-dependencies";
@@ -418,12 +421,14 @@ export async function initAction(opts: any) {
 		if (hasBetterAuth) return;
 		await nextStep("Install Better Auth");
 
-		const { shouldInstallBetterAuth } = await prompts({
-			type: "confirm",
-			name: "shouldInstallBetterAuth",
+		const shouldInstallBetterAuth = await confirm({
 			message: `Would you like to install better-auth using ${chalk.bold(pm)}?`,
 			initial: true,
 		});
+		if (isCancel(shouldInstallBetterAuth)) {
+			cancel("✋ Operation cancelled.");
+			process.exit(0);
+		}
 
 		if (shouldInstallBetterAuth) {
 			depsToInstall.set("better-auth", {
@@ -620,8 +625,8 @@ export async function initAction(opts: any) {
 	// Prompt for auth config file location
 	let authConfigFilePath: string | null = null;
 	const hasAuthConfigAlready = await (async () => {
-		for (const _path of possibleAuthConfigPaths) {
-			const fullPath = path.join(cwd, _path);
+		for (const path_ of possibleAuthConfigPaths) {
+			const fullPath = path.join(cwd, path_);
 			const { error } = await tryCatch(fs.access(fullPath, fs.constants.F_OK));
 			if (!error) {
 				authConfigFilePath = fullPath;
@@ -1339,7 +1344,19 @@ export const auth = betterAuth({
 
 	// Generate the `auth-client.ts` file.
 	await (async () => {
-		if (hasAuthConfigAlready) return;
+		const hasAuthClientConfigAlready = await (async () => {
+			for (const path_ of possibleClientConfigPaths) {
+				const fullPath = path.join(cwd, path_);
+				const { error } = await tryCatch(
+					fs.access(fullPath, fs.constants.F_OK),
+				);
+				if (!error) {
+					return true;
+				}
+			}
+			return false;
+		})();
+		if (hasAuthClientConfigAlready) return;
 		await nextStep("Generate Auth Client Configuration");
 
 		console.log(

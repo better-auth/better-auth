@@ -78,7 +78,7 @@ export const { GET, POST } = toNextJsHandler(auth.handler);`,
 			code: `import { auth } from "~/lib/auth"; // import your auth config
 
 export default defineEventHandler((event) => {
-	return auth.handler(toWebRequest(event)); 1
+	return auth.handler(toWebRequest(event));
 });`,
 		},
 		configPaths: [
