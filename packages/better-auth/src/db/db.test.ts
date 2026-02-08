@@ -97,6 +97,47 @@ describe("db", async () => {
 		expect(session?.user.email).toBe("test@email.com");
 	});
 
+	it("should coerce string where values to match field types", async () => {
+		// HTTP query params arrive as strings.
+		// The adapter should coerce values to match the field's schema type.
+		const { db } = await getTestInstance({
+			user: {
+				additionalFields: {
+					age: {
+						type: "number",
+						required: false,
+					},
+				},
+			},
+		});
+
+		// boolean: "false" → false, "true" → true
+		const users = await db.findMany<{ emailVerified: boolean }>({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: "false" }],
+		});
+		expect(users.length).toBeGreaterThanOrEqual(1);
+		expect(users.every((u) => u.emailVerified === false)).toBe(true);
+		const verifiedUsers = await db.findMany<{ emailVerified: boolean }>({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: "true" }],
+		});
+		expect(verifiedUsers.every((u) => u.emailVerified === true)).toBe(true);
+
+		// number: "25" → 25
+		await db.update({
+			model: "user",
+			where: [{ field: "emailVerified", operator: "eq", value: false }],
+			update: { age: 25 },
+		});
+		const byAge = await db.findMany<{ age: number | null }>({
+			model: "user",
+			where: [{ field: "age", operator: "eq", value: "25" }],
+		});
+		expect(byAge.length).toBeGreaterThanOrEqual(1);
+		expect(byAge.every((u) => u.age === 25)).toBe(true);
+	});
+
 	it("delete hooks", async () => {
 		const hookUserDeleteBefore = vi.fn();
 		const hookUserDeleteAfter = vi.fn();

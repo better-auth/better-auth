@@ -540,12 +540,23 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
+				if (fieldAttr.type === "boolean" && typeof newValue === "string") {
+					newValue = newValue === "true";
+				}
+
+				if (fieldAttr.type === "number" && typeof newValue === "string") {
+					const parsed = Number(newValue);
+					if (!Number.isNaN(parsed)) {
+						newValue = parsed;
+					}
+				}
+
 				if (
 					fieldAttr.type === "boolean" &&
-					typeof value === "boolean" &&
+					typeof newValue === "boolean" &&
 					!config.supportsBooleans
 				) {
-					newValue = value ? 1 : 0;
+					newValue = newValue ? 1 : 0;
 				}
 
 				if (
