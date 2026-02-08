@@ -67,7 +67,8 @@ export const getOrgInit = (opts: OrganizationOptions) => {
 								if (teamsAddon) {
 									await teamsAddon.events.createDefaultTeam(
 										{ organization, user },
-										ctx,
+										authContext,
+										teamsAddon.options,
 									);
 								}
 

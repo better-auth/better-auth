@@ -1,5 +1,6 @@
 import type { Addon } from "../../types";
 import { getTeamAddonSchema } from "..";
+import { acceptInvitationForTeams } from "./events/accept-invitation";
 import { createDefaultTeam } from "./events/create-default-team";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
@@ -14,7 +15,6 @@ import { removeTeamMember } from "./routes/remove-team-member";
 import { setActiveTeam } from "./routes/set-active-team";
 import { updateTeam } from "./routes/update-team";
 import type { InferTeam, TeamsOptions } from "./types";
-import { acceptInvitationForTeams } from "./events/accept-invitation";
 
 export * from "./schema";
 
@@ -27,13 +27,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		priority: 10, // Run early to create default teams before other addons
 		errorCodes: TEAMS_ERROR_CODES,
 		events: {
-			async createDefaultTeam({ organization, user }, context) {
-				return await createDefaultTeam(
-					{ user, organization },
-					context,
-					options,
-				);
-			},
+			createDefaultTeam,
 			acceptInvitationForTeams,
 		},
 		Infer: {
