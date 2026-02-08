@@ -323,7 +323,7 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 
 #### Social Sign-In
 
-For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
+For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL. When you pass a relative path like "/dashboard", the Expo plugin automatically converts it to a deep link using `Linking.createURL`.
 
 ```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
@@ -332,7 +332,7 @@ export default function SocialSignIn() {
     const handleLogin = async () => {
         await authClient.signIn.social({
             provider: "google",
-            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+            callbackURL: "/dashboard" // [!code highlight] automatically converted to a deep link via Linking.createURL
         })
     };
     return <Button title="Login with Google" onPress={handleLogin} />;
