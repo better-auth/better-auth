@@ -68,7 +68,9 @@ async function fetchUserImage(
 			const imageType = detectImageType(buffer);
 			if (!imageType) return;
 
-			const mimeType = response.headers.get("content-type")?.split(";")[0]?.trim() || imageType;
+			const mimeType =
+				response.headers.get("content-type")?.split(";")[0]?.trim() ||
+				imageType;
 			const encoded = base64.encode(buffer);
 			const dataUrl = `data:${mimeType};base64,${encoded}`;
 
