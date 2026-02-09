@@ -187,9 +187,9 @@ describe("i18n plugin", async () => {
 						translations,
 						defaultLocale: "en",
 						detection: ["callback"],
-						getLocale: (request) => {
-							// Use a custom header for locale detection
-							return request.headers.get("X-Custom-Locale");
+						getLocale: (request, _ctx) => {
+							if (!request) return null;
+							return request.headers.get("X-Custom-Locale") ?? null;
 						},
 					}),
 				],
@@ -206,6 +206,36 @@ describe("i18n plugin", async () => {
 			});
 
 			expect(error!.message).toBe("Email ou mot de passe invalide");
+		});
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7805
+		 */
+		it("should call getLocale callback even when request is undefined (auth.api)", async () => {
+			const { auth: authWithCallback } = await getTestInstance({
+				plugins: [
+					i18n({
+						translations,
+						defaultLocale: "en",
+						detection: ["callback"],
+						getLocale: (_request, _ctx) => {
+							return "fr";
+						},
+					}),
+				],
+			});
+
+			const response = await authWithCallback.api.signInEmail({
+				body: {
+					email: "nonexistent@example.com",
+					password: "wrongpassword",
+				},
+				asResponse: true,
+			});
+
+			const body = await response.json();
+			expect(body.code).toBe("INVALID_EMAIL_OR_PASSWORD");
+			expect(body.message).toBe("Email ou mot de passe invalide");
 		});
 	});
 

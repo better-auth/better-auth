@@ -133,6 +133,7 @@ i18n({
     detection: ["callback", "header"],
     getLocale: (request, ctx) => {
         // Custom logic: use query param, custom header, etc.
+        if (!request) return null;
         const url = new URL(request.url);
         return url.searchParams.get("lang");
     },
@@ -207,9 +208,13 @@ The field name on the user object that stores their locale preference when using
 
 ### `getLocale`
 
-**Type:** `(request: Request, ctx: AuthContext) => string | null | Promise<string | null>`
+**Type:** `(request: Request | undefined, ctx: AuthContext) => string | null | Promise<string | null>`
 
 A custom function to detect the locale when using the `"callback"` detection strategy. Receives the request and auth context, returns the locale code or `null`.
+
+<Callout type="info">
+`request` could be undefined for non-HTTP calls.
+</Callout>
 
 ## Fallback Behavior
 
