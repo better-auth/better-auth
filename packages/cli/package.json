@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/cli",
+  "name": "auth",
   "version": "1.5.0-beta.13",
   "type": "module",
   "description": "The CLI for Better Auth",

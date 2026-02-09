@@ -1094,7 +1094,7 @@ export const auth = betterAuth({
 
 				await new Promise<void>((resolve, reject) => {
 					exec(
-						`npx @better-auth/cli migrate`,
+						`npx auth migrate`,
 						{ cwd },
 						(error, stdout, stderr) => {
 							if (error) {
@@ -1527,7 +1527,7 @@ export const auth = betterAuth({
 			} else if (isPrisma) {
 				command = "npx prisma migrate dev";
 			} else {
-				command = "npx @better-auth/cli migrate";
+				command = "npx auth migrate";
 			}
 			logs.push(`  ${nextStepNum}. Run ${chalk.cyan(command)} to apply schema`);
 			nextStepNum++;
