@@ -604,7 +604,7 @@ async function getFingerprint(): Promise<FingerprintResult | null> {
 		return cachedFingerprint;
 	}
 
-	if (fingerprintPromise) {
+	if (await fingerprintPromise) {
 		return fingerprintPromise;
 	}
 

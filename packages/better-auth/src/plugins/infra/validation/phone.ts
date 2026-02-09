@@ -1,20 +1,11 @@
-// Optional dependency - gracefully handle if not installed
-let parsePhoneNumberFromString: any;
-let isValidPhoneNumber: any;
-type CountryCode = string;
-type PhoneNumber = any;
-
-try {
-	const libphonenumber = require("libphonenumber-js");
-	parsePhoneNumberFromString = libphonenumber.parsePhoneNumberFromString;
-	isValidPhoneNumber = libphonenumber.isValidPhoneNumber;
-} catch {
-	// libphonenumber-js not installed - phone validation will be disabled
-}
-
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth/types";
+import type { CountryCode, PhoneNumber } from "libphonenumber-js";
+import {
+	isValidPhoneNumber,
+	parsePhoneNumberFromString,
+} from "libphonenumber-js";
 
 /**
  * Common fake/test phone numbers that should be blocked

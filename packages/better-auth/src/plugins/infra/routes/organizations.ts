@@ -11,10 +11,6 @@ import z from "zod";
 import { jwtMiddleware } from "../jwt";
 import type { DashOptionsInternal } from "../types";
 
-// Optional types - will be any if @better-auth/sso is not installed
-const _sso: any = null;
-type SSOOptions = any;
-
 export const listOrganizations = (options: DashOptionsInternal) => {
 	return createAuthEndpoint(
 		"/dash/list-organizations",
@@ -1965,7 +1961,6 @@ export const inviteMember = (options: DashOptionsInternal) => {
 					role: ctx.body.role as any,
 					organizationId,
 				},
-				// @ts-expect-error
 				context: {
 					...ctx.context,
 					session: {
@@ -2891,7 +2886,6 @@ export const resendInvitation = (options: DashOptionsInternal) => {
 					organizationId,
 					resend: true,
 				},
-				// @ts-expect-error
 				context: {
 					...ctx.context,
 					session: {

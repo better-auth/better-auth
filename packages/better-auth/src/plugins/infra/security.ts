@@ -462,9 +462,7 @@ export function createSecurityClient(
 		/**
 		 * Check if a visitor has exceeded the free trial signup limit.
 		 */
-		async checkFreeTrialAbuse(
-			visitorId: string,
-		): Promise<{
+		async checkFreeTrialAbuse(visitorId: string): Promise<{
 			isAbuse: boolean;
 			accountCount: number;
 			maxAccounts: number;

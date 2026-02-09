@@ -491,6 +491,8 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/scim": "workspace:*",
+    "@better-auth/sso": "workspace:*",
     "@lynx-js/react": "^0.116.1",
     "@sveltejs/kit": "^2.50.1",
     "@tanstack/react-start": "^1.157.16",
@@ -503,6 +505,7 @@
     "better-sqlite3": "^12.6.2",
     "deepmerge": "^4.3.1",
     "happy-dom": "^20.4.0",
+    "libphonenumber-js": "^1.11.16",
     "listhen": "^1.9.0",
     "msw": "^2.12.4",
     "next": "^16.1.6",
