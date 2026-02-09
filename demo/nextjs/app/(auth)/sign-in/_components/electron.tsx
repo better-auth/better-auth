@@ -62,18 +62,18 @@ export function ElectronTransferUser({
 				});
 
 				const promise = authClient.electron.transferUser({
-                    fetchOptions: {
-                        query: params,
+					fetchOptions: {
+						query: params,
 					},
 				});
-                
+
 				// Switch back to the original session
 				await authClient.multiSession.setActive({
-                    sessionToken: originalSessionToken,
+					sessionToken: originalSessionToken,
 				});
-                
-                // Transfer user
-                await promise;
+
+				// Transfer user
+				await promise;
 			}),
 		[params, activeSession],
 	);
