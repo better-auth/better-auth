@@ -132,7 +132,7 @@ export const i18n = <Locales extends string[]>(
 				}
 
 				case "callback": {
-					if (opts.getLocale && request) {
+					if (opts.getLocale) {
 						const callbackLocale = await opts.getLocale(request, ctx);
 						if (callbackLocale && availableLocales.includes(callbackLocale)) {
 							locale = callbackLocale;

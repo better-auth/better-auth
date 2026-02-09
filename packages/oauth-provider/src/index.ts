@@ -5,5 +5,5 @@ export {
 	oauthProviderOpenIdConfigMetadata,
 	oidcServerMetadata,
 } from "./metadata";
-export { oauthProvider } from "./oauth";
+export { getOAuthProviderState, oauthProvider } from "./oauth";
 export type * from "./types";
