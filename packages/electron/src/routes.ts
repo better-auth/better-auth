@@ -198,9 +198,7 @@ const electronTransferUserQuerySchema = z.object({
 	code_challenge_method: z.string().optional(),
 });
 const electronTransferUserBodySchema = z.object({
-	callbackURL: z.string().optional().meta({
-		description: "The URL to redirect to after the redirect is initiated.",
-	}),
+	callbackURL: z.string().optional(),
 });
 
 export const electronTransferUser = (
