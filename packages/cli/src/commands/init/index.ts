@@ -1016,8 +1016,12 @@ export const auth = betterAuth({
 			}
 		})();
 	}
-
+	// Select the plugins to use. For now this is skipped.
 	const plugins = await (async (): Promise<Plugin[]> => {
+		// For now we do not want to allow configurations of plugins.
+		// Possibly in the future we can support this.
+		const skip = true;
+		if (skip) return [];
 		if (hasAuthConfigAlready) return [];
 
 		await nextStep("Select Plugins");

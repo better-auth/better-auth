@@ -139,8 +139,8 @@ describe("initAction", () => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
 				// Install Better Auth
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: true };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 
 				// Create .env file - confirm() wrapper returns value directly
@@ -286,8 +286,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: true };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (question.message?.includes("set environment variables")) {
 					return { value: true };
@@ -378,8 +378,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (question.name === "providedSecret") {
 					return { providedSecret: "" };
@@ -435,8 +435,8 @@ describe("initAction", () => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
 			// Handle other prompts that might be called
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: false };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.type === "confirm" &&
@@ -502,8 +502,8 @@ describe("initAction", () => {
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: false };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.type === "confirm" &&
@@ -576,8 +576,8 @@ describe("initAction", () => {
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: false };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.type === "confirm" &&
@@ -646,8 +646,8 @@ describe("initAction", () => {
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: false };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.type === "confirm" &&
@@ -712,8 +712,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.name === "filePath" &&
@@ -781,8 +781,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
@@ -852,8 +852,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
@@ -922,8 +922,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
@@ -1011,8 +1011,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
@@ -1077,8 +1077,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
@@ -1140,8 +1140,8 @@ describe("initAction", () => {
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: false };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.name === "filePath" &&
@@ -1195,8 +1195,8 @@ describe("initAction", () => {
 		mockPrompts.mockImplementation(async (questions: any) => {
 			const question = Array.isArray(questions) ? questions[0] : questions;
 
-			if (question.name === "shouldInstallBetterAuth") {
-				return { shouldInstallBetterAuth: true };
+			if (question.message?.includes("install better-auth")) {
+				return { value: true };
 			}
 			if (
 				question.type === "confirm" &&
@@ -1244,8 +1244,8 @@ describe("initAction", () => {
 			mockPrompts.mockImplementation(async (questions: any) => {
 				const question = Array.isArray(questions) ? questions[0] : questions;
 
-				if (question.name === "shouldInstallBetterAuth") {
-					return { shouldInstallBetterAuth: false };
+				if (question.message?.includes("install better-auth")) {
+					return { value: true };
 				}
 				if (
 					question.type === "confirm" &&
