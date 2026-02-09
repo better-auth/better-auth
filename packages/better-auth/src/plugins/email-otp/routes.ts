@@ -678,13 +678,17 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				if (opts.disableSignUp) {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
-				const data = parseUserInput(ctx.context.options, rest, "create");
+				const additionalFields = parseUserInput(
+					ctx.context.options,
+					rest,
+					"create",
+				);
 				const newUser = await ctx.context.internalAdapter.createUser({
+					...additionalFields,
 					email,
 					emailVerified: true,
 					name: name || "",
 					image,
-					...data,
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,
