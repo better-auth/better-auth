@@ -4,7 +4,6 @@ import type { LiteralString } from "@better-auth/core";
 const flagsMap = {
 	npm: {
 		dev: "--save-dev",
-		peer: "--save-peer",
 		optional: "--save-optional",
 	},
 	pnpm: {
@@ -51,7 +50,7 @@ export function installDependencies({
 			flags.push("--force");
 			break;
 		case "pnpm":
-			installCommand = "pnpm install";
+			installCommand = "pnpm add";
 			break;
 		case "bun":
 			installCommand = "bun install";

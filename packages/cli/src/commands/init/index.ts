@@ -998,7 +998,7 @@ export const auth = betterAuth({
 				socialProviderEnvVars,
 			);
 
-			if (missingSocialEnvVars.length > 0) {
+			if (missingSocialEnvVars.length > 0 && envFiles.size > 0) {
 				// Add missing social provider env vars to the file with shortest length
 				const firstEnvFile = [...envFiles.keys()].sort(
 					(a, b) => path.basename(a).length - path.basename(b).length,
@@ -1008,7 +1008,10 @@ export const auth = betterAuth({
 					.flatMap((x) => x.var.map((v) => `${v}=""`));
 
 				if (envVarsToAdd.length > 0) {
-					filesToWrite.push(() => updateEnvFiles([firstEnvFile], envVarsToAdd));
+					const resolvedPath = path.isAbsolute(firstEnvFile)
+						? firstEnvFile
+						: path.join(cwd, firstEnvFile);
+					filesToWrite.push(() => updateEnvFiles([resolvedPath], envVarsToAdd));
 				}
 			}
 		})();
