@@ -1,6 +1,6 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError, BetterAuthError } from "@better-auth/core/error";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultRoles } from "./access";
@@ -67,7 +67,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		}
 	}
 
-	return {
+	return createPlugin({
 		id: "admin",
 		init() {
 			return {
@@ -178,5 +178,5 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 		$ERROR_CODES: ADMIN_ERROR_CODES,
 		schema: mergeSchema(schema, opts.schema),
 		options: options as NoInfer<O>,
-	} satisfies BetterAuthPlugin;
+	});
 };

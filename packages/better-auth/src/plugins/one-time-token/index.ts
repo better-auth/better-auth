@@ -1,11 +1,9 @@
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { sessionMiddleware } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -114,7 +112,7 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 		return token;
 	}
 
-	return {
+	return createPlugin({
 		id: "one-time-token",
 		endpoints: {
 			/**
@@ -245,5 +243,5 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 			],
 		},
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };

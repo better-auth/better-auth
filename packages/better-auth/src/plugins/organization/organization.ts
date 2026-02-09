@@ -1,7 +1,8 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
@@ -1199,7 +1200,7 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		},
 	});
 
-	return {
+	return createPlugin({
 		id: "organization",
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
@@ -1263,5 +1264,5 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 		options: opts as NoInfer<O>,
-	} satisfies BetterAuthPlugin;
+	});
 }

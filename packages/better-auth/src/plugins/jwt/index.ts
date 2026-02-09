@@ -1,9 +1,9 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import type { JSONWebKeySet, JWTPayload } from "jose";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
@@ -65,7 +65,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 		);
 	}
 
-	return {
+	return createPlugin({
 		id: "jwt",
 		options: options as NoInfer<O>,
 		endpoints: {
@@ -346,7 +346,7 @@ export const jwt = <O extends JwtOptions>(options?: O) => {
 			],
 		},
 		schema: mergeSchema(schema, options?.schema),
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export { getJwtToken };

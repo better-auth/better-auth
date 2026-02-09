@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { mergeSchema } from "better-auth/db";
 import { PASSKEY_ERROR_CODES } from "./error-codes";
 import {
@@ -33,7 +33,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 		},
 	};
 
-	return {
+	return createPlugin({
 		id: "passkey",
 		endpoints: {
 			generatePasskeyRegistrationOptions: generatePasskeyRegistrationOptions(
@@ -53,7 +53,7 @@ export const passkey = (options?: PasskeyOptions | undefined) => {
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: PASSKEY_ERROR_CODES,
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type { Passkey, PasskeyOptions };

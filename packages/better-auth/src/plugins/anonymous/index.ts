@@ -1,8 +1,8 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import {
@@ -56,7 +56,7 @@ async function getAnonUserEmail(
 }
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {
-	return {
+	return createPlugin({
 		id: "anonymous",
 		endpoints: {
 			signInAnonymous: createAuthEndpoint(
@@ -330,7 +330,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 		options,
 		schema: mergeSchema(schema, options?.schema),
 		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type * from "./types";

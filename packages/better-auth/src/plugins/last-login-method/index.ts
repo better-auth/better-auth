@@ -1,8 +1,6 @@
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -82,7 +80,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		...userConfig,
 	} satisfies LastLoginMethodOptions;
 
-	return {
+	return createPlugin({
 		id: "last-login-method",
 		init(ctx) {
 			return {
@@ -197,5 +195,5 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 				}
 			: undefined,
 		options: userConfig as NoInfer<O>,
-	} satisfies BetterAuthPlugin;
+	});
 };

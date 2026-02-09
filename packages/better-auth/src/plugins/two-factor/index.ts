@@ -1,9 +1,9 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { createOTP } from "@better-auth/utils/otp";
 import * as z from "zod";
@@ -72,7 +72,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 	const backupCode = backupCode2fa(backupCodeOptions);
 	const otp = otp2fa(options?.otpOptions);
 
-	return {
+	return createPlugin({
 		id: "two-factor",
 		endpoints: {
 			...totp.endpoints,
@@ -452,7 +452,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 			},
 		],
 		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export * from "./client";

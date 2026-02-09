@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -44,7 +44,7 @@ const getSiweNonceBodySchema = z.object({
 });
 
 export const siwe = (options: SIWEPluginOptions) =>
-	({
+	createPlugin({
 		id: "siwe",
 		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
 		endpoints: {
@@ -309,4 +309,4 @@ export const siwe = (options: SIWEPluginOptions) =>
 			),
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	});

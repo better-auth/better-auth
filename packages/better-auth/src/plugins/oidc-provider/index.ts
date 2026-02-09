@@ -1,12 +1,10 @@
-import type {
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { GenericEndpointContext } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { getCurrentAuthContext } from "@better-auth/core/context";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { OpenAPIParameter } from "better-call";
@@ -379,7 +377,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		return clientSecret === storedClientSecret;
 	}
 
-	return {
+	return createPlugin({
 		id: "oidc-provider",
 		hooks: {
 			after: [
@@ -1755,6 +1753,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 		get options() {
 			return opts;
 		},
-	} satisfies BetterAuthPlugin;
+	});
 };
 export type * from "./types";

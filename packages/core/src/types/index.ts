@@ -26,6 +26,7 @@ export type {
 export type {
 	BetterAuthPlugin,
 	BetterAuthPluginErrorCodePart,
+	BetterAuthPluginV2,
 	HookEndpointContext,
 } from "./plugin";
 export type {

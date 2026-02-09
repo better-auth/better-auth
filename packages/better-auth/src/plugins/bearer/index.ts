@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
@@ -27,7 +27,7 @@ export interface BearerOptions {
  * Converts bearer token to session cookie
  */
 export const bearer = (options?: BearerOptions | undefined) => {
-	return {
+	return createPlugin({
 		id: "bearer",
 		hooks: {
 			before: [
@@ -132,5 +132,5 @@ export const bearer = (options?: BearerOptions | undefined) => {
 			],
 		},
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };

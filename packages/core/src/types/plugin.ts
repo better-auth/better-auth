@@ -29,6 +29,23 @@ export type HookEndpointContext = Partial<
 	headers?: Headers | undefined;
 };
 
+export type BetterAuthPluginV2<
+	ID extends string,
+	Endpoints extends Record<string, Endpoint>,
+	Schema extends BetterAuthPluginDBSchema,
+	ERROR_CODES extends Record<string, RawError>,
+	Options extends object,
+> = {
+	id: ID;
+	endpoints?: Endpoints;
+	options?: Options;
+	schema?: Schema;
+	$ERROR_CODES?: ERROR_CODES;
+} & Omit<
+	BetterAuthPlugin,
+	"id" | "endpoints" | "$ERROR_CODES" | "options" | "schema"
+>;
+
 export type BetterAuthPluginErrorCodePart = {
 	/**
 	 * The error codes returned by the plugin

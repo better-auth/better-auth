@@ -1,8 +1,8 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
@@ -56,7 +56,7 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 
 	const isMultiSessionCookie = (key: string) => key.includes("_multi-");
 
-	return {
+	return createPlugin({
 		id: "multi-session",
 		endpoints: {
 			/**
@@ -405,5 +405,5 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 		},
 		options,
 		$ERROR_CODES: ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };

@@ -1,9 +1,9 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { parseJSON } from "../../client/parser";
@@ -102,7 +102,7 @@ const oauthCallbackQuerySchema = z.object({
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
-	return {
+	return createPlugin({
 		id: "oauth-proxy",
 		options: opts as NoInfer<O>,
 		endpoints: {
@@ -582,5 +582,5 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				},
 			],
 		},
-	} satisfies BetterAuthPlugin;
+	});
 };

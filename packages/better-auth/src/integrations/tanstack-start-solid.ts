@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { parseSetCookieHeader } from "../cookies";
 
 /**
@@ -20,7 +20,7 @@ import { parseSetCookieHeader } from "../cookies";
  * ```
  */
 export const tanstackStartCookies = () => {
-	return {
+	return createPlugin({
 		id: "tanstack-start-cookies-solid",
 		hooks: {
 			after: [
@@ -62,5 +62,5 @@ export const tanstackStartCookies = () => {
 				},
 			],
 		},
-	} satisfies BetterAuthPlugin;
+	});
 };

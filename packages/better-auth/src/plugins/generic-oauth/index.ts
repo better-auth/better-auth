@@ -1,4 +1,4 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type { AuthContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
@@ -6,6 +6,7 @@ import {
 	refreshAccessToken,
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { betterFetch } from "@better-fetch/fetch";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import {
@@ -70,7 +71,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 		);
 	}
 
-	return {
+	return createPlugin({
 		id: "generic-oauth",
 		init: (ctx: AuthContext) => {
 			const genericProviders = options.config.map((c) => {
@@ -238,5 +239,5 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 		},
 		options,
 		$ERROR_CODES: GENERIC_OAUTH_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };

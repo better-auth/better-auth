@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { mergeSchema } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
@@ -130,7 +130,7 @@ export const deviceAuthorization = (
 ) => {
 	const opts = deviceAuthorizationOptionsSchema.parse(options);
 
-	return {
+	return createPlugin({
 		id: "device-authorization",
 		schema: mergeSchema(schema, options?.schema),
 		endpoints: {
@@ -142,7 +142,7 @@ export const deviceAuthorization = (
 		},
 		$ERROR_CODES: DEVICE_AUTHORIZATION_ERROR_CODES,
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type * from "../../utils/time";

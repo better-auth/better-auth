@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "better-auth";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { authMiddlewareFactory } from "./middlewares";
 import {
 	createSCIMUser,
@@ -32,7 +32,7 @@ export const scim = (options?: SCIMOptions) => {
 
 	const authMiddleware = authMiddlewareFactory(opts);
 
-	return {
+	return createPlugin({
 		id: "scim",
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
@@ -69,7 +69,7 @@ export const scim = (options?: SCIMOptions) => {
 			},
 		},
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export * from "./types";

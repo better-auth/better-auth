@@ -1,4 +1,5 @@
-import type { BetterAuthPlugin, User } from "better-auth";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
+import type { User } from "better-auth";
 import { APIError } from "better-auth";
 import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
@@ -46,7 +47,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		createBillingPortal: createBillingPortal(options),
 	};
 
-	return {
+	return createPlugin({
 		id: "stripe",
 		endpoints: {
 			stripeWebhook: stripeWebhook(options),
@@ -307,7 +308,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		schema: getSchema(options),
 		options: options as NoInfer<O>,
 		$ERROR_CODES: STRIPE_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type StripePlugin<O extends StripeOptions> = ReturnType<

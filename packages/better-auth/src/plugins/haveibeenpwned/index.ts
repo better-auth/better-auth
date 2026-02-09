@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { getCurrentAuthContext } from "@better-auth/core/context";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
@@ -82,7 +82,7 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		"/reset-password",
 	];
 
-	return {
+	return createPlugin({
 		id: "have-i-been-pwned",
 		init(ctx) {
 			const originalHash = ctx.password.hash;
@@ -107,5 +107,5 @@ export const haveIBeenPwned = (options?: HaveIBeenPwnedOptions | undefined) => {
 		},
 		options,
 		$ERROR_CODES: ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };

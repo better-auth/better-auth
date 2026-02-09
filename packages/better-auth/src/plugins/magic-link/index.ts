@@ -1,9 +1,6 @@
-import type {
-	Awaitable,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { Awaitable, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { originCheck } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -152,7 +149,7 @@ export const magicLink = (options: MagicLinkOptions) => {
 		return token;
 	}
 
-	return {
+	return createPlugin({
 		id: "magic-link",
 		endpoints: {
 			/**
@@ -425,5 +422,5 @@ export const magicLink = (options: MagicLinkOptions) => {
 			},
 		],
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };

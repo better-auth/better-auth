@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { generateRandomString } from "../../crypto";
 import { getDate } from "../../utils/date";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -41,7 +41,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 
 	const sendVerificationOTPAction = sendVerificationOTP(opts);
 
-	return {
+	return createPlugin({
 		id: "email-otp",
 		init(ctx) {
 			if (!opts.overrideDefaultEmailVerification) {
@@ -173,5 +173,5 @@ export const emailOTP = (options: EmailOTPOptions) => {
 		],
 		options,
 		$ERROR_CODES: EMAIL_OTP_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };

@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { APIError } from "../../api";
@@ -107,7 +107,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 
 	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
 
-	return {
+	return createPlugin({
 		id: "api-key",
 		$ERROR_CODES: API_KEY_ERROR_CODES,
 		hooks: {
@@ -322,7 +322,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		},
 		schema,
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type * from "./types";

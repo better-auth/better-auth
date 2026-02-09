@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
@@ -39,7 +39,7 @@ const oneTapCallbackBodySchema = z.object({
 });
 
 export const oneTap = (options?: OneTapOptions | undefined) =>
-	({
+	createPlugin({
 		id: "one-tap",
 		endpoints: {
 			oneTapCallback: createAuthEndpoint(
@@ -184,4 +184,4 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 			),
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	});

@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { expoAuthorizationProxy } from "./routes";
 
 export interface ExpoOptions {
@@ -19,7 +19,7 @@ declare module "@better-auth/core" {
 }
 
 export const expo = (options?: ExpoOptions | undefined) => {
-	return {
+	return createPlugin({
 		id: "expo",
 		init: (ctx) => {
 			const trustedOrigins =
@@ -98,5 +98,5 @@ export const expo = (options?: ExpoOptions | undefined) => {
 			expoAuthorizationProxy,
 		},
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };

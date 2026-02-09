@@ -1,5 +1,5 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader } from "../cookies";
 
@@ -23,7 +23,7 @@ export function toNextJsHandler(
 }
 
 export const nextCookies = () => {
-	return {
+	return createPlugin({
 		id: "next-cookies",
 		hooks: {
 			before: [
@@ -109,5 +109,5 @@ export const nextCookies = () => {
 				},
 			],
 		},
-	} satisfies BetterAuthPlugin;
+	});
 };

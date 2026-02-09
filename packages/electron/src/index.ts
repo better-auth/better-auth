@@ -3,7 +3,7 @@
 import type { HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import type { BetterAuthPlugin } from "better-auth";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
@@ -43,7 +43,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		);
 	};
 
-	return {
+	return createPlugin({
 		id: "electron",
 		async onRequest(request, _ctx) {
 			if (opts.disableOriginOverride || request.headers.get("origin")) {
@@ -192,7 +192,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		},
 		options: opts,
 		$ERROR_CODES: ELECTRON_ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export type * from "./types";

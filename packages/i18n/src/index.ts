@@ -1,4 +1,5 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type { AuthContext } from "@better-auth/core";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { parseCookies } from "better-auth/cookies";
 import type { I18nOptions, LocaleDetectionStrategy } from "./types";
@@ -148,9 +149,8 @@ export const i18n = <Locales extends string[]>(
 		return opts.defaultLocale;
 	}
 
-	return {
+	return createPlugin({
 		id: "i18n",
-
 		hooks: {
 			after: [
 				{
@@ -190,5 +190,5 @@ export const i18n = <Locales extends string[]>(
 		},
 
 		options: opts,
-	} satisfies BetterAuthPlugin;
+	});
 };

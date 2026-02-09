@@ -1,6 +1,5 @@
 import type {
 	BetterAuthOptions,
-	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import {
@@ -8,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Session, User } from "@better-auth/core/db";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { getSession } from "../../api";
 import { getEndpointResponse } from "../../utils/plugin-helper";
@@ -65,7 +65,7 @@ export const customSession = <
 	options?: O | undefined,
 	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
-	return {
+	return createPlugin({
 		id: "custom-session",
 		hooks: {
 			after: [
@@ -145,5 +145,5 @@ export const customSession = <
 			Session: {} as Awaited<ReturnType<typeof fn>>,
 		},
 		options: pluginOptions,
-	} satisfies BetterAuthPlugin;
+	});
 };

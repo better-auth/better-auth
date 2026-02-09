@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { getIp } from "../../utils/get-request-ip";
 import { middlewareResponse } from "../../utils/middleware-response";
 import { defaultEndpoints, Providers, siteVerifyMap } from "./constants";
@@ -18,7 +18,7 @@ import * as verifyHandlers from "./verify-handlers";
 export type * from "./types";
 
 export const captcha = (options: CaptchaOptions) =>
-	({
+	createPlugin({
 		id: "captcha",
 		onRequest: async (request, ctx) => {
 			try {
@@ -93,4 +93,4 @@ export const captcha = (options: CaptchaOptions) =>
 			}
 		},
 		options,
-	}) satisfies BetterAuthPlugin;
+	});

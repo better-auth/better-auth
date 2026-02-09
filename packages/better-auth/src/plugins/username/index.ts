@@ -1,10 +1,10 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import type { Account, User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
@@ -135,7 +135,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 			: displayUsername;
 	};
 
-	return {
+	return createPlugin({
 		id: "username",
 		init(ctx) {
 			return {
@@ -594,5 +594,5 @@ export const username = (options?: UsernameOptions | undefined) => {
 		},
 		options,
 		$ERROR_CODES: ERROR_CODES,
-	} satisfies BetterAuthPlugin;
+	});
 };

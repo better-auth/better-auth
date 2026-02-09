@@ -43,6 +43,7 @@ export {
 	SignatureAlgorithm,
 } from "./saml";
 
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
@@ -171,7 +172,7 @@ export function sso<O extends SSOOptions>(
 		};
 	}
 
-	return {
+	return createPlugin({
 		id: "sso",
 		init(ctx) {
 			const existing = ctx.skipOriginCheck;
@@ -261,5 +262,5 @@ export function sso<O extends SSOOptions>(
 			},
 		},
 		options: options as NoInfer<O>,
-	} satisfies BetterAuthPlugin;
+	});
 }

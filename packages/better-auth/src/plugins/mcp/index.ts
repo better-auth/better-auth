@@ -1,6 +1,5 @@
 import type {
 	BetterAuthOptions,
-	BetterAuthPlugin,
 	GenericEndpointContext,
 } from "@better-auth/core";
 import {
@@ -8,6 +7,7 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
+import { createPlugin } from "@better-auth/core/utils/create-plugin";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
@@ -183,7 +183,7 @@ export const mcp = (options: MCPOptions) => {
 		oauthConsent: "oauthConsent",
 	};
 	const provider = oidcProvider(opts);
-	return {
+	return createPlugin({
 		id: "mcp",
 		hooks: {
 			after: [
@@ -960,7 +960,7 @@ export const mcp = (options: MCPOptions) => {
 		},
 		schema,
 		options,
-	} satisfies BetterAuthPlugin;
+	});
 };
 
 export const withMcpAuth = <
