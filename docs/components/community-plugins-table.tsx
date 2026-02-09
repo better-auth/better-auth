@@ -41,15 +41,33 @@ const columns: ColumnDef<CommunityPlugin>[] = [
 			);
 		},
 		cell: ({ row }) => {
+			const author = row.original.author;
+
 			return (
-				<a
-					href={row.original.url}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="font-mono text-sm hover:underline text-primary"
-				>
-					{row.original.name}
-				</a>
+				<div className="w-[220px]">
+					<a
+						href={row.original.url}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="font-mono text-sm hover:underline text-primary"
+					>
+						{row.original.name}
+					</a>
+					<br />
+					<a
+						href={`https://github.com/${author?.github}`}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="flex items-center gap-2 hover:text-foreground transition-colors text-muted-foreground h-12"
+					>
+						<img
+							src={author?.avatar}
+							alt={author?.name}
+							className="rounded-full w-6 h-6 border opacity-70 m-0"
+						/>
+						<span className="text-sm">{author?.name}</span>
+					</a>
+				</div>
 			);
 		},
 	},
@@ -61,38 +79,6 @@ const columns: ColumnDef<CommunityPlugin>[] = [
 				<div className="text-sm text-muted-foreground">
 					{row.original.description}
 				</div>
-			);
-		},
-	},
-	{
-		accessorKey: "author.name",
-		header: ({ column }) => {
-			return (
-				<button
-					className="flex items-center gap-2 font-semibold hover:text-foreground transition-colors"
-					onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-				>
-					Author
-					<ArrowUpDown className="h-4 w-4" />
-				</button>
-			);
-		},
-		cell: ({ row }) => {
-			const author = row.original.author;
-			return (
-				<a
-					href={`https://github.com/${author.github}`}
-					target="_blank"
-					rel="noopener noreferrer"
-					className="flex items-center gap-2 hover:text-foreground transition-colors"
-				>
-					<img
-						src={author.avatar}
-						alt={author.name}
-						className="rounded-full w-6 h-6 border opacity-70 m-0"
-					/>
-					<span className="text-sm">{author.name}</span>
-				</a>
 			);
 		},
 	},
