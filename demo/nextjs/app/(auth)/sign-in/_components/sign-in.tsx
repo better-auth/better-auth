@@ -3,7 +3,7 @@
 import { Key } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { SignInForm } from "@/components/forms/sign-in-form";
 import { LastUsedIndicator } from "@/components/last-used-indicator";
@@ -21,13 +21,52 @@ import { getCallbackURL } from "@/lib/shared";
 import { cn } from "@/lib/utils";
 
 export default function SignIn() {
+	const [isLoading, startTransition] = useTransition();
+	const [isTransferLoading, startTransferTransition] = useTransition();
 	const [isMounted, setIsMounted] = useState(false);
+	const [userName, setUserName] = useState<string | null>(null);
 	const router = useRouter();
 	const params = useSearchParams();
 
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
+
+	useEffect(() => {
+		if (params.get("client_id") === "electron") {
+			startTransition(async () => {
+				const { data: session } = await authClient.getSession();
+				if (session?.user) {
+					setUserName(session.user.name || session.user.email);
+				}
+			});
+		}
+	}, []);
+
+	if (isLoading) {
+		return <div>Loading...</div>;
+	}
+
+	if (userName) {
+		return (
+			<div>
+				<Button
+					onClick={() => {
+						startTransferTransition(async () => {
+							await authClient.electron.transferUser({
+								fetchOptions: {
+									query: Object.fromEntries(params.entries()),
+								},
+							});
+						});
+					}}
+					disabled={isTransferLoading}
+				>
+					Continue as <b>{userName}</b>
+				</Button>
+			</div>
+		);
+	}
 
 	return (
 		<Card className="w-full rounded-none max-h-[90vh] overflow-y-auto">
