@@ -865,7 +865,7 @@ describe("oauth - prompt", async () => {
 		expect(callbackURL).toContain("/success");
 	});
 
-	it("consent - should consent again given new scope", async () => {
+	it("consent - should require consent again when new scope is requested", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");
 		}
@@ -912,6 +912,75 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
 		expect(consentRedirectUri).toContain(`state=`);
+	});
+
+	it("consent - should issue code when user consents to fewer scopes", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance({
+				prompt: "consent",
+				scopes: ["openid", "profile", "email", "read:posts"],
+			});
+		const client = createAuthClient({
+			plugins: [genericOAuthClient()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(`prompt=consent`);
+
+		let consentRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(context) {
+				consentRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(headers)(context);
+			},
+		});
+		expect(consentRedirectUri).toContain(`/consent`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(consentRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		const consentRes = await serverClient.oauth2.consent(
+			{
+				accept: true,
+				scope: "openid profile email",
+			},
+			{
+				headers,
+				throw: true,
+			},
+		);
+
+		expect(consentRes.redirect).toBeTruthy();
+		expect(consentRes.uri).toContain(redirectUri);
+		expect(consentRes.uri).toContain(`code=`);
+		expect(consentRes.uri).not.toContain(`/consent`);
 	});
 
 	it("select_account - should sign in requesting account selection", async ({
