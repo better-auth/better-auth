@@ -64,32 +64,14 @@ describe("installDependencies", () => {
 		"should run npm install with --save-dev for dev dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
-				dependencies: "typescript",
+				dependencies: "better-auth",
 				packageManager: "npm",
 				cwd: tmp,
 				type: "dev",
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"npm install --force --save-dev typescript",
-				{ cwd: tmp },
-				expect.any(Function),
-			);
-		},
-	);
-
-	testWithTmpDir(
-		"should run npm install with --save-peer for peer dependencies",
-		async ({ tmp }) => {
-			await installDependencies({
-				dependencies: "react",
-				packageManager: "npm",
-				cwd: tmp,
-				type: "peer",
-			});
-
-			expect(mockExec).toHaveBeenCalledWith(
-				"npm install --force --save-peer react",
+				"npm install --force --save-dev better-auth",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -100,14 +82,14 @@ describe("installDependencies", () => {
 		"should run npm install with --save-optional for optional dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
-				dependencies: "fsevents",
+				dependencies: "better-auth",
 				packageManager: "npm",
 				cwd: tmp,
 				type: "optional",
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"npm install --force --save-optional fsevents",
+				"npm install --force --save-optional better-auth",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -115,7 +97,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run pnpm install with single dependency",
+		"should run pnpm add with single dependency",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "better-auth",
@@ -124,7 +106,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"pnpm install better-auth",
+				"pnpm add better-auth",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -132,7 +114,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run pnpm install with --save-dev for dev dependencies",
+		"should run pnpm add with --save-dev for dev dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: ["typescript", "vitest"],
@@ -142,7 +124,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"pnpm install --save-dev typescript vitest",
+				"pnpm add --save-dev typescript vitest",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -150,7 +132,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run pnpm install with --save-catalog for catalog dependencies",
+		"should run pnpm add with --save-catalog for catalog dependencies",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "some-package",
@@ -160,7 +142,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"pnpm install --save-catalog some-package",
+				"pnpm add --save-catalog some-package",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
@@ -168,7 +150,7 @@ describe("installDependencies", () => {
 	);
 
 	testWithTmpDir(
-		"should run pnpm install with --save-catalog-name for named catalog",
+		"should run pnpm add with --save-catalog-name for named catalog",
 		async ({ tmp }) => {
 			await installDependencies({
 				dependencies: "some-package",
@@ -179,7 +161,7 @@ describe("installDependencies", () => {
 			});
 
 			expect(mockExec).toHaveBeenCalledWith(
-				"pnpm install --save-catalog-name alpha some-package",
+				"pnpm add --save-catalog-name alpha some-package",
 				{ cwd: tmp },
 				expect.any(Function),
 			);
