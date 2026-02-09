@@ -29,6 +29,32 @@ export const electronToken = (_opts: ElectronOptions) =>
 			body: electronTokenBodySchema,
 			metadata: {
 				scope: "http",
+				openapi: {
+					description: "Exchange the electron token for a session",
+					operationId: "electronToken",
+					responses: {
+						200: {
+							description: "Returns the session token and user",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											token: {
+												type: "string",
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+										},
+										required: ["token", "user"],
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -130,6 +156,39 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			query: electronInitOAuthProxyQuerySchema,
 			metadata: {
 				scope: "http",
+				openapi: {
+					description: "Initialize the OAuth proxy for the electron app",
+					operationId: "electronInitOAuthProxy",
+					responses: {
+						200: {
+							description: "Returns the URL to redirect to and if the redirect should be performed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											url: {
+												type: "string",
+												nullable: true,
+											},
+											redirect: {
+												type: "boolean",
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+											token: {
+												type: "string",
+											},
+										},
+										required: ["url", "redirect"],
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -225,6 +284,34 @@ export const electronTransferUser = (
 			body: electronTransferUserBodySchema,
 			use: [sessionMiddleware],
 			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Transfer the user to the electron app",
+					operationId: "electronTransferUser",
+					responses: {
+						200: {
+							description: "Returns the URL to redirect to and if the redirect should be performed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											url: {
+												type: "string",
+												nullable: true,
+											},
+											redirect: {
+												type: "boolean",
+											},
+										},
+										required: ["url", "redirect"],
+									},
+								},
+							},
+						},
+					},
+				},
+			}
 		},
 		async (ctx) => {
 			const success = await handleTransfer(ctx, ctx.query);
