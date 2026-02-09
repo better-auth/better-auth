@@ -2,7 +2,7 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { router } from "../api";
 import type { InferAPI } from "./api";
-import type { InferPluginTypes, Session, User } from "./models";
+import type { Account, InferPluginTypes, Session, User } from "./models";
 import type { InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
@@ -20,6 +20,7 @@ export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		? InferPluginTypes<Options>
 		: {
 				Session: {
+					account: Account<Options["account"], Options["plugins"]>;
 					session: Session<Options["session"], Options["plugins"]>;
 					user: User<Options["user"], Options["plugins"]>;
 				};

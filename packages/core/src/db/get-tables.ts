@@ -143,6 +143,17 @@ export const getAuthTables = (
 					required: true,
 					index: true,
 				},
+				accountId: {
+					type: "string",
+					fieldName: options.session?.fields?.accountId || "accountId",
+					references: {
+						model: options.account?.modelName || "account",
+						field: "id",
+						onDelete: "cascade",
+					},
+					required: true,
+					index: true,
+				},
 				...session?.fields,
 				...options.session?.additionalFields,
 			},

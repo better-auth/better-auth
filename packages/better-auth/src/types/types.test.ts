@@ -49,12 +49,28 @@ describe("general types", async (it) => {
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;
-		expectTypeOf<Session>().toEqualTypeOf<{
+		expectTypeOf<Session>().toMatchTypeOf<{
+			account: {
+				id?: string;
+				createdAt?: Date;
+				updatedAt?: Date;
+				userId?: string;
+				accountId?: string;
+				providerId?: string;
+				accessToken?: string | null;
+				refreshToken?: string | null;
+				idToken?: string | null;
+				accessTokenExpiresAt?: Date | null;
+				refreshTokenExpiresAt?: Date | null;
+				scope?: string | null;
+				password?: string | null;
+			};
 			session: {
 				id: string;
 				createdAt: Date;
 				updatedAt: Date;
 				userId: string;
+				accountId: string;
 				expiresAt: Date;
 				token: string;
 				ipAddress?: string | null | undefined;

@@ -18,8 +18,8 @@ import {
 	symmetricEncodeJWT,
 	verifyJWT,
 } from "../crypto/jwt";
-import { parseUserOutput } from "../db/schema";
-import type { Session, User } from "../types";
+import { parseAccountOutput, parseUserOutput } from "../db/schema";
+import type { Account, Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
@@ -120,6 +120,7 @@ export function getCookies(options: BetterAuthOptions) {
 export async function setCookieCache(
 	ctx: GenericEndpointContext,
 	session: {
+		account: Account;
 		session: Session & Record<string, any>;
 		user: User;
 	},
@@ -128,6 +129,11 @@ export async function setCookieCache(
 	if (!ctx.context.options.session?.cookieCache?.enabled) {
 		return;
 	}
+
+	const filteredAccount = parseAccountOutput(
+		ctx.context.options,
+		session.account,
+	);
 
 	const filteredSession = filterOutputFields(
 		session.session,
@@ -148,6 +154,7 @@ export async function setCookieCache(
 	}
 
 	const sessionData = {
+		account: filteredAccount,
 		session: filteredSession,
 		user: filteredUser,
 		updatedAt: Date.now(),
@@ -237,6 +244,7 @@ export async function setCookieCache(
 export async function setSessionCookie(
 	ctx: GenericEndpointContext,
 	session: {
+		account: Account & Record<string, any>;
 		session: Session & Record<string, any>;
 		user: User;
 	},
