@@ -161,7 +161,7 @@ export const kakao = (options: KakaoOptions) => {
 			const kakaoProfile = account.profile || {};
 			const user = {
 				id: String(profile.id),
-				name: kakaoProfile.nickname || account.name || undefined,
+				name: kakaoProfile.nickname || account.name || "",
 				email: account.email,
 				image:
 					kakaoProfile.profile_image_url || kakaoProfile.thumbnail_image_url,

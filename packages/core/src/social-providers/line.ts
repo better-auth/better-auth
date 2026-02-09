@@ -147,7 +147,7 @@ export const line = (options: LineOptions) => {
 			const userMap = await options.mapProfileToUser?.(profile as any);
 			// ID preference order
 			const id = (profile as any).sub || (profile as any).userId;
-			const name = (profile as any).name || (profile as any).displayName;
+			const name = (profile as any).name || (profile as any).displayName || "";
 			const image =
 				(profile as any).picture || (profile as any).pictureUrl || undefined;
 			const email = (profile as any).email;

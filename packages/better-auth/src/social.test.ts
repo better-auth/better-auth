@@ -1061,12 +1061,8 @@ describe("Apple Provider", async () => {
 
 		// Name should NOT be the email address
 		expect(session.data?.user.name).not.toBe("user@privaterelay.appleid.com");
-		// Name should be undefined, null, or space when not provided
-		expect(
-			session.data?.user.name === undefined ||
-				session.data?.user.name === null ||
-				session.data?.user.name === " ",
-		).toBe(true);
+		// Name should be empty string when not provided
+		expect(session.data?.user.name).toBe("");
 	});
 
 	it("should use firstName and lastName when provided in token.user", async () => {

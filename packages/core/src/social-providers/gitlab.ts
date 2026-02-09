@@ -141,7 +141,7 @@ export const gitlab = (options: GitlabOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.name ?? profile.username,
+					name: profile.name ?? profile.username ?? "",
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: profile.email_verified ?? false,
