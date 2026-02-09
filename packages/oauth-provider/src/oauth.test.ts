@@ -981,6 +981,37 @@ describe("oauth - prompt", async () => {
 		expect(consentRes.uri).toContain(redirectUri);
 		expect(consentRes.uri).toContain(`code=`);
 		expect(consentRes.uri).not.toContain(`/consent`);
+
+		// Exchange code for tokens and verify narrowed scopes
+		const callbackUrl = new URL(consentRes.uri);
+		const code = callbackUrl.searchParams.get("code")!;
+		expect(code).toBeTruthy();
+
+		// Follow the RP callback to exchange the code for tokens
+		let authToken: string | undefined;
+		await client.$fetch(consentRes.uri, {
+			method: "GET",
+			headers: oauthHeaders,
+			onError(context) {
+				authToken = context.response.headers.get("set-auth-token") ?? undefined;
+			},
+		});
+		expect(authToken).toBeDefined();
+
+		// Retrieve the access token via the RP and verify narrowed scopes
+		const tokens = await client.getAccessToken(
+			{ providerId },
+			{
+				auth: {
+					type: "Bearer",
+					token: authToken,
+				},
+			},
+		);
+		expect(tokens.data?.accessToken).toBeDefined();
+
+		expect(tokens.data?.scopes).toEqual(["openid", "profile", "email"]);
+		expect(tokens.data?.scopes).not.toContain("read:posts");
 	});
 
 	it("select_account - should sign in requesting account selection", async ({
