@@ -11,6 +11,8 @@ export * from "./device-authorization";
 export * from "./email-otp";
 export * from "./generic-oauth";
 export * from "./haveibeenpwned";
+// Note: infra/dash plugin is now internal and enabled via betterAuth({ infrastructure: { enabled: true, ... } })
+// It is no longer exported for manual plugin registration
 export * from "./jwt";
 export * from "./last-login-method";
 export * from "./magic-link";

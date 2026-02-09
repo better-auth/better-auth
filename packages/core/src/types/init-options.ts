@@ -1018,6 +1018,72 @@ export type BetterAuthOptions = {
 	 */
 	rateLimit?: BetterAuthRateLimitOptions | undefined;
 	/**
+	 * Better Auth Infrastructure configuration
+	 *
+	 * Enables analytics, security features, and dashboard capabilities
+	 * when connected to Better Auth Infrastructure.
+	 *
+	 * By default, infrastructure is automatically enabled when BETTER_AUTH_API_KEY
+	 * environment variable is present. Set enabled: false to explicitly disable.
+	 *
+	 * @example
+	 * ```ts
+	 * // Automatically enabled if BETTER_AUTH_API_KEY env var is set
+	 * betterAuth({
+	 *   infrastructure: {
+	 *     projectId: "your-project-id",
+	 *   }
+	 * })
+	 *
+	 * // Explicitly disable even if API key is present
+	 * betterAuth({
+	 *   infrastructure: {
+	 *     enabled: false,
+	 *   }
+	 * })
+	 * ```
+	 */
+	infrastructure?:
+		| {
+				/**
+				 * Enable Better Auth Infrastructure features
+				 *
+				 * When true, enables analytics, security monitoring, and dashboard features.
+				 * When false, explicitly disables infrastructure even if API key is available.
+				 * When undefined (default), automatically enables if BETTER_AUTH_API_KEY is set.
+				 *
+				 * @default undefined (auto-detect based on BETTER_AUTH_API_KEY)
+				 */
+				enabled?: boolean | undefined;
+				/**
+				 * Your Better Auth project ID
+				 *
+				 * @default process.env.BETTER_AUTH_PROJECT_ID
+				 */
+				projectId?: string | undefined;
+				/**
+				 * Your Better Auth API key
+				 *
+				 * Required when enabled is true or when auto-enabling.
+				 *
+				 * @default process.env.BETTER_AUTH_API_KEY
+				 */
+				apiKey?: string | undefined;
+				/**
+				 * The URL of the Better Auth Infrastructure API
+				 *
+				 * @default "https://dash.better-auth.com"
+				 */
+				apiUrl?: string | undefined;
+				/**
+				 * The URL of the KV storage service
+				 *
+				 * @default "https://kv.better-auth.com"
+				 */
+				kvUrl?: string | undefined;
+		  }
+		| undefined;
+	/**
 	 * Advanced options
 	 */
 	advanced?: BetterAuthAdvancedOptions | undefined;

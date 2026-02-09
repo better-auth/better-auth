@@ -109,6 +109,12 @@ export const ENV = Object.freeze({
 	get BETTER_AUTH_TELEMETRY_ID() {
 		return getEnvVar("BETTER_AUTH_TELEMETRY_ID");
 	},
+	get BETTER_AUTH_API_KEY() {
+		return getEnvVar("BETTER_AUTH_API_KEY");
+	},
+	get BETTER_AUTH_PROJECT_ID() {
+		return getEnvVar("BETTER_AUTH_PROJECT_ID");
+	},
 	get NODE_ENV() {
 		return getEnvVar("NODE_ENV", "development");
 	},

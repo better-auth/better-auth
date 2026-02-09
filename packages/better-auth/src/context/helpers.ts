@@ -54,6 +54,54 @@ export function getInternalPlugins(options: BetterAuthOptions) {
 	if (options.advanced?.crossSubDomainCookies?.enabled) {
 		// TODO: add internal plugin
 	}
+
+	// Infrastructure plugin logic
+	const infraConfig = options.infrastructure;
+	const apiKey = infraConfig?.apiKey || env.BETTER_AUTH_API_KEY;
+	const projectId = infraConfig?.projectId || env.BETTER_AUTH_PROJECT_ID;
+
+	// Determine if infrastructure should be enabled
+	// enabled: true -> always enable
+	// enabled: false -> never enable
+	// enabled: undefined -> auto-enable if API key is available
+	const shouldEnable =
+		infraConfig?.enabled === true ||
+		(infraConfig?.enabled !== false && !!apiKey);
+
+	if (shouldEnable) {
+		// Validate that apiKey is available
+		if (!apiKey) {
+			throw new Error(
+				"Better Auth Infrastructure is enabled but no API key was provided. " +
+					"Please set BETTER_AUTH_API_KEY environment variable or provide apiKey in infrastructure config.",
+			);
+		}
+
+		const hasInfraPlugin = options.plugins?.some(
+			(p) => p.id === "infra" || p.id === "dash",
+		);
+		if (!hasInfraPlugin) {
+			// Lazy load the infra plugin to avoid circular dependencies
+			try {
+				// Import the infra plugin synchronously
+				// eslint-disable-next-line @typescript-eslint/no-var-requires
+				const { infra } = require("../plugins/infra");
+				plugins.push(
+					infra({
+						apiKey,
+						projectId,
+						apiUrl: infraConfig?.apiUrl,
+						kvUrl: infraConfig?.kvUrl,
+					}),
+				);
+			} catch (error) {
+				throw new Error(
+					`Failed to load Better Auth Infrastructure plugin: ${error}`,
+				);
+			}
+		}
+	}
+
 	return plugins;
 }
 
