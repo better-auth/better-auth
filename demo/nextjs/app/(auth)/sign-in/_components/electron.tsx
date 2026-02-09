@@ -61,7 +61,7 @@ export function ElectronTransferUser({
 					sessionToken: session.session.token,
 				});
 
-                // Transfer user
+				// Transfer user
 				await authClient.electron.transferUser({
 					fetchOptions: {
 						query: params,
@@ -116,7 +116,7 @@ function ContinueAsUser({
 				/>
 				<AvatarFallback>
 					{session.user.name
-                        .normalize("NFD")
+						.normalize("NFD")
 						.split(" ", 2)
 						.map((n) => n.charAt(0))
 						.join("")
