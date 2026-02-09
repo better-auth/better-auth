@@ -61,9 +61,8 @@ export function ElectronTransferUser({
 					sessionToken: session.session.token,
 				});
 
-				// IMPORTANT: Invoke transferUser concurrently before switching back to the
-				// original session so the request is sent with the target session's cookies.
-				const transferPromise = authClient.electron.transferUser({
+                // Transfer user
+				await authClient.electron.transferUser({
 					fetchOptions: {
 						query: params,
 					},
@@ -73,9 +72,6 @@ export function ElectronTransferUser({
 				await authClient.multiSession.setActive({
 					sessionToken: originalSessionToken,
 				});
-
-				// Transfer user
-				await transferPromise;
 			}),
 		[params, activeSession],
 	);
@@ -120,6 +116,7 @@ function ContinueAsUser({
 				/>
 				<AvatarFallback>
 					{session.user.name
+                        .normalize("NFD")
 						.split(" ", 2)
 						.map((n) => n.charAt(0))
 						.join("")
