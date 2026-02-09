@@ -161,7 +161,8 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 					operationId: "electronInitOAuthProxy",
 					responses: {
 						200: {
-							description: "Returns the URL to redirect to and if the redirect should be performed",
+							description:
+								"Returns the URL to redirect to and if the redirect should be performed",
 							content: {
 								"application/json": {
 									schema: {
@@ -290,7 +291,8 @@ export const electronTransferUser = (
 					operationId: "electronTransferUser",
 					responses: {
 						200: {
-							description: "Returns the URL to redirect to and if the redirect should be performed",
+							description:
+								"Returns the URL to redirect to and if the redirect should be performed",
 							content: {
 								"application/json": {
 									schema: {
@@ -311,7 +313,7 @@ export const electronTransferUser = (
 						},
 					},
 				},
-			}
+			},
 		},
 		async (ctx) => {
 			const success = await handleTransfer(ctx, ctx.query);
