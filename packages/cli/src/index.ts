@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
-import { login } from "./commands/login";
+import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
 import { generateSecret } from "./commands/secret";
@@ -35,6 +35,7 @@ async function main() {
 		.addCommand(generateSecret)
 		.addCommand(info)
 		.addCommand(login)
+		.addCommand(logout)
 		.addCommand(mcp)
 		.version(cliVersion)
 		.description("Better Auth CLI")
