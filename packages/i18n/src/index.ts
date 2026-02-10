@@ -1,4 +1,7 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type {
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 import { parseCookies } from "better-auth/cookies";
 import type { I18nOptions, LocaleDetectionStrategy } from "./types";
@@ -89,23 +92,21 @@ export const i18n = <Locales extends string[]>(
 	};
 
 	async function detectLocale(
-		request: Request | undefined,
-		headers: Headers | undefined,
-		ctx: AuthContext,
+		ctx: GenericEndpointContext,
 	): Promise<Locales[number]> {
 		for (const strategy of opts.detection) {
 			let locale: Locales[number] | null = null;
 
 			switch (strategy) {
 				case "header": {
-					const acceptLang = headers?.get("Accept-Language") ?? null;
+					const acceptLang = ctx.headers?.get("Accept-Language") ?? null;
 					const preferred = parseAcceptLanguage(acceptLang);
 					locale = preferred.find((l) => availableLocales.includes(l)) ?? null;
 					break;
 				}
 
 				case "cookie": {
-					const cookieHeader = headers?.get("Cookie");
+					const cookieHeader = ctx.headers?.get("Cookie");
 					if (cookieHeader) {
 						const cookies = parseCookies(cookieHeader);
 						const cookieLocale = cookies.get(opts.localeCookie);
@@ -117,10 +118,10 @@ export const i18n = <Locales extends string[]>(
 				}
 
 				case "session": {
-					if (ctx.session?.user) {
-						const userLocale = (ctx.session.user as Record<string, unknown>)[
-							opts.userLocaleField
-						];
+					if (ctx.context.session?.user) {
+						const userLocale = (
+							ctx.context.session.user as Record<string, unknown>
+						)[opts.userLocaleField];
 						if (
 							typeof userLocale === "string" &&
 							availableLocales.includes(userLocale)
@@ -133,7 +134,7 @@ export const i18n = <Locales extends string[]>(
 
 				case "callback": {
 					if (opts.getLocale) {
-						const callbackLocale = await opts.getLocale(request, ctx);
+						const callbackLocale = await opts.getLocale(ctx);
 						if (callbackLocale && availableLocales.includes(callbackLocale)) {
 							locale = callbackLocale;
 						}
@@ -167,11 +168,7 @@ export const i18n = <Locales extends string[]>(
 							return;
 						}
 
-						const locale = await detectLocale(
-							ctx.request,
-							ctx.headers,
-							ctx.context,
-						);
+						const locale = await detectLocale(ctx);
 
 						const translation = opts.translations[locale]?.[errorCode];
 

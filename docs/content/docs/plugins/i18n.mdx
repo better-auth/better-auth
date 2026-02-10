@@ -131,16 +131,16 @@ For advanced use cases, you can provide a custom locale detection function:
 i18n({
     translations: { /* ... */ },
     detection: ["callback", "header"],
-    getLocale: (request, ctx) => {
+    getLocale: (ctx) => {
         // Custom logic: use query param, custom header, etc.
-        if (!request) return null;
-        const url = new URL(request.url);
+        if (!ctx.request) return null;
+        const url = new URL(ctx.request.url);
         return url.searchParams.get("lang");
     },
 })
 ```
 
-The callback receives the request object and the auth context, and should return the locale code or `null`.
+The callback receives the full endpoint context. It should return the locale code or `null`.
 
 ## Error Codes
 
@@ -208,12 +208,12 @@ The field name on the user object that stores their locale preference when using
 
 ### `getLocale`
 
-**Type:** `(request: Request | undefined, ctx: AuthContext) => string | null | Promise<string | null>`
+**Type:** `(ctx: GenericEndpointContext) => string | null | Promise<string | null>`
 
-A custom function to detect the locale when using the `"callback"` detection strategy. Receives the request and auth context, returns the locale code or `null`.
+A custom function to detect the locale when using the `"callback"` detection strategy. Receives the full endpoint context. Returns the locale code or `null`.
 
 <Callout type="info">
-`request` could be undefined for non-HTTP calls.
+`ctx.request` could be undefined for non-HTTP calls.
 </Callout>
 
 ## Fallback Behavior

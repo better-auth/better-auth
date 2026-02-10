@@ -187,9 +187,8 @@ describe("i18n plugin", async () => {
 						translations,
 						defaultLocale: "en",
 						detection: ["callback"],
-						getLocale: (request, _ctx) => {
-							if (!request) return null;
-							return request.headers.get("X-Custom-Locale") ?? null;
+						getLocale: (ctx) => {
+							return ctx.headers?.get("X-Custom-Locale") ?? null;
 						},
 					}),
 				],
@@ -218,7 +217,7 @@ describe("i18n plugin", async () => {
 						translations,
 						defaultLocale: "en",
 						detection: ["callback"],
-						getLocale: (_request, _ctx) => {
+						getLocale: () => {
 							return "fr";
 						},
 					}),
