@@ -1,6 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
-import { getTeamAddonSchema } from "../../";
 import type { Organization } from "../../schema";
 import type { Addon } from "../../types";
 import type { AcceptInvitationForTeamsProps } from "./events/accept-invitation";
@@ -15,6 +14,7 @@ import { validateInvitationTeams } from "./events/validate-invitation-teams";
 import type { ValidateTeamForMemberProps } from "./events/validate-team-for-member";
 import { validateTeamForMember } from "./events/validate-team-for-member";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
+import { getTeamAddonSchema } from "./helpers/get-team-addon-schema";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { addTeamMember } from "./routes/add-team-member";
 import { createTeam } from "./routes/create-team";
