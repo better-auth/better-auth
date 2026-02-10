@@ -81,6 +81,59 @@ describe("Custom Session Plugin Tests", async () => {
 		});
 	});
 
+	/**
+	 * Verifies that multiple Set-Cookie headers are sent as separate headers,
+	 * not comma-joined into a single header (which would corrupt cookie attributes).
+	 *
+	 * @see https://github.com/better-auth/better-auth/issues/7878
+	 */
+	it("should send multiple Set-Cookie headers separately (not comma-joined)", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					// Use getSetCookie() to get individual Set-Cookie headers as an array
+					// This is the correct way to read multiple Set-Cookie headers
+					const setCookies = context.response.headers.getSetCookie();
+
+					// Should have at least 2 cookies (session_token and session_data)
+					expect(setCookies.length).toBeGreaterThanOrEqual(2);
+
+					// Find the session_token and session_data cookies
+					const sessionTokenCookie = setCookies.find((c) =>
+						c.startsWith("better-auth.session_token="),
+					);
+					const sessionDataCookie = setCookies.find((c) =>
+						c.startsWith("better-auth.session_data="),
+					);
+
+					expect(sessionTokenCookie).toBeDefined();
+					expect(sessionDataCookie).toBeDefined();
+
+					// Each cookie should have its own Max-Age attribute
+					expect(sessionTokenCookie).toMatch(/Max-Age=\d+/);
+					expect(sessionDataCookie).toMatch(/Max-Age=\d+/);
+
+					// Critical: each cookie string should only contain ONE cookie
+					// If they were comma-joined incorrectly, one cookie string would
+					// contain both cookie names
+					expect(sessionTokenCookie).not.toContain("better-auth.session_data");
+					expect(sessionDataCookie).not.toContain("better-auth.session_token");
+
+					// Verify each cookie has proper structure (name=value; attributes)
+					// and hasn't been corrupted by comma-joining
+					expect(sessionTokenCookie!.split(";")[0]).toMatch(
+						/^better-auth\.session_token=[^,]+$/,
+					);
+					expect(sessionDataCookie!.split(";")[0]).toMatch(
+						/^better-auth\.session_data=[^,]+$/,
+					);
+				},
+			},
+		});
+	});
+
 	it("should return the custom session for multi-session", async () => {
 		const headers = new Headers();
 		const testUser = {
