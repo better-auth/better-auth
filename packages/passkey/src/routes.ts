@@ -38,10 +38,7 @@ const generatePasskeyQuerySchema = z
 
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
-	{
-		maxAgeInSeconds,
-		expirationTime,
-	}: { maxAgeInSeconds: number; expirationTime: Date },
+	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
 ) =>
 	createAuthEndpoint(
 		"/passkey/generate-register-options",
@@ -222,6 +219,7 @@ export const generatePasskeyRegistrationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: verificationToken,
 				value: JSON.stringify({
@@ -240,10 +238,7 @@ export const generatePasskeyRegistrationOptions = (
 
 export const generatePasskeyAuthenticationOptions = (
 	opts: RequiredPassKeyOptions,
-	{
-		maxAgeInSeconds,
-		expirationTime,
-	}: { maxAgeInSeconds: number; expirationTime: Date },
+	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
 ) =>
 	createAuthEndpoint(
 		"/passkey/generate-authenticate-options",
@@ -388,6 +383,7 @@ export const generatePasskeyAuthenticationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: verificationToken,
 				value: JSON.stringify(data),

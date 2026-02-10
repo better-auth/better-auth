@@ -1,4 +1,5 @@
 import { dash, sendEmail } from "@better-auth/dash";
+import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -435,11 +436,13 @@ const authOptions = {
 				oauthAuthServerConfig: true,
 			},
 		}),
+		electron(),
 	],
 	trustedOrigins: [
 		"https://*.better-auth.com",
 		"https://better-auth-demo-*-better-auth.vercel.app",
 		"exp://",
+		"com.better-auth.demo:/",
 		"https://appleid.apple.com",
 	],
 } satisfies BetterAuthOptions;

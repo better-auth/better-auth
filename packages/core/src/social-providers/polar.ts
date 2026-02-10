@@ -96,7 +96,7 @@ export const polar = (options: PolarOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.public_name || profile.username,
+					name: profile.public_name || profile.username || "",
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: profile.email_verified ?? false,
