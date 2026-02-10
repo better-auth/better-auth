@@ -1,5 +1,10 @@
 import { base64Url } from "@better-auth/utils/base64";
-import type { Account, DBAdapter, User, GenericEndpointContext } from "better-auth";
+import type {
+	Account,
+	DBAdapter,
+	User,
+	GenericEndpointContext,
+} from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import {
 	APIError,
@@ -97,25 +102,25 @@ async function checkSCIMProviderAccess(
 		});
 	}
 
-	// Access only for org-scoped providers: user must be a member of that org
-	if (!provider.organizationId) {
-		throw new APIError("FORBIDDEN", {
-			message:
-				"Access to this SCIM provider is restricted to organization members",
-		});
-	}
+	if (provider.organizationId) {
+		if (!ctx.context.hasPlugin("organization")) {
+			throw new APIError("FORBIDDEN", {
+				message: "Organization plugin is required to access this SCIM provider",
+			});
+		}
 
-	if (!ctx.context.hasPlugin("organization")) {
-		throw new APIError("FORBIDDEN", {
-			message: "Organization plugin is required to access this SCIM provider",
-		});
-	}
+		const isMember = await isSCIMOrgMember(
+			ctx,
+			userId,
+			provider.organizationId,
+		);
 
-	const isMember = await isSCIMOrgMember(ctx, userId, provider.organizationId);
-	if (!isMember) {
-		throw new APIError("FORBIDDEN", {
-			message: "You must be a member of the organization to access this provider",
-		});
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					"You must be a member of the organization to access this provider",
+			});
+		}
 	}
 
 	return provider;
@@ -294,25 +299,22 @@ export const listSCIMProviders = () =>
 			},
 		},
 		async (ctx) => {
-			if (!ctx.context.hasPlugin("organization")) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						"List SCIM providers requires the organization plugin. Only org-scoped providers are listed.",
-				});
-			}
-
 			const userId = ctx.context.session.user.id;
-			const userOrgIds = await getSCIMUserOrgIds(ctx, userId);
+			const userOrgIds: Set<string> = ctx.context.hasPlugin("organization")
+				? await getSCIMUserOrgIds(ctx, userId)
+				: new Set();
 
 			const allProviders = await ctx.context.adapter.findMany<SCIMProvider>({
 				model: "scimProvider",
 			});
 
 			const accessibleProviders = allProviders.filter(
-				(p) => p.organizationId != null && userOrgIds.has(p.organizationId),
+				(p) => userOrgIds.has(p.organizationId!) || p.organizationId === null,
 			);
 
-			const providers = accessibleProviders.map((p) => normalizeSCIMProvider(p));
+			const providers = accessibleProviders.map((p) =>
+				normalizeSCIMProvider(p),
+			);
 
 			return ctx.json({ providers });
 		},

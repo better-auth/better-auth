@@ -48,7 +48,9 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		},
 	});
 
-	async function getAuthCookieHeaders(user: { email: string; password: string; name: string } = testUser) {
+	async function getAuthCookieHeaders(
+		user: { email: string; password: string; name: string } = testUser,
+	) {
 		const headers = new Headers();
 
 		await authClient.signUp.email({
