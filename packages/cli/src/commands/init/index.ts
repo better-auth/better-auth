@@ -1093,22 +1093,18 @@ export const auth = betterAuth({
 				s.start();
 
 				await new Promise<void>((resolve, reject) => {
-					exec(
-						`npx auth migrate`,
-						{ cwd },
-						(error, stdout, stderr) => {
-							if (error) {
-								s.stop();
-								log.error(`Failed to run migration: ${error.message}`);
-								if (stderr) log.error(stderr);
-								reject(error);
-								return;
-							}
-							s.success("Database migration completed successfully!");
-							if (stdout) console.log(stdout);
-							resolve();
-						},
-					);
+					exec(`npx auth migrate`, { cwd }, (error, stdout, stderr) => {
+						if (error) {
+							s.stop();
+							log.error(`Failed to run migration: ${error.message}`);
+							if (stderr) log.error(stderr);
+							reject(error);
+							return;
+						}
+						s.success("Database migration completed successfully!");
+						if (stdout) console.log(stdout);
+						resolve();
+					});
 				});
 			});
 			return;
