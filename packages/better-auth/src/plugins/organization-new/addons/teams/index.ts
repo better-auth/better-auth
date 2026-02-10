@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
+import { getTeamAddonSchema } from "../../";
 import type { Organization } from "../../schema";
 import type { Addon } from "../../types";
-import { getTeamAddonSchema } from "..";
 import type { AcceptInvitationForTeamsProps } from "./events/accept-invitation";
 import { acceptInvitationForTeams } from "./events/accept-invitation";
 import type { AddMemberToTeamProps } from "./events/add-member-to-team";

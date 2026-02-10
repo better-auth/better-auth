@@ -3,7 +3,7 @@ import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod/v4";
 import { APIError, getSessionFromCtx } from "../../../../api";
 import { parseRoles } from "../../access";
-import type { TeamsAddon } from "../../addons";
+import type { Team, TeamsAddon } from "../../addons";
 import { TEAMS_ERROR_CODES } from "../../addons/teams/helpers/errors";
 import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
@@ -108,7 +108,7 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			}
 
 			// Validate team exists and check team member limits if teamId is provided
-			let team: Record<string, unknown> | null = null;
+			let team: (Team & Record<string, unknown>) | null = null;
 			let realTeamId: RealTeamId | undefined;
 
 			if (teamId && teamsAddon) {
