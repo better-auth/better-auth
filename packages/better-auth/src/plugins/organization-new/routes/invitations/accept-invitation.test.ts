@@ -1077,3 +1077,124 @@ describe("accept invitation - team member limit function", async (it) => {
 		);
 	});
 });
+
+describe("accept invitation via query parameter", async (it) => {
+	const plugin = organization({
+		async sendInvitationEmail(data, request) {},
+	});
+	const { auth, signInWithTestUser, signInWithUser } = await defineInstance([
+		plugin,
+	]);
+	const { headers } = await signInWithTestUser();
+
+	const orgData = getOrganizationData();
+	const testOrg = await auth.api.createOrganization({
+		headers,
+		body: {
+			name: orgData.name,
+			slug: orgData.slug,
+		},
+	});
+
+	it("should accept invitation via query parameter", async () => {
+		const invitedEmail = `query-param-${crypto.randomUUID()}@test.com`;
+
+		// Create invitation
+		const invitation = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: invitedEmail,
+				role: "member",
+			},
+		});
+
+		// Sign up the invited user
+		await auth.api.signUpEmail({
+			body: {
+				email: invitedEmail,
+				password: "test123456",
+				name: "Query Param User",
+			},
+		});
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedEmail,
+			"test123456",
+		);
+
+		// Accept invitation via query parameter (simulating URL click)
+		const result = await auth.api.acceptInvitation({
+			headers: invitedHeaders,
+			query: {
+				invitationId: invitation.invitation.id,
+			},
+		});
+
+		expect(result.member).toBeDefined();
+		expect(result.invitation.status).toBe("accepted");
+	});
+
+	it("should require invitationId in either body or query", async () => {
+		const userEmail = `no-id-${crypto.randomUUID()}@test.com`;
+		await auth.api.signUpEmail({
+			body: {
+				email: userEmail,
+				password: "test123456",
+				name: "No ID User",
+			},
+		});
+		const { headers: userHeaders } = await signInWithUser(
+			userEmail,
+			"test123456",
+		);
+
+		await expect(
+			auth.api.acceptInvitation({
+				headers: userHeaders,
+				body: {},
+			}),
+		).rejects.toThrow("Invitation ID is required");
+	});
+
+	it("should prefer query parameter over body when both are provided", async () => {
+		const invitedEmail = `prefer-query-${crypto.randomUUID()}@test.com`;
+
+		// Create invitation
+		const invitation = await auth.api.createInvitation({
+			headers,
+			body: {
+				organizationId: testOrg.id,
+				email: invitedEmail,
+				role: "member",
+			},
+		});
+
+		// Sign up the invited user
+		await auth.api.signUpEmail({
+			body: {
+				email: invitedEmail,
+				password: "test123456",
+				name: "Prefer Query User",
+			},
+		});
+		const { headers: invitedHeaders } = await signInWithUser(
+			invitedEmail,
+			"test123456",
+		);
+
+		// Accept invitation with query param (valid) and body (invalid)
+		// Query should take precedence
+		const result = await auth.api.acceptInvitation({
+			headers: invitedHeaders,
+			query: {
+				invitationId: invitation.invitation.id,
+			},
+			body: {
+				invitationId: "invalid-body-id",
+			},
+		});
+
+		expect(result.member).toBeDefined();
+		expect(result.invitation.status).toBe("accepted");
+	});
+});
