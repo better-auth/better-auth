@@ -144,6 +144,51 @@ describe("listMembers", async () => {
 		expect(members.data?.total).toBe(10);
 	});
 
+	it("should filter the members with 'in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "in",
+				filterValue: ["member", "owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members with 'not_in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "not_in",
+				filterValue: ["owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
+	it("should filter the members with 'starts_with' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "starts_with",
+				filterValue: "mem",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
 	it("should sort the members", async () => {
 		const defaultMembers = await client.organization.listMembers({
 			fetchOptions: {

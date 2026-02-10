@@ -1,5 +1,6 @@
 import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
@@ -879,9 +880,11 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 						})
 						.or(z.number())
 						.or(z.boolean())
+						.or(z.array(z.string()))
+						.or(z.array(z.number()))
 						.optional(),
 					filterOperator: z
-						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+						.enum(whereOperators)
 						.meta({
 							description: "The operator to use for the filter",
 						})
