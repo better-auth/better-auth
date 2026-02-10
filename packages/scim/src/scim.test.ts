@@ -1361,7 +1361,7 @@ describe("SCIM", () => {
 	});
 
 	describe("PATCH /scim/v2/users", () => {
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should partially update a user resource with %s", async (op) => {
@@ -1516,7 +1516,7 @@ describe("SCIM", () => {
 			});
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should partially update multiple name sub-attributes with %s", async (op) => {
@@ -1559,7 +1559,7 @@ describe("SCIM", () => {
 			expect(updatedUser.name.formatted).toBe("Updated Value");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should %s nested object values with path prefix", async (op) => {
@@ -1615,7 +1615,7 @@ describe("SCIM", () => {
 			expect(updatedUser.userName).toBe("nested-test-user-updated");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should support operations without explicit path with %s", async (op) => {
@@ -1701,7 +1701,7 @@ describe("SCIM", () => {
 			expect(updatedUser.userName).toBe("username");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should handle %s operation case-insensitively", async (op) => {
@@ -1785,7 +1785,7 @@ describe("SCIM", () => {
 			);
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should ignore %s on non-existing path", async (op) => {

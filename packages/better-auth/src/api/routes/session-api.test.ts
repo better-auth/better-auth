@@ -2,7 +2,15 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -11,6 +19,10 @@ import { getDate } from "../../utils/date";
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
 		await getTestInstance();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should set cookies correctly on sign in", async () => {
 		const headers = new Headers();
@@ -491,6 +503,10 @@ describe("cookie cache", async () => {
 	});
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should cache cookies", async () => {});
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
@@ -598,6 +614,10 @@ describe("cookie cache with JWT strategy", async () => {
 		},
 	});
 	const ctx = await auth.$context;
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
@@ -748,6 +768,10 @@ describe("cookie cache with JWE strategy", async () => {
 	});
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
 	const headers = new Headers();
@@ -881,6 +905,10 @@ describe("cookie cache refreshCache", async () => {
 	});
 	const ctx = await auth.$context;
 	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	const headers = new Headers();
 
@@ -1417,6 +1445,10 @@ describe("cookie cache versioning", async () => {
 });
 
 describe("deferSessionRefresh", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should return needsRefresh flag on GET when enabled", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
@@ -1696,6 +1728,10 @@ describe("deferSessionRefresh", async () => {
 });
 
 describe("date field type consistency", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should have consistent date types between cookie cache and refresh paths", async () => {
 		const { auth, testUser } = await getTestInstance({
 			database: undefined, // stateless mode

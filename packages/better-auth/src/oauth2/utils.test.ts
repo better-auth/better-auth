@@ -78,6 +78,9 @@ describe("decryptOAuthToken", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6018
+ */
 describe("migration scenario - issue #6018", () => {
 	it("should handle Google OAuth token stored before encryption was enabled", async () => {
 		// Simulate the exact bug scenario from issue #6018:

@@ -1,5 +1,5 @@
 /* cspell:ignore xenc */
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as alg from "./algorithms";
 
 const encryptedAssertionXml = `
@@ -41,10 +41,6 @@ const plainAssertionXml = `
 `;
 
 describe("validateSAMLAlgorithms", () => {
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
 	describe("signature validation", () => {
 		it("should accept secure signature algorithms", () => {
 			expect(() =>
@@ -205,10 +201,6 @@ describe("algorithm constants", () => {
 });
 
 describe("validateConfigAlgorithms", () => {
-	afterEach(() => {
-		vi.restoreAllMocks();
-	});
-
 	describe("signature algorithm validation", () => {
 		it("should accept secure signature algorithms", () => {
 			expect(() =>

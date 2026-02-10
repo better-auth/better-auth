@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@better-fetch/fetch", () => ({
 	betterFetch: vi.fn(),
@@ -10,10 +10,6 @@ import { refreshAccessToken } from "./refresh-access-token";
 const mockedBetterFetch = vi.mocked(betterFetch);
 
 describe("refreshAccessToken", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	it("should set accessTokenExpiresAt when expires_in is returned", async () => {
 		const now = Date.now();
 		mockedBetterFetch.mockResolvedValueOnce({

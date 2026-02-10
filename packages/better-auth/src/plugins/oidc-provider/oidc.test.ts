@@ -783,6 +783,9 @@ describe("oidc", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/4594
+	 */
 	describe("cookie persistence bug (issue #4594)", () => {
 		// Reproduce issue #4594: oidc_login_prompt cookie persists after OIDC flow
 		// and causes subsequent normal logins to redirect to OIDC client
@@ -1003,7 +1006,7 @@ describe("oidc storage", async () => {
 		}
 	});
 
-	test.each([
+	test.for([
 		{
 			storeClientSecret: undefined,
 		},
@@ -1387,7 +1390,7 @@ describe("oidc-jwt", async () => {
 		}
 	});
 
-	test.each([
+	test.for([
 		{ useJwt: true, description: "with jwt plugin", expected: "EdDSA" },
 		{ useJwt: false, description: "without jwt plugin", expected: "HS256" },
 	])("testing oidc-provider $description to return token signed with $expected", async ({

@@ -112,6 +112,11 @@ describe("Admin plugin", async () => {
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -968,7 +973,7 @@ describe("Admin plugin", async () => {
 	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		user: [
 			"create",

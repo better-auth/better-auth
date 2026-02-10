@@ -1,8 +1,8 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { openAPI } from ".";
 
-describe("open-api", async (it) => {
+describe("open-api", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [openAPI()],
 		user: {

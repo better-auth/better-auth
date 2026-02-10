@@ -57,6 +57,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	server.resetHandlers();
 	server.use(...handlers);
 });
@@ -91,6 +92,7 @@ describe("account", async () => {
 		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
+
 	afterEach(() => {
 		googleVerifyIdTokenMock.mockClear();
 		googleGetUserInfoMock.mockClear();

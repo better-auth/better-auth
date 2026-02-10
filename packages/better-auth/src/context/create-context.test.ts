@@ -616,9 +616,9 @@ describe("base context creation", () => {
 			expect(fn).toHaveBeenCalled();
 			const regex = /Misconfiguration detected/;
 			expect(fn).toHaveBeenCalledWith(expect.stringMatching(regex));
-			fn.mockRestore();
 			const id = res.generateId({ model: "user" });
 			expect(id).toBe(false);
+			fn.mockRestore();
 		});
 	});
 

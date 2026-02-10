@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -27,10 +27,6 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
-vi.setConfig({
-	testTimeout: 10_000,
-});
-
 describe("organization type", () => {
 	it("empty org type should works", () => {
 		expectTypeOf({} satisfies OrganizationOptions);
@@ -38,7 +34,7 @@ describe("organization type", () => {
 	});
 });
 
-describe("organization", async (it) => {
+describe("organization", async () => {
 	const { auth, signInWithTestUser, signInWithUser, cookieSetter } =
 		await getTestInstance({
 			user: {
@@ -370,7 +366,7 @@ describe("organization", async (it) => {
 		expect(org?.members.length).toBe(1);
 	});
 
-	it.each([
+	it.for([
 		{
 			role: "owner" as const,
 			newUser: {
@@ -1506,7 +1502,7 @@ describe("invitation expiration and filtering", async () => {
 	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
@@ -2046,7 +2042,7 @@ describe("owner can update roles", async () => {
 		};
 });
 
-describe("types", async (it) => {
+describe("types", async () => {
 	const { auth } = await getTestInstance({
 		plugins: [organization({})],
 	});
@@ -2936,7 +2932,7 @@ async function getAtomValue<Result>(
 		| { data: Result; error: null }
 		| { data: null; error: BetterFetchError };
 }
-describe("organization hooks", async (it) => {
+describe("organization hooks", async () => {
 	let hooksCalled: string[] = [];
 
 	const { auth, signInWithTestUser } = await getTestInstance({

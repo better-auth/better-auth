@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siweClient } from "./client";
 import { siwe } from "./index";
 
-describe("siwe", async (it) => {
+describe("siwe", async () => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
 	const domain = "example.com";
 	const chainId = 1; // Ethereum mainnet

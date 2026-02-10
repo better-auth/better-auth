@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
@@ -560,7 +560,7 @@ describe("OIDC Discovery", () => {
 			);
 		});
 
-		it.each([
+		it.for([
 			[
 				"/oauth2/token",
 				"https://idp.example.com/base",
@@ -577,8 +577,11 @@ describe("OIDC Discovery", () => {
 				"issuer with trailing slash",
 			],
 			["//oauth2/token", "https://idp.example.com/base//", "multiple slashes"],
-		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", (endpoint, issuer) => {
-			expect(normalizeUrl("url", endpoint, issuer)).toBe(
+		])("should resolve relative endpoint preserving issuer base path (%s, %s) - %s", ([
+			endpoint,
+			issuer,
+		]) => {
+			expect(normalizeUrl("url", endpoint!, issuer!)).toBe(
 				"https://idp.example.com/base/oauth2/token",
 			);
 		});
@@ -637,10 +640,6 @@ describe("OIDC Discovery", () => {
 
 	describe("fetchDiscoveryDocument", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should fetch and parse valid discovery document", async () => {
 			const expectedDoc = createMockDiscoveryDocument();
@@ -793,10 +792,6 @@ describe("OIDC Discovery", () => {
 		const mockBetterFetch = betterFetch as ReturnType<typeof vi.fn>;
 		const issuer = "https://idp.example.com";
 		const isTrustedOrigin = vi.fn().mockReturnValue(true);
-
-		beforeEach(() => {
-			vi.clearAllMocks();
-		});
 
 		it("should return hydrated config from valid discovery", async () => {
 			const discoveryDoc = createMockDiscoveryDocument({

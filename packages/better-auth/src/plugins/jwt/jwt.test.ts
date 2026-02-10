@@ -300,7 +300,7 @@ describe("jwt", async () => {
 	}
 });
 
-describe.each([
+describe.for([
 	{
 		alg: "EdDSA",
 		crv: "Ed25519",

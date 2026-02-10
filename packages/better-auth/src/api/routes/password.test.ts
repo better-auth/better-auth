@@ -1,9 +1,9 @@
 import { APIError } from "better-call";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils";
 import type { Account } from "../../types";
 
-describe("forget password", async (it) => {
+describe("forget password", async () => {
 	const mockSendEmail = vi.fn();
 	const mockOnPasswordReset = vi.fn();
 	let token = "";
@@ -25,6 +25,10 @@ describe("forget password", async (it) => {
 			testWith: "sqlite",
 		},
 	);
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should send a reset password email when enabled", async () => {
 		await client.requestPasswordReset({
 			email: testUser.email,
@@ -318,7 +322,7 @@ describe("forget password", async (it) => {
 	});
 });
 
-describe("revoke sessions on password reset", async (it) => {
+describe("revoke sessions on password reset", async () => {
 	const mockSendEmail = vi.fn();
 	let token = "";
 
@@ -404,7 +408,7 @@ describe("revoke sessions on password reset", async (it) => {
 	});
 });
 
-describe("verify password", async (it) => {
+describe("verify password", async () => {
 	const { testUser, auth } = await getTestInstance({
 		emailAndPassword: {
 			enabled: true,

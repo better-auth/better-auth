@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { toZodSchema } from "./to-zod";
 
 describe("toZodSchema", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7489
+	 */
 	describe("returned: false field handling (issue #7489)", () => {
 		it("should include fields with returned: false in input schema (isClientSide: true)", () => {
 			const schema = toZodSchema({

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { atom } from "nanostores";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalOnlineManager } from "./online-manager";
 import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
@@ -11,6 +11,10 @@ describe("session-refresh", () => {
 		const onlineManager = getGlobalOnlineManager();
 		onlineManager.setOnline(true);
 		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("should trigger network fetch and update session when refetchInterval fires", async () => {

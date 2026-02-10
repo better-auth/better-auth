@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { validateEmailDomain } from "./utils";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7324
+ */
 describe("validateEmailDomain", () => {
 	// Tests for issue #7324: Enterprise multi-domain SSO support
 	// https://github.com/better-auth/better-auth/issues/7324

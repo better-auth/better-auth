@@ -1,5 +1,5 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../../client";
 import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -9,7 +9,7 @@ import { inferOrgAdditionalFields, organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
 
-describe("dynamic access control", async (it) => {
+describe("dynamic access control", async () => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],

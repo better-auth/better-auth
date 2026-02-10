@@ -889,8 +889,6 @@ describe("SAML SSO", async () => {
 		data.verification = [];
 		data.account = [];
 		data.ssoProvider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {
@@ -2330,8 +2328,6 @@ describe("SAML SSO with custom fields", () => {
 		data.verification = [];
 		data.account = [];
 		data.sso_provider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {

@@ -1,5 +1,5 @@
 import * as betterFetchModule from "@better-fetch/fetch";
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { captcha } from ".";
 
@@ -11,7 +11,7 @@ vi.mock("@better-fetch/fetch", async (importOriginal) => {
 	};
 });
 
-describe("captcha", async (it) => {
+describe("captcha", async () => {
 	const mockBetterFetch = betterFetchModule.betterFetch as ReturnType<
 		typeof vi.fn
 	>;
@@ -112,7 +112,7 @@ describe("captcha", async (it) => {
 		expect(res.error?.status).toBe(500);
 	});
 
-	describe("cloudflare-turnstile", async (it) => {
+	describe("cloudflare-turnstile", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
 				captcha({
@@ -191,7 +191,7 @@ describe("captcha", async (it) => {
 		});
 	});
 
-	describe("google-recaptcha", async (it) => {
+	describe("google-recaptcha", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
 				captcha({ provider: "google-recaptcha", secretKey: "xx-secret-key" }),
@@ -287,7 +287,7 @@ describe("captcha", async (it) => {
 			expect(res.error?.status).toBe(403);
 		});
 	});
-	describe("hcaptcha", async (it) => {
+	describe("hcaptcha", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
 				captcha({
@@ -365,7 +365,7 @@ describe("captcha", async (it) => {
 		});
 	});
 
-	describe("captchafox", async (it) => {
+	describe("captchafox", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
 				captcha({

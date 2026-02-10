@@ -35,7 +35,7 @@ describe("mcp", async () => {
 		baseURL: apiServerBaseUrl,
 	});
 
-	it.each([
+	it.for([
 		{
 			resource: apiServerBaseUrl,
 			expected: `Bearer resource_metadata="${apiServerBaseUrl}/.well-known/oauth-protected-resource"`,

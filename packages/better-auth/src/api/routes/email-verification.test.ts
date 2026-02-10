@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("Email Verification", async () => {
@@ -15,6 +15,10 @@ describe("Email Verification", async () => {
 				mockSendEmail(user.email, url);
 			},
 		},
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("should send a verification email when enabled", async () => {

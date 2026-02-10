@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { organization, twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
@@ -45,7 +45,7 @@ declare module "@better-auth/core" {
 	}
 }
 
-describe("general types", async (it) => {
+describe("general types", async () => {
 	it("should infer base session", async () => {
 		const { auth } = await getTestInstance();
 		type Session = typeof auth.$Infer.Session;

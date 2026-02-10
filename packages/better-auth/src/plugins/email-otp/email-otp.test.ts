@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
@@ -31,6 +31,10 @@ describe("email-otp", async () => {
 			},
 		},
 	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should verify email with otp", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
@@ -555,7 +559,11 @@ describe("custom rate limiting storage", async () => {
 		],
 	});
 
-	it.each([
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([
 		{
 			path: "/email-otp/send-verification-otp",
 			body: {

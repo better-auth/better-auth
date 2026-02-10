@@ -230,8 +230,6 @@ describe("stripe", () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
-
-		vi.clearAllMocks();
 	});
 
 	const memory = memoryAdapter(data);
@@ -2108,7 +2106,7 @@ describe("stripe", () => {
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 
-	it.each([
+	it.for([
 		{
 			name: "past",
 			periodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000),

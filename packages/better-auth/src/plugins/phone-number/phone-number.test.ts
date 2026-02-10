@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
-describe("phone-number", async (it) => {
+describe("phone-number", async () => {
 	let otp = "";
 
 	const { client, sessionSetter } = await getTestInstance(
@@ -32,6 +32,11 @@ describe("phone-number", async (it) => {
 	const headers = new Headers();
 
 	const testPhoneNumber = "+251911121314";
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should send verification code", async () => {
 		const res = await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
@@ -212,7 +217,7 @@ describe("phone auth flow", async () => {
 	});
 });
 
-describe("verify phone-number", async (it) => {
+describe("verify phone-number", async () => {
 	let otp = "";
 
 	const { client, sessionSetter } = await getTestInstance(
@@ -241,6 +246,10 @@ describe("verify phone-number", async (it) => {
 	const headers = new Headers();
 
 	const testPhoneNumber = "+251911121314";
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should verify the last code", async () => {
 		await client.phoneNumber.sendOtp({
@@ -292,7 +301,7 @@ describe("verify phone-number", async (it) => {
 	});
 });
 
-describe("reset password flow attempts", async (it) => {
+describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";
 
@@ -383,7 +392,7 @@ describe("reset password flow attempts", async (it) => {
 	});
 });
 
-describe("reset password session revocation", async (it) => {
+describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
 

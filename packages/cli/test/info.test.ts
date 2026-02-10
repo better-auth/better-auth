@@ -29,7 +29,6 @@ describe("info command", () => {
 
 	afterEach(async () => {
 		await fs.rm(tmpDir, { recursive: true });
-		vi.restoreAllMocks();
 	});
 
 	it("should display system information without auth config", async () => {

@@ -96,7 +96,7 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it.each([
+	it.for([
 		"native",
 		"user-agent-based",
 	] as OAuthClient["type"][])("should fail with type '%s' check for confidential client request", async (type) => {
@@ -108,7 +108,7 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it.each([
+	it.for([
 		"native",
 		"user-agent-based",
 	] as OAuthClient["type"][])("should register public '%s' client with minimum requirements via server", async (type) => {

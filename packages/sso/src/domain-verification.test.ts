@@ -137,7 +137,6 @@ describe("Domain verification", async () => {
 	};
 
 	afterEach(() => {
-		vi.clearAllMocks();
 		vi.useRealTimers();
 	});
 
