@@ -8,6 +8,7 @@ import { getOrgAdapter } from "../../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../../helpers/get-organization-id";
 import { orgMiddleware } from "../../../middleware/org-middleware";
 import { TEAMS_ERROR_CODES } from "../helpers/errors";
+import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import { getHook } from "../helpers/get-team-hook";
 import { resolveTeamOptions } from "../helpers/resolve-team-options";
@@ -116,8 +117,6 @@ export const removeTeamMember = <O extends TeamsOptions>(_options?: O) => {
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const realTeamId = await teamAdapter.getRealTeamId(ctx.body.teamId);
-
 			const team = await teamAdapter.findTeamById({
 				teamId: ctx.body.teamId,
 				organizationId: realOrgId,
@@ -127,6 +126,9 @@ export const removeTeamMember = <O extends TeamsOptions>(_options?: O) => {
 				const msg = TEAMS_ERROR_CODES.TEAM_NOT_FOUND;
 				throw APIError.from("BAD_REQUEST", msg);
 			}
+
+			// Use the org-scoped team.id to ensure we operate on the correct team
+			const realTeamId = team.id as RealTeamId;
 
 			const organization = await orgAdapter.findOrganizationById(realOrgId);
 			if (!organization) {
