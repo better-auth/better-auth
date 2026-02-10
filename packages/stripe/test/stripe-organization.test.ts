@@ -81,10 +81,6 @@ describe("stripe - organization customer", () => {
 		},
 	} satisfies StripeOptions;
 
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	it("should create a Stripe customer for organization when upgrading subscription", async () => {
 		const onCustomerCreate = vi.fn();
 		const stripeOptionsWithOrgCallback: StripeOptions = {
@@ -1736,7 +1732,6 @@ describe("stripe - organizationHooks integration", () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
 		mockStripeHooks.subscriptions.list.mockResolvedValue({ data: [] });
 		mockStripeHooks.customers.list.mockResolvedValue({ data: [] });
 	});

@@ -1700,7 +1700,6 @@ describe("oauth2", async () => {
 			expect(warnSpy).toHaveBeenCalledWith(
 				"Duplicate provider IDs found: duplicate-id",
 			);
-
 			warnSpy.mockRestore();
 		});
 
@@ -1746,7 +1745,6 @@ describe("oauth2", async () => {
 			const warningMessage = warnSpy.mock.calls[0]?.[0] as string;
 			expect(warningMessage).toContain("dup-1");
 			expect(warningMessage).toContain("dup-2");
-
 			warnSpy.mockRestore();
 		});
 
@@ -1775,7 +1773,6 @@ describe("oauth2", async () => {
 			});
 
 			expect(warnSpy).not.toHaveBeenCalled();
-
 			warnSpy.mockRestore();
 		});
 
@@ -1798,7 +1795,6 @@ describe("oauth2", async () => {
 			});
 
 			expect(warnSpy).not.toHaveBeenCalled();
-
 			warnSpy.mockRestore();
 		});
 
@@ -1835,7 +1831,6 @@ describe("oauth2", async () => {
 			expect(warnSpy).toHaveBeenCalledWith(
 				"Duplicate provider IDs found: triple-dup",
 			);
-
 			warnSpy.mockRestore();
 		});
 	});

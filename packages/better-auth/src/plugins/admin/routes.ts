@@ -4,6 +4,7 @@ import {
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -574,9 +575,11 @@ const listUsersQuerySchema = z.object({
 		})
 		.or(z.number())
 		.or(z.boolean())
+		.or(z.array(z.string()))
+		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
-		.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+		.enum(whereOperators)
 		.meta({
 			description: "The operator to use for the filter",
 		})

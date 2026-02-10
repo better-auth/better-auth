@@ -1,5 +1,5 @@
 import type { APIError } from "@better-auth/core/error";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isAPIError } from "../../utils/is-api-error";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
@@ -27,6 +27,10 @@ describe("api-key", async () => {
 		},
 	);
 	const { headers, user } = await signInWithTestUser();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	// =========================================================================
 	// CREATE API KEY

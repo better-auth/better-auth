@@ -1,11 +1,11 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
 import { organization } from "./organization";
 
-describe("team", async (it) => {
+describe("team", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		user: {
 			modelName: "users",
@@ -348,7 +348,7 @@ describe("team", async (it) => {
 	});
 });
 
-describe("multi team support", async (it) => {
+describe("multi team support", async () => {
 	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
