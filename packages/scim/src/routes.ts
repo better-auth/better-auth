@@ -48,7 +48,7 @@ const generateSCIMTokenBodySchema = z.object({
 		.meta({ description: "Optional organization id" }),
 });
 
-const getSCIMProviderParamsSchema = z.object({
+const getSCIMProviderConnectionParamsSchema = z.object({
 	providerId: z.string(),
 });
 
@@ -255,15 +255,15 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 		},
 	);
 
-export const listSCIMProviders = () =>
+export const listSCIMProviderConnections = () =>
 	createAuthEndpoint(
-		"/scim/providers",
+		"/scim/provider-connections",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
 			metadata: {
 				openapi: {
-					operationId: "listSCIMProviders",
+					operationId: "listSCIMProviderConnections",
 					summary: "List SCIM providers",
 					description:
 						"Returns SCIM providers for organizations the user is a member of. Requires the organization plugin.",
@@ -320,16 +320,16 @@ export const listSCIMProviders = () =>
 		},
 	);
 
-export const getSCIMProvider = () =>
+export const getSCIMProviderConnection = () =>
 	createAuthEndpoint(
-		"/scim/providers/:providerId",
+		"/scim/provider-connections/:providerId",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
-			params: getSCIMProviderParamsSchema,
+			params: getSCIMProviderConnectionParamsSchema,
 			metadata: {
 				openapi: {
-					operationId: "getSCIMProvider",
+					operationId: "getSCIMProviderConnection",
 					summary: "Get SCIM provider details",
 					description: "Returns details for a specific SCIM provider",
 					responses: {
@@ -371,16 +371,16 @@ export const getSCIMProvider = () =>
 		},
 	);
 
-export const deleteSCIMProvider = () =>
+export const deleteSCIMProviderConnection = () =>
 	createAuthEndpoint(
-		"/scim/providers/:providerId",
+		"/scim/provider-connections/:providerId",
 		{
 			method: "DELETE",
 			use: [sessionMiddleware],
-			params: getSCIMProviderParamsSchema,
+			params: getSCIMProviderConnectionParamsSchema,
 			metadata: {
 				openapi: {
-					operationId: "deleteSCIMProvider",
+					operationId: "deleteSCIMProviderConnection",
 					summary: "Delete SCIM provider",
 					description: "Deletes a SCIM provider and invalidates its token",
 					responses: {

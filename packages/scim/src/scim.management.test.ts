@@ -391,12 +391,12 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("GET /scim/providers", () => {
+	describe("GET /scim/provider-connections", () => {
 		it("should return empty list when user is not in any org", async () => {
 			const { auth, getAuthCookieHeaders } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
 
-			const res = await auth.api.listSCIMProviders({ headers });
+			const res = await auth.api.listSCIMProviderConnections({ headers });
 
 			expect(res).toMatchObject({ providers: [] });
 		});
@@ -414,7 +414,7 @@ describe("SCIM provider management", () => {
 				getSCIMToken("provider-3"),
 			]);
 
-			const res = await auth.api.listSCIMProviders({ headers });
+			const res = await auth.api.listSCIMProviderConnections({ headers });
 
 			expect(res.providers).toHaveLength(2);
 			expect(res.providers?.map((p) => p.providerId).sort()).toEqual([
@@ -431,7 +431,7 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("GET /scim/providers/:providerId", () => {
+	describe("GET /scim/provider-connections/:providerId", () => {
 		it("should return provider details when user is org member", async () => {
 			const { auth, getAuthCookieHeaders, registerOrganization, getSCIMToken } =
 				createTestInstance();
@@ -440,7 +440,7 @@ describe("SCIM provider management", () => {
 			const org = await registerOrganization("scim-get-org");
 			await getSCIMToken("my-provider", org!.id);
 
-			const res = await auth.api.getSCIMProvider({
+			const res = await auth.api.getSCIMProviderConnection({
 				params: { providerId: "my-provider" },
 				headers,
 			});
@@ -458,7 +458,7 @@ describe("SCIM provider management", () => {
 
 			await getSCIMToken("no-org-provider");
 
-			const res = await auth.api.getSCIMProvider({
+			const res = await auth.api.getSCIMProviderConnection({
 				params: { providerId: "no-org-provider" },
 				headers,
 			});
@@ -489,7 +489,7 @@ describe("SCIM provider management", () => {
 			});
 
 			await expect(
-				auth.api.getSCIMProvider({
+				auth.api.getSCIMProviderConnection({
 					params: { providerId: "other-org-provider" },
 					headers: headers2,
 				}),
@@ -505,7 +505,7 @@ describe("SCIM provider management", () => {
 			const headers = await getAuthCookieHeaders();
 
 			await expect(
-				auth.api.getSCIMProvider({
+				auth.api.getSCIMProviderConnection({
 					params: { providerId: "unknown" },
 					headers,
 				}),
@@ -515,7 +515,7 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("DELETE /scim/providers/:providerId", () => {
+	describe("DELETE /scim/provider-connections/:providerId", () => {
 		it("should delete org-scoped provider and invalidate token when user is org member", async () => {
 			const { auth, getAuthCookieHeaders, getSCIMToken, registerOrganization } =
 				createTestInstance();
@@ -524,18 +524,18 @@ describe("SCIM provider management", () => {
 			const org = await registerOrganization("org-a");
 			const scimToken = await getSCIMToken("my-provider", org!.id);
 
-			const listBefore = await auth.api.listSCIMProviders({ headers });
+			const listBefore = await auth.api.listSCIMProviderConnections({ headers });
 			expect(
 				listBefore.providers?.some((p) => p.providerId === "my-provider"),
 			).toBe(true);
 
-			const deleteRes = await auth.api.deleteSCIMProvider({
+			const deleteRes = await auth.api.deleteSCIMProviderConnection({
 				params: { providerId: "my-provider" },
 				headers,
 			});
 			expect(deleteRes).toMatchObject({ success: true });
 
-			const listAfter = await auth.api.listSCIMProviders({ headers });
+			const listAfter = await auth.api.listSCIMProviderConnections({ headers });
 			expect(
 				listAfter.providers?.some((p) => p.providerId === "my-provider"),
 			).toBe(false);
@@ -570,7 +570,7 @@ describe("SCIM provider management", () => {
 			});
 
 			await expect(
-				auth.api.deleteSCIMProvider({
+				auth.api.deleteSCIMProviderConnection({
 					params: { providerId: "other-org-del" },
 					headers: headers2,
 				}),
@@ -586,7 +586,7 @@ describe("SCIM provider management", () => {
 			const headers = await getAuthCookieHeaders();
 
 			await expect(
-				auth.api.deleteSCIMProvider({
+				auth.api.deleteSCIMProviderConnection({
 					params: { providerId: "unknown" },
 					headers,
 				}),
