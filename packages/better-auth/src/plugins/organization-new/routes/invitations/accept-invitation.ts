@@ -140,18 +140,16 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			// Team support: add user to teams if teams addon is enabled and invitation has teamId
 			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
 			if (teamsAddon && "teamId" in acceptedI && acceptedI.teamId) {
-				const { updatedSession } =
-					await teamsAddon.events.acceptInvitationForTeams(
-						{
-							invitation: acceptedI as Invitation & { teamId: string },
-							user: session.user,
-							session: session.session,
-							organizationId: invitation.organizationId,
-							setActiveTeam: adapter.setActiveTeam,
-						},
-						ctx.context,
-						teamsAddon.options,
-					);
+				const { updatedSession } = await teamsAddon.events.acceptInvitation(
+					{
+						invitation: acceptedI as Invitation & { teamId: string },
+						user: session.user,
+						session: session.session,
+						organizationId: invitation.organizationId,
+						setActiveTeam: adapter.setActiveTeam,
+					},
+					ctx.context,
+				);
 
 				if (updatedSession) {
 					await setSessionCookie(ctx, {

@@ -6,11 +6,9 @@ import { getDate } from "../../../../utils/date";
 import type { InferOrganizationRolesFromOption } from "../../access";
 import { hasPermission, parseRoles } from "../../access";
 import type { TeamsAddon } from "../../addons";
-import { TEAMS_ERROR_CODES } from "../../addons/teams/helpers/errors";
-import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
-import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getAddon } from "../../helpers/get-addon";
 import { getHook } from "../../helpers/get-hook";
 import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
@@ -362,9 +360,7 @@ export const createInvitation = <O extends OrganizationOptions>(
 			}
 
 			// Team support: validate teams exist and check member limits
-			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
-				| TeamsAddon
-				| undefined;
+			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
 			let teamIds: string[] = [];
 
 			if ("teamId" in ctx.body && ctx.body.teamId) {
@@ -375,36 +371,14 @@ export const createInvitation = <O extends OrganizationOptions>(
 			}
 
 			if (teamsAddon && teamIds.length > 0) {
-				const teamOptions = resolveTeamOptions(teamsAddon.options);
-				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
-
-				for (const teamId of teamIds) {
-					const realTeamId = await teamAdapter.getRealTeamId(teamId);
-					const team = await teamAdapter.findTeamById({
-						teamId,
+				await teamsAddon.events.validateInvitationTeams(
+					{
+						teamIds,
 						organizationId,
-					});
-
-					if (!team) {
-						const code = "TEAM_NOT_FOUND";
-						const msg = TEAMS_ERROR_CODES[code];
-						throw APIError.from("BAD_REQUEST", msg);
-					}
-
-					// Check if team has reached maximum members limit
-					const memberCount = await teamAdapter.countTeamMembers(realTeamId);
-					const maxMembers = await teamOptions.maximumMembersPerTeam({
-						teamId: realTeamId,
 						session,
-						organizationId,
-					});
-
-					if (memberCount >= maxMembers) {
-						const code = "TEAM_MEMBER_LIMIT_REACHED";
-						const msg = ORGANIZATION_ERROR_CODES[code];
-						throw APIError.from("FORBIDDEN", msg);
-					}
-				}
+					},
+					ctx.context,
+				);
 			}
 
 			const {

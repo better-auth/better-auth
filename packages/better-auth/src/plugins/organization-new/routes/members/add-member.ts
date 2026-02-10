@@ -6,11 +6,9 @@ import { parseRoles } from "../../access";
 import type { TeamsAddon } from "../../addons";
 import { TEAMS_ERROR_CODES } from "../../addons/teams/helpers/errors";
 import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
-import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
-import { getHook as getTeamHook } from "../../addons/teams/helpers/get-team-hook";
-import { resolveTeamOptions } from "../../addons/teams/helpers/resolve-team-options";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getAddon } from "../../helpers/get-addon";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
@@ -84,9 +82,7 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 
 			// Check if teams addon is enabled when teamId is provided
 			const teamId = "teamId" in body ? (body.teamId as string) : undefined;
-			const teamsAddon = options.use.find((addon) => addon.id === "teams") as
-				| TeamsAddon
-				| undefined;
+			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
 
 			if (teamId && !teamsAddon) {
 				ctx.context.logger.error("Teams are not enabled");
@@ -112,42 +108,21 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 			}
 
 			// Validate team exists and check team member limits if teamId is provided
-			let team: Awaited<
-				ReturnType<ReturnType<typeof getTeamAdapter>["findTeamById"]>
-			> = null;
+			let team: Record<string, unknown> | null = null;
 			let realTeamId: RealTeamId | undefined;
 
 			if (teamId && teamsAddon) {
-				const teamOptions = resolveTeamOptions(teamsAddon.options);
-				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
-
-				realTeamId = await teamAdapter.getRealTeamId(teamId);
-				team = await teamAdapter.findTeamById({
-					teamId,
-					organizationId: realOrgId,
-				});
-
-				if (!team) {
-					const msg = ORGANIZATION_ERROR_CODES.TEAM_NOT_FOUND;
-					throw APIError.from("BAD_REQUEST", msg);
-				}
-
-				// Check maximum members per team limit
 				const session = await getSessionFromCtx(ctx);
-				if (session) {
-					const memberCount = await teamAdapter.countTeamMembers(realTeamId);
-					const maxMembers = await teamOptions.maximumMembersPerTeam({
-						teamId: realTeamId,
-						session,
+				const result = await teamsAddon.events.validateTeamForMember(
+					{
+						teamId,
 						organizationId: realOrgId,
-					});
-
-					if (memberCount >= maxMembers) {
-						const code = "TEAM_MEMBER_LIMIT_REACHED";
-						const msg = ORGANIZATION_ERROR_CODES[code];
-						throw APIError.from("FORBIDDEN", msg);
-					}
-				}
+						session,
+					},
+					ctx.context,
+				);
+				team = result.team;
+				realTeamId = result.realTeamId;
 			}
 
 			const membershipLimit = options.membershipLimit;
@@ -210,47 +185,16 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 
 			// Add user to team if teamId is provided and teams addon is enabled
 			if (teamId && teamsAddon && realTeamId && team) {
-				const teamOptions = resolveTeamOptions(teamsAddon.options);
-				const teamAdapter = getTeamAdapter(ctx.context, teamOptions);
-				const addTeamMemberHook = getTeamHook("AddTeamMember", teamOptions);
-
-				let teamMemberData = {
-					teamId: realTeamId,
-					userId: user.id,
-				};
-
-				const teamModify = await addTeamMemberHook.before(
+				await teamsAddon.events.addMemberToTeam(
 					{
-						teamMember: teamMemberData,
+						realTeamId,
 						team,
 						user,
 						organization,
+						endpointContext: ctx,
 					},
-					ctx,
+					ctx.context,
 				);
-
-				if (teamModify) {
-					teamMemberData = {
-						...teamMemberData,
-						...teamModify,
-					};
-				}
-
-				const teamMember = await teamAdapter.createTeamMember(
-					teamMemberData as { teamId: RealTeamId; userId: string },
-				);
-
-				if (teamMember) {
-					await addTeamMemberHook.after(
-						{
-							teamMember,
-							team,
-							user,
-							organization,
-						},
-						ctx,
-					);
-				}
 			}
 
 			await addMemberHook.after(

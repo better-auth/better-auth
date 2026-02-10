@@ -1,7 +1,19 @@
+import type { AuthContext } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
+import type { Organization } from "../../schema";
 import type { Addon } from "../../types";
 import { getTeamAddonSchema } from "..";
+import type { AcceptInvitationForTeamsProps } from "./events/accept-invitation";
 import { acceptInvitationForTeams } from "./events/accept-invitation";
+import type { AddMemberToTeamProps } from "./events/add-member-to-team";
+import { addMemberToTeam } from "./events/add-member-to-team";
 import { createDefaultTeam } from "./events/create-default-team";
+import type { RemoveMemberFromTeamsProps } from "./events/remove-member-from-teams";
+import { removeMemberFromTeams } from "./events/remove-member-from-teams";
+import type { ValidateInvitationTeamsProps } from "./events/validate-invitation-teams";
+import { validateInvitationTeams } from "./events/validate-invitation-teams";
+import type { ValidateTeamForMemberProps } from "./events/validate-team-for-member";
+import { validateTeamForMember } from "./events/validate-team-for-member";
 import { TEAMS_ERROR_CODES } from "./helpers/errors";
 import { resolveTeamOptions } from "./helpers/resolve-team-options";
 import { addTeamMember } from "./routes/add-team-member";
@@ -27,8 +39,39 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		priority: 10, // Run early to create default teams before other addons
 		errorCodes: TEAMS_ERROR_CODES,
 		events: {
-			createDefaultTeam,
-			acceptInvitationForTeams,
+			async createDefaultTeam(
+				props: { organization: Organization; user: User },
+				context: AuthContext,
+			) {
+				return await createDefaultTeam(props, context, options);
+			},
+			async acceptInvitation(
+				props: AcceptInvitationForTeamsProps,
+				context: AuthContext,
+			) {
+				return await acceptInvitationForTeams(props, context, options);
+			},
+			async validateInvitationTeams(
+				props: ValidateInvitationTeamsProps,
+				context: AuthContext,
+			) {
+				return await validateInvitationTeams(props, context, options);
+			},
+			async validateTeamForMember(
+				props: ValidateTeamForMemberProps,
+				context: AuthContext,
+			) {
+				return await validateTeamForMember(props, context, options);
+			},
+			async addMemberToTeam(props: AddMemberToTeamProps, context: AuthContext) {
+				return await addMemberToTeam(props, context, options);
+			},
+			async removeMemberFromTeams(
+				props: RemoveMemberFromTeamsProps,
+				context: AuthContext,
+			) {
+				return await removeMemberFromTeams(props, context, options);
+			},
 		},
 		Infer: {
 			Team: {} as InferTeam<O>,
