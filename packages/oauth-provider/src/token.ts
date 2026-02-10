@@ -22,6 +22,7 @@ import {
 	getStoredToken,
 	parseClientMetadata,
 	storeToken,
+	toDate,
 	validateClientCredentials,
 } from "./utils";
 
@@ -82,12 +83,12 @@ async function createJwtAccessToken(
 	const exp = overrides?.exp ?? iat + (opts.accessTokenExpiresIn ?? 3600);
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
-				user,
-				scopes,
-				resource: ctx.body.resource,
-				referenceId,
-				metadata: parseClientMetadata(client.metadata),
-			})
+			user,
+			scopes,
+			resource: ctx.body.resource,
+			referenceId,
+			metadata: parseClientMetadata(client.metadata),
+		})
 		: {};
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
@@ -131,8 +132,8 @@ async function createIdToken(
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
 	const authTime = Math.floor(
-		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
-			1000,
+		toDate(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
+		1000,
 	);
 	// TODO: this should be validated against the login process
 	// - bronze : password only
@@ -141,10 +142,10 @@ async function createIdToken(
 
 	const customClaims = opts.customIdTokenClaims
 		? await opts.customIdTokenClaims({
-				user,
-				scopes,
-				metadata: parseClientMetadata(client.metadata),
-			})
+			user,
+			scopes,
+			metadata: parseClientMetadata(client.metadata),
+		})
 		: {};
 
 	const jwtPluginOptions = opts.disableJwtPlugin
@@ -173,20 +174,20 @@ async function createIdToken(
 
 	return opts.disableJwtPlugin
 		? new SignJWT(payload)
-				.setProtectedHeader({ alg: "HS256" })
-				.sign(
-					new TextEncoder().encode(
-						await decryptStoredClientSecret(
-							ctx,
-							opts.storeClientSecret,
-							client.clientSecret!,
-						),
+			.setProtectedHeader({ alg: "HS256" })
+			.sign(
+				new TextEncoder().encode(
+					await decryptStoredClientSecret(
+						ctx,
+						opts.storeClientSecret,
+						client.clientSecret!,
 					),
-				)
+				),
+			)
 		: signJWT(ctx, {
-				options: jwtPluginOptions,
-				payload,
-			});
+			options: jwtPluginOptions,
+			payload,
+		});
 }
 
 /**
@@ -375,14 +376,14 @@ async function createUserTokens(
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
 	const exp = opts.scopeExpirations
 		? scopes
-				.map((sc) =>
-					opts.scopeExpirations?.[sc]
-						? toExpJWT(opts.scopeExpirations[sc], iat)
-						: defaultExp,
-				)
-				.reduce((prev, curr) => {
-					return prev < curr ? prev : curr;
-				}, defaultExp)
+			.map((sc) =>
+				opts.scopeExpirations?.[sc]
+					? toExpJWT(opts.scopeExpirations[sc], iat)
+					: defaultExp,
+			)
+			.reduce((prev, curr) => {
+				return prev < curr ? prev : curr;
+			}, defaultExp)
 		: defaultExp;
 
 	// Check requested audience if sent as the resource parameter
@@ -397,6 +398,56 @@ async function createUserTokens(
 	const earlyRefreshToken =
 		isRefreshToken && !isJwtAccessToken
 			? await createRefreshToken(
+				ctx,
+				opts,
+				user,
+				referenceId,
+				client,
+				scopes,
+				{
+					iat,
+					exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
+					sid: sessionId,
+				},
+				additional?.refreshToken,
+			)
+			: undefined;
+
+	// Sign jwt and refresh tokens in parallel
+	const [accessToken, refreshToken, idToken] = await Promise.all([
+		isJwtAccessToken
+			? createJwtAccessToken(
+				ctx,
+				opts,
+				user,
+				client,
+				audience,
+				scopes,
+				referenceId,
+				{
+					iat,
+					exp,
+					sid: sessionId,
+				},
+			)
+			: createOpaqueAccessToken(
+				ctx,
+				opts,
+				user,
+				client,
+				scopes,
+				{
+					iat,
+					exp,
+					sid: sessionId,
+				},
+				referenceId,
+				earlyRefreshToken?.id,
+			),
+		earlyRefreshToken
+			? earlyRefreshToken
+			: isRefreshToken
+				? createRefreshToken(
 					ctx,
 					opts,
 					user,
@@ -410,56 +461,6 @@ async function createUserTokens(
 					},
 					additional?.refreshToken,
 				)
-			: undefined;
-
-	// Sign jwt and refresh tokens in parallel
-	const [accessToken, refreshToken, idToken] = await Promise.all([
-		isJwtAccessToken
-			? createJwtAccessToken(
-					ctx,
-					opts,
-					user,
-					client,
-					audience,
-					scopes,
-					referenceId,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-					},
-				)
-			: createOpaqueAccessToken(
-					ctx,
-					opts,
-					user,
-					client,
-					scopes,
-					{
-						iat,
-						exp,
-						sid: sessionId,
-					},
-					referenceId,
-					earlyRefreshToken?.id,
-				),
-		earlyRefreshToken
-			? earlyRefreshToken
-			: isRefreshToken
-				? createRefreshToken(
-						ctx,
-						opts,
-						user,
-						referenceId,
-						client,
-						scopes,
-						{
-							iat,
-							exp: iat + (opts.refreshTokenExpiresIn ?? 2592000),
-							sid: sessionId,
-						},
-						additional?.refreshToken,
-					)
 				: undefined,
 		isIdToken
 			? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId)
@@ -804,49 +805,49 @@ async function handleClientCredentialsGrant(
 	const exp =
 		opts.scopeExpirations && requestedScopes
 			? requestedScopes
-					.map((sc) =>
-						opts.scopeExpirations?.[sc]
-							? toExpJWT(opts.scopeExpirations[sc], iat)
-							: defaultExp,
-					)
-					.reduce((prev, curr) => {
-						return prev < curr ? prev : curr;
-					}, defaultExp)
+				.map((sc) =>
+					opts.scopeExpirations?.[sc]
+						? toExpJWT(opts.scopeExpirations[sc], iat)
+						: defaultExp,
+				)
+				.reduce((prev, curr) => {
+					return prev < curr ? prev : curr;
+				}, defaultExp)
 			: defaultExp;
 
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
-				scopes: requestedScopes,
-				resource: ctx.body.resource,
-				metadata: parseClientMetadata(client.metadata),
-			})
+			scopes: requestedScopes,
+			resource: ctx.body.resource,
+			metadata: parseClientMetadata(client.metadata),
+		})
 		: {};
 
 	const accessToken =
 		audience && !opts.disableJwtPlugin
 			? await signJWT(ctx, {
-					options: jwtPluginOptions,
-					payload: {
-						...customClaims,
-						aud: audience,
-						azp: client.clientId,
-						scope: requestedScopes.join(" "),
-						iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-						iat,
-						exp,
-					},
-				})
+				options: jwtPluginOptions,
+				payload: {
+					...customClaims,
+					aud: audience,
+					azp: client.clientId,
+					scope: requestedScopes.join(" "),
+					iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
+					iat,
+					exp,
+				},
+			})
 			: await createOpaqueAccessToken(
-					ctx,
-					opts,
-					undefined,
-					client,
-					requestedScopes,
-					{
-						iat,
-						exp,
-					},
-				);
+				ctx,
+				opts,
+				undefined,
+				client,
+				requestedScopes,
+				{
+					iat,
+					exp,
+				},
+			);
 
 	return ctx.json(
 		{

@@ -18,6 +18,7 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
+	toDate,
 	validateClientCredentials,
 } from "./utils";
 
@@ -54,10 +55,10 @@ async function validateJwtAccessToken(
 			jwksFetch: jwtPluginOptions?.jwks?.remoteUrl
 				? jwtPluginOptions.jwks.remoteUrl
 				: async () => {
-						const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
-						// @ts-expect-error response is a JSONWebKeySet but within the response field
-						return jwksRes?.response as JSONWebKeySet | undefined;
-					},
+					const jwksRes = await jwtPlugin?.endpoints.getJwks(ctx);
+					// @ts-expect-error response is a JSONWebKeySet but within the response field
+					return jwksRes?.response as JSONWebKeySet | undefined;
+				},
 			verifyOptions: {
 				audience: opts.validAudiences ?? ctx.context.baseURL,
 				issuer: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
@@ -216,11 +217,11 @@ async function validateOpaqueAccessToken(
 	// Add Custom Claims
 	const customClaims = opts.customAccessTokenClaims
 		? await opts.customAccessTokenClaims({
-				user,
-				scopes: accessToken.scopes,
-				referenceId: accessToken?.referenceId,
-				metadata: parseClientMetadata(client?.metadata),
-			})
+			user,
+			scopes: accessToken.scopes,
+			referenceId: accessToken?.referenceId,
+			metadata: parseClientMetadata(client?.metadata),
+		})
 		: {};
 
 	// Return the access token in introspection format
@@ -236,8 +237,8 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(accessToken.createdAt.getTime() / 1000),
+		exp: Math.floor(toDate(accessToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(toDate(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -323,8 +324,8 @@ async function validateRefreshToken(
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(refreshToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(refreshToken.createdAt.getTime() / 1000),
+		exp: Math.floor(toDate(refreshToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(toDate(refreshToken.createdAt).getTime() / 1000),
 		scope: refreshToken.scopes?.join(" "),
 	} as JWTPayload;
 }

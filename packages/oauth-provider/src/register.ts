@@ -4,7 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { parseClientMetadata, storeClientSecret } from "./utils";
+import { parseClientMetadata, storeClientSecret, toDate } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
@@ -161,9 +161,9 @@ export async function createOAuthClientEndpoint(
 	const iat = Math.floor(Date.now() / 1000);
 	const referenceId = opts.clientReference
 		? await opts.clientReference({
-				user: session?.user,
-				session: session?.session,
-			})
+			user: session?.user,
+			session: session?.session,
+		})
 		: undefined;
 	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
@@ -356,10 +356,10 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(toDate(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(toDate(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
 	const _metadata = parseClientMetadata(metadata);

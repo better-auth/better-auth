@@ -20,7 +20,7 @@ import type {
 
 class TTLCache<K, V extends { expiresAt?: Date }> {
 	private cache = new Map<K, V>();
-	constructor() {}
+	constructor() { }
 
 	set(key: K, value: V) {
 		this.cache.set(key, value);
@@ -424,4 +424,16 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 			: query.delete("prompt");
 	}
 	return Object.fromEntries(query);
+}
+
+/**
+ * Defensively coerces a value to a Date object.
+ * Needed because some database adapters (e.g. Drizzle with SQLite)
+ * may return date columns as strings or numbers instead of Date objects.
+ *
+ * @internal
+ */
+export function toDate(value: unknown): Date {
+	if (value instanceof Date) return value;
+	return new Date(value as string | number);
 }
