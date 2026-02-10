@@ -2,8 +2,8 @@ import { base64Url } from "@better-auth/utils/base64";
 import type {
 	Account,
 	DBAdapter,
-	User,
 	GenericEndpointContext,
+	User,
 } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import {

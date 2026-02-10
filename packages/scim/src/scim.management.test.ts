@@ -1,13 +1,13 @@
-import { describe, expect, it } from "vitest";
+import { sso } from "@better-auth/sso";
 import { APIError, betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import type { SCIMOptions } from "./types";
-import { bearer, organization } from "better-auth/plugins";
-import { scim } from ".";
-import { sso } from "@better-auth/sso";
 import { createAuthClient } from "better-auth/client";
-import { scimClient } from "./client";
 import { setCookieToHeader } from "better-auth/cookies";
+import { bearer, organization } from "better-auth/plugins";
+import { describe, expect, it } from "vitest";
+import { scim } from ".";
+import { scimClient } from "./client";
+import type { SCIMOptions } from "./types";
 
 const createTestInstance = (scimOptions?: SCIMOptions) => {
 	const testUser = {
@@ -524,7 +524,9 @@ describe("SCIM provider management", () => {
 			const org = await registerOrganization("org-a");
 			const scimToken = await getSCIMToken("my-provider", org!.id);
 
-			const listBefore = await auth.api.listSCIMProviderConnections({ headers });
+			const listBefore = await auth.api.listSCIMProviderConnections({
+				headers,
+			});
 			expect(
 				listBefore.providers?.some((p) => p.providerId === "my-provider"),
 			).toBe(true);
