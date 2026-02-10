@@ -272,7 +272,10 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 			// Helper function to generate invitation URL
 			// The URL points to the backend callback endpoint which handles acceptance and redirect
 			const generateInvitationURL = (invitationId: string) => {
-				const baseURL = ctx.context.baseURL || "";
+				const baseURL = ctx.context.baseURL;
+				if (!baseURL) {
+					throw new APIError("INTERNAL_SERVER_ERROR", { message: "baseURL is not configured" });
+				}
 				const url = new URL(
 					`${baseURL}/organization/accept-invitation-callback`,
 				);
