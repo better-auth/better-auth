@@ -29,6 +29,11 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
     better-auth @better-auth/electron
     ```
 
+    <Callout type="info">
+      We support two major versions behind the latest stable major release of Electron.
+      This keeps you on versions that receive security updates and aligns with [Electron's version support policy](https://www.electronjs.org/docs/latest/tutorial/electron-timelines#breaking-api-changes).
+    </Callout>
+
   </Step>
   
   <Step>
@@ -289,6 +294,8 @@ function SignIn({
   );
 }
 ```
+
+To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/(auth)/sign-in/_components/electron.tsx)
 
 ### Handling Authentication in Electron
 

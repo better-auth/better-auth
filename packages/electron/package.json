@@ -83,6 +83,7 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
+    "electron": ">=36.0.0",
     "conf": "^15.0.2"
   },
   "dependencies": {
@@ -91,6 +92,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
+    "electron": "^38.8.0",
     "better-auth": "workspace:*",
     "better-sqlite3": "^12.6.2",
     "tsdown": "catalog:"
