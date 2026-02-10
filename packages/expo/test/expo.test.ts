@@ -463,8 +463,6 @@ describe("expo", async () => {
 	});
 
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -686,8 +684,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should include oauthState param in proxy URL", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -702,8 +698,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {
-		fn.mockClear();
-
 		const expoWebBrowser = await import("expo-web-browser");
 		const { parseSetCookieHeader } = await import("../src/client");
 

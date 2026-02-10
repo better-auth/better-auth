@@ -198,7 +198,9 @@ export async function getConfig({
 				  }
 			>({
 				configFile: resolvedPath,
-				dotenv: true,
+				dotenv: {
+					fileName: [".env", ".env.local"],
+				},
 				jitiOptions: jitiOptions(cwd),
 				cwd,
 			});
@@ -228,6 +230,9 @@ export async function getConfig({
 						};
 					}>({
 						configFile: possiblePath,
+						dotenv: {
+							fileName: [".env", ".env.local"],
+						},
 						jitiOptions: jitiOptions(cwd),
 						cwd,
 					});

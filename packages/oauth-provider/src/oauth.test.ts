@@ -1328,7 +1328,7 @@ describe("oauth - config", () => {
 		});
 	}
 
-	it.each([
+	it.for([
 		{
 			storeClientSecret: undefined,
 		},
@@ -1432,7 +1432,7 @@ describe("oauth - config", () => {
 		expect(callbackURL).toContain("/success");
 	});
 
-	it.each([
+	it.for([
 		{
 			storeClientSecret: "encrypted",
 		},
@@ -1533,7 +1533,7 @@ describe("oauth - config", () => {
 		expect(callbackURL).toContain("/success");
 	});
 
-	it.each([
+	it.for([
 		{ disableJwtPlugin: false, publicClient: false, resource: false },
 		{ disableJwtPlugin: true, publicClient: false, resource: false },
 		{ disableJwtPlugin: false, publicClient: true, resource: false },
