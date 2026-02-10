@@ -12,82 +12,81 @@ import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { Invitation } from "../../schema";
 import type { OrganizationOptions } from "../../types";
 
-const acceptInvitationBodySchema = z
-	.object({
-		invitationId: z
-			.string()
-			.meta({
-				description: "The ID of the invitation to accept",
-			})
-			.optional(),
-	})
-	.optional();
+const acceptInvitationCallbackQuerySchema = z.object({
+	invitationId: z.string().meta({
+		description: "The ID of the invitation to accept",
+	}),
+	callbackURL: z
+		.string()
+		.meta({
+			description: "The URL to redirect to after accepting the invitation",
+		})
+		.optional(),
+});
 
-const acceptInvitationQuerySchema = z
-	.object({
-		invitationId: z
-			.string()
-			.meta({
-				description:
-					"The ID of the invitation to accept (alternative to body parameter)",
-			})
-			.optional(),
-	})
-	.optional();
+export type AcceptInvitationCallback<O extends OrganizationOptions> =
+	ReturnType<typeof acceptInvitationCallback<O>>;
 
-export type AcceptInvitation<O extends OrganizationOptions> = ReturnType<
-	typeof acceptInvitation<O>
->;
-
-export const acceptInvitation = <O extends OrganizationOptions>(
+export const acceptInvitationCallback = <O extends OrganizationOptions>(
 	_options: O,
 ) => {
 	const options = resolveOrgOptions(_options);
+
 	return createAuthEndpoint(
-		"/organization/accept-invitation",
+		"/organization/accept-invitation-callback",
 		{
-			method: "POST",
-			body: acceptInvitationBodySchema,
-			query: acceptInvitationQuerySchema,
+			method: "GET",
+			query: acceptInvitationCallbackQuerySchema,
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "acceptOrganizationInvitationCallback",
 					description:
-						"Accept an invitation to an organization. The invitation ID can be provided via query parameter or request body.",
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											invitation: {
-												type: "object",
-											},
-											member: {
-												type: "object",
-											},
-										},
-									},
-								},
+						"Callback endpoint for accepting an invitation via URL. Accepts the invitation and redirects to the callback URL.",
+					parameters: [
+						{
+							name: "invitationId",
+							in: "query",
+							description: "The ID of the invitation to accept",
+							required: true,
+							schema: {
+								type: "string",
 							},
+						},
+						{
+							name: "callbackURL",
+							in: "query",
+							description:
+								"The URL to redirect to after accepting the invitation",
+							required: false,
+							schema: {
+								type: "string",
+							},
+						},
+					],
+					responses: {
+						"302": {
+							description:
+								"Redirect to callback URL after successful acceptance",
 						},
 					},
 				},
 			},
 		},
 		async (ctx) => {
+			const { invitationId, callbackURL } = ctx.query;
 			const session = ctx.context.session;
 			const adapter = getOrgAdapter<O>(ctx.context, _options);
 
-			const invitationId = ctx.query?.invitationId || ctx.body?.invitationId;
-			if (!invitationId) {
-				throw APIError.from("BAD_REQUEST", {
-					message: "Invitation ID is required",
-					code: "INVITATION_ID_REQUIRED",
-				});
+			// Helper function to redirect with error
+			function redirectOnError(error: { code: string; message: string }) {
+				if (callbackURL) {
+					const url = new URL(callbackURL);
+					url.searchParams.set("error", error.code);
+					throw ctx.redirect(url.toString());
+				}
+				throw APIError.from("BAD_REQUEST", error);
 			}
 
 			const invitation = await adapter.findInvitationById(invitationId);
@@ -97,15 +96,13 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				invitation.expiresAt < new Date() ||
 				invitation.status !== "pending"
 			) {
-				const code = "INVITATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
+				return redirectOnError(ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND);
 			}
 
 			if (invitation.email.toLowerCase() !== session.user.email.toLowerCase()) {
 				const code = "YOU_ARE_NOT_THE_RECIPIENT_OF_THE_INVITATION";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("FORBIDDEN", msg);
+				return redirectOnError(msg);
 			}
 
 			if (
@@ -115,7 +112,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				const code =
 					"EMAIL_VERIFICATION_REQUIRED_BEFORE_ACCEPTING_OR_REJECTING_INVITATION";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("FORBIDDEN", msg);
+				return redirectOnError(msg);
 			}
 
 			const membershipLimit = options.membershipLimit;
@@ -131,7 +128,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			if (!organization) {
 				const code = "ORGANIZATION_NOT_FOUND";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
+				return redirectOnError(msg);
 			}
 
 			const limit = await membershipLimit(session.user, organization, ctx);
@@ -139,7 +136,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			if (membersCount >= limit) {
 				const code = "ORGANIZATION_MEMBERSHIP_LIMIT_REACHED";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("FORBIDDEN", msg);
+				return redirectOnError(msg);
 			}
 
 			const acceptInvitationHooks = getHook("AcceptInvitation", options);
@@ -160,7 +157,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			if (!acceptedI) {
 				const code = "FAILED_TO_RETRIEVE_INVITATION";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
+				return redirectOnError(msg);
 			}
 
 			// Team support: add user to teams if teams addon is enabled and invitation has teamId
@@ -197,17 +194,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				invitation.organizationId,
 			);
 
-			if (!acceptedI) {
-				const code = "INVITATION_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: msg.message,
-					},
-				});
-			}
-
 			await acceptInvitationHooks.after(
 				{
 					invitation: acceptedI as unknown as Invitation,
@@ -218,6 +204,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				ctx,
 			);
 
+			// Redirect to callback URL on success
+			if (callbackURL) {
+				throw ctx.redirect(callbackURL);
+			}
+
+			// If no callback URL, return JSON response
 			return ctx.json({
 				invitation: acceptedI,
 				member,

@@ -5,10 +5,14 @@ import type { UnionToIntersection } from "../../../types";
 import { shimContext } from "../../../utils/shim";
 import type { AcceptInvitation } from "../routes/invitations/accept-invitation";
 import { acceptInvitation } from "../routes/invitations/accept-invitation";
+import type { AcceptInvitationCallback } from "../routes/invitations/accept-invitation-callback";
+import { acceptInvitationCallback } from "../routes/invitations/accept-invitation-callback";
 import type { CancelInvitation } from "../routes/invitations/cancel-invitation";
 import { cancelInvitation } from "../routes/invitations/cancel-invitation";
 import type { CreateInvitation } from "../routes/invitations/create-invitation";
 import { createInvitation } from "../routes/invitations/create-invitation";
+import type { CreateInvitationURL } from "../routes/invitations/create-invitation-url";
+import { createInvitationURL } from "../routes/invitations/create-invitation-url";
 import type { GetInvitation } from "../routes/invitations/get-invitation";
 import { getInvitation } from "../routes/invitations/get-invitation";
 import type { ListInvitations } from "../routes/invitations/list-invitations";
@@ -59,10 +63,12 @@ type BaseEndpoints<O extends OrganizationOptions> = {
 	setActiveOrganization: SetActiveOrganization<O>;
 	listOrganizations: ListOrganizations<O>;
 	createInvitation: CreateInvitation<O>;
+	createInvitationURL: CreateInvitationURL<O>;
 	getInvitation: GetInvitation<O>;
 	listInvitations: ListInvitations<O>;
 	listUserInvitations: ListUserInvitations<O>;
 	acceptInvitation: AcceptInvitation<O>;
+	acceptInvitationCallback: AcceptInvitationCallback<O>;
 	rejectInvitation: RejectInvitation<O>;
 	cancelInvitation: CancelInvitation<O>;
 	addMember: AddMember<O>;
@@ -97,10 +103,12 @@ export const getEndpoints = <O extends OrganizationOptions>(
 		setActiveOrganization: setActiveOrganization(options),
 		listOrganizations: listOrganizations(options),
 		createInvitation: createInvitation(options),
+		createInvitationURL: createInvitationURL(options),
 		getInvitation: getInvitation(options),
 		listInvitations: listInvitations(options),
 		listUserInvitations: listUserInvitations(options),
 		acceptInvitation: acceptInvitation(options),
+		acceptInvitationCallback: acceptInvitationCallback(options),
 		rejectInvitation: rejectInvitation(options),
 		cancelInvitation: cancelInvitation(options),
 		addMember: addMember(options),

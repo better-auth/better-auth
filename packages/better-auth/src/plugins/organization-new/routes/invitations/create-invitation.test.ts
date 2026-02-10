@@ -156,6 +156,7 @@ describe("create invitation", async (it) => {
 				role: "member",
 				createdAt: new Date(),
 			},
+			forceAllowId: true,
 		});
 
 		// Try to invite the user who is already a member
@@ -220,6 +221,7 @@ describe("create invitation", async (it) => {
 				role: "admin",
 				createdAt: new Date(),
 			},
+			forceAllowId: true,
 		});
 
 		// Sign in as admin and try to invite someone with owner role
@@ -501,6 +503,7 @@ describe("member permission to invite", async (it) => {
 				role: "member",
 				createdAt: new Date(),
 			},
+			forceAllowId: true,
 		});
 
 		const { headers: memberHeaders } = await signInWithUser(
@@ -544,6 +547,7 @@ describe("member permission to invite", async (it) => {
 				role: "admin",
 				createdAt: new Date(),
 			},
+			forceAllowId: true,
 		});
 
 		const { headers: adminHeaders } = await signInWithUser(
