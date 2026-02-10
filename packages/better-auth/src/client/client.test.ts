@@ -56,6 +56,29 @@ describe("run time proxy", async () => {
 		expect(apiCalled).toBe(true);
 	});
 
+	it("should reject custom protocol baseURL by default", () => {
+		expect(() => createSolidClient({ baseURL: "electronapp://api" })).toThrow(
+			"URL must include 'http://' or 'https://'",
+		);
+	});
+
+	it("should allow custom protocol baseURL when allowCustomBaseURLProtocol is true", async () => {
+		let capturedUrl: string | null = null;
+		const client = createSolidClient({
+			baseURL: "electronapp://api",
+			allowCustomBaseURLProtocol: true,
+			plugins: [testClientPlugin()],
+			fetchOptions: {
+				customFetchImpl: async (url) => {
+					capturedUrl = url.toString();
+					return new Response();
+				},
+			},
+		});
+		await client.test();
+		expect(capturedUrl).toContain("electronapp://api");
+	});
+
 	it("state listener should be called on matched path", async () => {
 		const client = createSolidClient({
 			plugins: [testClientPlugin()],

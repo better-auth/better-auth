@@ -260,4 +260,24 @@ describe("getBaseURL", () => {
 			expect(result).toBe("https://api.v1.staging.example.com/auth");
 		});
 	});
+
+	describe("protocol policy", () => {
+		it("should reject custom protocols by default", () => {
+			expect(() => getBaseURL("electronapp://api", "/auth", undefined, false)).toThrow(
+				"URL must include 'http://' or 'https://'",
+			);
+		});
+
+		it("should allow custom protocols when protocolPolicy is 'any'", () => {
+			const result = getBaseURL(
+				"electronapp://api",
+				"/auth",
+				undefined,
+				false,
+				undefined,
+				"any",
+			);
+			expect(result).toBe("electronapp://api/auth");
+		});
+	});
 });

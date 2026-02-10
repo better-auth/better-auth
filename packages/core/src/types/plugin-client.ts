@@ -71,6 +71,18 @@ export interface BetterAuthClientOptions {
 	plugins?: BetterAuthClientPlugin[] | undefined;
 	baseURL?: string | undefined;
 	basePath?: string | undefined;
+	/**
+	 * Allow non-HTTP(S) protocols in `baseURL` (e.g. `app://`, `electronapp://`).
+	 *
+	 * This is primarily intended for desktop runtimes (Electron/Tauri/etc.) where
+	 * requests may be proxied through a custom protocol.
+	 *
+	 * When enabled, Better Auth will accept any valid URL protocol in `baseURL`
+	 * instead of only `http:` / `https:`.
+	 *
+	 * @default false
+	 */
+	allowCustomBaseURLProtocol?: boolean | undefined;
 	disableDefaultFetchPlugins?: boolean | undefined;
 	$InferAuth?: BetterAuthOptions | undefined;
 	sessionOptions?: RevalidateOptions | undefined;

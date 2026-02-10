@@ -16,8 +16,16 @@ export const getClientConfig = (
 ) => {
 	/* check if the credentials property is supported. Useful for cf workers */
 	const isCredentialsSupported = "credentials" in Request.prototype;
+	const protocolPolicy = options?.allowCustomBaseURLProtocol ? "any" : "http";
 	const baseURL =
-		getBaseURL(options?.baseURL, options?.basePath, undefined, loadEnv) ??
+		getBaseURL(
+			options?.baseURL,
+			options?.basePath,
+			undefined,
+			loadEnv,
+			undefined,
+			protocolPolicy,
+		) ??
 		"/api/auth";
 	const pluginsFetchPlugins =
 		options?.plugins

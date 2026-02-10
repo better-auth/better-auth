@@ -1,6 +1,8 @@
 import { env } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 
+export type BaseURLProtocolPolicy = "http" | "any";
+
 function checkHasPath(url: string): boolean {
 	try {
 		const parsedUrl = new URL(url);
@@ -13,10 +15,17 @@ function checkHasPath(url: string): boolean {
 	}
 }
 
-function assertHasProtocol(url: string): void {
+function assertHasProtocol(
+	url: string,
+	protocolPolicy: BaseURLProtocolPolicy,
+): void {
 	try {
 		const parsedUrl = new URL(url);
-		if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+		if (
+			protocolPolicy === "http" &&
+			parsedUrl.protocol !== "http:" &&
+			parsedUrl.protocol !== "https:"
+		) {
 			throw new BetterAuthError(
 				`Invalid base URL: ${url}. URL must include 'http://' or 'https://'`,
 			);
@@ -34,8 +43,12 @@ function assertHasProtocol(url: string): void {
 	}
 }
 
-function withPath(url: string, path = "/api/auth") {
-	assertHasProtocol(url);
+function withPath(
+	url: string,
+	path = "/api/auth",
+	protocolPolicy: BaseURLProtocolPolicy,
+) {
+	assertHasProtocol(url, protocolPolicy);
 
 	const hasPath = checkHasPath(url);
 	if (hasPath) {
@@ -109,9 +122,11 @@ export function getBaseURL(
 	request?: Request,
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean | undefined,
+	protocolPolicy?: BaseURLProtocolPolicy | undefined,
 ) {
+	const protocolPolicyResolved = protocolPolicy ?? "http";
 	if (url) {
-		return withPath(url, path);
+		return withPath(url, path, protocolPolicyResolved);
 	}
 
 	if (loadEnv !== false) {
@@ -124,7 +139,7 @@ export function getBaseURL(
 			(env.BASE_URL !== "/" ? env.BASE_URL : undefined);
 
 		if (fromEnv) {
-			return withPath(fromEnv, path);
+			return withPath(fromEnv, path, protocolPolicyResolved);
 		}
 	}
 
@@ -136,7 +151,11 @@ export function getBaseURL(
 			validateProxyHeader(fromRequest, "host")
 		) {
 			try {
-				return withPath(`${fromRequestProto}://${fromRequest}`, path);
+				return withPath(
+					`${fromRequestProto}://${fromRequest}`,
+					path,
+					protocolPolicyResolved,
+				);
 			} catch (_error) {}
 		}
 	}
@@ -148,11 +167,11 @@ export function getBaseURL(
 				"Could not get origin from request. Please provide a valid base URL.",
 			);
 		}
-		return withPath(url, path);
+		return withPath(url, path, protocolPolicyResolved);
 	}
 
 	if (typeof window !== "undefined" && window.location) {
-		return withPath(window.location.origin, path);
+		return withPath(window.location.origin, path, protocolPolicyResolved);
 	}
 	return undefined;
 }
