@@ -452,7 +452,7 @@ describe("SCIM provider management", () => {
 			});
 		});
 
-		it("should always return provider when it doesnt belong to an org", async () => {
+		it("should always return provider when it doesn't belong to an org", async () => {
 			const { auth, getAuthCookieHeaders, getSCIMToken } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
 

@@ -266,7 +266,7 @@ export const listSCIMProviderConnections = () =>
 					operationId: "listSCIMProviderConnections",
 					summary: "List SCIM providers",
 					description:
-						"Returns SCIM providers for organizations the user is a member of. Requires the organization plugin.",
+						"Returns SCIM providers for organizations the user is a member of.",
 					responses: {
 						"200": {
 							description: "List of SCIM providers",
