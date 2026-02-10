@@ -69,8 +69,9 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 	async function getSCIMToken(
 		providerId: string = "the-saml-provider-1",
 		organizationId?: string,
+		userHeaders?: Headers,
 	) {
-		const headers = await getAuthCookieHeaders();
+		const headers = userHeaders ?? (await getAuthCookieHeaders());
 		const { scimToken } = await auth.api.generateSCIMToken({
 			body: {
 				providerId,
@@ -102,13 +103,13 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 	};
 };
 
-const policyUser1 = {
+const policyUserA = {
 	email: "user1@policy.test",
 	password: "password",
 	name: "User One",
 };
 
-const policyUser2 = {
+const policyUserB = {
 	email: "user2@policy.test",
 	password: "password",
 	name: "User Two",
@@ -405,29 +406,43 @@ describe("SCIM provider management", () => {
 			const { auth, getAuthCookieHeaders, registerOrganization, getSCIMToken } =
 				createTestInstance();
 
-			const headers = await getAuthCookieHeaders();
-			const org = await registerOrganization("org-a");
-
-			await Promise.all([
-				getSCIMToken("provider-1", org!.id),
-				getSCIMToken("provider-2", org!.id),
-				getSCIMToken("provider-3"),
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+			const [orgA, orgB] = await Promise.all([
+				registerOrganization("org-a", headersUserA),
+				registerOrganization("org-b", headersUserB),
 			]);
 
-			const res = await auth.api.listSCIMProviderConnections({ headers });
+			await Promise.all([
+				getSCIMToken("provider-1", orgA!.id, headersUserA),
+				getSCIMToken("provider-2", orgA!.id, headersUserA),
+				getSCIMToken("provider-3", orgB!.id, headersUserB),
+			]);
+
+			const res = await auth.api.listSCIMProviderConnections({
+				headers: headersUserA,
+			});
 
 			expect(res.providers).toHaveLength(2);
 			expect(res.providers?.map((p) => p.providerId).sort()).toEqual([
 				"provider-1",
 				"provider-2",
 			]);
-			for (const p of res.providers ?? []) {
-				expect(p).toMatchObject({
-					id: expect.any(String),
-					providerId: expect.any(String),
-					organizationId: org!.id,
-				});
-			}
+			const byProviderId = Object.fromEntries(
+				(res.providers ?? []).map((p) => [p.providerId, p]),
+			);
+			expect(byProviderId["provider-1"]).toMatchObject({
+				id: expect.any(String),
+				providerId: "provider-1",
+				organizationId: orgA!.id,
+			});
+			expect(byProviderId["provider-2"]).toMatchObject({
+				id: expect.any(String),
+				providerId: "provider-2",
+				organizationId: orgA!.id,
+			});
 		});
 	});
 
@@ -474,8 +489,8 @@ describe("SCIM provider management", () => {
 				createTestInstance();
 
 			const [headers1, headers2] = await Promise.all([
-				getAuthCookieHeaders(policyUser1),
-				getAuthCookieHeaders(policyUser2),
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
 			]);
 
 			const [org1, _org2] = await Promise.all([
@@ -557,8 +572,8 @@ describe("SCIM provider management", () => {
 				createTestInstance();
 
 			const [headers1, headers2] = await Promise.all([
-				getAuthCookieHeaders(policyUser1),
-				getAuthCookieHeaders(policyUser2),
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
 			]);
 
 			const [org1, _org2] = await Promise.all([
