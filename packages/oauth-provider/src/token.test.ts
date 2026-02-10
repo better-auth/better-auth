@@ -1188,7 +1188,7 @@ describe("oauth token - config", async () => {
 	}
 
 	// Client Credentials Grant
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments"],
 			result: 1800, // 30m lowest
@@ -1237,7 +1237,7 @@ describe("oauth token - config", async () => {
 	});
 
 	// Authorization Code and Refresh Token grants
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments", "offline_access"],
 			result: 1800, // 30m lowest

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
@@ -34,6 +34,10 @@ describe("magic link", async () => {
 		},
 		baseURL: "http://localhost:3000",
 		basePath: "/api/auth",
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("should send magic link", async () => {

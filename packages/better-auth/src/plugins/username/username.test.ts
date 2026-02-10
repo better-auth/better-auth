@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
 
-describe("username", async (it) => {
+describe("username", async () => {
 	const { client, sessionSetter, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
@@ -296,7 +296,7 @@ describe("username", async (it) => {
 	});
 });
 
-describe("username custom normalization", async (it) => {
+describe("username custom normalization", async () => {
 	const { client } = await getTestInstance(
 		{
 			plugins: [
@@ -362,7 +362,7 @@ describe("username custom normalization", async (it) => {
 	});
 });
 
-describe("username with displayUsername validation", async (it) => {
+describe("username with displayUsername validation", async () => {
 	const { client, sessionSetter } = await getTestInstance(
 		{
 			plugins: [
@@ -471,7 +471,7 @@ describe("username with displayUsername validation", async (it) => {
 	});
 });
 
-describe("isUsernameAvailable with custom validator", async (it) => {
+describe("isUsernameAvailable with custom validator", async () => {
 	const { client } = await getTestInstance(
 		{
 			plugins: [
@@ -529,7 +529,7 @@ describe("isUsernameAvailable with custom validator", async (it) => {
 	});
 });
 
-describe("post normalization flow", async (it) => {
+describe("post normalization flow", async () => {
 	it("should set displayUsername to username if only username is provided", async () => {
 		const { auth } = await getTestInstance({
 			plugins: [
@@ -562,7 +562,7 @@ describe("post normalization flow", async (it) => {
 	});
 });
 
-describe("username email verification flow (no info leak)", async (it) => {
+describe("username email verification flow (no info leak)", async () => {
 	const { client } = await getTestInstance(
 		{
 			emailAndPassword: { enabled: true, requireEmailVerification: true },
