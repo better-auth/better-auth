@@ -4,7 +4,7 @@ import { isProxy } from "node:util/types";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
@@ -30,6 +30,10 @@ import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("atom in proxy should not be proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
