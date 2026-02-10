@@ -7,6 +7,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { describe, expect, vi } from "vitest";
 import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
+import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
 import { it, testUtils } from "./utils";
 
@@ -492,6 +493,108 @@ describe("Electron", () => {
 		expect(data?.user.id).toBe(user.id);
 		expect(spy).toHaveBeenCalled();
 		spy.mockRestore();
+	});
+
+	describe("transferUser", () => {
+		const transferQuery =
+			"client_id=electron&state=xyz&code_challenge=challenge";
+		const post = (cookie: string, body?: object) =>
+			auth.handler(
+				new Request(
+					`http://localhost:3000/api/auth/electron/transfer-user?${transferQuery}`,
+					{
+						method: "POST",
+						headers: {
+							cookie: cookie,
+							"content-type": "application/json",
+						},
+						body: JSON.stringify(body ?? {}),
+					},
+				),
+			);
+
+		async function getSessionCookie() {
+			let res = await auth.handler(
+				new Request("http://localhost:3000/api/auth/sign-up/email", {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({
+						email: "transfer-test@test.com",
+						password: "password",
+						name: "Transfer Test",
+					}),
+				}),
+			);
+			if (res.status !== 200) {
+				res = await auth.handler(
+					new Request("http://localhost:3000/api/auth/sign-in/email", {
+						method: "POST",
+						headers: { "content-type": "application/json" },
+						body: JSON.stringify({
+							email: "transfer-test@test.com",
+							password: "password",
+						}),
+					}),
+				);
+			}
+			const setCookie = res.headers.get("set-cookie") ?? "";
+			const parsed = parseSetCookieHeader(setCookie);
+			const parts: string[] = [];
+			parsed.forEach((value, name) => {
+				parts.push(`${name}=${value.value}`);
+			});
+			return parts.join("; ");
+		}
+
+		it("should return url and redirect from body when callbackURL provided", async () => {
+			const cookie = await getSessionCookie();
+			const res = await post(cookie, {
+				callbackURL: "https://app.example.com/callback",
+			});
+			expect(res.status).toBe(200);
+			const data = await res.json();
+			expect(data).toEqual({
+				url: "https://app.example.com/callback",
+				redirect: true,
+			});
+		});
+
+		it("should return null url and false redirect when callbackURL omitted", async () => {
+			const cookie = await getSessionCookie();
+			const res = await post(cookie);
+			expect(res.status).toBe(200);
+			const data = await res.json();
+			expect(data).toEqual({ url: null, redirect: false });
+		});
+
+		it("should throw INVALID_CLIENT_ID when client_id does not match", async () => {
+			const cookie = await getSessionCookie();
+			const res = await auth.handler(
+				new Request(
+					"http://localhost:3000/api/auth/electron/transfer-user?client_id=wrong&state=xyz&code_challenge=challenge",
+					{
+						method: "POST",
+						headers: {
+							cookie,
+							"content-type": "application/json",
+						},
+						body: JSON.stringify({}),
+					},
+				),
+			);
+			expect(res.status).toBe(400);
+			const data = await res.json();
+			expect(data.code).toBe(ELECTRON_ERROR_CODES.INVALID_CLIENT_ID.code);
+		});
+
+		it("should set redirect cookie on success", async () => {
+			const cookie = await getSessionCookie();
+			const res = await post(cookie);
+			expect(res.status).toBe(200);
+			const setCookie = res.headers.get("set-cookie") ?? "";
+			const cookies = parseSetCookieHeader(setCookie);
+			expect(cookies.has("better-auth.electron")).toBe(true);
+		});
 	});
 
 	it("should register protocol", async ({ setProcessType }) => {

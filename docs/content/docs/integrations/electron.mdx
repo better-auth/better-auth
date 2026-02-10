@@ -290,6 +290,8 @@ function SignIn({
 }
 ```
 
+To handle already signed-in users, you can use the `electron.transferUser` method on the client and `electronTransferUser` on the server to transfer the user to the Electron app. [See Example](https://github.com/better-auth/better-auth/blob/main/demo/nextjs/app/(auth)/sign-in/_components/electron.tsx)
+
 ### Handling Authentication in Electron
 
 In your Electron renderer process, you can use the IPC bridges exposed by the preload script.
