@@ -1654,6 +1654,9 @@ importers:
       better-sqlite3:
         specifier: ^12.6.2
         version: 12.6.2
+      electron:
+        specifier: ^38.8.0
+        version: 38.8.0
       tsdown:
         specifier: 'catalog:'
         version: 0.20.1(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.17.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -9943,6 +9946,11 @@ packages:
   electron-winstaller@5.4.0:
     resolution: {integrity: sha512-bO3y10YikuUwUuDUQRM4KfwNkKhnpVO7IPdbsrejwN9/AABJzzTQ4GeHwyzNSrVO+tEH3/Np255a3sVZpZDjvg==}
     engines: {node: '>=8.0.0'}
+
+  electron@38.8.0:
+    resolution: {integrity: sha512-cMvNuIFdXXDr4pJd5xD+F8FDjQhin9vyJ5hGSb5cZRIUb1VqfvRyP2nLBzU2Iazj0z3L686AUOkykp6Xd8bT1w==}
+    engines: {node: '>= 12.20.55'}
+    hasBin: true
 
   electron@39.5.1:
     resolution: {integrity: sha512-6s/sBQar+bbW59XSqohZj04MPic+kdVUAWjLbfQB/uLOeNw9jWX5FHaTxpHK29Xp3mKOHef7wErsjwMyCuWltg==}
@@ -22582,9 +22590,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/metro-config@0.83.1(@babel/core@7.29.0)':
@@ -22595,9 +22601,7 @@ snapshots:
       metro-runtime: 0.83.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
     optional: true
 
   '@react-native/normalize-colors@0.74.89': {}
@@ -24314,14 +24318,14 @@ snapshots:
       chai: 6.2.2
       tinyrainbow: 3.0.3
 
-  '@vitest/mocker@4.0.18(msw@2.12.7(@types/node@25.0.10)(typescript@5.9.3))(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitest/mocker@4.0.18(msw@2.12.7(@types/node@25.0.10)(typescript@5.9.3))(vite@7.3.1(@types/node@25.2.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.18
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       msw: 2.12.7(@types/node@25.0.10)(typescript@5.9.3)
-      vite: 7.3.1(@types/node@25.0.10)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@25.2.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/mocker@4.0.18(msw@2.12.7(@types/node@25.2.0)(typescript@5.9.3))(vite@7.3.1(@types/node@25.2.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
@@ -26484,6 +26488,14 @@ snapshots:
       temp: 0.9.4
     optionalDependencies:
       '@electron/windows-sign': 1.2.2
+    transitivePeerDependencies:
+      - supports-color
+
+  electron@38.8.0:
+    dependencies:
+      '@electron/get': 2.0.3
+      '@types/node': 22.19.8
+      extract-zip: 2.0.1
     transitivePeerDependencies:
       - supports-color
 
@@ -34781,7 +34793,7 @@ snapshots:
   vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.0.10)(@vitest/ui@4.0.18)(happy-dom@20.4.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(msw@2.12.7(@types/node@25.0.10)(typescript@5.9.3))(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(msw@2.12.7(@types/node@25.0.10)(typescript@5.9.3))(vite@7.3.1(@types/node@25.0.10)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.0.18(msw@2.12.7(@types/node@25.0.10)(typescript@5.9.3))(vite@7.3.1(@types/node@25.2.0)(jiti@2.6.1)(less@4.5.1)(lightningcss@1.30.2)(sass@1.97.1)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18
