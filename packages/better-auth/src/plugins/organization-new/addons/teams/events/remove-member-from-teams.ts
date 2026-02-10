@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import type { RealOrganizationId } from "../../../helpers/get-org-adapter";
 import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import type { ResolvedTeamsOptions } from "../types";
@@ -7,7 +8,7 @@ export interface RemoveMemberFromTeamsProps {
 	/**
 	 * The real organization ID
 	 */
-	realOrgId: string;
+	realOrgId: RealOrganizationId;
 	/**
 	 * The user ID to remove from all teams
 	 */

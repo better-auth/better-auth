@@ -15,7 +15,7 @@ export interface AddMemberToTeamProps {
 	/**
 	 * The validated team
 	 */
-	team: (Team & Record<string, unknown>) | Record<string, unknown>;
+	team: Team & Record<string, any>;
 	/**
 	 * The user to add to the team
 	 */
