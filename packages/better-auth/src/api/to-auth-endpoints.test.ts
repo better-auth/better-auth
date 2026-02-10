@@ -145,6 +145,71 @@ describe("before hook", async () => {
 			expect(res).toMatchObject({ key: "value", name: "headers" });
 		});
 
+		it("should accept a Next.js ReadonlyHeaders-like object", async () => {
+			class ReadonlyHeadersLike {
+				private readonly inner: Headers;
+				constructor(init: Record<string, string>) {
+					this.inner = new Headers(init);
+				}
+				get(name: string) {
+					return this.inner.get(name);
+				}
+				entries() {
+					return this.inner.entries();
+				}
+			}
+
+			const readonlyHeaders = new ReadonlyHeadersLike({
+				key: "value",
+				cookie: "better-auth.session_token=abc",
+			});
+
+			const res = await authEndpoints.headers({
+				// Next.js `headers()` is not a real `Headers` instance
+				headers: readonlyHeaders as any,
+			});
+
+			expect(res).toMatchObject({
+				key: "value",
+				name: "headers",
+				cookie: "better-auth.session_token=abc",
+			});
+		});
+
+		it("should accept a header-like object with get/forEach (non-iterable)", async () => {
+			class ForEachHeadersLike {
+				private readonly map = new Map<string, string>();
+				constructor(init: Record<string, string>) {
+					for (const [k, v] of Object.entries(init)) {
+						this.map.set(k.toLowerCase(), v);
+					}
+				}
+				get(name: string) {
+					return this.map.get(name.toLowerCase()) ?? null;
+				}
+				forEach(cb: (value: string, key: string) => void) {
+					for (const [k, v] of this.map.entries()) {
+						cb(v, k);
+					}
+				}
+			}
+
+			const readonlyHeaders = new ForEachHeadersLike({
+				key: "value",
+				cookie: "better-auth.session_token=abc",
+			});
+
+			const res = await authEndpoints.headers({
+				headers: readonlyHeaders as any,
+			});
+
+			expect(res).toMatchObject({
+				key: "value",
+				name: "headers",
+				cookie: "better-auth.session_token=abc",
+			});
+		});
+
 		it("should replace existing array when hook provides another array", async () => {
 			const endpoint = {
 				body: createAuthEndpoint(

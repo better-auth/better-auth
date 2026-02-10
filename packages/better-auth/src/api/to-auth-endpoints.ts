@@ -15,6 +15,7 @@ import type {
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
+import { toHeaders } from "../utils/headers";
 
 type InternalContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -73,7 +74,9 @@ export function toAuthEndpoints<
 						session: null,
 					},
 					path: endpoint.path,
-					headers: context?.headers ? new Headers(context?.headers) : undefined,
+					headers: context?.headers
+						? (toHeaders(context.headers as any) ?? new Headers())
+						: undefined,
 				};
 				return runWithEndpointContext(internalContext, async () => {
 					const { beforeHooks, afterHooks } = getHooks(authContext);
@@ -96,6 +99,9 @@ export function toAuthEndpoints<
 						 * header
 						 */
 						if (headers) {
+							if (!internalContext.headers) {
+								internalContext.headers = new Headers();
+							}
 							headers.forEach((value, key) => {
 								(internalContext.headers as Headers).set(key, value);
 							});
