@@ -43,7 +43,7 @@ export async function consentEndpoint(
 	if (!accepted) {
 		return {
 			redirect: true,
-			uri: formatErrorURL(
+			url: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
@@ -74,11 +74,11 @@ export async function consentEndpoint(
 				},
 				...(referenceId
 					? [
-							{
-								field: "referenceId",
-								value: referenceId,
-							},
-						]
+						{
+							field: "referenceId",
+							value: referenceId,
+						},
+					]
 					: []),
 			],
 		},
@@ -94,25 +94,25 @@ export async function consentEndpoint(
 	};
 	foundConsent?.id
 		? await ctx.context.adapter.update({
-				model: "oauthConsent",
-				where: [
-					{
-						field: "id",
-						value: foundConsent.id,
-					},
-				],
-				update: {
-					scopes: consent.scopes,
-					updatedAt: new Date(iat * 1000),
+			model: "oauthConsent",
+			where: [
+				{
+					field: "id",
+					value: foundConsent.id,
 				},
-			})
+			],
+			update: {
+				scopes: consent.scopes,
+				updatedAt: new Date(iat * 1000),
+			},
+		})
 		: await ctx.context.adapter.create({
-				model: "oauthConsent",
-				data: {
-					...consent,
-					scopes: consent.scopes,
-				},
-			});
+			model: "oauthConsent",
+			data: {
+				...consent,
+				scopes: consent.scopes,
+			},
+		});
 
 	// Return authorization code
 	ctx?.headers?.set("accept", "application/json");
@@ -121,6 +121,6 @@ export async function consentEndpoint(
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }

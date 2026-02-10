@@ -96,8 +96,8 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						 * The role to assign to the user
 						 */
 						role:
-							| InferOrganizationRolesFromOption<O>
-							| InferOrganizationRolesFromOption<O>[];
+						| InferOrganizationRolesFromOption<O>
+						| InferOrganizationRolesFromOption<O>[];
 						/**
 						 * The organization ID to invite
 						 * the user to
@@ -110,12 +110,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 						resend?: boolean | undefined;
 					} & (O extends { teams: { enabled: true } }
 						? {
-								/**
-								 * The team the user is
-								 * being invited to.
-								 */
-								teamId?: (string | string[]) | undefined;
-							}
+							/**
+							 * The team the user is
+							 * being invited to.
+							 */
+							teamId?: (string | string[]) | undefined;
+						}
 						: {}) &
 						InferAdditionalFieldsFromPluginOptions<"invitation", O, false>,
 				},
@@ -365,13 +365,13 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			const invitationLimit =
 				typeof ctx.context.orgOptions.invitationLimit === "function"
 					? await ctx.context.orgOptions.invitationLimit(
-							{
-								user: session.user,
-								organization,
-								member: member as Member,
-							},
-							ctx.context,
-						)
+						{
+							user: session.user,
+							organization,
+							member: member as Member,
+						},
+						ctx.context,
+					)
 					: (ctx.context.orgOptions.invitationLimit ?? 100);
 
 			const pendingInvitations = await adapter.findPendingInvitations({
@@ -389,7 +389,7 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 				ctx.context.orgOptions.teams &&
 				ctx.context.orgOptions.teams.enabled &&
 				typeof ctx.context.orgOptions.teams.maximumMembersPerTeam !==
-					"undefined" &&
+				"undefined" &&
 				"teamId" in ctx.body &&
 				ctx.body.teamId
 			) {
@@ -414,12 +414,12 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 
 					const maximumMembersPerTeam =
 						typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-						"function"
+							"function"
 							? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-									teamId,
-									session: session,
-									organizationId: organizationId,
-								})
+								teamId,
+								session: session,
+								organizationId: organizationId,
+							})
 							: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 					if (team.members.length >= maximumMembersPerTeam) {
 						throw APIError.from(
@@ -656,12 +656,12 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 
 						const maximumMembersPerTeam =
 							typeof ctx.context.orgOptions.teams.maximumMembersPerTeam ===
-							"function"
+								"function"
 								? await ctx.context.orgOptions.teams.maximumMembersPerTeam({
-										teamId,
-										session: session,
-										organizationId: invitation.organizationId,
-									})
+									teamId,
+									session: session,
+									organizationId: invitation.organizationId,
+								})
 								: ctx.context.orgOptions.teams.maximumMembersPerTeam;
 
 						if (members >= maximumMembersPerTeam) {
@@ -701,12 +701,10 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				ctx,
 			);
 			if (!acceptedI) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND.message,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
+				);
 			}
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
