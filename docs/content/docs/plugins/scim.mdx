@@ -163,6 +163,50 @@ const auth = betterAuth({
 In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
 </Callout>
 
+### Managing SCIM provider connections
+
+You can manage SCIM provider connections from your application using the following endpoints:
+
+#### List SCIM provider connections
+
+List existing connections for organizations the current user is a member of or providers that are not associated to an organization.
+
+<APIMethod path="/scim/providers" method="GET" requireSession>
+```ts
+type listSCIMProviders = {}
+```
+</APIMethod>
+
+#### Get SCIM provider connection details
+
+Get a single connection by id. Access is allowed only if the user is a member of the connection's organization or the connection is not associated to an organization.
+
+<APIMethod path="/scim/providers/:providerId" method="GET" forceAsParam requireSession>
+```ts
+type getSCIMProvider = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
+#### Delete SCIM provider connection
+
+Delete an existing connection. This will immediately invalidate the connection's associated token.
+
+<APIMethod path="/scim/providers/:providerId" method="DELETE" forceAsParam requireSession>
+```ts
+type deleteSCIMProvider = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
 ### SCIM endpoints
 
 The following subset of the specification is currently supported:
