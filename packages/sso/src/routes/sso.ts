@@ -1674,7 +1674,7 @@ export const callbackSSO = (options?: SSOOptions) => {
 			const linked = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email,
-					name: userInfo.name || userInfo.email,
+					name: userInfo.name || "",
 					id: userInfo.id,
 					image: userInfo.image,
 					emailVerified: options?.trustEmailVerified
@@ -2216,7 +2216,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						.filter(Boolean)
 						.join(" ") ||
 					attributes[mapping.name || "displayName"] ||
-					extract.nameID,
+					extract.nameID ||
+					"",
 				emailVerified:
 					options?.trustEmailVerified && mapping.emailVerified
 						? ((attributes[mapping.emailVerified] || false) as boolean)
@@ -2253,7 +2254,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			const result = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email as string,
-					name: (userInfo.name || userInfo.email) as string,
+					name: (userInfo.name || "") as string,
 					id: userInfo.id as string,
 					emailVerified: Boolean(userInfo.emailVerified),
 				},
@@ -2698,7 +2699,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						.filter(Boolean)
 						.join(" ") ||
 					attributes[mapping.name || "displayName"] ||
-					extract.nameID,
+					extract.nameID ||
+					"",
 				emailVerified:
 					options?.trustEmailVerified && mapping.emailVerified
 						? ((attributes[mapping.emailVerified] || false) as boolean)
@@ -2736,7 +2738,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			const result = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email as string,
-					name: (userInfo.name || userInfo.email) as string,
+					name: (userInfo.name || "") as string,
 					id: userInfo.id as string,
 					emailVerified: Boolean(userInfo.emailVerified),
 				},
