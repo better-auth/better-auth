@@ -5,7 +5,7 @@ import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
-import { parseUserOutput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
 import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
@@ -562,15 +562,31 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 		},
 	);
 
-const signInEmailOTPBodySchema = z.object({
-	email: z.string({}).meta({
-		description: "Email address to sign in",
-	}),
-	otp: z.string().meta({
-		required: true,
-		description: "OTP sent to the email",
-	}),
-});
+const signInEmailOTPBodySchema = z
+	.object({
+		email: z.string({}).meta({
+			description: "Email address to sign in",
+		}),
+		otp: z.string().meta({
+			required: true,
+			description: "OTP sent to the email",
+		}),
+		name: z
+			.string()
+			.meta({
+				description:
+					'User display name. Only used if the user is registering for the first time. Eg: "my-name"',
+			})
+			.optional(),
+		image: z
+			.string()
+			.meta({
+				description:
+					"User profile image URL. Only used if the user is registering for the first time.",
+			})
+			.optional(),
+	})
+	.and(z.record(z.string(), z.any()));
 
 /**
  * ### Endpoint
@@ -624,7 +640,8 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
-			const email = ctx.body.email.toLowerCase();
+			const { email: rawEmail, otp, name, image, ...rest } = ctx.body;
+			const email = rawEmail.toLowerCase();
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
 					`sign-in-otp-${email}`,
@@ -643,7 +660,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
 			}
-			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, otp);
 			if (!verified) {
 				await ctx.context.internalAdapter.updateVerificationValue(
 					verificationValue.id,
@@ -661,10 +678,17 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				if (opts.disableSignUp) {
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 				}
+				const additionalFields = parseUserInput(
+					ctx.context.options,
+					rest,
+					"create",
+				);
 				const newUser = await ctx.context.internalAdapter.createUser({
+					...additionalFields,
 					email,
 					emailVerified: true,
-					name: "",
+					name: name || "",
+					image,
 				});
 				const session = await ctx.context.internalAdapter.createSession(
 					newUser.id,

@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.5.0-beta.11",
+  "version": "1.5.0-beta.13",
   "type": "module",
   "description": "An oauth provider plugin for Better Auth",
   "main": "dist/index.mjs",
@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.25.3",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
