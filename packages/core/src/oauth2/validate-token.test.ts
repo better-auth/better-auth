@@ -1,14 +1,6 @@
 import type { JWK } from "jose";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
-import {
-	afterAll,
-	beforeAll,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { validateToken } from "./validate-authorization-code";
 
 describe("validateToken", () => {
@@ -22,10 +14,6 @@ describe("validateToken", () => {
 
 	afterAll(() => {
 		globalThis.fetch = originalFetch;
-	});
-
-	beforeEach(() => {
-		mockedFetch.mockReset();
 	});
 
 	async function createTestJWKS(alg: string, crv?: string) {

@@ -492,7 +492,6 @@ describe("Electron", () => {
 		expect(data?.token).toBeDefined();
 		expect(data?.user.id).toBe(user.id);
 		expect(spy).toHaveBeenCalled();
-		spy.mockRestore();
 	});
 
 	describe("transferUser", () => {
@@ -1239,7 +1238,6 @@ describe("Electron", () => {
 		expect(mockElectron.app.setAsDefaultProtocolClient).toHaveBeenCalled();
 		expect(spy).toHaveBeenCalled();
 
-		spy.mockRestore();
 		mockElectron.app.setAsDefaultProtocolClient = original;
 	});
 
