@@ -121,19 +121,27 @@ Once the user provides the OTP, you can sign in the user using the `signIn.email
 ```ts
 type signInEmailOTP = {
     /**
-     * Email address to sign in. 
+     * Email address to sign in.
      */
     email: string = "user@example.com"
     /**
-     * OTP sent to the email. 
+     * OTP sent to the email.
      */
     otp: string = "123456"
+    /**
+     * User display name. Only used when the user is registering for the first time.
+     */
+    name?: string = "John Doe"
+    /**
+     * User profile image URL. Only used when the user is registering for the first time.
+     */
+    image?: string = "https://example.com/image.png"
 }
 ```
 </APIMethod>
 
 <Callout>
-If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
+If the user is not registered, they'll be automatically registered. Configured [additional fields](/docs/concepts/typescript#additional-fields) are also accepted for new users. To prevent automatic sign-up, pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
 ### Verify Email with OTP
