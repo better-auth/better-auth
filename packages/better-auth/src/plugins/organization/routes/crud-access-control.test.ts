@@ -1,5 +1,5 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../../client";
 import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -9,7 +9,7 @@ import { inferOrgAdditionalFields, organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
 
-describe("dynamic access control", async (it) => {
+describe("dynamic access control", async () => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
@@ -378,6 +378,136 @@ describe("dynamic access control", async (it) => {
 			headers,
 		});
 		expect(res).not.toBeNull();
+	});
+
+	it("should not be allowed to delete a role that is assigned to members", async () => {
+		// Create a new dynamic role
+		const testRole = await authClient.organization.createRole(
+			{
+				role: "assigned-role",
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Create a member with the role
+		const memberDetails = {
+			email: `delete-role-test-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: "assigned-role",
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Try to delete the role - should fail
+		await expect(
+			auth.api.deleteOrgRole({
+				body: { roleName: "assigned-role" },
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS.message,
+		);
+
+		// Clean up: change member's role and then delete the dynamic role
+		await auth.api.updateMemberRole({
+			body: {
+				memberId: (
+					await auth.api.listMembers({
+						query: { organizationId: org.data?.id },
+						headers,
+					})
+				).members?.find((m) => m.userId === memberUser.user.id)?.id!,
+				role: "member",
+			},
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "assigned-role" },
+			headers,
+		});
+	});
+
+	it("should not be allowed to delete a role when member has multiple roles including that role", async () => {
+		// Create two dynamic roles
+		const role1 = await authClient.organization.createRole(
+			{
+				role: "multi-role-1",
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		const role2 = await authClient.organization.createRole(
+			{
+				role: "multi-role-2",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#111111" },
+			},
+			{ headers },
+		);
+		if (!role1.data || !role2.data) throw new Error("Roles not created");
+
+		// Create a member with multiple roles (comma-separated)
+		const memberDetails = {
+			email: `multi-role-test-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: ["multi-role-1", "multi-role-2"],
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Try to delete one of the roles - should fail
+		await expect(
+			auth.api.deleteOrgRole({
+				body: { roleName: "multi-role-1" },
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS.message,
+		);
+
+		// Clean up
+		const memberId = (
+			await auth.api.listMembers({
+				query: { organizationId: org.data?.id },
+				headers,
+			})
+		).members?.find((m) => m.userId === memberUser.user.id)?.id!;
+		await auth.api.updateMemberRole({
+			body: { memberId, role: "member" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "multi-role-1" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "multi-role-2" },
+			headers,
+		});
 	});
 
 	it("should not be allowed to delete a role without necessary permissions", async () => {

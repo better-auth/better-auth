@@ -1,4 +1,5 @@
 import * as z from "zod";
+import type { AwaitableFunction } from "../types";
 import { apple } from "./apple";
 import { atlassian } from "./atlassian";
 import { cognito } from "./cognito";
@@ -81,11 +82,11 @@ export const SocialProviderListEnum = z
 export type SocialProvider = z.infer<typeof SocialProviderListEnum>;
 
 export type SocialProviders = {
-	[K in SocialProviderList[number]]?: Parameters<
-		(typeof socialProviders)[K]
-	>[0] & {
-		enabled?: boolean | undefined;
-	};
+	[K in SocialProviderList[number]]?: AwaitableFunction<
+		Parameters<(typeof socialProviders)[K]>[0] & {
+			enabled?: boolean | undefined;
+		}
+	>;
 };
 
 export * from "./apple";

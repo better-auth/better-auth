@@ -4,7 +4,7 @@ import { isProxy } from "node:util/types";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
-import { describe, expect, expectTypeOf, it, vi } from "vitest";
+import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
@@ -30,6 +30,10 @@ import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("atom in proxy should not be proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
@@ -183,7 +187,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -292,7 +296,7 @@ describe("type", () => {
 				id: string;
 				email: string;
 				emailVerified: boolean;
-				name?: string | undefined | null;
+				name: string;
 				createdAt: Date;
 				updatedAt: Date;
 				image?: string | undefined | null;
@@ -310,7 +314,7 @@ describe("type", () => {
 		});
 		const $infer = client.$Infer.Session;
 		expectTypeOf<typeof $infer.user>().toEqualTypeOf<{
-			name?: string | undefined | null;
+			name: string;
 			id: string;
 			email: string;
 			emailVerified: boolean;
@@ -339,7 +343,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -394,7 +398,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -430,7 +434,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -468,7 +472,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;
@@ -507,7 +511,7 @@ describe("type", () => {
 							id: string;
 							email: string;
 							emailVerified: boolean;
-							name?: string | undefined | null;
+							name: string;
 							createdAt: Date;
 							updatedAt: Date;
 							image?: string | undefined | null;
@@ -547,7 +551,7 @@ describe("type", () => {
 					id: string;
 					email: string;
 					emailVerified: boolean;
-					name?: string | undefined | null;
+					name: string;
 					createdAt: Date;
 					updatedAt: Date;
 					image?: string | undefined | null;

@@ -737,6 +737,95 @@ describe("SAML SSO without signed AuthnRequests", async () => {
 	});
 });
 
+describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-level config)", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	// This tests the fix for signInSSO where IdentityProvider was incorrectly constructed
+	// when idpMetadata is provided but without a full metadata XML.
+	// The bug was:
+	// 1. Using encryptCert instead of signingCert (samlify expects signingCert)
+	// 2. Not falling back to parsedSamlConfig.issuer when entityID is missing
+	// 3. Not falling back to parsedSamlConfig.entryPoint when singleSignOnService is missing
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8083",
+				providerId: "partial-idp-metadata-saml",
+				samlConfig: {
+					issuer: "http://localhost:8083/issuer",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
+					cert: certificate,
+					callbackUrl: "http://localhost:8083/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: false,
+					spMetadata: {},
+					// idpMetadata is provided but WITHOUT metadata XML - this triggers the fallback path
+					// The fix ensures signingCert is used (not encryptCert) and entryPoint/issuer fallbacks work
+					idpMetadata: {
+						// No metadata XML provided
+						// cert could be provided here, but we test fallback to top-level cert
+						entityID: "http://localhost:8081/custom-entity-id",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should initiate SAML login using fallback entryPoint when idpMetadata has no metadata XML", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The URL should point to the entryPoint from top-level config (fallback)
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining(
+				"http://localhost:8081/api/sso/saml2/idp/redirect",
+			),
+			redirect: true,
+		});
+		// The URL should contain a SAMLRequest parameter, proving the IdP was constructed correctly
+		// with signingCert (not encryptCert) - if encryptCert was used, samlify would fail
+		expect(signInResponse.url).toContain("SAMLRequest=");
+	});
+
+	it("should use idpMetadata.entityID when provided (not fall back to issuer)", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The fact that we get a valid SAMLRequest proves the IdentityProvider
+		// was constructed correctly. The entityID from idpMetadata should be used.
+		const url = new URL(signInResponse.url);
+		const samlRequest = url.searchParams.get("SAMLRequest");
+		expect(samlRequest).toBeTruthy();
+	});
+});
+
 describe("SAML SSO", async () => {
 	const data = {
 		user: [],
@@ -800,8 +889,6 @@ describe("SAML SSO", async () => {
 		data.verification = [];
 		data.account = [];
 		data.ssoProvider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {
@@ -2022,6 +2109,160 @@ describe("SAML SSO", async () => {
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).toContain("error=unsolicited_response");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7777
+	 */
+	it("should correctly parse verification-ID-based RelayState on ACS route (SP-initiated)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-acs-relay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// SP-initiated: signInSSO returns a URL with a RelayState verification ID
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-relay-provider",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = signInRes.response;
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		const samlRedirectUrl = new URL(signInResponse?.url);
+		const relayStateParam = samlRedirectUrl.searchParams.get("RelayState");
+		// RelayState should be a verification ID, not a raw URL
+		expect(relayStateParam).toBeTruthy();
+		expect(relayStateParam).not.toContain("http");
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// POST to the ACS endpoint with the verification-ID-based RelayState
+		const acsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-relay-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayStateParam!,
+					}),
+				},
+			),
+		);
+
+		expect(acsResponse.status).toBe(302);
+		const acsRedirectLocation = acsResponse.headers.get("location") || "";
+		// Must redirect to the callbackURL from the relay state, not to the verification ID
+		expect(acsRedirectLocation).toContain("dashboard");
+		expect(acsRedirectLocation).not.toContain("error");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7777
+	 */
+	it("should fallback to provider callbackUrl on ACS route when RelayState is invalid", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-acs-bad-relay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// POST with a garbage RelayState - should fallback to provider callbackUrl
+		const acsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-bad-relay-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "not-a-valid-relay-state",
+					}),
+				},
+			),
+		);
+
+		expect(acsResponse.status).toBe(302);
+		const location = acsResponse.headers.get("location") || "";
+		// Should redirect to the provider's callbackUrl, not the garbage RelayState
+		expect(location).toContain("dashboard");
+		expect(location).not.toContain("not-a-valid-relay-state");
+	});
 });
 
 describe("SAML SSO with custom fields", () => {
@@ -2087,8 +2328,6 @@ describe("SAML SSO with custom fields", () => {
 		data.verification = [];
 		data.account = [];
 		data.sso_provider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {

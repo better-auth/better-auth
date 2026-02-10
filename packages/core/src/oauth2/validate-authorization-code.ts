@@ -1,10 +1,48 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import type { JWK } from "jose";
-import { decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { getOAuth2Tokens } from "./index";
 
+export async function authorizationCodeRequest({
+	code,
+	codeVerifier,
+	redirectURI,
+	options,
+	authentication,
+	deviceId,
+	headers,
+	additionalParams = {},
+	resource,
+}: {
+	code: string;
+	redirectURI: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	codeVerifier?: string | undefined;
+	deviceId?: string | undefined;
+	authentication?: ("basic" | "post") | undefined;
+	headers?: Record<string, string> | undefined;
+	additionalParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
+	options = typeof options === "function" ? await options() : options;
+	return createAuthorizationCodeRequest({
+		code,
+		codeVerifier,
+		redirectURI,
+		options,
+		authentication,
+		deviceId,
+		headers,
+		additionalParams,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd authorizationCodeRequest instead
+ */
 export function createAuthorizationCodeRequest({
 	code,
 	codeVerifier,
@@ -32,6 +70,7 @@ export function createAuthorizationCodeRequest({
 		accept: "application/json",
 		...headers,
 	};
+
 	body.set("grant_type", "authorization_code");
 	body.set("code", code);
 	codeVerifier && body.set("code_verifier", codeVerifier);
@@ -91,7 +130,7 @@ export async function validateAuthorizationCode({
 }: {
 	code: string;
 	redirectURI: string;
-	options: Partial<ProviderOptions>;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
 	codeVerifier?: string | undefined;
 	deviceId?: string | undefined;
 	tokenEndpoint: string;
@@ -100,7 +139,7 @@ export async function validateAuthorizationCode({
 	additionalParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
 }) {
-	const { body, headers: requestHeaders } = createAuthorizationCodeRequest({
+	const { body, headers: requestHeaders } = await authorizationCodeRequest({
 		code,
 		codeVerifier,
 		redirectURI,
@@ -117,7 +156,6 @@ export async function validateAuthorizationCode({
 		body: body,
 		headers: requestHeaders,
 	});
-
 	if (error) {
 		throw error;
 	}
@@ -125,25 +163,18 @@ export async function validateAuthorizationCode({
 	return tokens;
 }
 
-export async function validateToken(token: string, jwksEndpoint: string) {
-	const { data, error } = await betterFetch<{
-		keys: JWK[];
-	}>(jwksEndpoint, {
-		method: "GET",
-		headers: {
-			accept: "application/json",
-		},
+export async function validateToken(
+	token: string,
+	jwksEndpoint: string,
+	options?: {
+		audience?: string | string[];
+		issuer?: string | string[];
+	},
+) {
+	const jwks = createRemoteJWKSet(new URL(jwksEndpoint));
+	const verified = await jwtVerify(token, jwks, {
+		audience: options?.audience,
+		issuer: options?.issuer,
 	});
-	if (error) {
-		throw error;
-	}
-	const keys = data["keys"];
-	const header = decodeProtectedHeader(token);
-	const key = keys.find((k) => k.kid === header.kid);
-	if (!key) {
-		throw new Error("Key not found");
-	}
-	const cryptoKey = await importJWK(key, header.alg);
-	const verified = await jwtVerify(token, cryptoKey);
 	return verified;
 }

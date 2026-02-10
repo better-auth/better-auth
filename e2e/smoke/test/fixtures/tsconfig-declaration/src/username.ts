@@ -22,7 +22,7 @@ expectTypeOf<User>().toEqualTypeOf<{
 	emailVerified: boolean;
 	id: string;
 	image?: string | null | undefined;
-	name?: string | null | undefined;
+	name: string;
 	updatedAt: Date;
 	username?: string | null | undefined;
 }>();
