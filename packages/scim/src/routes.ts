@@ -309,7 +309,7 @@ export const listSCIMProviderConnections = () =>
 			});
 
 			const accessibleProviders = allProviders.filter(
-				(p) => userOrgIds.has(p.organizationId!) || p.organizationId === null,
+				(p) => userOrgIds.has(p.organizationId!) || !p.organizationId,
 			);
 
 			const providers = accessibleProviders.map((p) =>
