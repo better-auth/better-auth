@@ -1,12 +1,13 @@
 import { Buffer } from "node:buffer";
 import { timingSafeEqual } from "node:crypto";
+import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { betterFetch } from "@better-fetch/fetch";
-import { createAuthEndpoint } from "better-auth/api";
+import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
 import type { User } from "better-auth/db";
 import { parseUserOutput } from "better-auth/db";
@@ -20,7 +21,7 @@ const electronTokenBodySchema = z.object({
 	code_verifier: z.string().nonempty(),
 });
 
-export const electronToken = (opts: ElectronOptions) =>
+export const electronToken = (_opts: ElectronOptions) =>
 	createAuthEndpoint(
 		"/electron/token",
 		{
@@ -28,6 +29,32 @@ export const electronToken = (opts: ElectronOptions) =>
 			body: electronTokenBodySchema,
 			metadata: {
 				scope: "http",
+				openapi: {
+					description: "Exchange the electron token for a session",
+					operationId: "electronToken",
+					responses: {
+						200: {
+							description: "Returns the session token and user",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											token: {
+												type: "string",
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+										},
+										required: ["token", "user"],
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -129,6 +156,40 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			query: electronInitOAuthProxyQuerySchema,
 			metadata: {
 				scope: "http",
+				openapi: {
+					description: "Initialize the OAuth proxy for the electron app",
+					operationId: "electronInitOAuthProxy",
+					responses: {
+						200: {
+							description:
+								"Returns the URL to redirect to and if the redirect should be performed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											url: {
+												type: "string",
+												nullable: true,
+											},
+											redirect: {
+												type: "boolean",
+											},
+											user: {
+												type: "object",
+												$ref: "#/components/schemas/User",
+											},
+											token: {
+												type: "string",
+											},
+										},
+										required: ["url", "redirect"],
+									},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 		async (ctx) => {
@@ -187,5 +248,85 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 				return;
 			}
 			return ctx.json(res.data);
+		},
+	);
+
+const electronTransferUserQuerySchema = z.object({
+	client_id: z.string(),
+	state: z.string(),
+	code_challenge: z.string(),
+	code_challenge_method: z.string().optional(),
+});
+const electronTransferUserBodySchema = z.object({
+	callbackURL: z.string().optional(),
+});
+
+export const electronTransferUser = (
+	_opts: ElectronOptions,
+	{
+		handleTransfer,
+	}: {
+		handleTransfer: (
+			ctx: GenericEndpointContext,
+			payload: {
+				client_id: string;
+				state: string;
+				code_challenge: string;
+				code_challenge_method?: string | undefined;
+			},
+		) => Promise<boolean>;
+	},
+) =>
+	createAuthEndpoint(
+		"/electron/transfer-user",
+		{
+			method: "POST",
+			query: electronTransferUserQuerySchema,
+			body: electronTransferUserBodySchema,
+			use: [sessionMiddleware],
+			requireHeaders: true,
+			metadata: {
+				openapi: {
+					description: "Transfer the user to the electron app",
+					operationId: "electronTransferUser",
+					responses: {
+						200: {
+							description:
+								"Returns the URL to redirect to and if the redirect should be performed",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											url: {
+												type: "string",
+												nullable: true,
+											},
+											redirect: {
+												type: "boolean",
+											},
+										},
+										required: ["url", "redirect"],
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const success = await handleTransfer(ctx, ctx.query);
+			if (!success) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ELECTRON_ERROR_CODES.INVALID_CLIENT_ID,
+				);
+			}
+
+			return ctx.json({
+				url: ctx.body.callbackURL ? ctx.body.callbackURL : null,
+				redirect: ctx.body.callbackURL ? true : false,
+			});
 		},
 	);

@@ -197,7 +197,8 @@ export const tiktok = (options: TiktokOptions) => {
 				user: {
 					email: profile.data.user.email || profile.data.user.username,
 					id: profile.data.user.open_id,
-					name: profile.data.user.display_name || profile.data.user.username,
+					name:
+						profile.data.user.display_name || profile.data.user.username || "",
 					image: profile.data.user.avatar_large_url,
 					emailVerified: false,
 				},

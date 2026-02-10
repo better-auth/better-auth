@@ -97,6 +97,25 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-up with otp and set name and image", async () => {
+		const testUser3 = {
+			email: "test-email-with-name@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser3.email,
+			type: "sign-in",
+		});
+		const newUser = await client.signIn.emailOtp({
+			email: testUser3.email,
+			otp,
+			name: "Test User",
+			image: "https://example.com/avatar.png",
+		});
+		expect(newUser.data?.token).toBeDefined();
+		expect(newUser.data?.user.name).toBe("Test User");
+		expect(newUser.data?.user.image).toBe("https://example.com/avatar.png");
+	});
+
 	it("should sign-up with uppercase email", async () => {
 		const testUser2 = {
 			email: "TEST-EMAIL@DOMAIN.COM",
@@ -1202,5 +1221,93 @@ describe("override default email verification", async () => {
 			}),
 			expect.any(Object),
 		);
+	});
+});
+
+describe("sign-up with additional fields via email-otp", async () => {
+	let otp = "";
+	const { client, auth, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+			user: {
+				additionalFields: {
+					lang: {
+						type: "string",
+						required: false,
+						input: true,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: false,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should sign-up with additional fields", async () => {
+		const email = "additional-fields@domain.com";
+		const headers = new Headers();
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp(
+			{
+				email,
+				otp,
+				name: "AF User",
+				lang: "ko",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.token).toBeDefined();
+		expect(res.data?.user.name).toBe("AF User");
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("session not found");
+		}
+		expect(session.user.name).toBe("AF User");
+		expect(session.user.lang).toBe("ko");
+		expect(session.user.isAdmin).toBe(false);
+	});
+
+	it("should ignore input: false fields and use default value", async () => {
+		const email = "ignore-input-false@domain.com";
+		const headers = new Headers();
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp(
+			{
+				email,
+				otp,
+				isAdmin: true,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.token).toBeDefined();
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("session not found");
+		}
+		expect(session.user.isAdmin).toBe(false);
 	});
 });

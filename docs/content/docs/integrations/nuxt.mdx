@@ -20,14 +20,6 @@ export default defineEventHandler((event) => {
  You can change the path on your better-auth configuration but it's recommended to keep it as `/api/auth/[...all]`
 </Callout>
 
-### Migrate the database
-
-Run the following command to create the necessary tables in your database:
-
-```bash
-npx @better-auth/cli migrate
-```
-
 ## Create a client
 
 Create a client instance. You can name the file anything you want. Here we are creating `client.ts` file inside the `lib/` directory.

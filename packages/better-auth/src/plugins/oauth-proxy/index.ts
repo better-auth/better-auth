@@ -407,7 +407,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							userInfo: {
 								id: String(userInfo.id),
 								email: userInfo.email,
-								name: userInfo.name || userInfo.email,
+								name: userInfo.name || "",
 								image: userInfo.image,
 								emailVerified: userInfo.emailVerified,
 							},
