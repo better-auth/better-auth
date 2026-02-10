@@ -2,14 +2,17 @@ import type { BetterAuthPlugin } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
 	createSCIMUser,
+	deleteSCIMProvider,
 	deleteSCIMUser,
 	generateSCIMToken,
+	getSCIMProvider,
 	getSCIMResourceType,
 	getSCIMResourceTypes,
 	getSCIMSchema,
 	getSCIMSchemas,
 	getSCIMServiceProviderConfig,
 	getSCIMUser,
+	listSCIMProviders,
 	listSCIMUsers,
 	patchSCIMUser,
 	updateSCIMUser,
@@ -36,6 +39,9 @@ export const scim = (options?: SCIMOptions) => {
 		id: "scim",
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
+			listSCIMProviders: listSCIMProviders(),
+			getSCIMProvider: getSCIMProvider(),
+			deleteSCIMProvider: deleteSCIMProvider(),
 			getSCIMUser: getSCIMUser(authMiddleware),
 			createSCIMUser: createSCIMUser(authMiddleware),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
