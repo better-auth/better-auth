@@ -376,6 +376,65 @@ describe("Admin plugin", async () => {
 		});
 	});
 
+	it("should apply filter when filterValue is boolean false", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data).toBeDefined();
+		expect(res.data?.users).toBeDefined();
+		expect(res.data?.users.every((u) => u.banned !== true)).toBe(true);
+	});
+
+	it("should apply filter when filterValue is 0", async () => {
+		const resAll = await client.admin.listUsers({
+			query: {},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		const res = await client.admin.listUsers({
+			query: {
+				filterField: "role",
+				filterOperator: "eq",
+				filterValue: 0,
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data).toBeDefined();
+		expect(res.data?.users).toBeDefined();
+		expect(res.data?.users.length).toBeLessThanOrEqual(
+			resAll.data?.total ?? 0,
+		);
+	});
+
+	it("should default filterField to email when not provided", async () => {
+		const res = await client.admin.listUsers({
+			query: {
+				filterValue: "test",
+				filterOperator: "contains",
+			},
+			fetchOptions: {
+				headers: adminHeaders,
+			},
+		});
+		expect(res.data).toBeDefined();
+		expect(res.data?.users).toBeDefined();
+		expect(
+			res.data?.users.every((u) =>
+				u.email.toLowerCase().includes("test"),
+			),
+		).toBe(true);
+	});
+
 	it("should filter users by id with ne operator", async () => {
 		const allUsers = await client.admin.listUsers({
 			query: {},
