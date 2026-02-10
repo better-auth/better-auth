@@ -1,9 +1,8 @@
 import * as z from "zod/v4";
 import { APIError, createAuthEndpoint } from "../../../../api";
 import type { TeamsAddon } from "../../addons";
-import type { RealTeamId } from "../../addons/teams/helpers/get-team-adapter";
-import { getTeamAdapter } from "../../addons/teams/helpers/get-team-adapter";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
+import { getAddon } from "../../helpers/get-addon";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { resolveOrgOptions } from "../../helpers/resolve-org-options";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
@@ -94,19 +93,14 @@ export const leaveOrganization = <O extends OrganizationOptions>(
 			}
 
 			// Delete user from all teams in the organization before leaving
-			type T = TeamsAddon | undefined;
-			const team = options.use.find((x) => x.id === "teams") as T;
-			if (team) {
-				const teamOpts = team.options;
-				const teamAdapter = getTeamAdapter(ctx.context, teamOpts);
-				const teams = await teamAdapter.getTeams(realOrgId);
-				await Promise.all(
-					teams.map((team) =>
-						teamAdapter.removeTeamMember({
-							teamId: team.id as RealTeamId,
-							userId: session.user.id,
-						}),
-					),
+			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
+			if (teamsAddon) {
+				await teamsAddon.events.removeMemberFromTeams(
+					{
+						realOrgId,
+						userId: session.user.id,
+					},
+					ctx.context,
 				);
 			}
 

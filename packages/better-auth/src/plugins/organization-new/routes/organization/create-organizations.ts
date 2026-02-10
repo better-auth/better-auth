@@ -1,9 +1,10 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../../../api";
+import type { TeamsAddon } from "../../addons";
 import { buildEndpointSchema } from "../../helpers/build-endpoint-schema";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
-import { getAddonHook } from "../../helpers/get-addon-hook";
+import { getAddon } from "../../helpers/get-addon";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getUserFromSessionOrBody } from "../../helpers/get-user-from-session-or-body";
@@ -137,7 +138,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			// Prepare hooks
-			const addonHooks = getAddonHook("CreateOrganization", options);
 			const createOrgHook = getHook("CreateOrganization", options);
 			const addMemberHook = getHook("AddMember", options);
 
@@ -145,13 +145,10 @@ export const createOrganization = <O extends OrganizationOptions>(
 			const organizationData = await (async () => {
 				const { keepCurrentActiveOrganization: _, userId: __, ...rest } = body;
 				const organization = { ...rest, createdAt: new Date() };
-				const { before: addonBefore } = addonHooks;
 				const { before: createOrgBefore } = createOrgHook;
-				const addonModify = await addonBefore({ organization, user }, ctx);
 				const customModify = await createOrgBefore({ organization, user }, ctx);
 				return {
 					...organization,
-					...(addonModify || {}),
 					...(customModify || {}),
 				};
 			})();
@@ -184,8 +181,16 @@ export const createOrganization = <O extends OrganizationOptions>(
 
 			// Execute after hooks
 			await addMemberHook.after({ member, organization, user }, ctx);
-			await addonHooks.after({ organization, user, member }, ctx);
 			await createOrgHook.after({ organization, user, member }, ctx);
+
+			// Create default team if teams addon is enabled
+			const [teamsAddon] = getAddon(options, "teams", {} as TeamsAddon);
+			if (teamsAddon) {
+				await teamsAddon.events.createDefaultTeam(
+					{ organization, user },
+					ctx.context,
+				);
+			}
 
 			// Set the active organization
 			if (ctx.context.session && !ctx.body.keepCurrentActiveOrganization) {
