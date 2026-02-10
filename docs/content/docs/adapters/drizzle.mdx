@@ -51,6 +51,13 @@ To generate and apply the migration, run the following commands:
     </Tabs>
 
 
+## JSON mode columns (SQLite / MySQL)
+
+When using SQLite or MySQL, the generated Drizzle schema stores `json`, `string[]`, and `number[]` fields using `mode: "json"` columns (for example `text("field", { mode: "json" })`).
+
+- Provide **native objects/arrays** for these fields (do not pre-`JSON.stringify` them).
+- If you have existing rows where these values were stored as JSON strings, you may need a one-time data migration.
+
 ## Joins (Experimental)
 
 Database joins is useful when Better-Auth needs to fetch related data from multiple tables in a single query.

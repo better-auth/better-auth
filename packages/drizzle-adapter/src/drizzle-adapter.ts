@@ -27,6 +27,7 @@ import {
 	or,
 	sql,
 } from "drizzle-orm";
+import { tryParseJSON } from "./json";
 
 export interface DB {
 	[key: string]: any;
@@ -622,10 +623,35 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "pg" ? true : false,
 			supportsJSON:
-				config.provider === "pg" // even though mysql also supports it, mysql requires to pass stringified json anyway.
+				(config.provider === "pg" || config.provider === "sqlite") // even though mysql also supports it, mysql requires to pass stringified json anyway.
 					? true
 					: false,
-			supportsArrays: config.provider === "pg" ? true : false,
+			supportsArrays:
+				config.provider === "pg" || config.provider === "sqlite" ? true : false,
+			customTransformInput: ({ data, fieldAttributes }) => {
+				if (config.provider !== "sqlite") return data;
+				if (
+					typeof fieldAttributes.type === "string" &&
+					(fieldAttributes.type === "json" ||
+						fieldAttributes.type === "string[]" ||
+						fieldAttributes.type === "number[]")
+				) {
+					return tryParseJSON(data);
+				}
+				return data;
+			},
+			customTransformOutput: ({ data, fieldAttributes }) => {
+				if (config.provider !== "sqlite") return data;
+				if (
+					typeof fieldAttributes.type === "string" &&
+					(fieldAttributes.type === "json" ||
+						fieldAttributes.type === "string[]" ||
+						fieldAttributes.type === "number[]")
+				) {
+					return tryParseJSON(data);
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
