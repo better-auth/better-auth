@@ -361,6 +361,54 @@ export default function SocialSignIn() {
 }
 ```
 
+<Accordions>
+<Accordion title="Example: Google Sign-In with `@react-native-google-signin/google-signin`">
+
+This example shows how to implement Google Sign-In using an idToken. No additional configuration is needed in Better Auth. However, since this approach uses native code, you'll need to configure Expo to obtain the idToken.
+
+Follow the [Expo Google authentication guide](https://docs.expo.dev/guides/google-authentication/) to set up `@react-native-google-signin/google-signin`, then pass the idToken to Better Auth:
+
+```tsx title="app/sign-in.tsx"
+import {
+  GoogleSignin,
+  GoogleSigninButton,
+  isSuccessResponse,
+} from "@react-native-google-signin/google-signin";
+import { View } from "react-native";
+import { router } from "expo-router";
+import { authClient } from "@/lib/auth-client";
+
+GoogleSignin.configure({
+  webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+  iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+});
+
+export default function GoogleSignIn() {
+  const handleGoogle = async () => {
+    await GoogleSignin.hasPlayServices();
+    const response = await GoogleSignin.signIn();
+
+    if (isSuccessResponse(response) && response.data.idToken) {
+      const { error } = await authClient.signIn.social({
+        provider: "google",
+        idToken: { token: response.data.idToken },
+      });
+      if (!error) {
+        router.replace("/dashboard");
+      }
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <GoogleSigninButton onPress={handleGoogle} />
+    </View>
+  );
+}
+```
+</Accordion>
+</Accordions>
+
 ### Session
 
 Better Auth provides a `useSession` hook to access the current user's session in your app.
