@@ -12,10 +12,9 @@ import {
 	createSaveUser,
 } from "./db-helpers";
 import { createOrganizationFactory, createUserFactory } from "./factories";
-import { captureOTP, getOTP as getOTPFromStore } from "./otp-sink";
+import { createOTPStore } from "./otp-sink";
 import type { TestHelpers, TestUtilsOptions } from "./types";
 
-export { clearAllOTPs } from "./otp-sink";
 export type {
 	LoginResult,
 	TestCookie,
@@ -90,9 +89,13 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 				helpers.addMember = createAddMember(ctx);
 			}
 
-			// Add OTP capture helper if enabled
+			// Instance-scoped OTP store
+			const otpStore = createOTPStore();
+
+			// Add OTP helpers if enabled
 			if (options.captureOTP) {
-				helpers.getOTP = getOTPFromStore;
+				helpers.getOTP = otpStore.get;
+				helpers.clearOTPs = otpStore.clear;
 			}
 
 			// Build database hooks for OTP capture if enabled
@@ -125,17 +128,15 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 													break;
 												}
 											}
-											captureOTP(identifier, otpPart);
+											otpStore.capture(identifier, otpPart);
 										}
 									}
 								},
 							},
 						},
 					}
-				: undefined;
+				: null;
 
-			// Add test helpers to context
-			// Access via `(await auth.$context).test as TestHelpers`
 			return {
 				context: {
 					test: helpers,

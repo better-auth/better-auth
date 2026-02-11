@@ -303,7 +303,6 @@ test("dashboard shows user name", async ({ context, page }) => {
 ```ts
 import { describe, it, expect, beforeAll, beforeEach } from "vitest"
 import { auth } from "./auth"
-import { clearAllOTPs } from "better-auth/plugins"
 import type { TestHelpers } from "better-auth/plugins"
 
 describe("OTP verification", () => {
@@ -315,7 +314,7 @@ describe("OTP verification", () => {
     })
 
     beforeEach(() => {
-        clearAllOTPs()
+        test.clearOTPs()
     })
 
     it("should verify email with captured OTP", async () => {

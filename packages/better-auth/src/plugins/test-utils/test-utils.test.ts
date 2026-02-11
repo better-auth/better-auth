@@ -2,18 +2,25 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { emailOTP } from "../email-otp";
 import { organization } from "../organization";
-import { clearAllOTPs, testUtils } from "./index";
+import { testUtils } from "./index";
 import type { TestHelpers } from "./types";
+
+async function getTestHelpers(
+	...args: Parameters<typeof getTestInstance>
+): Promise<{
+	auth: Awaited<ReturnType<typeof getTestInstance>>["auth"];
+	test: TestHelpers;
+}> {
+	const { auth } = await getTestInstance(...args);
+	const ctx = (await auth.$context) as unknown as { test: TestHelpers };
+	return { auth, test: ctx.test };
+}
 
 describe("testUtils plugin", async () => {
 	describe("basic functionality", async () => {
-		const { auth } = await getTestInstance({
+		const { test } = await getTestHelpers({
 			plugins: [testUtils()],
 		});
-
-		// Get test helpers from context
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should expose test helpers on context", () => {
 			expect(test).toBeDefined();
@@ -38,12 +45,9 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("user factories", async () => {
-		const { auth } = await getTestInstance({
+		const { test } = await getTestHelpers({
 			plugins: [testUtils()],
 		});
-
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should create user with default values", () => {
 			const user = test.createUser();
@@ -82,12 +86,9 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("database helpers", async () => {
-		const { auth } = await getTestInstance({
+		const { test } = await getTestHelpers({
 			plugins: [testUtils()],
 		});
-
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should save and delete user", async () => {
 			const user = test.createUser({
@@ -109,12 +110,9 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("auth helpers", async () => {
-		const { auth } = await getTestInstance({
+		const { auth, test } = await getTestHelpers({
 			plugins: [testUtils()],
 		});
-
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should login and return session, user, headers, cookies, token", async () => {
 			const user = test.createUser({
@@ -206,12 +204,9 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("with organization plugin", async () => {
-		const { auth } = await getTestInstance({
+		const { test } = await getTestHelpers({
 			plugins: [testUtils(), organization()],
 		});
-
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should expose organization helpers", () => {
 			expect(test.createOrganization).toBeDefined();
@@ -286,10 +281,7 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("OTP capture", async () => {
-		beforeEach(() => {
-			clearAllOTPs();
-		});
-
+		// Inline getTestInstance here to preserve emailOTP plugin type inference
 		const { auth } = await getTestInstance({
 			plugins: [
 				testUtils({ captureOTP: true }),
@@ -304,8 +296,13 @@ describe("testUtils plugin", async () => {
 		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
 		const test = ctx.test;
 
+		beforeEach(() => {
+			test.clearOTPs!();
+		});
+
 		it("should expose getOTP helper when captureOTP is true", () => {
 			expect(test.getOTP).toBeDefined();
+			expect(test.clearOTPs).toBeDefined();
 		});
 
 		it("should capture OTP when verification value is created", async () => {
@@ -329,12 +326,9 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("integration test example", async () => {
-		const { auth } = await getTestInstance({
+		const { auth, test } = await getTestHelpers({
 			plugins: [testUtils()],
 		});
-
-		const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-		const test = ctx.test;
 
 		it("should work for authenticated request testing", async () => {
 			// Create and save user

@@ -51,4 +51,5 @@ export interface TestHelpers {
 
 	// OTP capture (when captureOTP: true)
 	getOTP?(identifier: string): string | undefined;
+	clearOTPs?(): void;
 }

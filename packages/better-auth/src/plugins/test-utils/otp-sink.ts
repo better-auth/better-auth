@@ -1,18 +1,19 @@
 /**
- * In-memory OTP store for capturing OTPs during testing.
- * OTPs are keyed by identifier (email, phone, etc.).
- * Tests should use unique identifiers to avoid collisions.
+ * Creates an instance-scoped OTP store for capturing OTPs during testing.
+ * Each auth instance gets its own store to avoid cross-contamination.
  */
-const otpStore = new Map<string, string>();
+export function createOTPStore() {
+	const otpStore = new Map<string, string>();
 
-export function captureOTP(identifier: string, otp: string): void {
-	otpStore.set(identifier, otp);
-}
-
-export function getOTP(identifier: string): string | undefined {
-	return otpStore.get(identifier);
-}
-
-export function clearAllOTPs(): void {
-	otpStore.clear();
+	return {
+		capture(identifier: string, otp: string): void {
+			otpStore.set(identifier, otp);
+		},
+		get(identifier: string): string | undefined {
+			return otpStore.get(identifier);
+		},
+		clear(): void {
+			otpStore.clear();
+		},
+	};
 }
