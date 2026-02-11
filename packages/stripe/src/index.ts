@@ -87,7 +87,13 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				};
 				const { plans } = options.subscription;
 				if (typeof plans === "function") {
-					void Promise.resolve(plans()).then(warnIfSeatPricing);
+					void Promise.resolve(plans())
+						.then(warnIfSeatPricing)
+						.catch((e: any) => {
+							ctx.logger.error(
+								`Failed to resolve plans for seat pricing validation: ${e.message}`,
+							);
+						});
 				} else {
 					warnIfSeatPricing(plans);
 				}
