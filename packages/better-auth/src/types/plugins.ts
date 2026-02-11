@@ -1,6 +1,8 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
-
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import type {
+	BetterAuthPluginDBSchema,
+	DBFieldAttribute,
+} from "@better-auth/core/db";
 import type { UnionToIntersection } from "./helper";
 
 export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
@@ -10,7 +12,7 @@ export type InferOptionSchema<S extends BetterAuthPluginDBSchema> =
 					modelName?: string | undefined;
 					fields?:
 						| {
-								[P in keyof Fields]?: string;
+								[P in keyof Fields]?: string | Partial<DBFieldAttribute>;
 						  }
 						| undefined;
 				};
