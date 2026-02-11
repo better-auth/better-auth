@@ -7,15 +7,28 @@ import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions } from "../src/types";
 
+/**
+ * Create a mock that mimics Stripe's list()
+ */
+function mockStripeList<T>(data: T[]) {
+	return {
+		data,
+		has_more: false,
+		async *[Symbol.asyncIterator]() {
+			for (const item of data) yield item;
+		},
+	};
+}
+
 describe("metered billing", async () => {
 	const meterEventsCreate = vi.fn().mockResolvedValue({});
 	const metersListEventSummaries = vi.fn();
-	const metersList = vi.fn().mockResolvedValue({
-		data: [
+	const metersList = vi.fn().mockReturnValue(
+		mockStripeList([
 			{ event_name: "stripe_meter_emails", id: "meter_emails_id" },
 			{ event_name: "stripe_meter_api", id: "meter_api_id" },
-		],
-	});
+		]),
+	);
 
 	const mockStripe = {
 		prices: { list: vi.fn().mockResolvedValue({ data: [] }) },
@@ -112,12 +125,12 @@ describe("metered billing", async () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		metersList.mockResolvedValue({
-			data: [
+		metersList.mockReturnValue(
+			mockStripeList([
 				{ event_name: "stripe_meter_emails", id: "meter_emails_id" },
 				{ event_name: "stripe_meter_api", id: "meter_api_id" },
-			],
-		});
+			]),
+		);
 	});
 
 	afterEach(() => {
@@ -396,7 +409,7 @@ describe("metered billing", async () => {
 	it("should fail when the meter is not registered in Stripe", async () => {
 		vi.useFakeTimers();
 		vi.advanceTimersByTime(5 * 60 * 1000 + 1);
-		metersList.mockResolvedValueOnce({ data: [] });
+		metersList.mockReturnValueOnce(mockStripeList([]));
 
 		const res = await client.subscription.usage({
 			query: {

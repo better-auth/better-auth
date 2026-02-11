@@ -8,6 +8,19 @@ import {
 	validateEventName,
 } from "../src/utils";
 
+/**
+ * Create a mock that mimics Stripe's list()
+ */
+function mockStripeList<T>(data: T[]) {
+	return {
+		data,
+		has_more: false,
+		async *[Symbol.asyncIterator]() {
+			for (const item of data) yield item;
+		},
+	};
+}
+
 describe("escapeStripeSearchValue", () => {
 	it("should escape double quotes", () => {
 		expect(escapeStripeSearchValue('test"value')).toBe('test\\"value');
@@ -131,12 +144,12 @@ describe("createMeterIdResolver", () => {
 		const mockClient = {
 			billing: {
 				meters: {
-					list: vi.fn().mockResolvedValue({
-						data: [
+					list: vi.fn().mockReturnValue(
+						mockStripeList([
 							{ event_name: "api_calls", id: "meter_abc" },
 							{ event_name: "emails", id: "meter_def" },
-						],
-					}),
+						]),
+					),
 				},
 			},
 		} as unknown as Stripe;
@@ -153,9 +166,11 @@ describe("createMeterIdResolver", () => {
 	});
 
 	it("should cache results within TTL", async () => {
-		const listFn = vi.fn().mockResolvedValue({
-			data: [{ event_name: "api_calls", id: "meter_abc" }],
-		});
+		const listFn = vi
+			.fn()
+			.mockReturnValue(
+				mockStripeList([{ event_name: "api_calls", id: "meter_abc" }]),
+			);
 		const mockClient = {
 			billing: { meters: { list: listFn } },
 		} as unknown as Stripe;
@@ -169,9 +184,11 @@ describe("createMeterIdResolver", () => {
 	});
 
 	it("should refresh cache after TTL expires", async () => {
-		const listFn = vi.fn().mockResolvedValue({
-			data: [{ event_name: "api_calls", id: "meter_abc" }],
-		});
+		const listFn = vi
+			.fn()
+			.mockReturnValue(
+				mockStripeList([{ event_name: "api_calls", id: "meter_abc" }]),
+			);
 		const mockClient = {
 			billing: { meters: { list: listFn } },
 		} as unknown as Stripe;

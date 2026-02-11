@@ -117,14 +117,14 @@ export function createMeterIdResolver(stripeClient: Stripe) {
 
 	return async (): Promise<Map<string, string>> => {
 		if (cache && Date.now() < expiry) return cache;
-		const meters = await stripeClient.billing.meters.list({
+		const result = new Map<string, string>();
+		for await (const meter of stripeClient.billing.meters.list({
 			status: "active",
 			limit: 100,
-		});
-		cache = new Map();
-		for (const meter of meters.data) {
-			cache.set(meter.event_name, meter.id);
+		})) {
+			result.set(meter.event_name, meter.id);
 		}
+		cache = result;
 		expiry = Date.now() + 5 * 60 * 1000; // 5 min
 		return cache;
 	};
