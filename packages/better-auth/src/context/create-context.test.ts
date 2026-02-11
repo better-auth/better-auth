@@ -550,6 +550,41 @@ describe("base context creation", () => {
 		});
 	});
 
+	describe("trusted providers", () => {
+		it("should include static trusted providers", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: ["google", "github"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("github");
+		});
+
+		it("should resolve dynamic trusted providers from function", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: async () => ["google", "microsoft"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("microsoft");
+		});
+
+		it("should return empty array when no trusted providers configured", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedProviders).toEqual([]);
+		});
+	});
+
 	describe("generate ID", () => {
 		it("should fallback to advanced.database.generateId", async () => {
 			const databaseGenerateId = vi.fn(() => "db-id");

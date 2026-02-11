@@ -2239,9 +2239,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));
@@ -2715,9 +2713,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));
