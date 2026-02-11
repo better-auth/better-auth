@@ -1676,7 +1676,7 @@ export const createBillingPortal = (options: StripeOptions) => {
 const usageEventSchema = z.object({
 	meter: z.string(),
 	value: z.number().int().min(1),
-	timestamp: z.string().optional(),
+	timestamp: z.iso.datetime({ offset: true }).optional(),
 	identifier: z.string().max(128).optional(),
 });
 
@@ -1761,8 +1761,8 @@ const getUsageQuerySchema = z.object({
 	referenceId: z.string().optional(),
 	customerType: z.enum(["user", "organization"]).optional(),
 	groupingWindow: z.enum(["hour", "day"]).optional(),
-	startTime: z.string().optional(),
-	endTime: z.string().optional(),
+	startTime: z.iso.datetime({ offset: true }).optional(),
+	endTime: z.iso.datetime({ offset: true }).optional(),
 	limit: z.coerce.number().min(1).max(100).optional(),
 	startingAfter: z.string().optional(),
 });
