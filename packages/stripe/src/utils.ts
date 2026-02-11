@@ -72,9 +72,9 @@ export function resolveQuantity(
 ): number {
 	if (seatPriceId) {
 		const seatItem = items.find((item) => item.price.id === seatPriceId);
-		if (seatItem) return seatItem.quantity ?? 0;
+		if (seatItem) return seatItem.quantity ?? 1;
 	}
-	return planItem.quantity ?? 0;
+	return planItem.quantity ?? 1;
 }
 
 /**
