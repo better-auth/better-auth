@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
 import { organization, twoFactor } from "../plugins";
@@ -199,5 +199,56 @@ describe("general types", async () => {
 		type SessionWithoutPlugins = typeof authWithoutPlugins.$Infer;
 
 		expectTypeOf<SessionWithEmptyPlugins>().toEqualTypeOf<SessionWithoutPlugins>();
+	});
+
+	it("should allow passing partial context to auth.api calls", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		// Test that context parameter is accepted in API calls
+		type SignUpEmailParams = NonNullable<
+			Parameters<typeof auth.api.signUpEmail>[0]
+		>;
+
+		// Verify that context property exists and accepts partial AuthContext
+		type ContextParam = SignUpEmailParams["context"];
+		expectTypeOf<ContextParam>().not.toEqualTypeOf<never>();
+
+		// Verify that session can be passed in context
+		expectTypeOf<ContextParam>().toMatchTypeOf<
+			| {
+					session?: {
+						session?: Record<string, any>;
+						user?: Record<string, any>;
+					} | null;
+			  }
+			| undefined
+		>();
+
+		// Verify that internalAdapter can be partially overridden
+		expectTypeOf<ContextParam>().toMatchTypeOf<
+			| {
+					internalAdapter?: Partial<AuthContext["internalAdapter"]>;
+			  }
+			| undefined
+		>();
+	});
+
+	it("should allow passing context to getSession", async () => {
+		const { auth } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+			},
+		});
+
+		// Test that context parameter is accepted in getSession
+		type GetSessionParams = NonNullable<
+			Parameters<typeof auth.api.getSession>[0]
+		>;
+		type ContextParam = GetSessionParams["context"];
+		expectTypeOf<ContextParam>().not.toEqualTypeOf<never>();
 	});
 });

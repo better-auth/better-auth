@@ -7,7 +7,7 @@ import type { InferPluginErrorCodes } from "./plugins";
 
 export type Auth<Options extends BetterAuthOptions = BetterAuthOptions> = {
 	handler: (request: Request) => Promise<Response>;
-	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"]>;
+	api: InferAPI<ReturnType<typeof router<Options>>["endpoints"], Options>;
 	options: Options;
 	$ERROR_CODES: InferPluginErrorCodes<Options> & typeof BASE_ERROR_CODES;
 	$context: Promise<AuthContext<Options>>;

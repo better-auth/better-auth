@@ -42,7 +42,14 @@ const hooksSourceWeakMap = new WeakMap<
 
 type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
->;
+> & {
+	/**
+	 * Partial auth context to override default values.
+	 * Useful for server-side calls where you already have
+	 * session data or need to customize the context.
+	 */
+	context?: Partial<AuthContext>;
+};
 
 export function toAuthEndpoints<
 	const E extends Record<
@@ -64,14 +71,19 @@ export function toAuthEndpoints<
 		api[key] = async (context?: UserInputContext) => {
 			const run = async () => {
 				const authContext = await ctx;
+				// Extract user-provided context if any
+				const userProvidedContext = context?.context;
 				let internalContext: InternalContext = {
 					...context,
-					context: {
-						...authContext,
-						returned: undefined,
-						responseHeaders: undefined,
-						session: null,
-					},
+					context: defuReplaceArrays(
+						{
+							returned: undefined,
+							responseHeaders: undefined,
+							session: userProvidedContext?.session ?? null,
+						},
+						userProvidedContext ?? {},
+						authContext,
+					) as InternalContext["context"],
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
