@@ -3,6 +3,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { oAuthState } from "./oauth";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -131,6 +132,10 @@ export async function authorizeEndpoint(
 
 	// Check request
 	const query: OAuthAuthorizationQuery = ctx.query;
+	await oAuthState.set({
+		query: query.toString(),
+	});
+
 	if (!query.client_id) {
 		throw ctx.redirect(
 			getErrorURL(ctx, "invalid_client", "client_id is required"),

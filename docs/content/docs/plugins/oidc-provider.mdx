@@ -35,13 +35,15 @@ This plugin is in active development and may not be suitable for production use.
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { oidcProvider } from "better-auth/plugins";
+        import { oidcProvider } from "better-auth/plugins"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [oidcProvider({
-                loginPage: "/sign-in", // path to the login page
-                // ...other options
-            })]
+            plugins: [
+            oidcProvider({ // [!code highlight]
+                loginPage: "/sign-in", // path to the login page // [!code highlight]
+                // ...other options // [!code highlight]
+              }) // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -71,13 +73,16 @@ This plugin is in active development and may not be suitable for production use.
 
         Add the OIDC client plugin to your auth client config.
 
-        ```ts
+        ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client";
-        import { oidcClient } from "better-auth/client/plugins"
+        import { oidcClient } from "better-auth/client/plugins" // [!code highlight]
+        
         const authClient = createAuthClient({
-            plugins: [oidcClient({
-                // Your OIDC configuration
-            })]
+            plugins: [
+            oidcClient({ // [!code highlight]
+                // Your OIDC configuration // [!code highlight]
+              }) // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -294,11 +299,14 @@ When a user is redirected to the OIDC provider for authentication, they may be p
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { oidcProvider } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    plugins: [oidcProvider({
+    plugins: [
+      oidcProvider({
         consentPage: "/path/to/consent/page"
-    })]
+      })
+    ]
 })
 ```
 
@@ -310,6 +318,8 @@ The consent endpoint supports two methods for passing the consent code:
 
 **Method 1: URL Parameter**
 ```ts title="consent-page.ts"
+import { authClient } from "@/lib/auth-client"
+
 // Get the consent code from the URL
 const params = new URLSearchParams(window.location.search);
 
@@ -319,7 +329,7 @@ if (!consentCode) {
 	throw new Error('Consent code not found in URL parameters');
 }
 
-const res = await client.oauth2.consent({
+const res = await authClient.oauth2.consent({
 	accept: true, // or false to deny
 	consent_code: consentCode,
 });
@@ -327,9 +337,11 @@ const res = await client.oauth2.consent({
 
 **Method 2: Cookie-Based**
 ```ts title="consent-page.ts"
+import { authClient } from "@/lib/auth-client"
+
 // The consent code is automatically stored in a signed cookie
 // Just submit the consent decision
-const res = await client.oauth2.consent({
+const res = await authClient.oauth2.consent({
 	accept: true, // or false to deny
 	// consent_code not needed when using cookie-based flow
 });
@@ -345,9 +357,11 @@ When a user is redirected to the OIDC provider for authentication, if they are n
 import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
-    plugins: [oidcProvider({
+    plugins: [
+      oidcProvider({
         loginPage: "/sign-in"
-    })]
+      })
+    ]
 })
 ```
 
@@ -364,14 +378,16 @@ import { betterAuth } from "better-auth";
 import { oidcProvider } from "better-auth/plugins";
 
 export const auth = betterAuth({
-    plugins: [oidcProvider({
+    plugins: [
+      oidcProvider({
         metadata: {
             issuer: "https://your-domain.com",
             authorization_endpoint: "/custom/oauth2/authorize",
             token_endpoint: "/custom/oauth2/token",
             // ...other custom metadata
         }
-    })]
+      })
+    ]
 })
 ```
 
@@ -411,9 +427,11 @@ If you want to allow clients to register dynamically, you can enable this featur
 
 ```ts title="auth.ts"
 const auth = betterAuth({
-    plugins: [oidcProvider({
+    plugins: [
+      oidcProvider({
         allowDynamicClientRegistration: true,
-    })]
+      })
+    ]
 })
 ```
 
