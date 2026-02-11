@@ -932,7 +932,10 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const updated = await auth.api.updateSSOProvider({
-				body: { providerId: "my-saml-provider", issuer: "https://new-issuer.example.com" },
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://new-issuer.example.com",
+				},
 				headers,
 			});
 
