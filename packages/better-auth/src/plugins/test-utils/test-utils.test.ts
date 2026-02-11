@@ -5,22 +5,12 @@ import { organization } from "../organization";
 import { testUtils } from "./index";
 import type { TestHelpers } from "./types";
 
-async function getTestHelpers(
-	...args: Parameters<typeof getTestInstance>
-): Promise<{
-	auth: Awaited<ReturnType<typeof getTestInstance>>["auth"];
-	test: TestHelpers;
-}> {
-	const { auth } = await getTestInstance(...args);
-	const ctx = (await auth.$context) as unknown as { test: TestHelpers };
-	return { auth, test: ctx.test };
-}
-
 describe("testUtils plugin", async () => {
 	describe("basic functionality", async () => {
-		const { test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should expose test helpers on context", () => {
 			expect(test).toBeDefined();
@@ -45,9 +35,10 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("user factories", async () => {
-		const { test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should create user with default values", () => {
 			const user = test.createUser();
@@ -86,9 +77,10 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("database helpers", async () => {
-		const { test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should save and delete user", async () => {
 			const user = test.createUser({
@@ -110,9 +102,10 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("auth helpers", async () => {
-		const { auth, test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should login and return session, user, headers, cookies, token", async () => {
 			const user = test.createUser({
@@ -204,9 +197,10 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("with organization plugin", async () => {
-		const { test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils(), organization()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should expose organization helpers", () => {
 			expect(test.createOrganization).toBeDefined();
@@ -326,9 +320,10 @@ describe("testUtils plugin", async () => {
 	});
 
 	describe("integration test example", async () => {
-		const { auth, test } = await getTestHelpers({
+		const { auth } = await getTestInstance({
 			plugins: [testUtils()],
 		});
+		const test = (await auth.$context).test;
 
 		it("should work for authenticated request testing", async () => {
 			// Create and save user

@@ -1,4 +1,4 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import {
 	createGetAuthHeaders,
 	createGetCookies,
@@ -100,10 +100,10 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 
 			// Build database hooks for OTP capture if enabled
 			const databaseHooks = options.captureOTP
-				? {
+				? ({
 						verification: {
 							create: {
-								after(
+								async after(
 									verification: {
 										identifier: string;
 										value: string;
@@ -134,7 +134,7 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 								},
 							},
 						},
-					}
+					} satisfies BetterAuthOptions["databaseHooks"])
 				: null;
 
 			return {
@@ -142,7 +142,7 @@ export const testUtils = (options: TestUtilsOptions = {}) => {
 					test: helpers,
 				},
 				options: databaseHooks ? { databaseHooks } : undefined,
-			} as any;
+			};
 		},
 		options,
 	} satisfies BetterAuthPlugin;
