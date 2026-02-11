@@ -1,0 +1,343 @@
+---
+title: Test Utils
+description: Testing utilities for integration and E2E testing
+---
+
+The Test Utils plugin provides helpers for writing integration and E2E tests against Better Auth. It includes factories, database helpers, authentication helpers, and OTP capture functionality.
+
+<Callout type="warn">
+This plugin is designed for test environments only. Do not use it in production.
+</Callout>
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth"
+    import { testUtils } from "better-auth/plugins" // [!code highlight]
+
+    export const auth = betterAuth({
+        // ... other config options
+        plugins: [
+            testUtils() // [!code highlight]
+        ]
+    })
+    ```
+  </Step>
+  <Step>
+    ### Access test helpers via context
+
+    ```ts title="test-setup.ts"
+    const ctx = await auth.$context
+    const test = ctx.test
+    ```
+  </Step>
+</Steps>
+
+## Usage
+
+### Factories
+
+Factories create objects without writing to the database. Use them to generate test data with sensible defaults.
+
+#### createUser
+
+Creates a user object with default values that can be overridden.
+
+```ts
+// Create user with defaults
+const user = test.createUser()
+// { id: "...", email: "user-xxx@example.com", name: "Test User", emailVerified: true, ... }
+
+// Create user with overrides
+const user = test.createUser({
+    email: "alice@example.com",
+    name: "Alice",
+    emailVerified: false
+})
+```
+
+#### createOrganization
+
+Creates an organization object. Only available when the organization plugin is installed.
+
+```ts
+const org = test.createOrganization({
+    name: "Acme Corp",
+    slug: "acme-corp"
+})
+```
+
+### Database Helpers
+
+Database helpers persist and remove test data from the database.
+
+#### saveUser
+
+Saves a user to the database.
+
+```ts
+const user = test.createUser({ email: "test@example.com" })
+const savedUser = await test.saveUser(user)
+```
+
+#### deleteUser
+
+Deletes a user from the database.
+
+```ts
+await test.deleteUser(user.id)
+```
+
+#### saveOrganization
+
+Saves an organization to the database. Only available with the organization plugin.
+
+```ts
+const org = test.createOrganization({ name: "Test Org" })
+const savedOrg = await test.saveOrganization(org)
+```
+
+#### deleteOrganization
+
+Deletes an organization from the database. Only available with the organization plugin.
+
+```ts
+await test.deleteOrganization(org.id)
+```
+
+#### addMember
+
+Adds a user as a member of an organization. Only available with the organization plugin.
+
+```ts
+const member = await test.addMember({
+    userId: user.id,
+    organizationId: org.id,
+    role: "admin"
+})
+```
+
+### Auth Helpers
+
+Auth helpers create authenticated sessions for testing protected routes.
+
+#### login
+
+Creates a session for a user and returns session details, headers, cookies, and token.
+
+```ts
+const { session, user, headers, cookies, token } = await test.login({
+    userId: user.id
+})
+
+// session - The session object with userId, token, etc.
+// user - The user object
+// headers - Headers object with session cookie (for fetch/Request)
+// cookies - Cookie array (for Playwright/Puppeteer)
+// token - The session token string
+```
+
+#### getAuthHeaders
+
+Returns a `Headers` object with the session cookie set. Useful for making authenticated requests.
+
+```ts
+const headers = await test.getAuthHeaders({ userId: user.id })
+
+// Use with auth API
+const session = await auth.api.getSession({ headers })
+
+// Use with fetch
+const response = await fetch("/api/protected", { headers })
+```
+
+#### getCookies
+
+Returns an array of cookie objects compatible with browser testing tools like Playwright and Puppeteer.
+
+```ts
+const cookies = await test.getCookies({
+    userId: user.id,
+    domain: "localhost" // optional, defaults to baseURL domain
+})
+
+// Playwright example
+await context.addCookies(cookies)
+
+// Puppeteer example
+for (const cookie of cookies) {
+    await page.setCookie(cookie)
+}
+```
+
+Each cookie object contains:
+- `name` - Cookie name (e.g., "better-auth.session_token")
+- `value` - Cookie value
+- `domain` - Cookie domain
+- `path` - Cookie path (defaults to "/")
+- `httpOnly` - Whether cookie is HTTP-only
+- `secure` - Whether cookie requires HTTPS
+- `sameSite` - SameSite attribute ("Lax", "Strict", or "None")
+
+### OTP Capture
+
+When `captureOTP: true` is set, the plugin passively captures OTPs as they are created. This allows you to retrieve OTPs in tests without needing to mock email or SMS sending.
+
+<Callout>
+OTP capture is passive - it does not prevent OTPs from being sent via your configured `sendVerificationOTP` function. It simply stores a copy for test retrieval.
+</Callout>
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { testUtils, emailOTP } from "better-auth/plugins"
+
+export const auth = betterAuth({
+    plugins: [
+        testUtils({ captureOTP: true }), // [!code highlight]
+        emailOTP({
+            async sendVerificationOTP({ email, otp }) {
+                // Your email sending logic
+            }
+        })
+    ]
+})
+```
+
+#### getOTP
+
+Retrieves a captured OTP by identifier (email or phone number).
+
+```ts
+// Send OTP
+await auth.api.sendVerificationOTP({
+    body: { email: "user@example.com", type: "sign-in" }
+})
+
+// Retrieve captured OTP
+const otp = test.getOTP("user@example.com")
+// "123456"
+```
+
+## Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `captureOTP` | `boolean` | `false` | Enable OTP capture for testing verification flows |
+
+## Examples
+
+### Integration Test (Vitest)
+
+```ts
+import { describe, it, expect, beforeAll } from "vitest"
+import { auth } from "./auth"
+import type { TestHelpers } from "better-auth/plugins"
+
+describe("protected route", () => {
+    let test: TestHelpers
+
+    beforeAll(async () => {
+        const ctx = await auth.$context
+        test = ctx.test
+    })
+
+    it("should return user data for authenticated request", async () => {
+        // Setup
+        const user = test.createUser({ email: "test@example.com" })
+        await test.saveUser(user)
+
+        // Get authenticated headers
+        const headers = await test.getAuthHeaders({ userId: user.id })
+
+        // Test authenticated request
+        const session = await auth.api.getSession({ headers })
+        expect(session?.user.id).toBe(user.id)
+
+        // Cleanup
+        await test.deleteUser(user.id)
+    })
+})
+```
+
+### E2E Test (Playwright)
+
+```ts
+import { test, expect } from "@playwright/test"
+import { auth } from "./auth"
+
+test("dashboard shows user name", async ({ context, page }) => {
+    const ctx = await auth.$context
+    const testUtils = ctx.test
+
+    // Create and save user
+    const user = testUtils.createUser({
+        email: "e2e@example.com",
+        name: "E2E User"
+    })
+    await testUtils.saveUser(user)
+
+    // Get cookies and inject into browser
+    const cookies = await testUtils.getCookies({
+        userId: user.id,
+        domain: "localhost"
+    })
+    await context.addCookies(cookies)
+
+    // Navigate to protected page
+    await page.goto("/dashboard")
+
+    // Assert user name is visible
+    await expect(page.getByText("E2E User")).toBeVisible()
+
+    // Cleanup
+    await testUtils.deleteUser(user.id)
+})
+```
+
+### OTP Verification Test
+
+```ts
+import { describe, it, expect, beforeAll, beforeEach } from "vitest"
+import { auth } from "./auth"
+import type { TestHelpers } from "better-auth/plugins"
+
+describe("OTP verification", () => {
+    let test: TestHelpers
+
+    beforeAll(async () => {
+        const ctx = await auth.$context
+        test = ctx.test
+    })
+
+    beforeEach(() => {
+        test.clearOTPs()
+    })
+
+    it("should verify email with captured OTP", async () => {
+        const email = "otp-test@example.com"
+        const user = test.createUser({ email, emailVerified: false })
+        await test.saveUser(user)
+
+        // Request OTP
+        await auth.api.sendVerificationOTP({
+            body: { email, type: "email-verification" }
+        })
+
+        // Get captured OTP
+        const otp = test.getOTP(email)
+        expect(otp).toBeDefined()
+
+        // Verify email
+        await auth.api.verifyEmail({
+            body: { email, otp }
+        })
+
+        // Cleanup
+        await test.deleteUser(user.id)
+    })
+})
+```
