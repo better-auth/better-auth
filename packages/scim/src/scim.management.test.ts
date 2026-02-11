@@ -392,7 +392,7 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("GET /scim/provider-connections", () => {
+	describe("GET /scim/list-provider-connections", () => {
 		it("should return empty list when user is not in any org", async () => {
 			const { auth, getAuthCookieHeaders } = createTestInstance();
 			const headers = await getAuthCookieHeaders();
@@ -446,7 +446,7 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("GET /scim/provider-connections/:providerId", () => {
+	describe("GET /scim/get-provider-connection", () => {
 		it("should return provider details when user is org member", async () => {
 			const { auth, getAuthCookieHeaders, registerOrganization, getSCIMToken } =
 				createTestInstance();
@@ -456,7 +456,7 @@ describe("SCIM provider management", () => {
 			await getSCIMToken("my-provider", org!.id);
 
 			const res = await auth.api.getSCIMProviderConnection({
-				params: { providerId: "my-provider" },
+				query: { providerId: "my-provider" },
 				headers,
 			});
 
@@ -474,7 +474,7 @@ describe("SCIM provider management", () => {
 			await getSCIMToken("no-org-provider");
 
 			const res = await auth.api.getSCIMProviderConnection({
-				params: { providerId: "no-org-provider" },
+				query: { providerId: "no-org-provider" },
 				headers,
 			});
 
@@ -505,7 +505,7 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
-					params: { providerId: "other-org-provider" },
+					query: { providerId: "other-org-provider" },
 					headers: headers2,
 				}),
 			).rejects.toMatchObject({
@@ -521,7 +521,7 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.getSCIMProviderConnection({
-					params: { providerId: "unknown" },
+					query: { providerId: "unknown" },
 					headers,
 				}),
 			).rejects.toMatchObject({
@@ -530,7 +530,7 @@ describe("SCIM provider management", () => {
 		});
 	});
 
-	describe("DELETE /scim/provider-connections/:providerId", () => {
+	describe("POST /scim/delete-provider-connection", () => {
 		it("should delete org-scoped provider and invalidate token when user is org member", async () => {
 			const { auth, getAuthCookieHeaders, getSCIMToken, registerOrganization } =
 				createTestInstance();
@@ -547,7 +547,7 @@ describe("SCIM provider management", () => {
 			).toBe(true);
 
 			const deleteRes = await auth.api.deleteSCIMProviderConnection({
-				params: { providerId: "my-provider" },
+				body: { providerId: "my-provider" },
 				headers,
 			});
 			expect(deleteRes).toMatchObject({ success: true });
@@ -588,7 +588,7 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.deleteSCIMProviderConnection({
-					params: { providerId: "other-org-del" },
+					body: { providerId: "other-org-del" },
 					headers: headers2,
 				}),
 			).rejects.toMatchObject({
@@ -604,7 +604,7 @@ describe("SCIM provider management", () => {
 
 			await expect(
 				auth.api.deleteSCIMProviderConnection({
-					params: { providerId: "unknown" },
+					body: { providerId: "unknown" },
 					headers,
 				}),
 			).rejects.toMatchObject({

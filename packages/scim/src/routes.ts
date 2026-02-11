@@ -48,7 +48,11 @@ const generateSCIMTokenBodySchema = z.object({
 		.meta({ description: "Optional organization id" }),
 });
 
-const getSCIMProviderConnectionParamsSchema = z.object({
+const getSCIMProviderConnectionQuerySchema = z.object({
+	providerId: z.string(),
+});
+
+const deleteSCIMProviderConnectionBodySchema = z.object({
 	providerId: z.string(),
 });
 
@@ -257,7 +261,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 
 export const listSCIMProviderConnections = () =>
 	createAuthEndpoint(
-		"/scim/provider-connections",
+		"/scim/list-provider-connections",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
@@ -322,11 +326,11 @@ export const listSCIMProviderConnections = () =>
 
 export const getSCIMProviderConnection = () =>
 	createAuthEndpoint(
-		"/scim/provider-connections/:providerId",
+		"/scim/get-provider-connection",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
-			params: getSCIMProviderConnectionParamsSchema,
+			query: getSCIMProviderConnectionQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "getSCIMProviderConnection",
@@ -362,7 +366,7 @@ export const getSCIMProviderConnection = () =>
 			},
 		},
 		async (ctx) => {
-			const { providerId } = ctx.params;
+			const { providerId } = ctx.query;
 			const userId = ctx.context.session.user.id;
 
 			const provider = await checkSCIMProviderAccess(ctx, userId, providerId);
@@ -373,11 +377,11 @@ export const getSCIMProviderConnection = () =>
 
 export const deleteSCIMProviderConnection = () =>
 	createAuthEndpoint(
-		"/scim/provider-connections/:providerId",
+		"/scim/delete-provider-connection",
 		{
-			method: "DELETE",
+			method: "POST",
 			use: [sessionMiddleware],
-			params: getSCIMProviderConnectionParamsSchema,
+			body: deleteSCIMProviderConnectionBodySchema,
 			metadata: {
 				openapi: {
 					operationId: "deleteSCIMProviderConnection",
@@ -408,7 +412,7 @@ export const deleteSCIMProviderConnection = () =>
 			},
 		},
 		async (ctx) => {
-			const { providerId } = ctx.params;
+			const { providerId } = ctx.body;
 			const userId = ctx.context.session.user.id;
 
 			await checkSCIMProviderAccess(ctx, userId, providerId);
