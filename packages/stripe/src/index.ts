@@ -9,6 +9,8 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
+	getSubscriptionUsage,
+	ingestSubscriptionUsage,
 	listActiveSubscriptions,
 	restoreSubscription,
 	stripeWebhook,
@@ -17,13 +19,14 @@ import {
 } from "./routes";
 import { getSchema } from "./schema";
 import type {
+	MeterConfig,
 	StripeOptions,
 	StripePlan,
 	Subscription,
 	SubscriptionOptions,
 	WithStripeCustomerId,
 } from "./types";
-import { escapeStripeSearchValue } from "./utils";
+import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -46,6 +49,11 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		createBillingPortal: createBillingPortal(options),
 	};
 
+	const meteringEndpoints = {
+		stripeIngestUsage: ingestSubscriptionUsage(options),
+		stripeGetUsage: getSubscriptionUsage(options),
+	};
+
 	return {
 		id: "stripe",
 		endpoints: {
@@ -57,8 +65,40 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			}
 				? typeof subscriptionEndpoints
 				: {}),
+			...((options.subscription?.enabled && options.subscription.meters?.length
+				? meteringEndpoints
+				: {}) as O["subscription"] extends {
+				enabled: true;
+				meters: MeterConfig[];
+			}
+				? typeof meteringEndpoints
+				: {}),
 		},
 		init(ctx) {
+			// Validate: seatPriceId requires organization to be enabled
+			if (options.subscription?.enabled && !options.organization?.enabled) {
+				const warnIfSeatPricing = (plans: StripePlan[]) => {
+					if (plans.some((p) => p.seatPriceId)) {
+						ctx.logger.error(
+							"seatPriceId is configured on a plan but stripe organization option is not enabled. " +
+								"Seat-based billing requires `organization: { enabled: true }` in stripe plugin options.",
+						);
+					}
+				};
+				const { plans } = options.subscription;
+				if (typeof plans === "function") {
+					void Promise.resolve(plans())
+						.then(warnIfSeatPricing)
+						.catch((e: any) => {
+							ctx.logger.error(
+								`Failed to resolve plans for seat pricing validation: ${e.message}`,
+							);
+						});
+				} else {
+					warnIfSeatPricing(plans);
+				}
+			}
+
 			if (options.organization?.enabled) {
 				const orgPlugin = ctx.getPlugin("organization");
 				if (!orgPlugin) {
@@ -146,6 +186,90 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				};
 
+				/**
+				 * Sync seat quantity to Stripe when organization members change.
+				 * quantity = memberCount; Stripe graduated pricing handles free tiers.
+				 */
+				const syncSeatsAfterMemberChange = async (data: {
+					organization: Organization & WithStripeCustomerId;
+				}) => {
+					if (
+						!options.subscription?.enabled ||
+						!data.organization?.stripeCustomerId
+					) {
+						return;
+					}
+
+					try {
+						const memberCount = await ctx.adapter.count({
+							model: "member",
+							where: [
+								{
+									field: "organizationId",
+									value: data.organization.id,
+								},
+							],
+						});
+
+						const plans = await getPlans(options.subscription);
+						const seatPlans = plans.filter((p) => p.seatPriceId);
+						if (seatPlans.length === 0) return;
+
+						const seatPlanNames = new Set(
+							seatPlans.map((p) => p.name.toLowerCase()),
+						);
+						const dbSub = await ctx.adapter.findOne<Subscription>({
+							model: "subscription",
+							where: [
+								{
+									field: "referenceId",
+									value: data.organization.id,
+								},
+							],
+						});
+						if (
+							!dbSub?.stripeSubscriptionId ||
+							!isActiveOrTrialing(dbSub) ||
+							!seatPlanNames.has(dbSub.plan)
+						) {
+							return;
+						}
+
+						const plan = seatPlans.find(
+							(p) => p.name.toLowerCase() === dbSub.plan,
+						)!;
+						const { seatPriceId } = plan;
+
+						const stripeSub = await client.subscriptions.retrieve(
+							dbSub.stripeSubscriptionId,
+						);
+						if (!isActiveOrTrialing(stripeSub)) return;
+
+						const seatItem = stripeSub.items.data.find(
+							(item) => item.price.id === seatPriceId,
+						);
+
+						// Skip if no change needed
+						if (seatItem?.quantity === memberCount) return;
+
+						const items = seatItem
+							? [{ id: seatItem.id, quantity: memberCount }]
+							: [{ price: seatPriceId, quantity: memberCount }];
+
+						await client.subscriptions.update(stripeSub.id, {
+							items,
+							proration_behavior: "create_prorations",
+						});
+						await ctx.adapter.update({
+							model: "subscription",
+							update: { seats: memberCount },
+							where: [{ field: "id", value: dbSub.id }],
+						});
+					} catch (e: any) {
+						ctx.logger.error(`Failed to sync seats to Stripe: ${e.message}`);
+					}
+				};
+
 				orgPlugin.options.organizationHooks = {
 					...existingHooks,
 					afterUpdateOrganization: existingHooks.afterUpdateOrganization
@@ -160,6 +284,24 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 								await beforeDeleteStripeOrg(data);
 							}
 						: beforeDeleteStripeOrg,
+					afterAddMember: existingHooks.afterAddMember
+						? async (data) => {
+								await existingHooks.afterAddMember!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
+					afterRemoveMember: existingHooks.afterRemoveMember
+						? async (data) => {
+								await existingHooks.afterRemoveMember!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
+					afterAcceptInvitation: existingHooks.afterAcceptInvitation
+						? async (data) => {
+								await existingHooks.afterAcceptInvitation!(data);
+								await syncSeatsAfterMemberChange(data);
+							}
+						: syncSeatsAfterMemberChange,
 				};
 			}
 

@@ -5,10 +5,11 @@ import type Stripe from "stripe";
 import { subscriptionMetadata } from "./metadata";
 import type { CustomerType, StripeOptions, Subscription } from "./types";
 import {
-	getPlanByPriceInfo,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
+	resolvePlanItem,
+	resolveQuantity,
 } from "./utils";
 
 /**
@@ -51,27 +52,25 @@ export async function onCheckoutSessionCompleted(
 		const subscription = await client.subscriptions.retrieve(
 			checkoutSession.subscription as string,
 		);
-		const subscriptionItem = subscription.items.data[0];
-		if (!subscriptionItem) {
+		const resolved = await resolvePlanItem(options, subscription.items.data);
+		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscription.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key;
-		const plan = await getPlanByPriceInfo(
-			options,
-			priceId as string,
-			priceLookupKey,
-		);
+		const { item: subscriptionItem, plan } = resolved;
 		if (plan) {
 			const checkoutMeta = subscriptionMetadata.get(checkoutSession?.metadata);
 			const referenceId =
 				checkoutSession?.client_reference_id || checkoutMeta.referenceId;
 			const { subscriptionId } = checkoutMeta;
-			const seats = subscriptionItem.quantity;
+			const seats = resolveQuantity(
+				subscription.items.data,
+				subscriptionItem,
+				plan.seatPriceId,
+			);
 			if (referenceId && subscriptionId) {
 				const trial =
 					subscription.trial_start && subscription.trial_end
@@ -84,6 +83,7 @@ export async function onCheckoutSessionCompleted(
 				let dbSubscription = await ctx.context.adapter.update<Subscription>({
 					model: "subscription",
 					update: {
+						...trial,
 						plan: plan.name.toLowerCase(),
 						status: subscription.status,
 						updatedAt: new Date(),
@@ -101,7 +101,6 @@ export async function onCheckoutSessionCompleted(
 							? new Date(subscription.ended_at * 1000)
 							: null,
 						seats: seats,
-						...trial,
 					},
 					where: [
 						{
@@ -194,25 +193,30 @@ export async function onSubscriptionCreated(
 		}
 		const { referenceId, customerType } = reference;
 
-		const subscriptionItem = subscriptionCreated.items.data[0];
-		if (!subscriptionItem) {
+		const resolved = await resolvePlanItem(
+			options,
+			subscriptionCreated.items.data,
+		);
+		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key || null;
-		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
+		const { item: subscriptionItem, plan } = resolved;
 		if (!plan) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: No matching plan found for priceId: ${priceId}`,
+				`Stripe webhook warning: No matching plan found for priceId: ${subscriptionItem.price.id}`,
 			);
 			return;
 		}
 
-		const seats = subscriptionItem.quantity;
+		const seats = resolveQuantity(
+			subscriptionCreated.items.data,
+			subscriptionItem,
+			plan.seatPriceId,
+		);
 		const periodStart = new Date(subscriptionItem.current_period_start * 1000);
 		const periodEnd = new Date(subscriptionItem.current_period_end * 1000);
 
@@ -228,6 +232,8 @@ export async function onSubscriptionCreated(
 		const newSubscription = await ctx.context.adapter.create<Subscription>({
 			model: "subscription",
 			data: {
+				...trial,
+				...(plan.limits ? { limits: plan.limits } : {}),
 				referenceId,
 				stripeCustomerId,
 				stripeSubscriptionId: subscriptionCreated.id,
@@ -236,8 +242,6 @@ export async function onSubscriptionCreated(
 				periodStart,
 				periodEnd,
 				seats,
-				...(plan.limits ? { limits: plan.limits } : {}),
-				...trial,
 			},
 		});
 
@@ -266,17 +270,18 @@ export async function onSubscriptionUpdated(
 			return;
 		}
 		const subscriptionUpdated = event.data.object as Stripe.Subscription;
-		const subscriptionItem = subscriptionUpdated.items.data[0];
-		if (!subscriptionItem) {
+		const resolved = await resolvePlanItem(
+			options,
+			subscriptionUpdated.items.data,
+		);
+		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
 
-		const priceId = subscriptionItem.price.id;
-		const priceLookupKey = subscriptionItem.price.lookup_key;
-		const plan = await getPlanByPriceInfo(options, priceId, priceLookupKey);
+		const { item: subscriptionItem, plan } = resolved;
 
 		const { subscriptionId } = subscriptionMetadata.get(
 			subscriptionUpdated.metadata,
@@ -309,6 +314,14 @@ export async function onSubscriptionUpdated(
 			}
 		}
 
+		const seats = plan
+			? resolveQuantity(
+					subscriptionUpdated.items.data,
+					subscriptionItem,
+					plan.seatPriceId,
+				)
+			: subscriptionItem.quantity;
+
 		const updatedSubscription = await ctx.context.adapter.update<Subscription>({
 			model: "subscription",
 			update: {
@@ -332,7 +345,7 @@ export async function onSubscriptionUpdated(
 				endedAt: subscriptionUpdated.ended_at
 					? new Date(subscriptionUpdated.ended_at * 1000)
 					: null,
-				seats: subscriptionItem.quantity,
+				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 			},
 			where: [
