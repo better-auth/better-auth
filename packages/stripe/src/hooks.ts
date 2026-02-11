@@ -55,7 +55,7 @@ export async function onCheckoutSessionCompleted(
 		const resolved = await resolvePlanItem(options, subscription.items.data);
 		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscription.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscription.id} has no items matching a configured plan`,
 			);
 			return;
 		}
@@ -199,7 +199,7 @@ export async function onSubscriptionCreated(
 		);
 		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscriptionCreated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
@@ -276,7 +276,7 @@ export async function onSubscriptionUpdated(
 		);
 		if (!resolved) {
 			ctx.context.logger.warn(
-				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items`,
+				`Stripe webhook warning: Subscription ${subscriptionUpdated.id} has no items matching a configured plan`,
 			);
 			return;
 		}
