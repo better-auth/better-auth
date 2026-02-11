@@ -367,7 +367,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 										notification.isSkippedMoment()
 									) {
 										const reason = notification.getSkippedReason?.();
-										if (noRetryReasons.skipped.includes(reason)) {
+										if (!reason || noRetryReasons.skipped.includes(reason)) {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 											return;
@@ -379,6 +379,12 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 											opts?.onPromptNotification?.(notification);
 											resolve();
 										}
+									} else if (
+										notification.isNotDisplayed &&
+										notification.isNotDisplayed()
+									) {
+										opts?.onPromptNotification?.(notification);
+										resolve();
 									}
 								});
 							};
@@ -401,7 +407,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 };
 
 const loadGoogleScript = (): Promise<void> => {
-	return new Promise((resolve) => {
+	return new Promise((resolve, reject) => {
 		if (window.googleScriptInitialized) {
 			resolve();
 			return;
@@ -414,6 +420,9 @@ const loadGoogleScript = (): Promise<void> => {
 		script.onload = () => {
 			window.googleScriptInitialized = true;
 			resolve();
+		};
+		script.onerror = () => {
+			reject(new Error("Failed to load Google Identity Services script"));
 		};
 		document.head.appendChild(script);
 	});
