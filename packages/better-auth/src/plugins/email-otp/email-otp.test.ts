@@ -725,7 +725,7 @@ describe("custom storeOTP", async () => {
 				statusCode: 400,
 				status: "BAD_REQUEST",
 				body: {
-					code: "OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
+					message: "OTP is hashed, cannot return the plain text OTP",
 				},
 			});
 		});
@@ -1014,7 +1014,7 @@ describe("custom storeOTP", async () => {
 				statusCode: 400,
 				status: "BAD_REQUEST",
 				body: {
-					code: "OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
+					message: "OTP is hashed, cannot return the plain text OTP",
 				},
 			});
 		});
