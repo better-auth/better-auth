@@ -33,7 +33,7 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
     <Step>
         ### Enable HTTP methods
 
-        SCIM requires the `POST`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
+        SCIM requires the `POST`, `GET`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
         For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
 
         <Tabs items={["Next.js", "Solid Start"]}>
@@ -162,6 +162,51 @@ const auth = betterAuth({
 
 In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
 </Callout>
+
+### Managing SCIM provider connections
+
+You can manage SCIM provider connections from your application using the following endpoints:
+
+#### List SCIM provider connections
+
+List existing connections for organizations the current user is a member of or providers that are not associated to an organization.
+
+<APIMethod path="/scim/list-provider-connections" method="GET" requireSession>
+```ts
+type listSCIMProviderConnections = {
+}
+```
+</APIMethod>
+
+#### Get SCIM provider connection details
+
+Get a single connection by id. Access is allowed only if the user is a member of the connection's organization or the connection is not associated to an organization.
+
+<APIMethod path="/scim/get-provider-connection" method="GET" requireSession>
+```ts
+type getSCIMProviderConnection = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
+#### Delete SCIM provider connection
+
+Delete an existing connection. This will immediately invalidate the connection's associated token.
+
+<APIMethod path="/scim/delete-provider-connection" method="POST" requireSession>
+```ts
+type deleteSCIMProviderConnection = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
 
 ### SCIM endpoints
 

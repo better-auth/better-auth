@@ -1,5 +1,10 @@
 import { base64Url } from "@better-auth/utils/base64";
-import type { Account, DBAdapter, User } from "better-auth";
+import type {
+	Account,
+	DBAdapter,
+	GenericEndpointContext,
+	User,
+} from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import {
 	APIError,
@@ -42,6 +47,88 @@ const generateSCIMTokenBodySchema = z.object({
 		.optional()
 		.meta({ description: "Optional organization id" }),
 });
+
+const getSCIMProviderConnectionQuerySchema = z.object({
+	providerId: z.string(),
+});
+
+const deleteSCIMProviderConnectionBodySchema = z.object({
+	providerId: z.string(),
+});
+
+async function getSCIMUserOrgIds(
+	ctx: GenericEndpointContext,
+	userId: string,
+): Promise<Set<string>> {
+	const members = await ctx.context.adapter.findMany<Member>({
+		model: "member",
+		where: [{ field: "userId", value: userId }],
+	});
+	return new Set(members.map((m) => m.organizationId));
+}
+
+async function isSCIMOrgMember(
+	ctx: GenericEndpointContext,
+	userId: string,
+	organizationId: string,
+): Promise<boolean> {
+	const member = await ctx.context.adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "organizationId", value: organizationId },
+		],
+	});
+	return member !== null;
+}
+
+function normalizeSCIMProvider(provider: SCIMProvider) {
+	return {
+		id: provider.id,
+		providerId: provider.providerId,
+		organizationId: provider.organizationId ?? null,
+	};
+}
+
+async function checkSCIMProviderAccess(
+	ctx: GenericEndpointContext,
+	userId: string,
+	providerId: string,
+): Promise<SCIMProvider> {
+	const provider = await ctx.context.adapter.findOne<SCIMProvider>({
+		model: "scimProvider",
+		where: [{ field: "providerId", value: providerId }],
+	});
+
+	if (!provider) {
+		throw new APIError("NOT_FOUND", {
+			message: "SCIM provider not found",
+		});
+	}
+
+	if (provider.organizationId) {
+		if (!ctx.context.hasPlugin("organization")) {
+			throw new APIError("FORBIDDEN", {
+				message: "Organization plugin is required to access this SCIM provider",
+			});
+		}
+
+		const isMember = await isSCIMOrgMember(
+			ctx,
+			userId,
+			provider.organizationId,
+		);
+
+		if (!isMember) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					"You must be a member of the organization to access this provider",
+			});
+		}
+	}
+
+	return provider;
+}
 
 export const generateSCIMToken = (opts: SCIMOptions) =>
 	createAuthEndpoint(
@@ -169,6 +256,173 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			return ctx.json({
 				scimToken,
 			});
+		},
+	);
+
+export const listSCIMProviderConnections = () =>
+	createAuthEndpoint(
+		"/scim/list-provider-connections",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "listSCIMProviderConnections",
+					summary: "List SCIM providers",
+					description:
+						"Returns SCIM providers for organizations the user is a member of.",
+					responses: {
+						"200": {
+							description: "List of SCIM providers",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											providers: {
+												type: "array",
+												items: {
+													type: "object",
+													properties: {
+														id: { type: "string" },
+														providerId: { type: "string" },
+														organizationId: {
+															type: "string",
+															nullable: true,
+														},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const userId = ctx.context.session.user.id;
+			const userOrgIds: Set<string> = ctx.context.hasPlugin("organization")
+				? await getSCIMUserOrgIds(ctx, userId)
+				: new Set();
+
+			const allProviders = await ctx.context.adapter.findMany<SCIMProvider>({
+				model: "scimProvider",
+			});
+
+			const accessibleProviders = allProviders.filter(
+				(p) => userOrgIds.has(p.organizationId!) || !p.organizationId,
+			);
+
+			const providers = accessibleProviders.map((p) =>
+				normalizeSCIMProvider(p),
+			);
+
+			return ctx.json({ providers });
+		},
+	);
+
+export const getSCIMProviderConnection = () =>
+	createAuthEndpoint(
+		"/scim/get-provider-connection",
+		{
+			method: "GET",
+			use: [sessionMiddleware],
+			query: getSCIMProviderConnectionQuerySchema,
+			metadata: {
+				openapi: {
+					operationId: "getSCIMProviderConnection",
+					summary: "Get SCIM provider details",
+					description: "Returns details for a specific SCIM provider",
+					responses: {
+						"200": {
+							description: "SCIM provider details",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											id: { type: "string" },
+											providerId: { type: "string" },
+											organizationId: {
+												type: "string",
+												nullable: true,
+											},
+										},
+									},
+								},
+							},
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.query;
+			const userId = ctx.context.session.user.id;
+
+			const provider = await checkSCIMProviderAccess(ctx, userId, providerId);
+
+			return ctx.json(normalizeSCIMProvider(provider));
+		},
+	);
+
+export const deleteSCIMProviderConnection = () =>
+	createAuthEndpoint(
+		"/scim/delete-provider-connection",
+		{
+			method: "POST",
+			use: [sessionMiddleware],
+			body: deleteSCIMProviderConnectionBodySchema,
+			metadata: {
+				openapi: {
+					operationId: "deleteSCIMProviderConnection",
+					summary: "Delete SCIM provider",
+					description: "Deletes a SCIM provider and invalidates its token",
+					responses: {
+						"200": {
+							description: "SCIM provider deleted successfully",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: { type: "boolean" },
+										},
+									},
+								},
+							},
+						},
+						"404": {
+							description: "Provider not found",
+						},
+						"403": {
+							description: "Access denied",
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const { providerId } = ctx.body;
+			const userId = ctx.context.session.user.id;
+
+			await checkSCIMProviderAccess(ctx, userId, providerId);
+
+			await ctx.context.adapter.delete<SCIMProvider>({
+				model: "scimProvider",
+				where: [{ field: "providerId", value: providerId }],
+			});
+
+			return ctx.json({ success: true });
 		},
 	);
 
