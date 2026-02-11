@@ -23,7 +23,7 @@ export const ssoClient = <CO extends SSOClientOptions>(
 		}>,
 		pathMethods: {
 			"/sso/providers": "GET",
-			"/sso/providers/:providerId": "GET",
+			"/sso/get-provider": "GET",
 		},
 	} satisfies BetterAuthClientPlugin;
 };
