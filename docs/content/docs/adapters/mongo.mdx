@@ -11,6 +11,9 @@ Before getting started, make sure you have MongoDB installed and configured. For
 
 You can use the MongoDB adapter to connect to your database as follows.
 
+<Tabs items={["Native Driver", "Mongoose"]}>
+<Tab value="Native Driver">
+
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
@@ -26,6 +29,42 @@ export const auth = betterAuth({
   }),
 });
 ```
+
+</Tab>
+<Tab value="Mongoose">
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
+
+dotenv.config();
+
+const connectDB = async () => {
+  if (mongoose.connection.readyState === 0) {
+    await mongoose.connect(process.env.DATABASE_URI || "");
+  }
+  return mongoose.connection;
+};
+
+const connection = await connectDB();
+const db = connection.getClient().db();
+
+export const auth = betterAuth({
+  database: mongodbAdapter(db),
+  baseURL: // your base url,
+  basePath: // your base path,
+  secret: // your secret key,
+  emailAndPassword: {
+    enabled: true,
+  },
+});
+
+```
+
+</Tab>
+</Tabs>
 
 ## Schema generation & migration
 
