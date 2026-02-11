@@ -53,9 +53,9 @@ const db = connection.getClient().db();
 
 export const auth = betterAuth({
   database: mongodbAdapter(db),
-  baseURL: // your base url,
-  basePath: // your base path,
-  secret: // your secret key,
+  baseURL: "https://your-base-url",
+  basePath: "/your-base-path",
+  secret: "your-secret-key",
   emailAndPassword: {
     enabled: true,
   },
