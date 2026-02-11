@@ -205,10 +205,10 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"A comprehensive Paystack integration plugin for Better Auth featuring native/local subscriptions, trial support, and organization billing with seat limits, secure webhooks and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
@@ -266,6 +266,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			name: "Ramiras123",
 			github: "ramiras123",
 			avatar: "https://github.com/ramiras123.png",
+		},
+	},
+	{
+		name: "@guilhermejansen/better-auth-waitlist",
+		url: "https://github.com/guilhermejansen/better-auth-waitlist",
+		description:
+			"Waitlist and early-access gating plugin. Intercepts all registration paths and gates sign-ups behind an invite-based approval workflow.",
+		author: {
+			name: "guilhermejansen",
+			github: "guilhermejansen",
+			avatar: "https://github.com/guilhermejansen.png",
 		},
 	},
 ];
