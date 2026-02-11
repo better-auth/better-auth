@@ -205,10 +205,10 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-		name: "@alexasomba/better-auth-paystack",
+		name: "better-auth-paystack",
 		url: "https://github.com/alexasomba/better-auth-paystack",
 		description:
-			"Paystack plugin for Better Auth — integrates Paystack transactions, webhooks, and subscription flows.",
+			"A comprehensive Paystack integration plugin for Better Auth featuring native/local subscriptions, trial support, and organization billing with seat limits, secure webhooks and more.",
 		author: {
 			name: "alexasomba",
 			github: "alexasomba",
