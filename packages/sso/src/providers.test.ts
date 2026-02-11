@@ -459,11 +459,11 @@ describe("SSO provider read endpoints", () => {
 		});
 	});
 
-	describe("GET /sso/providers/:providerId", () => {
+	describe("GET /sso/get-provider", () => {
 		it("should return 401 when not authenticated", async () => {
 			const { auth } = createTestAuth();
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "test" },
+				query: { providerId: "test" },
 				asResponse: true,
 			});
 			expect(response.status).toBe(401);
@@ -478,7 +478,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "nonexistent" },
+				query: { providerId: "nonexistent" },
 				headers,
 				asResponse: true,
 			});
@@ -504,7 +504,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "other-provider" },
+				query: { providerId: "other-provider" },
 				headers: otherHeaders,
 				asResponse: true,
 			});
@@ -524,7 +524,7 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				query: { providerId: "my-saml-provider" },
 				headers,
 			});
 
@@ -559,7 +559,7 @@ describe("SSO provider read endpoints", () => {
 			);
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-oidc-provider" },
+				query: { providerId: "my-oidc-provider" },
 				headers,
 			});
 
@@ -589,7 +589,7 @@ describe("SSO provider read endpoints", () => {
 			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-oidc-provider" },
+				query: { providerId: "my-oidc-provider" },
 				headers,
 			});
 
@@ -629,7 +629,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-provider" },
+				query: { providerId: "my-provider" },
 				headers,
 			});
 
@@ -671,7 +671,7 @@ describe("SSO provider read endpoints", () => {
 
 			// Owner should be able to access it since they created the org (are admin)
 			const ownerResponse = await auth.api.getSSOProvider({
-				params: { providerId: "user-owned-org-provider" },
+				query: { providerId: "user-owned-org-provider" },
 				headers: ownerHeaders,
 			});
 
@@ -685,7 +685,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const nonAdminResponse = await auth.api.getSSOProvider({
-				params: { providerId: "user-owned-org-provider" },
+				query: { providerId: "user-owned-org-provider" },
 				headers: nonAdminHeaders,
 				asResponse: true,
 			});
@@ -709,7 +709,7 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				query: { providerId: "my-saml-provider" },
 				headers,
 			});
 
@@ -745,7 +745,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				query: { providerId: "my-saml-provider" },
 				headers,
 			});
 
@@ -771,7 +771,7 @@ describe("SSO provider read endpoints", () => {
 			createOIDCProviderData(user!.id, "my-oidc-provider", "abc");
 
 			const response = await auth.api.getSSOProvider({
-				params: { providerId: "my-oidc-provider" },
+				query: { providerId: "my-oidc-provider" },
 				headers,
 			});
 
@@ -779,12 +779,11 @@ describe("SSO provider read endpoints", () => {
 		});
 	});
 
-	describe("PATCH /sso/providers/:providerId", () => {
+	describe("POST /sso/update-provider", () => {
 		it("should return 401 when not authenticated", async () => {
 			const { auth } = createTestAuth();
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "test" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "test", domain: "new-domain.com" },
 				asResponse: true,
 			});
 			expect(response.status).toBe(401);
@@ -799,8 +798,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "nonexistent" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "nonexistent", domain: "new-domain.com" },
 				headers,
 				asResponse: true,
 			});
@@ -826,8 +824,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "other-provider" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "other-provider", domain: "new-domain.com" },
 				headers: otherHeaders,
 				asResponse: true,
 			});
@@ -849,8 +846,7 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const updated = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "my-saml-provider", domain: "new-domain.com" },
 				headers,
 			});
 
@@ -871,8 +867,8 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const updated = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
 				body: {
+					providerId: "my-saml-provider",
 					samlConfig: {
 						audience: "new-audience",
 						wantAssertionsSigned: false,
@@ -904,8 +900,8 @@ describe("SSO provider read endpoints", () => {
 			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
 
 			const updated = await auth.api.updateSSOProvider({
-				params: { providerId: "my-oidc-provider" },
 				body: {
+					providerId: "my-oidc-provider",
 					oidcConfig: {
 						scopes: ["openid", "email", "profile", "custom"],
 						pkce: false,
@@ -936,8 +932,10 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const updated = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
-				body: { issuer: "https://new-issuer.example.com" },
+				body: {
+					providerId: "my-saml-provider",
+					issuer: "https://new-issuer.example.com",
+				},
 				headers,
 			});
 
@@ -957,8 +955,7 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
-				body: { issuer: "invalid-url" },
+				body: { providerId: "my-saml-provider", issuer: "invalid-url" },
 				headers,
 				asResponse: true,
 			});
@@ -979,8 +976,7 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
-				body: {},
+				body: { providerId: "my-saml-provider" },
 				headers,
 				asResponse: true,
 			});
@@ -1020,8 +1016,7 @@ describe("SSO provider read endpoints", () => {
 			await addMember(adminUser!.id, org!.id, "admin", ownerHeaders);
 
 			const updated = await auth.api.updateSSOProvider({
-				params: { providerId: "org-provider" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "org-provider", domain: "new-domain.com" },
 				headers: adminHeaders,
 			});
 
@@ -1060,8 +1055,7 @@ describe("SSO provider read endpoints", () => {
 			await addMember(memberUser!.id, org!.id, "member", ownerHeaders);
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "org-provider" },
-				body: { domain: "new-domain.com" },
+				body: { providerId: "org-provider", domain: "new-domain.com" },
 				headers: memberHeaders,
 				asResponse: true,
 			});
@@ -1085,8 +1079,8 @@ describe("SSO provider read endpoints", () => {
 			createOIDCProviderData(user!.id, "my-oidc-provider", "client123");
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "my-oidc-provider" },
 				body: {
+					providerId: "my-oidc-provider",
 					samlConfig: {
 						entryPoint: "https://idp.example.com/sso",
 						cert: TEST_CERT,
@@ -1114,8 +1108,8 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const response = await auth.api.updateSSOProvider({
-				params: { providerId: "my-saml-provider" },
 				body: {
+					providerId: "my-saml-provider",
 					oidcConfig: {
 						clientId: "new-client-id",
 						clientSecret: "new-secret",
@@ -1129,11 +1123,11 @@ describe("SSO provider read endpoints", () => {
 		});
 	});
 
-	describe("DELETE /sso/providers/:providerId", () => {
+	describe("POST /sso/delete-provider", () => {
 		it("should return 401 when not authenticated", async () => {
 			const { auth } = createTestAuth();
 			const response = await auth.api.deleteSSOProvider({
-				params: { providerId: "test" },
+				body: { providerId: "test" },
 				asResponse: true,
 			});
 			expect(response.status).toBe(401);
@@ -1148,7 +1142,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.deleteSSOProvider({
-				params: { providerId: "nonexistent" },
+				body: { providerId: "nonexistent" },
 				headers,
 				asResponse: true,
 			});
@@ -1174,7 +1168,7 @@ describe("SSO provider read endpoints", () => {
 			});
 
 			const response = await auth.api.deleteSSOProvider({
-				params: { providerId: "other-provider" },
+				body: { providerId: "other-provider" },
 				headers: otherHeaders,
 				asResponse: true,
 			});
@@ -1194,14 +1188,14 @@ describe("SSO provider read endpoints", () => {
 			await registerSAMLProvider(headers, "my-saml-provider");
 
 			const deleteResponse = await auth.api.deleteSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				body: { providerId: "my-saml-provider" },
 				headers,
 			});
 
 			expect(deleteResponse.success).toBe(true);
 
 			const getResponse = await auth.api.getSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				query: { providerId: "my-saml-provider" },
 				headers,
 				asResponse: true,
 			});
@@ -1241,7 +1235,7 @@ describe("SSO provider read endpoints", () => {
 			await addMember(adminUser!.id, org!.id, "admin", ownerHeaders);
 
 			const deleteResponse = await auth.api.deleteSSOProvider({
-				params: { providerId: "org-provider" },
+				body: { providerId: "org-provider" },
 				headers: adminHeaders,
 			});
 
@@ -1280,7 +1274,7 @@ describe("SSO provider read endpoints", () => {
 			await addMember(memberUser!.id, org!.id, "member", ownerHeaders);
 
 			const response = await auth.api.deleteSSOProvider({
-				params: { providerId: "org-provider" },
+				body: { providerId: "org-provider" },
 				headers: memberHeaders,
 				asResponse: true,
 			});
@@ -1316,7 +1310,7 @@ describe("SSO provider read endpoints", () => {
 			const accountCountBefore = data.account.length;
 
 			await auth.api.deleteSSOProvider({
-				params: { providerId: "my-saml-provider" },
+				body: { providerId: "my-saml-provider" },
 				headers,
 			});
 

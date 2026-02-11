@@ -281,7 +281,6 @@ describe("internal adapter test", async () => {
 			(call) => call[0].model === "verification",
 		);
 		expect(verificationDeleteCalls.length).toBe(0);
-
 		deleteSpy.mockRestore();
 	});
 

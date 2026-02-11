@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
@@ -31,6 +31,10 @@ describe("email-otp", async () => {
 			},
 		},
 	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should verify email with otp", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
@@ -555,7 +559,11 @@ describe("custom rate limiting storage", async () => {
 		],
 	});
 
-	it.each([
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([
 		{
 			path: "/email-otp/send-verification-otp",
 			body: {
@@ -706,23 +714,20 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should not be allowed to get otp if storeOTP is hashed", async () => {
-			try {
-				await auth.api.getVerificationOTP({
+			await expect(
+				auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
 					},
-				});
-			} catch (error: any) {
-				expect(error.statusCode).toBe(400);
-				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body.code).toBe(
-					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
-				);
-				return;
-			}
-			// Should not reach here given the above should throw and thus return.
-			expect(true).toBe(false);
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				status: "BAD_REQUEST",
+				body: {
+					message: "OTP is hashed, cannot return the plain text OTP",
+				},
+			});
 		});
 
 		it("should be able to sign in with normal otp", async () => {
@@ -807,22 +812,14 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is encrypted", async () => {
-			try {
-				const res = await auth.api.getVerificationOTP({
-					query: {
-						email: userEmail1,
-						type: "sign-in",
-					},
-				});
-				if (!res.otp) {
-					expect(true).toBe(false);
-					return;
-				}
-				expect(res.otp).toEqual(validOTP);
-				expect(res.otp.length).toBe(6);
-			} catch (error: any) {
-				expect(error).not.toBeDefined();
-			}
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: userEmail1,
+					type: "sign-in",
+				},
+			});
+			expect(res.otp).toEqual(validOTP);
+			expect(res.otp?.length).toBe(6);
 		});
 
 		it("should be able to sign in with encrypted otp", async () => {
@@ -912,23 +909,14 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is custom encryptor", async () => {
-			try {
-				const res = await auth.api.getVerificationOTP({
-					query: {
-						email: userEmail1,
-						type: "sign-in",
-					},
-				});
-				if (!res.otp) {
-					expect(true).toBe(false);
-					return;
-				}
-				expect(res.otp).toEqual(validOTP);
-				expect(res.otp.length).toBe(6);
-			} catch (error: any) {
-				console.error(error);
-				expect(error).not.toBeDefined();
-			}
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: userEmail1,
+					type: "sign-in",
+				},
+			});
+			expect(res.otp).toEqual(validOTP);
+			expect(res.otp?.length).toBe(6);
 		});
 
 		it("should be able to sign in with custom encryptor otp", async () => {
@@ -1015,23 +1003,20 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is custom hasher", async () => {
-			try {
-				await auth.api.getVerificationOTP({
+			await expect(
+				auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
 					},
-				});
-			} catch (error: any) {
-				expect(error.statusCode).toBe(400);
-				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body.code).toBe(
-					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
-				);
-				return;
-			}
-			// Should not reach here given the above should throw and thus return.
-			expect(true).toBe(false);
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				status: "BAD_REQUEST",
+				body: {
+					message: "OTP is hashed, cannot return the plain text OTP",
+				},
+			});
 		});
 
 		it("should be able to sign in with custom hasher otp", async () => {
