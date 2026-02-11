@@ -179,6 +179,28 @@ describe("general types", async () => {
 		}>();
 	});
 
+	it("should infer plugin-contributed context from init", async () => {
+		const testUtilsPlugin = {
+			id: "test-utils" as const,
+			init() {
+				return {
+					context: {
+						testValue: 42 as number,
+						testHelper: () => "hello" as string,
+					},
+				};
+			},
+		} satisfies BetterAuthPlugin;
+
+		const { auth } = await getTestInstance({
+			plugins: [testUtilsPlugin],
+		});
+
+		const context = await auth.$context;
+		expectTypeOf(context.testValue).toEqualTypeOf<number>();
+		expectTypeOf(context.testHelper).toEqualTypeOf<() => string>();
+	});
+
 	it("should infer the same types for empty plugins and no plugins", async () => {
 		const { auth: authWithEmptyPlugins } = await getTestInstance({
 			plugins: [],
