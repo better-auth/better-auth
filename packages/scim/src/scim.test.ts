@@ -2013,7 +2013,7 @@ describe("SCIM", () => {
 
 		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
 			const { auth, getSCIMToken, registerOrganization } =
-				await createSqlTestInstance("postgres");
+				createTestInstance();
 			const scimToken = await getSCIMToken();
 
 			const createUser = (userName: string, scimToken: string) => {
