@@ -713,11 +713,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
-							.message,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }

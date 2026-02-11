@@ -102,7 +102,7 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 	};
 };
 
-const createSqlTestInstance = async (
+const _createSqlTestInstance = async (
 	testWith: "sqlite" | "postgres",
 	scimOptions?: SCIMOptions,
 ) => {
@@ -2012,8 +2012,7 @@ describe("SCIM", () => {
 		});
 
 		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
-			const { auth, getSCIMToken, registerOrganization } =
-				await createSqlTestInstance("postgres");
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
 			const scimToken = await getSCIMToken();
 
 			const createUser = (userName: string, scimToken: string) => {
