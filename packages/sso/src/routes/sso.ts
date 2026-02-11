@@ -1698,7 +1698,7 @@ async function handleOIDCCallback(
 	const linked = await handleOAuthUserInfo(ctx, {
 		userInfo: {
 			email: userInfo.email,
-			name: userInfo.name || userInfo.email,
+			name: userInfo.name || "",
 			id: userInfo.id,
 			image: userInfo.image,
 			emailVerified: options?.trustEmailVerified
@@ -1725,7 +1725,7 @@ async function handleOIDCCallback(
 	}
 	const { session, user } = linked.data!;
 
-	if (options?.provisionUser) {
+	if (options?.provisionUser && linked.isRegister) {
 		await options.provisionUser({
 			user,
 			userInfo,
