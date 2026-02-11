@@ -521,8 +521,6 @@ describe("seat-based billing", () => {
 				fetchOptions: { headers: newMemberHeaders },
 			});
 
-			await new Promise((resolve) => setTimeout(resolve, 200));
-
 			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
 				"sub_seat_sync",
 				expect.objectContaining({
@@ -634,8 +632,6 @@ describe("seat-based billing", () => {
 				organizationId: orgId,
 				fetchOptions: { headers },
 			});
-
-			await new Promise((resolve) => setTimeout(resolve, 200));
 
 			expect(mockStripe.subscriptions.update).toHaveBeenCalledWith(
 				"sub_seat_remove",
