@@ -79,10 +79,15 @@ describe("metered billing", async () => {
 		organization: { enabled: true },
 		subscription: {
 			enabled: true,
-			plans: [{ priceId: "price_starter", name: "starter" }],
-			meters: [
-				{ eventName: "stripe_meter_emails" },
-				{ eventName: "stripe_meter_api" },
+			plans: [
+				{
+					priceId: "price_starter",
+					name: "starter",
+					meters: [
+						{ eventName: "stripe_meter_emails", priceId: "price_meter_emails" },
+						{ eventName: "stripe_meter_api", priceId: "price_meter_api" },
+					],
+				},
 			],
 			authorizeReference: async () => true,
 		},

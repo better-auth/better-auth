@@ -173,6 +173,150 @@ describe("seat-based billing", () => {
 		});
 	});
 
+	describe("checkout with usage-based meters", async () => {
+		const meterPlanOptions: StripeOptions = {
+			stripeClient: mockStripe as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			createCustomerOnSignUp: false,
+			organization: { enabled: true },
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: "price_pro_base",
+						name: "pro",
+						seatPriceId: "price_pro_seat",
+						meters: [
+							{ eventName: "api_requests", priceId: "price_meter_api" },
+							{ eventName: "email_sends", priceId: "price_meter_email" },
+						],
+					},
+				],
+				authorizeReference: async () => true,
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [organization(), stripe(meterPlanOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				email: "meter-test@email.com",
+				password: "password",
+				name: "Meter Test User",
+			},
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: "meter-test@email.com", password: "password" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		it("should include meter prices in checkout line_items", async () => {
+			const org = await client.organization.create({
+				name: "Meter Test Org",
+				slug: "meter-test-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await client.subscription.upgrade({
+				plan: "pro",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(createCall).toBeDefined();
+			expect(createCall.line_items).toHaveLength(4); // base + seat + 2 meters
+			expect(createCall.line_items[0]).toEqual({ price: "price_pro_base" });
+			expect(createCall.line_items[1]).toMatchObject({
+				price: "price_pro_seat",
+				quantity: expect.any(Number),
+			});
+			expect(createCall.line_items[2]).toEqual({ price: "price_meter_api" });
+			expect(createCall.line_items[3]).toEqual({ price: "price_meter_email" });
+		});
+
+		it("should not include meter prices when plan has no meters", async () => {
+			mockStripe.checkout.sessions.create.mockClear();
+
+			const noMeterOptions: StripeOptions = {
+				stripeClient: mockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				createCustomerOnSignUp: false,
+				organization: { enabled: true },
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_basic_base",
+							name: "basic",
+							seatPriceId: "price_basic_seat",
+						},
+					],
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client: c2, sessionSetter: ss2 } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(noMeterOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+
+			await c2.signUp.email(
+				{
+					email: "no-meter@email.com",
+					password: "password",
+					name: "No Meter User",
+				},
+				{ throw: true },
+			);
+			const h2 = new Headers();
+			await c2.signIn.email(
+				{ email: "no-meter@email.com", password: "password" },
+				{ throw: true, onSuccess: ss2(h2) },
+			);
+
+			const org2 = await c2.organization.create({
+				name: "No Meter Org",
+				slug: "no-meter-org",
+				fetchOptions: { headers: h2 },
+			});
+
+			await c2.subscription.upgrade({
+				plan: "basic",
+				customerType: "organization",
+				referenceId: org2.data?.id as string,
+				fetchOptions: { headers: h2 },
+			});
+
+			const call = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(call.line_items).toHaveLength(2); // base + seat only
+		});
+	});
+
 	describe("portal upgrade with seat items", () => {
 		it("should swap seat item when upgrading to a plan with different seat pricing", async () => {
 			const { client, auth, sessionSetter } = await getTestInstance(

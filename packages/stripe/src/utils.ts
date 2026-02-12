@@ -4,7 +4,6 @@ import type Stripe from "stripe";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import type {
 	CustomerType,
-	MeterConfig,
 	StripeOptions,
 	StripePlan,
 	Subscription,
@@ -131,13 +130,15 @@ export function createMeterIdResolver(stripeClient: Stripe) {
 }
 
 /**
- * Validate that the given event name is registered in the meters config.
+ * Validate that the given event name is registered in any plan's meters.
  */
 export function validateEventName(
-	meters: MeterConfig[] | undefined,
+	plans: StripePlan[],
 	eventName: string,
 ): string {
-	const exists = meters?.some((m) => m.eventName === eventName);
+	const exists = plans.some((p) =>
+		p.meters?.some((m) => m.eventName === eventName),
+	);
 	if (!exists) {
 		throw APIError.from("BAD_REQUEST", STRIPE_ERROR_CODES.UNKNOWN_METER);
 	}

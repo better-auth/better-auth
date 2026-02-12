@@ -811,9 +811,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									? {}
 									: { quantity: ctx.body.seats || 1 }),
 							},
+							// Per-seat
 							...(isAutoManagedSeats
 								? [{ price: plan.seatPriceId, quantity: memberCount }]
 								: []),
+							// Usage-based
+							...(plan.meters?.map((m) => ({
+								price: m.priceId,
+							})) ?? []),
 						],
 						subscription_data: {
 							...freeTrial,
@@ -1701,9 +1706,9 @@ export const ingestSubscriptionUsage = (options: StripeOptions) => {
 			use: [stripeSessionMiddleware],
 		},
 		async (ctx) => {
-			const { meters } = options.subscription as SubscriptionOptions;
 			const { events } = ctx.body;
 			const customerType = ctx.body.customerType || "user";
+			const plans = await getPlans(options.subscription);
 			const referenceId = getReferenceId(
 				ctx.context.session,
 				customerType,
@@ -1717,7 +1722,7 @@ export const ingestSubscriptionUsage = (options: StripeOptions) => {
 
 			const results = await Promise.allSettled(
 				events.map(async (event) => {
-					const eventName = validateEventName(meters, event.meter);
+					const eventName = validateEventName(plans, event.meter);
 					await client.billing.meterEvents.create({
 						event_name: eventName,
 						payload: {
@@ -1790,9 +1795,9 @@ export const getSubscriptionUsage = (options: StripeOptions) => {
 			],
 		},
 		async (ctx) => {
-			const { meters } = options.subscription as SubscriptionOptions;
 			const { meter, groupingWindow, startTime, endTime } = ctx.query;
 			const customerType = ctx.query.customerType || "user";
+			const plans = await getPlans(options.subscription);
 			const referenceId =
 				ctx.query.referenceId ||
 				getReferenceId(ctx.context.session, customerType, options);
@@ -1802,7 +1807,7 @@ export const getSubscriptionUsage = (options: StripeOptions) => {
 				referenceId,
 				customerType,
 			);
-			const eventName = validateEventName(meters, meter);
+			const eventName = validateEventName(plans, meter);
 
 			const meterIds = await resolveMeterIds();
 			const meterId = meterIds.get(eventName);
