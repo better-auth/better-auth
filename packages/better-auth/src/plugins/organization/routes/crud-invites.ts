@@ -688,14 +688,6 @@ export const acceptInvitation = <O extends OrganizationOptions>(options: O) =>
 				invitation.organizationId,
 				ctx,
 			);
-			if (!acceptedI) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.INVITATION_NOT_FOUND,
-					},
-				});
-			}
 			if (options?.organizationHooks?.afterAcceptInvitation) {
 				await options?.organizationHooks.afterAcceptInvitation({
 					invitation: acceptedI as unknown as Invitation,
