@@ -14,10 +14,13 @@ import type { Prettify } from "../../types/helper";
 import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
+
+export * from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -96,18 +99,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -175,7 +169,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},
@@ -275,6 +269,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				signal: "$activeMemberRoleSignal",
 			},
 		],
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 

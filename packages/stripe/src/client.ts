@@ -1,6 +1,7 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
+import { STRIPE_ERROR_CODES } from "./error-codes";
 import type { stripe } from "./index";
-
+import type { MeterConfig } from "./types";
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
@@ -19,6 +20,7 @@ export const stripeClient = <
 							subscription: {
 								enabled: true;
 								plans: [];
+								meters: MeterConfig[];
 							};
 						}
 					: {
@@ -31,5 +33,7 @@ export const stripeClient = <
 			"/subscription/billing-portal": "POST",
 			"/subscription/restore": "POST",
 		},
+		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+export * from "./error-codes";

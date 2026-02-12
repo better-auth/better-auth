@@ -3,7 +3,6 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import { defineErrorCodes } from "@better-auth/core/utils";
 import * as z from "zod";
 import { APIError, sessionMiddleware } from "../../api";
 import {
@@ -16,6 +15,14 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"multi-session": {
+			creator: typeof multiSession;
+		};
+	}
+}
+
 export interface MultiSessionConfig {
 	/**
 	 * The maximum number of sessions a user can have
@@ -25,9 +32,9 @@ export interface MultiSessionConfig {
 	maximumSessions?: number | undefined;
 }
 
-const ERROR_CODES = defineErrorCodes({
-	INVALID_SESSION_TOKEN: "Invalid session token",
-});
+import { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
+
+export { MULTI_SESSION_ERROR_CODES as ERROR_CODES } from "./error-codes";
 
 const setActiveSessionBodySchema = z.object({
 	sessionToken: z.string().meta({
@@ -167,9 +174,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 					const session =
 						await ctx.context.internalAdapter.findSession(sessionToken);
@@ -178,9 +186,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 							name: multiSessionCookieName,
 							attributes: ctx.context.authCookies.sessionToken.attributes,
 						});
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 					await setSessionCookie(ctx, session);
 					return ctx.json({
@@ -244,9 +253,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 						ctx.context.secret,
 					);
 					if (!sessionCookie) {
-						throw new APIError("UNAUTHORIZED", {
-							message: ERROR_CODES.INVALID_SESSION_TOKEN,
-						});
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.INVALID_SESSION_TOKEN,
+						);
 					}
 
 					await ctx.context.internalAdapter.deleteSession(sessionToken);

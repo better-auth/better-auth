@@ -1,6 +1,8 @@
 export type { StandardSchemaV1 } from "@standard-schema/spec";
 export type {
 	AuthContext,
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
 	GenericEndpointContext,
 	InfoContext,
 	InternalAdapter,
@@ -13,13 +15,19 @@ export type {
 export type * from "./helper";
 export type {
 	BetterAuthAdvancedOptions,
+	BetterAuthDBOptions,
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 	BetterAuthRateLimitRule,
 	BetterAuthRateLimitStorage,
 	GenerateIdFn,
+	StoreIdentifierOption,
 } from "./init-options";
-export type { BetterAuthPlugin, HookEndpointContext } from "./plugin";
+export type {
+	BetterAuthPlugin,
+	BetterAuthPluginErrorCodePart,
+	HookEndpointContext,
+} from "./plugin";
 export type {
 	BetterAuthClientOptions,
 	BetterAuthClientPlugin,

@@ -245,7 +245,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect(verifyRes.error?.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
 		);
 	});
 
@@ -256,7 +256,9 @@ describe("two factor", async () => {
 				headers,
 			},
 		});
-		expect(res.error?.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+		expect(res.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
+		);
 	});
 
 	let backupCodes: string[] = [];
@@ -1476,7 +1478,7 @@ describe("OTP storage modes", async () => {
 			});
 			expect(verifyRes.status).toBe(401);
 			const json = (await verifyRes.json()) as { message: string };
-			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE);
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
 		});
 	});
 

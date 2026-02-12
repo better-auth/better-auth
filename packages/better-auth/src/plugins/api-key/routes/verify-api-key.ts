@@ -1,10 +1,11 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { APIError } from "@better-auth/core/error";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
-import { APIError } from "../../../api";
+import { isAPIError } from "../../../utils/is-api-error";
 import { role } from "../../access";
-import { API_KEY_TABLE_NAME, ERROR_CODES } from "..";
+import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import {
 	deleteApiKey,
@@ -33,16 +34,11 @@ export async function validateApiKey({
 	const apiKey = await getApiKey(ctx, hashedKey, opts);
 
 	if (!apiKey) {
-		throw new APIError("UNAUTHORIZED", {
-			message: ERROR_CODES.INVALID_API_KEY,
-		});
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.INVALID_API_KEY);
 	}
 
 	if (apiKey.enabled === false) {
-		throw new APIError("UNAUTHORIZED", {
-			message: ERROR_CODES.KEY_DISABLED,
-			code: "KEY_DISABLED" as const,
-		});
+		throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_DISABLED);
 	}
 
 	if (apiKey.expiresAt) {
@@ -76,10 +72,7 @@ export async function validateApiKey({
 				await deleteExpiredKey();
 			}
 
-			throw new APIError("UNAUTHORIZED", {
-				message: ERROR_CODES.KEY_EXPIRED,
-				code: "KEY_EXPIRED" as const,
-			});
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_EXPIRED);
 		}
 	}
 
@@ -91,18 +84,12 @@ export async function validateApiKey({
 			: null;
 
 		if (!apiKeyPermissions) {
-			throw new APIError("UNAUTHORIZED", {
-				message: ERROR_CODES.KEY_NOT_FOUND,
-				code: "KEY_NOT_FOUND" as const,
-			});
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 		const r = role(apiKeyPermissions as any);
 		const result = r.authorize(permissions);
 		if (!result.success) {
-			throw new APIError("UNAUTHORIZED", {
-				message: ERROR_CODES.KEY_NOT_FOUND,
-				code: "KEY_NOT_FOUND" as const,
-			});
+			throw APIError.from("UNAUTHORIZED", ERROR_CODES.KEY_NOT_FOUND);
 		}
 	}
 
@@ -137,10 +124,7 @@ export async function validateApiKey({
 			await deleteExhaustedKey();
 		}
 
-		throw new APIError("TOO_MANY_REQUESTS", {
-			message: ERROR_CODES.USAGE_EXCEEDED,
-			code: "USAGE_EXCEEDED" as const,
-		});
+		throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 	} else if (remaining !== null) {
 		const now = Date.now();
 		const refillInterval = apiKey.refillInterval;
@@ -159,10 +143,7 @@ export async function validateApiKey({
 
 		if (remaining === 0) {
 			// if there are no more remaining requests, than the key is invalid
-			throw new APIError("TOO_MANY_REQUESTS", {
-				message: ERROR_CODES.USAGE_EXCEEDED,
-				code: "USAGE_EXCEEDED" as const,
-			});
+			throw APIError.from("TOO_MANY_REQUESTS", ERROR_CODES.USAGE_EXCEEDED);
 		} else {
 			remaining--;
 		}
@@ -226,10 +207,10 @@ export async function validateApiKey({
 	} else {
 		newApiKey = await performUpdate();
 		if (!newApiKey) {
-			throw new APIError("INTERNAL_SERVER_ERROR", {
-				message: ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
-				code: "INTERNAL_SERVER_ERROR" as const,
-			});
+			throw APIError.from(
+				"INTERNAL_SERVER_ERROR",
+				ERROR_CODES.FAILED_TO_UPDATE_API_KEY,
+			);
 		}
 	}
 
@@ -307,10 +288,11 @@ export function verifyApiKey({
 				}
 			} catch (error) {
 				ctx.context.logger.error("Failed to validate API key:", error);
-				if (error instanceof APIError) {
+				if (isAPIError(error)) {
 					return ctx.json({
 						valid: false,
 						error: {
+							...error.body,
 							message: error.body?.message,
 							code: error.body?.code as string,
 						},

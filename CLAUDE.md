@@ -58,6 +58,16 @@ run specific tests.
 * Adapter tests require Docker containers running (`docker compose up -d`)
 * Consider using test helpers like `getTestInstance()` from
   `better-auth/test` first
+* If a test is to prevent regression of a specific numbered GitHub issue,
+  add a JSDoc `@see` comment with the issue URL above the `it()` or `describe()`:
+  ```typescript
+  /**
+   * @see https://github.com/better-auth/better-auth/issues/{issue_number}
+   */
+  it("should handle the previously broken behavior", async () => {
+    // ...
+  });
+  ```
 
 ## Documentation
 
@@ -71,6 +81,10 @@ run specific tests.
 * Commit format: `feat(scope): description` or `fix(scope): description`,
   following [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/)
 * Use `docs:` for documentation, `chore:` for non-functional changes
+
+## Postmortems
+
+Check `postmortem/` directory for lessons learned from past issues.
 
 ## After Everything is done
 

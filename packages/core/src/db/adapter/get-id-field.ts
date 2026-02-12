@@ -1,6 +1,6 @@
 import { logger } from "../../env";
 import type { BetterAuthOptions } from "../../types";
-import { generateId as defaultGenerateId } from "../../utils";
+import { generateId as defaultGenerateId } from "../../utils/id";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "../type";
 import { initGetDefaultModelName } from "./get-default-model-name";
 
@@ -31,9 +31,7 @@ export const initGetIdField = ({
 		customModelName?: string;
 		forceAllowId?: boolean;
 	}) => {
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		const shouldGenerateId: boolean = (() => {

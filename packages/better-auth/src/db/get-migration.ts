@@ -6,6 +6,8 @@ import {
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
@@ -16,8 +18,6 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
@@ -274,9 +274,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -462,12 +460,6 @@ export async function getMigrations(config: BetterAuthOptions) {
 	}
 
 	const toBeIndexed: CreateIndexBuilder[] = [];
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
-	}
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {

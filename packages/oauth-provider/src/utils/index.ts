@@ -8,9 +8,8 @@ import {
 	symmetricEncrypt,
 } from "better-auth/crypto";
 import type { jwt } from "better-auth/plugins";
-import type { Auth } from "better-auth/types";
 import { APIError } from "better-call";
-import type { oauthProvider } from "..";
+import type { oauthProvider } from "../oauth";
 import type {
 	OAuthOptions,
 	Prompt,
@@ -42,18 +41,18 @@ class TTLCache<K, V extends { expiresAt?: Date }> {
  * Gets the oAuth Provider Plugin
  * @internal
  */
-export const getOAuthProviderPlugin = (ctx: AuthContext | Auth) => {
-	return ctx.options.plugins?.find(
-		(plugin) => plugin.id === "oauthProvider",
-	) as ReturnType<typeof oauthProvider>;
+export const getOAuthProviderPlugin = (ctx: AuthContext) => {
+	return ctx.getPlugin("oauth-provider") satisfies ReturnType<
+		typeof oauthProvider
+	> | null;
 };
 
 /**
  * Gets the JWT Plugin
  * @internal
  */
-export const getJwtPlugin = (ctx: AuthContext): ReturnType<typeof jwt> => {
-	const plugin = ctx.getPlugin<ReturnType<typeof jwt>>("jwt");
+export const getJwtPlugin = (ctx: AuthContext) => {
+	const plugin = ctx.getPlugin("jwt") satisfies ReturnType<typeof jwt> | null;
 	if (!plugin) {
 		throw new BetterAuthError("jwt_config", "jwt plugin not found");
 	}

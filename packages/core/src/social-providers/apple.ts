@@ -1,6 +1,7 @@
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
+
 import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
+import { APIError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -141,11 +142,7 @@ export const apple = (options: AppleOptions) => {
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
-						},
+						options,
 						tokenEndpoint: "https://appleid.apple.com/auth/token",
 					});
 				},
@@ -161,15 +158,15 @@ export const apple = (options: AppleOptions) => {
 				return null;
 			}
 
-			// TODO: " " masking will be removed when the name field is made optional
+			// TODO: "" masking will be removed when the name field is made optional
 			let name: string;
 			if (token.user?.name) {
 				const firstName = token.user.name.firstName || "";
 				const lastName = token.user.name.lastName || "";
 				const fullName = `${firstName} ${lastName}`.trim();
-				name = fullName || " ";
+				name = fullName;
 			} else {
-				name = profile.name || " ";
+				name = profile.name || "";
 			}
 
 			const emailVerified =

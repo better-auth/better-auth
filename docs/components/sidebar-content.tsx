@@ -22,20 +22,23 @@ import {
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
+export interface ContentListItem {
+	title: string;
+	href: string;
+	icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
+	isNew?: boolean;
+	isUpdated?: boolean;
+	children?: ContentListItem[];
+}
+
 interface Content {
 	title: string;
 	href?: string;
 	Icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
 	isNew?: boolean;
-	list: {
-		title: string;
-		href: string;
-		icon: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
-		group?: boolean;
-		separator?: boolean;
-		isNew?: boolean;
-		hasSubpages?: boolean;
-	}[];
+	isUpdated?: boolean;
+	list: ContentListItem[];
 }
 
 export function getPageTree(): Root {
@@ -61,6 +64,35 @@ export function getPageTree(): Root {
 	};
 }
 
+function contentListItemToPageTreeNode(
+	item: ContentListItem,
+): Folder | { type: "page"; url: string; name: string; icon: ReactNode } {
+	// If item has children, create a folder with nested pages
+	if (item.children && item.children.length > 0) {
+		return {
+			type: "folder",
+			name: item.title,
+			icon: <item.icon />,
+			index: {
+				type: "page",
+				url: item.href,
+				name: item.title,
+				icon: <item.icon />,
+			},
+			children: item.children
+				.filter((child) => !child.group && child.href)
+				.map((child) => contentListItemToPageTreeNode(child)),
+		};
+	}
+	// Regular page
+	return {
+		type: "page",
+		url: item.href,
+		name: item.title,
+		icon: <item.icon />,
+	};
+}
+
 function contentToPageTree(content: Content): Folder {
 	return {
 		type: "folder",
@@ -75,20 +107,8 @@ function contentToPageTree(content: Content): Folder {
 				}
 			: undefined,
 		children: content.list
-			.filter((item) => !item.group && (item.href || item.separator))
-			.map((item) =>
-				item.separator
-					? ({
-							type: "separator",
-							name: item.title,
-						} as const)
-					: ({
-							type: "page",
-							url: item.href,
-							name: item.title,
-							icon: <item.icon />,
-						} as const),
-			),
+			.filter((item) => !item.group && item.href)
+			.map((item) => contentListItemToPageTreeNode(item)),
 	};
 }
 
@@ -1408,12 +1428,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: Icons.astro,
 				href: "/docs/integrations/astro",
 			},
-
-			{
-				title: "Remix",
-				icon: Icons.remix,
-				href: "/docs/integrations/remix",
-			},
 			{
 				title: "Next",
 				icon: Icons.nextJS,
@@ -1423,6 +1437,11 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Nuxt",
 				icon: Icons.nuxt,
 				href: "/docs/integrations/nuxt",
+			},
+			{
+				title: "React Router v7",
+				icon: Icons.reactRouter,
+				href: "/docs/integrations/react-router",
 			},
 			{
 				title: "SvelteKit",
@@ -1485,6 +1504,12 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Mobile & Desktop",
 				href: "",
 				icon: LucideAArrowDown,
+			},
+			{
+				title: "Electron",
+				icon: Icons.electron,
+				href: "/docs/integrations/electron",
+				isNew: true,
 			},
 			{
 				title: "Expo",
@@ -1836,6 +1861,23 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Have I Been Pwned",
 				href: "/docs/plugins/have-i-been-pwned",
 				icon: () => <p className="text-xs">';--</p>,
+			},
+			{
+				title: "i18n",
+				href: "/docs/plugins/i18n",
+				icon: () => (
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						width="1.2em"
+						height="1.2em"
+						viewBox="0 0 24 24"
+					>
+						<path
+							fill="currentColor"
+							d="m12.87 15.07l-2.54-2.51l.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35C8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5l3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7l1.62-4.33L19.12 17z"
+						/>
+					</svg>
+				),
 			},
 			{
 				title: "Last Login Method",
@@ -2521,7 +2563,68 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Errors",
 				href: "/docs/reference/errors",
 				icon: () => <TriangleAlertIcon className="w-4 h-4 text-current" />,
-				hasSubpages: true,
+				children: [
+					{
+						title: "invalid_callback_request",
+						href: "/docs/reference/errors/invalid_callback_request",
+						icon: () => null,
+					},
+					{
+						title: "state_not_found",
+						href: "/docs/reference/errors/state_not_found",
+						icon: () => null,
+					},
+					{
+						title: "state_mismatch",
+						href: "/docs/reference/errors/state_mismatch",
+						icon: () => null,
+					},
+					{
+						title: "no_code",
+						href: "/docs/reference/errors/no_code",
+						icon: () => null,
+					},
+					{
+						title: "no_callback_url",
+						href: "/docs/reference/errors/no_callback_url",
+						icon: () => null,
+					},
+					{
+						title: "oauth_provider_not_found",
+						href: "/docs/reference/errors/oauth_provider_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_not_found",
+						href: "/docs/reference/errors/email_not_found",
+						icon: () => null,
+					},
+					{
+						title: "email_doesn't_match",
+						href: "/docs/reference/errors/email_doesn't_match",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_get_user_info",
+						href: "/docs/reference/errors/unable_to_get_user_info",
+						icon: () => null,
+					},
+					{
+						title: "unable_to_link_account",
+						href: "/docs/reference/errors/unable_to_link_account",
+						icon: () => null,
+					},
+					{
+						title: "account_already_linked_to_different_user",
+						href: "/docs/reference/errors/account_already_linked_to_different_user",
+						icon: () => null,
+					},
+					{
+						title: "signup_disabled",
+						href: "/docs/reference/errors/signup_disabled",
+						icon: () => null,
+					},
+				],
 			},
 			{
 				title: "Contributing",
@@ -2600,11 +2703,6 @@ export const examples: Content[] = [
 				icon: Icons.astro,
 			},
 			{
-				title: "Remix",
-				href: "/docs/examples/remix",
-				icon: Icons.remix,
-			},
-			{
 				title: "Next.js",
 				href: "/docs/examples/next-js",
 				icon: Icons.nextJS,
@@ -2613,6 +2711,11 @@ export const examples: Content[] = [
 				title: "Nuxt",
 				href: "/docs/examples/nuxt",
 				icon: Icons.nuxt,
+			},
+			{
+				title: "React Router v7",
+				href: "/docs/examples/react-router",
+				icon: Icons.reactRouter,
 			},
 			{
 				title: "SvelteKit",

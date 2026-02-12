@@ -136,6 +136,7 @@ function sanitizeProvider(
 					callbackUrl: samlConfig.callbackUrl,
 					audience: samlConfig.audience,
 					wantAssertionsSigned: samlConfig.wantAssertionsSigned,
+					authnRequestsSigned: samlConfig.authnRequestsSigned,
 					identifierFormat: samlConfig.identifierFormat,
 					signatureAlgorithm: samlConfig.signatureAlgorithm,
 					digestAlgorithm: samlConfig.digestAlgorithm,
@@ -187,9 +188,7 @@ export const listSSOProviders = () => {
 				(p) => p.organizationId !== null && p.organizationId !== undefined,
 			);
 
-			const orgPluginEnabled =
-				ctx.context.options.plugins?.some(({ id }) => id === "organization") ??
-				false;
+			const orgPluginEnabled = ctx.context.hasPlugin("organization");
 
 			let accessibleProviders: typeof userOwnedProviders = [
 				...userOwnedProviders,
@@ -234,7 +233,7 @@ export const listSSOProviders = () => {
 	);
 };
 
-const getSSOProviderParamsSchema = z.object({
+const getSSOProviderQuerySchema = z.object({
 	providerId: z.string(),
 });
 
@@ -261,10 +260,7 @@ async function checkProviderAccess(
 
 	let hasAccess = false;
 	if (provider.organizationId) {
-		const orgPluginEnabled =
-			ctx.context.options.plugins?.some(({ id }) => id === "organization") ??
-			false;
-		if (orgPluginEnabled) {
+		if (ctx.context.hasPlugin("organization")) {
 			hasAccess = await isOrgAdmin(ctx, userId, provider.organizationId);
 		} else {
 			hasAccess = provider.userId === userId;
@@ -284,11 +280,11 @@ async function checkProviderAccess(
 
 export const getSSOProvider = () => {
 	return createAuthEndpoint(
-		"/sso/providers/:providerId",
+		"/sso/get-provider",
 		{
 			method: "GET",
 			use: [sessionMiddleware],
-			params: getSSOProviderParamsSchema,
+			query: getSSOProviderQuerySchema,
 			metadata: {
 				openapi: {
 					operationId: "getSSOProvider",
@@ -309,7 +305,7 @@ export const getSSOProvider = () => {
 			},
 		},
 		async (ctx) => {
-			const { providerId } = ctx.params;
+			const { providerId } = ctx.query;
 
 			const provider = await checkProviderAccess(ctx, providerId);
 
@@ -354,6 +350,8 @@ function mergeSAMLConfig(
 		audience: updates.audience ?? current.audience,
 		wantAssertionsSigned:
 			updates.wantAssertionsSigned ?? current.wantAssertionsSigned,
+		authnRequestsSigned:
+			updates.authnRequestsSigned ?? current.authnRequestsSigned,
 		identifierFormat: updates.identifierFormat ?? current.identifierFormat,
 		signatureAlgorithm:
 			updates.signatureAlgorithm ?? current.signatureAlgorithm,
@@ -389,12 +387,13 @@ function mergeOIDCConfig(
 
 export const updateSSOProvider = (options: SSOOptions) => {
 	return createAuthEndpoint(
-		"/sso/providers/:providerId",
+		"/sso/update-provider",
 		{
-			method: "PATCH",
+			method: "POST",
 			use: [sessionMiddleware],
-			params: getSSOProviderParamsSchema,
-			body: updateSSOProviderBodySchema,
+			body: updateSSOProviderBodySchema.extend({
+				providerId: z.string(),
+			}),
 			metadata: {
 				openapi: {
 					operationId: "updateSSOProvider",
@@ -416,8 +415,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 			},
 		},
 		async (ctx) => {
-			const { providerId } = ctx.params;
-			const body = ctx.body;
+			const { providerId, ...body } = ctx.body;
 
 			const { issuer, domain, samlConfig, oidcConfig } = body;
 			if (!issuer && !domain && !samlConfig && !oidcConfig) {
@@ -527,11 +525,13 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 export const deleteSSOProvider = () => {
 	return createAuthEndpoint(
-		"/sso/providers/:providerId",
+		"/sso/delete-provider",
 		{
-			method: "DELETE",
+			method: "POST",
 			use: [sessionMiddleware],
-			params: getSSOProviderParamsSchema,
+			body: z.object({
+				providerId: z.string(),
+			}),
 			metadata: {
 				openapi: {
 					operationId: "deleteSSOProvider",
@@ -552,7 +552,7 @@ export const deleteSSOProvider = () => {
 			},
 		},
 		async (ctx) => {
-			const { providerId } = ctx.params;
+			const { providerId } = ctx.body;
 
 			await checkProviderAccess(ctx, providerId);
 

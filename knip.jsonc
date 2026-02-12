@@ -8,7 +8,11 @@
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": ["src/**/*.ts!"],
+			"ignoreDependencies": ["@better-auth/core"]
+		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -48,7 +52,10 @@
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!"
+				"nanostores!",
+
+				// implicit test dependencies
+				"vitest"
 			]
 		},
 		"packages/cli": {
@@ -74,6 +81,16 @@
 				"react-native"
 			]
 		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
 		"packages/stripe": {
 			"ignoreDependencies": [
 				// implicit dependencies
@@ -83,7 +100,17 @@
 		"packages/sso": {
 			"ignoreDependencies": [
 				// type-only dependencies
+				"@better-auth/core",
 				"better-call"
+			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
 			]
 		}
 	},

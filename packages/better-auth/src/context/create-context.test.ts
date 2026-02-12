@@ -1,10 +1,11 @@
-import Database from "better-sqlite3";
+import { DatabaseSync } from "node:sqlite";
 import { describe, expect, it, vi } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { getAdapter } from "../db";
+import { getAdapter } from "../db/adapter-kysely";
 import { getTestInstance } from "../test-utils/test-instance";
 import type { BetterAuthOptions } from "../types";
 import { createAuthContext } from "./create-context";
+import { getAwaitableValue } from "./helpers";
 
 describe("base context creation", () => {
 	const initBase = async (options: Partial<BetterAuthOptions> = {}) => {
@@ -54,12 +55,14 @@ describe("base context creation", () => {
 
 	it("should execute plugins init", async () => {
 		const newBaseURL = "http://test.test";
+		const set = new Set<object>();
 		const res = await initBase({
 			baseURL: "http://localhost:3000",
 			plugins: [
 				{
 					id: "test",
-					init: () => {
+					init: (ctx) => {
+						set.add(ctx);
 						return {
 							context: {
 								baseURL: newBaseURL,
@@ -69,6 +72,8 @@ describe("base context creation", () => {
 				},
 			],
 		});
+		set.add(res);
+		expect(set.size).toBe(1);
 		expect(res.baseURL).toBe(newBaseURL);
 	});
 
@@ -168,12 +173,14 @@ describe("base context creation", () => {
 			],
 		});
 		expect(ctx.socialProviders).toHaveLength(2);
-		const testProvider = ctx.socialProviders.find(
-			(p) => p.id === "test-oauth-provider",
-		);
+		const testProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "test-oauth-provider",
+		});
 		expect(testProvider).toBeDefined();
 		expect(testProvider?.refreshAccessToken).toBeDefined();
-		const githubProvider = ctx.socialProviders.find((p) => p.id === "github");
+		const githubProvider = await getAwaitableValue(ctx.socialProviders, {
+			value: "github",
+		});
 		expect(githubProvider).toBeDefined();
 	});
 
@@ -286,7 +293,7 @@ describe("base context creation", () => {
 
 		it("should return false for cookieRefreshCache when undefined", async () => {
 			const res = await initBase({
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 			});
 			expect(res.sessionConfig.cookieRefreshCache).toBe(false);
 		});
@@ -329,7 +336,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
@@ -516,7 +523,10 @@ describe("base context creation", () => {
 					},
 				},
 			});
-			const github = res.socialProviders.find((p) => p.id === "github");
+
+			const github = await getAwaitableValue(res.socialProviders, {
+				value: "github",
+			});
 			expect(github?.disableImplicitSignUp).toBe(true);
 		});
 	});
@@ -606,9 +616,9 @@ describe("base context creation", () => {
 			expect(fn).toHaveBeenCalled();
 			const regex = /Misconfiguration detected/;
 			expect(fn).toHaveBeenCalledWith(expect.stringMatching(regex));
-			fn.mockRestore();
 			const id = res.generateId({ model: "user" });
 			expect(id).toBe(false);
+			fn.mockRestore();
 		});
 	});
 
@@ -1303,7 +1313,7 @@ describe("base context creation", () => {
 					level: "warn",
 					log,
 				} as any,
-				database: new Database(":memory:"),
+				database: new DatabaseSync(":memory:"),
 				session: {
 					cookieCache: {
 						refreshCache: true,
@@ -1602,9 +1612,21 @@ describe("base context creation", () => {
 			});
 
 			expect(ctx.socialProviders).toHaveLength(3);
-			expect(ctx.socialProviders.find((p) => p.id === "github")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "google")).toBeDefined();
-			expect(ctx.socialProviders.find((p) => p.id === "discord")).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "github",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "google",
+				}),
+			).toBeDefined();
+			expect(
+				await getAwaitableValue(ctx.socialProviders, {
+					value: "discord",
+				}),
+			).toBeDefined();
 		});
 
 		it("should handle secondaryStorage configuration", async () => {
@@ -1662,6 +1684,55 @@ describe("base context creation", () => {
 			});
 			expect(ctx.options.session?.cookieCache?.enabled).toBe(false);
 			expect(ctx.oauthConfig.storeStateStrategy).toBe("database");
+		});
+	});
+
+	describe("hasPlugin", () => {
+		it("should return true when plugin is enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "test-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(true);
+		});
+
+		it("should return false when plugin is not enabled", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "other-plugin",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should return false when no plugins are configured", async () => {
+			const ctx = await initBase({});
+			expect(ctx.hasPlugin("test-plugin")).toBe(false);
+		});
+
+		it("should work with multiple plugins", async () => {
+			const ctx = await initBase({
+				plugins: [
+					{
+						id: "plugin-1",
+					},
+					{
+						id: "plugin-2",
+					},
+					{
+						id: "plugin-3",
+					},
+				],
+			});
+			expect(ctx.hasPlugin("plugin-1")).toBe(true);
+			expect(ctx.hasPlugin("plugin-2")).toBe(true);
+			expect(ctx.hasPlugin("plugin-3")).toBe(true);
+			expect(ctx.hasPlugin("plugin-4")).toBe(false);
 		});
 	});
 });

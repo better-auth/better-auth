@@ -1,5 +1,6 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { APIError, sessionMiddleware } from "better-auth/api";
+import { APIError } from "@better-auth/core/error";
+import { sessionMiddleware } from "better-auth/api";
 import { STRIPE_ERROR_CODES } from "./error-codes";
 import type {
 	AuthorizeReferenceAction,
@@ -27,9 +28,7 @@ export const referenceMiddleware = (
 	createAuthMiddleware(async (ctx) => {
 		const ctxSession = ctx.context.session as StripeCtxSession;
 		if (!ctxSession) {
-			throw new APIError("UNAUTHORIZED", {
-				message: STRIPE_ERROR_CODES.UNAUTHORIZED,
-			});
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
 
 		const customerType: CustomerType =
@@ -42,17 +41,19 @@ export const referenceMiddleware = (
 				ctx.context.logger.error(
 					`Organization subscriptions require authorizeReference to be defined in your stripe plugin config.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.ORGANIZATION_SUBSCRIPTION_NOT_ENABLED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.AUTHORIZE_REFERENCE_REQUIRED,
+				);
 			}
 
 			const referenceId =
 				explicitReferenceId || ctxSession.session.activeOrganizationId;
 			if (!referenceId) {
-				throw new APIError("BAD_REQUEST", {
-					message: STRIPE_ERROR_CODES.ORGANIZATION_REFERENCE_ID_REQUIRED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					STRIPE_ERROR_CODES.ORGANIZATION_REFERENCE_ID_REQUIRED,
+				);
 			}
 			const isAuthorized = await subscriptionOptions.authorizeReference(
 				{
@@ -64,9 +65,7 @@ export const referenceMiddleware = (
 				ctx,
 			);
 			if (!isAuthorized) {
-				throw new APIError("UNAUTHORIZED", {
-					message: STRIPE_ERROR_CODES.UNAUTHORIZED,
-				});
+				throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 			}
 			return;
 		}
@@ -85,9 +84,10 @@ export const referenceMiddleware = (
 			ctx.context.logger.error(
 				`Passing referenceId into a subscription action isn't allowed if subscription.authorizeReference isn't defined in your stripe plugin config.`,
 			);
-			throw new APIError("BAD_REQUEST", {
-				message: STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				STRIPE_ERROR_CODES.REFERENCE_ID_NOT_ALLOWED,
+			);
 		}
 		const isAuthorized = await subscriptionOptions.authorizeReference(
 			{
@@ -99,8 +99,6 @@ export const referenceMiddleware = (
 			ctx,
 		);
 		if (!isAuthorized) {
-			throw new APIError("UNAUTHORIZED", {
-				message: STRIPE_ERROR_CODES.UNAUTHORIZED,
-			});
+			throw APIError.from("UNAUTHORIZED", STRIPE_ERROR_CODES.UNAUTHORIZED);
 		}
 	});

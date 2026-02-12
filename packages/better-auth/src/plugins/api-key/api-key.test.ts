@@ -1,7 +1,8 @@
-import { APIError } from "better-call";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { APIError } from "@better-auth/core/error";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { apiKey, ERROR_CODES } from ".";
+import { isAPIError } from "../../utils/is-api-error";
+import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 
@@ -27,6 +28,10 @@ describe("api-key", async () => {
 	);
 	const { headers, user } = await signInWithTestUser();
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	// =========================================================================
 	// CREATE API KEY
 	// =========================================================================
@@ -38,7 +43,9 @@ describe("api-key", async () => {
 		expect(apiKeyFail.error).toBeDefined();
 		expect(apiKeyFail.error?.status).toEqual(401);
 		expect(apiKeyFail.error?.statusText).toEqual("UNAUTHORIZED");
-		expect(apiKeyFail.error?.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(apiKeyFail.error?.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	let firstApiKey: ApiKey;
@@ -95,7 +102,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should fail to create api keys from the client if user id is provided", async () => {
@@ -198,7 +207,7 @@ describe("api-key", async () => {
 			err = error;
 		}
 		expect(err).toBeDefined();
-		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED);
+		expect(err.body.message).toBe(ERROR_CODES.NAME_REQUIRED.message);
 	});
 
 	it("should respect rateLimit configuration from plugin options", async () => {
@@ -266,7 +275,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with a name that's longer than the allowed maximum", async () => {
@@ -288,7 +299,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.INVALID_NAME_LENGTH.message,
+		);
 	});
 
 	it("should create the API key with the given prefix", async () => {
@@ -325,7 +338,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -349,7 +362,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_PREFIX_LENGTH,
+			ERROR_CODES.INVALID_PREFIX_LENGTH.message,
 		);
 	});
 
@@ -465,7 +478,7 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -490,7 +503,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -515,7 +528,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -530,7 +543,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -542,7 +557,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should fail to create API key when refill interval is provided, but no refill amount", async () => {
@@ -566,7 +583,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -591,7 +608,7 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.status).toEqual("BAD_REQUEST");
 		expect(res.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -710,7 +727,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -796,7 +813,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.METADATA_DISABLED);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.METADATA_DISABLED.message,
+		);
 	});
 
 	it("should have the first 6 characters of the key as the start property", async () => {
@@ -879,7 +898,9 @@ describe("api-key", async () => {
 		expect(apiKey.data).toBeNull();
 		expect(apiKey.error).toBeDefined();
 		expect(apiKey.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 
 		const apiKey2 = await client.apiKey.create(
 			{
@@ -891,7 +912,9 @@ describe("api-key", async () => {
 		expect(apiKey2.data).toBeNull();
 		expect(apiKey2.error).toBeDefined();
 		expect(apiKey2.error?.statusText).toEqual("BAD_REQUEST");
-		expect(apiKey2.error?.message).toEqual(ERROR_CODES.SERVER_ONLY_PROPERTY);
+		expect(apiKey2.error?.message).toEqual(
+			ERROR_CODES.SERVER_ONLY_PROPERTY.message,
+		);
 	});
 
 	it("should successfully apply custom rate-limit options on the newly created API key", async () => {
@@ -1098,7 +1121,9 @@ describe("api-key", async () => {
 		expect(res.error).toBeDefined();
 		expect(res.error?.statusCode).toEqual(401);
 		expect(res.error?.status).toEqual("UNAUTHORIZED");
-		expect(res.error?.body.message).toEqual(ERROR_CODES.UNAUTHORIZED_SESSION);
+		expect(res.error?.body.message).toEqual(
+			ERROR_CODES.UNAUTHORIZED_SESSION.message,
+		);
 	});
 
 	it("should update API key name with headers", async () => {
@@ -1126,10 +1151,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1146,10 +1173,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.INVALID_NAME_LENGTH);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.INVALID_NAME_LENGTH.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1165,10 +1194,12 @@ describe("api-key", async () => {
 				headers,
 			})
 			.catch((e) => {
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
-					expect(error?.body?.message).toEqual(ERROR_CODES.NO_VALUES_TO_UPDATE);
+					expect(error?.body?.message).toEqual(
+						ERROR_CODES.NO_VALUES_TO_UPDATE.message,
+					);
 				}
 			});
 		expect(error).not.toBeNull();
@@ -1232,7 +1263,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.KEY_DISABLED_EXPIRATION,
+			ERROR_CODES.KEY_DISABLED_EXPIRATION.message,
 		);
 	});
 
@@ -1279,7 +1310,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL.message,
 		);
 	});
 
@@ -1326,7 +1357,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
+			ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE.message,
 		);
 	});
 
@@ -1365,7 +1396,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
+			ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED.message,
 		);
 	});
 
@@ -1390,7 +1421,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
+			ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED.message,
 		);
 	});
 
@@ -1446,7 +1477,7 @@ describe("api-key", async () => {
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("BAD_REQUEST");
 		expect(result.error?.body.message).toEqual(
-			ERROR_CODES.INVALID_METADATA_TYPE,
+			ERROR_CODES.INVALID_METADATA_TYPE.message,
 		);
 	});
 
@@ -1638,7 +1669,10 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	it("should fail to list API keys without headers", async () => {
-		const result: { data: Partial<ApiKey>[] | null; error: Err | null } = {
+		const result: {
+			data: { apiKeys: Partial<ApiKey>[]; total: number } | null;
+			error: Err | null;
+		} = {
 			data: null,
 			error: null,
 		};
@@ -1660,7 +1694,8 @@ describe("api-key", async () => {
 		});
 
 		expect(apiKeys).not.toBeNull();
-		expect(apiKeys.length).toBeGreaterThan(0);
+		expect(apiKeys.apiKeys.length).toBeGreaterThan(0);
+		expect(apiKeys.total).toBeGreaterThan(0);
 	});
 
 	it("should list API keys with metadata as an object", async () => {
@@ -1669,11 +1704,200 @@ describe("api-key", async () => {
 		});
 
 		expect(apiKeys).not.toBeNull();
-		expect(apiKeys.length).toBeGreaterThan(0);
-		apiKeys.map((apiKey) => {
+		expect(apiKeys.apiKeys.length).toBeGreaterThan(0);
+		apiKeys.apiKeys.map((apiKey) => {
 			if (apiKey.metadata) {
 				expect(apiKey.metadata).toBeInstanceOf(Object);
 			}
+		});
+	});
+
+	// =========================================================================
+	// LIST API KEY PAGINATION
+	// =========================================================================
+
+	describe("list API keys pagination", () => {
+		it("should return paginated response with total count", async () => {
+			const result = await auth.api.listApiKeys({
+				headers,
+			});
+
+			expect(result).not.toBeNull();
+			expect(result.apiKeys).toBeDefined();
+			expect(Array.isArray(result.apiKeys)).toBe(true);
+			expect(typeof result.total).toBe("number");
+			expect(result.total).toBeGreaterThanOrEqual(result.apiKeys.length);
+		});
+
+		it("should limit the number of returned API keys", async () => {
+			// Create multiple API keys for testing
+			await auth.api.createApiKey({
+				body: { name: "pagination-key-1" },
+				headers,
+			});
+			await auth.api.createApiKey({
+				body: { name: "pagination-key-2" },
+				headers,
+			});
+			await auth.api.createApiKey({
+				body: { name: "pagination-key-3" },
+				headers,
+			});
+
+			const result = await auth.api.listApiKeys({
+				query: { limit: 2 },
+				headers,
+			});
+
+			expect(result.apiKeys.length).toBeLessThanOrEqual(2);
+			expect(result.limit).toBe(2);
+			expect(result.total).toBeGreaterThanOrEqual(3);
+		});
+
+		it("should skip API keys with offset", async () => {
+			const allResults = await auth.api.listApiKeys({
+				headers,
+			});
+
+			const offsetResults = await auth.api.listApiKeys({
+				query: { offset: 1 },
+				headers,
+			});
+
+			expect(offsetResults.offset).toBe(1);
+			expect(offsetResults.apiKeys.length).toBe(allResults.apiKeys.length - 1);
+		});
+
+		it("should support pagination with both limit and offset", async () => {
+			const page1 = await auth.api.listApiKeys({
+				query: { limit: 2, offset: 0 },
+				headers,
+			});
+
+			const page2 = await auth.api.listApiKeys({
+				query: { limit: 2, offset: 2 },
+				headers,
+			});
+
+			expect(page1.apiKeys.length).toBeLessThanOrEqual(2);
+			expect(page2.apiKeys.length).toBeLessThanOrEqual(2);
+			expect(page1.limit).toBe(2);
+			expect(page1.offset).toBe(0);
+			expect(page2.offset).toBe(2);
+
+			// Ensure no overlap between pages
+			const page1Ids = page1.apiKeys.map((k) => k.id);
+			const page2Ids = page2.apiKeys.map((k) => k.id);
+			const overlap = page1Ids.filter((id) => page2Ids.includes(id));
+			expect(overlap.length).toBe(0);
+		});
+
+		it("should sort API keys by createdAt ascending", async () => {
+			const result = await auth.api.listApiKeys({
+				query: { sortBy: "createdAt", sortDirection: "asc" },
+				headers,
+			});
+
+			expect(result.apiKeys.length).toBeGreaterThan(1);
+			for (let i = 1; i < result.apiKeys.length; i++) {
+				const prev = new Date(result.apiKeys[i - 1]!.createdAt).getTime();
+				const curr = new Date(result.apiKeys[i]!.createdAt).getTime();
+				expect(curr).toBeGreaterThanOrEqual(prev);
+			}
+		});
+
+		it("should sort API keys by createdAt descending", async () => {
+			const result = await auth.api.listApiKeys({
+				query: { sortBy: "createdAt", sortDirection: "desc" },
+				headers,
+			});
+
+			expect(result.apiKeys.length).toBeGreaterThan(1);
+			for (let i = 1; i < result.apiKeys.length; i++) {
+				const prev = new Date(result.apiKeys[i - 1]!.createdAt).getTime();
+				const curr = new Date(result.apiKeys[i]!.createdAt).getTime();
+				expect(curr).toBeLessThanOrEqual(prev);
+			}
+		});
+
+		it("should sort API keys by name", async () => {
+			// Create keys with specific names for sorting test
+			await auth.api.createApiKey({
+				body: { name: "aaa-sort-test" },
+				headers,
+			});
+			await auth.api.createApiKey({
+				body: { name: "zzz-sort-test" },
+				headers,
+			});
+
+			const ascResult = await auth.api.listApiKeys({
+				query: { sortBy: "name", sortDirection: "asc" },
+				headers,
+			});
+
+			const descResult = await auth.api.listApiKeys({
+				query: { sortBy: "name", sortDirection: "desc" },
+				headers,
+			});
+
+			// Filter to only named keys for comparison
+			const ascNamed = ascResult.apiKeys.filter((k) =>
+				k.name?.includes("-sort-test"),
+			);
+			const descNamed = descResult.apiKeys.filter((k) =>
+				k.name?.includes("-sort-test"),
+			);
+
+			expect(ascNamed[0]!.name).toBe("aaa-sort-test");
+			expect(descNamed[0]!.name).toBe("zzz-sort-test");
+		});
+
+		it("should combine sorting with pagination", async () => {
+			const result = await auth.api.listApiKeys({
+				query: {
+					limit: 3,
+					offset: 0,
+					sortBy: "createdAt",
+					sortDirection: "desc",
+				},
+				headers,
+			});
+
+			expect(result.apiKeys.length).toBeLessThanOrEqual(3);
+			expect(result.limit).toBe(3);
+
+			// Verify sorting is applied
+			for (let i = 1; i < result.apiKeys.length; i++) {
+				const prev = new Date(result.apiKeys[i - 1]!.createdAt).getTime();
+				const curr = new Date(result.apiKeys[i]!.createdAt).getTime();
+				expect(curr).toBeLessThanOrEqual(prev);
+			}
+		});
+
+		it("should return empty array when offset exceeds total", async () => {
+			const allResults = await auth.api.listApiKeys({
+				headers,
+			});
+
+			const result = await auth.api.listApiKeys({
+				query: { offset: allResults.total + 100 },
+				headers,
+			});
+
+			expect(result.apiKeys.length).toBe(0);
+			expect(result.total).toBe(allResults.total);
+		});
+
+		it("should handle string query parameters for limit and offset", async () => {
+			const result = await auth.api.listApiKeys({
+				query: { limit: "2", offset: "1" } as any,
+				headers,
+			});
+
+			expect(result.limit).toBe(2);
+			expect(result.offset).toBe(1);
+			expect(result.apiKeys.length).toBeLessThanOrEqual(2);
 		});
 	});
 
@@ -1850,7 +2074,9 @@ describe("api-key", async () => {
 		expect(result.data).toBeNull();
 		expect(result.error).toBeDefined();
 		expect(result.error?.status).toEqual("NOT_FOUND");
-		expect(result.error?.body.message).toEqual(ERROR_CODES.KEY_NOT_FOUND);
+		expect(result.error?.body.message).toEqual(
+			ERROR_CODES.KEY_NOT_FOUND.message,
+		);
 	});
 
 	it("should create an API key with permissions", async () => {
@@ -2317,9 +2543,9 @@ describe("api-key", async () => {
 			});
 
 			expect(keys).not.toBeNull();
-			expect(keys?.length).toBeGreaterThanOrEqual(2);
-			expect(keys?.some((k) => k.id === key1?.id)).toBe(true);
-			expect(keys?.some((k) => k.id === key2?.id)).toBe(true);
+			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
+			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2552,10 +2778,10 @@ describe("api-key", async () => {
 				fetchOptions: { headers: headers },
 			});
 
-			expect(keys?.length).toBeGreaterThanOrEqual(3);
-			expect(keys?.some((k) => k.id === key1?.id)).toBe(true);
-			expect(keys?.some((k) => k.id === key2?.id)).toBe(true);
-			expect(keys?.some((k) => k.id === key3?.id)).toBe(true);
+			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(3);
+			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k) => k.id === key3?.id)).toBe(true);
 
 			// Delete one key
 			await client.apiKey.delete({ keyId: key2!.id }, { headers: headers });
@@ -2565,8 +2791,10 @@ describe("api-key", async () => {
 				fetchOptions: { headers: headers },
 			});
 
-			expect(keysAfterDelete?.length).toBe(keys!.length - 1);
-			expect(keysAfterDelete?.some((k) => k.id === key2?.id)).toBe(false);
+			expect(keysAfterDelete?.apiKeys?.length).toBe(keys!.apiKeys!.length - 1);
+			expect(keysAfterDelete?.apiKeys?.some((k) => k.id === key2?.id)).toBe(
+				false,
+			);
 		});
 	});
 
@@ -2791,9 +3019,9 @@ describe("api-key", async () => {
 			const { data: keys } = await client.apiKey.list({}, { headers: headers });
 
 			expect(keys).not.toBeNull();
-			expect(keys?.length).toBeGreaterThanOrEqual(2);
-			expect(keys?.some((k) => k.id === dbKey1!.id)).toBe(true);
-			expect(keys?.some((k) => k.id === dbKey2!.id)).toBe(true);
+			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
+			expect(keys?.apiKeys?.some((k) => k.id === dbKey1!.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k) => k.id === dbKey2!.id)).toBe(true);
 
 			// Verify keys are now in storage (auto-populated)
 			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(true);
@@ -3000,6 +3228,8 @@ describe("api-key", async () => {
 			const result3 = await auth.api.verifyApiKey({ body: { key: key.key } });
 			expect(result3.valid).toBe(false);
 			expect(result3.error?.code).toBe("RATE_LIMITED");
+			expect(result3.error).toHaveProperty("details");
+			expect((result3.error as any)?.details).toHaveProperty("tryAgainIn");
 		});
 
 		it("should defer remaining count updates", async () => {
@@ -3277,8 +3507,12 @@ describe("api-key", async () => {
 			// List via API - both keys should have properly parsed metadata objects
 			const results = await auth.api.listApiKeys({ headers });
 
-			const foundKey1 = results.find((k: any) => k.id === createdKey1.id);
-			const foundKey2 = results.find((k: any) => k.id === createdKey2.id);
+			const foundKey1 = results.apiKeys.find(
+				(k: any) => k.id === createdKey1.id,
+			);
+			const foundKey2 = results.apiKeys.find(
+				(k: any) => k.id === createdKey2.id,
+			);
 
 			expect(foundKey1).toBeDefined();
 			expect(foundKey1?.metadata).toEqual({ plan: "legacy-1" });

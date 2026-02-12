@@ -1,4 +1,4 @@
-import { normalizeIP } from "@better-auth/core/utils";
+import { normalizeIP } from "@better-auth/core/utils/ip";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { RateLimit } from "../../types";

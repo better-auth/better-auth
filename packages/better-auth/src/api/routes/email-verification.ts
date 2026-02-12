@@ -1,7 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import type { JWTPayload, JWTVerifyResult } from "jose";
 import { jwtVerify } from "jose";
 import { JWTExpired } from "jose/errors";
@@ -50,9 +49,10 @@ export async function sendVerificationEmailFn(
 ) {
 	if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 		ctx.context.logger.error("Verification email isn't enabled.");
-		throw new APIError("BAD_REQUEST", {
-			message: "Verification email isn't enabled",
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+		);
 	}
 	const token = await createEmailVerificationToken(
 		ctx.context.secret,
@@ -162,22 +162,23 @@ export const sendVerificationEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
-				message: "Verification email isn't enabled",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.VERIFICATION_EMAIL_NOT_ENABLED,
+			);
 		}
 		const { email } = ctx.body;
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
+			if (!user || user.user.emailVerified) {
 				await createEmailVerificationToken(
 					ctx.context.secret,
 					email,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
 				);
-				//we're returning true to avoid leaking information about the user
+				// We're returning true to avoid leaking information about the user
 				return ctx.json({
 					status: true,
 				});
@@ -188,14 +189,13 @@ export const sendVerificationEmail = createAuthEndpoint(
 			});
 		}
 		if (session?.user.email !== email) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.EMAIL_MISMATCH,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.EMAIL_MISMATCH);
 		}
 		if (session?.user.emailVerified) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.EMAIL_ALREADY_VERIFIED,
+			);
 		}
 		await sendVerificationEmailFn(ctx, session.user);
 		return ctx.json({
@@ -272,16 +272,14 @@ export const verifyEmail = createAuthEndpoint(
 		},
 	},
 	async (ctx) => {
-		function redirectOnError(error: string) {
+		function redirectOnError(error: { code: string; message: string }) {
 			if (ctx.query.callbackURL) {
 				if (ctx.query.callbackURL.includes("?")) {
-					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error}`);
+					throw ctx.redirect(`${ctx.query.callbackURL}&error=${error.code}`);
 				}
-				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error}`);
+				throw ctx.redirect(`${ctx.query.callbackURL}?error=${error.code}`);
 			}
-			throw new APIError("UNAUTHORIZED", {
-				message: error,
-			});
+			throw APIError.from("UNAUTHORIZED", error);
 		}
 		const { token } = ctx.query;
 		let jwt: JWTVerifyResult<JWTPayload>;
@@ -295,9 +293,9 @@ export const verifyEmail = createAuthEndpoint(
 			);
 		} catch (e) {
 			if (e instanceof JWTExpired) {
-				return redirectOnError("token_expired");
+				return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
 			}
-			return redirectOnError("invalid_token");
+			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const schema = z.object({
 			email: z.email(),
@@ -309,12 +307,12 @@ export const verifyEmail = createAuthEndpoint(
 			parsed.email,
 		);
 		if (!user) {
-			return redirectOnError("user_not_found");
+			return redirectOnError(BASE_ERROR_CODES.USER_NOT_FOUND);
 		}
 		if (parsed.updateTo) {
 			const session = await getSessionFromCtx(ctx);
 			if (session && session.user.email !== parsed.email) {
-				return redirectOnError("unauthorized");
+				return redirectOnError(BASE_ERROR_CODES.INVALID_USER);
 			}
 			switch (parsed.requestType) {
 				/**
@@ -359,20 +357,15 @@ export const verifyEmail = createAuthEndpoint(
 							user.user.id,
 						);
 						if (!newSession) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							});
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
 						}
 						activeSession = {
 							session: newSession,
 							user: user.user,
 						};
-					}
-					if (ctx.context.options.emailVerification?.onEmailVerification) {
-						await ctx.context.options.emailVerification.onEmailVerification(
-							user.user,
-							ctx.request,
-						);
 					}
 					const updatedUser =
 						await ctx.context.internalAdapter.updateUserByEmail(parsed.email, {
@@ -414,9 +407,10 @@ export const verifyEmail = createAuthEndpoint(
 							user.user.id,
 						);
 						if (!newSession) {
-							throw new APIError("INTERNAL_SERVER_ERROR", {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
-							});
+							throw APIError.from(
+								"INTERNAL_SERVER_ERROR",
+								BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+							);
 						}
 						activeSession = {
 							session: newSession,
@@ -480,12 +474,6 @@ export const verifyEmail = createAuthEndpoint(
 				ctx.request,
 			);
 		}
-		if (ctx.context.options.emailVerification?.onEmailVerification) {
-			await ctx.context.options.emailVerification.onEmailVerification(
-				user.user,
-				ctx.request,
-			);
-		}
 		const updatedUser = await ctx.context.internalAdapter.updateUserByEmail(
 			parsed.email,
 			{
@@ -505,9 +493,10 @@ export const verifyEmail = createAuthEndpoint(
 					user.user.id,
 				);
 				if (!session) {
-					throw new APIError("INTERNAL_SERVER_ERROR", {
-						message: "Failed to create session",
-					});
+					throw APIError.from(
+						"INTERNAL_SERVER_ERROR",
+						BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+					);
 				}
 				await setSessionCookie(ctx, {
 					session,

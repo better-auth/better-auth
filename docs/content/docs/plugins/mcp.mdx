@@ -25,13 +25,13 @@ This plugin is based on OIDC Provider plugin. It's currently not ready for produ
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth";
-        import { mcp } from "better-auth/plugins";
+        import { mcp } from "better-auth/plugins"; // [!code highlight]
 
         export const auth = betterAuth({
             plugins: [
-                mcp({
-                    loginPage: "/sign-in" // path to your login page
-                })
+                mcp({ // [!code highlight]
+                    loginPage: "/sign-in" // path to your login page // [!code highlight]
+                }) // [!code highlight]
             ]
         });
         ```

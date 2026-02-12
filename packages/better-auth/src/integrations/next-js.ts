@@ -1,5 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { setShouldSkipSessionRefresh } from "../api/state/should-session-refresh";
 import { parseSetCookieHeader } from "../cookies";
 
 export function toNextJsHandler(
@@ -25,6 +26,33 @@ export const nextCookies = () => {
 	return {
 		id: "next-cookies",
 		hooks: {
+			before: [
+				{
+					matcher(ctx) {
+						return ctx.path === "/get-session";
+					},
+					handler: createAuthMiddleware(async () => {
+						// Detect Server Component by testing if cookies can be modified.
+						// In Server Components, `cookies().set()` throws an error.
+						// In Server Actions or Route Handlers, it succeeds.
+						let cookieStore: Awaited<
+							ReturnType<typeof import("next/headers").cookies>
+						>;
+						try {
+							const { cookies } = await import("next/headers");
+							cookieStore = await cookies();
+						} catch {
+							// import failed or not in request context
+							return;
+						}
+						try {
+							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
+						} catch {
+							await setShouldSkipSessionRefresh(true);
+						}
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(ctx) {

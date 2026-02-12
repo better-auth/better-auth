@@ -77,6 +77,9 @@ If you enable require email verification, users must verify their email before t
 </Callout>
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sendEmail } from './email'; // your email sending function
+
 export const auth = betterAuth({
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
@@ -142,6 +145,8 @@ await authClient.verifyEmail({
 To sign in the user automatically after they successfully verify their email, set the `autoSignInAfterVerification` option to `true`:
 
 ```ts
+import { betterAuth } from "better-auth";
+
 const auth = betterAuth({
     //...your other options
     emailVerification: {

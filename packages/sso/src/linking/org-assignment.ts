@@ -5,13 +5,13 @@ import type { NormalizedSSOProfile } from "./types";
 
 export interface OrganizationProvisioningOptions {
 	disabled?: boolean;
-	defaultRole?: "member" | "admin";
+	defaultRole?: string;
 	getRole?: (data: {
 		user: User & Record<string, any>;
 		userInfo: Record<string, any>;
 		token?: OAuth2Tokens;
 		provider: SSOProvider<SSOOptions>;
-	}) => Promise<"member" | "admin">;
+	}) => Promise<string>;
 }
 
 export interface AssignOrganizationFromProviderOptions {
@@ -40,11 +40,7 @@ export async function assignOrganizationFromProvider(
 		return;
 	}
 
-	const hasOrganizationPlugin =
-		ctx.context.options.plugins?.some(
-			(plugin) => plugin.id === "organization",
-		) ?? false;
-	if (!hasOrganizationPlugin) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 
@@ -106,11 +102,7 @@ export async function assignOrganizationByDomain(
 		return;
 	}
 
-	const hasOrganizationPlugin =
-		ctx.context.options.plugins?.some(
-			(plugin) => plugin.id === "organization",
-		) ?? false;
-	if (!hasOrganizationPlugin) {
+	if (!ctx.context.hasPlugin("organization")) {
 		return;
 	}
 

@@ -15,11 +15,11 @@ The One-Time Token (OTT) plugin provides functionality to generate and verify se
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { oneTimeToken } from "better-auth/plugins/one-time-token";
+    import { oneTimeToken } from "better-auth/plugins/one-time-token"; // [!code highlight]
     
     export const auth = betterAuth({
         plugins: [
-          oneTimeToken()
+          oneTimeToken() // [!code highlight]
         ]
         // ... other auth config
     });
@@ -33,11 +33,11 @@ The One-Time Token (OTT) plugin provides functionality to generate and verify se
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { oneTimeTokenClient } from "better-auth/client/plugins"
+    import { oneTimeTokenClient } from "better-auth/client/plugins" // [!code highlight]
     
     export const authClient = createAuthClient({
         plugins: [
-            oneTimeTokenClient()
+            oneTimeTokenClient() // [!code highlight]
         ]
     })
     ```

@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { serve } from "@hono/node-server";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db";
+import { getMigrations } from "better-auth/db/migration";
 import { Hono } from "hono";
 
 const database = new DatabaseSync(":memory:");

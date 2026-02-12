@@ -1,7 +1,6 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
-import { BetterAuthError } from "@better-auth/core/error";
-import { APIError } from "../../api";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { mergeSchema } from "../../db/schema";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 import { defaultRoles } from "./access";
@@ -29,6 +28,14 @@ import type {
 	SessionWithImpersonatedBy,
 	UserWithRole,
 } from "./types";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		admin: {
+			creator: typeof admin;
+		};
+	}
+}
 
 export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 	const opts = {
@@ -117,7 +124,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 											);
 										}
 
-										throw new APIError("FORBIDDEN", {
+										throw APIError.from("FORBIDDEN", {
 											message: opts.bannedUserMessage,
 											code: "BANNED_USER",
 										});

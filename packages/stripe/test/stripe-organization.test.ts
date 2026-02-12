@@ -81,10 +81,6 @@ describe("stripe - organization customer", () => {
 		},
 	} satisfies StripeOptions;
 
-	beforeEach(() => {
-		vi.clearAllMocks();
-	});
-
 	it("should create a Stripe customer for organization when upgrading subscription", async () => {
 		const onCustomerCreate = vi.fn();
 		const stripeOptionsWithOrgCallback: StripeOptions = {
@@ -821,7 +817,7 @@ describe("stripe - organization customer", () => {
 		});
 
 		// Try to cancel other org's subscription - authorizeReference returns false for org_other
-		const _cancelRes = await client.subscription.cancel({
+		const cancelRes = await client.subscription.cancel({
 			customerType: "organization",
 			referenceId: otherOrgId,
 			returnUrl: "/dashboard",
@@ -829,10 +825,10 @@ describe("stripe - organization customer", () => {
 		});
 
 		// authorizeReference returns false -> UNAUTHORIZED from middleware
-		// expect(cancelRes.error?.code).toBe("UNAUTHORIZED");
+		expect(cancelRes.error?.code).toBe("UNAUTHORIZED");
 	});
 
-	it("should reject organization subscription when organization.enabled is false", async () => {
+	it("should reject organization subscription when authorizeReference is not configured", async () => {
 		const stripeOptionsWithoutOrg: StripeOptions = {
 			...baseOrgStripeOptions,
 			organization: undefined, // Disable organization support
@@ -871,14 +867,14 @@ describe("stripe - organization customer", () => {
 
 		// Try to upgrade with organization customerType when organization is not enabled
 		// Without authorizeReference, middleware rejects organization subscriptions
-		const _res = await client.subscription.upgrade({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
 			customerType: "organization",
 			referenceId: "fake-org-id",
 			fetchOptions: { headers },
 		});
 
-		// expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+		expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 	});
 
 	it("should keep user and organization subscriptions separate", async () => {
@@ -1412,14 +1408,14 @@ describe("stripe - organization customer", () => {
 		);
 
 		// Try to upgrade subscription for non-existent organization
-		const _res = await client.subscription.upgrade({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
 			customerType: "organization",
 			referenceId: "non_existent_org_id",
 			fetchOptions: { headers },
 		});
 
-		// expect(res.error?.code).toBe("ORGANIZATION_NOT_FOUND");
+		expect(res.error?.code).toBe("ORGANIZATION_NOT_FOUND");
 	});
 
 	it("should return error when Stripe customer creation fails for organization", async () => {
@@ -1470,14 +1466,14 @@ describe("stripe - organization customer", () => {
 		});
 		const orgId = org.data?.id as string;
 
-		const _res = await client.subscription.upgrade({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
 			customerType: "organization",
 			referenceId: orgId,
 			fetchOptions: { headers },
 		});
 
-		// expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
+		expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
 	});
 
 	it("should return error when getCustomerCreateParams callback throws", async () => {
@@ -1524,14 +1520,14 @@ describe("stripe - organization customer", () => {
 		});
 		const orgId = org.data?.id as string;
 
-		const _res = await client.subscription.upgrade({
+		const res = await client.subscription.upgrade({
 			plan: "starter",
 			customerType: "organization",
 			referenceId: orgId,
 			fetchOptions: { headers },
 		});
 
-		// expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
+		expect(res.error?.code).toBe("UNABLE_TO_CREATE_CUSTOMER");
 	});
 
 	it("should call onSubscriptionCreated callback for organization subscription from dashboard", async () => {
@@ -1736,7 +1732,6 @@ describe("stripe - organizationHooks integration", () => {
 	};
 
 	beforeEach(() => {
-		vi.resetAllMocks();
 		mockStripeHooks.subscriptions.list.mockResolvedValue({ data: [] });
 		mockStripeHooks.customers.list.mockResolvedValue({ data: [] });
 	});
@@ -1887,9 +1882,9 @@ describe("stripe - organizationHooks integration", () => {
 
 		// Verify deletion was blocked with expected error
 		expect(deleteResult.error).toBeDefined();
-		// expect(deleteResult.error?.code).toBe(
-		// 	"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
-		// );
+		expect(deleteResult.error?.code).toBe(
+			"ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION",
+		);
 
 		// Verify organization still exists
 		const orgAfterDelete = await ctx.adapter.findOne({

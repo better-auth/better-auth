@@ -3,7 +3,7 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import {
 	parseSetCookieHeader,
 	SECURE_COOKIE_PREFIX,
@@ -108,7 +108,7 @@ export function getCookie(cookie: string) {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
-		return `${acc}; ${key}=${value.value}`;
+		return acc ? `${acc}; ${key}=${value.value}` : `${key}=${value.value}`;
 	}, "");
 	return toSend;
 }

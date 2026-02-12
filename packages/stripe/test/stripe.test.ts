@@ -230,8 +230,6 @@ describe("stripe", () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
-
-		vi.clearAllMocks();
 	});
 
 	const memory = memoryAdapter(data);
@@ -2108,7 +2106,7 @@ describe("stripe", () => {
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 
-	it.each([
+	it.for([
 		{
 			name: "past",
 			periodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000),
@@ -2903,7 +2901,7 @@ describe("stripe", () => {
 		// Update the user's email using internal adapter (which triggers hooks)
 		await runWithEndpointContext(
 			{
-				context: ctx,
+				context: ctx as never,
 			},
 			() =>
 				ctx.internalAdapter.updateUserByEmail(testUser.email, {
@@ -4831,13 +4829,13 @@ describe("stripe", () => {
 					},
 				);
 
-				const _res = await client.subscription.upgrade({
+				const res = await client.subscription.upgrade({
 					plan: "starter",
 					referenceId: "some-other-id",
 					fetchOptions: { headers },
 				});
 
-				// expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
+				expect(res.error?.code).toBe("REFERENCE_ID_NOT_ALLOWED");
 			});
 
 			it("should reject when authorizeReference returns false", async () => {
@@ -4874,13 +4872,13 @@ describe("stripe", () => {
 					},
 				);
 
-				const _res = await client.subscription.upgrade({
+				const res = await client.subscription.upgrade({
 					plan: "starter",
 					referenceId: "some-other-id",
 					fetchOptions: { headers },
 				});
 
-				// expect(res.error?.code).toBe("UNAUTHORIZED");
+				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
 			it("should pass when authorizeReference returns true", async () => {
@@ -4955,14 +4953,14 @@ describe("stripe", () => {
 					},
 				);
 
-				const _res = await client.subscription.upgrade({
+				const res = await client.subscription.upgrade({
 					plan: "starter",
 					customerType: "organization",
 					referenceId: "org_123",
 					fetchOptions: { headers },
 				});
 
-				// expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+				expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 			});
 
 			it("should reject when no referenceId or activeOrganizationId", async () => {
@@ -4999,13 +4997,13 @@ describe("stripe", () => {
 					},
 				);
 
-				const _res = await client.subscription.upgrade({
+				const res = await client.subscription.upgrade({
 					plan: "starter",
 					customerType: "organization",
 					fetchOptions: { headers },
 				});
 
-				// expect(res.error?.code).toBe("ORGANIZATION_REFERENCE_ID_REQUIRED");
+				expect(res.error?.code).toBe("ORGANIZATION_REFERENCE_ID_REQUIRED");
 			});
 
 			it("should reject when authorizeReference returns false", async () => {
@@ -5042,14 +5040,14 @@ describe("stripe", () => {
 					},
 				);
 
-				const _res = await client.subscription.upgrade({
+				const res = await client.subscription.upgrade({
 					plan: "starter",
 					customerType: "organization",
 					referenceId: "org_123",
 					fetchOptions: { headers },
 				});
 
-				// expect(res.error?.code).toBe("UNAUTHORIZED");
+				expect(res.error?.code).toBe("UNAUTHORIZED");
 			});
 
 			it("should pass when authorizeReference returns true", async () => {

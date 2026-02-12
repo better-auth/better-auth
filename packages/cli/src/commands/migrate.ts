@@ -4,7 +4,8 @@ import {
 	createTelemetry,
 	getTelemetryAuthConfig,
 } from "@better-auth/telemetry";
-import { getAdapter, getMigrations } from "better-auth/db";
+import { getAdapter } from "better-auth/db/adapter";
+import { getMigrations } from "better-auth/db/migration";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
@@ -61,7 +62,7 @@ export async function migrateAction(opts: any) {
 					payload: {
 						outcome: "unsupported_adapter",
 						adapter: "prisma",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
@@ -78,7 +79,7 @@ export async function migrateAction(opts: any) {
 					payload: {
 						outcome: "unsupported_adapter",
 						adapter: "drizzle",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
@@ -92,7 +93,7 @@ export async function migrateAction(opts: any) {
 				payload: {
 					outcome: "unsupported_adapter",
 					adapter: db.id,
-					config: getTelemetryAuthConfig(config),
+					config: await getTelemetryAuthConfig(config),
 				},
 			});
 		} catch {}
@@ -112,7 +113,7 @@ export async function migrateAction(opts: any) {
 				type: "cli_migrate",
 				payload: {
 					outcome: "no_changes",
-					config: getTelemetryAuthConfig(config),
+					config: await getTelemetryAuthConfig(config),
 				},
 			});
 		} catch {}
@@ -154,7 +155,10 @@ export async function migrateAction(opts: any) {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_migrate",
-				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+				payload: {
+					outcome: "aborted",
+					config: await getTelemetryAuthConfig(config),
+				},
 			});
 		} catch {}
 		process.exit(0);
@@ -168,7 +172,10 @@ export async function migrateAction(opts: any) {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_migrate",
-			payload: { outcome: "migrated", config: getTelemetryAuthConfig(config) },
+			payload: {
+				outcome: "migrated",
+				config: await getTelemetryAuthConfig(config),
+			},
 		});
 	} catch {}
 	process.exit(0);

@@ -4,6 +4,14 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		bearer: {
+			creator: typeof bearer;
+		};
+	}
+}
+
 export interface BearerOptions {
 	/**
 	 * If true, only signed tokens

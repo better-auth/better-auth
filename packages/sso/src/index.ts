@@ -47,6 +47,14 @@ import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		sso: {
+			creator: typeof sso;
+		};
+	}
+}
+
 export {
 	computeDiscoveryUrl,
 	type DiscoverOIDCConfigParams,
@@ -190,11 +198,7 @@ export function sso<O extends SSOOptions>(
 							return;
 						}
 
-						const hasOrganizationPlugin =
-							ctx.context.options.plugins?.some(
-								(plugin) => plugin.id === "organization",
-							) ?? false;
-						if (!hasOrganizationPlugin) {
+						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
 

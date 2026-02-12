@@ -1,7 +1,8 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
+import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
-import { filterOutputFields } from "@better-auth/core/utils";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
@@ -134,7 +135,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			filter?:
 				| {
 						field: string;
-						operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+						operator?: WhereOperator;
 						value: any;
 				  }
 				| undefined;
@@ -157,7 +158,12 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 								]
 							: []),
 					],
-					limit: data.limit || options?.membershipLimit || 100,
+					limit:
+						data.limit ||
+						(typeof options?.membershipLimit === "number"
+							? options.membershipLimit
+							: 100) ||
+						100,
 					offset: data.offset || 0,
 					sortBy: data.sortBy
 						? { field: data.sortBy, direction: data.sortOrder || "asc" }
@@ -531,7 +537,10 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					? await adapter.findMany<User>({
 							model: "user",
 							where: [{ field: "id", value: userIds, operator: "in" }],
-							limit: options?.membershipLimit || 100,
+							limit:
+								(typeof options?.membershipLimit === "number"
+									? options.membershipLimit
+									: 100) || 100,
 						})
 					: [];
 

@@ -144,6 +144,51 @@ describe("listMembers", async () => {
 		expect(members.data?.total).toBe(10);
 	});
 
+	it("should filter the members with 'in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "in",
+				filterValue: ["member", "owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(11);
+		expect(members.data?.total).toBe(11);
+	});
+
+	it("should filter the members with 'not_in' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "not_in",
+				filterValue: ["owner"],
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
+	it("should filter the members with 'starts_with' operator", async () => {
+		const members = await client.organization.listMembers({
+			fetchOptions: {
+				headers,
+			},
+			query: {
+				filterField: "role",
+				filterOperator: "starts_with",
+				filterValue: "mem",
+			},
+		});
+		expect(members.data?.members.length).toBe(10);
+		expect(members.data?.total).toBe(10);
+	});
+
 	it("should sort the members", async () => {
 		const defaultMembers = await client.organization.listMembers({
 			fetchOptions: {
@@ -236,7 +281,8 @@ describe("listMembers", async () => {
 		});
 		expect(members.error).toBeTruthy();
 		expect(members.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION
+				.message,
 		);
 	});
 });
@@ -356,7 +402,8 @@ describe("updateMemberRole", async () => {
 		);
 		expect(updatedMember.error).toBeTruthy();
 		expect(updatedMember.error?.message).toBe(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_MEMBER
+				.message,
 		);
 	});
 });
@@ -494,7 +541,9 @@ describe("inviteMember role validation", async () => {
 
 		expect(error).toBeTruthy();
 		expect(error?.status).toBe(400);
-		expect(error?.message).toContain(ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND);
+		expect(error?.message).toContain(
+			ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.code,
+		);
 	});
 
 	it("should succeed when inviting with a valid default role", async () => {

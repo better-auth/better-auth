@@ -20,6 +20,14 @@ export type * from "./types";
 export { createJwk, generateExportedKeyPair, toExpJWT } from "./utils";
 export { verifyJWT } from "./verify";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		jwt: {
+			creator: typeof jwt;
+		};
+	}
+}
+
 const signJWTBodySchema = z.object({
 	payload: z.record(z.string(), z.any()),
 	overrideOptions: z.record(z.string(), z.any()).optional(),

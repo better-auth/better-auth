@@ -7,6 +7,14 @@ import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
 export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
@@ -77,14 +85,16 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
+						const googleProvider =
+							typeof ctx.context.options.socialProviders?.google === "function"
+								? await ctx.context.options.socialProviders?.google()
+								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
+								audience: options?.clientId || googleProvider?.clientId,
 							},
 						);
 						payload = verifiedPayload;

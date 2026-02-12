@@ -12,12 +12,69 @@ import type { DBAdapter, Where } from "../db/adapter";
 import type { createLogger } from "../env";
 import type { OAuthProvider } from "../oauth2";
 import type { BetterAuthCookie, BetterAuthCookies } from "./cookie";
-import type { Awaitable } from "./helper";
+import type { Awaitable, LiteralString } from "./helper";
 import type {
 	BetterAuthOptions,
 	BetterAuthRateLimitOptions,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
+
+/**
+ * @internal
+ */
+type InferPluginID<O extends BetterAuthOptions> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"]
+			: never
+		: never;
+
+/**
+ * @internal
+ */
+type InferPluginOptions<
+	O extends BetterAuthOptions,
+	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"] extends ID
+				? P extends { options: infer O }
+					? O
+					: never
+				: never
+			: never
+		: never;
+
+/**
+ * Mutators are defined in each plugin
+ *
+ * @example
+ * ```ts
+ * interface MyPluginOptions {
+ *   useFeature: boolean
+ * }
+ *
+ * const createMyPlugin = <Options extends MyPluginOptions>(options?: Options) => ({
+ *   id: 'my-plugin',
+ *   options,
+ * } satisfies BetterAuthPlugin);
+ *
+ * declare module "@better-auth/core" {
+ *  interface BetterAuthPluginRegistry<AuthOptions, Options> {
+ *    'my-plugin': {
+ *      creator: Options extends MyPluginOptions ? typeof createMyPlugin<Options>: typeof createMyPlugin
+ *    }
+ *  }
+ * }
+ * ```
+ */
+// biome-ignore lint/correctness/noUnusedVariables: Auth and Context is used in the declaration merging
+export interface BetterAuthPluginRegistry<AuthOptions, Options> {}
+export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
+	unknown,
+	unknown
+>;
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
@@ -162,10 +219,39 @@ type CheckPasswordFn<Options extends BetterAuthOptions = BetterAuthOptions> = (
 	ctx: GenericEndpointContext<Options>,
 ) => Promise<boolean>;
 
-export type PluginContext = {
-	getPlugin: <Plugin extends BetterAuthPlugin>(
-		pluginId: Plugin["id"],
-	) => Plugin | null;
+export type PluginContext<Options extends BetterAuthOptions> = {
+	getPlugin: <
+		ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
+		PluginOptions extends InferPluginOptions<Options, ID>,
+	>(
+		pluginId: ID,
+	) =>
+		| (ID extends BetterAuthPluginRegistryIdentifier
+				? BetterAuthPluginRegistry<Options, PluginOptions>[ID] extends {
+						creator: infer C;
+					}
+					? C extends (...args: any[]) => infer R
+						? R
+						: never
+					: never
+				: BetterAuthPlugin)
+		| null;
+	/**
+	 * Checks if a plugin is enabled by its ID.
+	 *
+	 * @param pluginId - The ID of the plugin to check
+	 * @returns `true` if the plugin is enabled, `false` otherwise
+	 *
+	 * @example
+	 * ```ts
+	 * if (ctx.context.hasPlugin("organization")) {
+	 *   // organization plugin is enabled
+	 * }
+	 * ```
+	 */
+	hasPlugin: <ID extends BetterAuthPluginRegistryIdentifier | LiteralString>(
+		pluginId: ID,
+	) => ID extends InferPluginID<Options> ? true : boolean;
 };
 
 export type InfoContext = {
@@ -175,11 +261,9 @@ export type InfoContext = {
 };
 
 export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
-	PluginContext &
+	PluginContext<Options> &
 		InfoContext & {
 			options: Options;
-			appName: string;
-			baseURL: string;
 			trustedOrigins: string[];
 			/**
 			 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration

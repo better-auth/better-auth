@@ -1,8 +1,4 @@
-import type {
-	AuthContext,
-	BetterAuthOptions,
-	BetterAuthPlugin,
-} from "@better-auth/core";
+import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { getBetterAuthVersion } from "@better-auth/core/context";
 import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
@@ -11,7 +7,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
-import { deprecate } from "@better-auth/core/utils";
+import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
@@ -20,7 +16,6 @@ import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
@@ -84,11 +79,11 @@ function validateSecret(
 	}
 }
 
-export async function createAuthContext(
-	adapter: DBAdapter<BetterAuthOptions>,
-	options: BetterAuthOptions,
-	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
-): Promise<AuthContext> {
+export async function createAuthContext<Options extends BetterAuthOptions>(
+	adapter: DBAdapter,
+	options: Options,
+	getDatabaseType: (database: Options["database"]) => string,
+): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
 	if (!options.database) {
 		options = defu(options, {
@@ -103,7 +98,7 @@ export async function createAuthContext(
 				storeStateStrategy: "cookie" as const,
 				storeAccountCookie: true,
 			},
-		});
+		}) as Options;
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
@@ -112,7 +107,7 @@ export async function createAuthContext(
 
 	if (!baseURL) {
 		logger.warn(
-			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_BASE_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
 		);
 	}
 
@@ -147,29 +142,35 @@ Most of the features of Better Auth will not work correctly.`,
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers: OAuthProvider[] = (
-		Object.entries(
-			options.socialProviders || {},
-		) as unknown as Entries<SocialProviders>
-	)
-		.map(([key, config]) => {
-			if (config == null) {
-				return null;
-			}
-			if (config.enabled === false) {
-				return null;
-			}
-			if (!config.clientId) {
-				logger.warn(
-					`Social provider ${key} is missing clientId or clientSecret`,
-				);
-			}
-			const provider = socialProviders[key](config as never);
-			(provider as OAuthProvider).disableImplicitSignUp =
-				config.disableImplicitSignUp;
-			return provider;
-		})
-		.filter((x) => x !== null);
+	const providers = (
+		await Promise.all(
+			(
+				Object.entries(
+					options.socialProviders || {},
+				) as unknown as Entries<SocialProviders>
+			).map(async ([key, originalConfig]) => {
+				const config =
+					typeof originalConfig === "function"
+						? await originalConfig()
+						: originalConfig;
+				if (config == null) {
+					return null;
+				}
+				if (config.enabled === false) {
+					return null;
+				}
+				if (!config.clientId) {
+					logger.warn(
+						`Social provider ${key} is missing clientId or clientSecret`,
+					);
+				}
+				const provider = socialProviders[key](config as never);
+				(provider as OAuthProvider).disableImplicitSignUp =
+					config.disableImplicitSignUp;
+				return provider as OAuthProvider;
+			}),
+		)
+	).filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
 		if (typeof (options.advanced as any)?.generateId === "function") {
@@ -195,6 +196,13 @@ Most of the features of Better Auth will not work correctly.`,
 				? "adapter"
 				: getDatabaseType(options.database),
 	});
+
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
+
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
 
 	const trustedOrigins = await getTrustedOrigins(options);
 
@@ -340,29 +348,14 @@ Most of the features of Better Auth will not work correctly.`,
 				logger.error("Failed to run background task:", e);
 			}
 		},
-		getPlugin: <Plugin extends BetterAuthPlugin>(id: Plugin["id"]) =>
-			(options.plugins!.find((p): p is Plugin => p.id === id) as
-				| Plugin
-				| undefined) ?? null,
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
-	if (
-		typeof context.options.emailVerification?.onEmailVerification === "function"
-	) {
-		context.options.emailVerification.onEmailVerification = deprecate(
-			context.options.emailVerification.onEmailVerification,
-			"Use `afterEmailVerification` instead. This will be removed in 1.5",
-			context.logger,
-		);
-	}
-
-	return context;
+	return ctx as unknown as AuthContext<Options>;
 }

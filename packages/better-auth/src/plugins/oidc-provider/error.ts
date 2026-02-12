@@ -1,4 +1,4 @@
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 
 class OIDCProviderError extends APIError {}
 

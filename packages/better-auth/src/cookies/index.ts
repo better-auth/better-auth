@@ -6,7 +6,8 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { filterOutputFields, safeJSONParse } from "@better-auth/core/utils";
+import { filterOutputFields } from "@better-auth/core/utils/db";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
 import { binary } from "@better-auth/utils/binary";
 import { createHMAC } from "@better-auth/utils/hmac";
@@ -57,11 +58,10 @@ export function createCookieGetter(options: BetterAuthOptions) {
 	) {
 		const prefix = options.advanced?.cookiePrefix || "better-auth";
 		const name =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.name ||
+			options.advanced?.cookies?.[cookieName]?.name ||
 			`${prefix}.${cookieName}`;
-
 		const attributes =
-			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
+			options.advanced?.cookies?.[cookieName]?.attributes ?? {};
 
 		return {
 			name: `${secureCookiePrefix}${name}`,
@@ -312,8 +312,7 @@ export function deleteSessionCookie(
 	}
 
 	if (ctx.context.oauthConfig.storeStateStrategy === "cookie") {
-		const stateCookie = ctx.context.createAuthCookie("oauth_state");
-		expireCookie(ctx, stateCookie);
+		expireCookie(ctx, ctx.context.createAuthCookie("oauth_state"));
 	}
 
 	// Use createSessionStore to clean up all session data chunks
@@ -360,7 +359,10 @@ export const getSessionCookie = (
 			config.cookiePrefix = `${config.cookiePrefix}.`;
 		}
 	}
-	const headers = "headers" in request ? request.headers : request;
+	const headers =
+		request instanceof Headers || !("headers" in request)
+			? request
+			: request.headers;
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;
@@ -408,7 +410,10 @@ export const getCookieCache = async <
 		  }
 		| undefined,
 ) => {
-	const headers = request instanceof Headers ? request : request.headers;
+	const headers =
+		request instanceof Headers || !("headers" in request)
+			? request
+			: request.headers;
 	const cookies = headers.get("cookie");
 	if (!cookies) {
 		return null;

@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { SecondaryStorage } from "@better-auth/core/db";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { PredefinedApiKeyOptions } from "./routes";
 import type { ApiKey } from "./types";
 
@@ -507,6 +507,61 @@ export async function deleteApiKey(
 	}
 }
 
+export interface ListApiKeysOptions {
+	limit?: number;
+	offset?: number;
+	sortBy?: string;
+	sortDirection?: "asc" | "desc";
+}
+
+export interface ListApiKeysResult {
+	apiKeys: ApiKey[];
+	total: number;
+}
+
+/**
+ * Apply sorting and pagination to an array of API keys in memory
+ * Used for secondary storage mode where we can't rely on database operations
+ */
+function applySortingAndPagination(
+	apiKeys: ApiKey[],
+	sortBy?: string,
+	sortDirection?: "asc" | "desc",
+	limit?: number,
+	offset?: number,
+): ApiKey[] {
+	let result = [...apiKeys];
+
+	// Apply sorting if sortBy is specified
+	if (sortBy) {
+		const direction = sortDirection || "asc";
+		result.sort((a, b) => {
+			const aValue = a[sortBy as keyof ApiKey];
+			const bValue = b[sortBy as keyof ApiKey];
+
+			// Handle null/undefined values
+			if (aValue == null && bValue == null) return 0;
+			if (aValue == null) return direction === "asc" ? -1 : 1;
+			if (bValue == null) return direction === "asc" ? 1 : -1;
+
+			// Compare values
+			if (aValue < bValue) return direction === "asc" ? -1 : 1;
+			if (aValue > bValue) return direction === "asc" ? 1 : -1;
+			return 0;
+		});
+	}
+
+	// Apply pagination
+	if (offset !== undefined) {
+		result = result.slice(offset);
+	}
+	if (limit !== undefined) {
+		result = result.slice(0, limit);
+	}
+
+	return result;
+}
+
 /**
  * List API keys for a user with support for all storage modes
  */
@@ -514,20 +569,39 @@ export async function listApiKeys(
 	ctx: GenericEndpointContext,
 	userId: string,
 	opts: PredefinedApiKeyOptions,
-): Promise<ApiKey[]> {
+	paginationOpts?: ListApiKeysOptions,
+): Promise<ListApiKeysResult> {
 	const storage = getStorageInstance(ctx, opts);
+	const { limit, offset, sortBy, sortDirection } = paginationOpts || {};
 
 	// Database mode only
 	if (opts.storage === "database") {
-		return await ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
-		});
+		const [apiKeys, total] = await Promise.all([
+			ctx.context.adapter.findMany<ApiKey>({
+				model: "apikey",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+				limit,
+				offset,
+				sortBy: sortBy
+					? { field: sortBy, direction: sortDirection || "asc" }
+					: undefined,
+			}),
+			ctx.context.adapter.count({
+				model: "apikey",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			}),
+		]);
+		return { apiKeys, total };
 	}
 
 	// Secondary storage mode with fallback
@@ -556,19 +630,43 @@ export async function listApiKeys(
 						apiKeys.push(apiKey);
 					}
 				}
-				return apiKeys;
+				// Apply sorting and pagination in memory for secondary storage
+				const sortedKeys = applySortingAndPagination(
+					apiKeys,
+					sortBy,
+					sortDirection,
+					limit,
+					offset,
+				);
+				return { apiKeys: sortedKeys, total: apiKeys.length };
 			}
 		}
 		// Fallback to database
-		const dbKeys = await ctx.context.adapter.findMany<ApiKey>({
-			model: "apikey",
-			where: [
-				{
-					field: "userId",
-					value: userId,
-				},
-			],
-		});
+		const [dbKeys, total] = await Promise.all([
+			ctx.context.adapter.findMany<ApiKey>({
+				model: "apikey",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+				limit,
+				offset,
+				sortBy: sortBy
+					? { field: sortBy, direction: sortDirection || "asc" }
+					: undefined,
+			}),
+			ctx.context.adapter.count({
+				model: "apikey",
+				where: [
+					{
+						field: "userId",
+						value: userId,
+					},
+				],
+			}),
+		]);
 
 		// Populate secondary storage with fetched keys
 		if (storage && dbKeys.length > 0) {
@@ -583,13 +681,13 @@ export async function listApiKeys(
 			await storage.set(userKey, JSON.stringify(userIds));
 		}
 
-		return dbKeys;
+		return { apiKeys: dbKeys, total };
 	}
 
 	// Secondary storage mode only
 	if (opts.storage === "secondary-storage") {
 		if (!storage) {
-			return [];
+			return { apiKeys: [], total: 0 };
 		}
 
 		const userKey = getStorageKeyByUserId(userId);
@@ -600,12 +698,12 @@ export async function listApiKeys(
 			try {
 				userIds = JSON.parse(userListData);
 			} catch {
-				return [];
+				return { apiKeys: [], total: 0 };
 			}
 		} else if (Array.isArray(userListData)) {
 			userIds = userListData;
 		} else {
-			return [];
+			return { apiKeys: [], total: 0 };
 		}
 
 		const apiKeys: ApiKey[] = [];
@@ -616,17 +714,42 @@ export async function listApiKeys(
 			}
 		}
 
-		return apiKeys;
+		// Apply sorting and pagination in memory for secondary storage
+		const sortedKeys = applySortingAndPagination(
+			apiKeys,
+			sortBy,
+			sortDirection,
+			limit,
+			offset,
+		);
+		return { apiKeys: sortedKeys, total: apiKeys.length };
 	}
 
 	// Default fallback
-	return await ctx.context.adapter.findMany<ApiKey>({
-		model: "apikey",
-		where: [
-			{
-				field: "userId",
-				value: userId,
-			},
-		],
-	});
+	const [apiKeys, total] = await Promise.all([
+		ctx.context.adapter.findMany<ApiKey>({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+			limit,
+			offset,
+			sortBy: sortBy
+				? { field: sortBy, direction: sortDirection || "asc" }
+				: undefined,
+		}),
+		ctx.context.adapter.count({
+			model: "apikey",
+			where: [
+				{
+					field: "userId",
+					value: userId,
+				},
+			],
+		}),
+	]);
+	return { apiKeys, total };
 }

@@ -1,4 +1,5 @@
 import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
 	createAuthorizationURL,
@@ -6,7 +7,6 @@ import {
 	validateAuthorizationCode,
 } from "@better-auth/core/oauth2";
 import { betterFetch } from "@better-fetch/fetch";
-import { APIError } from "better-call";
 import { GENERIC_OAUTH_ERROR_CODES } from "./error-codes";
 import {
 	getUserInfo,
@@ -18,6 +18,14 @@ import type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"generic-oauth": {
+			creator: typeof genericOAuth;
+		};
+	}
+}
 
 /**
  * Base type for OAuth provider options.
@@ -45,6 +53,23 @@ export type BaseOAuthProviderOptions = Omit<
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const seenIds = new Set<string>();
+	const nonUniqueIds = new Set<string>();
+
+	for (const config of options.config) {
+		const id = config.providerId;
+		if (seenIds.has(id)) {
+			nonUniqueIds.add(id);
+		}
+		seenIds.add(id);
+	}
+
+	if (nonUniqueIds.size > 0) {
+		console.warn(
+			`Duplicate provider IDs found: ${Array.from(nonUniqueIds).join(", ")}`,
+		);
+	}
+
 	return {
 		id: "generic-oauth",
 		init: (ctx: AuthContext) => {
@@ -77,9 +102,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalAuthUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								GENERIC_OAUTH_ERROR_CODES.INVALID_OAUTH_CONFIGURATION,
+							);
 						}
 						return createAuthorizationURL({
 							id: c.providerId,
@@ -122,9 +148,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+							);
 						}
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
@@ -156,9 +183,10 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							}
 						}
 						if (!finalTokenUrl) {
-							throw new APIError("BAD_REQUEST", {
-								message: GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
+							);
 						}
 						return refreshAccessToken({
 							refreshToken,

@@ -57,6 +57,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	server.resetHandlers();
 	server.use(...handlers);
 });
@@ -91,6 +92,7 @@ describe("account", async () => {
 		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
+
 	afterEach(() => {
 		googleVerifyIdTokenMock.mockClear();
 		googleGetUserInfoMock.mockClear();
@@ -166,6 +168,27 @@ describe("account", async () => {
 			const accessToken = await client.getAccessToken({
 				providerId: "google",
 			});
+			expect(accessToken.data?.accessToken).toBe("test");
+		});
+	});
+
+	it("should get access token using accountId from listAccounts", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			const googleAccount = accounts.data?.find(
+				(a) => a.providerId === "google",
+			);
+			expect(googleAccount).toBeDefined();
+			expect(googleAccount?.accountId).toBeDefined();
+
+			// Use accountId from listAccounts to get access token
+			const accessToken = await client.getAccessToken({
+				providerId: "google",
+				accountId: googleAccount!.accountId,
+			});
+
+			expect(accessToken.error).toBeNull();
 			expect(accessToken.data?.accessToken).toBe("test");
 		});
 	});
@@ -327,7 +350,7 @@ describe("account", async () => {
 				accountId: unlinkAccountId,
 			});
 			expect(unlinkRes.error?.message).toBe(
-				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT,
+				BASE_ERROR_CODES.FAILED_TO_UNLINK_LAST_ACCOUNT.message,
 			);
 		});
 	});

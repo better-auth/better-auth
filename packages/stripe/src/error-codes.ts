@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const STRIPE_ERROR_CODES = defineErrorCodes({
 	UNAUTHORIZED: "Unauthorized access",
@@ -23,8 +23,12 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	ORGANIZATION_NOT_FOUND: "Organization not found",
 	ORGANIZATION_SUBSCRIPTION_NOT_ENABLED:
 		"Organization subscription is not enabled",
+	AUTHORIZE_REFERENCE_REQUIRED:
+		"Organization subscriptions require authorizeReference callback to be configured",
 	ORGANIZATION_HAS_ACTIVE_SUBSCRIPTION:
 		"Cannot delete organization with active subscription",
 	ORGANIZATION_REFERENCE_ID_REQUIRED:
 		"Reference ID is required. Provide referenceId or set activeOrganizationId in session",
+	UNKNOWN_METER: "Unknown meter event name",
+	METER_ID_NOT_FOUND: "Could not resolve Stripe Meter ID for event name",
 });

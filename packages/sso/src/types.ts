@@ -73,6 +73,7 @@ export interface SAMLConfig {
 		encPrivateKeyPass?: string | undefined;
 	};
 	wantAssertionsSigned?: boolean | undefined;
+	authnRequestsSigned?: boolean | undefined;
 	signatureAlgorithm?: string | undefined;
 	digestAlgorithm?: string | undefined;
 	identifierFormat?: string | undefined;
@@ -252,9 +253,12 @@ export interface SSOOptions {
 		 */
 		enabled?: boolean;
 		/**
-		 * Prefix used to generate the domain verification token
+		 * Prefix used to generate the domain verification token.
+		 * An underscore is automatically prepended to follow DNS
+		 * infrastructure subdomain conventions (RFC 8552), so do
+		 * not include a leading underscore.
 		 *
-		 * @default "better-auth-token-"
+		 * @default "better-auth-token"
 		 */
 		tokenPrefix?: string;
 	};

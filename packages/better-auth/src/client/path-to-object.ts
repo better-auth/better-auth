@@ -55,108 +55,107 @@ export type InferUserUpdateCtx<
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
-> = C["body"] extends Record<string, any>
-	? C["body"] & {
-			fetchOptions?: FetchOptions | undefined;
-		}
-	: C["query"] extends Record<string, any>
-		? {
-				query: C["query"];
+> =
+	C["body"] extends Record<string, any>
+		? C["body"] & {
 				fetchOptions?: FetchOptions | undefined;
 			}
-		: C["query"] extends Record<string, any> | undefined
+		: C["query"] extends Record<string, any>
 			? {
-					query?: C["query"] | undefined;
+					query: C["query"];
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: {
-					fetchOptions?: FetchOptions | undefined;
-				};
+			: C["query"] extends Record<string, any> | undefined
+				? {
+						query?: C["query"] | undefined;
+						fetchOptions?: FetchOptions | undefined;
+					}
+				: {
+						fetchOptions?: FetchOptions | undefined;
+					};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
-export type InferRoute<
-	API,
-	COpts extends BetterAuthClientOptions,
-> = API extends Record<string, infer T>
-	? T extends Endpoint
-		? T["options"]["metadata"] extends
-				| {
-						isAction: false;
-				  }
-				| {
-						SERVER_ONLY: true;
-				  }
-				| {
-						scope: "http";
-				  }
-				| {
-						scope: "server";
-				  }
-			? {}
-			: PathToObject<
-					T["path"],
-					T extends (ctx: infer C) => infer R
-						? C extends InputContext<any, any>
-							? <
-									FetchOptions extends ClientFetchOption<
-										Partial<C["body"]> & Record<string, any>,
-										Partial<C["query"]> & Record<string, any>,
-										C["params"]
-									>,
-								>(
-									...data: HasRequiredKeys<
-										InferCtx<C, FetchOptions>
-									> extends true
-										? [
-												Prettify<
-													T["path"] extends `/sign-up/email`
-														? InferSignUpEmailCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
-												>,
-												FetchOptions?,
-											]
-										: [
-												Prettify<
-													T["path"] extends `/update-user`
-														? InferUserUpdateCtx<COpts, FetchOptions>
-														: InferCtx<C, FetchOptions>
-												>?,
-												FetchOptions?,
-											]
-								) => Promise<
-									BetterFetchResponse<
-										T["options"]["metadata"] extends {
-											CUSTOM_SESSION: boolean;
-										}
-											? NonNullable<Awaited<R>>
-											: T["path"] extends "/get-session"
-												? {
-														user: InferUserFromClient<COpts>;
-														session: InferSessionFromClient<COpts>;
-													} | null
-												: NonNullable<Awaited<R>>,
-										T["options"]["error"] extends StandardSchemaV1
-											? // InferOutput
-												NonNullable<
-													T["options"]["error"]["~standard"]["types"]
-												>["output"]
-											: {
-													code?: string | undefined;
-													message?: string | undefined;
-												},
-										FetchOptions["throw"] extends true
-											? true
-											: COpts["fetchOptions"] extends { throw: true }
+export type InferRoute<API, COpts extends BetterAuthClientOptions> =
+	API extends Record<string, infer T>
+		? T extends Endpoint
+			? T["options"]["metadata"] extends
+					| {
+							isAction: false;
+					  }
+					| {
+							SERVER_ONLY: true;
+					  }
+					| {
+							scope: "http";
+					  }
+					| {
+							scope: "server";
+					  }
+				? {}
+				: PathToObject<
+						T["path"],
+						T extends (ctx: infer C) => infer R
+							? C extends InputContext<any, any>
+								? <
+										FetchOptions extends ClientFetchOption<
+											Partial<C["body"]> & Record<string, any>,
+											Partial<C["query"]> & Record<string, any>,
+											C["params"]
+										>,
+									>(
+										...data: HasRequiredKeys<
+											InferCtx<C, FetchOptions>
+										> extends true
+											? [
+													Prettify<
+														T["path"] extends `/sign-up/email`
+															? InferSignUpEmailCtx<COpts, FetchOptions>
+															: InferCtx<C, FetchOptions>
+													>,
+													FetchOptions?,
+												]
+											: [
+													Prettify<
+														T["path"] extends `/update-user`
+															? InferUserUpdateCtx<COpts, FetchOptions>
+															: InferCtx<C, FetchOptions>
+													>?,
+													FetchOptions?,
+												]
+									) => Promise<
+										BetterFetchResponse<
+											T["options"]["metadata"] extends {
+												CUSTOM_SESSION: boolean;
+											}
+												? NonNullable<Awaited<R>>
+												: T["path"] extends "/get-session"
+													? {
+															user: InferUserFromClient<COpts>;
+															session: InferSessionFromClient<COpts>;
+														} | null
+													: NonNullable<Awaited<R>>,
+											T["options"]["error"] extends StandardSchemaV1
+												? // InferOutput
+													NonNullable<
+														T["options"]["error"]["~standard"]["types"]
+													>["output"]
+												: {
+														code?: string | undefined;
+														message?: string | undefined;
+													},
+											FetchOptions["throw"] extends true
 												? true
-												: false
+												: COpts["fetchOptions"] extends { throw: true }
+													? true
+													: false
+										>
 									>
-								>
+								: never
 							: never
-						: never
-				>
-		: {}
-	: never;
+					>
+			: {}
+		: never;
 
 export type InferRoutes<
 	API extends Record<string, Endpoint>,
