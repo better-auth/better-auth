@@ -6,6 +6,7 @@ export interface SCIMProvider {
 	providerId: string;
 	scimToken: string;
 	organizationId?: string;
+	userId?: string;
 }
 
 export type SCIMName = {
@@ -17,6 +18,13 @@ export type SCIMName = {
 export type SCIMEmail = { value?: string; primary?: boolean };
 
 export type SCIMOptions = {
+	/**
+	 * SCIM provider ownership configuration. When enabled, each provider
+	 * connection is linked to the user who generated its token
+	 */
+	providerOwnership?: {
+		enabled: boolean;
+	};
 	/**
 	 * Default list of SCIM providers for testing
 	 * These will take precedence over the database when present

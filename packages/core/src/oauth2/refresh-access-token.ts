@@ -119,6 +119,7 @@ export async function refreshAccessToken({
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
+		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
 		scope?: string | undefined;
 		id_token?: string | undefined;
@@ -142,6 +143,13 @@ export async function refreshAccessToken({
 		const now = new Date();
 		tokens.accessTokenExpiresAt = new Date(
 			now.getTime() + data.expires_in * 1000,
+		);
+	}
+
+	if (data.refresh_token_expires_in) {
+		const now = new Date();
+		tokens.refreshTokenExpiresAt = new Date(
+			now.getTime() + data.refresh_token_expires_in * 1000,
 		);
 	}
 

@@ -29,4 +29,6 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 		"Cannot delete organization with active subscription",
 	ORGANIZATION_REFERENCE_ID_REQUIRED:
 		"Reference ID is required. Provide referenceId or set activeOrganizationId in session",
+	UNKNOWN_METER: "Unknown meter event name",
+	METER_ID_NOT_FOUND: "Could not resolve Stripe Meter ID for event name",
 });
