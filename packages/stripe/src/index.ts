@@ -46,9 +46,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		listActiveSubscriptions: listActiveSubscriptions(options),
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
-	};
-
-	const meteringEndpoints = {
 		stripeIngestUsage: ingestSubscriptionUsage(options),
 		stripeGetUsage: getSubscriptionUsage(options),
 	};
@@ -63,13 +60,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				enabled: true;
 			}
 				? typeof subscriptionEndpoints
-				: {}),
-			...((options.subscription?.enabled
-				? meteringEndpoints
-				: {}) as O["subscription"] extends {
-				enabled: true;
-			}
-				? typeof meteringEndpoints
 				: {}),
 		},
 		init(ctx) {
