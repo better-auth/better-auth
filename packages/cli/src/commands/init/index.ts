@@ -1,7 +1,6 @@
 import { exec } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import boxen from "boxen";
 import chalk from "chalk";
 import { Command } from "commander";
 import prompts from "prompts";
