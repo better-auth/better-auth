@@ -15,13 +15,13 @@ const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
 });
 
-function getVerificationIdentifier(
+export function getVerificationIdentifier(
 	options: SSOOptions,
 	providerId: string,
 ): string {
 	const tokenPrefix =
 		options.domainVerification?.tokenPrefix || DEFAULT_TOKEN_PREFIX;
-	return `${tokenPrefix}-${providerId}`;
+	return `_${tokenPrefix}-${providerId}`;
 }
 
 export const requestDomainVerification = (options: SSOOptions) => {

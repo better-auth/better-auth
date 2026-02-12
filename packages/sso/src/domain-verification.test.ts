@@ -285,7 +285,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -470,7 +470,7 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -484,7 +484,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(204);
 			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
-				"better-auth-token-saml-provider-1.hello.com",
+				"_better-auth-token-saml-provider-1.hello.com",
 			);
 		});
 
@@ -500,7 +500,7 @@ describe("Domain verification", async () => {
 				[
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
-				[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
+				[`_auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
 			]);
 
 			const response = await auth.api.verifyDomain({
@@ -513,7 +513,7 @@ describe("Domain verification", async () => {
 
 			expect(response.status).toBe(204);
 			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
-				"auth-prefix-saml-provider-1.hello.com",
+				"_auth-prefix-saml-provider-1.hello.com",
 			);
 		});
 
@@ -560,7 +560,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
