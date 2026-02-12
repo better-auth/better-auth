@@ -390,6 +390,64 @@ describe("SCIM provider management", () => {
 				scimToken: expect.any(String),
 			});
 		});
+
+		it("should deny regenerate when user is not the owner of a personal provider", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				providerOwnership: { enabled: true },
+			});
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "user-a-owned-provider" },
+				headers: headersUserA,
+			});
+
+			await expect(
+				auth.api.generateSCIMToken({
+					body: { providerId: "user-a-owned-provider" },
+					headers: headersUserB,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message: "You must be the owner to access this provider",
+			});
+		});
+
+		it("should deny regenerate when provider belongs to another org", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization } =
+				createTestInstance();
+
+			const [headers1, headers2] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			const [org1, _org2] = await Promise.all([
+				registerOrganization("policy-org-1", headers1),
+				registerOrganization("policy-org-2", headers2),
+			]);
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "other-org", organizationId: org1?.id },
+				headers: headers1,
+			});
+
+			// User B omits organizationId - tries to replace org1's provider
+			await expect(
+				auth.api.generateSCIMToken({
+					body: { providerId: "other-org" },
+					headers: headers2,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message:
+					"You must be a member of the organization to access this provider",
+			});
+		});
 	});
 
 	describe("GET /scim/list-provider-connections", () => {
@@ -444,6 +502,36 @@ describe("SCIM provider management", () => {
 				organizationId: orgA!.id,
 			});
 		});
+
+		it("should return owned non-org providers in list for the owner", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				providerOwnership: { enabled: true },
+			});
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "user-a-personal-provider" },
+				headers: headersUserA,
+			});
+
+			const resUserA = await auth.api.listSCIMProviderConnections({
+				headers: headersUserA,
+			});
+			expect(resUserA.providers).toHaveLength(1);
+			expect(resUserA.providers?.[0]).toMatchObject({
+				providerId: "user-a-personal-provider",
+				organizationId: null,
+			});
+
+			const resUserB = await auth.api.listSCIMProviderConnections({
+				headers: headersUserB,
+			});
+			expect(resUserB.providers).toHaveLength(0);
+		});
 	});
 
 	describe("GET /scim/get-provider-connection", () => {
@@ -484,6 +572,32 @@ describe("SCIM provider management", () => {
 			});
 		});
 
+		it("should deny access to non-org provider when user is not the owner", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				providerOwnership: { enabled: true },
+			});
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "user-a-owned-provider" },
+				headers: headersUserA,
+			});
+
+			await expect(
+				auth.api.getSCIMProviderConnection({
+					query: { providerId: "user-a-owned-provider" },
+					headers: headersUserB,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message: "You must be the owner to access this provider",
+			});
+		});
+
 		it("should return 403 when provider belongs to another org", async () => {
 			const { auth, getAuthCookieHeaders, registerOrganization } =
 				createTestInstance();
@@ -513,6 +627,61 @@ describe("SCIM provider management", () => {
 				message:
 					"You must be a member of the organization to access this provider",
 			});
+		});
+
+		it("should return 403 when token creator was removed from org (org membership required)", async () => {
+			const { auth, getAuthCookieHeaders, registerOrganization } =
+				createTestInstance({ providerOwnership: { enabled: true } });
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			const org = await registerOrganization("owner-removed-org", headersUserA);
+			await auth.api.generateSCIMToken({
+				body: { providerId: "owner-removed-provider", organizationId: org?.id },
+				headers: headersUserA,
+			});
+
+			const sessionB = await auth.api.getSession({ headers: headersUserB });
+			if (!sessionB?.user?.id) throw new Error("User B session not found");
+			await auth.api.addMember({
+				body: {
+					organizationId: org!.id,
+					userId: sessionB.user.id,
+					role: "owner",
+				},
+				headers: headersUserA,
+			});
+
+			await auth.api.removeMember({
+				body: {
+					organizationId: org!.id,
+					memberIdOrEmail: policyUserA.email,
+				},
+				headers: headersUserB,
+			});
+
+			await expect(
+				auth.api.getSCIMProviderConnection({
+					query: { providerId: "owner-removed-provider" },
+					headers: headersUserA,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message:
+					"You must be a member of the organization to access this provider",
+			});
+
+			const listRes = await auth.api.listSCIMProviderConnections({
+				headers: headersUserA,
+			});
+			expect(
+				listRes.providers?.some(
+					(p) => p.providerId === "owner-removed-provider",
+				),
+			).toBe(false);
 		});
 
 		it("should return 404 for unknown providerId", async () => {
@@ -609,6 +778,32 @@ describe("SCIM provider management", () => {
 				}),
 			).rejects.toMatchObject({
 				message: "SCIM provider not found",
+			});
+		});
+
+		it("should deny delete of non-org provider when user is not the owner", async () => {
+			const { auth, getAuthCookieHeaders } = createTestInstance({
+				providerOwnership: { enabled: true },
+			});
+
+			const [headersUserA, headersUserB] = await Promise.all([
+				getAuthCookieHeaders(policyUserA),
+				getAuthCookieHeaders(policyUserB),
+			]);
+
+			await auth.api.generateSCIMToken({
+				body: { providerId: "user-a-delete-provider" },
+				headers: headersUserA,
+			});
+
+			await expect(
+				auth.api.deleteSCIMProviderConnection({
+					body: { providerId: "user-a-delete-provider" },
+					headers: headersUserB,
+				}),
+			).rejects.toMatchObject({
+				status: "FORBIDDEN",
+				message: "You must be the owner to access this provider",
 			});
 		});
 	});
