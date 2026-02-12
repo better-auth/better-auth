@@ -1,0 +1,16 @@
+{
+  "name": "@better-auth-test/drizzle-v2-relations-adapter",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "e2e:integration": "vitest run"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/test-utils": "workspace:*",
+    "better-auth": "workspace:*",
+    "drizzle-orm": "1.0.0-beta.11-05230d9",
+    "drizzle-kit": "1.0.0-beta.11-05230d9"
+  }
+}

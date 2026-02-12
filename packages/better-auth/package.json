@@ -391,6 +391,9 @@
       "adapters": [
         "./dist/adapters/index.d.mts"
       ],
+      "adapters/test-adapter": [
+        "./dist/adapters/test-adapter.d.mts"
+      ],
       "adapters/prisma": [
         "./dist/adapters/prisma-adapter/index.d.mts"
       ],
