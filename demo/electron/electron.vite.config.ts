@@ -8,7 +8,8 @@ export default defineConfig({
 	preload: {
 		build: {
 			externalizeDeps: {
-				// Don't prevent bundling @better-auth/electron into the preload script.
+				// Bundle @better-auth/electron instead of externalizing it.
+				// Make sure to import only from @better-auth/electron/preload in your preload script.
 				exclude: ["@better-auth/electron"],
 			},
 		},

@@ -3,6 +3,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import electron, { contextBridge } from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
+import type { ElectronClientOptions } from "./types/client";
 import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
 const { ipcRenderer } = electron;
@@ -80,7 +81,7 @@ function exposeBridges(opts: SetupRendererConfig) {
 }
 
 export interface SetupRendererConfig {
-	channelPrefix?: string | undefined;
+	channelPrefix?: ElectronClientOptions["channelPrefix"] | undefined;
 }
 
 /**

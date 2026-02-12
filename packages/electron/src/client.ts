@@ -5,6 +5,7 @@ import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
+import { setupMain } from "./browser";
 import {
 	getCookie,
 	getSetCookie,
@@ -12,7 +13,6 @@ import {
 	hasSessionCookieChanged,
 } from "./cookies";
 import type { ExposedBridges } from "./preload";
-import { setupMain } from "./setup";
 import type { ElectronClientOptions, Storage } from "./types/client";
 import {
 	getChannelPrefixWithDelimiter,
@@ -201,5 +201,5 @@ export const electronClient = (options: ElectronClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
-export { handleDeepLink } from "./setup";
+export { handleDeepLink } from "./browser";
 export * from "./types/client";
