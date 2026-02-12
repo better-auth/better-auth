@@ -67,27 +67,63 @@ async function getSCIMUserOrgIds(
 	return new Set(members.map((m) => m.organizationId));
 }
 
-async function isSCIMOrgMember(
-	ctx: GenericEndpointContext,
-	userId: string,
-	organizationId: string,
-): Promise<boolean> {
-	const member = await ctx.context.adapter.findOne<Member>({
-		model: "member",
-		where: [
-			{ field: "userId", value: userId },
-			{ field: "organizationId", value: organizationId },
-		],
-	});
-	return member !== null;
-}
-
 function normalizeSCIMProvider(provider: SCIMProvider) {
 	return {
 		id: provider.id,
 		providerId: provider.providerId,
 		organizationId: provider.organizationId ?? null,
 	};
+}
+
+async function findOrganizationMember(
+	ctx: GenericEndpointContext,
+	userId: string,
+	organizationId: string,
+): Promise<Member | null> {
+	return ctx.context.adapter.findOne<Member>({
+		model: "member",
+		where: [
+			{
+				field: "userId",
+				value: userId,
+			},
+			{
+				field: "organizationId",
+				value: organizationId,
+			},
+		],
+	});
+}
+
+async function assertSCIMProviderAccess(
+	ctx: GenericEndpointContext,
+	userId: string,
+	provider: SCIMProvider,
+): Promise<void> {
+	if (provider.organizationId) {
+		if (!ctx.context.hasPlugin("organization")) {
+			throw new APIError("FORBIDDEN", {
+				message: "Organization plugin is required to access this SCIM provider",
+			});
+		}
+
+		const member = await findOrganizationMember(
+			ctx,
+			userId,
+			provider.organizationId,
+		);
+
+		if (!member) {
+			throw new APIError("FORBIDDEN", {
+				message:
+					"You must be a member of the organization to access this provider",
+			});
+		}
+	} else if (provider.userId && provider.userId !== userId) {
+		throw new APIError("FORBIDDEN", {
+			message: "You must be the owner to access this provider",
+		});
+	}
 }
 
 async function checkSCIMProviderAccess(
@@ -106,26 +142,7 @@ async function checkSCIMProviderAccess(
 		});
 	}
 
-	if (provider.organizationId) {
-		if (!ctx.context.hasPlugin("organization")) {
-			throw new APIError("FORBIDDEN", {
-				message: "Organization plugin is required to access this SCIM provider",
-			});
-		}
-
-		const isMember = await isSCIMOrgMember(
-			ctx,
-			userId,
-			provider.organizationId,
-		);
-
-		if (!isMember) {
-			throw new APIError("FORBIDDEN", {
-				message:
-					"You must be a member of the organization to access this provider",
-			});
-		}
-	}
+	await assertSCIMProviderAccess(ctx, userId, provider);
 
 	return provider;
 }
@@ -182,19 +199,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 
 			let member: Member | null = null;
 			if (organizationId) {
-				member = await ctx.context.adapter.findOne<Member>({
-					model: "member",
-					where: [
-						{
-							field: "userId",
-							value: user.id,
-						},
-						{
-							field: "organizationId",
-							value: organizationId,
-						},
-					],
-				});
+				member = await findOrganizationMember(ctx, user.id, organizationId);
 
 				if (!member) {
 					throw new APIError("FORBIDDEN", {
@@ -214,6 +219,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 			});
 
 			if (scimProvider) {
+				await assertSCIMProviderAccess(ctx, user.id, scimProvider);
 				await ctx.context.adapter.delete<SCIMProvider>({
 					model: "scimProvider",
 					where: [{ field: "id", value: scimProvider.id }],
@@ -239,6 +245,7 @@ export const generateSCIMToken = (opts: SCIMOptions) =>
 					providerId: providerId,
 					organizationId: organizationId,
 					scimToken: await storeSCIMToken(ctx, opts, baseToken),
+					...(opts.providerOwnership?.enabled ? { userId: user.id } : {}),
 				},
 			});
 
@@ -312,9 +319,11 @@ export const listSCIMProviderConnections = () =>
 				model: "scimProvider",
 			});
 
-			const accessibleProviders = allProviders.filter(
-				(p) => userOrgIds.has(p.organizationId!) || !p.organizationId,
-			);
+			const accessibleProviders = allProviders.filter((p) => {
+				if (p.organizationId) return userOrgIds.has(p.organizationId); // org level access
+				if (p.userId === userId) return true; // owner access
+				return !p.userId; // no org and no owner
+			});
 
 			const providers = accessibleProviders.map((p) =>
 				normalizeSCIMProvider(p),
