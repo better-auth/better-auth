@@ -374,19 +374,23 @@ export async function initAction(opts: any) {
 	const additionalSteps: (() => Promise<unknown>)[] = [];
 
 	// Render hero
+	//${chalk.italic(chalk.dim(cliVersion.padStart(41, " ")))}
 	console.log(
-		boxen(
+		// boxen(
+		"\n" +
 			[
-				"██  ████  ██▄ ██▀ ▀█▀ ▀█▀ ██▀ █▀▄   ▄▀▄ █ █ ▀█▀ █▄█",
-				"████  ██  █▄█ █▄▄  █   █  █▄▄ █▀▄   █▀█ ▀▄█  █  █ █",
-				`██  ████  ${chalk.italic(chalk.dim(cliVersion.padStart(41, " ")))}`,
-			].join("\n"),
-			{
-				padding: 1,
-				borderStyle: "doubleSingle",
-				dimBorder: true,
-			},
-		),
+				`   ██  ████`,
+				`   ████  ██  ${chalk.bold(`Better Auth CLI`)} ${chalk.dim(`(${cliVersion})`)}`,
+				`   ██  ████  ${chalk.gray("Welcome to the Better Auth CLI! Let's get you set up.")}`,
+			]
+				// .map((x) => x.padStart(10))
+				.join("\n"),
+		// 	{
+		// 		padding: 1,
+		// 		borderStyle: "doubleSingle",
+		// 		dimBorder: true,
+		// 	},
+		// ),
 	);
 
 	// Get package manager information
