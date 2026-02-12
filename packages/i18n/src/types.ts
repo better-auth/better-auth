@@ -1,7 +1,7 @@
 import type {
-	AuthContext,
 	BetterAuthPluginRegistry,
 	BetterAuthPluginRegistryIdentifier,
+	GenericEndpointContext,
 	UnionToIntersection,
 } from "@better-auth/core";
 
@@ -84,14 +84,15 @@ export interface I18nOptions<Locales extends string[]> {
 	userLocaleField?: string | undefined;
 
 	/**
-	 * Custom locale detection function (when "callback" strategy is used)
-	 * Receives a request and an AuthContext, returns a locale code or null.
-	 * Note: `request` may be undefined for non-HTTP calls.
+	 * Custom locale detection function (when "callback" strategy is used).
+	 * @example
+	 * getLocale: (ctx) => {
+	 *   return ctx.headers?.get("X-Custom-Locale") ?? null;
+	 * }
 	 */
 	getLocale?:
 		| undefined
 		| ((
-				request: Request | undefined,
-				ctx: AuthContext,
+				ctx: GenericEndpointContext,
 		  ) => Promise<Locales[number] | null> | Locales[number] | null);
 }
