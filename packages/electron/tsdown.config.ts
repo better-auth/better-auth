@@ -17,9 +17,9 @@ export default defineConfig([
 		dts: { build: true, incremental: true },
 		format: ["esm"],
 		entry: ["./src/preload.ts"],
-		external: ["electron"],
+		external: ["electron", "kysely"],
 		noExternal: [/^@better-auth\/core/, /^better-call/],
-		inlineOnly: false,
+		inlineOnly: ["better-call", "@standard-schema/spec"],
 		treeshake: true,
 	},
 ]);
