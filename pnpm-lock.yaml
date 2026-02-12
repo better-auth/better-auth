@@ -1504,9 +1504,6 @@ importers:
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
-      boxen:
-        specifier: ^8.0.1
-        version: 8.0.1
       c12:
         specifier: ^3.3.3
         version: 3.3.3(magicast@0.5.1)
