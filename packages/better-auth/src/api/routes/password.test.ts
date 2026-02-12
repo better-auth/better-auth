@@ -481,3 +481,77 @@ describe("verify password", async () => {
 		}
 	});
 });
+
+describe("forget password custom password validation", async () => {
+	let token = "";
+
+	const { client, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				validate: (password) => password.includes("!"),
+			},
+			async sendResetPassword({ url }) {
+				token = url.split("?")[0]!.split("/").pop() || "";
+			},
+		},
+	});
+
+	it("should return PASSWORD_DOES_NOT_MATCH_REQUIREMENTS when custom validation fails", async () => {
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		const res = await client.resetPassword(
+			{
+				newPassword: "invalidpassword",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_DOES_NOT_MATCH_REQUIREMENTS");
+	});
+});
+
+describe("forget password async custom password validation", async () => {
+	let token = "";
+
+	const { client, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				validate: (async () => true) as any,
+			},
+			async sendResetPassword({ url }) {
+				token = url.split("?")[0]!.split("/").pop() || "";
+			},
+		},
+	});
+
+	it("should return ASYNC_VALIDATION_NOT_SUPPORTED for async validators", async () => {
+		await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://localhost:3000",
+		});
+
+		const res = await client.resetPassword(
+			{
+				newPassword: "validpassword!",
+			},
+			{
+				query: {
+					token,
+				},
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("ASYNC_VALIDATION_NOT_SUPPORTED");
+	});
+});

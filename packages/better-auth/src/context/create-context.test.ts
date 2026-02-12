@@ -630,7 +630,7 @@ describe("base context creation", () => {
 			expect(res.password.validate).toBeUndefined();
 		});
 
-		it("should allow custom password length limits", async () => {
+		it("should allow custom password length limits and validation", async () => {
 			const customValidate = vi.fn((password: string) =>
 				/(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[^A-Za-z0-9]).+/.test(
 					password,

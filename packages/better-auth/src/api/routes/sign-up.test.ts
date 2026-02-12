@@ -199,6 +199,33 @@ describe("sign-up with custom fields", async () => {
 	});
 });
 
+describe("sign-up custom password validation", async () => {
+	const { client } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				password: {
+					validate: (password) => password.includes("!"),
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return PASSWORD_DOES_NOT_MATCH_REQUIREMENTS when custom validation fails", async () => {
+		const res = await client.signUp.email({
+			email: "validator-signup@test.com",
+			password: "invalidpassword",
+			name: "Validator User",
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_DOES_NOT_MATCH_REQUIREMENTS");
+	});
+});
+
 describe("sign-up CSRF protection", async () => {
 	const { auth } = await getTestInstance(
 		{

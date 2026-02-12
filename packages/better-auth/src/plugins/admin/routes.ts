@@ -379,6 +379,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 			}
 			// Only create credential account if password is provided
 			if (ctx.body.password) {
+				assertPasswordPolicy(ctx, ctx.body.password);
 				const hashedPassword = await ctx.context.password.hash(
 					ctx.body.password,
 				);

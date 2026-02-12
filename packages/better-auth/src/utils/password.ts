@@ -15,11 +15,25 @@ export function assertPasswordPolicy(
 		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 	}
 
-	if (ctx.context.password.validate && !ctx.context.password.validate(password)) {
-		throw APIError.from(
-			"BAD_REQUEST",
-			BASE_ERROR_CODES.PASSWORD_DOES_NOT_MATCH_REQUIREMENTS,
-		);
+	if (ctx.context.password.validate) {
+		const validationResult = ctx.context.password.validate(password);
+		if (
+			typeof validationResult === "object" &&
+			validationResult !== null &&
+			"then" in validationResult
+		) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.ASYNC_VALIDATION_NOT_SUPPORTED,
+			);
+		}
+
+		if (validationResult !== true) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.PASSWORD_DOES_NOT_MATCH_REQUIREMENTS,
+			);
+		}
 	}
 }
 

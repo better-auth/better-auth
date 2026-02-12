@@ -167,7 +167,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User",
 				email: "user@email.com",
-				password: "test",
+				password: "test123!",
 				role: "user",
 			},
 			{
@@ -216,7 +216,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "test123!",
 				role: ["user", "admin"],
 			},
 			{
@@ -250,7 +250,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User",
 				email: "test2@test.com",
-				password: "test",
+				password: "test123!",
 				role: "user",
 			},
 			{
@@ -1016,6 +1016,36 @@ describe("Admin plugin", async () => {
 		);
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.code).toBe("YOU_ARE_NOT_ALLOWED_TO_UPDATE_USERS");
+	});
+});
+
+describe("Admin plugin custom password validation", async () => {
+	const { client, signInWithTestUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				validate: (password) => password.includes("!"),
+			},
+		},
+		plugins: [admin()],
+	});
+
+	it("should reject admin createUser when custom validation fails", async () => {
+		const { headers } = await signInWithTestUser();
+		const res = await client.admin.createUser(
+			{
+				name: "Validation User",
+				email: "admin-validator@test.com",
+				password: "invalidpassword",
+				role: "user",
+			},
+			{
+				headers,
+			},
+		);
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_DOES_NOT_MATCH_REQUIREMENTS");
 	});
 });
 

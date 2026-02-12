@@ -605,6 +605,49 @@ describe("custom rate limiting storage", async () => {
 	});
 });
 
+describe("email-otp custom password validation", async () => {
+	let otp = "";
+	const { client, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				password: {
+					validate: (password: string) => password.includes("!"),
+				},
+			},
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp, type }) {
+						if (type === "forget-password") {
+							otp = _otp;
+						}
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should return PASSWORD_DOES_NOT_MATCH_REQUIREMENTS when custom validation fails", async () => {
+		await client.emailOtp.requestPasswordReset({
+			email: testUser.email,
+		});
+
+		const res = await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "invalidpassword",
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("PASSWORD_DOES_NOT_MATCH_REQUIREMENTS");
+	});
+});
+
 describe("custom generate otpFn", async () => {
 	const { client, testUser } = await getTestInstance(
 		{

@@ -454,6 +454,31 @@ describe("updateUser", async () => {
 	});
 });
 
+describe("changePassword custom password validation", async () => {
+	const { client, signInWithTestUser, testUser } = await getTestInstance({
+		emailAndPassword: {
+			enabled: true,
+			password: {
+				validate: (password) => password.includes("!"),
+			},
+		},
+	});
+
+	it("should return PASSWORD_DOES_NOT_MATCH_REQUIREMENTS when custom validation fails", async () => {
+		const { runWithUser } = await signInWithTestUser();
+
+		await runWithUser(async () => {
+			const res = await client.changePassword({
+				newPassword: "invalidpassword",
+				currentPassword: testUser.password,
+			});
+
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.code).toBe("PASSWORD_DOES_NOT_MATCH_REQUIREMENTS");
+		});
+	});
+});
+
 describe("delete user", async () => {
 	it("should not delete user if deleteUser is disabled", async () => {
 		const { client, signInWithTestUser } = await getTestInstance({
