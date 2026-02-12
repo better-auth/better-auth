@@ -455,14 +455,17 @@ describe("updateUser", async () => {
 });
 
 describe("changePassword custom password validation", async () => {
-	const { client, signInWithTestUser, testUser } = await getTestInstance({
-		emailAndPassword: {
-			enabled: true,
-			password: {
-				validate: (password) => password.includes("!"),
+	const { client, signInWithTestUser, testUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				password: {
+					validate: (password) =>
+						password === "test123456" || password.includes("!"),
+				},
 			},
 		},
-	});
+	);
 
 	it("should return PASSWORD_DOES_NOT_MATCH_REQUIREMENTS when custom validation fails", async () => {
 		const { runWithUser } = await signInWithTestUser();

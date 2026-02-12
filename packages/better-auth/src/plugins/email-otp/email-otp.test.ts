@@ -612,7 +612,8 @@ describe("email-otp custom password validation", async () => {
 			emailAndPassword: {
 				enabled: true,
 				password: {
-					validate: (password: string) => password.includes("!"),
+					validate: (password: string) =>
+						password === "test123456" || password.includes("!"),
 				},
 			},
 			plugins: [

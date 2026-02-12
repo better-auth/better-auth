@@ -489,7 +489,8 @@ describe("forget password custom password validation", async () => {
 		emailAndPassword: {
 			enabled: true,
 			password: {
-				validate: (password) => password.includes("!"),
+				validate: (password) =>
+					password === "test123456" || password.includes("!"),
 			},
 			async sendResetPassword({ url }) {
 				token = url.split("?")[0]!.split("/").pop() || "";
@@ -526,7 +527,8 @@ describe("forget password async custom password validation", async () => {
 		emailAndPassword: {
 			enabled: true,
 			password: {
-				validate: (async () => true) as any,
+				validate: ((password: string) =>
+					password === "test123456" ? true : Promise.resolve(true)) as any,
 			},
 			async sendResetPassword({ url }) {
 				token = url.split("?")[0]!.split("/").pop() || "";

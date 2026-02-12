@@ -1025,7 +1025,8 @@ describe("Admin plugin custom password validation", async () => {
 			emailAndPassword: {
 				enabled: true,
 				password: {
-					validate: (password) => password.includes("!"),
+					validate: (password) =>
+						password === "test123456" || password.includes("!"),
 				},
 			},
 			plugins: [admin()],
