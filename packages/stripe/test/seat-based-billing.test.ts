@@ -317,6 +317,80 @@ describe("seat-based billing", () => {
 		});
 	});
 
+	describe("checkout when priceId equals seatPriceId", async () => {
+		const seatOnlyOptions: StripeOptions = {
+			stripeClient: mockStripe as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			createCustomerOnSignUp: false,
+			organization: { enabled: true },
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: "price_same",
+						name: "starter",
+						seatPriceId: "price_same",
+						meters: [{ eventName: "api_calls", priceId: "price_meter_api" }],
+					},
+				],
+				authorizeReference: async () => true,
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [organization(), stripe(seatOnlyOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				email: "seat-only@email.com",
+				password: "password",
+				name: "Seat Only",
+			},
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: "seat-only@email.com", password: "password" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		it("should not duplicate base price in line_items", async () => {
+			mockStripe.checkout.sessions.create.mockClear();
+
+			const org = await client.organization.create({
+				name: "Seat Only Org",
+				slug: "seat-only-org",
+				fetchOptions: { headers },
+			});
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				customerType: "organization",
+				referenceId: org.data?.id as string,
+				fetchOptions: { headers },
+			});
+
+			const call = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(call).toBeDefined();
+			// seat + 1 meter = 2 items (no duplicate base)
+			expect(call.line_items).toHaveLength(2);
+			expect(call.line_items[0]).toMatchObject({
+				price: "price_same",
+				quantity: expect.any(Number),
+			});
+			expect(call.line_items[1]).toEqual({ price: "price_meter_api" });
+		});
+	});
+
 	describe("portal upgrade with seat items", () => {
 		it("should swap seat item when upgrading to a plan with different seat pricing", async () => {
 			const { client, auth, sessionSetter } = await getTestInstance(

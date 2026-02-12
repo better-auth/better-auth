@@ -554,6 +554,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const isSubscriptionStillValid =
 				!activeOrTrialingSubscription?.periodEnd ||
 				activeOrTrialingSubscription.periodEnd > new Date();
+			const isSeatOnlyPlan =
+				isAutoManagedSeats && priceIdToUse === plan.seatPriceId;
 
 			const isAlreadySubscribed =
 				activeOrTrialingSubscription?.status === "active" &&
@@ -805,12 +807,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						),
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
-							{
-								price: priceIdToUse,
-								...(isAutoManagedSeats
-									? {}
-									: { quantity: ctx.body.seats || 1 }),
-							},
+							// Base price
+							...(!isSeatOnlyPlan
+								? [
+										{
+											price: priceIdToUse,
+											...(isAutoManagedSeats
+												? {}
+												: { quantity: ctx.body.seats || 1 }),
+										},
+									]
+								: []),
 							// Per-seat
 							...(isAutoManagedSeats
 								? [{ price: plan.seatPriceId, quantity: memberCount }]
