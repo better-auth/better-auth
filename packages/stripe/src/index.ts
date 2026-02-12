@@ -9,7 +9,6 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
-	ingestSubscriptionUsage,
 	listActiveSubscriptions,
 	restoreSubscription,
 	stripeWebhook,
@@ -21,7 +20,6 @@ import type {
 	StripeOptions,
 	StripePlan,
 	Subscription,
-	SubscriptionOptions,
 	WithStripeCustomerId,
 } from "./types";
 import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
@@ -45,7 +43,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		listActiveSubscriptions: listActiveSubscriptions(options),
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
-		stripeIngestUsage: ingestSubscriptionUsage(options),
 	};
 
 	return {
@@ -442,4 +439,4 @@ export type StripePlugin<O extends StripeOptions> = ReturnType<
 	typeof stripe<O>
 >;
 
-export type { Subscription, SubscriptionOptions, StripePlan };
+export type * from "./types";

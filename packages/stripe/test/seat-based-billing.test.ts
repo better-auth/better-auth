@@ -175,7 +175,7 @@ describe("seat-based billing", () => {
 		});
 	});
 
-	describe("checkout with usage-based meters", async () => {
+	describe("checkout with additional line items", async () => {
 		const meterPlanOptions: StripeOptions = {
 			stripeClient: mockStripe as unknown as Stripe,
 			stripeWebhookSecret: "test_secret",
@@ -188,9 +188,9 @@ describe("seat-based billing", () => {
 						priceId: "price_pro_base",
 						name: "pro",
 						seatPriceId: "price_pro_seat",
-						meters: [
-							{ eventName: "api_requests", priceId: "price_meter_api" },
-							{ eventName: "email_sends", priceId: "price_meter_email" },
+						lineItems: [
+							{ price: "price_meter_api" },
+							{ price: "price_meter_email" },
 						],
 					},
 				],
@@ -224,7 +224,7 @@ describe("seat-based billing", () => {
 			{ throw: true, onSuccess: sessionSetter(headers) },
 		);
 
-		it("should include meter prices in checkout line_items", async () => {
+		it("should include additional line items in checkout", async () => {
 			const org = await client.organization.create({
 				name: "Meter Test Org",
 				slug: "meter-test-org",
@@ -241,7 +241,7 @@ describe("seat-based billing", () => {
 
 			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
-			expect(createCall.line_items).toHaveLength(4); // base + seat + 2 meters
+			expect(createCall.line_items).toHaveLength(4); // base + seat + 2 lineItems
 			expect(createCall.line_items[0]).toEqual({
 				price: "price_pro_base",
 				quantity: 1,
@@ -254,7 +254,7 @@ describe("seat-based billing", () => {
 			expect(createCall.line_items[3]).toEqual({ price: "price_meter_email" });
 		});
 
-		it("should not include meter prices when plan has no meters", async () => {
+		it("should not include extra line items when plan has none", async () => {
 			mockStripe.checkout.sessions.create.mockClear();
 
 			const noMeterOptions: StripeOptions = {
@@ -335,7 +335,7 @@ describe("seat-based billing", () => {
 						priceId: "price_same",
 						name: "starter",
 						seatPriceId: "price_same",
-						meters: [{ eventName: "api_calls", priceId: "price_meter_api" }],
+						lineItems: [{ price: "price_meter_api" }],
 					},
 				],
 				authorizeReference: async () => true,

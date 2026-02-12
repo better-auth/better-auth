@@ -82,11 +82,9 @@ export type StripePlan = {
 	 */
 	seatPriceId?: string | undefined;
 	/**
-	 * Usage-based billing meters.
-	 *
-	 * Each entry links a meter event to a usage-based price.
+	 * Additional line items to include in the checkout session.
 	 */
-	meters?: { eventName: string; priceId: string }[] | undefined;
+	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
 	/**
 	 * Free trial days
 	 */
