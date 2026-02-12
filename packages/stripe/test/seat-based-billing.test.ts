@@ -622,6 +622,125 @@ describe("seat-based billing", () => {
 				price: "price_pro_base",
 			});
 		});
+
+		it("should not duplicate subscription item when upgrading between seat-only plans", async () => {
+			const seatOnlyUpgradeOptions: StripeOptions = {
+				stripeClient: mockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				createCustomerOnSignUp: false,
+				organization: { enabled: true },
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_starter",
+							name: "starter",
+							seatPriceId: "price_starter",
+						},
+						{
+							priceId: "price_growth",
+							name: "growth",
+							seatPriceId: "price_growth",
+						},
+					],
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(seatOnlyUpgradeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "seat-only-upgrade@test.com",
+					password: "password",
+					name: "Seat Only Upgrade",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "seat-only-upgrade@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Seat Only Upgrade Org",
+				slug: "seat-only-upgrade-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_seat_only_upgrade" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_seat_only_upgrade",
+					stripeSubscriptionId: "sub_starter",
+					status: "active",
+					plan: "starter",
+					seats: 2,
+				},
+			});
+
+			// Seat-only plan: single item where base price IS the seat price
+			mockStripe.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: "sub_starter",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						items: {
+							data: [
+								{
+									id: "si_only",
+									price: { id: "price_starter", lookup_key: null },
+									quantity: 2,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			await client.subscription.upgrade({
+				plan: "growth",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(updateCall[0]).toBe("sub_starter");
+			const items = updateCall[1]!.items;
+
+			// Should have exactly 1 item — no duplicate si_only entries
+			expect(items).toHaveLength(1);
+			expect(items[0]).toMatchObject({
+				id: "si_only",
+				price: "price_growth",
+				quantity: expect.any(Number),
+			});
+		});
 	});
 
 	describe("seat sync on member changes", () => {

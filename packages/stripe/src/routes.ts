@@ -555,7 +555,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				!activeOrTrialingSubscription?.periodEnd ||
 				activeOrTrialingSubscription.periodEnd > new Date();
 			const isSeatOnlyPlan =
-				isAutoManagedSeats && priceIdToUse === plan.seatPriceId;
+				isAutoManagedSeats && plan.seatPriceId === plan.priceId;
 
 			const isAlreadySubscribed =
 				activeOrTrialingSubscription?.status === "active" &&
@@ -639,15 +639,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				// When seat price changes between plans, use direct API.
 				let upgradeUrl: string;
 				if (seatPortalItems.length > 0) {
+					// For seat-only plans, planItem and seatItem are the same subscription item.
+					// Skip the base entry to avoid duplicates.
+					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
 					await client.subscriptions
 						.update(activeSubscription.id, {
-							items: [
-								{
-									id: planItem.id,
-									price: priceIdToUse,
-								},
-								...seatPortalItems,
-							],
+							items: isSeatItem
+								? seatPortalItems
+								: [
+										{
+											id: planItem.id,
+											price: priceIdToUse,
+										},
+										...seatPortalItems,
+									],
 							proration_behavior: "create_prorations",
 						})
 						.catch(async (e) => {
