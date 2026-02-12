@@ -34,8 +34,6 @@ import {
 	isStripePendingCancel,
 	resolvePlanItem,
 	resolveQuantity,
-	resolveStripeCustomerId,
-	validateEventName,
 } from "./utils";
 
 /**
@@ -824,10 +822,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							...(isAutoManagedSeats
 								? [{ price: plan.seatPriceId, quantity: memberCount }]
 								: []),
-							// Usage-based
-							...(plan.meters?.map((m) => ({
-								price: m.priceId,
-							})) ?? []),
+							// Additional line items (metered prices, add-ons, etc.)
+							...(plan.lineItems ?? []),
 						],
 						subscription_data: {
 							...freeTrial,
@@ -1683,89 +1679,6 @@ export const createBillingPortal = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.UNABLE_TO_CREATE_BILLING_PORTAL,
 				);
 			}
-		},
-	);
-};
-
-const usageEventSchema = z.object({
-	meter: z.string(),
-	value: z.number().int().min(1),
-	timestamp: z.iso.datetime({ offset: true }).optional(),
-	identifier: z.string().max(128).optional(),
-});
-
-const ingestUsageBodySchema = z.object({
-	events: z.array(usageEventSchema).min(1),
-	customerType: z.enum(["user", "organization"]).optional(),
-});
-
-export const ingestSubscriptionUsage = (options: StripeOptions) => {
-	const client = options.stripeClient;
-
-	return createAuthEndpoint(
-		"/subscription/usage/ingest",
-		{
-			method: "POST",
-			body: ingestUsageBodySchema,
-			metadata: {
-				openapi: {
-					operationId: "ingestSubscriptionUsage",
-				},
-			},
-			use: [stripeSessionMiddleware],
-		},
-		async (ctx) => {
-			const { events } = ctx.body;
-			const customerType = ctx.body.customerType || "user";
-			const plans = await getPlans(options.subscription);
-			const referenceId = getReferenceId(
-				ctx.context.session,
-				customerType,
-				options,
-			);
-			const stripeCustomerId = await resolveStripeCustomerId(
-				ctx,
-				referenceId,
-				customerType,
-			);
-
-			const results = await Promise.allSettled(
-				events.map(async (event) => {
-					const eventName = validateEventName(plans, event.meter);
-					await client.billing.meterEvents.create({
-						event_name: eventName,
-						payload: {
-							stripe_customer_id: stripeCustomerId,
-							value: String(event.value),
-						},
-						timestamp: event.timestamp
-							? Math.floor(new Date(event.timestamp).getTime() / 1000)
-							: undefined,
-						identifier: event.identifier,
-					});
-					return { meter: event.meter };
-				}),
-			);
-
-			return ctx.json(
-				events.map((event, i) => {
-					const result = results[i];
-					if (result?.status === "fulfilled") {
-						return {
-							meter: event.meter,
-							success: true as const,
-						};
-					}
-					return {
-						meter: event.meter,
-						success: false as const,
-						error:
-							result?.status === "rejected"
-								? result.reason?.message || "Unknown error"
-								: "Unknown error",
-					};
-				}),
-			);
 		},
 	);
 };

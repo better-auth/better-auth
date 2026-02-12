@@ -1,11 +1,7 @@
 import type Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 import type { StripeOptions } from "../src/types";
-import {
-	escapeStripeSearchValue,
-	resolvePlanItem,
-	validateEventName,
-} from "../src/utils";
+import { escapeStripeSearchValue, resolvePlanItem } from "../src/utils";
 
 describe("escapeStripeSearchValue", () => {
 	it("should escape double quotes", () => {
@@ -18,34 +14,6 @@ describe("escapeStripeSearchValue", () => {
 
 	it("should escape multiple quotes", () => {
 		expect(escapeStripeSearchValue('"a" and "b"')).toBe('\\"a\\" and \\"b\\"');
-	});
-});
-
-describe("validateEventName", () => {
-	const plans = [
-		{
-			name: "starter",
-			meters: [
-				{ eventName: "stripe_meter_emails", priceId: "price_emails" },
-				{ eventName: "stripe_meter_api", priceId: "price_api" },
-			],
-		},
-	];
-
-	it("should accept a registered event name", () => {
-		expect(validateEventName(plans, "stripe_meter_emails")).toBe(
-			"stripe_meter_emails",
-		);
-	});
-
-	it("should throw for an unknown event name", () => {
-		expect(() => validateEventName(plans, "unknown")).toThrow();
-	});
-
-	it("should throw when plans have no meters", () => {
-		expect(() =>
-			validateEventName([{ name: "basic" }], "stripe_meter_emails"),
-		).toThrow();
 	});
 });
 
