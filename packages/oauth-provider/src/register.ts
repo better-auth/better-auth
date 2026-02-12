@@ -356,10 +356,10 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(new Date(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(new Date(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
 	const _metadata = parseClientMetadata(metadata);
