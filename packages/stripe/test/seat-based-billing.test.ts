@@ -124,8 +124,10 @@ describe("seat-based billing", () => {
 
 			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
-			expect(createCall.line_items[0]).toEqual({ price: "price_team_base" });
-			expect(createCall.line_items[0]).not.toHaveProperty("quantity");
+			expect(createCall.line_items[0]).toEqual({
+				price: "price_team_base",
+				quantity: 1,
+			});
 			expect(createCall.line_items[1]).toMatchObject({
 				price: "price_team_seat",
 				quantity: expect.any(Number),
@@ -240,7 +242,10 @@ describe("seat-based billing", () => {
 			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
 			expect(createCall.line_items).toHaveLength(4); // base + seat + 2 meters
-			expect(createCall.line_items[0]).toEqual({ price: "price_pro_base" });
+			expect(createCall.line_items[0]).toEqual({
+				price: "price_pro_base",
+				quantity: 1,
+			});
 			expect(createCall.line_items[1]).toMatchObject({
 				price: "price_pro_seat",
 				quantity: expect.any(Number),

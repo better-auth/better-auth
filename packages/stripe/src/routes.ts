@@ -817,9 +817,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								? [
 										{
 											price: priceIdToUse,
-											...(isAutoManagedSeats
-												? {}
-												: { quantity: ctx.body.seats || 1 }),
+											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
 										},
 									]
 								: []),
