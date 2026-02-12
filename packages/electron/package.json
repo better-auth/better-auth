@@ -47,6 +47,15 @@
       "types": "./dist/proxy.d.mts",
       "default": "./dist/proxy.mjs"
     },
+    "./preload": {
+      "dev-source": "./src/preload.ts",
+      "types": "./dist/preload.d.mts",
+      "default": "./dist/preload.bundle.cjs"
+    },
+    "./preload/source": {
+      "types": "./dist/preload.d.mts",
+      "default": "./dist/preload.mjs"
+    },
     "./storage": {
       "dev-source": "./src/storage.ts",
       "types": "./dist/storage.d.mts",
@@ -63,6 +72,12 @@
       ],
       "proxy": [
         "./dist/proxy.d.mts"
+      ],
+      "preload": [
+        "./dist/preload.d.mts"
+      ],
+      "preload/source": [
+        "./dist/preload.d.mts"
       ],
       "storage": [
         "./dist/storage.d.mts"
