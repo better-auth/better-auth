@@ -642,26 +642,14 @@ export async function initAction(opts: any) {
 		}
 
 		// Determine default auth config path based on project structure
-		// Priority: lib/ > root, with src/ prefix if src/ exists
+		// Priority: src/lib/ if src/ exists, otherwise lib/
 		const hasSrc = allFiles.some((node) => node === "src");
-		const hasLib = allFiles.some((node) => node === "lib");
 
 		let defaultAuthConfigPath: string;
 		if (hasSrc) {
-			// Check if src/lib exists
-			const { data: srcFiles } = await tryCatch(
-				fs.readdir(path.join(cwd, "src"), "utf-8"),
-			);
-			const hasSrcLib = srcFiles?.some((node) => node === "lib");
-			if (hasSrcLib) {
-				defaultAuthConfigPath = path.join(cwd, "src", "lib", "auth.ts");
-			} else {
-				defaultAuthConfigPath = path.join(cwd, "src", "auth.ts");
-			}
-		} else if (hasLib) {
-			defaultAuthConfigPath = path.join(cwd, "lib", "auth.ts");
+			defaultAuthConfigPath = path.join(cwd, "src", "lib", "auth.ts");
 		} else {
-			defaultAuthConfigPath = path.join(cwd, "auth.ts");
+			defaultAuthConfigPath = path.join(cwd, "lib", "auth.ts");
 		}
 
 		// Convert absolute path to relative path for display
@@ -790,30 +778,26 @@ export const auth = betterAuth({
 					process.exit(0);
 				}
 				database = sqliteVariants;
-				return;
-			}
-
-			// If a direct adapter (kysely dialect or mongodb) was selected, return it directly
-			if (isDirectAdapter(selectedOption)) {
+			} else if (isDirectAdapter(selectedOption)) {
+				// If a direct adapter (kysely dialect or mongodb) was selected, use it directly
 				database = selectedOption;
-				return;
-			}
+			} else {
+				// Otherwise, select the database dialect for the chosen ORM
+				const availableDialects = getDialectsForORM(selectedOption);
+				const selectedDialect = await select({
+					message: `Select the database dialect:`,
+					options: availableDialects.map((d) => ({
+						value: d.adapter,
+						label: d.label,
+					})),
+				});
+				if (isCancel(selectedDialect)) {
+					cancel("✋ Operation cancelled.");
+					process.exit(0);
+				}
 
-			// Otherwise, select the database dialect for the chosen ORM
-			const availableDialects = getDialectsForORM(selectedOption);
-			const selectedDialect = await select({
-				message: `Select the database dialect:`,
-				options: availableDialects.map((d) => ({
-					value: d.adapter,
-					label: d.label,
-				})),
-			});
-			if (isCancel(selectedDialect)) {
-				cancel("✋ Operation cancelled.");
-				process.exit(0);
+				database = selectedDialect;
 			}
-
-			database = selectedDialect;
 		}
 
 		// Install database dependencies if a database was selected
@@ -1404,26 +1388,14 @@ export const auth = betterAuth({
 		}
 
 		// Determine default auth-client config path based on project structure
-		// Priority: lib/ > root, with src/ prefix if src/ exists
+		// Priority: src/lib/ if src/ exists, otherwise lib/
 		const hasSrc = allFiles.some((node) => node === "src");
-		const hasLib = allFiles.some((node) => node === "lib");
 
 		let defaultAuthClientPath: string;
 		if (hasSrc) {
-			// Check if src/lib exists
-			const { data: srcFiles } = await tryCatch(
-				fs.readdir(path.join(cwd, "src"), "utf-8"),
-			);
-			const hasSrcLib = srcFiles?.some((node) => node === "lib");
-			if (hasSrcLib) {
-				defaultAuthClientPath = path.join(cwd, "src", "lib", "auth-client.ts");
-			} else {
-				defaultAuthClientPath = path.join(cwd, "src", "auth-client.ts");
-			}
-		} else if (hasLib) {
-			defaultAuthClientPath = path.join(cwd, "lib", "auth-client.ts");
+			defaultAuthClientPath = path.join(cwd, "src", "lib", "auth-client.ts");
 		} else {
-			defaultAuthClientPath = path.join(cwd, "auth-client.ts");
+			defaultAuthClientPath = path.join(cwd, "lib", "auth-client.ts");
 		}
 
 		// Convert absolute path to relative path for display
