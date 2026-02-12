@@ -85,7 +85,7 @@ export interface SetupRendererConfig {
 
 /**
  * Sets up the renderer process.
- * 
+ *
  * - Exposes IPC bridges to the renderer process.
  */
 export function setupRenderer(options: SetupRendererConfig = {}) {
