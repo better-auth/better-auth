@@ -95,7 +95,10 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 			}
 
-			const identifier = getVerificationIdentifier(options, provider.providerId);
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
 
 			const activeVerification =
 				await ctx.context.adapter.findOne<Verification>({
@@ -255,9 +258,7 @@ export const verifyDomain = (options: SSOOptions) => {
 
 			try {
 				const hostname = new URL(provider.domain).hostname;
-				const dnsRecords = await dns.resolveTxt(
-					`${identifier}.${hostname}`,
-				);
+				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
 				records = dnsRecords.flat();
 			} catch (error) {
 				ctx.context.logger.warn(
