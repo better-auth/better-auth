@@ -1,13 +1,5 @@
-import type { GenericEndpointContext } from "better-auth";
-import { APIError } from "better-auth";
 import type Stripe from "stripe";
-import { STRIPE_ERROR_CODES } from "./error-codes";
-import type {
-	CustomerType,
-	StripeOptions,
-	StripePlan,
-	Subscription,
-} from "./types";
+import type { StripeOptions, StripePlan, Subscription } from "./types";
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
@@ -104,41 +96,4 @@ export async function resolvePlanItem(
 		if (plan) return { item, plan };
 	}
 	return items.length === 1 ? { item: first, plan: undefined } : undefined;
-}
-
-/**
- * Validate that the given event name is registered in any plan's meters.
- */
-export function validateEventName(
-	plans: StripePlan[],
-	eventName: string,
-): string {
-	const exists = plans.some((p) =>
-		p.meters?.some((m) => m.eventName === eventName),
-	);
-	if (!exists) {
-		throw APIError.from("BAD_REQUEST", STRIPE_ERROR_CODES.UNKNOWN_METER);
-	}
-	return eventName;
-}
-
-/**
- * Resolve a referenceId + customerType to a Stripe customer ID via DB lookup.
- */
-export async function resolveStripeCustomerId(
-	ctx: GenericEndpointContext,
-	referenceId: string,
-	customerType: CustomerType,
-): Promise<string> {
-	const model = customerType === "organization" ? "organization" : "user";
-	const record = await ctx.context.adapter.findOne<{
-		stripeCustomerId?: string;
-	}>({
-		model,
-		where: [{ field: "id", value: referenceId }],
-	});
-	if (!record?.stripeCustomerId) {
-		throw APIError.from("BAD_REQUEST", STRIPE_ERROR_CODES.CUSTOMER_NOT_FOUND);
-	}
-	return record.stripeCustomerId;
 }
