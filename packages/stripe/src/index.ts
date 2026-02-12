@@ -36,6 +36,8 @@ declare module "@better-auth/core" {
 	}
 }
 
+export type * from "./types";
+
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
 
