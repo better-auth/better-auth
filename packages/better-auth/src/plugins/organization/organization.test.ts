@@ -2796,7 +2796,7 @@ describe("Additional Fields", async () => {
 				memberOptionalField?: string | undefined;
 				memberHiddenField?: string | undefined;
 			};
-		} | null;
+		};
 		if (!acceptedInvitation) throw new Error("Accepted invitation is null");
 		expectTypeOf<Result>().toEqualTypeOf<ExpectedResult>();
 		expect("memberRequiredField" in acceptedInvitation.member).toBeTruthy();
