@@ -437,9 +437,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 		async (ctx) => {
 			const origin = options?.origin || ctx.headers?.get("origin") || "";
 			if (!origin) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
 			}
 			const resp = ctx.body.response;
 			const webAuthnCookie = ctx.context.createAuthCookie(
@@ -461,9 +462,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					verificationToken,
 				);
 			if (!data) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
 			}
 			const { expectedChallenge, userData } = JSON.parse(
 				data.value,
@@ -486,9 +488,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				});
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
-					return ctx.json(null, {
-						status: 400,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					);
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;

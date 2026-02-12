@@ -30,6 +30,7 @@ declare module "@better-auth/core" {
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
+		providerOwnership: { enabled: false },
 		...options,
 	} satisfies SCIMOptions;
 
@@ -71,6 +72,14 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
+					...(opts.providerOwnership?.enabled
+						? {
+								userId: {
+									type: "string",
+									required: false,
+								},
+							}
+						: {}),
 				},
 			},
 		},
