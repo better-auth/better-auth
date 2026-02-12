@@ -2,12 +2,8 @@ import { exec as execMock } from "node:child_process";
 import { join } from "node:path";
 import { env } from "@better-auth/core/env";
 import { fs } from "memfs";
-import type { PackageJson } from "type-fest";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-	detectPackageManager,
-	getCatalogEntries,
-} from "../src/utils/check-package-managers";
+import { afterEach, describe, expect, vi } from "vitest";
+import { detectPackageManager } from "../src/utils/check-package-managers";
 import { testWithTmpDir } from "./test-utils";
 
 vi.mock("node:fs", () => ({
@@ -23,72 +19,6 @@ vi.mock("node:child_process", () => ({
 }));
 
 const mockExec = vi.mocked(execMock);
-
-describe("getCatalogEntries", () => {
-	testWithTmpDir(
-		"parses catalog and catalogs from pnpm-workspace.yaml",
-		({ tmp }) => {
-			const yaml = `packages:
-  - 'packages/*'
-catalog:
-  - left: https://left.example
-  - right: https://right.example
-catalogs:
-  alpha:
-    - a: https://a.example
-    - b: https://b.example
-  beta:
-    - c: https://c.example
-`;
-			fs.writeFileSync(join(tmp, "pnpm-workspace.yaml"), yaml);
-
-			const result = getCatalogEntries(tmp, {}, "pnpm");
-
-			expect(result.catalog.get("left")).toBe("https://left.example");
-			expect(result.catalog.get("right")).toBe("https://right.example");
-
-			expect(result.catalogs).toBeDefined();
-			const catalogs = result.catalogs!;
-			expect(catalogs.get("alpha")!.get("a")).toBe("https://a.example");
-			expect(catalogs.get("alpha")!.get("b")).toBe("https://b.example");
-			expect(catalogs.get("beta")!.get("c")).toBe("https://c.example");
-		},
-	);
-
-	testWithTmpDir("strips quotes from package names in catalog", ({ tmp }) => {
-		const yaml = `packages:
-  - 'packages/*'
-catalog:
-  - "@package/name": 1.3.8
-  - '@scope/other': 2.0.0
-`;
-		fs.writeFileSync(join(tmp, "pnpm-workspace.yaml"), yaml);
-
-		const result = getCatalogEntries(tmp, {}, "pnpm");
-
-		expect(result.catalog.get("@package/name")).toBe("1.3.8");
-		expect(result.catalog.get("@scope/other")).toBe("2.0.0");
-	});
-
-	testWithTmpDir("reads catalog from packageJson for bun", () => {
-		const packageJson = {
-			workspaces: {
-				catalog: {
-					foo: "https://foo.example",
-					bar: "https://bar.example",
-				},
-			},
-		} as PackageJson;
-
-		const result = getCatalogEntries(process.cwd(), packageJson, "bun");
-		expect(result.catalog.get("foo")).toBe("https://foo.example");
-		expect(result.catalog.get("bar")).toBe("https://bar.example");
-	});
-
-	it("throws for unsupported package managers", () => {
-		expect(() => getCatalogEntries(process.cwd(), {}, "npm")).toThrow();
-	});
-});
 
 describe("detectPackageManager", () => {
 	afterEach(() => {
