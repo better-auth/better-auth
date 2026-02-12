@@ -4,7 +4,7 @@ import { isProxy } from "node:util/types";
 import type { BetterFetchError } from "@better-fetch/fetch";
 import type { ReadableAtom } from "nanostores";
 import type { Accessor } from "solid-js";
-import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { Ref } from "vue";
 import type { Session, SessionQueryParams } from "../types";
 import {
@@ -30,10 +30,6 @@ import { createAuthClient as createVanillaClient } from "./vanilla";
 import { createAuthClient as createVueClient } from "./vue";
 
 describe("run time proxy", async () => {
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
 	it("atom in proxy should not be proxy", async () => {
 		const client = createVanillaClient();
 		const atom = client.$store.atoms.session;
@@ -588,91 +584,43 @@ describe("type", () => {
 
 		// Should have organization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
-		).toEqualTypeOf<"ORGANIZATION_NOT_FOUND">();
+			client.$ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		).toEqualTypeOf<"Organization not found">();
 
 		// Should have two-factor error codes
 		expectTypeOf(
-			client.$ERROR_CODES.OTP_HAS_EXPIRED.code,
-		).toEqualTypeOf<"OTP_HAS_EXPIRED">();
+			client.$ERROR_CODES.OTP_HAS_EXPIRED,
+		).toEqualTypeOf<"OTP has expired">();
 
 		// Should have email-otp error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_EMAIL.code,
-		).toEqualTypeOf<"INVALID_EMAIL">();
+			client.$ERROR_CODES.INVALID_EMAIL,
+		).toEqualTypeOf<"Invalid email">();
 
 		// Should have admin error codes
 		expectTypeOf(
-			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS.code,
-		).toEqualTypeOf<"YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS">();
+			client.$ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_REVOKE_USERS_SESSIONS,
+		).toEqualTypeOf<"You are not allowed to revoke users sessions">();
 
 		// Should have multi-session error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_SESSION_TOKEN.code,
-		).toEqualTypeOf<"INVALID_SESSION_TOKEN">();
+			client.$ERROR_CODES.INVALID_SESSION_TOKEN,
+		).toEqualTypeOf<"Invalid session token">();
 
 		// Should have generic-oauth error codes
 		expectTypeOf(
-			client.$ERROR_CODES.PROVIDER_NOT_FOUND.code,
-		).toEqualTypeOf<"PROVIDER_NOT_FOUND">();
+			client.$ERROR_CODES.PROVIDER_NOT_FOUND,
+		).toEqualTypeOf<"Provider not found">();
 
 		// Should have device-authorization error codes
 		expectTypeOf(
-			client.$ERROR_CODES.INVALID_DEVICE_CODE.code,
-		).toEqualTypeOf<"INVALID_DEVICE_CODE">();
+			client.$ERROR_CODES.INVALID_DEVICE_CODE,
+		).toEqualTypeOf<"Invalid device code">();
 
 		// Should have base error codes
 		expectTypeOf(
-			client.$ERROR_CODES.USER_NOT_FOUND.code,
-		).toEqualTypeOf<"USER_NOT_FOUND">();
-	});
-});
-
-describe("plugin actions deep merge", () => {
-	it("should merge actions from multiple plugins with same top-level key", async () => {
-		const client = createVanillaClient({
-			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
-			fetchOptions: {
-				customFetchImpl: async () => new Response(),
-				baseURL: "http://localhost:3000",
-			},
-		});
-
-		// Both methods should be accessible under signIn
-		expect(typeof client.signIn.methodA).toBe("function");
-		expect(typeof client.signIn.methodB).toBe("function");
-
-		// Both methods should work correctly
-		const resultA = await client.signIn.methodA();
-		const resultB = await client.signIn.methodB();
-		expect(resultA).toEqual({ success: true, method: "A" });
-		expect(resultB).toEqual({ success: true, method: "B" });
-	});
-
-	it("should preserve first plugin methods when second plugin adds to same key", async () => {
-		// Order matters: A first, then B
-		const clientAB = createVanillaClient({
-			plugins: [testDeepMergePluginA(), testDeepMergePluginB()],
-			fetchOptions: {
-				customFetchImpl: async () => new Response(),
-				baseURL: "http://localhost:3000",
-			},
-		});
-
-		// Order reversed: B first, then A
-		const clientBA = createVanillaClient({
-			plugins: [testDeepMergePluginB(), testDeepMergePluginA()],
-			fetchOptions: {
-				customFetchImpl: async () => new Response(),
-				baseURL: "http://localhost:3000",
-			},
-		});
-
-		// Both orders should have both methods
-		expect(typeof clientAB.signIn.methodA).toBe("function");
-		expect(typeof clientAB.signIn.methodB).toBe("function");
-		expect(typeof clientBA.signIn.methodA).toBe("function");
-		expect(typeof clientBA.signIn.methodB).toBe("function");
+			client.$ERROR_CODES.USER_NOT_FOUND,
+		).toEqualTypeOf<"User not found">();
 	});
 });
 

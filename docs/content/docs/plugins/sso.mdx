@@ -18,8 +18,8 @@ The SAML 2.0 support is in active development and may not be suitable for produc
     <Step>
         ### Install the plugin
 
-        ```package-install
-        @better-auth/sso
+        ```bash
+        npm install @better-auth/sso
         ```
     </Step>
     <Step>
@@ -27,12 +27,12 @@ The SAML 2.0 support is in active development and may not be suitable for produc
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { sso } from "@better-auth/sso"; // [!code highlight]
+        import { sso } from "@better-auth/sso";
 
         const auth = betterAuth({
-            plugins: [
+            plugins: [ // [!code highlight]
                 sso() // [!code highlight]
-            ]
+            ] // [!code highlight]
         })
         ```
     </Step>
@@ -60,12 +60,12 @@ The SAML 2.0 support is in active development and may not be suitable for produc
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { ssoClient } from "@better-auth/sso/client" // [!code highlight]
+        import { ssoClient } from "@better-auth/sso/client"
 
         const authClient = createAuthClient({
-            plugins: [
+            plugins: [ // [!code highlight]
                 ssoClient() // [!code highlight]
-            ]
+            ] // [!code highlight]
         })
         ```
     </Step>
@@ -435,30 +435,6 @@ await auth.api.registerSSOProvider({
     </Tab>
 </Tabs>
 
-### IdP-Initiated SSO
-
- For IdP-initiated flows (e.g., via Okta dashboard), your framework may require an explicit route handler to manage the redirect if the default handler doesn't support the `GET` request following the SAML POST.
-
- <Tabs items={["next-js-app-router"]}>
-   <Tab value="next-js-app-router">
-     Create this file to prevent 404 errors:
-
-     ```ts title="app/api/auth/sso/saml2/callback/[providerId]/route.ts"
-     import { auth } from "@/lib/auth";
-     import { NextResponse } from "next/server";
-
-     export async function POST(req: Request) {
-         return auth.handler(req);
-     }
-
-     export async function GET(req: Request) {
-         // Required: IdP-initiated flows redirect to this URL after POST
-         return NextResponse.redirect(new URL("/", req.url));
-     }
-     ```
-   </Tab>
-</Tabs>
-
 ### Get Service Provider Metadata
 
 For SAML providers, you can retrieve the Service Provider metadata XML that needs to be configured in your Identity Provider:
@@ -482,8 +458,6 @@ To sign in with an SSO provider, you can call `signIn.sso`
 You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await authClient.signIn.sso({
     email: "user@example.com",
     callbackURL: "/dashboard",
@@ -493,8 +467,6 @@ const res = await authClient.signIn.sso({
 or you can specify the domain:
 
 ```ts title="sign-in-domain.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
@@ -504,8 +476,6 @@ const res = await authClient.signIn.sso({
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ts title="sign-in-org.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await authClient.signIn.sso({
     organizationSlug: "example-org",
     callbackURL: "/dashboard",
@@ -515,8 +485,6 @@ const res = await authClient.signIn.sso({
 Alternatively, you can sign in using the provider's ID:
 
 ```ts title="sign-in-provider-id.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     callbackURL: "/dashboard",
@@ -526,8 +494,6 @@ const res = await authClient.signIn.sso({
 Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
 
 ```ts title="sign-in-with-login-hint.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     loginHint: "user@example.com",
@@ -538,8 +504,6 @@ const res = await authClient.signIn.sso({
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
-import { authClient } from "@/lib/auth-client"
-
 const res = await auth.api.signInSSO({
     body: {
         organizationSlug: "example-org",
@@ -602,9 +566,6 @@ Note: If email is provided and loginHint is not specified, email will be sent as
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({
@@ -638,9 +599,6 @@ User provisioning allows you to run custom logic whenever a user signs in throug
 - Updating user information from the SSO provider
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({
@@ -692,9 +650,6 @@ Organization provisioning automatically manages user memberships in organization
 #### Basic Organization Provisioning
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({
@@ -710,9 +665,6 @@ const auth = betterAuth({
 #### Advanced Organization Provisioning with Custom Roles
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({
@@ -750,8 +702,6 @@ const auth = betterAuth({
 When registering an SSO provider, you can link it to a specific organization:
 
 ```ts title="register-org-provider.ts"
-import { auth } from "@/lib/auth"
-
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
@@ -762,7 +712,7 @@ await auth.api.registerSSOProvider({
             // SAML configuration...
         },
     },
-    headers: await headers() // headers containing the user's session token
+    headers,
 });
 ```
 
@@ -773,8 +723,6 @@ Now when users from `acmecorp.com` sign in through this provider, they'll automa
 You can set up multiple SSO providers for different organizations:
 
 ```ts title="multi-org-setup.ts"
-import { auth } from "@/lib/auth"
-
 // Acme Corp SAML provider
 await auth.api.registerSSOProvider({
     body: {
@@ -865,9 +813,6 @@ organizationProvisioning: {
 ### Default SSO Provider
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({
@@ -903,27 +848,11 @@ When registering a SAML provider, you need to provide Service Provider (SP) meta
 
 - **metadata**: XML metadata for the Service Provider
 - **binding**: The binding method, typically "post" or "redirect"
-- **privateKey**: Private key for signing AuthnRequests
-- **privateKeyPass**: Password for the private key
+- **privateKey**: Private key for signing (optional)
+- **privateKeyPass**: Password for the private key (if encrypted)
 - **isAssertionEncrypted**: Whether assertions should be encrypted
 - **encPrivateKey**: Private key for decryption (if encryption is enabled)
 - **encPrivateKeyPass**: Password for the encryption private key
-
-### Signed AuthnRequests
-
-Some enterprise IdPs (Okta, Azure AD, ADFS) require signed AuthnRequests. Enable this with:
-
-```ts
-samlConfig: {
-    // ... other config
-    authnRequestsSigned: true,
-    spMetadata: {
-        privateKey: "-----BEGIN RSA PRIVATE KEY-----\n...",
-    }
-}
-```
-
-The SP metadata endpoint will automatically include `AuthnRequestsSigned="true"` when enabled.
 
 ### Identity Provider Configuration
 
@@ -1219,9 +1148,6 @@ const authClient = createAuthClient({
 
     <Tab value="server">
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth";
-import { sso } from "@better-auth/sso";
-
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
@@ -1269,7 +1195,7 @@ You can use this token to prove ownership over the domain.
 #### Create `TXT` DNS record
 To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    *   **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
 
 **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
@@ -1461,10 +1387,10 @@ If you want to allow account linking for specific trusted providers, enable the 
                 required: false
             },
             tokenPrefix: {
-                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
+                description: "Prefix to append to the verification token identifier",
                 type: "string",
                 required: false,
-                default: "better-auth-token"
+                default: "better-auth-token-"
             },
         },
     },
