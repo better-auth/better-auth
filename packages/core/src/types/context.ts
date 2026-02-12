@@ -160,7 +160,10 @@ export interface InternalAdapter<
 		options?: { includeAccounts: boolean } | undefined,
 	): Promise<{ user: User; accounts: Account[] } | null>;
 
-	findUserById(userId: string): Promise<User | null>;
+	findUserById(
+		userId: string,
+		options?: { includeSoftDeleted?: boolean },
+	): Promise<User | null>;
 
 	linkAccount(
 		account: Omit<Account, "id" | "createdAt" | "updatedAt"> & Partial<Account>,

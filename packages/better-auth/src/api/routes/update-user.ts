@@ -401,6 +401,17 @@ export const deleteUser = createAuthEndpoint(
 					description: "The token to delete the user is required",
 				})
 				.optional(),
+			/**
+			 * If true and soft delete is enabled in config, the user will be
+			 * soft-deleted (deletedAt timestamp set) instead of permanently removed.
+			 */
+			softDelete: z
+				.boolean()
+				.meta({
+					description:
+						"Soft delete the user instead of permanently removing them",
+				})
+				.optional(),
 		}),
 		metadata: {
 			openapi: {
@@ -425,6 +436,11 @@ export const deleteUser = createAuthEndpoint(
 									token: {
 										type: "string",
 										description: "The deletion verification token",
+									},
+									softDelete: {
+										type: "boolean",
+										description:
+											"Soft delete the user instead of permanently removing them",
 									},
 								},
 							},
@@ -549,7 +565,16 @@ export const deleteUser = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		const isSoftDelete =
+			ctx.body.softDelete === true &&
+			ctx.context.options.user?.deleteUser?.softDelete === true;
+		if (isSoftDelete) {
+			await ctx.context.internalAdapter.updateUser(session.user.id, {
+				deletedAt: new Date(),
+			});
+		} else {
+			await ctx.context.internalAdapter.deleteUser(session.user.id);
+		}
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		deleteSessionCookie(ctx);
 		const afterDelete = ctx.context.options.user.deleteUser?.afterDelete;
@@ -640,9 +665,17 @@ export const deleteUserCallback = createAuthEndpoint(
 		if (beforeDelete) {
 			await beforeDelete(session.user, ctx.request);
 		}
-		await ctx.context.internalAdapter.deleteUser(session.user.id);
+		const isSoftDelete =
+			ctx.context.options.user?.deleteUser?.softDelete === true;
+		if (isSoftDelete) {
+			await ctx.context.internalAdapter.updateUser(session.user.id, {
+				deletedAt: new Date(),
+			});
+		} else {
+			await ctx.context.internalAdapter.deleteUser(session.user.id);
+			await ctx.context.internalAdapter.deleteAccounts(session.user.id);
+		}
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
-		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
 		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
 
 		deleteSessionCookie(ctx);

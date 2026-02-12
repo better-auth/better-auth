@@ -573,6 +573,212 @@ describe("delete user", async () => {
 		});
 	});
 
+	it("should soft delete user with deletedAt when softDelete is enabled", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					softDelete: true,
+				},
+			},
+			session: {
+				freshAge: 1000,
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			const userId = session.data!.user.id;
+
+			const res = await client.deleteUser({
+				softDelete: true,
+			});
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+
+			// User should still exist in DB with deletedAt set
+			const dbUser = await db.findOne<{ deletedAt: Date | null }>({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+			expect(dbUser).toBeDefined();
+			expect(dbUser!.deletedAt).toBeDefined();
+			expect(dbUser!.deletedAt).not.toBeNull();
+
+			// Session should be revoked
+			const sessionAfter = await client.getSession();
+			expect(sessionAfter.data).toBeNull();
+		});
+	});
+
+	it("should prevent soft-deleted user from signing in", async () => {
+		const { client, signInWithTestUser, testUser } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					softDelete: true,
+				},
+			},
+			session: {
+				freshAge: 1000,
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.deleteUser({
+				softDelete: true,
+			});
+		});
+
+		// Signing in should fail because user is soft-deleted
+		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+		});
+		expect(signInRes.error).toBeDefined();
+	});
+
+	it("should still hard delete by default even with softDelete config enabled", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+					softDelete: true,
+				},
+			},
+			session: {
+				freshAge: 1000,
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			const userId = session.data!.user.id;
+
+			const res = await client.deleteUser();
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+
+			// User should be completely gone from DB
+			const dbUser = await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+			expect(dbUser).toBeNull();
+		});
+	});
+
+	it("should hard delete when body has softDelete but config does not", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1000,
+			},
+		});
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			const userId = session.data!.user.id;
+
+			const res = await client.deleteUser({
+				softDelete: true,
+			});
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+
+			// User should be hard deleted since config.softDelete is off
+			const dbUser = await db.findOne({
+				model: "user",
+				where: [{ field: "id", value: userId }],
+			});
+			expect(dbUser).toBeNull();
+		});
+	});
+
+	it("should allow admin to hard-delete a soft-deleted user", async () => {
+		const { admin } = await import("../../plugins/admin/admin");
+		const { adminClient: adminClientPlugin } = await import(
+			"../../plugins/admin/client"
+		);
+		const { client, signInWithTestUser, db, sessionSetter } =
+			await getTestInstance(
+				{
+					user: {
+						deleteUser: {
+							enabled: true,
+							softDelete: true,
+						},
+					},
+					plugins: [admin()],
+					session: {
+						freshAge: 1000,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [adminClientPlugin()],
+					},
+				},
+			);
+
+		// Sign up and soft-delete a user
+		const { runWithUser } = await signInWithTestUser();
+		let userId = "";
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			userId = session.data!.user.id;
+			await client.deleteUser({
+				softDelete: true,
+			});
+		});
+
+		// Verify user is soft-deleted in DB
+		const dbUser = await db.findOne<{ deletedAt: Date | null }>({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(dbUser).toBeDefined();
+		expect(dbUser!.deletedAt).not.toBeNull();
+
+		// Create an admin user
+		const adminHeaders = new Headers();
+		await client.signUp.email({
+			email: "admin@test.com",
+			password: "admin-password",
+			name: "Admin",
+			fetchOptions: {
+				onSuccess: sessionSetter(adminHeaders),
+			},
+		});
+		// Set admin role directly
+		await db.update({
+			model: "user",
+			update: { role: "admin" },
+			where: [{ field: "email", value: "admin@test.com" }],
+		});
+
+		// Admin hard-deletes the soft-deleted user
+		const removeRes = await client.admin.removeUser(
+			{ userId },
+			{ headers: adminHeaders },
+		);
+		expect(removeRes.data?.success).toBe(true);
+
+		// User should now be completely gone
+		const dbUserAfter = await db.findOne({
+			model: "user",
+			where: [{ field: "id", value: userId }],
+		});
+		expect(dbUserAfter).toBeNull();
+	});
+
 	it("should ignore cookie cache for sensitive operations like changePassword", async () => {
 		const { client: cacheClient, sessionSetter: cacheSessionSetter } =
 			await getTestInstance(

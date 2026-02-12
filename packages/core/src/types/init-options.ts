@@ -680,6 +680,15 @@ export type BetterAuthOptions = {
 					 */
 					enabled?: boolean;
 					/**
+					 * Enable soft delete. When enabled, calling `deleteUser` with
+					 * `softDelete: true` will set a `deletedAt` timestamp instead
+					 * of permanently removing the user. A `deletedAt` column is
+					 * added to the user table when this option is `true`.
+					 *
+					 * Soft-deleted users cannot authenticate.
+					 */
+					softDelete?: boolean;
+					/**
 					 * Send a verification email when the user deletes their account.
 					 *
 					 * if this is not set, the user will be deleted immediately.

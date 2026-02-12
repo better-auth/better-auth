@@ -1010,6 +1010,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "description": "The user's password. Required if session is not fresh",
                     "type": "string",
                   },
+                  "softDelete": {
+                    "description": "Soft delete the user instead of permanently removing them",
+                    "type": "boolean",
+                  },
                   "token": {
                     "description": "The deletion verification token",
                     "type": "string",

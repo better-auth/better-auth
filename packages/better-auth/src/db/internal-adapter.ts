@@ -43,6 +43,7 @@ export const createInternalAdapter = (
 ): InternalAdapter => {
 	const logger = ctx.logger;
 	const options = ctx.options;
+	const softDeleteEnabled = options.user?.deleteUser?.softDelete === true;
 	const secondaryStorage = options.secondaryStorage;
 	const sessionExpiration = options.session?.expiresIn || 60 * 60 * 24 * 7; // 7 days
 	const {
@@ -760,8 +761,13 @@ export const createInternalAdapter = (
 					user: true,
 				},
 			});
+			const isSoftDeleted = (u: Record<string, unknown>) =>
+				softDeleteEnabled && u?.deletedAt != null;
 			if (account) {
 				if (account.user) {
+					if (isSoftDeleted(account.user)) {
+						return null;
+					}
 					return {
 						user: account.user,
 						linkedAccount: account,
@@ -777,7 +783,7 @@ export const createInternalAdapter = (
 							},
 						],
 					});
-					if (user) {
+					if (user && !isSoftDeleted(user)) {
 						return {
 							user,
 							linkedAccount: account,
@@ -796,7 +802,7 @@ export const createInternalAdapter = (
 						},
 					],
 				});
-				if (user) {
+				if (user && !isSoftDeleted(user)) {
 					const accounts = await (
 						await getCurrentAdapter(adapter)
 					).findMany<Account>({
@@ -837,6 +843,13 @@ export const createInternalAdapter = (
 					...(options?.includeAccounts ? { account: true } : {}),
 				},
 			});
+			if (
+				result &&
+				softDeleteEnabled &&
+				(result as Record<string, unknown>).deletedAt != null
+			) {
+				return null;
+			}
 			if (!result) return null;
 			const { account: accounts, ...user } = result;
 			return {
@@ -844,7 +857,10 @@ export const createInternalAdapter = (
 				accounts: accounts ?? [],
 			};
 		},
-		findUserById: async (userId: string) => {
+		findUserById: async (
+			userId: string,
+			opts?: { includeSoftDeleted?: boolean },
+		) => {
 			if (!userId) return null;
 			const user = await (await getCurrentAdapter(adapter)).findOne<User>({
 				model: "user",
@@ -855,6 +871,14 @@ export const createInternalAdapter = (
 					},
 				],
 			});
+			if (
+				user &&
+				softDeleteEnabled &&
+				!opts?.includeSoftDeleted &&
+				(user as Record<string, unknown>).deletedAt != null
+			) {
+				return null;
+			}
 			return user;
 		},
 		linkAccount: async (

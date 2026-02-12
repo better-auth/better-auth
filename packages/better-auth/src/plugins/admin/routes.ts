@@ -1443,6 +1443,7 @@ export const removeUser = (opts: AdminOptions) =>
 
 			const user = await ctx.context.internalAdapter.findUserById(
 				ctx.body.userId,
+				{ includeSoftDeleted: true },
 			);
 
 			if (!user) {
