@@ -1020,15 +1020,22 @@ describe("Admin plugin", async () => {
 });
 
 describe("Admin plugin custom password validation", async () => {
-	const { client, signInWithTestUser } = await getTestInstance({
-		emailAndPassword: {
-			enabled: true,
-			password: {
-				validate: (password) => password.includes("!"),
+	const { client, signInWithTestUser } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				password: {
+					validate: (password) => password.includes("!"),
+				},
+			},
+			plugins: [admin()],
+		},
+		{
+			clientOptions: {
+				plugins: [adminClient()],
 			},
 		},
-		plugins: [admin()],
-	});
+	);
 
 	it("should reject admin createUser when custom validation fails", async () => {
 		const { headers } = await signInWithTestUser();
