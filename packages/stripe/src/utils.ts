@@ -107,29 +107,6 @@ export async function resolvePlanItem(
 }
 
 /**
- * Create a meter ID resolver scoped to a Stripe client instance.
- * Results are cached with a 5-minute TTL.
- */
-export function createMeterIdResolver(stripeClient: Stripe) {
-	let cache: Map<string, string> | null = null;
-	let expiry = 0;
-
-	return async (): Promise<Map<string, string>> => {
-		if (cache && Date.now() < expiry) return cache;
-		const result = new Map<string, string>();
-		for await (const meter of stripeClient.billing.meters.list({
-			status: "active",
-			limit: 100,
-		})) {
-			result.set(meter.event_name, meter.id);
-		}
-		cache = result;
-		expiry = Date.now() + 5 * 60 * 1000; // 5 min
-		return cache;
-	};
-}
-
-/**
  * Validate that the given event name is registered in any plan's meters.
  */
 export function validateEventName(

@@ -9,7 +9,6 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
-	getSubscriptionUsage,
 	ingestSubscriptionUsage,
 	listActiveSubscriptions,
 	restoreSubscription,
@@ -47,7 +46,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
 		stripeIngestUsage: ingestSubscriptionUsage(options),
-		stripeGetUsage: getSubscriptionUsage(options),
 	};
 
 	return {

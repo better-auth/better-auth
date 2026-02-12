@@ -1,25 +1,11 @@
 import type Stripe from "stripe";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import type { StripeOptions } from "../src/types";
 import {
-	createMeterIdResolver,
 	escapeStripeSearchValue,
 	resolvePlanItem,
 	validateEventName,
 } from "../src/utils";
-
-/**
- * Create a mock that mimics Stripe's list()
- */
-function mockStripeList<T>(data: T[]) {
-	return {
-		data,
-		has_more: false,
-		async *[Symbol.asyncIterator]() {
-			for (const item of data) yield item;
-		},
-	};
-}
 
 describe("escapeStripeSearchValue", () => {
 	it("should escape double quotes", () => {
@@ -139,76 +125,5 @@ describe("resolvePlanItem", () => {
 		const result = await resolvePlanItem(optionsWithLookup, items);
 		expect(result?.item.price.id).toBe("price_foo");
 		expect(result?.plan?.name).toBe("premium");
-	});
-});
-
-describe("createMeterIdResolver", () => {
-	afterEach(() => {
-		vi.useRealTimers();
-	});
-
-	it("should resolve meter IDs from Stripe", async () => {
-		const mockClient = {
-			billing: {
-				meters: {
-					list: vi.fn().mockReturnValue(
-						mockStripeList([
-							{ event_name: "api_calls", id: "meter_abc" },
-							{ event_name: "emails", id: "meter_def" },
-						]),
-					),
-				},
-			},
-		} as unknown as Stripe;
-
-		const resolver = createMeterIdResolver(mockClient);
-		const result = await resolver();
-
-		expect(result.get("api_calls")).toBe("meter_abc");
-		expect(result.get("emails")).toBe("meter_def");
-		expect(mockClient.billing.meters.list).toHaveBeenCalledWith({
-			status: "active",
-			limit: 100,
-		});
-	});
-
-	it("should cache results within TTL", async () => {
-		const listFn = vi
-			.fn()
-			.mockReturnValue(
-				mockStripeList([{ event_name: "api_calls", id: "meter_abc" }]),
-			);
-		const mockClient = {
-			billing: { meters: { list: listFn } },
-		} as unknown as Stripe;
-
-		const resolver = createMeterIdResolver(mockClient);
-		await resolver();
-		await resolver();
-		await resolver();
-
-		expect(listFn).toHaveBeenCalledTimes(1);
-	});
-
-	it("should refresh cache after TTL expires", async () => {
-		const listFn = vi
-			.fn()
-			.mockReturnValue(
-				mockStripeList([{ event_name: "api_calls", id: "meter_abc" }]),
-			);
-		const mockClient = {
-			billing: { meters: { list: listFn } },
-		} as unknown as Stripe;
-
-		const resolver = createMeterIdResolver(mockClient);
-		await resolver();
-		expect(listFn).toHaveBeenCalledTimes(1);
-
-		// Simulate TTL expiry by advancing time
-		vi.useFakeTimers();
-		vi.advanceTimersByTime(5 * 60 * 1000 + 1);
-
-		await resolver();
-		expect(listFn).toHaveBeenCalledTimes(2);
 	});
 });

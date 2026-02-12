@@ -22,7 +22,6 @@ function mockStripeList<T>(data: T[]) {
 
 describe("metered billing", async () => {
 	const meterEventsCreate = vi.fn().mockResolvedValue({});
-	const metersListEventSummaries = vi.fn();
 	const metersList = vi.fn().mockReturnValue(
 		mockStripeList([
 			{ event_name: "stripe_meter_emails", id: "meter_emails_id" },
@@ -67,7 +66,6 @@ describe("metered billing", async () => {
 			meterEvents: { create: meterEventsCreate },
 			meters: {
 				list: metersList,
-				listEventSummaries: metersListEventSummaries,
 			},
 		},
 	};
@@ -141,10 +139,6 @@ describe("metered billing", async () => {
 	afterEach(() => {
 		vi.useRealTimers();
 	});
-
-	// =========================================================================
-	// Ingest usage events
-	// =========================================================================
 
 	it("should require authentication", async () => {
 		await expect(
@@ -273,157 +267,5 @@ describe("metered billing", async () => {
 				identifier,
 			}),
 		);
-	});
-
-	// =========================================================================
-	// Query usage summaries
-	// =========================================================================
-
-	it("should require authentication", async () => {
-		const res = await client.subscription.usage({
-			query: { meter: "stripe_meter_emails" },
-		});
-
-		expect(res.error?.status).toBe(401);
-	});
-
-	it("should return formatted usage summaries", async () => {
-		const startTs = Math.floor(Date.now() / 1000) - 3600;
-		const endTs = Math.floor(Date.now() / 1000);
-
-		metersListEventSummaries.mockResolvedValue({
-			data: [
-				{
-					id: "summary_1",
-					aggregated_value: 42,
-					start_time: startTs,
-					end_time: endTs,
-				},
-			],
-			has_more: false,
-		});
-
-		const res = await client.subscription.usage({
-			query: {
-				meter: "stripe_meter_emails",
-				referenceId: userId,
-			},
-			fetchOptions: { headers },
-		});
-
-		expect(res.data).toMatchObject({
-			data: [
-				{
-					id: "summary_1",
-					aggregatedValue: 42,
-					startTime: new Date(startTs * 1000),
-					endTime: new Date(endTs * 1000),
-				},
-			],
-			hasMore: false,
-		});
-	});
-
-	it("should support pagination and grouping options", async () => {
-		metersListEventSummaries.mockResolvedValue({
-			data: [
-				{
-					id: "summary_page2",
-					aggregated_value: 10,
-					start_time: Math.floor(Date.now() / 1000) - 3600,
-					end_time: Math.floor(Date.now() / 1000),
-				},
-			],
-			has_more: true,
-		});
-
-		const res = await client.subscription.usage({
-			query: {
-				meter: "stripe_meter_emails",
-				referenceId: userId,
-				limit: 10,
-				startingAfter: "summary_prev",
-				groupingWindow: "day",
-			},
-			fetchOptions: { headers },
-		});
-
-		expect(res.data?.hasMore).toBe(true);
-		expect(res.data?.lastId).toBe("summary_page2");
-		expect(metersListEventSummaries).toHaveBeenCalledWith(
-			"meter_emails_id",
-			expect.objectContaining({
-				limit: 10,
-				starting_after: "summary_prev",
-				value_grouping_window: "day",
-			}),
-		);
-	});
-
-	it("should return usage summaries for organization customerType", async () => {
-		const org = await client.organization.create({
-			name: "Usage Query Org",
-			slug: "usage-query-org",
-			fetchOptions: { headers },
-		});
-		const orgId = org.data?.id as string;
-		await ctx.adapter.update({
-			model: "organization",
-			update: { stripeCustomerId: "cus_org_usage" },
-			where: [{ field: "id", value: orgId }],
-		});
-
-		const startTs = Math.floor(Date.now() / 1000) - 3600;
-		const endTs = Math.floor(Date.now() / 1000);
-		metersListEventSummaries.mockResolvedValue({
-			data: [
-				{
-					id: "summary_org",
-					aggregated_value: 100,
-					start_time: startTs,
-					end_time: endTs,
-				},
-			],
-			has_more: false,
-		});
-
-		const res = await client.subscription.usage({
-			query: {
-				meter: "stripe_meter_emails",
-				customerType: "organization",
-			},
-			fetchOptions: { headers },
-		});
-
-		expect(res.data?.data[0]?.aggregatedValue).toBe(100);
-		expect(metersListEventSummaries).toHaveBeenCalledWith(
-			"meter_emails_id",
-			expect.objectContaining({
-				customer: "cus_org_usage",
-			}),
-		);
-
-		// Clean up: remove activeOrganizationId
-		await ctx.adapter.update({
-			model: "session",
-			update: { activeOrganizationId: null },
-			where: [{ field: "userId", value: userId }],
-		});
-	});
-
-	it("should fail when the meter is not registered in Stripe", async () => {
-		vi.useFakeTimers();
-		vi.advanceTimersByTime(5 * 60 * 1000 + 1);
-		metersList.mockReturnValueOnce(mockStripeList([]));
-
-		const res = await client.subscription.usage({
-			query: {
-				meter: "stripe_meter_emails",
-				referenceId: userId,
-			},
-			fetchOptions: { headers },
-		});
-
-		expect(res.error?.status).toBe(400);
 	});
 });
