@@ -212,7 +212,10 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
-			const identifier = getVerificationIdentifier(options, provider.providerId);
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
 
 			if (identifier.length > DNS_LABEL_MAX_LENGTH) {
 				throw new APIError("BAD_REQUEST", {
