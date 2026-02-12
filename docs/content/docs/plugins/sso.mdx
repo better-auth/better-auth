@@ -1219,7 +1219,7 @@ You can use this token to prove ownership over the domain.
 #### Create `TXT` DNS record
 To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
 
 **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
@@ -1411,10 +1411,10 @@ If you want to allow account linking for specific trusted providers, enable the 
                 required: false
             },
             tokenPrefix: {
-                description: "Prefix to append to the verification token identifier",
+                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
                 type: "string",
                 required: false,
-                default: "better-auth-token-"
+                default: "better-auth-token"
             },
         },
     },

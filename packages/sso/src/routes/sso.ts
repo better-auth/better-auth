@@ -24,6 +24,7 @@ import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
 import z from "zod/v4";
+import { getVerificationIdentifier } from "./domain-verification";
 
 interface AuthnRequestRecord {
 	id: string;
@@ -860,9 +861,7 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				await ctx.context.adapter.create<Verification>({
 					model: "verification",
 					data: {
-						identifier: options.domainVerification?.tokenPrefix
-							? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-							: `better-auth-token-${provider.providerId}`,
+						identifier: getVerificationIdentifier(options, provider.providerId),
 						createdAt: new Date(),
 						updatedAt: new Date(),
 						value: domainVerificationToken as string,

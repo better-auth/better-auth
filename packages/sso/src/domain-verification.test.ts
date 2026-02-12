@@ -286,7 +286,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -471,7 +471,7 @@ describe("Domain verification", async () => {
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
@@ -484,6 +484,9 @@ describe("Domain verification", async () => {
 			});
 
 			expect(response.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-saml-provider-1.hello.com",
+			);
 		});
 
 		it("should verify a provider domain ownership (custom token verification prefix)", async () => {
@@ -498,7 +501,7 @@ describe("Domain verification", async () => {
 				[
 					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
 				],
-				[`auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
+				[`_auth-prefix-saml-provider-1=${provider.domainVerificationToken}`],
 			]);
 
 			const response = await auth.api.verifyDomain({
@@ -510,6 +513,45 @@ describe("Domain verification", async () => {
 			});
 
 			expect(response.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_auth-prefix-saml-provider-1.hello.com",
+			);
+		});
+
+		it("should return bad request when provider ID exceeds DNS label limit", async () => {
+			const longProviderId = "a".repeat(50);
+			const { auth, getAuthHeaders } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: longProviderId,
+					issuer: "http://hello.com:8081",
+					domain: "http://hello.com:8081",
+					samlConfig: {
+						entryPoint: "http://idp.com:",
+						cert: "the-cert",
+						callbackUrl: "http://hello.com:8081/api/sso/saml2/callback",
+						spMetadata: {},
+					},
+				},
+				headers,
+			});
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: longProviderId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				message:
+					"Verification identifier exceeds the DNS label limit of 63 characters",
+				code: "IDENTIFIER_TOO_LONG",
+			});
 		});
 
 		it("should fail to verify an already verified domain", async () => {
@@ -519,7 +561,7 @@ describe("Domain verification", async () => {
 
 			dnsMock.resolveTxt.mockResolvedValue([
 				[
-					`better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
 				],
 			]);
 
