@@ -36,23 +36,30 @@ describe("escapeStripeSearchValue", () => {
 });
 
 describe("validateEventName", () => {
-	const meters = [
-		{ eventName: "stripe_meter_emails" },
-		{ eventName: "stripe_meter_api" },
+	const plans = [
+		{
+			name: "starter",
+			meters: [
+				{ eventName: "stripe_meter_emails", priceId: "price_emails" },
+				{ eventName: "stripe_meter_api", priceId: "price_api" },
+			],
+		},
 	];
 
 	it("should accept a registered event name", () => {
-		expect(validateEventName(meters, "stripe_meter_emails")).toBe(
+		expect(validateEventName(plans, "stripe_meter_emails")).toBe(
 			"stripe_meter_emails",
 		);
 	});
 
 	it("should throw for an unknown event name", () => {
-		expect(() => validateEventName(meters, "unknown")).toThrow();
+		expect(() => validateEventName(plans, "unknown")).toThrow();
 	});
 
-	it("should throw when meters is undefined", () => {
-		expect(() => validateEventName(undefined, "stripe_meter_emails")).toThrow();
+	it("should throw when plans have no meters", () => {
+		expect(() =>
+			validateEventName([{ name: "basic" }], "stripe_meter_emails"),
+		).toThrow();
 	});
 });
 

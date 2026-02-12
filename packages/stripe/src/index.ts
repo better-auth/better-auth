@@ -19,7 +19,6 @@ import {
 } from "./routes";
 import { getSchema } from "./schema";
 import type {
-	MeterConfig,
 	StripeOptions,
 	StripePlan,
 	Subscription,
@@ -35,8 +34,6 @@ declare module "@better-auth/core" {
 		};
 	}
 }
-
-export type * from "./types";
 
 export const stripe = <O extends StripeOptions>(options: O) => {
 	const client = options.stripeClient;
@@ -67,11 +64,10 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 			}
 				? typeof subscriptionEndpoints
 				: {}),
-			...((options.subscription?.enabled && options.subscription.meters?.length
+			...((options.subscription?.enabled
 				? meteringEndpoints
 				: {}) as O["subscription"] extends {
 				enabled: true;
-				meters: MeterConfig[];
 			}
 				? typeof meteringEndpoints
 				: {}),
