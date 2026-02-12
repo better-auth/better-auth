@@ -615,6 +615,13 @@ export type BetterAuthOptions = {
 						hash: string;
 						password: string;
 					}) => Promise<boolean>;
+					/**
+					 * Custom password validator.
+					 *
+					 * Return `true` for valid passwords and `false` for invalid passwords.
+					 * The built-in min/max length checks are still applied before this validator.
+					 */
+					validate?: (password: string) => boolean;
 				};
 				/**
 				 * Automatically sign in the user after sign up

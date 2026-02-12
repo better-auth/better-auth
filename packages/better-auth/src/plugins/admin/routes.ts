@@ -15,6 +15,7 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import { assertPasswordPolicy } from "../../utils/password";
 import type { AccessControl } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
@@ -1529,16 +1530,7 @@ export const setUserPassword = (opts: AdminOptions) =>
 			}
 
 			const { newPassword, userId } = ctx.body;
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (newPassword.length < minPasswordLength) {
-				ctx.context.logger.error("Password is too short");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (newPassword.length > maxPasswordLength) {
-				ctx.context.logger.error("Password is too long");
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordPolicy(ctx, newPassword);
 			const hashedPassword = await ctx.context.password.hash(newPassword);
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 			return ctx.json({

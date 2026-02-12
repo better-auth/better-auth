@@ -6,6 +6,7 @@ import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
+import { assertPasswordPolicy } from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
 import {
@@ -250,18 +251,7 @@ export const changePassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword, currentPassword, revokeOtherSessions } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordPolicy(ctx, newPassword);
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			session.user.id,
@@ -329,18 +319,7 @@ export const setPassword = createAuthEndpoint(
 	async (ctx) => {
 		const { newPassword } = ctx.body;
 		const session = ctx.context.session;
-		const minPasswordLength = ctx.context.password.config.minPasswordLength;
-		if (newPassword.length < minPasswordLength) {
-			ctx.context.logger.error("Password is too short");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-
-		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-
-		if (newPassword.length > maxPasswordLength) {
-			ctx.context.logger.error("Password is too long");
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordPolicy(ctx, newPassword);
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
 			session.user.id,

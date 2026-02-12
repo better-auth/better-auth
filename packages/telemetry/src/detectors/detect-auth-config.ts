@@ -34,6 +34,7 @@ export async function getTelemetryAuthConfig(
 			password: {
 				hash: !!options.emailAndPassword?.password?.hash,
 				verify: !!options.emailAndPassword?.password?.verify,
+				validate: !!options.emailAndPassword?.password?.validate,
 			},
 			autoSignIn: !!options.emailAndPassword?.autoSignIn,
 			revokeSessionsOnPasswordReset:

@@ -627,18 +627,28 @@ describe("base context creation", () => {
 			const res = await initBase({});
 			expect(res.password.config.minPasswordLength).toBe(8);
 			expect(res.password.config.maxPasswordLength).toBe(128);
+			expect(res.password.validate).toBeUndefined();
 		});
 
 		it("should allow custom password length limits", async () => {
+			const customValidate = vi.fn((password: string) =>
+				/(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[^A-Za-z0-9]).+/.test(
+					password,
+				),
+			);
 			const res = await initBase({
 				emailAndPassword: {
 					enabled: true,
 					minPasswordLength: 12,
 					maxPasswordLength: 256,
+					password: {
+						validate: customValidate,
+					},
 				},
 			});
 			expect(res.password.config.minPasswordLength).toBe(12);
 			expect(res.password.config.maxPasswordLength).toBe(256);
+			expect(res.password.validate).toBe(customValidate);
 		});
 
 		it("should use custom hash and verify functions", async () => {

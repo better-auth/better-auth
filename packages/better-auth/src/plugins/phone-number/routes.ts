@@ -8,6 +8,7 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
 import { getDate } from "../../utils/date";
+import { assertPasswordPolicy } from "../../utils/password";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
@@ -825,14 +826,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					PHONE_NUMBER_ERROR_CODES.UNEXPECTED_ERROR,
 				);
 			}
-			const minLength = ctx.context.password.config.minPasswordLength;
-			const maxLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.newPassword.length < minLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			if (ctx.body.newPassword.length > maxLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordPolicy(ctx, ctx.body.newPassword);
 			const hashedPassword = await ctx.context.password.hash(
 				ctx.body.newPassword,
 			);

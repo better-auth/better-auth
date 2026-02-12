@@ -1,6 +1,28 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 
+export function assertPasswordPolicy(
+	ctx: GenericEndpointContext,
+	password: string,
+) {
+	const { minPasswordLength, maxPasswordLength } = ctx.context.password.config;
+
+	if (password.length < minPasswordLength) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
+	}
+
+	if (password.length > maxPasswordLength) {
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
+	}
+
+	if (ctx.context.password.validate && !ctx.context.password.validate(password)) {
+		throw APIError.from(
+			"BAD_REQUEST",
+			BASE_ERROR_CODES.PASSWORD_DOES_NOT_MATCH_REQUIREMENTS,
+		);
+	}
+}
+
 export async function validatePassword(
 	ctx: GenericEndpointContext,
 	data: {

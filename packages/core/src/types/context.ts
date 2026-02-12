@@ -345,6 +345,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			password: {
 				hash: (password: string) => Promise<string>;
 				verify: (data: { password: string; hash: string }) => Promise<boolean>;
+				validate?: (password: string) => boolean;
 				config: {
 					minPasswordLength: number;
 					maxPasswordLength: number;

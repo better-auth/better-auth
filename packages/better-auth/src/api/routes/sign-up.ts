@@ -9,6 +9,7 @@ import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import { assertPasswordPolicy } from "../../utils/password";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
@@ -213,23 +214,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 				}
 
-				const minPasswordLength = ctx.context.password.config.minPasswordLength;
-				if (password.length < minPasswordLength) {
-					ctx.context.logger.error("Password is too short");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-					);
-				}
+				assertPasswordPolicy(ctx, password);
 
-				const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-				if (password.length > maxPasswordLength) {
-					ctx.context.logger.error("Password is too long");
-					throw APIError.from(
-						"BAD_REQUEST",
-						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-					);
-				}
 				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
 				if (dbUser?.user) {
 					ctx.context.logger.info(

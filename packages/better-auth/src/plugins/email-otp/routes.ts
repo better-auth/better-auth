@@ -7,6 +7,7 @@ import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
+import { assertPasswordPolicy } from "../../utils/password";
 import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
 import { splitAtLastColon } from "./utils";
@@ -1011,14 +1012,7 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!user) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
-			const minPasswordLength = ctx.context.password.config.minPasswordLength;
-			if (ctx.body.password.length < minPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-			}
-			const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
-			if (ctx.body.password.length > maxPasswordLength) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-			}
+			assertPasswordPolicy(ctx, ctx.body.password);
 			const passwordHash = await ctx.context.password.hash(ctx.body.password);
 			const account = user.accounts?.find(
 				(account) => account.providerId === "credential",

@@ -293,6 +293,7 @@ Most of the features of Better Auth will not work correctly.`,
 		password: {
 			hash: options.emailAndPassword?.password?.hash || hashPassword,
 			verify: options.emailAndPassword?.password?.verify || verifyPassword,
+			validate: options.emailAndPassword?.password?.validate,
 			config: {
 				minPasswordLength: options.emailAndPassword?.minPasswordLength || 8,
 				maxPasswordLength: options.emailAndPassword?.maxPasswordLength || 128,

@@ -33,6 +33,7 @@ export const BASE_ERROR_CODES = defineErrorCodes({
 	EMAIL_NOT_VERIFIED: "Email not verified",
 	PASSWORD_TOO_SHORT: "Password too short",
 	PASSWORD_TOO_LONG: "Password too long",
+	PASSWORD_DOES_NOT_MATCH_REQUIREMENTS: "Password does not match requirements",
 	USER_ALREADY_EXISTS: "User already exists.",
 	USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL:
 		"User already exists. Use another email.",

@@ -4,7 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { getDate } from "../../utils/date";
-import { validatePassword } from "../../utils/password";
+import { assertPasswordPolicy, validatePassword } from "../../utils/password";
 import { originCheck } from "../middlewares";
 import { sensitiveSessionMiddleware } from "./session";
 
@@ -277,15 +277,7 @@ export const resetPassword = createAuthEndpoint(
 		}
 
 		const { newPassword } = ctx.body;
-
-		const minLength = ctx.context.password?.config.minPasswordLength;
-		const maxLength = ctx.context.password?.config.maxPasswordLength;
-		if (newPassword.length < minLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
-		}
-		if (newPassword.length > maxLength) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
-		}
+		assertPasswordPolicy(ctx, newPassword);
 
 		const id = `reset-password:${token}`;
 
