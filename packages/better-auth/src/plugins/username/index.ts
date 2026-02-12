@@ -397,12 +397,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(
 						ctx,

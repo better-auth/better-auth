@@ -124,12 +124,10 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						newUser.id,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,
