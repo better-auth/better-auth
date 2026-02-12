@@ -77,7 +77,7 @@ export type StripePlan = {
 	/**
 	 * Per-seat billing price ID
 	 *
-	 * Requires the `organization` plugin. Members changes
+	 * Requires the `organization` plugin. Member changes
 	 * automatically sync the seat quantity in Stripe.
 	 */
 	seatPriceId?: string | undefined;
