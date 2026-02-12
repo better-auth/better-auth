@@ -21,10 +21,11 @@ function listenerFactory(
 }
 
 export type ExposedBridges = ReturnType<typeof exposeBridges>["$InferBridges"];
+
 /**
  * Exposes IPC bridges to the renderer process.
  */
-function exposeBridges(opts: { channelPrefix?: string | undefined } = {}) {
+function exposeBridges(opts: SetupRendererConfig) {
 	if (!process.contextIsolated) {
 		throw new BetterAuthError(
 			"Context isolation must be enabled to use IPC bridges securely.",
@@ -78,13 +79,20 @@ function exposeBridges(opts: { channelPrefix?: string | undefined } = {}) {
 	};
 }
 
-export function setupRenderer(
-	opts: { channelPrefix?: string | undefined } = {},
-) {
+export interface SetupRendererConfig {
+	channelPrefix?: string | undefined;
+}
+
+/**
+ * Sets up the renderer process.
+ * 
+ * - Exposes IPC bridges to the renderer process.
+ */
+export function setupRenderer(options: SetupRendererConfig = {}) {
 	if (!isProcessType("renderer")) {
 		throw new BetterAuthError(
 			"setupRenderer can only be called in the renderer process.",
 		);
 	}
-	void exposeBridges(opts);
+	void exposeBridges(options);
 }
