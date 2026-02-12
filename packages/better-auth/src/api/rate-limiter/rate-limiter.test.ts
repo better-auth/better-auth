@@ -320,6 +320,115 @@ describe("should work in development/test environment", () => {
 	});
 });
 
+describe("countOn", () => {
+	it("should not count successful responses when countOn is 'error'", async () => {
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				countOn: "error",
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Successful sign-in requests should not count against the rate limit
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+			expect(response.error).toBeNull();
+		}
+
+		// The rate limit key for sign-in should not exist in storage
+		expect(store.has("127.0.0.1|/sign-in/email")).toBe(false);
+	});
+
+	it("should count failed responses when countOn is 'error'", async () => {
+		const store = new Map<string, string>();
+		const { client } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				countOn: "error",
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Failed sign-in requests (wrong password) should count against the rate limit
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signIn.email({
+				email: "wrong@email.com",
+				password: "wrong-password",
+			});
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error?.status).toBe(401);
+			}
+		}
+	});
+
+	it("should count all responses when countOn is 'all'", async () => {
+		const store = new Map<string, string>();
+		const { client, testUser } = await getTestInstance({
+			rateLimit: {
+				enabled: true,
+				window: 10,
+				max: 3,
+				countOn: "all",
+			},
+			secondaryStorage: {
+				set(key, value) {
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// With countOn "all", successful requests should count
+		for (let i = 0; i < 5; i++) {
+			const response = await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+			});
+			if (i >= 3) {
+				expect(response.error?.status).toBe(429);
+			} else {
+				expect(response.error).toBeNull();
+			}
+		}
+	});
+});
+
 describe("IPv6 address normalization and rate limiting", () => {
 	it("should normalize IPv6 addresses to canonical form", () => {
 		// All these representations of the same IPv6 address should normalize to the same value
