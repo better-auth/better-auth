@@ -174,13 +174,7 @@ export interface GoogleOneTapActionOptions
 		| undefined;
 }
 
-interface IdentityCredential {
-	readonly configURL: string;
-	readonly isAutoSelected: boolean;
-	token: string;
-}
-
-let isRequestInProgress: AbortController | null = null;
+let isRequestInProgress = false;
 
 function isFedCMSupported() {
 	return typeof window !== "undefined" && "IdentityCredential" in window;
@@ -221,7 +215,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 					opts?: GoogleOneTapActionOptions | undefined,
 					fetchOptions?: ClientFetchOption | undefined,
 				) => {
-					if (isRequestInProgress && !isRequestInProgress.signal.aborted) {
+					if (isRequestInProgress) {
 						console.warn(
 							"A Google One Tap request is already in progress. Please wait.",
 						);
@@ -311,142 +305,97 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 
 					const { autoSelect, cancelOnTapOutside, context } = opts ?? {};
 					const contextValue = context ?? options.context ?? "signin";
-					const clients = {
-						fedCM: async () => {
-							try {
-								const identityCredential = (await navigator.credentials.get({
-									identity: {
-										context: contextValue,
-										providers: [
-											{
-												configURL: "https://accounts.google.com/gsi/fedcm.json",
-												clientId: options.clientId,
-												nonce: opts?.nonce,
-											},
-										],
-									},
-									mediation: autoSelect ? "optional" : "required",
-									signal: isRequestInProgress?.signal,
-								} as any)) as IdentityCredential | null;
-
-								if (!identityCredential?.token) {
-									// Notify the caller that the prompt resulted in no token.
-									opts?.onPromptNotification?.(undefined);
-									return;
-								}
-
-								try {
-									await callback(identityCredential.token);
-									return;
-								} catch (error) {
-									console.error("Error during FedCM callback:", error);
-									throw error;
-								}
-							} catch (error: any) {
-								if (error?.code && (error.code === 19 || error.code === 20)) {
-									// Notify the caller that the prompt was closed/dismissed.
-									opts?.onPromptNotification?.(undefined);
-									return;
-								}
-								throw error;
-							}
-						},
-						oneTap: () => {
-							return new Promise<void>((resolve, reject) => {
-								let isResolved = false;
-								const baseDelay = options.promptOptions?.baseDelay ?? 1000;
-								const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
-
-								window.google?.accounts.id.initialize({
-									client_id: options.clientId,
-									callback: async (response: { credential: string }) => {
-										isResolved = true;
-										try {
-											await callback(response.credential);
-											resolve();
-										} catch (error) {
-											console.error("Error during One Tap callback:", error);
-											reject(error);
-										}
-									},
-									auto_select: autoSelect,
-									cancel_on_tap_outside: cancelOnTapOutside,
-									context: contextValue,
-									ux_mode: opts?.uxMode || "popup",
-									nonce: opts?.nonce,
-									/**
-									 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
-									 */
-									itp_support: true,
-
-									...options.additionalOptions,
-								});
-
-								const handlePrompt = (attempt: number) => {
-									if (isResolved) return;
-
-									window.google?.accounts.id.prompt((notification: any) => {
-										if (isResolved) return;
-
-										if (
-											notification.isDismissedMoment &&
-											notification.isDismissedMoment()
-										) {
-											const reason = notification.getDismissedReason?.();
-											if (noRetryReasons.dismissed.includes(reason)) {
-												opts?.onPromptNotification?.(notification);
-												return;
-											}
-											if (attempt < maxAttempts) {
-												const delay = Math.pow(2, attempt) * baseDelay;
-												setTimeout(() => handlePrompt(attempt + 1), delay);
-											} else {
-												opts?.onPromptNotification?.(notification);
-											}
-										} else if (
-											notification.isSkippedMoment &&
-											notification.isSkippedMoment()
-										) {
-											const reason = notification.getSkippedReason?.();
-											if (noRetryReasons.skipped.includes(reason)) {
-												opts?.onPromptNotification?.(notification);
-												return;
-											}
-											if (attempt < maxAttempts) {
-												const delay = Math.pow(2, attempt) * baseDelay;
-												setTimeout(() => handlePrompt(attempt + 1), delay);
-											} else {
-												opts?.onPromptNotification?.(notification);
-											}
-										}
-									});
-								};
-
-								handlePrompt(0);
-							});
-						},
-					};
-
-					if (isRequestInProgress) {
-						isRequestInProgress?.abort();
-					}
-					isRequestInProgress = new AbortController();
+					isRequestInProgress = true;
 
 					try {
-						const client =
-							options.promptOptions?.fedCM === false || !isFedCMSupported()
-								? "oneTap"
-								: "fedCM";
-						if (client === "oneTap") {
-							await loadGoogleScript();
-						}
+						await loadGoogleScript();
+						await new Promise<void>((resolve, reject) => {
+							let isResolved = false;
+							const baseDelay = options.promptOptions?.baseDelay ?? 1000;
+							const maxAttempts = options.promptOptions?.maxAttempts ?? 5;
 
-						await clients[client]();
+							window.google?.accounts.id.initialize({
+								client_id: options.clientId,
+								callback: async (response: { credential: string }) => {
+									isResolved = true;
+									try {
+										await callback(response.credential);
+										resolve();
+									} catch (error) {
+										console.error("Error during One Tap callback:", error);
+										reject(error);
+									}
+								},
+								auto_select: autoSelect,
+								cancel_on_tap_outside: cancelOnTapOutside,
+								context: contextValue,
+								ux_mode: opts?.uxMode || "popup",
+								nonce: opts?.nonce,
+								/**
+								 * @see {@link https://developers.google.com/identity/gsi/web/guides/overview}
+								 */
+								itp_support: true,
+
+								...options.additionalOptions,
+							});
+
+							const handlePrompt = (attempt: number) => {
+								if (isResolved) return;
+
+								window.google?.accounts.id.prompt((notification: any) => {
+									if (isResolved) return;
+
+									if (
+										notification.isDismissedMoment &&
+										notification.isDismissedMoment()
+									) {
+										const reason = notification.getDismissedReason?.();
+										if (noRetryReasons.dismissed.includes(reason)) {
+											opts?.onPromptNotification?.(notification);
+											resolve();
+											return;
+										}
+										if (attempt < maxAttempts) {
+											const delay = Math.pow(2, attempt) * baseDelay;
+											setTimeout(() => handlePrompt(attempt + 1), delay);
+										} else {
+											opts?.onPromptNotification?.(notification);
+											resolve();
+										}
+									} else if (
+										notification.isSkippedMoment &&
+										notification.isSkippedMoment()
+									) {
+										const reason = notification.getSkippedReason?.();
+										if (!reason || noRetryReasons.skipped.includes(reason)) {
+											opts?.onPromptNotification?.(notification);
+											resolve();
+											return;
+										}
+										if (attempt < maxAttempts) {
+											const delay = Math.pow(2, attempt) * baseDelay;
+											setTimeout(() => handlePrompt(attempt + 1), delay);
+										} else {
+											opts?.onPromptNotification?.(notification);
+											resolve();
+										}
+									} else if (
+										notification.isNotDisplayed &&
+										notification.isNotDisplayed()
+									) {
+										opts?.onPromptNotification?.(notification);
+										resolve();
+									}
+								});
+							};
+
+							handlePrompt(0);
+						});
 					} catch (error) {
 						console.error("Error during Google One Tap flow:", error);
 						throw error;
 					} finally {
-						isRequestInProgress = null;
+						isRequestInProgress = false;
 					}
 				},
 			};
@@ -458,7 +407,7 @@ export const oneTapClient = (options: GoogleOneTapOptions) => {
 };
 
 const loadGoogleScript = (): Promise<void> => {
-	return new Promise((resolve) => {
+	return new Promise((resolve, reject) => {
 		if (window.googleScriptInitialized) {
 			resolve();
 			return;
@@ -471,6 +420,9 @@ const loadGoogleScript = (): Promise<void> => {
 		script.onload = () => {
 			window.googleScriptInitialized = true;
 			resolve();
+		};
+		script.onerror = () => {
+			reject(new Error("Failed to load Google Identity Services script"));
 		};
 		document.head.appendChild(script);
 	});
