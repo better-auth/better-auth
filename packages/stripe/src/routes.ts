@@ -26,7 +26,6 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import {
-	createMeterIdResolver,
 	escapeStripeSearchValue,
 	getPlanByName,
 	getPlans,
@@ -554,6 +553,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const isSubscriptionStillValid =
 				!activeOrTrialingSubscription?.periodEnd ||
 				activeOrTrialingSubscription.periodEnd > new Date();
+			const isSeatOnlyPlan =
+				isAutoManagedSeats && plan.seatPriceId === plan.priceId;
 
 			const isAlreadySubscribed =
 				activeOrTrialingSubscription?.status === "active" &&
@@ -637,15 +638,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				// When seat price changes between plans, use direct API.
 				let upgradeUrl: string;
 				if (seatPortalItems.length > 0) {
+					// For seat-only plans, planItem and seatItem are the same subscription item.
+					// Skip the base entry to avoid duplicates.
+					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
 					await client.subscriptions
 						.update(activeSubscription.id, {
-							items: [
-								{
-									id: planItem.id,
-									price: priceIdToUse,
-								},
-								...seatPortalItems,
-							],
+							items: isSeatItem
+								? seatPortalItems
+								: [
+										{
+											id: planItem.id,
+											price: priceIdToUse,
+										},
+										...seatPortalItems,
+									],
 							proration_behavior: "create_prorations",
 						})
 						.catch(async (e) => {
@@ -805,15 +811,23 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						),
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
-							{
-								price: priceIdToUse,
-								...(isAutoManagedSeats
-									? {}
-									: { quantity: ctx.body.seats || 1 }),
-							},
+							// Base price
+							...(!isSeatOnlyPlan
+								? [
+										{
+											price: priceIdToUse,
+											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+										},
+									]
+								: []),
+							// Per-seat
 							...(isAutoManagedSeats
 								? [{ price: plan.seatPriceId, quantity: memberCount }]
 								: []),
+							// Usage-based
+							...(plan.meters?.map((m) => ({
+								price: m.priceId,
+							})) ?? []),
 						],
 						subscription_data: {
 							...freeTrial,
@@ -1701,9 +1715,9 @@ export const ingestSubscriptionUsage = (options: StripeOptions) => {
 			use: [stripeSessionMiddleware],
 		},
 		async (ctx) => {
-			const { meters } = options.subscription as SubscriptionOptions;
 			const { events } = ctx.body;
 			const customerType = ctx.body.customerType || "user";
+			const plans = await getPlans(options.subscription);
 			const referenceId = getReferenceId(
 				ctx.context.session,
 				customerType,
@@ -1717,7 +1731,7 @@ export const ingestSubscriptionUsage = (options: StripeOptions) => {
 
 			const results = await Promise.allSettled(
 				events.map(async (event) => {
-					const eventName = validateEventName(meters, event.meter);
+					const eventName = validateEventName(plans, event.meter);
 					await client.billing.meterEvents.create({
 						event_name: eventName,
 						payload: {
@@ -1752,103 +1766,6 @@ export const ingestSubscriptionUsage = (options: StripeOptions) => {
 					};
 				}),
 			);
-		},
-	);
-};
-
-const getUsageQuerySchema = z.object({
-	meter: z.string(),
-	referenceId: z.string().optional(),
-	customerType: z.enum(["user", "organization"]).optional(),
-	groupingWindow: z.enum(["hour", "day"]).optional(),
-	startTime: z.iso.datetime({ offset: true }).optional(),
-	endTime: z.iso.datetime({ offset: true }).optional(),
-	limit: z.coerce.number().min(1).max(100).optional(),
-	startingAfter: z.string().optional(),
-});
-
-export const getSubscriptionUsage = (options: StripeOptions) => {
-	const client = options.stripeClient;
-	const resolveMeterIds = createMeterIdResolver(client);
-
-	return createAuthEndpoint(
-		"/subscription/usage",
-		{
-			method: "GET",
-			query: getUsageQuerySchema,
-			metadata: {
-				openapi: {
-					operationId: "getSubscriptionUsage",
-				},
-			},
-			use: [
-				stripeSessionMiddleware,
-				referenceMiddleware(
-					options.subscription as SubscriptionOptions,
-					"list-subscription",
-				),
-			],
-		},
-		async (ctx) => {
-			const { meters } = options.subscription as SubscriptionOptions;
-			const { meter, groupingWindow, startTime, endTime } = ctx.query;
-			const customerType = ctx.query.customerType || "user";
-			const referenceId =
-				ctx.query.referenceId ||
-				getReferenceId(ctx.context.session, customerType, options);
-
-			const stripeCustomerId = await resolveStripeCustomerId(
-				ctx,
-				referenceId,
-				customerType,
-			);
-			const eventName = validateEventName(meters, meter);
-
-			const meterIds = await resolveMeterIds();
-			const meterId = meterIds.get(eventName);
-			if (!meterId) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.METER_ID_NOT_FOUND,
-				);
-			}
-
-			const now = new Date();
-			const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
-			const resolvedStartTime = startTime
-				? Math.floor(new Date(startTime).getTime() / 1000)
-				: Math.floor(defaultStart.getTime() / 1000);
-			const resolvedEndTime = endTime
-				? Math.floor(new Date(endTime).getTime() / 1000)
-				: Math.floor(now.getTime() / 1000);
-
-			const pageSize = ctx.query.limit || 100;
-			const summaries = await client.billing.meters.listEventSummaries(
-				meterId,
-				{
-					customer: stripeCustomerId,
-					start_time: resolvedStartTime,
-					end_time: resolvedEndTime,
-					...(groupingWindow && { value_grouping_window: groupingWindow }),
-					limit: pageSize,
-					...(ctx.query.startingAfter && {
-						starting_after: ctx.query.startingAfter,
-					}),
-				},
-			);
-
-			return ctx.json({
-				data: summaries.data.map((s) => ({
-					id: s.id,
-					aggregatedValue: s.aggregated_value,
-					startTime: new Date(s.start_time * 1000).toISOString(),
-					endTime: new Date(s.end_time * 1000).toISOString(),
-				})),
-				hasMore: summaries.has_more,
-				...(summaries.data.length > 0 && {
-					lastId: summaries.data[summaries.data.length - 1]?.id,
-				}),
-			});
 		},
 	);
 };

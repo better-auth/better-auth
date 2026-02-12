@@ -9,7 +9,6 @@ import {
 	cancelSubscription,
 	cancelSubscriptionCallback,
 	createBillingPortal,
-	getSubscriptionUsage,
 	ingestSubscriptionUsage,
 	listActiveSubscriptions,
 	restoreSubscription,
@@ -19,7 +18,6 @@ import {
 } from "./routes";
 import { getSchema } from "./schema";
 import type {
-	MeterConfig,
 	StripeOptions,
 	StripePlan,
 	Subscription,
@@ -47,11 +45,7 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 		listActiveSubscriptions: listActiveSubscriptions(options),
 		subscriptionSuccess: subscriptionSuccess(options),
 		createBillingPortal: createBillingPortal(options),
-	};
-
-	const meteringEndpoints = {
 		stripeIngestUsage: ingestSubscriptionUsage(options),
-		stripeGetUsage: getSubscriptionUsage(options),
 	};
 
 	return {
@@ -64,14 +58,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 				enabled: true;
 			}
 				? typeof subscriptionEndpoints
-				: {}),
-			...((options.subscription?.enabled && options.subscription.meters?.length
-				? meteringEndpoints
-				: {}) as O["subscription"] extends {
-				enabled: true;
-				meters: MeterConfig[];
-			}
-				? typeof meteringEndpoints
 				: {}),
 		},
 		init(ctx) {

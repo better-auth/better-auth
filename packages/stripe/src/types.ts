@@ -31,15 +31,6 @@ export type StripeCtxSession = {
 	user: User & WithStripeCustomerId;
 };
 
-export type MeterConfig = {
-	/**
-	 * The Stripe Billing Meter event name.
-	 *
-	 * @example "stripe_meter_emails"
-	 */
-	eventName: string;
-};
-
 export type StripePlan = {
 	/**
 	 * Monthly price id
@@ -84,15 +75,18 @@ export type StripePlan = {
 	 */
 	group?: string | undefined;
 	/**
-	 * Stripe Price ID for per-seat billing.
-	 * Requires the organization plugin to be enabled.
-	 * When configured, organization member changes automatically sync
-	 * the seat subscription item quantity in Stripe.
+	 * Per-seat billing price ID
 	 *
-	 * Use Stripe's graduated pricing tiers to handle
-	 * included/free seats (e.g., first 3 at $0, rest at $10).
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
 	 */
 	seatPriceId?: string | undefined;
+	/**
+	 * Usage-based billing meters.
+	 *
+	 * Each entry links a meter event to a usage-based price.
+	 */
+	meters?: { eventName: string; priceId: string }[] | undefined;
 	/**
 	 * Free trial days
 	 */
@@ -324,21 +318,6 @@ export type SubscriptionOptions = {
 				plan: StripePlan;
 		  }) => Promise<void>)
 		| undefined;
-	/**
-	 * Stripe Billing Meter definitions.
-	 * When configured, registers usage ingest and query endpoints.
-	 *
-	 * @example
-	 * ```ts
-	 * meters: [
-	 *   { eventName: "api_requests" },
-	 *   { eventName: "tokens" },
-	 * ]
-	 * ```
-	 *
-	 * @see https://docs.stripe.com/billing/subscriptions/usage-based
-	 */
-	meters?: MeterConfig[] | undefined;
 	/**
 	 * parameters for session create params
 	 *
