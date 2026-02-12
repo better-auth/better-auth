@@ -371,6 +371,52 @@ describe("Admin plugin", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7837
+	 */
+	it("should apply filter when filterValue is defined", async () => {
+		// Create a dedicated user for this test to avoid invalidating shared sessions
+		const { data: tempUser } = await client.signUp.email({
+			email: "falsy-filter-test@test.com",
+			password: "password",
+			name: "Falsy Filter Test",
+		});
+		const tempUserId = tempUser!.user.id;
+
+		const allUsers = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {},
+		});
+		const totalBefore = allUsers.total;
+		expect(totalBefore).toBeGreaterThanOrEqual(2);
+
+		// Ban the temp user so the dataset has both banned=true and banned=false
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
+		});
+
+		// Filter by banned = false should exclude the banned user
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+		});
+
+		expect(res.users.length).toBe(totalBefore - 1);
+		expect(res.users.every((u) => u.banned === false)).toBe(true);
+		expect(res.users.every((u) => u.id !== tempUserId)).toBe(true);
+
+		// Cleanup: unban the user
+		await auth.api.unbanUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
+		});
+	});
+
 	it("should filter users by id with ne operator", async () => {
 		const allUsers = await client.admin.listUsers({
 			query: {},
