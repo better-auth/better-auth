@@ -506,7 +506,7 @@ describe("Admin plugin", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "test123!",
 				role: "user",
 			},
 			{
@@ -590,7 +590,7 @@ describe("Admin plugin", async () => {
 	it("should not allow banned user to sign in", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "test123!",
 		});
 		expect(res.error?.code).toBe("BANNED_USER");
 		expect(res.error?.status).toBe(403);
@@ -629,7 +629,7 @@ describe("Admin plugin", async () => {
 	it("should change banned user message", async () => {
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "test123!",
 		});
 		expect(res.error?.message).toBe("Custom banned user message");
 	});
@@ -639,7 +639,7 @@ describe("Admin plugin", async () => {
 		await vi.advanceTimersByTimeAsync(60 * 60 * 24 * 1000);
 		const res = await client.signIn.email({
 			email: newUser?.email || "",
-			password: "test",
+			password: "test123!",
 		});
 		expect(res.data?.user).toBeDefined();
 	});
@@ -1030,10 +1030,29 @@ describe("Admin plugin custom password validation", async () => {
 				},
 			},
 			plugins: [admin()],
+			databaseHooks: {
+				user: {
+					create: {
+						before: async (user) => {
+							if (user.name === "Admin") {
+								return {
+									data: {
+										...user,
+										role: "admin",
+									},
+								};
+							}
+						},
+					},
+				},
+			},
 		},
 		{
 			clientOptions: {
 				plugins: [adminClient()],
+			},
+			testUser: {
+				name: "Admin",
 			},
 		},
 	);
@@ -1502,7 +1521,7 @@ describe("access control", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "test123!",
 				role: ["user"],
 			},
 			{
@@ -1533,7 +1552,7 @@ describe("access control", async () => {
 			{
 				name: "Test User mr",
 				email: "testmr@test.com",
-				password: "test",
+				password: "test123!",
 				role: "user",
 			},
 			{
@@ -1572,7 +1591,7 @@ describe("access control", async () => {
 			{
 				name: "Test User with Support Role",
 				email: "support-role@test.com",
-				password: "test",
+				password: "test123!",
 				role: "support", // This should be accepted as "support" is a custom role
 			},
 			{
