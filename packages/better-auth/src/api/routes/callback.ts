@@ -185,7 +185,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			if (
-				userInfo.email !== link.email &&
+				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				return redirectOnError("email_doesn't_match");

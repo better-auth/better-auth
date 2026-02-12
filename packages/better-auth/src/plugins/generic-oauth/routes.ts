@@ -451,7 +451,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (
 					ctx.context.options.account?.accountLinking?.allowDifferentEmails !==
 						true &&
-					link.email !== userInfo.email
+					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
 					return redirectOnError("email_doesn't_match");
 				}

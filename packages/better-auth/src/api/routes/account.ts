@@ -309,7 +309,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			if (
-				linkingUserInfo.user.email !== session.user.email &&
+				linkingUserInfo.user.email?.toLowerCase() !==
+					session.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				throw new APIError("UNAUTHORIZED", {
