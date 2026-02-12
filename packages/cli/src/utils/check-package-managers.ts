@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { Awaitable, LiteralString } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
@@ -152,7 +152,7 @@ function stripQuotes(s: string): string {
 	return trimmed;
 }
 
-function parseCatalogLine(line: string): [string, string] | [] {
+function _parseCatalogLine(line: string): [string, string] | [] {
 	const entry = line.trim().replace(/^- /, "").trim();
 	const delimiterIndex = entry.indexOf(":");
 	if (delimiterIndex === -1) return [];
