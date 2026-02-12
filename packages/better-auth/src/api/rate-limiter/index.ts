@@ -157,17 +157,14 @@ function getRateLimitStorage(
 	return createDatabaseStorageWrapper(ctx);
 }
 
-export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
-	if (!ctx.rateLimit.enabled) {
-		return;
-	}
+async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const basePath = new URL(ctx.baseURL).pathname;
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
-		return;
+		return null;
 	}
 	const key = createRateLimitKey(ip, path);
 	const specialRules = getDefaultSpecialRules();
@@ -214,10 +211,44 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 			}
 
 			if (resolved === false) {
-				return;
+				return null;
 			}
 		}
 	}
+
+	return { key, currentWindow, currentMax };
+}
+
+export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
+	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	const config = await resolveRateLimitConfig(req, ctx);
+	if (!config) {
+		return;
+	}
+	const { key, currentWindow, currentMax } = config;
+
+	const storage = getRateLimitStorage(ctx, {
+		window: currentWindow,
+	});
+	const data = await storage.get(key);
+
+	if (data && shouldRateLimit(currentMax, currentWindow, data)) {
+		const retryAfter = getRetryAfter(data.lastRequest, currentWindow);
+		return rateLimitResponse(retryAfter);
+	}
+}
+
+export async function onResponseRateLimit(req: Request, ctx: AuthContext) {
+	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	const config = await resolveRateLimitConfig(req, ctx);
+	if (!config) {
+		return;
+	}
+	const { key, currentWindow } = config;
 
 	const storage = getRateLimitStorage(ctx, {
 		window: currentWindow,
@@ -234,10 +265,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	} else {
 		const timeSinceLastRequest = now - data.lastRequest;
 
-		if (shouldRateLimit(currentMax, currentWindow, data)) {
-			const retryAfter = getRetryAfter(data.lastRequest, currentWindow);
-			return rateLimitResponse(retryAfter);
-		} else if (timeSinceLastRequest > currentWindow * 1000) {
+		if (timeSinceLastRequest > currentWindow * 1000) {
 			// Reset the count if the window has passed since the last request
 			await storage.set(
 				key,
