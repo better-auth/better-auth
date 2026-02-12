@@ -407,11 +407,7 @@ export async function initAction(opts: any) {
 
 	const depsToInstall = new Map<
 		string,
-		Partial<
-			Record<"prod" | "dev" | "peer" | "optional" | "catalog", boolean>
-		> & {
-			catalogName?: string;
-		}
+		Partial<Record<"prod" | "dev" | "peer" | "optional", boolean>>
 	>();
 	const filesToWrite: (() => Promise<unknown>)[] = [];
 
@@ -1499,11 +1495,9 @@ export const auth = betterAuth({
 		});
 		s.start();
 
-		const { catalogs, ...deps } = {
+		const deps = {
 			prod: new Set<string>(),
 			dev: new Set<string>(),
-			catalog: new Set<string>(),
-			catalogs: new Map<string, string[]>(),
 		};
 		for (const [dep, cfg] of depsToInstall) {
 			if (cfg.prod) {
@@ -1511,14 +1505,6 @@ export const auth = betterAuth({
 			}
 			if (cfg.dev) {
 				deps.dev.add(dep);
-			}
-			if (cfg.catalog && cfg.catalogName) {
-				catalogs.set(cfg.catalogName, [
-					...(catalogs.get(cfg.catalogName) || []),
-					dep,
-				]);
-			} else if (cfg.catalog) {
-				deps.catalog.add(dep);
 			}
 		}
 
@@ -1529,17 +1515,6 @@ export const auth = betterAuth({
 				packageManager: pm,
 				type: type as keyof typeof deps,
 			});
-		}
-		if (catalogs.size > 0) {
-			for (const [catalogName, dependencies] of catalogs.entries()) {
-				await installDependencies({
-					cwd,
-					dependencies: [...dependencies],
-					packageManager: pm,
-					type: "catalog",
-					catalogName,
-				});
-			}
 		}
 
 		s.success("Dependencies installed successfully!");
