@@ -124,8 +124,10 @@ describe("seat-based billing", () => {
 
 			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
-			expect(createCall.line_items[0]).toEqual({ price: "price_team_base" });
-			expect(createCall.line_items[0]).not.toHaveProperty("quantity");
+			expect(createCall.line_items[0]).toEqual({
+				price: "price_team_base",
+				quantity: 1,
+			});
 			expect(createCall.line_items[1]).toMatchObject({
 				price: "price_team_seat",
 				quantity: expect.any(Number),
@@ -240,7 +242,10 @@ describe("seat-based billing", () => {
 			const createCall = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(createCall).toBeDefined();
 			expect(createCall.line_items).toHaveLength(4); // base + seat + 2 meters
-			expect(createCall.line_items[0]).toEqual({ price: "price_pro_base" });
+			expect(createCall.line_items[0]).toEqual({
+				price: "price_pro_base",
+				quantity: 1,
+			});
 			expect(createCall.line_items[1]).toMatchObject({
 				price: "price_pro_seat",
 				quantity: expect.any(Number),
@@ -314,6 +319,80 @@ describe("seat-based billing", () => {
 
 			const call = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
 			expect(call.line_items).toHaveLength(2); // base + seat only
+		});
+	});
+
+	describe("checkout when priceId equals seatPriceId", async () => {
+		const seatOnlyOptions: StripeOptions = {
+			stripeClient: mockStripe as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+			createCustomerOnSignUp: false,
+			organization: { enabled: true },
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: "price_same",
+						name: "starter",
+						seatPriceId: "price_same",
+						meters: [{ eventName: "api_calls", priceId: "price_meter_api" }],
+					},
+				],
+				authorizeReference: async () => true,
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				plugins: [organization(), stripe(seatOnlyOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				email: "seat-only@email.com",
+				password: "password",
+				name: "Seat Only",
+			},
+			{ throw: true },
+		);
+		const headers = new Headers();
+		await client.signIn.email(
+			{ email: "seat-only@email.com", password: "password" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		it("should not duplicate base price in line_items", async () => {
+			mockStripe.checkout.sessions.create.mockClear();
+
+			const org = await client.organization.create({
+				name: "Seat Only Org",
+				slug: "seat-only-org",
+				fetchOptions: { headers },
+			});
+
+			await client.subscription.upgrade({
+				plan: "starter",
+				customerType: "organization",
+				referenceId: org.data?.id as string,
+				fetchOptions: { headers },
+			});
+
+			const call = mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+			expect(call).toBeDefined();
+			// seat + 1 meter = 2 items (no duplicate base)
+			expect(call.line_items).toHaveLength(2);
+			expect(call.line_items[0]).toMatchObject({
+				price: "price_same",
+				quantity: expect.any(Number),
+			});
+			expect(call.line_items[1]).toEqual({ price: "price_meter_api" });
 		});
 	});
 
@@ -546,6 +625,125 @@ describe("seat-based billing", () => {
 			expect(items[0]).toMatchObject({
 				id: "si_base",
 				price: "price_pro_base",
+			});
+		});
+
+		it("should not duplicate subscription item when upgrading between seat-only plans", async () => {
+			const seatOnlyUpgradeOptions: StripeOptions = {
+				stripeClient: mockStripe as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				createCustomerOnSignUp: false,
+				organization: { enabled: true },
+				subscription: {
+					enabled: true,
+					plans: [
+						{
+							priceId: "price_starter",
+							name: "starter",
+							seatPriceId: "price_starter",
+						},
+						{
+							priceId: "price_growth",
+							name: "growth",
+							seatPriceId: "price_growth",
+						},
+					],
+					authorizeReference: async () => true,
+				},
+			};
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					plugins: [organization(), stripe(seatOnlyUpgradeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [
+							organizationClient(),
+							stripeClient({ subscription: true }),
+						],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			await client.signUp.email(
+				{
+					email: "seat-only-upgrade@test.com",
+					password: "password",
+					name: "Seat Only Upgrade",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "seat-only-upgrade@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const org = await client.organization.create({
+				name: "Seat Only Upgrade Org",
+				slug: "seat-only-upgrade-org",
+				fetchOptions: { headers },
+			});
+			const orgId = org.data?.id as string;
+
+			await ctx.adapter.update({
+				model: "organization",
+				update: { stripeCustomerId: "cus_seat_only_upgrade" },
+				where: [{ field: "id", value: orgId }],
+			});
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: orgId,
+					stripeCustomerId: "cus_seat_only_upgrade",
+					stripeSubscriptionId: "sub_starter",
+					status: "active",
+					plan: "starter",
+					seats: 2,
+				},
+			});
+
+			// Seat-only plan: single item where base price IS the seat price
+			mockStripe.subscriptions.list.mockResolvedValue({
+				data: [
+					{
+						id: "sub_starter",
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						items: {
+							data: [
+								{
+									id: "si_only",
+									price: { id: "price_starter", lookup_key: null },
+									quantity: 2,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			await client.subscription.upgrade({
+				plan: "growth",
+				customerType: "organization",
+				referenceId: orgId,
+				fetchOptions: { headers },
+			});
+
+			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			expect(updateCall[0]).toBe("sub_starter");
+			const items = updateCall[1]!.items;
+
+			// Should have exactly 1 item — no duplicate si_only entries
+			expect(items).toHaveLength(1);
+			expect(items[0]).toMatchObject({
+				id: "si_only",
+				price: "price_growth",
+				quantity: expect.any(Number),
 			});
 		});
 	});
