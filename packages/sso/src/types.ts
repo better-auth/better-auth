@@ -60,6 +60,10 @@ export interface SAMLConfig {
 					Binding: string;
 					Location: string;
 				}>;
+				singleLogoutService?: Array<{
+					Binding: string;
+					Location: string;
+				}>;
 		  }
 		| undefined;
 	spMetadata: {
@@ -81,6 +85,25 @@ export interface SAMLConfig {
 	decryptionPvk?: string | undefined;
 	additionalParams?: Record<string, any> | undefined;
 	mapping?: SAMLMapping | undefined;
+}
+
+/** Session data stored during SAML login for Single Logout */
+export interface SAMLSessionRecord {
+	sessionId: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
+/** Parsed SAML assertion extract from samlify */
+export interface SAMLAssertionExtract {
+	nameID?: string;
+	sessionIndex?: string;
+	inResponseTo?: string;
+	conditions?: {
+		notBefore?: string;
+		notOnOrAfter?: string;
+	};
 }
 
 type BaseSSOProvider = {
@@ -357,6 +380,26 @@ export interface SSOOptions {
 		 * @default 102400 (100KB)
 		 */
 		maxMetadataSize?: number;
+		/**
+		 * Enable SAML Single Logout
+		 * @default false
+		 */
+		enableSingleLogout?: boolean;
+		/**
+		 * TTL for LogoutRequest records in milliseconds
+		 * @default 300000 (5 minutes)
+		 */
+		logoutRequestTTL?: number;
+		/**
+		 * Require signed LogoutRequests from IdP
+		 * @default false
+		 */
+		wantLogoutRequestSigned?: boolean;
+		/**
+		 * Require signed LogoutResponses from IdP
+		 * @default false
+		 */
+		wantLogoutResponseSigned?: boolean;
 	};
 }
 
