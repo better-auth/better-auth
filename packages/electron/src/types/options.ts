@@ -1,4 +1,13 @@
-export interface ElectronOptions {
+export interface ElectronSharedOptions {
+	/**
+	 * Client ID to use for identifying the Electron client during authorization.
+	 *
+	 * @default "electron"
+	 */
+	clientID?: string | undefined;
+}
+
+export interface ElectronOptions extends ElectronSharedOptions {
 	/**
 	 * The duration (in seconds) for which the authorization code remains valid.
 	 *
@@ -17,12 +26,6 @@ export interface ElectronOptions {
 	 * @default "better-auth"
 	 */
 	cookiePrefix?: string | undefined;
-	/**
-	 * Client ID to use for identifying the Electron client during authorization.
-	 *
-	 * @default "electron"
-	 */
-	clientID?: string | undefined;
 	/**
 	 * Override the origin for Electron API routes.
 	 * Enable this if you're facing cors origin issues with Electron API routes.

@@ -130,6 +130,8 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       <Callout type="warning">
           You should never expose the authClient directly
           to the renderer process. Instead, [create an IPC bridge](#creating-ipc-bridges) to securely communicate between the main and renderer processes.
+
+          Also make sure not to expose any sensitive data like tokens or cookies to the renderer process to mitigate injection attacks.
       </Callout>
 
   </Step>
@@ -199,6 +201,29 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       });
       ```
 
+      <Callout type="warning">
+        To run your process in `sandbox` mode, you need to ensure that `@better-auth/electron` is bundled into the preload script.
+        Import only `@better-auth/electron/preload` inside the preload script with tree-shaking enabled, to avoid bundling unwanted dependencies.
+
+        The following example uses electron-vite, but the concept applies to any bundler:
+
+        ```ts title="electron.vite.config.ts"
+        import { defineConfig } from "electron-vite";
+
+        export default defineConfig({
+          preload: {
+            build: {
+              externalizeDeps: { // [!code highlight]
+                exclude: ["@better-auth/electron"], // [!code highlight]
+              }, // [!code highlight]
+            },
+          },
+        });
+        ```
+
+        If your config uses a list of externals instead, do **not** add `@better-auth/electron` to that list so it gets bundled.
+      </Callout>
+
   </Step>
   
   <Step>
@@ -226,9 +251,9 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       In your preload script, use the `setupRenderer()` method from the Electron auth client to expose safe IPC bridges to the renderer process.
 
       ```ts title="electron/preload.ts"
-      import { authClient } from "./lib/auth-client";
+      import { setupRenderer } from "@better-auth/electron/preload";
 
-      authClient.setupRenderer();
+      setupRenderer();
       ```
 
       Note that this must also be called before the app is ready.
