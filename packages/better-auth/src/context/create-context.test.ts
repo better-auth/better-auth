@@ -586,7 +586,7 @@ describe("base context creation", () => {
 
 		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
 			const trustedProvidersList = ["provider-a", "provider-b"];
-			const trustedProvidersFn = vi.fn((_req: Request) =>
+			const trustedProvidersFn = vi.fn((request?: Request) =>
 				Promise.resolve(trustedProvidersList),
 			);
 
@@ -626,8 +626,8 @@ describe("base context creation", () => {
 		});
 
 		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
-			const trustedProvidersFn = vi.fn((req: Request) => {
-				const url = new URL(req.url);
+			const trustedProvidersFn = vi.fn((request?: Request) => {
+				const url = new URL(request?.url ?? "");
 				return Promise.resolve(
 					url.searchParams.get("variant") === "first"
 						? ["google", "github"]
