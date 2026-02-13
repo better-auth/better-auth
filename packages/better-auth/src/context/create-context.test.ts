@@ -583,6 +583,104 @@ describe("base context creation", () => {
 			});
 			expect(res.trustedProviders).toEqual([]);
 		});
+
+		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
+			const trustedProvidersList = ["provider-a", "provider-b"];
+			const trustedProvidersFn = vi.fn((_req: Request) =>
+				Promise.resolve(trustedProvidersList),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			const response = await auth.handler(request);
+			const data = (await response.json()) as { trustedProviders: string[] };
+
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(1);
+			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+			expect(data.trustedProviders).toEqual(trustedProvidersList);
+		});
+
+		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
+			const trustedProvidersFn = vi.fn((req: Request) => {
+				const url = new URL(req.url);
+				return Promise.resolve(
+					url.searchParams.get("variant") === "first"
+						? ["google", "github"]
+						: ["microsoft", "apple"],
+				);
+			});
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const requestFirst = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=first",
+			);
+			const responseFirst = await auth.handler(requestFirst);
+			const dataFirst = (await responseFirst.json()) as {
+				trustedProviders: string[];
+			};
+
+			const requestSecond = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=second",
+			);
+			const responseSecond = await auth.handler(requestSecond);
+			const dataSecond = (await responseSecond.json()) as {
+				trustedProviders: string[];
+			};
+
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(1, requestFirst);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestSecond);
+			expect(dataFirst.trustedProviders).toEqual(["google", "github"]);
+			expect(dataSecond.trustedProviders).toEqual(["microsoft", "apple"]);
+		});
 	});
 
 	describe("generate ID", () => {
