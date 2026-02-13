@@ -1,21 +1,7 @@
 import type Stripe from "stripe";
 import { describe, expect, it } from "vitest";
 import type { StripeOptions } from "../src/types";
-import { escapeStripeSearchValue, resolvePlanItem } from "../src/utils";
-
-describe("escapeStripeSearchValue", () => {
-	it("should escape double quotes", () => {
-		expect(escapeStripeSearchValue('test"value')).toBe('test\\"value');
-	});
-
-	it("should handle strings without quotes", () => {
-		expect(escapeStripeSearchValue("simple")).toBe("simple");
-	});
-
-	it("should escape multiple quotes", () => {
-		expect(escapeStripeSearchValue('"a" and "b"')).toBe('\\"a\\" and \\"b\\"');
-	});
-});
+import { resolvePlanItem } from "../src/utils";
 
 describe("resolvePlanItem", () => {
 	const options = {

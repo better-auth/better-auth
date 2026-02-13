@@ -42,17 +42,6 @@ export function isStripePendingCancel(stripeSub: Stripe.Subscription): boolean {
 }
 
 /**
- * Escapes a value for use in Stripe search queries.
- * Stripe search query uses double quotes for string values,
- * and double quotes within the value need to be escaped with backslash.
- *
- * @see https://docs.stripe.com/search#search-query-language
- */
-export function escapeStripeSearchValue(value: string): string {
-	return value.replace(/"/g, '\\"');
-}
-
-/**
  * Resolve the quantity for a subscription by checking the seat item first,
  * then falling back to the plan item's quantity.
  */

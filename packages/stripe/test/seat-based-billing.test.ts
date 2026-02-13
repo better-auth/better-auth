@@ -15,7 +15,6 @@ describe("seat-based billing", () => {
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_seat_org" }),
 			list: vi.fn().mockResolvedValue({ data: [] }),
-			search: vi.fn().mockResolvedValue({ data: [] }),
 			retrieve: vi.fn().mockResolvedValue({
 				id: "cus_seat_org",
 				name: "Seat Org",
@@ -74,7 +73,7 @@ describe("seat-based billing", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockStripe.subscriptions.list.mockResolvedValue({ data: [] });
-		mockStripe.customers.search.mockResolvedValue({ data: [] });
+		mockStripe.customers.list.mockResolvedValue({ data: [] });
 	});
 
 	describe("checkout with auto-managed seats", async () => {

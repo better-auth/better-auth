@@ -26,7 +26,6 @@ import type {
 	WithStripeCustomerId,
 } from "./types";
 import {
-	escapeStripeSearchValue,
 	getPlanByName,
 	getPlans,
 	isActiveOrTrialing,
@@ -335,12 +334,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					if (!customerId) {
 						try {
 							// First, search for existing organization customer by organizationId
-							const existingOrgCustomers = await client.customers.search({
-								query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
-								limit: 1,
+							const existingOrgCustomers = await client.customers.list({
+								limit: 100,
 							});
 
-							let stripeCustomer = existingOrgCustomers.data[0];
+							let stripeCustomer = existingOrgCustomers.data.find(
+								(c) =>
+									c.metadata?.[customerMetadata.keys.organizationId] === org.id,
+							);
 
 							if (!stripeCustomer) {
 								// Get custom params if provided
@@ -415,12 +416,16 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				if (!customerId) {
 					try {
 						// Try to find existing user Stripe customer by email
-						const existingCustomers = await client.customers.search({
-							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
-							limit: 1,
+						const existingCustomers = await client.customers.list({
+							email: user.email,
+							limit: 100,
 						});
 
-						let stripeCustomer = existingCustomers.data[0];
+						let stripeCustomer = existingCustomers.data.find(
+							(c) =>
+								c.metadata?.[customerMetadata.keys.customerType] !==
+								"organization",
+						);
 
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({

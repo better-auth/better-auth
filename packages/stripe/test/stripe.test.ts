@@ -152,7 +152,6 @@ describe("stripe", () => {
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_mock123" }),
 			list: vi.fn().mockResolvedValue({ data: [] }),
-			search: vi.fn().mockResolvedValue({ data: [] }),
 			retrieve: vi.fn().mockResolvedValue({
 				id: "cus_mock123",
 				email: "test@email.com",
@@ -2539,8 +2538,8 @@ describe("stripe", () => {
 			},
 		);
 
-		// Mock customers.search to find existing user customer
-		mockStripe.customers.search.mockResolvedValueOnce({
+		// Mock customers.list to find existing user customer
+		mockStripe.customers.list.mockResolvedValueOnce({
 			data: [{ id: "cus_test_123" }],
 		});
 
@@ -3621,7 +3620,7 @@ describe("stripe", () => {
 			const existingEmail = "duplicate-email@example.com";
 			const existingCustomerId = "cus_stripe_existing_456";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			mockStripe.customers.list.mockResolvedValueOnce({
 				data: [
 					{
 						id: existingCustomerId,
@@ -3662,10 +3661,10 @@ describe("stripe", () => {
 				{ throw: true },
 			);
 
-			// Should check for existing user customer by email (excluding organization customers)
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:"${existingEmail}" AND -metadata["customerType"]:"organization"`,
-				limit: 1,
+			// Should check for existing user customer by email
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: existingEmail,
+				limit: 100,
 			});
 
 			// Should NOT create duplicate customer
@@ -3684,7 +3683,7 @@ describe("stripe", () => {
 		it("should CREATE customer only when user has no stripeCustomerId and none exists in Stripe", async () => {
 			const newEmail = "brand-new@example.com";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			mockStripe.customers.list.mockResolvedValueOnce({
 				data: [],
 			});
 
@@ -3724,10 +3723,10 @@ describe("stripe", () => {
 				{ throw: true },
 			);
 
-			// Should check for existing user customer first (excluding organization customers)
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:"${newEmail}" AND -metadata["customerType"]:"organization"`,
-				limit: 1,
+			// Should check for existing user customer first by email
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: newEmail,
+				limit: 100,
 			});
 
 			// Should create new customer (this is correct behavior)
@@ -3760,10 +3759,15 @@ describe("stripe", () => {
 			const orgCustomerId = "cus_org_123";
 
 			// Mock: Only organization customer exists with this email
-			// The search query includes `-metadata['customerType']:'organization'`
-			// so this should NOT be returned
-			mockStripe.customers.search.mockResolvedValueOnce({
-				data: [], // Organization customer is excluded by the search query
+			// The client-side filter excludes organization customers
+			mockStripe.customers.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: orgCustomerId,
+						email: sharedEmail,
+						metadata: { customerType: "organization" },
+					},
+				],
 			});
 
 			mockStripe.customers.create.mockResolvedValueOnce({
@@ -3802,10 +3806,10 @@ describe("stripe", () => {
 				{ throw: true },
 			);
 
-			// Should search with query that EXCLUDES organization customers
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
-				limit: 1,
+			// Should list customers by email and filter client-side
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: sharedEmail,
+				limit: 100,
 			});
 
 			// Should create NEW user customer (not use org customer)
@@ -3836,9 +3840,18 @@ describe("stripe", () => {
 			const sharedEmail = "both-exist@example.com";
 			const existingUserCustomerId = "cus_user_existing_789";
 
-			// Mock: Search returns ONLY user customer (org customer excluded by query)
-			mockStripe.customers.search.mockResolvedValueOnce({
+			// Mock: List returns both org and user customers; client-side filter picks user
+			mockStripe.customers.list.mockResolvedValueOnce({
 				data: [
+					{
+						id: "cus_org_same_email",
+						email: sharedEmail,
+						name: "Org Customer",
+						metadata: {
+							customerType: "organization",
+							organizationId: "org_123",
+						},
+					},
 					{
 						id: existingUserCustomerId,
 						email: sharedEmail,
@@ -3882,10 +3895,10 @@ describe("stripe", () => {
 				{ throw: true },
 			);
 
-			// Should search excluding organization customers
-			expect(mockStripe.customers.search).toHaveBeenCalledWith({
-				query: `email:"${sharedEmail}" AND -metadata["customerType"]:"organization"`,
-				limit: 1,
+			// Should list customers by email and filter client-side
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: sharedEmail,
+				limit: 100,
 			});
 
 			// Should NOT create new customer - use existing user customer
@@ -3906,7 +3919,7 @@ describe("stripe", () => {
 			const orgEmail = "org@example.com";
 			const orgId = "org_test_123";
 
-			mockStripe.customers.search.mockResolvedValueOnce({
+			mockStripe.customers.list.mockResolvedValueOnce({
 				data: [],
 			});
 
@@ -3949,12 +3962,11 @@ describe("stripe", () => {
 			// Manually trigger the organization customer creation flow
 			// by calling the internal function (simulating what hooks do)
 			const stripeClient = stripeOptions.stripeClient;
-			const searchResult = await stripeClient.customers.search({
-				query: `email:'${orgEmail}' AND metadata['customerType']:'organization'`,
-				limit: 1,
+			const listResult = await stripeClient.customers.list({
+				limit: 100,
 			});
 
-			if (searchResult.data.length === 0) {
+			if (listResult.data.length === 0) {
 				await stripeClient.customers.create({
 					email: orgEmail,
 					name: "Test Organization",

@@ -15,7 +15,6 @@ describe("stripe - organization customer", () => {
 		customers: {
 			create: vi.fn().mockResolvedValue({ id: "cus_org_mock123" }),
 			list: vi.fn().mockResolvedValue({ data: [] }),
-			search: vi.fn().mockResolvedValue({ data: [] }),
 			retrieve: vi.fn().mockResolvedValue({
 				id: "cus_org_mock123",
 				email: "org@email.com",

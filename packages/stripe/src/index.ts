@@ -22,7 +22,7 @@ import type {
 	Subscription,
 	WithStripeCustomerId,
 } from "./types";
-import { escapeStripeSearchValue, getPlans, isActiveOrTrialing } from "./utils";
+import { getPlans, isActiveOrTrialing } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -304,12 +304,16 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 									try {
 										// Check if user customer already exists in Stripe by email
-										const existingCustomers = await client.customers.search({
-											query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
-											limit: 1,
+										const existingCustomers = await client.customers.list({
+											email: user.email,
+											limit: 100,
 										});
 
-										let stripeCustomer = existingCustomers.data[0];
+										let stripeCustomer = existingCustomers.data.find(
+											(c) =>
+												c.metadata?.[customerMetadata.keys.customerType] !==
+												"organization",
+										);
 
 										// If user customer exists, link it to prevent duplicate creation
 										if (stripeCustomer) {
