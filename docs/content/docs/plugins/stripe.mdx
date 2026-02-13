@@ -835,7 +835,13 @@ stripe({
 | `annualDiscountLookupKey` | `string`   | The Stripe price lookup key for annual billing.              |
 | `limits`                  | `object`   | Limits for plan (e.g. `{ projects: 10, storage: 5 }`).       |
 | `group`                   | `string`   | A group name for categorizing plans.                         |
+| `seatPriceId`             | `string`   | Per-seat billing price ID. Requires the `organization` plugin. |
+| `lineItems`               | `LineItem[]` | Additional line items to include in the checkout session.   |
 | `freeTrial`               | `object`   | Trial configuration. See [below](#free-trial-configuration). |
+
+<Callout type="info">
+Stripe does not support [mixed-interval subscriptions](https://docs.stripe.com/billing/subscriptions/mixed-interval) via Checkout Sessions. All line items in a checkout should use the **same billing interval** (e.g. all monthly or all yearly). If intervals differ, the Stripe API will reject the request.
+</Callout>
 
 #### Free Trial Configuration
 
