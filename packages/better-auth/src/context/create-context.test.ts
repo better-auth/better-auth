@@ -584,6 +584,43 @@ describe("base context creation", () => {
 			expect(res.trustedProviders).toEqual([]);
 		});
 
+		it("should pass request to dynamic trustedProviders function", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(["google", "github"]),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			await auth.handler(request);
+
+			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+		});
+
 		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
 			const trustedProvidersList = ["provider-a", "provider-b"];
 			const trustedProvidersFn = vi.fn((request?: Request) =>
