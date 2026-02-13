@@ -11,8 +11,6 @@ export interface ElectronSharedClientOptions extends ElectronSharedOptions {
 	 *
 	 * Should follow the reverse domain name notation to ensure uniqueness.
 	 *
-	 * Note that this must match the protocol scheme registered in the server plugin.
-	 *
 	 * @see {@link https://datatracker.ietf.org/doc/html/rfc8252#section-7.1}
 	 * @example "com.example.app"
 	 */
