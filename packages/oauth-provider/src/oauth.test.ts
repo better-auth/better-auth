@@ -978,18 +978,18 @@ describe("oauth - prompt", async () => {
 		);
 
 		expect(consentRes.redirect).toBeTruthy();
-		expect(consentRes.uri).toContain(redirectUri);
-		expect(consentRes.uri).toContain(`code=`);
-		expect(consentRes.uri).not.toContain(`/consent`);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain(`code=`);
+		expect(consentRes.url).not.toContain(`/consent`);
 
 		// Exchange code for tokens and verify narrowed scopes
-		const callbackUrl = new URL(consentRes.uri);
+		const callbackUrl = new URL(consentRes.url);
 		const code = callbackUrl.searchParams.get("code")!;
 		expect(code).toBeTruthy();
 
 		// Follow the RP callback to exchange the code for tokens
 		let authToken: string | undefined;
-		await client.$fetch(consentRes.uri, {
+		await client.$fetch(consentRes.url, {
 			method: "GET",
 			headers: oauthHeaders,
 			onError(context) {
@@ -1312,6 +1312,7 @@ describe("oauth - prompt", async () => {
 			vi.unstubAllGlobals();
 		});
 
+		let consentRedirectUri = "";
 		// Select Account and continue auth flow
 		await serverClient.organization.setActive(
 			{
@@ -1320,22 +1321,12 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				headers,
-				throw: true,
-				onResponse: cookieSetter(headers),
+				onResponse(context) {
+					consentRedirectUri = context.response.headers.get("Location") || "";
+					cookieSetter(headers);
+				},
 			},
 		);
-		const selectedAccountRes = await serverClient.oauth2.continue(
-			{
-				postLogin: true,
-			},
-			{
-				headers,
-				throw: true,
-				onResponse: cookieSetter(headers),
-			},
-		);
-		expect(selectedAccountRes.redirect).toBeTruthy();
-		const consentRedirectUri = selectedAccountRes?.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
