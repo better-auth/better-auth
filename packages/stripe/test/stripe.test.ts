@@ -4117,6 +4117,91 @@ describe("stripe", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7959
+	 */
+	describe("Search API fallback for unsupported regions", () => {
+		function mockStripeList(data: any[] = []) {
+			const p = Promise.resolve({ data, has_more: false });
+			(p as any)[Symbol.asyncIterator] = async function* () {
+				yield* data;
+			};
+			return p;
+		}
+
+		it("should fall back to customers.list when customers.search is unavailable (user signup)", async () => {
+			const fallbackEmail = "fallback-user@example.com";
+			const existingCustomerId = "cus_fallback_123";
+
+			// Simulate Search API failure (unavailable in some regions)
+			mockStripe.customers.search.mockRejectedValueOnce(
+				new Error("search feature unavailable for merchant"),
+			);
+			mockStripe.customers.list.mockReturnValueOnce(
+				mockStripeList([
+					{
+						id: existingCustomerId,
+						email: fallbackEmail,
+						metadata: { customerType: "user" },
+					},
+				]),
+			);
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const { client: testAuthClient } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			vi.clearAllMocks();
+
+			// Make search fail, list succeed
+			mockStripe.customers.search.mockRejectedValueOnce(
+				new Error("search feature unavailable for merchant"),
+			);
+			mockStripe.customers.list.mockReturnValueOnce(
+				mockStripeList([
+					{
+						id: existingCustomerId,
+						email: fallbackEmail,
+						metadata: { customerType: "user" },
+					},
+				]),
+			);
+
+			await testAuthClient.signUp.email(
+				{
+					email: fallbackEmail,
+					password: "password",
+					name: "Fallback User",
+				},
+				{ throw: true },
+			);
+
+			// Search was attempted first
+			expect(mockStripe.customers.search).toHaveBeenCalled();
+			// Fell back to list after search failure
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: fallbackEmail,
+				limit: 100,
+			});
+			// Should NOT create duplicate — used existing customer from list fallback
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("webhook: cancel_at_period_end cancellation", () => {
 		it("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async () => {
 			const { auth } = await getTestInstance(
