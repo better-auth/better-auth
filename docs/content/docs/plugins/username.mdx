@@ -318,7 +318,7 @@ const auth = betterAuth({
 
 ### Disable Is Username Available
 
-By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disablePaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
+By default, the plugin exposes an endpoint `/is-username-available` to check if a username is available. You can disable this endpoint by providing `disabledPaths` option to the better-auth configuration. This is useful if you want to protect usernames from being enumerated.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -328,7 +328,7 @@ const auth = betterAuth({
     emailAndPassword: {
         enabled: true,
     },
-    disablePaths: ["/is-username-available"],
+    disabledPaths: ["/is-username-available"],
     plugins: [
         username()
     ]

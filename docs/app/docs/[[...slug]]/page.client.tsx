@@ -1,6 +1,5 @@
 "use client";
 import { cva } from "class-variance-authority";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	Popover,
 	PopoverContent,
@@ -14,7 +13,13 @@ import {
 	MessageCircle,
 } from "lucide-react";
 import type { MouseEventHandler } from "react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import {
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
