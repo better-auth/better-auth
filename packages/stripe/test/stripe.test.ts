@@ -4133,20 +4133,6 @@ describe("stripe", () => {
 			const fallbackEmail = "fallback-user@example.com";
 			const existingCustomerId = "cus_fallback_123";
 
-			// Simulate Search API failure (unavailable in some regions)
-			mockStripe.customers.search.mockRejectedValueOnce(
-				new Error("search feature unavailable for merchant"),
-			);
-			mockStripe.customers.list.mockReturnValueOnce(
-				mockStripeList([
-					{
-						id: existingCustomerId,
-						email: fallbackEmail,
-						metadata: { customerType: "user" },
-					},
-				]),
-			);
-
 			const testOptions = {
 				...stripeOptions,
 				createCustomerOnSignUp: true,
@@ -4198,6 +4184,88 @@ describe("stripe", () => {
 				limit: 100,
 			});
 			// Should NOT create duplicate — used existing customer from list fallback
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+		});
+
+		it("should fall back to customers.list when customers.search is unavailable (user upgrade)", async () => {
+			const fallbackEmail = "fallback-upgrade@example.com";
+			const existingCustomerId = "cus_fallback_upgrade_123";
+
+			const {
+				client: testAuthClient,
+				auth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			// Create user without stripeCustomerId
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: fallbackEmail,
+					password: "password",
+					name: "Fallback Upgrade User",
+				},
+				{ throw: true },
+			);
+
+			// Remove stripeCustomerId to force customer lookup during upgrade
+			await ctx.adapter.update({
+				model: "user",
+				update: { stripeCustomerId: null },
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+
+			const headers = new Headers();
+			await testAuthClient.signIn.email(
+				{ email: fallbackEmail, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			vi.clearAllMocks();
+
+			// Make search fail, list succeed with existing customer
+			mockStripe.customers.search.mockRejectedValueOnce(
+				new Error("search feature unavailable for merchant"),
+			);
+			mockStripe.customers.list.mockReturnValueOnce(
+				mockStripeList([
+					{
+						id: existingCustomerId,
+						email: fallbackEmail,
+						metadata: { customerType: "user" },
+					},
+				]),
+			);
+
+			mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+				url: "https://checkout.stripe.com/mock-fallback",
+				id: "cs_fallback",
+			});
+
+			await testAuthClient.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			// Search was attempted first
+			expect(mockStripe.customers.search).toHaveBeenCalled();
+			// Fell back to list after search failure
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: fallbackEmail,
+				limit: 100,
+			});
+			// Should use existing customer, not create a new one
 			expect(mockStripe.customers.create).not.toHaveBeenCalled();
 		});
 	});
