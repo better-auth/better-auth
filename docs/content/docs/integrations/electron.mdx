@@ -203,7 +203,7 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
 
       <Callout type="warning">
         To run your process in `sandbox` mode, you need to ensure that `@better-auth/electron` is bundled into the preload script.
-        Makes sure to only import `@better-auth/electron/preload` inside the preload script with tree-shaking enabled, to avoid bundling unwanted dependencies.
+        Import only `@better-auth/electron/preload` inside the preload script with tree-shaking enabled, to avoid bundling unwanted dependencies.
 
         The following example uses electron-vite, but the concept applies to any bundler:
 
