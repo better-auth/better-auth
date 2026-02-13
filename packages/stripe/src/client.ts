@@ -1,7 +1,6 @@
 import type { BetterAuthClientPlugin } from "better-auth/client";
 import { STRIPE_ERROR_CODES } from "./error-codes";
-import type { stripe } from "./index";
-import type { MeterConfig } from "./types";
+import type { StripePlan, stripe } from "./index";
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
@@ -19,8 +18,7 @@ export const stripeClient = <
 							stripeWebhookSecret: string;
 							subscription: {
 								enabled: true;
-								plans: [];
-								meters: MeterConfig[];
+								plans: StripePlan[];
 							};
 						}
 					: {
