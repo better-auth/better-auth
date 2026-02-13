@@ -19,7 +19,7 @@ import {
 	possibleClientConfigPaths,
 } from "../../utils/config-paths";
 import { getPackageInfo, hasDependency } from "../../utils/get-package-info";
-import { generateSecretHash, tryCatch } from "../../utils/helper";
+import { generateSecretHash, spawnCommand, tryCatch } from "../../utils/helper";
 import { installDependencies } from "../../utils/install-dependencies";
 import type { DatabaseAdapter } from "./configs/databases.config";
 import type { Framework } from "./configs/frameworks.config";
@@ -1493,6 +1493,20 @@ export const auth = betterAuth({
 
 	for (const step of additionalSteps) {
 		await step();
+	}
+
+	const connectResponse = await prompts({
+		type: "confirm",
+		name: "connect",
+		message: "Would you like to connect your app to Better Auth infrastructure?",
+		initial: true,
+	});
+	if (connectResponse.connect) {
+		await open("https://www.better-auth.com/onboarding");
+		console.log(
+			chalk.cyan("\n→ ") +
+			"Opening Better Auth onboarding in your browser...\n",
+		);
 	}
 
 	console.log(

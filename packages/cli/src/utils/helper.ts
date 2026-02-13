@@ -38,10 +38,10 @@ export const generateSecretHash = () => {
 	return Crypto.randomBytes(16).toString("hex");
 };
 
-export const spawnCommand = (cmd: string) =>
+export const spawnCommand = (cmd: string, cwd: string = process.cwd()) =>
 	new Promise<void>((resolve, reject) => {
 		const child = spawn(cmd, {
-			cwd: process.cwd(),
+			cwd,
 			stdio: "inherit",
 			shell: true,
 		});
