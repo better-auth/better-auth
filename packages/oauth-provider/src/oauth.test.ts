@@ -1312,6 +1312,7 @@ describe("oauth - prompt", async () => {
 			vi.unstubAllGlobals();
 		});
 
+		let consentRedirectUri = "";
 		// Select Account and continue auth flow
 		await serverClient.organization.setActive(
 			{
@@ -1320,22 +1321,12 @@ describe("oauth - prompt", async () => {
 			},
 			{
 				headers,
-				throw: true,
-				onResponse: cookieSetter(headers),
+				onResponse(context) {
+					consentRedirectUri = context.response.headers.get("Location") || "";
+					cookieSetter(headers);
+				},
 			},
 		);
-		const selectedAccountRes = await serverClient.oauth2.continue(
-			{
-				postLogin: true,
-			},
-			{
-				headers,
-				throw: true,
-				onResponse: cookieSetter(headers),
-			},
-		);
-		expect(selectedAccountRes.redirect).toBeTruthy();
-		const consentRedirectUri = selectedAccountRes?.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
