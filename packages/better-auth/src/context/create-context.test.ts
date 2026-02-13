@@ -657,14 +657,16 @@ describe("base context creation", () => {
 			const response = await auth.handler(request);
 			const data = (await response.json()) as { trustedProviders: string[] };
 
-			expect(trustedProvidersFn).toHaveBeenCalledTimes(1);
-			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, request);
 			expect(data.trustedProviders).toEqual(trustedProvidersList);
 		});
 
 		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
 			const trustedProvidersFn = vi.fn((request?: Request) => {
-				const url = new URL(request?.url ?? "");
+				if (!request?.url) return Promise.resolve([]);
+				const url = new URL(request.url);
 				return Promise.resolve(
 					url.searchParams.get("variant") === "first"
 						? ["google", "github"]
@@ -712,9 +714,10 @@ describe("base context creation", () => {
 				trustedProviders: string[];
 			};
 
-			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
-			expect(trustedProvidersFn).toHaveBeenNthCalledWith(1, requestFirst);
-			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestSecond);
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(3);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestFirst);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(3, requestSecond);
 			expect(dataFirst.trustedProviders).toEqual(["google", "github"]);
 			expect(dataSecond.trustedProviders).toEqual(["microsoft", "apple"]);
 		});
