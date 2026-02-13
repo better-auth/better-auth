@@ -1,18 +1,12 @@
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import * as saml from "samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse } from "../utils";
 
-export type Adapter = {
-	findOne: <T>(options: {
-		model: string;
-		where: Array<{ field: string; value: string }>;
-	}) => Promise<T | null>;
-};
-
 export async function findSAMLProvider(
 	providerId: string,
 	options: SSOOptions | undefined,
-	adapter: Adapter,
+	adapter: DBAdapter,
 ): Promise<SSOProvider<SSOOptions> | null> {
 	if (options?.defaultSSO?.length) {
 		const match = options.defaultSSO.find((p) => p.providerId === providerId);
