@@ -313,6 +313,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 											stripeCustomer = result.data[0];
 										} catch {
 											// Search API unavailable in some regions, so fall back to paginated list
+											ctx.context.logger.warn(
+												"Stripe customers.search failed, falling back to customers.list",
+											);
 											for await (const customer of client.customers.list({
 												email: user.email,
 												limit: 100,
