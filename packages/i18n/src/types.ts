@@ -1,9 +1,38 @@
-import type { AuthContext } from "@better-auth/core";
+import type {
+	BetterAuthPluginRegistry,
+	BetterAuthPluginRegistryIdentifier,
+	GenericEndpointContext,
+	UnionToIntersection,
+} from "@better-auth/core";
+
+type ALL_PLUGIN_ERROR_CODE_KEYS = keyof UnionToIntersection<
+	{
+		[Key in Exclude<
+			BetterAuthPluginRegistryIdentifier,
+			"i18n"
+		>]: BetterAuthPluginRegistry<unknown, unknown>[Key] extends {
+			creator: infer C;
+		}
+			? C extends (...args: any[]) => infer P
+				? P extends {
+						$ERROR_CODES: infer E;
+					}
+					? E
+					: {}
+				: {}
+			: {};
+	}[Exclude<BetterAuthPluginRegistryIdentifier, "i18n">]
+>;
+
+type InternalTranslationDictionary = Partial<{
+	[Key in ALL_PLUGIN_ERROR_CODE_KEYS]: string;
+}>;
 
 /**
  * Translation dictionary mapping error codes to translated messages
  */
-export type TranslationDictionary = Record<string, string>;
+export type TranslationDictionary = InternalTranslationDictionary &
+	Record<string, string>;
 
 /**
  * Locale detection strategy
@@ -55,13 +84,15 @@ export interface I18nOptions<Locales extends string[]> {
 	userLocaleField?: string | undefined;
 
 	/**
-	 * Custom locale detection function (when "callback" strategy is used)
-	 * Receives request and AuthContext, return locale code or null
+	 * Custom locale detection function (when "callback" strategy is used).
+	 * @example
+	 * getLocale: (ctx) => {
+	 *   return ctx.headers?.get("X-Custom-Locale") ?? null;
+	 * }
 	 */
 	getLocale?:
 		| undefined
 		| ((
-				request: Request,
-				ctx: AuthContext,
+				ctx: GenericEndpointContext,
 		  ) => Promise<Locales[number] | null> | Locales[number] | null);
 }

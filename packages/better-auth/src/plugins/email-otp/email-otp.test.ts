@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
@@ -31,6 +31,10 @@ describe("email-otp", async () => {
 			},
 		},
 	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should verify email with otp", async () => {
 		const res = await client.emailOtp.sendVerificationOtp({
@@ -97,6 +101,25 @@ describe("email-otp", async () => {
 		expect(newUser.data?.token).toBeDefined();
 	});
 
+	it("should sign-up with otp and set name and image", async () => {
+		const testUser3 = {
+			email: "test-email-with-name@domain.com",
+		};
+		await client.emailOtp.sendVerificationOtp({
+			email: testUser3.email,
+			type: "sign-in",
+		});
+		const newUser = await client.signIn.emailOtp({
+			email: testUser3.email,
+			otp,
+			name: "Test User",
+			image: "https://example.com/avatar.png",
+		});
+		expect(newUser.data?.token).toBeDefined();
+		expect(newUser.data?.user.name).toBe("Test User");
+		expect(newUser.data?.user.image).toBe("https://example.com/avatar.png");
+	});
+
 	it("should sign-up with uppercase email", async () => {
 		const testUser2 = {
 			email: "TEST-EMAIL@DOMAIN.COM",
@@ -143,10 +166,9 @@ describe("email-otp", async () => {
 		);
 	});
 
-	it("should reset password", async () => {
-		await client.emailOtp.sendVerificationOtp({
+	it("should reset password using new emailOtp.requestPasswordReset endpoint", async () => {
+		await client.emailOtp.requestPasswordReset({
 			email: testUser.email,
-			type: "forget-password",
 		});
 		await client.emailOtp.resetPassword({
 			email: testUser.email,
@@ -157,6 +179,23 @@ describe("email-otp", async () => {
 		const { data } = await client.signIn.email({
 			email: testUser.email,
 			password: "changed-password",
+		});
+		expect(data?.user).toBeDefined();
+	});
+
+	it("should reset password using deprecated forgetPassword endpoint (backward compatibility)", async () => {
+		await client.forgetPassword.emailOtp({
+			email: testUser.email,
+		});
+		await client.emailOtp.resetPassword({
+			email: testUser.email,
+			otp,
+			password: "changed-password-2",
+		});
+
+		const { data } = await client.signIn.email({
+			email: testUser.email,
+			password: "changed-password-2",
 		});
 		expect(data?.user).toBeDefined();
 	});
@@ -520,7 +559,11 @@ describe("custom rate limiting storage", async () => {
 		],
 	});
 
-	it.each([
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.for([
 		{
 			path: "/email-otp/send-verification-otp",
 			body: {
@@ -671,23 +714,20 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should not be allowed to get otp if storeOTP is hashed", async () => {
-			try {
-				await auth.api.getVerificationOTP({
+			await expect(
+				auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
 					},
-				});
-			} catch (error: any) {
-				expect(error.statusCode).toBe(400);
-				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body.code).toBe(
-					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
-				);
-				return;
-			}
-			// Should not reach here given the above should throw and thus return.
-			expect(true).toBe(false);
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				status: "BAD_REQUEST",
+				body: {
+					message: "OTP is hashed, cannot return the plain text OTP",
+				},
+			});
 		});
 
 		it("should be able to sign in with normal otp", async () => {
@@ -772,22 +812,14 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is encrypted", async () => {
-			try {
-				const res = await auth.api.getVerificationOTP({
-					query: {
-						email: userEmail1,
-						type: "sign-in",
-					},
-				});
-				if (!res.otp) {
-					expect(true).toBe(false);
-					return;
-				}
-				expect(res.otp).toEqual(validOTP);
-				expect(res.otp.length).toBe(6);
-			} catch (error: any) {
-				expect(error).not.toBeDefined();
-			}
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: userEmail1,
+					type: "sign-in",
+				},
+			});
+			expect(res.otp).toEqual(validOTP);
+			expect(res.otp?.length).toBe(6);
 		});
 
 		it("should be able to sign in with encrypted otp", async () => {
@@ -877,23 +909,14 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is custom encryptor", async () => {
-			try {
-				const res = await auth.api.getVerificationOTP({
-					query: {
-						email: userEmail1,
-						type: "sign-in",
-					},
-				});
-				if (!res.otp) {
-					expect(true).toBe(false);
-					return;
-				}
-				expect(res.otp).toEqual(validOTP);
-				expect(res.otp.length).toBe(6);
-			} catch (error: any) {
-				console.error(error);
-				expect(error).not.toBeDefined();
-			}
+			const res = await auth.api.getVerificationOTP({
+				query: {
+					email: userEmail1,
+					type: "sign-in",
+				},
+			});
+			expect(res.otp).toEqual(validOTP);
+			expect(res.otp?.length).toBe(6);
 		});
 
 		it("should be able to sign in with custom encryptor otp", async () => {
@@ -980,23 +1003,20 @@ describe("custom storeOTP", async () => {
 		});
 
 		it("should be allowed to get otp if storeOTP is custom hasher", async () => {
-			try {
-				await auth.api.getVerificationOTP({
+			await expect(
+				auth.api.getVerificationOTP({
 					query: {
 						email: userEmail1,
 						type: "sign-in",
 					},
-				});
-			} catch (error: any) {
-				expect(error.statusCode).toBe(400);
-				expect(error.status).toBe("BAD_REQUEST");
-				expect(error.body.code).toBe(
-					"OTP_IS_HASHED_CANNOT_RETURN_THE_PLAIN_TEXT_OTP",
-				);
-				return;
-			}
-			// Should not reach here given the above should throw and thus return.
-			expect(true).toBe(false);
+				}),
+			).rejects.toMatchObject({
+				statusCode: 400,
+				status: "BAD_REQUEST",
+				body: {
+					message: "OTP is hashed, cannot return the plain text OTP",
+				},
+			});
 		});
 
 		it("should be able to sign in with custom hasher otp", async () => {
@@ -1186,5 +1206,93 @@ describe("override default email verification", async () => {
 			}),
 			expect.any(Object),
 		);
+	});
+});
+
+describe("sign-up with additional fields via email-otp", async () => {
+	let otp = "";
+	const { client, auth, sessionSetter } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+			user: {
+				additionalFields: {
+					lang: {
+						type: "string",
+						required: false,
+						input: true,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: false,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should sign-up with additional fields", async () => {
+		const email = "additional-fields@domain.com";
+		const headers = new Headers();
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp(
+			{
+				email,
+				otp,
+				name: "AF User",
+				lang: "ko",
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.token).toBeDefined();
+		expect(res.data?.user.name).toBe("AF User");
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("session not found");
+		}
+		expect(session.user.name).toBe("AF User");
+		expect(session.user.lang).toBe("ko");
+		expect(session.user.isAdmin).toBe(false);
+	});
+
+	it("should ignore input: false fields and use default value", async () => {
+		const email = "ignore-input-false@domain.com";
+		const headers = new Headers();
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "sign-in",
+		});
+		const res = await client.signIn.emailOtp(
+			{
+				email,
+				otp,
+				isAdmin: true,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+		expect(res.data?.token).toBeDefined();
+		const session = await auth.api.getSession({ headers });
+		if (!session) {
+			throw new Error("session not found");
+		}
+		expect(session.user.isAdmin).toBe(false);
 	});
 });

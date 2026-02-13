@@ -81,7 +81,7 @@ export const google = (options: GoogleOptions) => {
 			const url = await createAuthorizationURL({
 				id: "google",
 				options,
-				authorizationEndpoint: "https://accounts.google.com/o/oauth2/auth",
+				authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
 				scopes: _scopes,
 				state,
 				codeVerifier,
@@ -116,7 +116,7 @@ export const google = (options: GoogleOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://www.googleapis.com/oauth2/v4/token",
+						tokenEndpoint: "https://oauth2.googleapis.com/token",
 					});
 				},
 		async verifyIdToken(token, nonce) {

@@ -7,7 +7,6 @@ import {
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
-import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
 	HOST_COOKIE_PREFIX,
@@ -300,6 +299,55 @@ describe("getSessionCookie", async () => {
 			headers,
 		});
 		const cookies = getSessionCookie(request);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with Headers object directly", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Pass Headers object directly (simulating Next.js ReadonlyHeaders from `await headers()`)
+		const cookies = getSessionCookie(headers);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with Headers-like object that has inherited 'headers' property", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		class ReadonlyHeadersLike extends Headers {
+			// This property exists in the prototype chain, making "headers" in obj return true
+			get headers(): undefined {
+				return undefined;
+			}
+		}
+
+		const readonlyHeaders = new ReadonlyHeadersLike();
+		// Copy cookies from original headers
+		const cookieValue = headers.get("cookie");
+		if (cookieValue) {
+			readonlyHeaders.set("cookie", cookieValue);
+		}
+
+		const cookies = getSessionCookie(readonlyHeaders);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with cross-realm Headers-like object (instanceof fails)", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Simulate cross-realm Headers where instanceof check fails
+		// See: https://github.com/better-auth/better-auth/pull/1838
+		const crossRealmHeaders = {
+			get: (name: string) => headers.get(name),
+			has: (name: string) => headers.has(name),
+		};
+
+		const cookies = getSessionCookie(crossRealmHeaders as Headers);
 		expect(cookies).not.toBeNull();
 		expect(cookies).toBeDefined();
 	});
@@ -670,26 +718,6 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
-	});
-
-	it("should always include id in parseUserOutput", () => {
-		const options = {
-			user: {
-				additionalFields: {
-					id: { type: "string", returned: false },
-				},
-			},
-		} as any;
-		const user = {
-			id: "custom-oauth-id-123",
-			email: "test@example.com",
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: "Test User",
-		};
-		const result = parseUserOutput(options, user);
-		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {

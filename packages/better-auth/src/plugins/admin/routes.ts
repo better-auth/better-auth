@@ -4,6 +4,7 @@ import {
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -574,9 +575,11 @@ const listUsersQuerySchema = z.object({
 		})
 		.or(z.number())
 		.or(z.boolean())
+		.or(z.array(z.string()))
+		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
-		.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+		.enum(whereOperators)
 		.meta({
 			description: "The operator to use for the filter",
 		})
@@ -655,7 +658,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			if (ctx.query?.filterValue) {
+			if (ctx.query?.filterValue !== undefined) {
 				where.push({
 					field: ctx.query.filterField || "email",
 					operator: ctx.query.filterOperator || "eq",
@@ -688,7 +691,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			} catch {
 				return ctx.json({
-					users: [],
+					users: [] as UserWithRole[],
 					total: 0,
 				});
 			}
@@ -1593,18 +1596,9 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	return createAuthEndpoint(
 		"/admin/has-permission",
@@ -1620,11 +1614,6 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 								schema: {
 									type: "object",
 									properties: {
-										permission: {
-											type: "object",
-											description: "The permission to check",
-											deprecated: true,
-										},
 										permissions: {
 											type: "object",
 											description: "The permission to check",
@@ -1666,7 +1655,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 			},
 		},
 		async (ctx) => {
-			if (!ctx.body?.permission && !ctx.body?.permissions) {
+			if (!ctx.body?.permissions) {
 				throw new APIError("BAD_REQUEST", {
 					message: "invalid permission check. no permission(s) were passed.",
 				});
@@ -1700,7 +1689,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 				userId: user.id,
 				role: user.role,
 				options: opts as AdminOptions,
-				permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+				permissions: ctx.body.permissions as any,
 			});
 			return ctx.json({
 				error: null,

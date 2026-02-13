@@ -81,6 +81,16 @@
 				"react-native"
 			]
 		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
 		"packages/stripe": {
 			"ignoreDependencies": [
 				// implicit dependencies
@@ -96,6 +106,12 @@
 		},
 		"packages/test-utils": {
 			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
+			]
 		}
 	},
 	"vitest": {

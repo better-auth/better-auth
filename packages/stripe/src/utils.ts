@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import type { StripeOptions, Subscription } from "./types";
+import type { StripeOptions, StripePlan, Subscription } from "./types";
 
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
@@ -10,23 +10,6 @@ export async function getPlans(
 			: subscriptionOptions.plans;
 	}
 	throw new Error("Subscriptions are not enabled in the Stripe options.");
-}
-
-export async function getPlanByPriceInfo(
-	options: StripeOptions,
-	priceId: string,
-	priceLookupKey: string | null,
-) {
-	return await getPlans(options.subscription).then((res) =>
-		res?.find(
-			(plan) =>
-				plan.priceId === priceId ||
-				plan.annualDiscountPriceId === priceId ||
-				(priceLookupKey &&
-					(plan.lookupKey === priceLookupKey ||
-						plan.annualDiscountLookupKey === priceLookupKey)),
-		),
-	);
 }
 
 export async function getPlanByName(options: StripeOptions, name: string) {
@@ -67,4 +50,50 @@ export function isStripePendingCancel(stripeSub: Stripe.Subscription): boolean {
  */
 export function escapeStripeSearchValue(value: string): string {
 	return value.replace(/"/g, '\\"');
+}
+
+/**
+ * Resolve the quantity for a subscription by checking the seat item first,
+ * then falling back to the plan item's quantity.
+ */
+export function resolveQuantity(
+	items: Stripe.SubscriptionItem[],
+	planItem: Stripe.SubscriptionItem,
+	seatPriceId?: string,
+): number {
+	if (seatPriceId) {
+		const seatItem = items.find((item) => item.price.id === seatPriceId);
+		if (seatItem) return seatItem.quantity ?? 1;
+	}
+	return planItem.quantity ?? 1;
+}
+
+/**
+ * Resolve the plan-matching subscription item and its plan config
+ * from a (possibly multi-item) Stripe subscription.
+ *
+ * - Iterates items to find one whose price matches a configured plan.
+ * - For single-item subscriptions, returns the item even without a plan match.
+ */
+export async function resolvePlanItem(
+	options: StripeOptions,
+	items: Stripe.SubscriptionItem[],
+): Promise<
+	{ item: Stripe.SubscriptionItem; plan: StripePlan | undefined } | undefined
+> {
+	const first = items[0];
+	if (!first) return undefined;
+	const plans = await getPlans(options.subscription);
+	for (const item of items) {
+		const plan = plans?.find(
+			(p) =>
+				p.priceId === item.price.id ||
+				p.annualDiscountPriceId === item.price.id ||
+				(item.price.lookup_key &&
+					(p.lookupKey === item.price.lookup_key ||
+						p.annualDiscountLookupKey === item.price.lookup_key)),
+		);
+		if (plan) return { item, plan };
+	}
+	return items.length === 1 ? { item: first, plan: undefined } : undefined;
 }

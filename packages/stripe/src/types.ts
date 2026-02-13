@@ -75,6 +75,17 @@ export type StripePlan = {
 	 */
 	group?: string | undefined;
 	/**
+	 * Per-seat billing price ID
+	 *
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
+	 */
+	seatPriceId?: string | undefined;
+	/**
+	 * Additional line items to include in the checkout session.
+	 */
+	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
+	/**
 	 * Free trial days
 	 */
 	freeTrial?:

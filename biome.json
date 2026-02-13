@@ -132,6 +132,7 @@
       "!**/dist",
       "!**/coverage",
       "!**/build",
+      "!**/demo/electron/out",
       "!**/.next",
       "!**/.svelte-kit",
       "!**/.contentlayer",
