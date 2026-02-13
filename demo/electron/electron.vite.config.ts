@@ -5,7 +5,15 @@ import { defineConfig } from "electron-vite";
 
 export default defineConfig({
 	main: {},
-	preload: {},
+	preload: {
+		build: {
+			externalizeDeps: {
+				// Bundle @better-auth/electron instead of externalizing it.
+				// Make sure to import only from @better-auth/electron/preload in your preload script.
+				exclude: ["@better-auth/electron"],
+			},
+		},
+	},
 	renderer: {
 		resolve: {
 			alias: {

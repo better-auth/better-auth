@@ -5,17 +5,20 @@ import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
-import type { exposeBridges } from "./bridges";
-import { getChannelPrefixWithDelimiter } from "./bridges";
+import { setupMain } from "./browser";
 import {
 	getCookie,
 	getSetCookie,
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
-import { setupMain, setupRenderer } from "./setup";
+import type { ExposedBridges } from "./preload";
 import type { ElectronClientOptions, Storage } from "./types/client";
-import { isProcessType, parseProtocolScheme } from "./utils";
+import {
+	getChannelPrefixWithDelimiter,
+	isProcessType,
+	parseProtocolScheme,
+} from "./utils";
 
 const { app, safeStorage, webContents } = electron;
 
@@ -178,12 +181,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 				requestAuth: (options?: ElectronRequestAuthOptions | undefined) =>
 					requestAuth(clientOptions, opts, options),
 				/**
-				 * Sets up the renderer process.
-				 *
-				 * - Exposes IPC bridges to the renderer process.
-				 */
-				setupRenderer: () => setupRenderer(opts),
-				/**
 				 * Sets up the main process.
 				 *
 				 * - Registers custom protocol scheme.
@@ -197,12 +194,12 @@ export const electronClient = (options: ElectronClientOptions) => {
 					getWindow?: () => electron.BrowserWindow | null | undefined;
 				}) => setupMain($fetch, store, getCookieFn, opts, clientOptions, cfg),
 				$Infer: {} as {
-					Bridges: ReturnType<typeof exposeBridges>["$InferBridges"];
+					Bridges: ExposedBridges;
 				},
 			};
 		},
 	} satisfies BetterAuthClientPlugin;
 };
 
-export { handleDeepLink } from "./setup";
+export { handleDeepLink } from "./browser";
 export * from "./types/client";

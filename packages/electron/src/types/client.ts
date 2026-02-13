@@ -1,15 +1,11 @@
+import type { ElectronSharedOptions } from "./options";
+
 export interface Storage {
 	getItem: (name: string) => unknown | null;
 	setItem: (name: string, value: unknown) => void;
 }
 
-export interface ElectronClientOptions {
-	/**
-	 * The URL to redirect to for authentication.
-	 *
-	 * @example "http://localhost:3000/sign-in"
-	 */
-	signInURL: string | URL;
+export interface ElectronSharedClientOptions extends ElectronSharedOptions {
 	/**
 	 * The protocol scheme to use for deep linking in Electron.
 	 *
@@ -22,7 +18,6 @@ export interface ElectronClientOptions {
 		| string
 		| {
 				scheme: string;
-				privileges?: Electron.Privileges | undefined;
 		  };
 	/**
 	 * The callback path to use for authentication redirects.
@@ -30,14 +25,30 @@ export interface ElectronClientOptions {
 	 * @default "/auth/callback"
 	 */
 	callbackPath?: string;
+}
+
+export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	/**
-	 * An instance of a storage solution (e.g., `electron-store`)
+	 * The URL to redirect to for authentication.
+	 *
+	 * @example "http://localhost:3000/sign-in"
+	 */
+	signInURL: string | URL;
+	protocol:
+		| string
+		| {
+				scheme: string;
+				privileges?: Electron.Privileges | undefined;
+		  };
+	/**
+	 * An instance of a storage solution (e.g., `conf`)
 	 * to store session and cookie data.
 	 *
 	 * @example
 	 * ```ts
+	 * import { storage } from "@better-auth/electron/storage";
 	 * electronClient({
-	 *   storage: window.localStorage,
+	 *   storage: storage(),
 	 * });
 	 * ```
 	 */
@@ -66,12 +77,6 @@ export interface ElectronClientOptions {
 	 */
 	channelPrefix?: string | undefined;
 	/**
-	 * Client ID to use for identifying the Electron client during authorization.
-	 *
-	 * @default "electron"
-	 */
-	clientID?: string | undefined;
-	/**
 	 * Whether to disable caching the session data locally.
 	 *
 	 * @default false
@@ -79,34 +84,8 @@ export interface ElectronClientOptions {
 	disableCache?: boolean | undefined;
 }
 
-export interface ElectronProxyClientOptions {
-	/**
-	 * The protocol scheme to use for deep linking in Electron.
-	 *
-	 * Should follow the reverse domain name notation to ensure uniqueness.
-	 *
-	 * Note that this must match the protocol scheme registered in the server plugin.
-	 *
-	 * @see {@link https://datatracker.ietf.org/doc/html/rfc8252#section-7.1}
-	 * @example "com.example.app"
-	 */
-	protocol:
-		| string
-		| {
-				scheme: string;
-		  };
-	/**
-	 * The callback path to use for authentication redirects.
-	 *
-	 * @default "/auth/callback"
-	 */
-	callbackPath?: string;
-	/**
-	 * Client ID to use for identifying the Electron client during authorization.
-	 *
-	 * @default "electron"
-	 */
-	clientID?: string | undefined;
+export interface ElectronProxyClientOptions
+	extends ElectronSharedClientOptions {
 	/**
 	 * The prefix to use for cookies set by the plugin.
 	 *
@@ -116,3 +95,4 @@ export interface ElectronProxyClientOptions {
 }
 
 export type { ElectronRequestAuthOptions } from "../authenticate";
+export type { ElectronSharedOptions };

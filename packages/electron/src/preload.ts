@@ -1,17 +1,12 @@
-import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
-import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import type { User } from "better-auth";
-import electron from "electron";
+import type { BetterFetchError } from "@better-fetch/fetch";
+import electron, { contextBridge } from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
-import { requestAuth } from "./authenticate";
-import type { ElectronClientOptions } from "./client";
+import type { ElectronClientOptions } from "./types/client";
+import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
-const { ipcRenderer, ipcMain, contextBridge, webContents } = electron;
-
-export function getChannelPrefixWithDelimiter(ns: string = "better-auth") {
-	return ns.length > 0 ? ns + ":" : ns;
-}
+const { ipcRenderer } = electron;
 
 function listenerFactory(
 	channel: string,
@@ -26,10 +21,12 @@ function listenerFactory(
 	};
 }
 
+export type ExposedBridges = ReturnType<typeof exposeBridges>["$InferBridges"];
+
 /**
  * Exposes IPC bridges to the renderer process.
  */
-export function exposeBridges(opts: ElectronClientOptions) {
+function exposeBridges(opts: SetupRendererConfig) {
 	if (!process.contextIsolated) {
 		throw new BetterAuthError(
 			"Context isolation must be enabled to use IPC bridges securely.",
@@ -83,55 +80,20 @@ export function exposeBridges(opts: ElectronClientOptions) {
 	};
 }
 
+export interface SetupRendererConfig {
+	channelPrefix?: ElectronClientOptions["channelPrefix"] | undefined;
+}
+
 /**
- * Sets up IPC bridges in the main process.
+ * Sets up the renderer process.
+ *
+ * - Exposes IPC bridges to the renderer process.
  */
-export function setupBridges(
-	ctx: {
-		$fetch: BetterFetch;
-		$store: ClientStore | null;
-		getCookie: () => string;
-	},
-	opts: ElectronClientOptions,
-	clientOptions: BetterAuthClientOptions | undefined,
-) {
-	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
-
-	ctx.$store?.atoms.session?.subscribe((state) => {
-		if (state.isPending === true) return;
-
-		webContents
-			.getFocusedWebContents()
-			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
-	});
-
-	ipcMain.handle(`${prefix}getUser`, async () => {
-		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(
-			"/get-session",
-			{
-				method: "GET",
-				headers: {
-					cookie: ctx.getCookie(),
-					"content-type": "application/json",
-				},
-			},
+export function setupRenderer(options: SetupRendererConfig = {}) {
+	if (!isProcessType("renderer")) {
+		throw new BetterAuthError(
+			"setupRenderer can only be called in the renderer process.",
 		);
-
-		return result.data?.user ?? null;
-	});
-	ipcMain.handle(
-		`${prefix}requestAuth`,
-		(_evt, options?: ElectronRequestAuthOptions | undefined) =>
-			requestAuth(clientOptions, opts, options),
-	);
-	ipcMain.handle(`${prefix}signOut`, async () => {
-		await ctx.$fetch("/sign-out", {
-			method: "POST",
-			body: "{}",
-			headers: {
-				cookie: ctx.getCookie(),
-				"content-type": "application/json",
-			},
-		});
-	});
+	}
+	void exposeBridges(options);
 }

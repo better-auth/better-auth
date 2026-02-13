@@ -8,9 +8,8 @@ import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
-import { getChannelPrefixWithDelimiter } from "./bridges";
 import type { ElectronClientOptions } from "./types/client";
-import { isProcessType } from "./utils";
+import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
 export const kState = Symbol.for("better-auth:state");

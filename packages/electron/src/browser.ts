@@ -1,14 +1,22 @@
 import { resolve } from "node:path";
 import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch } from "@better-fetch/fetch";
 import electron from "electron";
-import { authenticate } from "./authenticate";
-import { exposeBridges, setupBridges } from "./bridges";
-import type { ElectronClientOptions } from "./client";
-import { isProcessType, parseProtocolScheme } from "./utils";
+import { authenticate, requestAuth } from "./authenticate";
+import type {
+	ElectronClientOptions,
+	ElectronRequestAuthOptions,
+} from "./client";
+import {
+	getChannelPrefixWithDelimiter,
+	isProcessType,
+	parseProtocolScheme,
+} from "./utils";
 
-const { app, session, protocol, BrowserWindow } = electron;
+const { app, session, protocol, BrowserWindow, ipcMain, webContents } =
+	electron;
 
 export function withGetWindowFallback(
 	win?: (() => Electron.BrowserWindow | null | undefined) | undefined,
@@ -20,15 +28,6 @@ export function withGetWindowFallback(
 			return allWindows.length > 0 ? allWindows[0] : null;
 		})
 	);
-}
-
-export function setupRenderer(opts: ElectronClientOptions) {
-	if (!isProcessType("renderer")) {
-		throw new BetterAuthError(
-			"setupRenderer can only be called in the renderer process.",
-		);
-	}
-	void exposeBridges(opts);
 }
 
 export type SetupMainConfig = {
@@ -284,6 +283,59 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 						.join("; "),
 				},
 			});
+		});
+	});
+}
+
+/**
+ * Sets up IPC bridges in the main process.
+ */
+export function setupBridges(
+	ctx: {
+		$fetch: BetterFetch;
+		$store: ClientStore | null;
+		getCookie: () => string;
+	},
+	opts: ElectronClientOptions,
+	clientOptions: BetterAuthClientOptions | undefined,
+) {
+	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
+
+	ctx.$store?.atoms.session?.subscribe((state) => {
+		if (state.isPending === true) return;
+
+		webContents
+			.getFocusedWebContents()
+			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
+	});
+
+	ipcMain.handle(`${prefix}getUser`, async () => {
+		const result = await ctx.$fetch<{ user: User & Record<string, any> }>(
+			"/get-session",
+			{
+				method: "GET",
+				headers: {
+					cookie: ctx.getCookie(),
+					"content-type": "application/json",
+				},
+			},
+		);
+
+		return result.data?.user ?? null;
+	});
+	ipcMain.handle(
+		`${prefix}requestAuth`,
+		(_evt, options?: ElectronRequestAuthOptions | undefined) =>
+			requestAuth(clientOptions, opts, options),
+	);
+	ipcMain.handle(`${prefix}signOut`, async () => {
+		await ctx.$fetch("/sign-out", {
+			method: "POST",
+			body: "{}",
+			headers: {
+				cookie: ctx.getCookie(),
+				"content-type": "application/json",
+			},
 		});
 	});
 }
