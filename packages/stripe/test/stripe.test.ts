@@ -2506,85 +2506,6 @@ describe("stripe", () => {
 		expect(hasTrialData).toBe(true);
 	});
 
-	it("should prevent trial abuse when processing incomplete subscription with past trial history", async () => {
-		const { client, auth, sessionSetter } = await getTestInstance(
-			{
-				database: memory,
-				plugins: [
-					stripe({
-						...stripeOptions,
-						subscription: {
-							...stripeOptions.subscription,
-							plans: stripeOptions.subscription.plans.map((plan) => ({
-								...plan,
-								freeTrial: { days: 7 },
-							})),
-						},
-					}),
-				],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [stripeClient({ subscription: true })],
-				},
-			},
-		);
-		const ctx = await auth.$context;
-
-		const userRes = await client.signUp.email(
-			{ ...testUser, email: "trial-findone-test@email.com" },
-			{ throw: true },
-		);
-
-		const headers = new Headers();
-		await client.signIn.email(
-			{ ...testUser, email: "trial-findone-test@email.com" },
-			{ throw: true, onSuccess: sessionSetter(headers) },
-		);
-
-		// Create a canceled subscription with trial history first
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: userRes.user.id,
-				stripeCustomerId: "cus_old_customer",
-				status: "canceled",
-				plan: "starter",
-				stripeSubscriptionId: "sub_canceled_with_trial",
-				trialStart: new Date(Date.now() - 1000000),
-				trialEnd: new Date(Date.now() - 500000),
-			},
-		});
-
-		// Create an new incomplete subscription (without trial info)
-		const incompleteSubId = "sub_incomplete_new";
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: userRes.user.id,
-				stripeCustomerId: "cus_old_customer",
-				status: "incomplete",
-				plan: "premium",
-				stripeSubscriptionId: incompleteSubId,
-			},
-		});
-
-		// When upgrading with a specific subscriptionId pointing to the incomplete one,
-		// the system should still check ALL subscriptions for trial history
-		const upgradeRes = await client.subscription.upgrade({
-			plan: "premium",
-			subscriptionId: incompleteSubId,
-			fetchOptions: { headers },
-		});
-
-		expect(upgradeRes.data?.url).toBeDefined();
-
-		// Verify that NO trial was granted despite processing the incomplete subscription
-		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
-		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
-	});
-
 	it("should upgrade existing subscription instead of creating new one", async () => {
 		// Reset mocks for this test
 		vi.clearAllMocks();
@@ -4454,6 +4375,420 @@ describe("stripe", () => {
 
 			// endedAt should be the actual termination time (now), not the cancellation request time
 			expect(updatedSub!.endedAt!.getTime()).toBe(now * 1000);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6863
+	 */
+	describe("trial abuse prevention", () => {
+		it("should check all subscriptions for trial history even when processing a specific incomplete subscription", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({
+							...stripeOptions,
+							subscription: {
+								...stripeOptions.subscription,
+								plans: stripeOptions.subscription.plans.map((plan) => ({
+									...plan,
+									freeTrial: { days: 7 },
+								})),
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "trial-findone-test@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "trial-findone-test@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// Create a canceled subscription with trial history first
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_old_customer",
+					status: "canceled",
+					plan: "starter",
+					stripeSubscriptionId: "sub_canceled_with_trial",
+					trialStart: new Date(Date.now() - 1000000),
+					trialEnd: new Date(Date.now() - 500000),
+				},
+			});
+
+			// Create an new incomplete subscription (without trial info)
+			const incompleteSubId = "sub_incomplete_new";
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_old_customer",
+					status: "incomplete",
+					plan: "premium",
+					stripeSubscriptionId: incompleteSubId,
+				},
+			});
+
+			// When upgrading with a specific subscriptionId pointing to the incomplete one,
+			// the system should still check ALL subscriptions for trial history
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "premium",
+				subscriptionId: incompleteSubId,
+				fetchOptions: { headers },
+			});
+
+			expect(upgradeRes.data?.url).toBeDefined();
+
+			// Verify that NO trial was granted despite processing the incomplete subscription
+			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+		});
+
+		it("should propagate trial data from Stripe event on subscription.deleted", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "trial-deleted-propagate@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 3 * 24 * 60 * 60; // 3 days ago
+			const trialEnd = now + 4 * 24 * 60 * 60; // 4 days from now
+
+			// Create subscription WITHOUT trial data (simulates checkout.session.completed webhook failure)
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_trial_deleted_propagate",
+					stripeSubscriptionId: "sub_trial_deleted_propagate",
+					status: "trialing",
+					plan: "starter",
+					// Note: no trialStart/trialEnd set (simulating missed checkout webhook)
+				},
+			});
+
+			// customer.subscription.deleted fires with trial data from Stripe
+			const webhookEvent = {
+				type: "customer.subscription.deleted",
+				data: {
+					object: {
+						id: "sub_trial_deleted_propagate",
+						customer: "cus_trial_deleted_propagate",
+						status: "canceled",
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: now,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("canceled");
+			// Trial data should be propagated from the Stripe event
+			expect(updatedSub!.trialStart).not.toBeNull();
+			expect(updatedSub!.trialEnd).not.toBeNull();
+			expect(updatedSub!.trialStart!.getTime()).toBe(trialStart * 1000);
+			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
+		});
+
+		it("should propagate trial data from Stripe event on subscription.updated", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "trial-updated-propagate@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 7 * 24 * 60 * 60; // 7 days ago
+			const trialEnd = now; // Trial just ended
+			const periodEnd = now + 30 * 24 * 60 * 60; // 30 days from now
+
+			// Create subscription WITHOUT trial data (simulates checkout.session.completed webhook failure)
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_trial_updated_propagate",
+					stripeSubscriptionId: "sub_trial_updated_propagate",
+					status: "trialing",
+					plan: "starter",
+					// Note: no trialStart/trialEnd set
+				},
+			});
+
+			// customer.subscription.updated fires when trial ends (status: trialing → active)
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_trial_updated_propagate",
+						customer: "cus_trial_updated_propagate",
+						status: "active",
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: null,
+						ended_at: null,
+						metadata: {
+							subscriptionId,
+						},
+						items: {
+							data: [
+								{
+									id: "si_test_item",
+									price: { id: process.env.STRIPE_PRICE_ID_1 },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: periodEnd,
+								},
+							],
+						},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("active");
+			// Trial data should be propagated from the Stripe event
+			expect(updatedSub!.trialStart).not.toBeNull();
+			expect(updatedSub!.trialEnd).not.toBeNull();
+			expect(updatedSub!.trialStart!.getTime()).toBe(trialStart * 1000);
+			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
+		});
+
+		it("should prevent trial abuse after subscription canceled during trial", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({
+							...stripeOptions,
+							subscription: {
+								...stripeOptions.subscription,
+								plans: stripeOptions.subscription.plans.map((plan) => ({
+									...plan,
+									freeTrial: { days: 7 },
+								})),
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "trial-abuse-cancel@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "trial-abuse-cancel@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 3 * 24 * 60 * 60;
+			const trialEnd = now + 4 * 24 * 60 * 60;
+
+			// Step 1: Create a subscription that was trialing (simulates checkout completed
+			// but trial data was NOT set in DB due to webhook failure)
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_trial_abuse",
+					stripeSubscriptionId: "sub_trial_abuse_old",
+					status: "canceled",
+					plan: "starter",
+					// No trialStart/trialEnd — simulates the scenario where
+					// onCheckoutSessionCompleted failed to set trial data
+				},
+			});
+
+			// Step 2: Simulate customer.subscription.deleted with trial data from Stripe
+			const deleteEvent = {
+				type: "customer.subscription.deleted" as const,
+				data: {
+					object: {
+						id: "sub_trial_abuse_old",
+						customer: "cus_trial_abuse",
+						status: "canceled" as const,
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: now,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForWebhook = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(deleteEvent),
+				},
+			};
+
+			const webhookOptions = {
+				...stripeOptions,
+				stripeClient: stripeForWebhook as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					plans: stripeOptions.subscription.plans.map((plan) => ({
+						...plan,
+						freeTrial: { days: 7 },
+					})),
+				},
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(webhookOptions)],
+				},
+				{ disableTestUser: true },
+			);
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(deleteEvent),
+				}),
+			);
+
+			// Step 3: User tries to subscribe again — should NOT get a trial
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(upgradeRes.data?.url).toBeDefined();
+
+			// Verify no trial was granted (trial_period_days should be absent)
+			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 		});
 	});
 
