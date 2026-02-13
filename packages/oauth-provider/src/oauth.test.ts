@@ -375,6 +375,7 @@ describe("oauth - prompt", async () => {
 	const scopes = ["openid", "profile", "email", "offline_access", "read:posts"];
 	let enableSelectAccount = false;
 	let enablePostLogin = false;
+	let selectedPostLogin = false;
 	let isUserRegistered = true;
 	const {
 		auth: authorizationServer,
@@ -409,10 +410,12 @@ describe("oauth - prompt", async () => {
 					page: "/select-organization",
 					shouldRedirect({ session }) {
 						if (!enablePostLogin) return false;
+						if (selectedPostLogin) return false;
 						return !session?.activeOrganizationId;
 					},
 					consentReferenceId({ session }) {
 						if (!enablePostLogin) return undefined;
+						if (selectedPostLogin) return undefined;
 						const activeOrganizationId = (session?.activeOrganizationId ??
 							undefined) as string | undefined;
 						if (!activeOrganizationId)
@@ -1249,6 +1252,84 @@ describe("oauth - prompt", async () => {
 		expect(consentRedirectUri).toContain(`state=`);
 
 		enableSelectAccount = false;
+	});
+
+	it("shall allow user to post login via continue", async ({
+		onTestFinished,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		enablePostLogin = true;
+		const { customFetchImpl: customFetchImplRP, cookieSetter } =
+			await createTestInstance();
+		const client = createAuthClient({
+			plugins: [genericOAuthClient(), organization()],
+			baseURL: rpBaseUrl,
+			fetchOptions: {
+				customFetchImpl: customFetchImplRP,
+			},
+		});
+
+		// Generate authorize url
+		const oauthHeaders = new Headers();
+		const data = await client.signIn.oauth2(
+			{
+				providerId,
+				callbackURL: "/success",
+			},
+			{
+				headers,
+				throw: true,
+				onSuccess: cookieSetter(oauthHeaders),
+			},
+		);
+		expect(data.url).toContain(
+			`${authServerBaseUrl}/api/auth/oauth2/authorize`,
+		);
+		expect(data.url).toContain(`client_id=${oauthClient.client_id}`);
+
+		// Check for redirection to /select-organization
+		let selectOrgRedirectUri = "";
+		await serverClient.$fetch(data.url, {
+			method: "GET",
+			headers,
+			onError(context) {
+				selectOrgRedirectUri = context.response.headers.get("Location") || "";
+				cookieSetter(headers)(context);
+			},
+		});
+		expect(selectOrgRedirectUri).toContain(`/select-organization`);
+		expect(selectOrgRedirectUri).toContain(
+			`client_id=${oauthClient.client_id}`,
+		);
+		expect(selectOrgRedirectUri).toContain(`scope=`);
+		expect(selectOrgRedirectUri).toContain(`state=`);
+		vi.stubGlobal("window", {
+			location: {
+				search: new URL(selectOrgRedirectUri, authServerBaseUrl).search,
+			},
+		});
+		onTestFinished(() => {
+			vi.unstubAllGlobals();
+		});
+
+		selectedPostLogin = true;
+		const continueRes = await serverClient.oauth2.continue(
+			{
+				postLogin: true,
+			},
+			{
+				headers,
+				throw: true,
+				onResponse: cookieSetter(headers),
+			},
+		);
+		expect(continueRes.url).toContain(redirectUri);
+		expect(continueRes.url).toContain(`code=`);
+
+		selectedPostLogin = false;
+		enablePostLogin = false;
 	});
 
 	it("shall allow user to select an organization/team post login and consent", async ({
