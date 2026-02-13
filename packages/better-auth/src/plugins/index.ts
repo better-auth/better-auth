@@ -24,5 +24,6 @@ export * from "./open-api";
 export * from "./organization";
 export * from "./phone-number";
 export * from "./siwe";
+export * from "./test-utils";
 export * from "./two-factor";
 export * from "./username";
