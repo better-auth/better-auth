@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/cli",
-  "version": "1.5.0-beta.11",
+  "version": "1.5.0-beta.13",
   "type": "module",
   "description": "The CLI for Better Auth",
   "module": "dist/index.mjs",
@@ -56,10 +56,11 @@
     "@types/better-sqlite3": "^7.6.13",
     "@types/prompts": "^2.4.9",
     "@types/semver": "^7.7.1",
+    "better-sqlite3": "^12.6.2",
     "jiti": "^2.6.0",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
-    "type-fest": "^5.4.2",
+    "type-fest": "^5.4.4",
     "typescript": "catalog:"
   },
   "dependencies": {
@@ -74,11 +75,10 @@
     "@prisma/client": "^5.22.0",
     "@types/pg": "^8.15.5",
     "better-auth": "workspace:*",
-    "better-sqlite3": "^12.6.2",
     "c12": "^3.3.3",
     "chalk": "^5.6.2",
     "commander": "^12.1.0",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.4",
     "drizzle-orm": "^0.41.0",
     "open": "^10.2.0",
     "pg": "^8.16.3",

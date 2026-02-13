@@ -226,8 +226,10 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
+		const shouldRunAdapterDelete =
+			!customDeleteFn || customDeleteFn.executeMainFn;
 		const deleted =
-			!customDeleteFn || customDeleteFn.executeMainFn
+			shouldRunAdapterDelete && entityToDelete
 				? await (await getCurrentAdapter(adapter)).delete({
 						model,
 						where,

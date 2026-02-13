@@ -38,10 +38,7 @@ const generatePasskeyQuerySchema = z
 
 export const generatePasskeyRegistrationOptions = (
 	opts: RequiredPassKeyOptions,
-	{
-		maxAgeInSeconds,
-		expirationTime,
-	}: { maxAgeInSeconds: number; expirationTime: Date },
+	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
 ) =>
 	createAuthEndpoint(
 		"/passkey/generate-register-options",
@@ -222,6 +219,7 @@ export const generatePasskeyRegistrationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: verificationToken,
 				value: JSON.stringify({
@@ -240,10 +238,7 @@ export const generatePasskeyRegistrationOptions = (
 
 export const generatePasskeyAuthenticationOptions = (
 	opts: RequiredPassKeyOptions,
-	{
-		maxAgeInSeconds,
-		expirationTime,
-	}: { maxAgeInSeconds: number; expirationTime: Date },
+	{ maxAgeInSeconds }: { maxAgeInSeconds: number },
 ) =>
 	createAuthEndpoint(
 		"/passkey/generate-authenticate-options",
@@ -388,6 +383,7 @@ export const generatePasskeyAuthenticationOptions = (
 					maxAge: maxAgeInSeconds,
 				},
 			);
+			const expirationTime = new Date(Date.now() + maxAgeInSeconds * 1000);
 			await ctx.context.internalAdapter.createVerificationValue({
 				identifier: verificationToken,
 				value: JSON.stringify(data),
@@ -441,9 +437,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 		async (ctx) => {
 			const origin = options?.origin || ctx.headers?.get("origin") || "";
 			if (!origin) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
 			}
 			const resp = ctx.body.response;
 			const webAuthnCookie = ctx.context.createAuthCookie(
@@ -465,9 +462,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					verificationToken,
 				);
 			if (!data) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
 			}
 			const { expectedChallenge, userData } = JSON.parse(
 				data.value,
@@ -490,9 +488,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 				});
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
-					return ctx.json(null, {
-						status: 400,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					);
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;
@@ -516,7 +515,9 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					model: "passkey",
 					data: newPasskey,
 				});
-				await ctx.context.internalAdapter.deleteVerificationValue(data.id);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
 				return ctx.json(newPasskeyRes, {
 					status: 200,
 				});
@@ -678,7 +679,9 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					session: s,
 					user,
 				});
-				await ctx.context.internalAdapter.deleteVerificationValue(data.id);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					verificationToken,
+				);
 
 				return ctx.json(
 					{
