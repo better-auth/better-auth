@@ -1074,6 +1074,9 @@ const requestEmailChangeEmailOTPBodySchema = z.object({
 	newEmail: z.string().meta({
 		description: "New email address to send the OTP",
 	}),
+	otp: z.string().optional().meta({
+		description: "OTP sent to the new email",
+	}),
 });
 
 /**
@@ -1135,6 +1138,66 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "Email is the same",
 				});
+			}
+
+			if (opts.changeEmail?.verifyCurrentEmail) {
+				if (!ctx.body.otp) {
+					throw APIError.fromStatus("BAD_REQUEST", {
+						message: "OTP is required to verify current email",
+					});
+				}
+
+				const currentEmailVerificationValue =
+					await ctx.context.internalAdapter.findVerificationValue(
+						`email-verification-otp-${email}`,
+					);
+				if (!currentEmailVerificationValue) {
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				}
+				if (currentEmailVerificationValue.expiresAt < new Date()) {
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						currentEmailVerificationValue.id,
+					);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+				}
+
+				const [otpValue, attempts] = splitAtLastColon(
+					currentEmailVerificationValue.value,
+				);
+				const allowedAttempts = opts?.allowedAttempts || 3;
+				if (attempts && parseInt(attempts) >= allowedAttempts) {
+					await ctx.context.internalAdapter.deleteVerificationValue(
+						currentEmailVerificationValue.id,
+					);
+					throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+				}
+
+				const verified = await verifyStoredOTP(
+					ctx,
+					opts,
+					otpValue,
+					ctx.body.otp,
+				);
+				if (!verified) {
+					await ctx.context.internalAdapter.updateVerificationValue(
+						currentEmailVerificationValue.id,
+						{
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						},
+					);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+				}
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					currentEmailVerificationValue.id,
+				);
+			} else {
+				if (ctx.body.otp) {
+					ctx.context.logger.warn(
+						"OTP provided but not required for verifying current email. " +
+							"If you want to require OTP verification for current email, " +
+							"please set the changeEmail.verifyCurrentEmail option to true in the configuration",
+					);
+				}
 			}
 
 			const otp =

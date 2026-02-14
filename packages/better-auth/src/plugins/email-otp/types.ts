@@ -82,6 +82,16 @@ export interface EmailOTPOptions {
 		  )
 		| undefined;
 	/**
+	 * Change email configuration for the change email with OTP flow
+	 *
+	 * @default {
+	 *  verifyCurrentEmail: false,
+	 * }
+	 */
+	changeEmail?: {
+		verifyCurrentEmail?: boolean;
+	};
+	/**
 	 * Override the default email verification to use email otp instead
 	 *
 	 * @default false

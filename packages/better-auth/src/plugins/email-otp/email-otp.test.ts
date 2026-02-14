@@ -491,6 +491,168 @@ describe("change email", async () => {
 				"change-email",
 			);
 		});
+
+		describe("when verifyCurrentEmail is enabled", async () => {
+			const verifyCurrentOtpFn = vi.fn();
+			let currentEmailOtp = "";
+			const {
+				client: vcClient,
+				testUser: vcTestUser,
+				runWithUser: vcRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP({ email, otp: _otp, type }) {
+								currentEmailOtp = _otp;
+								verifyCurrentOtpFn(email, _otp, type);
+							},
+							sendVerificationOnSignUp: true,
+							changeEmail: { verifyCurrentEmail: true },
+						}),
+					],
+					emailVerification: {
+						autoSignInAfterVerification: true,
+					},
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			it("should require otp when requesting email change", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.message).toBe(
+					"OTP is required to verify current email",
+				);
+			});
+
+			it("should reject invalid current email otp when requesting email change", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+						otp: "000000",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("INVALID_OTP");
+			});
+
+			it("should reject when no email-verification OTP was requested for current email", async () => {
+				let res: Awaited<
+					ReturnType<typeof vcClient.emailOtp.requestEmailChange>
+				>;
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					res = await vcClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+						otp: "123456",
+					});
+				});
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("INVALID_OTP");
+			});
+
+			it("should reject expired current email OTP when requesting email change", async () => {
+				const {
+					client: expClient,
+					testUser: expTestUser,
+					runWithUser: expRunWithUser,
+				} = await getTestInstance(
+					{
+						plugins: [
+							bearer(),
+							emailOTP({
+								async sendVerificationOTP({ otp: _otp, type }) {
+									if (type === "email-verification") {
+										currentEmailOtp = _otp;
+									}
+								},
+								sendVerificationOnSignUp: true,
+								changeEmail: { verifyCurrentEmail: true },
+								expiresIn: 60,
+							}),
+						],
+						emailVerification: {
+							autoSignInAfterVerification: true,
+						},
+					},
+					{
+						clientOptions: {
+							plugins: [emailOTPClient()],
+						},
+					},
+				);
+
+				await expRunWithUser(
+					expTestUser.email,
+					expTestUser.password,
+					async () => {
+						await expClient.emailOtp.sendVerificationOtp({
+							email: expTestUser.email,
+							type: "email-verification",
+						});
+					},
+				);
+				vi.useFakeTimers();
+				await vi.advanceTimersByTimeAsync(61 * 1000);
+
+				let res: Awaited<
+					ReturnType<typeof expClient.emailOtp.requestEmailChange>
+				>;
+				await expRunWithUser(
+					expTestUser.email,
+					expTestUser.password,
+					async () => {
+						res = await expClient.emailOtp.requestEmailChange({
+							newEmail: "new@test.com",
+							otp: currentEmailOtp,
+						});
+					},
+				);
+				expect(res!.error?.status).toBe(400);
+				expect(res!.error?.code).toBe("OTP_EXPIRED");
+			});
+
+			it("should send change-email OTP when valid current email OTP is provided", async () => {
+				const newEmail = "verified-change@test.com";
+				verifyCurrentOtpFn.mockClear();
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					await vcClient.emailOtp.sendVerificationOtp({
+						email: vcTestUser.email,
+						type: "email-verification",
+					});
+				});
+
+				expect(currentEmailOtp).toBeTruthy();
+				await vcRunWithUser(vcTestUser.email, vcTestUser.password, async () => {
+					const res = await vcClient.emailOtp.requestEmailChange({
+						newEmail,
+						otp: currentEmailOtp,
+					});
+					expect(res.data?.success).toBe(true);
+					expect(res.error).toBeFalsy();
+				});
+				expect(verifyCurrentOtpFn).toHaveBeenCalledWith(
+					newEmail,
+					expect.any(String),
+					"change-email",
+				);
+			});
+		});
 	});
 
 	describe("change", () => {
