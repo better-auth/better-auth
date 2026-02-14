@@ -1085,7 +1085,8 @@ const requestEmailChangeEmailOTPBodySchema = z.object({
 		description: "New email address to send the OTP",
 	}),
 	otp: z.string().optional().meta({
-		description: "OTP sent to the new email",
+		description:
+			"OTP sent to the current email. This is required if changeEmail.verifyCurrentEmail option is set to true",
 	}),
 });
 
@@ -1097,10 +1098,10 @@ const requestEmailChangeEmailOTPBodySchema = z.object({
  * ### API Methods
  *
  * **server:**
- * `auth.api.requestEmailChangeOTP`
+ * `auth.api.requestEmailChangeEmailOTP`
  *
  * **client:**
- * `authClient.emailOtp.requestEmailChangeEmailOTP`
+ * `authClient.emailOtp.requestEmailChange`
  *
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#change-email-with-otp)
  */
@@ -1144,7 +1145,7 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				});
 			}
 
-			const email = ctx.context.session.user.email;
+			const email = ctx.context.session.user.email.toLowerCase();
 			const newEmail = ctx.body.newEmail.toLowerCase();
 			const isValidEmail = z.email().safeParse(newEmail);
 			if (!isValidEmail.success) {
@@ -1223,14 +1224,14 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const storedOTP = await storeOTP(ctx, opts, otp);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${storedOTP}:0`,
-				identifier: `change-email-otp:${email}-${newEmail}`,
+				identifier: `change-email-otp-${email}-${newEmail}`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 
 			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
 			if (user) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					`change-email-otp:${email}-${newEmail}`,
+					`change-email-otp-${email}-${newEmail}`,
 				);
 				return ctx.json({
 					success: true,
@@ -1270,10 +1271,10 @@ const changeEmailEmailOTPBodySchema = z.object({
  * ### API Methods
  *
  * **server:**
- * `auth.api.changeEmailOTP`
+ * `auth.api.changeEmailEmailOTP`
  *
  * **client:**
- * `authClient.emailOtp.changeEmailEmailOTP`
+ * `authClient.emailOtp.changeEmail`
  *
  * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#change-email-with-otp)
  */
@@ -1310,9 +1311,16 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			if (!opts.changeEmail?.enabled) {
+				ctx.context.logger.error("Change email with OTP is disabled.");
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Change email with OTP is disabled",
+				});
+			}
+
 			const session = ctx.context.session;
 
-			const email = session.user.email;
+			const email = session.user.email.toLowerCase();
 			const newEmail = ctx.body.newEmail.toLowerCase();
 			const isValidNewEmail = z.email().safeParse(newEmail);
 			if (!isValidNewEmail.success) {
@@ -1327,7 +1335,7 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
-					`change-email-otp:${email}-${newEmail}`,
+					`change-email-otp-${email}-${newEmail}`,
 				);
 			if (!verificationValue) {
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
@@ -1362,22 +1370,34 @@ export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				verificationValue.id,
 			);
 
-			const user = await ctx.context.internalAdapter.findUserByEmail(email);
-			if (!user) {
+			const currentUser =
+				await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!currentUser) {
 				/**
 				 * safe to leak the existence of a user as a valid OTP has been provided
 				 */
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
+			const existingUserWithNewEmail =
+				await ctx.context.internalAdapter.findUserByEmail(newEmail);
+			if (existingUserWithNewEmail) {
+				/**
+				 * safe to leak the existence of a user as a valid OTP has been provided
+				 */
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Email already in use",
+				});
+			}
+
 			if (ctx.context.options.emailVerification?.beforeEmailVerification) {
 				await ctx.context.options.emailVerification.beforeEmailVerification(
-					user.user,
+					currentUser.user,
 					ctx.request,
 				);
 			}
 			const updatedUser = await ctx.context.internalAdapter.updateUser(
-				user.user.id,
+				currentUser.user.id,
 				{
 					email: newEmail,
 					emailVerified: true,
