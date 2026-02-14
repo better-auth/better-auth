@@ -8,9 +8,21 @@ import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
+const DNS_LABEL_MAX_LENGTH = 63;
+const DEFAULT_TOKEN_PREFIX = "better-auth-token";
+
 const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
 });
+
+export function getVerificationIdentifier(
+	options: SSOOptions,
+	providerId: string,
+): string {
+	const tokenPrefix =
+		options.domainVerification?.tokenPrefix || DEFAULT_TOKEN_PREFIX;
+	return `_${tokenPrefix}-${providerId}`;
+}
 
 export const requestDomainVerification = (options: SSOOptions) => {
 	return createAuthEndpoint(
@@ -83,15 +95,18 @@ export const requestDomainVerification = (options: SSOOptions) => {
 				});
 			}
 
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
+
 			const activeVerification =
 				await ctx.context.adapter.findOne<Verification>({
 					model: "verification",
 					where: [
 						{
 							field: "identifier",
-							value: options.domainVerification?.tokenPrefix
-								? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-								: `better-auth-token-${provider.providerId}`,
+							value: identifier,
 						},
 						{ field: "expiresAt", value: new Date(), operator: "gt" },
 					],
@@ -106,9 +121,7 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			await ctx.context.adapter.create<Verification>({
 				model: "verification",
 				data: {
-					identifier: options.domainVerification?.tokenPrefix
-						? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-						: `better-auth-token-${provider.providerId}`,
+					identifier,
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					value: domainVerificationToken,
@@ -199,15 +212,25 @@ export const verifyDomain = (options: SSOOptions) => {
 				});
 			}
 
+			const identifier = getVerificationIdentifier(
+				options,
+				provider.providerId,
+			);
+
+			if (identifier.length > DNS_LABEL_MAX_LENGTH) {
+				throw new APIError("BAD_REQUEST", {
+					message: `Verification identifier exceeds the DNS label limit of ${DNS_LABEL_MAX_LENGTH} characters`,
+					code: "IDENTIFIER_TOO_LONG",
+				});
+			}
+
 			const activeVerification =
 				await ctx.context.adapter.findOne<Verification>({
 					model: "verification",
 					where: [
 						{
 							field: "identifier",
-							value: options.domainVerification?.tokenPrefix
-								? `${options.domainVerification?.tokenPrefix}-${provider.providerId}`
-								: `better-auth-token-${provider.providerId}`,
+							value: identifier,
 						},
 						{ field: "expiresAt", value: new Date(), operator: "gt" },
 					],
@@ -237,9 +260,8 @@ export const verifyDomain = (options: SSOOptions) => {
 			}
 
 			try {
-				const dnsRecords = await dns.resolveTxt(
-					new URL(provider.domain).hostname,
-				);
+				const hostname = new URL(provider.domain).hostname;
+				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
 				records = dnsRecords.flat();
 			} catch (error) {
 				ctx.context.logger.warn(

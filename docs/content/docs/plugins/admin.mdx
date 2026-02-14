@@ -153,11 +153,11 @@ type listUsers = {
   /**
    * The value to filter by. 
    */
-  filterValue?: string | number | boolean = "hello@example.com"
+  filterValue?: string | number | boolean | string[] | number[] = "hello@example.com"
   /**
-   * The operator to use for the filter. 
+   * The operator to use for the filter.
    */
-  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
+  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
 }
 ```
 </APIMethod>

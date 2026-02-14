@@ -1090,11 +1090,11 @@ type listMembers = {
     /**
      * The operator to filter by.
      */
-    filterOperator?: "eq" | "ne" | "gt" | "gte" | "lt" | "lte" | "in" | "nin" | "contains" = "eq"
+    filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
     /**
      * The value to filter by.
      */
-    filterValue?: string = "value"
+    filterValue?: string | number | boolean | string[] | number[] = "value"
 }
 ```
 </APIMethod>
