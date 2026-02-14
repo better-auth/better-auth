@@ -243,6 +243,25 @@ type resetPasswordEmailOTP = {
 
 ### Change Email with OTP
 
+To allow users to change their email with OTP, first enable the `changeEmail` feature, which is disabled by default. Set `changeEmail.enabled` to `true`:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    plugins: [
+        emailOTP({
+            changeEmail: {
+                enabled: true, // [!code highlight]
+            }
+        })
+    ]
+})
+```
+
+By default, when a user requests to change their email, an OTP is sent to the **new** email address.
+The email is only updated after the user verifies the new email.
+
 #### Usage
 
 To change the user's email address with OTP, use the `emailOtp.requestEmailChange()` method to send a "change-email" OTP to the user's new email address.
@@ -289,11 +308,12 @@ import { betterAuth } from "better-auth";
 
 export const auth = betterAuth({
     plugins: [
-      emailOTP({
-        changeEmail: {
-          verifyCurrentEmail: true, // [!code highlight]
-        }
-      })
+        emailOTP({
+            changeEmail: {
+                enabled: true,
+                verifyCurrentEmail: true, // [!code highlight]
+            }
+        })
     ]
 })
 ```

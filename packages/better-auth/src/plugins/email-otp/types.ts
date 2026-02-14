@@ -85,10 +85,12 @@ export interface EmailOTPOptions {
 	 * Change email configuration for the change email with OTP flow
 	 *
 	 * @default {
+	 *  enabled: false,
 	 *  verifyCurrentEmail: false,
 	 * }
 	 */
 	changeEmail?: {
+		enabled?: boolean;
 		verifyCurrentEmail?: boolean;
 	};
 	/**

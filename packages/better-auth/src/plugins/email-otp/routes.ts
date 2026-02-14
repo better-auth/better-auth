@@ -1127,6 +1127,13 @@ export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			},
 		},
 		async (ctx) => {
+			if (!opts.changeEmail?.enabled) {
+				ctx.context.logger.error("Change email with OTP is disabled.");
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Change email with OTP is disabled",
+				});
+			}
+
 			const email = ctx.context.session.user.email;
 			const newEmail = ctx.body.newEmail.toLowerCase();
 			const isValidEmail = z.email().safeParse(newEmail);

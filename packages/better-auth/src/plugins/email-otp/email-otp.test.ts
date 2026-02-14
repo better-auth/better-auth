@@ -403,6 +403,7 @@ describe("change email", async () => {
 						otpFn(email, _otp, type);
 					},
 					sendVerificationOnSignUp: true,
+					changeEmail: { enabled: true },
 				}),
 			],
 			emailVerification: {
@@ -459,6 +460,45 @@ describe("change email", async () => {
 			expect(res.error?.code).toBe("UNAUTHORIZED");
 		});
 
+		it("should not send otp for change email request when change email with OTP is disabled", async () => {
+			const {
+				client: disabledClient,
+				testUser: disabledTestUser,
+				runWithUser: disabledRunWithUser,
+			} = await getTestInstance(
+				{
+					plugins: [
+						bearer(),
+						emailOTP({
+							async sendVerificationOTP() {},
+							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: false },
+						}),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [emailOTPClient()],
+					},
+				},
+			);
+
+			let res: Awaited<
+				ReturnType<typeof disabledClient.emailOtp.requestEmailChange>
+			>;
+			await disabledRunWithUser(
+				disabledTestUser.email,
+				disabledTestUser.password,
+				async () => {
+					res = await disabledClient.emailOtp.requestEmailChange({
+						newEmail: "new@test.com",
+					});
+				},
+			);
+			expect(res!.error?.status).toBe(400);
+			expect(res!.error?.message).toBe("Change email with OTP is disabled");
+		});
+
 		it("should not send otp for change email request if email is same as old email", async () => {
 			let res: Awaited<ReturnType<typeof client.emailOtp.requestEmailChange>>;
 			await runWithUser(testUser.email, testUser.password, async () => {
@@ -509,7 +549,7 @@ describe("change email", async () => {
 								verifyCurrentOtpFn(email, _otp, type);
 							},
 							sendVerificationOnSignUp: true,
-							changeEmail: { verifyCurrentEmail: true },
+							changeEmail: { enabled: true, verifyCurrentEmail: true },
 						}),
 					],
 					emailVerification: {
@@ -582,7 +622,7 @@ describe("change email", async () => {
 									}
 								},
 								sendVerificationOnSignUp: true,
-								changeEmail: { verifyCurrentEmail: true },
+								changeEmail: { enabled: true, verifyCurrentEmail: true },
 								expiresIn: 60,
 							}),
 						],
@@ -798,6 +838,7 @@ describe("change email", async () => {
 							},
 							sendVerificationOnSignUp: true,
 							expiresIn: 60,
+							changeEmail: { enabled: true },
 						}),
 					],
 					emailVerification: {
@@ -855,6 +896,7 @@ describe("change email", async () => {
 								callbackOtp = _otp;
 							},
 							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true },
 						}),
 					],
 					emailVerification: {
@@ -904,6 +946,7 @@ describe("change email", async () => {
 								callbackOtp = _otp;
 							},
 							sendVerificationOnSignUp: true,
+							changeEmail: { enabled: true },
 						}),
 					],
 					emailVerification: {
