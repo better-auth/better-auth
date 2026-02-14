@@ -241,6 +241,38 @@ type resetPasswordEmailOTP = {
 ```
 </APIMethod>
 
+### Change Email with OTP
+
+To change the user's email address with OTP, use the `emailOtp.requestEmailChange()` method to send a "change-email" OTP to the user's new email address.
+
+<APIMethod path="/email-otp/request-email-change" method="POST" requireSession>
+```ts
+type requestEmailChangeEmailOTP = {
+    /**
+     * New email address to send the OTP.
+     */
+    newEmail: string = "user@example.com"
+}
+```
+</APIMethod>
+
+Once the user provides the OTP, use the `changeEmail()` method to change the user's email address.
+
+<APIMethod path="/email-otp/change-email" method="POST" requireSession>
+```ts
+type changeEmailEmailOTP = {
+    /**
+     * New email address to change to. 
+     */
+    newEmail: string = "user@example.com"
+    /**
+     * OTP sent to the new email. 
+     */
+    otp: string = "123456"
+}
+```
+</APIMethod>
+
 ### Override Default Email Verification
 
 To override the default email verification, pass `overrideDefaultEmailVerification: true` in the options. This will make the system use an email OTP instead of the default verification link whenever email verification is triggered. In other words, the user will verify their email using an OTP rather than clicking a link.

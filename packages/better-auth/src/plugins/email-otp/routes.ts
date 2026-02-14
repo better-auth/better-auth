@@ -2,7 +2,11 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { deprecate } from "@better-auth/core/utils/deprecate";
 import * as z from "zod";
-import { APIError, getSessionFromCtx } from "../../api";
+import {
+	APIError,
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+} from "../../api";
 import { setCookieCache, setSessionCookie } from "../../cookies";
 import { generateRandomString, symmetricDecrypt } from "../../crypto";
 import { parseUserInput, parseUserOutput } from "../../db/schema";
@@ -11,7 +15,12 @@ import { storeOTP, verifyStoredOTP } from "./otp-token";
 import type { EmailOTPOptions } from "./types";
 import { splitAtLastColon } from "./utils";
 
-const types = ["email-verification", "sign-in", "forget-password"] as const;
+const types = [
+	"email-verification",
+	"sign-in",
+	"forget-password",
+	"change-email",
+] as const;
 
 type WithRequired<T, K extends keyof T> = T & { [P in K]-?: T[P] };
 
@@ -1055,6 +1064,260 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 				await ctx.context.internalAdapter.deleteSessions(user.user.id);
 			}
+			return ctx.json({
+				success: true,
+			});
+		},
+	);
+
+const requestEmailChangeEmailOTPBodySchema = z.object({
+	newEmail: z.string().meta({
+		description: "New email address to send the OTP",
+	}),
+});
+
+/**
+ * ### Endpoint
+ *
+ * POST `/email-otp/request-email-change`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.requestEmailChangeOTP`
+ *
+ * **client:**
+ * `authClient.emailOtp.requestEmailChangeEmailOTP`
+ *
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#change-email-with-otp)
+ */
+export const requestEmailChangeEmailOTP = (opts: RequiredEmailOTPOptions) =>
+	createAuthEndpoint(
+		"/email-otp/request-email-change",
+		{
+			method: "POST",
+			body: requestEmailChangeEmailOTPBodySchema,
+			use: [sensitiveSessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "requestEmailChangeWithEmailOTP",
+					description:
+						"Request email change with verification OTP sent to the new email",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const email = ctx.context.session.user.email;
+			const newEmail = ctx.body.newEmail.toLowerCase();
+			const isValidEmail = z.email().safeParse(newEmail);
+			if (!isValidEmail.success) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
+			if (newEmail === email) {
+				ctx.context.logger.error("Email is the same");
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Email is the same",
+				});
+			}
+
+			const otp =
+				opts.generateOTP({ email: newEmail, type: "change-email" }, ctx) ||
+				defaultOTPGenerator(opts);
+			const storedOTP = await storeOTP(ctx, opts, otp);
+			await ctx.context.internalAdapter.createVerificationValue({
+				value: `${storedOTP}:0`,
+				identifier: `change-email-otp:${email}-${newEmail}`,
+				expiresAt: getDate(opts.expiresIn, "sec"),
+			});
+
+			const user = await ctx.context.internalAdapter.findUserByEmail(newEmail);
+			if (user) {
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`change-email-otp:${email}-${newEmail}`,
+				);
+				return ctx.json({
+					success: true,
+				});
+			}
+
+			await ctx.context.runInBackgroundOrAwait(
+				opts.sendVerificationOTP(
+					{
+						email: newEmail,
+						otp,
+						type: "change-email",
+					},
+					ctx,
+				),
+			);
+			return ctx.json({
+				success: true,
+			});
+		},
+	);
+
+const changeEmailEmailOTPBodySchema = z.object({
+	newEmail: z.string().meta({
+		description: "New email address to verify and change to",
+	}),
+	otp: z.string().meta({
+		description: "OTP sent to the new email",
+	}),
+});
+
+/**
+ * ### Endpoint
+ *
+ * POST `/email-otp/change-email`
+ *
+ * ### API Methods
+ *
+ * **server:**
+ * `auth.api.changeEmailOTP`
+ *
+ * **client:**
+ * `authClient.emailOtp.changeEmailEmailOTP`
+ *
+ * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/email-otp#change-email-with-otp)
+ */
+export const changeEmailEmailOTP = (opts: RequiredEmailOTPOptions) =>
+	createAuthEndpoint(
+		"/email-otp/change-email",
+		{
+			method: "POST",
+			body: changeEmailEmailOTPBodySchema,
+			use: [sensitiveSessionMiddleware],
+			metadata: {
+				openapi: {
+					operationId: "changeEmailWithEmailOTP",
+					description:
+						"Verify new email with OTP and change the email if verification is successful",
+					responses: {
+						200: {
+							description: "Success",
+							content: {
+								"application/json": {
+									schema: {
+										type: "object",
+										properties: {
+											success: {
+												type: "boolean",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+		async (ctx) => {
+			const session = ctx.context.session;
+
+			const email = session.user.email;
+			const newEmail = ctx.body.newEmail.toLowerCase();
+			const isValidNewEmail = z.email().safeParse(newEmail);
+			if (!isValidNewEmail.success) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
+			}
+			if (newEmail === email) {
+				ctx.context.logger.error("Email is the same");
+				throw APIError.fromStatus("BAD_REQUEST", {
+					message: "Email is the same",
+				});
+			}
+
+			const verificationValue =
+				await ctx.context.internalAdapter.findVerificationValue(
+					`change-email-otp:${email}-${newEmail}`,
+				);
+			if (!verificationValue) {
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
+			if (verificationValue.expiresAt < new Date()) {
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationValue.id,
+				);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
+			}
+
+			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
+			const allowedAttempts = opts?.allowedAttempts || 3;
+			if (attempts && parseInt(attempts) >= allowedAttempts) {
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationValue.id,
+				);
+				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
+			}
+
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
+			if (!verified) {
+				await ctx.context.internalAdapter.updateVerificationValue(
+					verificationValue.id,
+					{
+						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+					},
+				);
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
+			await ctx.context.internalAdapter.deleteVerificationValue(
+				verificationValue.id,
+			);
+
+			const user = await ctx.context.internalAdapter.findUserByEmail(email);
+			if (!user) {
+				/**
+				 * safe to leak the existence of a user as a valid OTP has been provided
+				 */
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+			}
+
+			if (ctx.context.options.emailVerification?.beforeEmailVerification) {
+				await ctx.context.options.emailVerification.beforeEmailVerification(
+					user.user,
+					ctx.request,
+				);
+			}
+			const updatedUser = await ctx.context.internalAdapter.updateUser(
+				user.user.id,
+				{
+					email: newEmail,
+					emailVerified: true,
+				},
+			);
+			if (ctx.context.options.emailVerification?.afterEmailVerification) {
+				await ctx.context.options.emailVerification.afterEmailVerification(
+					updatedUser,
+					ctx.request,
+				);
+			}
+			await setSessionCookie(ctx, {
+				session: session.session,
+				user: {
+					...session.user,
+					email: newEmail,
+					emailVerified: true,
+				},
+			});
+
 			return ctx.json({
 				success: true,
 			});
