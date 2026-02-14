@@ -31,15 +31,82 @@ export function ThemeToggle(props: ComponentProps<typeof Button>) {
 		setMounted(true);
 	}, []);
 
+	function injectPolygonBlurAnimation() {
+		const styleId = "polygon-theme-transition";
+
+		let style = document.getElementById(styleId);
+
+		if (!style) {
+			style = document.createElement("style");
+			style.id = styleId;
+			document.head.appendChild(style);
+		}
+
+		style.textContent = `
+			::view-transition-group(root){
+				animation-duration:1.2s;
+				animation-timing-function:cubic-bezier(0.19,1,0.22,1);
+			}
+
+			::view-transition-new(root){
+				animation-name:polygon-light;
+				filter:blur(2px);
+			}
+
+			.dark::view-transition-new(root){
+				animation-name:polygon-dark;
+				filter:blur(2px);
+			}
+
+			::view-transition-old(root){
+				animation:none;
+				z-index:-1;
+			}
+
+			@keyframes polygon-dark{
+				from{
+					clip-path:polygon(50% -71%,-50% 71%,-50% 71%,50% -71%);
+					filter:blur(8px);
+				}
+				50%{filter:blur(4px);}
+				to{
+					clip-path:polygon(50% -71%,-50% 71%,50% 171%,171% 50%);
+					filter:blur(0);
+				}
+			}
+
+			@keyframes polygon-light{
+				from{
+					clip-path:polygon(171% 50%,50% 171%,50% 171%,171% 50%);
+					filter:blur(8px);
+				}
+				50%{filter:blur(4px);}
+				to{
+					clip-path:polygon(171% 50%,50% 171%,-50% 71%,50% -71%);
+					filter:blur(0);
+				}
+			}
+		`;
+	}
 	return (
 		<Button
 			variant="ghost"
 			size="icon"
 			aria-label="Toggle theme"
 			onClick={() => {
-				setTheme(
-					resolvedTheme === themeMap.dark ? themeMap.light : themeMap.dark,
-				);
+				const next =
+					resolvedTheme === themeMap.dark ? themeMap.light : themeMap.dark;
+
+				injectPolygonBlurAnimation();
+
+				const apply = () => setTheme(next);
+
+				if (!document.startViewTransition) {
+					apply();
+					return;
+				}
+
+				document.startViewTransition(apply);
 			}}
 			{...props}
 			className={cn(
