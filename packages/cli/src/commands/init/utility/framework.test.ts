@@ -468,6 +468,7 @@ describe("Init CLI - framework utility", () => {
 			).map((f) => f.routeHandler!.path);
 
 			const uniquePaths = new Set(routeHandlerPaths);
+			console.log(routeHandlerPaths, uniquePaths);
 			expect(routeHandlerPaths.length).toBe(uniquePaths.size);
 		});
 	});
