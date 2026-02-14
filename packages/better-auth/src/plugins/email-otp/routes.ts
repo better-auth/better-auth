@@ -97,6 +97,14 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			if (!isValidEmail.success) {
 				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 			}
+
+      // Enforce using the correct endpoint for change email OTP
+      if (ctx.body.type === "change-email") {
+        ctx.context.logger.error("Use the /email-otp/request-email-change endpoint to send OTP for changing email");
+        throw APIError.fromStatus("BAD_REQUEST", {
+          message: "Invalid OTP type",
+        });
+      }
 			const otp =
 				opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 				defaultOTPGenerator(opts);

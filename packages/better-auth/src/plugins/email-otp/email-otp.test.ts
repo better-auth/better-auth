@@ -288,6 +288,15 @@ describe("email-otp", async () => {
 		expect(res.error?.code).toBe("INVALID_EMAIL");
 	});
 
+	it("should reject change-email type", async () => {
+		const res = await client.emailOtp.sendVerificationOtp({
+			email: testUser.email,
+			type: "change-email",
+		});
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.message).toBe("Invalid OTP type");
+	});
+
 	it("should fail on expired otp", async () => {
 		await client.emailOtp.sendVerificationOtp({
 			email: testUser.email,
