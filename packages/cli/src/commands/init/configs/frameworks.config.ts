@@ -24,6 +24,27 @@ export const ALL: APIRoute = async (ctx) => {
 			"astro.config.cjs",
 		],
 	},
+	// todo: remove in future versions
+	{
+		name: "Remix",
+		id: "remix",
+		dependency: "@remix-run/server-runtime",
+		authClient: {
+			importPath: "better-auth/react",
+		},
+		routeHandler: {
+			path: "app/lib/auth.server.ts",
+			code: `import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    database: {
+        provider: "postgres", //change this to your database provider
+        url: process.env.DATABASE_URL, // path to your database or connection string
+    }
+})`,
+		},
+		configPaths: ["remix.config.js"],
+	},
 	{
 		name: "React Router v7",
 		id: "react-router-v7",
