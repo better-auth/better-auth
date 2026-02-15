@@ -115,6 +115,9 @@ export async function consentEndpoint(
 			});
 
 	// Return authorization code
+	if (requestedScopes) {
+		query.set("scope", consent.scopes.join(" "));
+	}
 	ctx?.headers?.set("accept", "application/json");
 	ctx.query = deleteFromPrompt(query, "consent");
 	ctx.context.postLogin = true;
