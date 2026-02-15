@@ -20,17 +20,33 @@ type KeepNullishFromOriginal<Original, Replaced> =
 	| (undefined extends Original ? undefined : never)
 	| (null extends Original ? null : never);
 
-type ReplaceSessionAndUser<
+type ReplaceTopLevelField<
+	Data,
+	Field extends "user" | "session",
+	Replaced,
+> = Data extends object
+	? Field extends keyof Data
+		? Omit<Data, Field> & {
+				[K in Field]: KeepNullishFromOriginal<Data[K], Replaced>;
+			}
+		: Data
+	: Data;
+
+type ReplaceAuthUserAndSession<
 	Data,
 	ClientOpts extends BetterAuthClientOptions,
-> = Data extends object
-	? {
-			[K in keyof Data]: K extends "user"
-				? KeepNullishFromOriginal<Data[K], InferUserFromClient<ClientOpts>>
-				: K extends "session"
-					? KeepNullishFromOriginal<Data[K], InferSessionFromClient<ClientOpts>>
-					: Data[K];
-		}
+> = ReplaceTopLevelField<
+	ReplaceTopLevelField<Data, "user", InferUserFromClient<ClientOpts>>,
+	"session",
+	InferSessionFromClient<ClientOpts>
+>;
+
+type RefineAuthResponse<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = Data extends { token: unknown } | { redirect: unknown }
+	? // Only auth-like responses should get client-side user/session type refinement.
+		ReplaceAuthUserAndSession<Data, ClientOpts>
 	: Data;
 
 export type CamelCase<S extends string> =
@@ -152,10 +168,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															user: InferUserFromClient<COpts>;
 															session: InferSessionFromClient<COpts>;
 														} | null
-													: ReplaceSessionAndUser<
-															NonNullable<Awaited<R>>,
-															COpts
-														>,
+													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
 											T["options"]["error"] extends StandardSchemaV1
 												? // InferOutput
 													NonNullable<
