@@ -126,7 +126,7 @@ export async function authenticate(
 		},
 		onSuccess: async (ctx) => {
 			const user = ctx.data.user
-				? await normalizeUserOutput(ctx.data.user)
+				? normalizeUserOutput(ctx.data.user, options)
 				: null;
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,

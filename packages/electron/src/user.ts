@@ -17,8 +17,8 @@ export async function fetchUserImage(
 ): Promise<FetchUserImageResult | null> {
 	if (options?.userImageProxy?.enabled === false) return null;
 
-	// Handle data URLs (e.g. base64-encoded image stored in the DB)
-	const decoded = decodeDataImageUrl(url, options);
+	// Handle data URLs
+	const decoded = await decodeDataImageUrl(url, options);
 	if (decoded) {
 		const stream = new ReadableStream<Uint8Array>({
 			start(controller) {
@@ -118,10 +118,10 @@ export async function fetchUserImage(
 	return { stream, mimeType };
 }
 
-export async function normalizeUserOutput<U extends User & Record<string, any>>(
+export function normalizeUserOutput<U extends User & Record<string, any>>(
 	user: U,
 	options?: ElectronClientOptions | undefined,
-): Promise<U> {
+): U {
 	const result = { ...user };
 	if (result.image && options?.userImageProxy?.enabled !== false) {
 		result.image = `${options?.userImageProxy?.scheme || "user-image"}://${result.id}`;
@@ -130,10 +130,10 @@ export async function normalizeUserOutput<U extends User & Record<string, any>>(
 	return result;
 }
 
-function decodeDataImageUrl(
+async function decodeDataImageUrl(
 	url: string,
 	options?: Pick<ElectronClientOptions, "userImageProxy"> | undefined,
-): { bytes: Uint8Array; mimeType: string } | null {
+) {
 	const maxSize = options?.userImageProxy?.maxSize ?? DEFAULT_MAX_BYTES;
 	const maxBase64Size = Math.ceil((maxSize * 4) / 3);
 	const lower = url.toLowerCase();
@@ -150,7 +150,7 @@ function decodeDataImageUrl(
 		const bytes = base64.decode(payload);
 		const { customValidator: validateImage = detectImageType } =
 			options?.userImageProxy ?? {};
-		if (!validateImage(bytes)) return null;
+		if (!(await validateImage(bytes))) return null;
 		return { bytes, mimeType };
 	} catch {
 		return null;

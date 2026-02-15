@@ -1328,7 +1328,7 @@ describe("Electron", () => {
 		): Promise<Uint8Array> {
 			const reader = stream.getReader();
 			const chunks: Uint8Array[] = [];
-			for (;;) {
+			while (true) {
 				const { done, value } = await reader.read();
 				if (done) break;
 				chunks.push(value);
@@ -1402,7 +1402,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const user = await normalizeUserOutput({
+			const user = normalizeUserOutput({
 				id: "abc123",
 				name: "Test",
 				email: "test@test.com",
@@ -1420,7 +1420,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const user = await normalizeUserOutput({
+			const user = normalizeUserOutput({
 				id: "abc123",
 				name: "Test",
 				email: "test@test.com",

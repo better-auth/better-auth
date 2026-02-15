@@ -339,11 +339,11 @@ export function setupBridges(
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
-	ctx.$store?.atoms.session?.subscribe(async (state) => {
+	ctx.$store?.atoms.session?.subscribe((state) => {
 		if (state.isPending === true) return;
 
 		const user = state?.data?.user
-			? await normalizeUserOutput(state.data.user)
+			? normalizeUserOutput(state.data.user, opts)
 			: null;
 		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
@@ -361,7 +361,7 @@ export function setupBridges(
 		);
 
 		return result.data?.user
-			? await normalizeUserOutput(result.data.user)
+			? normalizeUserOutput(result.data.user, opts)
 			: null;
 	});
 	ipcMain.handle(

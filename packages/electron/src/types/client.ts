@@ -1,3 +1,4 @@
+import type { Awaitable } from "@better-auth/core";
 import type { ElectronSharedOptions } from "./options";
 
 export interface Storage {
@@ -96,7 +97,7 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 				 * @param bytes The user image bytes.
 				 * @returns The image mime type or null if the image is not valid.
 				 */
-				customValidator?: (bytes: Uint8Array) => string | null;
+				customValidator?: (bytes: Uint8Array) => Awaitable<string | null>;
 		  }
 		| undefined;
 	/**
