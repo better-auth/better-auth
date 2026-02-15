@@ -1,6 +1,5 @@
 "use client";
 
-import { OramaClient } from "@oramacloud/client";
 import { useDocsSearch } from "fumadocs-core/search/client";
 import type { SharedProps } from "fumadocs-ui/components/dialog/search";
 import {
@@ -16,16 +15,10 @@ import {
 } from "fumadocs-ui/components/dialog/search";
 import { useI18n } from "fumadocs-ui/contexts/i18n";
 
-const client = new OramaClient({
-	endpoint: process.env.NEXT_PUBLIC_ORAMA_ENDPOINT!,
-	api_key: process.env.NEXT_PUBLIC_ORAMA_PUBLIC_API_KEY!,
-});
-
 export function CustomSearchDialog(props: SharedProps) {
 	const { locale } = useI18n();
 	const { search, setSearch, query } = useDocsSearch({
-		type: "orama-cloud-legacy",
-		client,
+		type: "fetch",
 		locale,
 	});
 

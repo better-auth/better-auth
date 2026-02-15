@@ -47,9 +47,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 					}}
 					search={{
 						enabled: true,
-						SearchDialog: process.env.ORAMA_PRIVATE_API_KEY
-							? CustomSearchDialog
-							: undefined,
+						SearchDialog: CustomSearchDialog,
 					}}
 				>
 					<AnchorScroll />
