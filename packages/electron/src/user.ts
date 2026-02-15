@@ -1,31 +1,28 @@
+import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
+import { getBaseURL } from "better-auth";
 import type { ElectronClientOptions } from "./client";
 
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 5; // 5MB
 const MAX_CACHE_SIZE = 100;
 const userImageCache = new Map<string, string>();
 
-function setUserImageCache(
-	map: Map<string, string>,
-	key: string,
-	value: string,
-) {
-	if (map.size >= MAX_CACHE_SIZE) {
-		const firstKey = map.keys().next().value;
+function setUserImageCache(key: string, value: string) {
+	if (userImageCache.size >= MAX_CACHE_SIZE) {
+		const firstKey = userImageCache.keys().next().value;
 		if (firstKey) {
-			map.delete(firstKey);
+			userImageCache.delete(firstKey);
 		}
 	}
-	map.set(key, value);
+	userImageCache.set(key, value);
 }
 
 async function readUserImageStream(
 	response: Response,
-	options?: Pick<ElectronClientOptions, "userImageMaxSize"> | undefined,
+	maxSize: number = DEFAULT_MAX_BYTES,
 ): Promise<Uint8Array | null> {
-	const maxSize = options?.userImageMaxSize ?? DEFAULT_MAX_BYTES;
 	const body = response.body;
 	if (!body) return null;
 
@@ -62,9 +59,14 @@ async function readUserImageStream(
 async function fetchUserImage(
 	baseURL: string | undefined,
 	url: string,
-	options?: Pick<ElectronClientOptions, "userImageMaxSize"> | undefined,
+	options?: Pick<ElectronClientOptions, "userImageProxy"> | undefined,
 ): Promise<string | null> {
-	if (isValidDataImageUrl(url)) return url;
+	if (
+		options?.userImageProxy?.enabled === false ||
+		isValidDataImageUrl(url, options?.userImageProxy?.maxSize)
+	) {
+		return url;
+	}
 
 	const cached = userImageCache.get(url);
 	if (cached) return cached;
@@ -91,9 +93,14 @@ async function fetchUserImage(
 	}
 
 	try {
+		const {
+			maxSize = DEFAULT_MAX_BYTES,
+			accept = "image/*",
+			customValidator: validateImage = detectImageType,
+		} = options?.userImageProxy ?? {};
 		const response = await fetch(resolvedUrl, {
 			method: "GET",
-			headers: { accept: "image/*" },
+			headers: { accept },
 		});
 
 		if (!response.ok) return null;
@@ -106,23 +113,22 @@ async function fetchUserImage(
 			return null;
 		}
 
-		const maxSize = options?.userImageMaxSize ?? DEFAULT_MAX_BYTES;
 		const contentLength = response.headers.get("content-length");
 		if (contentLength && Number(contentLength) > maxSize) {
 			return null;
 		}
 
-		const buffer = await readUserImageStream(response, options);
+		const buffer = await readUserImageStream(response, maxSize);
 		if (!buffer) return null;
 
-		const imageType = detectImageType(buffer);
+		const imageType = validateImage(buffer);
 		if (!imageType) return null;
 
 		const mimeType = contentType.split(";")[0]?.trim() || imageType;
 		const encoded = base64.encode(buffer);
 		const dataUrl = `data:${mimeType};base64,${encoded}`;
 
-		setUserImageCache(userImageCache, url, dataUrl);
+		setUserImageCache(url, dataUrl);
 		return dataUrl;
 	} catch {
 		return null;
@@ -130,9 +136,17 @@ async function fetchUserImage(
 }
 
 export async function normalizeUser<U extends User & Record<string, any>>(
-	baseURL: string | undefined,
+	clientOptions:
+		| Pick<BetterAuthClientOptions, "baseURL" | "basePath">
+		| undefined,
 	user: U,
 ): Promise<U> {
+	const baseURL = getBaseURL(
+		clientOptions?.baseURL,
+		clientOptions?.basePath,
+		undefined,
+		true,
+	);
 	const result = { ...user };
 	if (result.image) {
 		result.image = await fetchUserImage(baseURL, result.image);
@@ -167,11 +181,9 @@ function isLocalOrigin(parsed: URL): boolean {
 
 function isValidDataImageUrl(
 	url: string,
-	options?: Pick<ElectronClientOptions, "userImageMaxSize"> | undefined,
+	maxSize: number = DEFAULT_MAX_BYTES,
 ): boolean {
-	const maxBase64Size = Math.ceil(
-		((options?.userImageMaxSize ?? DEFAULT_MAX_BYTES) * 4) / 3,
-	);
+	const maxBase64Size = Math.ceil((maxSize * 4) / 3);
 	const lower = url.toLowerCase();
 	if (!lower.startsWith("data:image/") || lower.startsWith("data:image/svg")) {
 		return false;

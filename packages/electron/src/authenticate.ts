@@ -117,13 +117,6 @@ export async function authenticate(
 		throw new Error("State not found.");
 	}
 
-	const baseURL = getBaseURL(
-		clientOptions?.baseURL,
-		clientOptions?.basePath,
-		undefined,
-		true,
-	);
-
 	await $fetch("/electron/token", {
 		method: "POST",
 		body: {
@@ -133,7 +126,7 @@ export async function authenticate(
 		},
 		onSuccess: async (ctx) => {
 			const user = ctx.data.user
-				? await normalizeUser(baseURL, ctx.data.user)
+				? await normalizeUser(clientOptions, ctx.data.user)
 				: null;
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
