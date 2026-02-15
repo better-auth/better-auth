@@ -632,7 +632,7 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action !== "create") {
+					if (action !== "create" && action !== "update") {
 						return data;
 					}
 					if (Array.isArray(data)) {
