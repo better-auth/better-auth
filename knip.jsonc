@@ -66,8 +66,25 @@
 				"@types/pg",
 				"drizzle-orm",
 				"pg",
-				"prisma"
-			]
+				"prisma",
+				// implicit dependencies
+				"semver",
+				"@babel/core",
+				"@babel/preset-react",
+				"@babel/preset-typescript",
+				"@better-auth/telemetry",
+				"@clack/prompts",
+				"@mrleebo/prisma-ast",
+				"better-auth",
+				"c12",
+				"chalk",
+				"open",
+				"prettier",
+				"prompts",
+				"yocto-spinner",
+				"zod"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
 		"packages/expo": {
 			"ignoreDependencies": [

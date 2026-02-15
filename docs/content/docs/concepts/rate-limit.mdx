@@ -187,11 +187,11 @@ export const auth = betterAuth({
 Make sure to run `migrate` to create the rate limit table in your database:
 
 ```package-install
-npx @better-auth/cli@latest migrate
+npx auth@latest migrate
 ```
 
 <Callout type="info">
-  The `migrate` command only works if you're using the built-in Kysely adapter. If you're using Prisma, Drizzle, or another ORM, run `npx @better-auth/cli@latest generate` first, then apply the schema using your ORM's migration tool. For more info, see the [Better Auth CLI](/docs/concepts/cli).
+  The `migrate` command only works if you're using the built-in Kysely adapter. If you're using Prisma, Drizzle, or another ORM, run `npx auth@latest generate` first, then apply the schema using your ORM's migration tool. For more info, see the [Better Auth CLI](/docs/concepts/cli).
 </Callout>
 
 **Using Secondary Storage**

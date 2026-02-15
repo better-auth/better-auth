@@ -66,7 +66,7 @@ function validateSecret(
 
 	if (secret.length < 32) {
 		logger.warn(
-			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx @better-auth/cli secret\` or \`openssl rand -base64 32\`.`,
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx auth secret\` or \`openssl rand -base64 32\`.`,
 		);
 	}
 

@@ -54,7 +54,7 @@ your database schema based on your Better Auth configuration and plugins.
 </table>
 
 ```package-install title="Schema Generation"
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 ## Joins (Experimental)
@@ -77,7 +77,7 @@ export const auth = betterAuth({
 <Callout type="warn">
   Please make sure that your Prisma schema has the necessary relations defined.
   If you do not see any relations in your Prisma schema, you can manually add them using the `@relation` directive
-  or run our latest CLI version `npx @better-auth/cli@latest generate` to generate a new Prisma schema with the relations.
+  or run our latest CLI version `npx auth@latest generate` to generate a new Prisma schema with the relations.
 </Callout>
 
 ## Additional Information

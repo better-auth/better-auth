@@ -22,7 +22,7 @@ Better Auth comes with a CLI tool to manage database migrations and generate sch
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is only supported for the built-in Kysely adapter. For other adapters, you can use the `generate` command to create the schema and handle the migration through your ORM.
 
 ```package-install
-npx @better-auth/cli@latest migrate
+npx auth@latest migrate
 ```
 
 <Callout type="info">
@@ -34,7 +34,7 @@ For PostgreSQL users: The migrate command supports non-default schemas. It autom
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
 ```package-install
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
@@ -157,12 +157,12 @@ If you're using Prisma or Drizzle with Cloudflare Workers, you have a few option
    <Tabs items={["migrate", "generate"]}>
       <Tab value="migrate">
       ```package-install
-      npx @better-auth/cli@latest migrate
+      npx auth@latest migrate
       ```
       </Tab>
       <Tab value="generate">
       ```package-install
-      npx @better-auth/cli@latest generate
+      npx auth@latest generate
       ```
       </Tab>
     </Tabs>
@@ -189,7 +189,7 @@ If you're using Prisma or Drizzle with Cloudflare Workers, you have a few option
    After setting this up, run the CLI commands as normal:
 
    ```package-install
-   npx @better-auth/cli@latest generate
+   npx auth@latest generate
    ```
 
 3. **Generate schema locally and push manually**:

@@ -4,7 +4,7 @@ import { Command } from "commander";
 import { generate } from "./commands/generate";
 import { info } from "./commands/info";
 import { init } from "./commands/init";
-import { login } from "./commands/login";
+import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
 import { generateSecret } from "./commands/secret";
@@ -16,12 +16,15 @@ import "dotenv/config";
 process.on("SIGINT", () => process.exit(0));
 process.on("SIGTERM", () => process.exit(0));
 
+export let cliVersion = "1.1.2";
+
 async function main() {
 	const program = new Command("better-auth");
 
 	let packageInfo: Record<string, any> = {};
 	try {
 		packageInfo = await getPackageInfo();
+		cliVersion = packageInfo.version || "1.1.2";
 	} catch {
 		// it doesn't matter if we can't read the package.json file, we'll just use an empty object
 	}
@@ -32,8 +35,9 @@ async function main() {
 		.addCommand(generateSecret)
 		.addCommand(info)
 		.addCommand(login)
+		.addCommand(logout)
 		.addCommand(mcp)
-		.version(packageInfo.version || "1.1.2")
+		.version(cliVersion)
 		.description("Better Auth CLI")
 		.action(() => program.help());
 
