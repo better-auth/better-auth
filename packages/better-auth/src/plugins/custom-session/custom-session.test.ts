@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
 import { admin } from "../admin";
@@ -64,18 +63,19 @@ describe("Custom Session Plugin Tests", async () => {
 		expect(session?.newData).toEqual({ message: "Hello, World!" });
 	});
 
-	it("should return set cookie headers", async () => {
+	it("should return set cookie headers as separate entries", async () => {
 		const { headers } = await signInWithTestUser();
 		await client.getSession({
 			fetchOptions: {
 				headers,
 				onResponse(context) {
-					const header = context.response.headers.get("set-cookie");
-					expect(header).toBeDefined();
-
-					const cookies = parseSetCookieHeader(header!);
-					expect(cookies.has("better-auth.session_token")).toBe(true);
-					expect(cookies.has("better-auth.session_data")).toBe(true);
+					const setCookies = context.response.headers.getSetCookie();
+					// Each Set-Cookie must be a separate header (not comma-joined)
+					// to ensure browsers correctly parse individual cookie attributes
+					expect(setCookies.length).toBeGreaterThanOrEqual(2);
+					const joined = setCookies.join("; ");
+					expect(joined).toContain("better-auth.session_token");
+					expect(joined).toContain("better-auth.session_data");
 				},
 			},
 		});
@@ -105,6 +105,107 @@ describe("Custom Session Plugin Tests", async () => {
 		const session = sessions[0]!;
 		//@ts-expect-error
 		expect(session.newData).toEqual({ message: "Hello, World!" });
+	});
+
+	it("should preserve individual cookie Max-Age when cookieCache is enabled", async () => {
+		const sessionExpiresIn = 86400;
+		const cacheMaxAge = 300;
+		const {
+			auth: authWithCache,
+			signInWithTestUser: signInWithCache,
+			customFetchImpl: cacheFetchImpl,
+		} = await getTestInstance({
+			session: {
+				expiresIn: sessionExpiresIn,
+				updateAge: 0,
+				cookieCache: {
+					enabled: true,
+					maxAge: cacheMaxAge,
+				},
+			},
+			plugins: [
+				customSession(async ({ user, session }) => {
+					return { user, session };
+				}),
+			],
+		});
+
+		const cacheClient = createAuthClient({
+			baseURL: "http://localhost:3000",
+			plugins: [customSessionClient<typeof authWithCache>()],
+			fetchOptions: { customFetchImpl: cacheFetchImpl },
+		});
+
+		const { headers } = await signInWithCache();
+		await cacheClient.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					expect(setCookies.length).toBeGreaterThanOrEqual(2);
+
+					// Each cookie must be its own Set-Cookie header entry.
+					// If they were comma-joined, the browser would merge attributes
+					// and the session_token could inherit the short Max-Age from
+					// session_data, causing premature session expiry.
+					const tokenCookie = setCookies.find((c) =>
+						c.includes("better-auth.session_token"),
+					);
+					const dataCookie = setCookies.find((c) =>
+						c.includes("better-auth.session_data"),
+					);
+					expect(tokenCookie).toBeDefined();
+					expect(dataCookie).toBeDefined();
+
+					// Verify each cookie has its own Max-Age attribute
+					const tokenMaxAge = tokenCookie!.match(/Max-Age=(\d+)/i);
+					const dataMaxAge = dataCookie!.match(/Max-Age=(\d+)/i);
+					expect(tokenMaxAge).toBeTruthy();
+					expect(dataMaxAge).toBeTruthy();
+
+					const tokenMaxAgeValue = Number(tokenMaxAge![1]);
+					const dataMaxAgeValue = Number(dataMaxAge![1]);
+
+					// session_token must have the session expiresIn (within a small
+					// tolerance for elapsed time), not the shorter cookieCache maxAge
+					// (which would happen if headers were comma-joined)
+					expect(tokenMaxAgeValue).toBeGreaterThan(sessionExpiresIn - 10);
+					expect(tokenMaxAgeValue).toBeLessThanOrEqual(sessionExpiresIn);
+					expect(dataMaxAgeValue).toBe(cacheMaxAge);
+
+					// The critical invariant: token and data cookies must have
+					// different Max-Age values when configured differently
+					expect(tokenMaxAgeValue).not.toBe(dataMaxAgeValue);
+				},
+			},
+		});
+	});
+
+	it("should not comma-join Set-Cookie headers", async () => {
+		const { headers } = await signInWithTestUser();
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					// No single entry should contain multiple cookie assignments.
+					// A comma-joined header would look like:
+					// "session_token=xxx; ..., session_data=yyy; ..."
+					for (const cookie of setCookies) {
+						const cookieNames = cookie
+							.split(";")
+							.map((p) => p.trim().split("=")[0]!.toLowerCase());
+						// Only the first segment is the cookie name=value; the rest are
+						// attributes (max-age, path, httponly, samesite, etc.)
+						// None of those attributes should be another "better-auth." cookie
+						const betterAuthEntries = cookieNames.filter((n) =>
+							n.startsWith("better-auth."),
+						);
+						expect(betterAuthEntries).toHaveLength(1);
+					}
+				},
+			},
+		});
 	});
 
 	it.skipIf(globalThis.gc == null)(
