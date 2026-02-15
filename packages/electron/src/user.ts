@@ -123,7 +123,7 @@ export async function normalizeUserOutput<U extends User & Record<string, any>>(
 	options?: ElectronClientOptions | undefined,
 ): Promise<U> {
 	const result = { ...user };
-	if (result.image) {
+	if (result.image && options?.userImageProxy?.enabled !== false) {
 		result.image = `${options?.userImageProxy?.scheme || "user-image"}://${result.id}`;
 	}
 
