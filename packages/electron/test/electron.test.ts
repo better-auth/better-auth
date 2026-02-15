@@ -5,7 +5,7 @@ import { createHash } from "@better-auth/utils/hash";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
-import { afterEach, beforeEach, describe, expect, vi } from "vitest";
+import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
@@ -54,6 +54,9 @@ const mockElectron = vi.hoisted(() => {
 					onHeadersReceived: vi.fn(),
 				},
 			},
+		},
+		net: {
+			fetch: vi.fn(),
 		},
 		protocol: {
 			registerSchemesAsPrivileged: vi.fn(),
@@ -1390,11 +1393,7 @@ describe("Electron", () => {
 
 		beforeEach(() => {
 			vi.clearAllMocks();
-			vi.spyOn(globalThis, "fetch").mockImplementation(customFetchImpl as any);
-		});
-
-		afterEach(() => {
-			vi.restoreAllMocks();
+			mockElectron.net.fetch.mockImplementation(customFetchImpl as any);
 		});
 
 		it("normalizeUserOutput should replace image with protocol URL", async ({
@@ -1477,7 +1476,7 @@ describe("Electron", () => {
 				"https://example.com/avatar.png",
 			);
 
-			expect(fetch).toHaveBeenCalledWith(
+			expect(mockElectron.net.fetch).toHaveBeenCalledWith(
 				"https://example.com/avatar.png",
 				expect.objectContaining({
 					method: "GET",
@@ -1608,7 +1607,7 @@ describe("Electron", () => {
 				const result = await fetchUserImage(undefined, imageUrl);
 
 				expect(result).toBeNull();
-				expect(customFetchImpl).not.toHaveBeenCalled();
+				expect(mockElectron.net.fetch).not.toHaveBeenCalled();
 			});
 
 			it.each([
@@ -1618,7 +1617,7 @@ describe("Electron", () => {
 			])("should allow public origin %s", async (imageUrl) => {
 				const result = await fetchUserImage(undefined, imageUrl);
 
-				expect(customFetchImpl).toHaveBeenCalled();
+				expect(mockElectron.net.fetch).toHaveBeenCalled();
 				expect(result).not.toBeNull();
 			});
 		});

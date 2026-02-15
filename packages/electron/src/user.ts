@@ -1,7 +1,10 @@
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
+import electron from "electron";
 import type { ElectronClientOptions } from "./client";
+
+const { net } = electron;
 
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 5; // 5MB
 
@@ -56,7 +59,7 @@ export async function fetchUserImage(
 		customValidator: validateImage = detectImageType,
 	} = options?.userImageProxy ?? {};
 
-	const response = await fetch(resolvedUrl, {
+	const response = await net.fetch(resolvedUrl, {
 		method: "GET",
 		headers: { accept },
 	});
