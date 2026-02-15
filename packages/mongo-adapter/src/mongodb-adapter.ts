@@ -635,6 +635,9 @@ export const mongodbAdapter = (
 					if (action !== "create" && action !== "update") {
 						return data;
 					}
+					if (data instanceof ObjectId) {
+						return data;
+					}
 					if (Array.isArray(data)) {
 						return data.map((v) => {
 							if (typeof v === "string") {
@@ -662,6 +665,9 @@ export const mongodbAdapter = (
 						data === null
 					) {
 						return null;
+					}
+					if (action === "update") {
+						return data;
 					}
 					const oid = new ObjectId();
 					return oid;
