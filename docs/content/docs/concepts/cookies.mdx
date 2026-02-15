@@ -155,7 +155,7 @@ This makes the request appear first-party to Safari, allowing cookies to functio
 
 ```ts title="vercel.json"
 {
-  "redirects": [
+  "rewrites": [
     {
       "source": "/api/:path*",
       "destination": "https://domainA.com/api/:path*"
@@ -173,13 +173,7 @@ https://app.example.com
 https://api.example.com
 ```
 
-Then, configure cookies with:
-
-```
-Domain=.example.com
-SameSite=Lax (or None if required)
-Secure=true
-```
+Then, enable cross-subdomain cookies with the domain:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -189,13 +183,11 @@ export const auth = betterAuth({
         crossSubDomainCookies: {
             enabled: true,
             domain: "example.com",
-            attributes: {
-                sameSite: "lax",
-                secure: true,
-            },
         },
     },
 })
 ```
+
+Learn more about cross-subdomain cookies in the [documentation above](#cross-subdomain-cookies).
 
 This avoids Safari treating the API as third-party.
