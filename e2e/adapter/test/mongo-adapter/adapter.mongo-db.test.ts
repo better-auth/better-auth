@@ -3,12 +3,6 @@ import { createTestSuite, testAdapter } from "@better-auth/test-utils/adapter";
 import type { Session, User } from "better-auth";
 import { MongoClient, ObjectId } from "mongodb";
 import { expect } from "vitest";
-import {
-	authFlowTestSuite,
-	joinsTestSuite,
-	normalTestSuite,
-	transactionsTestSuite,
-} from "../adapter-factory";
 
 const dbClient = async (connectionString: string, dbName: string) => {
 	const client = new MongoClient(connectionString);
