@@ -1,5 +1,5 @@
 {
-  "name": "@better-auth/cli",
+  "name": "auth",
   "version": "1.5.0-beta.13",
   "type": "module",
   "description": "The CLI for Better Auth",
@@ -58,6 +58,7 @@
     "@types/semver": "^7.7.1",
     "better-sqlite3": "^12.6.2",
     "jiti": "^2.6.0",
+    "memfs": "^4.56.10",
     "tsdown": "catalog:",
     "tsx": "^4.20.6",
     "type-fest": "^5.4.4",

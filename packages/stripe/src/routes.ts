@@ -334,13 +334,32 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					// If org doesn't have a customer ID, create one
 					if (!customerId) {
 						try {
-							// First, search for existing organization customer by organizationId
-							const existingOrgCustomers = await client.customers.search({
-								query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
-								limit: 1,
-							});
-
-							let stripeCustomer = existingOrgCustomers.data[0];
+							// Find existing organization customer by organizationId metadata
+							let stripeCustomer: Stripe.Customer | undefined;
+							try {
+								const result = await client.customers.search({
+									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
+									limit: 1,
+								});
+								stripeCustomer = result.data[0];
+							} catch {
+								// Search API unavailable in some regions, so fall back to paginated list
+								ctx.context.logger.warn(
+									"Stripe customers.search failed, falling back to customers.list",
+								);
+								for await (const customer of client.customers.list({
+									limit: 100,
+								})) {
+									if (
+										customer.metadata?.[
+											customerMetadata.keys.organizationId
+										] === org.id
+									) {
+										stripeCustomer = customer;
+										break;
+									}
+								}
+							}
 
 							if (!stripeCustomer) {
 								// Get custom params if provided
@@ -414,13 +433,32 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
 				if (!customerId) {
 					try {
-						// Try to find existing user Stripe customer by email
-						const existingCustomers = await client.customers.search({
-							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
-							limit: 1,
-						});
-
-						let stripeCustomer = existingCustomers.data[0];
+						// Find existing user Stripe customer by email
+						let stripeCustomer: Stripe.Customer | undefined;
+						try {
+							const result = await client.customers.search({
+								query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
+								limit: 1,
+							});
+							stripeCustomer = result.data[0];
+						} catch {
+							// Search API unavailable in some regions, so fall back to paginated list
+							ctx.context.logger.warn(
+								"Stripe customers.search failed, falling back to customers.list",
+							);
+							for await (const customer of client.customers.list({
+								email: user.email,
+								limit: 100,
+							})) {
+								if (
+									customer.metadata?.[customerMetadata.keys.customerType] !==
+									"organization"
+								) {
+									stripeCustomer = customer;
+									break;
+								}
+							}
+						}
 
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({
