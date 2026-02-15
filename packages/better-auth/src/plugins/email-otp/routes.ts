@@ -676,7 +676,7 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
-					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 				}
 				const additionalFields = parseUserInput(
 					ctx.context.options,
