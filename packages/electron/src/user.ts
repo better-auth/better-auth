@@ -1,7 +1,6 @@
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
-import type { BetterFetch } from "@better-fetch/fetch";
 import type { ElectronClientOptions } from "./client";
 
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 5; // 5MB
@@ -22,8 +21,46 @@ function setUserImageCache(
 	map.set(key, value);
 }
 
+async function readUserImageStream(
+	response: Response,
+	options?: Pick<ElectronClientOptions, "userImageMaxSize"> | undefined,
+): Promise<Uint8Array | null> {
+	const maxSize = options?.userImageMaxSize ?? DEFAULT_MAX_BYTES;
+	const body = response.body;
+	if (!body) return null;
+
+	const reader = body.getReader();
+	const chunks: Uint8Array[] = [];
+	let totalSize = 0;
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			totalSize += value.byteLength;
+			if (totalSize > maxSize) {
+				reader.cancel();
+				return null;
+			}
+			chunks.push(value);
+		}
+	} catch {
+		return null;
+	}
+
+	if (chunks.length === 1) return chunks[0] ?? null;
+
+	const result = new Uint8Array(totalSize);
+	let offset = 0;
+	for (const chunk of chunks) {
+		result.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return result;
+}
+
 async function fetchUserImage(
-	$fetch: BetterFetch,
+	baseURL: string | undefined,
 	url: string,
 	options?: Pick<ElectronClientOptions, "userImageMaxSize"> | undefined,
 ): Promise<string | null> {
@@ -32,63 +69,73 @@ async function fetchUserImage(
 	const cached = userImageCache.get(url);
 	if (cached) return cached;
 
-	// Validate URL
+	// Validate and resolve URL
+	let resolvedUrl: string;
 	try {
-		const parsed = new URL(url);
+		let parsed: URL;
+		try {
+			parsed = new URL(url);
+		} catch {
+			if (!baseURL) return null;
+			const base = baseURL.endsWith("/") ? baseURL : `${baseURL}/`;
+			const relative = url.startsWith("/") ? url.slice(1) : url;
+			parsed = new URL(relative, base);
+		}
 		if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
 			return null;
 		}
 		if (!isDevelopment() && isLocalOrigin(parsed)) return null;
+		resolvedUrl = parsed.href;
 	} catch {
 		return null;
 	}
 
-	let result: string | null = null;
-	await $fetch(url, {
-		method: "GET",
-		headers: { accept: "image/*" },
-		async onSuccess({ data, response }) {
-			if (
-				!response.headers.get("content-type")?.startsWith("image/") ||
-				response.headers.get("content-type")?.startsWith("image/svg")
-			) {
-				return;
-			}
-			const maxSize = options?.userImageMaxSize ?? DEFAULT_MAX_BYTES;
-			const contentLength = response.headers.get("content-length");
-			if (contentLength && Number(contentLength) > maxSize) {
-				return;
-			}
-			const buffer =
-				data instanceof ArrayBuffer
-					? new Uint8Array(data)
-					: new Uint8Array(await (data as Blob).arrayBuffer());
-			if (buffer.byteLength > maxSize) return;
+	try {
+		const response = await fetch(resolvedUrl, {
+			method: "GET",
+			headers: { accept: "image/*" },
+		});
 
-			const imageType = detectImageType(buffer);
-			if (!imageType) return;
+		if (!response.ok) return null;
 
-			const mimeType =
-				response.headers.get("content-type")?.split(";")[0]?.trim() ||
-				imageType;
-			const encoded = base64.encode(buffer);
-			const dataUrl = `data:${mimeType};base64,${encoded}`;
+		const contentType = response.headers.get("content-type");
+		if (
+			!contentType?.startsWith("image/") ||
+			contentType.startsWith("image/svg")
+		) {
+			return null;
+		}
 
-			setUserImageCache(userImageCache, url, dataUrl);
-			result = dataUrl;
-		},
-	});
+		const maxSize = options?.userImageMaxSize ?? DEFAULT_MAX_BYTES;
+		const contentLength = response.headers.get("content-length");
+		if (contentLength && Number(contentLength) > maxSize) {
+			return null;
+		}
 
-	return result;
+		const buffer = await readUserImageStream(response, options);
+		if (!buffer) return null;
+
+		const imageType = detectImageType(buffer);
+		if (!imageType) return null;
+
+		const mimeType = contentType.split(";")[0]?.trim() || imageType;
+		const encoded = base64.encode(buffer);
+		const dataUrl = `data:${mimeType};base64,${encoded}`;
+
+		setUserImageCache(userImageCache, url, dataUrl);
+		return dataUrl;
+	} catch {
+		return null;
+	}
 }
 
 export async function normalizeUser<U extends User & Record<string, any>>(
-	$fetch: BetterFetch,
+	baseURL: string | undefined,
 	user: U,
 ): Promise<U> {
 	const result = { ...user };
 	if (result.image) {
-		result.image = await fetchUserImage($fetch, result.image);
+		result.image = await fetchUserImage(baseURL, result.image);
 	}
 
 	return result;

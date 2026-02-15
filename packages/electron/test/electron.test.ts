@@ -3,8 +3,6 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import type { User } from "@better-auth/core/db";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { BetterFetch } from "@better-fetch/fetch";
-import { betterFetch } from "@better-fetch/fetch";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
@@ -1266,15 +1264,9 @@ describe("Electron", () => {
 			return new Response(null, { status: 404 });
 		});
 
-		const $fetch = (async (input, init) => {
-			return await betterFetch(input, {
-				...init,
-				customFetchImpl,
-			});
-		}) as BetterFetch;
-
 		beforeEach(() => {
 			vi.clearAllMocks();
+			vi.spyOn(globalThis, "fetch").mockImplementation(customFetchImpl as any);
 		});
 
 		afterEach(() => {
@@ -1285,7 +1277,7 @@ describe("Electron", () => {
 			setProcessType("browser");
 
 			const dataUrl = `data:image/png;base64,${MINIMAL_PNG_BASE64}`;
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1298,7 +1290,7 @@ describe("Electron", () => {
 		it("should reject SVG data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1312,7 +1304,7 @@ describe("Electron", () => {
 		it("should reject invalid base64 data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1327,22 +1319,20 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
 				image: "https://example.com/avatar.png",
 			} as User);
 
-			expect(customFetchImpl).toHaveBeenCalledWith(
+			expect(fetch).toHaveBeenCalledWith(
 				expect.toSatisfy(
 					(value) => `${value}` === "https://example.com/avatar.png",
 				),
 				expect.objectContaining({
 					method: "GET",
-					headers: expect.toSatisfy(
-						(headers: Headers) => headers.get("accept") === "image/*",
-					),
+					headers: { accept: "image/*" },
 				}),
 			);
 			expect(user.image).toMatch(/^data:image\/png;base64,/);
@@ -1351,7 +1341,7 @@ describe("Electron", () => {
 		it("should return null when fetch fails", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1366,7 +1356,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1381,7 +1371,7 @@ describe("Electron", () => {
 		}) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1394,7 +1384,7 @@ describe("Electron", () => {
 		it("should convert JPEG to data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1407,7 +1397,7 @@ describe("Electron", () => {
 		it("should convert GIF to data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1420,7 +1410,7 @@ describe("Electron", () => {
 		it("should convert WebP to data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1433,7 +1423,7 @@ describe("Electron", () => {
 		it("should convert BMP to data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1446,7 +1436,7 @@ describe("Electron", () => {
 		it("should convert ICO to data URL", async ({ setProcessType }) => {
 			setProcessType("browser");
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1464,7 +1454,7 @@ describe("Electron", () => {
 			const gif87aBytes = makeImageBytes([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]);
 			const dataUrl = `data:image/gif;base64,${Buffer.from(gif87aBytes).toString("base64")}`;
 
-			const user = await normalizeUser($fetch, {
+			const user = await normalizeUser(undefined, {
 				id: "1",
 				name: "Test",
 				email: "test@test.com",
@@ -1485,7 +1475,7 @@ describe("Electron", () => {
 				["http://[::1]/avatar.png"],
 				["http://[fe80::1]/avatar.png"],
 			])("should reject local origin %s", async (imageUrl) => {
-				const user = await normalizeUser($fetch, {
+				const user = await normalizeUser(undefined, {
 					id: "1",
 					name: "Test",
 					email: "test@test.com",
@@ -1501,7 +1491,7 @@ describe("Electron", () => {
 				["https://gravatar.com/avatar/abc.png"],
 				["https://8.8.8.8/avatar.png"],
 			])("should allow public origin %s", async (imageUrl) => {
-				const user = await normalizeUser($fetch, {
+				const user = await normalizeUser(undefined, {
 					id: "1",
 					name: "Test",
 					email: "test@test.com",

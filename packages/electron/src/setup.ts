@@ -55,7 +55,12 @@ export function setupMain(
 		setupCSP(clientOptions);
 	}
 	if (!cfg || cfg.scheme === true) {
-		registerProtocolScheme($fetch, opts, withGetWindowFallback(cfg?.getWindow));
+		registerProtocolScheme(
+			$fetch,
+			opts,
+			withGetWindowFallback(cfg?.getWindow),
+			clientOptions,
+		);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -78,11 +83,13 @@ export async function handleDeepLink({
 	options,
 	url,
 	getWindow,
+	clientOptions,
 }: {
 	$fetch: BetterFetch;
 	options: ElectronClientOptions;
 	url: string;
 	getWindow?: SetupMainConfig["getWindow"] | undefined;
+	clientOptions?: BetterAuthClientOptions | undefined;
 }) {
 	if (!isProcessType("browser")) {
 		throw new BetterAuthError(
@@ -127,6 +134,7 @@ export async function handleDeepLink({
 			token,
 		},
 		withGetWindowFallback(getWindow),
+		clientOptions,
 	);
 }
 
@@ -134,6 +142,7 @@ function registerProtocolScheme(
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,
 	getWindow: () => electron.BrowserWindow | null | undefined,
+	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const { scheme, privileges = {} } =
 		typeof options.protocol === "string"
@@ -202,6 +211,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					clientOptions,
 				});
 			}
 		});
@@ -213,6 +223,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					clientOptions,
 				});
 			}
 		});
@@ -227,6 +238,7 @@ function registerProtocolScheme(
 					options,
 					url: process.argv[1],
 					getWindow,
+					clientOptions,
 				});
 			}
 		});

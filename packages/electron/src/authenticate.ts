@@ -104,6 +104,7 @@ export async function authenticate(
 		token: string;
 	},
 	getWindow: () => Electron.BrowserWindow | null | undefined,
+	clientOptions?: BetterAuthClientOptions | undefined,
 ) {
 	const codeVerifier = (globalThis as any)[kCodeVerifier];
 	const state = (globalThis as any)[kState];
@@ -117,6 +118,13 @@ export async function authenticate(
 		throw new Error("State not found.");
 	}
 
+	const baseURL = getBaseURL(
+		clientOptions?.baseURL,
+		clientOptions?.basePath,
+		undefined,
+		true,
+	);
+
 	await $fetch("/electron/token", {
 		method: "POST",
 		body: {
@@ -126,7 +134,7 @@ export async function authenticate(
 		},
 		onSuccess: async (ctx) => {
 			const user = ctx.data.user
-				? await normalizeUser($fetch, ctx.data.user)
+				? await normalizeUser(baseURL, ctx.data.user)
 				: null;
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,

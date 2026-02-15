@@ -1,7 +1,8 @@
 import type { BetterAuthClientOptions, ClientStore } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { BetterFetch, BetterFetchError } from "@better-fetch/fetch";
-import type { User } from "better-auth";
+import type { User } from "@better-auth/core/db";
+import { getBaseURL } from "better-auth";
 import electron from "electron";
 import type { ElectronRequestAuthOptions } from "./authenticate";
 import { requestAuth } from "./authenticate";
@@ -98,6 +99,13 @@ export function setupBridges(
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
+	const baseURL = getBaseURL(
+		clientOptions?.baseURL,
+		clientOptions?.basePath,
+		undefined,
+		true,
+	);
+
 	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
@@ -105,7 +113,7 @@ export function setupBridges(
 		if (!target) return;
 
 		const user = state?.data?.user
-			? await normalizeUser(ctx.$fetch, state.data.user)
+			? await normalizeUser(baseURL, state.data.user)
 			: null;
 		target.send(`${prefix}user-updated`, user);
 	});
@@ -123,7 +131,7 @@ export function setupBridges(
 		);
 
 		return result.data?.user
-			? await normalizeUser(ctx.$fetch, result.data.user)
+			? await normalizeUser(baseURL, result.data.user)
 			: null;
 	});
 	ipcMain.handle(
