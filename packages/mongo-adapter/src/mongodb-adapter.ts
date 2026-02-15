@@ -632,7 +632,10 @@ export const mongodbAdapter = (
 					if (customIdGen) {
 						return data;
 					}
-					if (action !== "create") {
+					if (action !== "create" && action !== "update") {
+						return data;
+					}
+					if (data instanceof ObjectId) {
 						return data;
 					}
 					if (Array.isArray(data)) {
@@ -662,6 +665,9 @@ export const mongodbAdapter = (
 						data === null
 					) {
 						return null;
+					}
+					if (action === "update") {
+						return data;
 					}
 					const oid = new ObjectId();
 					return oid;
