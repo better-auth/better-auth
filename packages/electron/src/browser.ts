@@ -341,7 +341,7 @@ function setupBridges(
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,
-		(_evt, options?: ElectronRequestAuthOptions | undefined) =>
+		async (_evt, options?: ElectronRequestAuthOptions | undefined) =>
 			requestAuth(clientOptions, opts, options),
 	);
 	ipcMain.handle(

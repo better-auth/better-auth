@@ -87,10 +87,6 @@ export async function requestAuth(
 	await shell.openExternal(url.toString(), {
 		activate: true,
 	});
-
-	return {
-		url: url.toString(),
-	};
 }
 
 /**

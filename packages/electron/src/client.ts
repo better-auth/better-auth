@@ -15,7 +15,6 @@ import {
 	hasBetterAuthCookies,
 	hasSessionCookieChanged,
 } from "./cookies";
-import type { electron as electronPlugin } from "./index";
 import type { ExposedBridges } from "./preload";
 import type { ElectronClientOptions, Storage } from "./types/client";
 import {
@@ -183,8 +182,12 @@ export const electronClient = (options: ElectronClientOptions) => {
 				/**
 				 * Exchanges the authorization code for a session.
 				 *
-				 * This is useful when you want to manually exchange the authorization code for a session.
-				 * (for example, to fallback for deep link handling)
+				 * Use this when you need to manually complete the exchange
+				 * (e.g., when another app registered the scheme or deep linking fails).
+				 *
+				 * The authorization code is returned when the user is authorized in the browser. (`electron_authorization_code`)
+				 *
+				 * Note: Must be called after `requestAuth`, since the code verifier and state are stored when the auth flow is initiated.
 				 */
 				authenticate: async (data: ElectronAuthenticateOptions) => {
 					return await authenticate({
@@ -230,7 +233,6 @@ export const electronClient = (options: ElectronClientOptions) => {
 				},
 			};
 		},
-		$InferServerPlugin: {} as ReturnType<typeof electronPlugin>,
 	} satisfies BetterAuthClientPlugin;
 };
 

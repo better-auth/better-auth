@@ -87,12 +87,11 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		const result = await client.requestAuth();
+		await client.requestAuth();
 
 		(globalThis as any)[kCodeVerifier] = undefined;
 		(globalThis as any)[kState] = undefined;
 
-		expect(result).toEqual({ url: expect.stringContaining(options.signInURL) });
 		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
 			expect.stringContaining(options.signInURL),
 			{
