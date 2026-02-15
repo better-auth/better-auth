@@ -304,12 +304,32 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 									try {
 										// Check if user customer already exists in Stripe by email
-										const existingCustomers = await client.customers.search({
-											query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
-											limit: 1,
-										});
-
-										let stripeCustomer = existingCustomers.data[0];
+										let stripeCustomer: Stripe.Customer | undefined;
+										try {
+											const result = await client.customers.search({
+												query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
+												limit: 1,
+											});
+											stripeCustomer = result.data[0];
+										} catch {
+											// Search API unavailable in some regions, so fall back to paginated list
+											ctx.context.logger.warn(
+												"Stripe customers.search failed, falling back to customers.list",
+											);
+											for await (const customer of client.customers.list({
+												email: user.email,
+												limit: 100,
+											})) {
+												if (
+													customer.metadata?.[
+														customerMetadata.keys.customerType
+													] !== "organization"
+												) {
+													stripeCustomer = customer;
+													break;
+												}
+											}
+										}
 
 										// If user customer exists, link it to prevent duplicate creation
 										if (stripeCustomer) {
