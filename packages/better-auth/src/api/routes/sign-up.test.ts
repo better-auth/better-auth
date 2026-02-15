@@ -1,9 +1,13 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { afterEach, describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe("sign-up with custom fields", async (it) => {
+describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();
+
+	afterEach(() => {
+		mockFn.mockReset();
+	});
 	const { auth, db } = await getTestInstance(
 		{
 			account: {
@@ -43,10 +47,6 @@ describe("sign-up with custom fields", async (it) => {
 			disableTestUser: true,
 		},
 	);
-
-	afterEach(() => {
-		mockFn.mockReset();
-	});
 
 	it("should work with custom fields on account table", async () => {
 		const res = await auth.api.signUpEmail({
@@ -199,7 +199,7 @@ describe("sign-up with custom fields", async (it) => {
 	});
 });
 
-describe("sign-up CSRF protection", async (it) => {
+describe("sign-up CSRF protection", async () => {
 	const { auth } = await getTestInstance(
 		{
 			trustedOrigins: ["http://localhost:3000"],
@@ -317,7 +317,7 @@ describe("sign-up CSRF protection", async (it) => {
 	});
 });
 
-describe("sign-up with form data", async (it) => {
+describe("sign-up with form data", async () => {
 	const { auth } = await getTestInstance(
 		{
 			trustedOrigins: ["http://localhost:3000"],
@@ -413,7 +413,7 @@ describe("sign-up with form data", async (it) => {
 	});
 });
 
-describe("sign-up sendOnSignUp option behavior", async (it) => {
+describe("sign-up sendOnSignUp option behavior", async () => {
 	it("should not send verification email when sendOnSignUp is false, even with requireEmailVerification", async () => {
 		const sendVerificationEmail = vi.fn();
 		const { auth } = await getTestInstance(

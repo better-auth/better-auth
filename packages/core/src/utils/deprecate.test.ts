@@ -36,7 +36,6 @@ describe("deprecate", () => {
 		deprecatedFn();
 
 		expect(consoleWarn).toHaveBeenCalledWith("[Deprecation] test message");
-		consoleWarn.mockRestore();
 	});
 
 	it("should pass arguments and return value correctly", () => {

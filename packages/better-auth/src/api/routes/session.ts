@@ -25,6 +25,7 @@ import { symmetricDecodeJWT, verifyJWT } from "../../crypto";
 import { parseSessionOutput, parseUserOutput } from "../../db";
 import type { Prettify, Session, User } from "../../types";
 import { getDate } from "../../utils/date";
+import { isAPIError } from "../../utils/is-api-error";
 import { getShouldSkipSessionRefresh } from "../state/should-session-refresh";
 
 export const getSession = <Option extends BetterAuthOptions>() =>
@@ -441,7 +442,10 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 						 * Handle case where session update fails (e.g., concurrent deletion)
 						 */
 						deleteSessionCookie(ctx);
-						return ctx.json(null, { status: 401 });
+						throw APIError.from(
+							"UNAUTHORIZED",
+							BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+						);
 					}
 					const maxAge =
 						(updatedSession.expiresAt.valueOf() - Date.now()) / 1000;
@@ -486,6 +490,9 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 					user: User<Option["user"], Option["plugins"]>;
 				});
 			} catch (error) {
+				if (isAPIError(error)) {
+					throw error;
+				}
 				ctx.context.logger.error("INTERNAL_SERVER_ERROR", error);
 				throw APIError.from(
 					"INTERNAL_SERVER_ERROR",
