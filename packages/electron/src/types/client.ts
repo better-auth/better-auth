@@ -70,6 +70,12 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 				 */
 				enabled?: boolean | undefined;
 				/**
+				 * The protocol scheme to use for user image proxy.
+				 *
+				 * @default "user-image"
+				 */
+				scheme?: string | undefined;
+				/**
 				 * The maximum size of user images in bytes.
 				 *
 				 * @default 1024 * 1024 * 5 (5MB)

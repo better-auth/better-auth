@@ -9,7 +9,7 @@ import type {
 	ElectronClientOptions,
 	ElectronRequestAuthOptions,
 } from "./client";
-import { normalizeUser } from "./client";
+import { fetchUserImage, normalizeUserOutput } from "./user";
 import {
 	getChannelPrefixWithDelimiter,
 	isProcessType,
@@ -52,7 +52,7 @@ export function setupMain(
 	}
 
 	if (!cfg || cfg.csp === true) {
-		setupCSP(clientOptions);
+		setupCSP(clientOptions, opts);
 	}
 	if (!cfg || cfg.scheme === true) {
 		registerProtocolScheme(
@@ -67,6 +67,16 @@ export function setupMain(
 			{
 				$fetch,
 				$store,
+				getCookie,
+			},
+			opts,
+			clientOptions,
+		);
+	}
+	if (opts.userImageProxy?.enabled !== false) {
+		setupUserImageProxy(
+			{
+				$fetch,
 				getCookie,
 			},
 			opts,
@@ -245,7 +255,10 @@ function registerProtocolScheme(
 	}
 }
 
-function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
+function setupCSP(
+	clientOptions: BetterAuthClientOptions | undefined,
+	options: ElectronClientOptions,
+) {
 	app.whenReady().then(() => {
 		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
 			const origin = new URL(clientOptions?.baseURL || "", "http://localhost")
@@ -288,14 +301,16 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 				csp.set("connect-src", ["'self'", origin]);
 			}
 
+			const userImageScheme =
+				(options.userImageProxy?.scheme || "user-image") + ":";
 			if (csp.has("img-src")) {
 				const values = csp.get("img-src") || [];
-				if (!values.includes("data:")) {
-					values.push("data:");
+				if (!values.includes(userImageScheme)) {
+					values.push(userImageScheme);
 				}
 				csp.set("img-src", values);
 			} else {
-				csp.set("img-src", ["'self'", "data:"]);
+				csp.set("img-src", ["'self'", userImageScheme]);
 			}
 
 			callback({
@@ -328,7 +343,7 @@ export function setupBridges(
 		if (state.isPending === true) return;
 
 		const user = state?.data?.user
-			? await normalizeUser(clientOptions, state.data.user)
+			? await normalizeUserOutput(state.data.user)
 			: null;
 		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
@@ -346,7 +361,7 @@ export function setupBridges(
 		);
 
 		return result.data?.user
-			? await normalizeUser(clientOptions, result.data.user)
+			? await normalizeUserOutput(result.data.user)
 			: null;
 	});
 	ipcMain.handle(
@@ -362,6 +377,92 @@ export function setupBridges(
 				cookie: ctx.getCookie(),
 				"content-type": "application/json",
 			},
+		});
+	});
+}
+
+function setupUserImageProxy(
+	ctx: {
+		$fetch: BetterFetch;
+		getCookie: () => string;
+	},
+	opts: ElectronClientOptions,
+	clientOptions: BetterAuthClientOptions | undefined,
+) {
+	const hasAdminPlugin =
+		clientOptions?.plugins?.some((plugin) => plugin.id === "admin") ?? false;
+	const scheme = opts.userImageProxy?.scheme || "user-image";
+
+	protocol.registerSchemesAsPrivileged([
+		{
+			scheme,
+			privileges: {
+				standard: false,
+				secure: true,
+				bypassCSP: true,
+				stream: true,
+			},
+		},
+	]);
+
+	app.whenReady().then(() => {
+		protocol.handle(scheme, async (request) => {
+			try {
+				const url = new URL(request.url);
+				const userId = url.hostname;
+				if (!userId) {
+					return new Response(null, { status: 400 });
+				}
+
+				const headers = {
+					cookie: ctx.getCookie(),
+					"content-type": "application/json",
+				};
+
+				let imageUrl: string | null | undefined = null;
+
+				// Check if the requested user is the current session user
+				const sessionResult = await ctx.$fetch<{
+					user: User & Record<string, any>;
+				}>("/get-session", {
+					method: "GET",
+					headers,
+				});
+
+				if (sessionResult.data?.user?.id === userId) {
+					imageUrl = sessionResult.data.user.image;
+				} else if (hasAdminPlugin) {
+					const userResult = await ctx.$fetch<{
+						user: User & Record<string, any>;
+					}>(`/admin/get-user?id=${encodeURIComponent(userId)}`, {
+						method: "GET",
+						headers,
+					});
+					imageUrl = userResult.data?.user?.image;
+				}
+
+				if (!imageUrl) {
+					return new Response(null, { status: 404 });
+				}
+
+				const result = await fetchUserImage(
+					clientOptions?.baseURL,
+					imageUrl,
+					opts,
+				);
+				if (!result) {
+					return new Response(null, { status: 404 });
+				}
+
+				return new Response(result.stream, {
+					headers: {
+						"content-type": result.mimeType,
+						"cache-control": "private, max-age=3600",
+					},
+				});
+			} catch {
+				return new Response(null, { status: 500 });
+			}
 		});
 	});
 }

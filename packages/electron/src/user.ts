@@ -1,75 +1,33 @@
-import type { BetterAuthClientOptions } from "@better-auth/core";
 import type { User } from "@better-auth/core/db";
 import { isDevelopment } from "@better-auth/core/env";
 import { base64 } from "@better-auth/utils/base64";
-import { getBaseURL } from "better-auth";
 import type { ElectronClientOptions } from "./client";
 
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 5; // 5MB
-const MAX_CACHE_SIZE = 100;
-const userImageCache = new Map<string, string>();
 
-function setUserImageCache(key: string, value: string) {
-	if (userImageCache.size >= MAX_CACHE_SIZE) {
-		const firstKey = userImageCache.keys().next().value;
-		if (firstKey) {
-			userImageCache.delete(firstKey);
-		}
-	}
-	userImageCache.set(key, value);
-}
+export type FetchUserImageResult = {
+	stream: ReadableStream<Uint8Array>;
+	mimeType: string;
+};
 
-async function readUserImageStream(
-	response: Response,
-	maxSize: number = DEFAULT_MAX_BYTES,
-): Promise<Uint8Array | null> {
-	const body = response.body;
-	if (!body) return null;
-
-	const reader = body.getReader();
-	const chunks: Uint8Array[] = [];
-	let totalSize = 0;
-
-	try {
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			totalSize += value.byteLength;
-			if (totalSize > maxSize) {
-				reader.cancel();
-				return null;
-			}
-			chunks.push(value);
-		}
-	} catch {
-		return null;
-	}
-
-	if (chunks.length === 1) return chunks[0] ?? null;
-
-	const result = new Uint8Array(totalSize);
-	let offset = 0;
-	for (const chunk of chunks) {
-		result.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-	return result;
-}
-
-async function fetchUserImage(
+export async function fetchUserImage(
 	baseURL: string | undefined,
 	url: string,
 	options?: Pick<ElectronClientOptions, "userImageProxy"> | undefined,
-): Promise<string | null> {
-	if (
-		options?.userImageProxy?.enabled === false ||
-		isValidDataImageUrl(url, options?.userImageProxy?.maxSize)
-	) {
-		return url;
-	}
+): Promise<FetchUserImageResult | null> {
+	if (options?.userImageProxy?.enabled === false) return null;
 
-	const cached = userImageCache.get(url);
-	if (cached) return cached;
+	// Handle data URLs (e.g. base64-encoded image stored in the DB)
+	const decoded = decodeDataImageUrl(url, options);
+	if (decoded) {
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(decoded.bytes);
+				controller.close();
+			},
+		});
+		return { stream, mimeType: decoded.mimeType };
+	}
 
 	// Validate and resolve URL
 	let resolvedUrl: string;
@@ -92,67 +50,111 @@ async function fetchUserImage(
 		return null;
 	}
 
-	try {
-		const {
-			maxSize = DEFAULT_MAX_BYTES,
-			accept = "image/*",
-			customValidator: validateImage = detectImageType,
-		} = options?.userImageProxy ?? {};
-		const response = await fetch(resolvedUrl, {
-			method: "GET",
-			headers: { accept },
-		});
+	const {
+		maxSize = DEFAULT_MAX_BYTES,
+		accept = "image/*",
+		customValidator: validateImage = detectImageType,
+	} = options?.userImageProxy ?? {};
 
-		if (!response.ok) return null;
+	const response = await fetch(resolvedUrl, {
+		method: "GET",
+		headers: { accept },
+	});
 
-		const contentType = response.headers.get("content-type");
-		if (
-			!contentType?.startsWith("image/") ||
-			contentType.startsWith("image/svg")
-		) {
-			return null;
-		}
+	if (!response.ok) return null;
 
-		const contentLength = response.headers.get("content-length");
-		if (contentLength && Number(contentLength) > maxSize) {
-			return null;
-		}
-
-		const buffer = await readUserImageStream(response, maxSize);
-		if (!buffer) return null;
-
-		const imageType = validateImage(buffer);
-		if (!imageType) return null;
-
-		const mimeType = contentType.split(";")[0]?.trim() || imageType;
-		const encoded = base64.encode(buffer);
-		const dataUrl = `data:${mimeType};base64,${encoded}`;
-
-		setUserImageCache(url, dataUrl);
-		return dataUrl;
-	} catch {
+	const contentType = response.headers.get("content-type");
+	if (
+		!contentType?.startsWith("image/") ||
+		contentType.startsWith("image/svg")
+	) {
 		return null;
 	}
+
+	const contentLength = response.headers.get("content-length");
+	if (contentLength && Number(contentLength) > maxSize) {
+		return null;
+	}
+
+	const body = response.body;
+	if (!body) return null;
+
+	const mimeType = contentType.split(";")[0]?.trim() || "image/png";
+	const reader = body.getReader();
+	let totalSize = 0;
+	let firstChunk = true;
+
+	const stream = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			const { done, value } = await reader.read();
+			if (done) {
+				controller.close();
+				return;
+			}
+
+			totalSize += value.byteLength;
+			if (totalSize > maxSize) {
+				reader.cancel();
+				controller.error(new Error("Image exceeds maximum size"));
+				return;
+			}
+
+			if (firstChunk) {
+				firstChunk = false;
+				if (!validateImage(value)) {
+					reader.cancel();
+					controller.error(new Error("Invalid image type"));
+					return;
+				}
+			}
+
+			controller.enqueue(value);
+		},
+		cancel() {
+			reader.cancel();
+		},
+	});
+
+	return { stream, mimeType };
 }
 
-export async function normalizeUser<U extends User & Record<string, any>>(
-	clientOptions:
-		| Pick<BetterAuthClientOptions, "baseURL" | "basePath">
-		| undefined,
+export async function normalizeUserOutput<U extends User & Record<string, any>>(
 	user: U,
+	options?: ElectronClientOptions | undefined,
 ): Promise<U> {
-	const baseURL = getBaseURL(
-		clientOptions?.baseURL,
-		clientOptions?.basePath,
-		undefined,
-		true,
-	);
 	const result = { ...user };
 	if (result.image) {
-		result.image = await fetchUserImage(baseURL, result.image);
+		result.image = `${options?.userImageProxy?.scheme || "user-image"}://${result.id}`;
 	}
 
 	return result;
+}
+
+function decodeDataImageUrl(
+	url: string,
+	options?: Pick<ElectronClientOptions, "userImageProxy"> | undefined,
+): { bytes: Uint8Array; mimeType: string } | null {
+	const maxSize = options?.userImageProxy?.maxSize ?? DEFAULT_MAX_BYTES;
+	const maxBase64Size = Math.ceil((maxSize * 4) / 3);
+	const lower = url.toLowerCase();
+	if (!lower.startsWith("data:image/") || lower.startsWith("data:image/svg")) {
+		return null;
+	}
+	const base64Marker = ";base64,";
+	const markerIdx = lower.indexOf(base64Marker);
+	if (markerIdx === -1) return null;
+	const mimeType = url.substring("data:".length, markerIdx);
+	const payload = url.substring(markerIdx + base64Marker.length);
+	if (!payload || payload.length > maxBase64Size) return null;
+	try {
+		const bytes = base64.decode(payload);
+		const { customValidator: validateImage = detectImageType } =
+			options?.userImageProxy ?? {};
+		if (!validateImage(bytes)) return null;
+		return { bytes, mimeType };
+	} catch {
+		return null;
+	}
 }
 
 function isLocalOrigin(parsed: URL): boolean {
@@ -177,28 +179,6 @@ function isLocalOrigin(parsed: URL): boolean {
 		return true;
 	if (/^fe[89ab][0-9a-f]/i.test(h)) return true;
 	return false;
-}
-
-function isValidDataImageUrl(
-	url: string,
-	maxSize: number = DEFAULT_MAX_BYTES,
-): boolean {
-	const maxBase64Size = Math.ceil((maxSize * 4) / 3);
-	const lower = url.toLowerCase();
-	if (!lower.startsWith("data:image/") || lower.startsWith("data:image/svg")) {
-		return false;
-	}
-	const base64Marker = ";base64,";
-	const markerIdx = lower.indexOf(base64Marker);
-	if (markerIdx === -1) return false;
-	const payload = url.slice(markerIdx + base64Marker.length);
-	if (payload.length === 0 || payload.length > maxBase64Size) return false;
-	try {
-		const decoded = base64.decode(payload);
-		return detectImageType(decoded) !== null;
-	} catch {
-		return false;
-	}
 }
 
 type SupportedImageType =
