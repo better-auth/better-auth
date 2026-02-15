@@ -50,11 +50,13 @@ export function setupMain(
 		);
 	}
 
+	const getWindow = withGetWindowFallback(cfg?.getWindow);
+
 	if (!cfg || cfg.csp === true) {
 		setupCSP(clientOptions);
 	}
 	if (!cfg || cfg.scheme === true) {
-		registerProtocolScheme($fetch, opts, withGetWindowFallback(cfg?.getWindow));
+		registerProtocolScheme($fetch, opts, getWindow);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -62,6 +64,7 @@ export function setupMain(
 				$fetch,
 				$store,
 				getCookie,
+				getWindow,
 			},
 			opts,
 			clientOptions,
@@ -119,14 +122,15 @@ export async function handleDeepLink({
 
 	const token = hash.substring("#token=".length);
 
-	await authenticate(
+	await authenticate({
 		$fetch,
-		options,
-		{
-			token,
+		fetchOptions: {
+			throw: true,
 		},
-		withGetWindowFallback(getWindow),
-	);
+		token,
+		getWindow: withGetWindowFallback(getWindow),
+		options,
+	});
 }
 
 function registerProtocolScheme(
@@ -290,23 +294,29 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 /**
  * Sets up IPC bridges in the main process.
  */
-export function setupBridges(
+function setupBridges(
 	ctx: {
 		$fetch: BetterFetch;
 		$store: ClientStore | null;
 		getCookie: () => string;
+		getWindow: () => electron.BrowserWindow | null | undefined;
 	},
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
-	ctx.$store?.atoms.session?.subscribe((state) => {
+	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
+
+		let user = state?.data?.user ?? null;
+		if (user !== null && typeof opts.sanitizeUser === "function") {
+			user = await opts.sanitizeUser(user);
+		}
 
 		webContents
 			.getFocusedWebContents()
-			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
+			?.send(`${prefix}user-updated`, user ?? null);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
@@ -321,12 +331,29 @@ export function setupBridges(
 			},
 		);
 
-		return result.data?.user ?? null;
+		let user: (User & Record<string, any>) | null | undefined =
+			result?.data?.user ?? null;
+		if (user !== null && typeof opts.sanitizeUser === "function") {
+			user = await opts.sanitizeUser(user);
+		}
+
+		return user ?? null;
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,
 		(_evt, options?: ElectronRequestAuthOptions | undefined) =>
 			requestAuth(clientOptions, opts, options),
+	);
+	ipcMain.handle(
+		`${prefix}authenticate`,
+		async (_evt, data: { token: string }) => {
+			void (await authenticate({
+				$fetch: ctx.$fetch,
+				getWindow: ctx.getWindow,
+				options: opts,
+				token: data.token,
+			}));
+		},
 	);
 	ipcMain.handle(`${prefix}signOut`, async () => {
 		await ctx.$fetch("/sign-out", {

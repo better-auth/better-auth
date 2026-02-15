@@ -1,3 +1,5 @@
+import type { Awaitable } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import type { ElectronSharedOptions } from "./options";
 
 export interface Storage {
@@ -58,6 +60,16 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	 * @default "better-auth"
 	 */
 	storagePrefix?: string | undefined;
+	/**
+	 * A function to sanitize the user object before it is sent to the renderer process.
+	 *
+	 * @default undefined
+	 */
+	sanitizeUser?:
+		| ((
+				user: User & Record<string, any>,
+		  ) => Awaitable<User & Record<string, any>>)
+		| undefined;
 	/**
 	 * Prefix(es) for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent

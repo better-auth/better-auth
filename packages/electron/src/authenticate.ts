@@ -1,8 +1,9 @@
 import type { BetterAuthClientOptions } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import type { BetterFetch } from "@better-fetch/fetch";
+import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
 import { APIError, getBaseURL } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
@@ -83,51 +84,74 @@ export async function requestAuth(
 	url.searchParams.set("code_challenge_method", "S256");
 	url.searchParams.set("state", state);
 
-	if (url === null) {
-		throw new Error("Failed to construct sign-in URL.");
-	}
-
 	await shell.openExternal(url.toString(), {
 		activate: true,
 	});
+
+	return {
+		url: url.toString(),
+	};
 }
 
 /**
  * Exchanges the authorization code for a session.
  */
-export async function authenticate(
-	$fetch: BetterFetch,
-	options: ElectronClientOptions,
-	body: {
-		token: string;
-	},
-	getWindow: () => Electron.BrowserWindow | null | undefined,
-) {
+export interface ElectronAuthenticateOptions {
+	fetchOptions?: Omit<CreateFetchOption, "method"> | undefined;
+	token: string;
+}
+export async function authenticate({
+	$fetch,
+	options,
+	token,
+	getWindow,
+	fetchOptions,
+}: ElectronAuthenticateOptions & {
+	$fetch: BetterFetch;
+	options: ElectronClientOptions;
+	getWindow: () => Electron.BrowserWindow | null | undefined;
+}) {
+	if (!isProcessType("browser")) {
+		throw new BetterAuthError(
+			"`authenticate` can only be called in the main process.",
+		);
+	}
+
 	const codeVerifier = (globalThis as any)[kCodeVerifier];
 	const state = (globalThis as any)[kState];
 	(globalThis as any)[kCodeVerifier] = undefined;
 	(globalThis as any)[kState] = undefined;
 
 	if (!codeVerifier) {
-		throw new Error("Code verifier not found.");
+		throw new BetterAuthError("Code verifier not found.");
 	}
 	if (!state) {
-		throw new Error("State not found.");
+		throw new BetterAuthError("State not found.");
 	}
 
-	await $fetch("/electron/token", {
+	return await $fetch<{
+		token: string;
+		user: User & Record<string, any>;
+	}>("/electron/token", {
 		method: "POST",
+		...fetchOptions,
 		body: {
-			...body,
+			...(fetchOptions?.body || {}),
+			token,
 			state,
 			code_verifier: codeVerifier,
 		},
-		onSuccess: (ctx) => {
+		onSuccess: async (ctx) => {
+			let user: User & Record<string, any> = ctx.data.user;
+			if (user !== null && typeof options.sanitizeUser === "function") {
+				user = await options.sanitizeUser(user);
+			}
+
+			await fetchOptions?.onSuccess?.(ctx);
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
-				ctx.data.user,
+				user,
 			);
 		},
-		throw: true,
 	});
 }

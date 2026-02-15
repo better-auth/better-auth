@@ -45,6 +45,9 @@ function exposeBridges(opts: SetupRendererConfig) {
 		signOut: async () => {
 			await ipcRenderer.invoke(`${prefix}signOut`);
 		},
+		authenticate: async (data: { token: string }) => {
+			await ipcRenderer.invoke(`${prefix}authenticate`, data);
+		},
 		onAuthenticated: (
 			callback: (user: User & Record<string, any>) => unknown,
 		) => {
