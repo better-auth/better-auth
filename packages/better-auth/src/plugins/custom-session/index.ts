@@ -9,6 +9,7 @@ import {
 } from "@better-auth/core/api";
 import * as z from "zod";
 import { getSession } from "../../api";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import type { InferSession, InferUser } from "../../types";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
@@ -120,11 +121,21 @@ export const customSession = <
 					}
 					const fnResult = await fn(session.response as any, ctx);
 
-					const setCookie = session.headers.get("set-cookie");
-					if (setCookie) {
-						ctx.setHeader("set-cookie", setCookie);
-						session.headers.delete("set-cookie");
+					for (const cookieStr of session.headers.getSetCookie()) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						parsed.forEach((attrs, name) => {
+							ctx.setCookie(name, attrs.value, {
+								maxAge: attrs["max-age"],
+								expires: attrs.expires,
+								domain: attrs.domain,
+								path: attrs.path,
+								secure: attrs.secure,
+								httpOnly: attrs.httponly,
+								sameSite: attrs.samesite,
+							});
+						});
 					}
+					session.headers.delete("set-cookie");
 
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
