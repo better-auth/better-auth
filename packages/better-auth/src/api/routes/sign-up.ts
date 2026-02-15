@@ -7,13 +7,14 @@ import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import type { AdditionalUserFieldsInput, InferUser, User } from "../../types";
+import type { AdditionalUserFieldsInput, User } from "../../types";
 import { isAPIError } from "../../utils/is-api-error";
+import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
 const signUpEmailBodySchema = z
 	.object({
-		name: z.string().nonempty(),
+		name: z.string(),
 		email: z.email(),
 		password: z.string().nonempty(),
 		image: z.string().optional(),
@@ -28,8 +29,13 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 		{
 			method: "POST",
 			operationId: "signUpWithEmailAndPassword",
+			use: [formCsrfMiddleware],
 			body: signUpEmailBodySchema,
 			metadata: {
+				allowedMediaTypes: [
+					"application/x-www-form-urlencoded",
+					"application/json",
+				],
 				$Infer: {
 					body: {} as {
 						name: string;
@@ -41,7 +47,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					} & AdditionalUserFieldsInput<O>,
 					returned: {} as {
 						token: string | null;
-						user: InferUser<O>;
+						user: User<O["user"], O["plugins"]>;
 					},
 				},
 				openapi: {
@@ -203,6 +209,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_EMAIL);
 				}
 
+				if (!password || typeof password !== "string") {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+				}
+
 				const minPasswordLength = ctx.context.password.config.minPasswordLength;
 				if (password.length < minPasswordLength) {
 					ctx.context.logger.error("Password is too short");
@@ -280,10 +290,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					accountId: createdUser.id,
 					password: hash,
 				});
-				if (
-					ctx.context.options.emailVerification?.sendOnSignUp ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
-				) {
+				const shouldSendVerificationEmail =
+					ctx.context.options.emailVerification?.sendOnSignUp ??
+					ctx.context.options.emailAndPassword.requireEmailVerification;
+				if (shouldSendVerificationEmail) {
 					const token = await createEmailVerificationToken(
 						ctx.context.secret,
 						createdUser.email,
@@ -315,10 +325,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				) {
 					return ctx.json({
 						token: null,
-						user: parseUserOutput(
-							ctx.context.options,
-							createdUser,
-						) as InferUser<O>,
+						user: parseUserOutput(ctx.context.options, createdUser) as User<
+							O["user"],
+							O["plugins"]
+						>,
 					});
 				}
 
@@ -342,10 +352,10 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				);
 				return ctx.json({
 					token: session.token,
-					user: parseUserOutput(
-						ctx.context.options,
-						createdUser,
-					) as InferUser<O>,
+					user: parseUserOutput(ctx.context.options, createdUser) as User<
+						O["user"],
+						O["plugins"]
+					>,
 				});
 			});
 		},

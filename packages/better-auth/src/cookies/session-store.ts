@@ -1,7 +1,7 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import type { Account } from "@better-auth/core/db";
 import type { InternalLogger } from "@better-auth/core/env";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import type { CookieOptions } from "better-call";
 import * as z from "zod";
 import { symmetricDecodeJWT, symmetricEncodeJWT } from "../crypto";
@@ -16,7 +16,7 @@ const CHUNK_SIZE = ALLOWED_COOKIE_SIZE - ESTIMATED_EMPTY_COOKIE_SIZE;
 interface Cookie {
 	name: string;
 	value: string;
-	options: CookieOptions;
+	attributes: CookieOptions;
 }
 
 type Chunks = Record<string, string>;
@@ -135,7 +135,7 @@ function getCleanCookies(
 		cleanedChunks[name] = {
 			name,
 			value: "",
-			options: { ...cookieOptions, maxAge: 0 },
+			attributes: { ...cookieOptions, maxAge: 0 },
 		};
 	}
 	return cleanedChunks;
@@ -191,7 +191,7 @@ const storeFactory =
 					{
 						name: cookieName,
 						value,
-						options: { ...cookieOptions, ...options },
+						attributes: { ...cookieOptions, ...options },
 					},
 					chunks,
 					logger,
@@ -222,7 +222,7 @@ const storeFactory =
 			 */
 			setCookies(cookies: Cookie[]): void {
 				for (const cookie of cookies) {
-					ctx.setCookie(cookie.name, cookie.value, cookie.options);
+					ctx.setCookie(cookie.name, cookie.value, cookie.attributes);
 				}
 			},
 		};
@@ -282,7 +282,7 @@ export async function setAccountCookie(
 	const accountDataCookie = c.context.authCookies.accountData;
 	const options = {
 		maxAge: 60 * 5,
-		...accountDataCookie.options,
+		...accountDataCookie.attributes,
 	};
 	const data = await symmetricEncodeJWT(
 		accountData,

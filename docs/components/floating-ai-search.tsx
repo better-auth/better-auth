@@ -79,6 +79,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 
 	const onStart = (e?: SyntheticEvent) => {
 		e?.preventDefault();
+		if (!input.trim() || isLoading) return;
 		void sendMessage({ text: input });
 		setInput("");
 	};
@@ -121,6 +122,10 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 					}}
 					onKeyDown={(event) => {
 						if (!event.shiftKey && event.key === "Enter") {
+							if (!input.trim() || isLoading) {
+								event.preventDefault();
+								return;
+							}
 							onStart(event);
 						}
 					}}
@@ -149,7 +154,7 @@ function SearchAIInput(props: ComponentProps<"form"> & { isMobile?: boolean }) {
 								className: "mt-2 rounded-full transition-all",
 							}),
 						)}
-						disabled={input.length === 0}
+						disabled={!input.trim() || isLoading}
 					>
 						<Send className="size-4" />
 					</button>

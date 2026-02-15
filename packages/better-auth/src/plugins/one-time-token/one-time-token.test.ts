@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { isAPIError } from "../../utils/is-api-error";
 import { oneTimeToken } from ".";
@@ -16,6 +16,11 @@ describe("One-time token", async () => {
 			},
 		},
 	);
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should work", async () => {
 		const { headers } = await signInWithTestUser();
 		const response = await auth.api.generateOneTimeToken({

@@ -6,12 +6,13 @@ import {
 	runWithRequestState,
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
+import { APIError } from "@better-auth/core/error";
 import type {
 	EndpointContext,
 	EndpointOptions,
 	InputContext,
 } from "better-call";
-import { toResponse } from "better-call";
+import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
 import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 
@@ -33,6 +34,11 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 		return true;
 	}
 });
+
+const hooksSourceWeakMap = new WeakMap<
+	AuthMiddleware,
+	`user` | `plugin:${string}`
+>();
 
 type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
@@ -204,7 +210,22 @@ async function runBeforeHooks(
 	let modifiedContext: Partial<InternalContext> = {};
 
 	for (const hook of hooks) {
-		if (hook.matcher(context)) {
+		let matched = false;
+		try {
+			matched = hook.matcher(context);
+		} catch (error) {
+			// manually handle unexpected errors during hook matcher execution to prevent accidental exposure of internal details
+			// Also provides debug information about which plugin the hook failed and error info
+			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
+			context.context.logger.error(
+				`An error occurred during ${hookSource} hook matcher execution:`,
+				error,
+			);
+			throw new APIError("INTERNAL_SERVER_ERROR", {
+				message: `An error occurred during hook matcher execution. Check the logs for more details.`,
+			});
+		}
+		if (matched) {
 			const result = await hook
 				.handler({
 					...context,
@@ -255,13 +276,20 @@ async function runAfterHooks(
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
 				if (isAPIError(e)) {
+					const headers = (e as any)[kAPIErrorHeaderSymbol] as
+						| Headers
+						| undefined;
 					if (shouldPublishLog(context.context.logger.level, "debug")) {
 						// inherit stack from errorStack if debug mode is enabled
 						e.stack = e.errorStack;
 					}
 					return {
 						response: e,
-						headers: e.headers ? new Headers(e.headers) : null,
+						headers: headers
+							? headers
+							: e.headers
+								? new Headers(e.headers)
+								: null,
 					};
 				}
 				throw e;
@@ -305,33 +333,29 @@ function getHooks(authContext: AuthContext) {
 		matcher: (context: HookEndpointContext) => boolean;
 		handler: AuthMiddleware;
 	}[] = [];
-	if (authContext.options.hooks?.before) {
+	const beforeHookHandler = authContext.options.hooks?.before;
+	if (beforeHookHandler) {
+		hooksSourceWeakMap.set(beforeHookHandler, "user");
 		beforeHooks.push({
 			matcher: () => true,
-			handler: authContext.options.hooks.before,
+			handler: beforeHookHandler,
 		});
 	}
-	if (authContext.options.hooks?.after) {
+	const afterHookHandler = authContext.options.hooks?.after;
+	if (afterHookHandler) {
+		hooksSourceWeakMap.set(afterHookHandler, "user");
 		afterHooks.push({
 			matcher: () => true,
-			handler: authContext.options.hooks.after,
+			handler: afterHookHandler,
 		});
 	}
 	const pluginBeforeHooks = plugins
-		.map((plugin) => {
-			if (plugin.hooks?.before) {
-				return plugin.hooks.before;
-			}
-		})
-		.filter((plugin) => plugin !== undefined)
+		.filter((plugin) => plugin.hooks?.before)
+		.map((plugin) => plugin.hooks?.before!)
 		.flat();
 	const pluginAfterHooks = plugins
-		.map((plugin) => {
-			if (plugin.hooks?.after) {
-				return plugin.hooks.after;
-			}
-		})
-		.filter((plugin) => plugin !== undefined)
+		.filter((plugin) => plugin.hooks?.after)
+		.map((plugin) => plugin.hooks?.after!)
 		.flat();
 
 	/**

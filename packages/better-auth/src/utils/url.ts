@@ -27,7 +27,9 @@ function assertHasProtocol(url: string): void {
 		}
 		throw new BetterAuthError(
 			`Invalid base URL: ${url}. Please provide a valid base URL.`,
-			String(error),
+			{
+				cause: error,
+			},
 		);
 	}
 }

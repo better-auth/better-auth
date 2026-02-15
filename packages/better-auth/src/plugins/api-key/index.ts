@@ -12,6 +12,14 @@ import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"api-key": {
+			creator: typeof apiKey;
+		};
+	}
+}
+
 export const defaultKeyHasher = async (key: string) => {
 	const hash = await createHash("SHA-256").digest(
 		new TextEncoder().encode(key),

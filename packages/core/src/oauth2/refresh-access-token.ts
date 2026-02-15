@@ -1,7 +1,34 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
+import type { AwaitableFunction } from "../types";
 import type { OAuth2Tokens, ProviderOptions } from "./oauth-provider";
 
+export async function refreshAccessTokenRequest({
+	refreshToken,
+	options,
+	authentication,
+	extraParams,
+	resource,
+}: {
+	refreshToken: string;
+	options: AwaitableFunction<Partial<ProviderOptions>>;
+	authentication?: ("basic" | "post") | undefined;
+	extraParams?: Record<string, string> | undefined;
+	resource?: (string | string[]) | undefined;
+}) {
+	options = typeof options === "function" ? await options() : options;
+	return createRefreshAccessTokenRequest({
+		refreshToken,
+		options,
+		authentication,
+		extraParams,
+		resource,
+	});
+}
+
+/**
+ * @deprecated use async'd refreshAccessTokenRequest instead
+ */
 export function createRefreshAccessTokenRequest({
 	refreshToken,
 	options,
@@ -10,7 +37,7 @@ export function createRefreshAccessTokenRequest({
 	resource,
 }: {
 	refreshToken: string;
-	options: Partial<ProviderOptions>;
+	options: ProviderOptions;
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
 	resource?: (string | string[]) | undefined;
@@ -80,10 +107,8 @@ export async function refreshAccessToken({
 	tokenEndpoint: string;
 	authentication?: ("basic" | "post") | undefined;
 	extraParams?: Record<string, string> | undefined;
-	/** @deprecated always "refresh_token" */
-	grantType?: string | undefined;
 }): Promise<OAuth2Tokens> {
-	const { body, headers } = createRefreshAccessTokenRequest({
+	const { body, headers } = await createRefreshAccessTokenRequest({
 		refreshToken,
 		options,
 		authentication,
@@ -94,6 +119,7 @@ export async function refreshAccessToken({
 		access_token: string;
 		refresh_token?: string | undefined;
 		expires_in?: number | undefined;
+		refresh_token_expires_in?: number | undefined;
 		token_type?: string | undefined;
 		scope?: string | undefined;
 		id_token?: string | undefined;
@@ -117,6 +143,13 @@ export async function refreshAccessToken({
 		const now = new Date();
 		tokens.accessTokenExpiresAt = new Date(
 			now.getTime() + data.expires_in * 1000,
+		);
+	}
+
+	if (data.refresh_token_expires_in) {
+		const now = new Date();
+		tokens.refreshTokenExpiresAt = new Date(
+			now.getTime() + data.refresh_token_expires_in * 1000,
 		);
 	}
 

@@ -1,0 +1,10 @@
+{
+  "name": "@better-auth-test/fixtures-esbuild",
+  "private": true,
+  "dependencies": {
+    "better-auth": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.2"
+  }
+}

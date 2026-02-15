@@ -47,7 +47,7 @@ function transform(
 	separator: string | boolean = true,
 ): string {
 	if (Array.isArray(pattern)) {
-		let regExpPatterns = pattern.map((p) => `^${transform(p, separator)}$`);
+		const regExpPatterns = pattern.map((p) => `^${transform(p, separator)}$`);
 		return `(?:${regExpPatterns.join("|")})`;
 	}
 
@@ -88,15 +88,15 @@ function transform(
 	// `foo/bar` will match `foo/bar//`
 	//
 	// So we use different quantifiers depending on the index of a segment.
-	let requiredSeparator = separator ? `${separatorMatcher}+?` : "";
-	let optionalSeparator = separator ? `${separatorMatcher}*?` : "";
+	const requiredSeparator = separator ? `${separatorMatcher}+?` : "";
+	const optionalSeparator = separator ? `${separatorMatcher}*?` : "";
 
-	let segments = separator ? pattern.split(separatorSplitter) : [pattern];
+	const segments = separator ? pattern.split(separatorSplitter) : [pattern];
 	let result = "";
 
 	for (let s = 0; s < segments.length; s++) {
-		let segment = segments[s]!;
-		let nextSegment = segments[s + 1]!;
+		const segment = segments[s]!;
+		const nextSegment = segments[s + 1]!;
 		let currentSeparator = "";
 
 		if (!segment && s > 0) {
@@ -122,7 +122,7 @@ function transform(
 		}
 
 		for (let c = 0; c < segment.length; c++) {
-			let char = segment[c]!;
+			const char = segment[c]!;
 
 			if (char === "\\") {
 				if (c < segment.length - 1) {
@@ -233,10 +233,10 @@ function wildcardMatch(
 		);
 	}
 
-	let regexpPattern = transform(pattern, options.separator);
-	let regexp = new RegExp(`^${regexpPattern}$`, options.flags);
+	const regexpPattern = transform(pattern, options.separator);
+	const regexp = new RegExp(`^${regexpPattern}$`, options.flags);
 
-	let fn = isMatch.bind(null, regexp) as isMatch;
+	const fn = isMatch.bind(null, regexp) as isMatch;
 	fn.options = options;
 	fn.pattern = pattern;
 	fn.regexp = regexp;

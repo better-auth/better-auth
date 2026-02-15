@@ -1,7 +1,6 @@
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import { STRIPE_ERROR_CODES } from "./error-codes";
-import type { stripe } from "./index";
-
+import type { StripePlan, stripe } from "./index";
 export const stripeClient = <
 	O extends {
 		subscription: boolean;
@@ -19,7 +18,7 @@ export const stripeClient = <
 							stripeWebhookSecret: string;
 							subscription: {
 								enabled: true;
-								plans: [];
+								plans: StripePlan[];
 							};
 						}
 					: {
@@ -30,6 +29,7 @@ export const stripeClient = <
 		>,
 		pathMethods: {
 			"/subscription/billing-portal": "POST",
+			"/subscription/restore": "POST",
 		},
 		$ERROR_CODES: STRIPE_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;

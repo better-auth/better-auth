@@ -1,5 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins/jwt";
+import type { JWSAlgorithms, JwtOptions } from "better-auth/plugins";
+import { validateIssuerUrl } from "./authorize";
 import type { OAuthOptions, Scope } from "./types";
 import type {
 	AuthServerMetadata,
@@ -22,12 +23,13 @@ export function authServerMetadata(
 	const baseURL = ctx.context.baseURL;
 	const metadata: AuthServerMetadata = {
 		scopes_supported: overrides?.scopes_supported,
-		issuer: opts?.jwt?.issuer ?? baseURL,
+		issuer: validateIssuerUrl(opts?.jwt?.issuer ?? baseURL),
 		authorization_endpoint: `${baseURL}/oauth2/authorize`,
 		token_endpoint: `${baseURL}/oauth2/token`,
 		jwks_uri: overrides?.jwt_disabled
 			? undefined
-			: (opts?.jwks?.remoteUrl ?? `${baseURL}/jwks`),
+			: (opts?.jwks?.remoteUrl ??
+				`${baseURL}${opts?.jwks?.jwksPath ?? "/jwks"}`),
 		registration_endpoint: `${baseURL}/oauth2/register`,
 		introspection_endpoint: `${baseURL}/oauth2/introspect`,
 		revocation_endpoint: `${baseURL}/oauth2/revoke`,
@@ -58,6 +60,7 @@ export function authServerMetadata(
 			"client_secret_post",
 		],
 		code_challenge_methods_supported: ["S256"],
+		authorization_response_iss_parameter_supported: true,
 	};
 	return metadata;
 }

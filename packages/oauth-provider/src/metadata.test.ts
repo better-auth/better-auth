@@ -1,9 +1,8 @@
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
@@ -120,9 +119,7 @@ describe("oauth metadata", async () => {
 				scopes,
 			},
 		});
-		await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(
-			new APIError("NOT_FOUND"),
-		);
+		await expect(auth.api.getOpenIdConfig()).rejects.toThrowError(APIError);
 		const oauthMetadata = await auth.api.getOAuthServerConfig();
 		expect(oauthMetadata).toMatchObject({
 			scopes_supported: scopes,

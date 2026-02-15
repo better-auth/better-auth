@@ -68,6 +68,45 @@ import type {
 } from "./schema";
 import type { OrganizationOptions } from "./types";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		organization: {
+			creator: OrganizationCreator;
+		};
+	}
+}
+
+export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
+	id: "organization";
+	endpoints: OrganizationEndpoints<Options>;
+	schema: OrganizationSchema<Options>;
+	$Infer: {
+		Organization: InferOrganization<Options>;
+		Invitation: InferInvitation<Options>;
+		Member: InferMember<Options>;
+		Team: Options["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : never;
+		ActiveOrganization: Options["teams"] extends { enabled: true }
+			? {
+					members: InferMember<Options, false>[];
+					invitations: InferInvitation<Options, false>[];
+					teams: InferTeam<Options, false>[];
+				} & InferOrganization<Options, false>
+			: {
+					members: InferMember<Options, false>[];
+					invitations: InferInvitation<Options, false>[];
+				} & InferOrganization<Options, false>;
+	};
+	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
+	options: NoInfer<Options>;
+};
+
+export interface OrganizationCreator {
+	<Options extends OrganizationOptions>(
+		options?: Options | undefined,
+	): DefaultOrganizationPlugin<Options>;
+}
+
 export function parseRoles(roles: string | string[]): string {
 	return Array.isArray(roles) ? roles.join(",") : roles;
 }
@@ -145,18 +184,9 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	return createAuthEndpoint(
 		"/organization/has-permission",
@@ -235,15 +265,15 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 			});
 			if (!member) {
 				throw APIError.from(
-					"FORBIDDEN",
+					"UNAUTHORIZED",
 					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
 				);
 			}
 			const result = await hasPermission(
 				{
 					role: member.role,
-					options: options || {},
-					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+					options: options,
+					permissions: ctx.body.permissions as any,
 					organizationId: activeOrganizationId,
 				},
 				ctx,
@@ -269,8 +299,8 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -304,6 +334,11 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 export function organization<
 	O extends OrganizationOptions & {
 		teams: { enabled: true };
+		dynamicAccessControl?:
+			| {
+					enabled?: false | undefined;
+			  }
+			| undefined;
 	},
 >(
 	options?: O | undefined,
@@ -315,8 +350,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : unknown;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : unknown;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -348,8 +383,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -367,6 +402,7 @@ export function organization<
 export function organization<
 	O extends OrganizationOptions & {
 		dynamicAccessControl: { enabled: true };
+		teams?: { enabled?: false | undefined } | undefined;
 	},
 >(
 	options?: O | undefined,
@@ -378,8 +414,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -396,33 +432,9 @@ export function organization<
 };
 export function organization<O extends OrganizationOptions>(
 	options?: O | undefined,
-): {
-	id: "organization";
-	endpoints: OrganizationEndpoints<O>;
-	schema: OrganizationSchema<O>;
-	$Infer: {
-		Organization: InferOrganization<O>;
-		Invitation: InferInvitation<O>;
-		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
-		ActiveOrganization: O["teams"] extends { enabled: true }
-			? {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-					teams: InferTeam<O, false>[];
-				} & InferOrganization<O, false>
-			: {
-					members: InferMember<O, false>[];
-					invitations: InferInvitation<O, false>[];
-				} & InferOrganization<O, false>;
-	};
-	$ERROR_CODES: typeof ORGANIZATION_ERROR_CODES;
-	options: NoInfer<O>;
-};
-export function organization<O extends OrganizationOptions>(
-	options?: O | undefined,
-): any {
+): DefaultOrganizationPlugin<O>;
+export function organization<O extends OrganizationOptions>(options?: O) {
+	const opts = (options || {}) as O;
 	let endpoints = {
 		/**
 		 * ### Endpoint
@@ -439,7 +451,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create)
 		 */
-		createOrganization: createOrganization(options as O),
+		createOrganization: createOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -455,7 +467,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update)
 		 */
-		updateOrganization: updateOrganization(options as O),
+		updateOrganization: updateOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -471,7 +483,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-delete)
 		 */
-		deleteOrganization: deleteOrganization(options as O),
+		deleteOrganization: deleteOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -487,7 +499,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
 		 */
-		setActiveOrganization: setActiveOrganization(options as O),
+		setActiveOrganization: setActiveOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -503,7 +515,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-full-organization)
 		 */
-		getFullOrganization: getFullOrganization(options as O),
+		getFullOrganization: getFullOrganization(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -519,7 +531,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list)
 		 */
-		listOrganizations: listOrganizations(options as O),
+		listOrganizations: listOrganizations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -535,7 +547,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-invite-member)
 		 */
-		createInvitation: createInvitation(options as O),
+		createInvitation: createInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -551,7 +563,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-cancel-invitation)
 		 */
-		cancelInvitation: cancelInvitation(options as O),
+		cancelInvitation: cancelInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -567,7 +579,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-accept-invitation)
 		 */
-		acceptInvitation: acceptInvitation(options as O),
+		acceptInvitation: acceptInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -583,7 +595,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-invitation)
 		 */
-		getInvitation: getInvitation(options as O),
+		getInvitation: getInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -599,7 +611,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-reject-invitation)
 		 */
-		rejectInvitation: rejectInvitation(options as O),
+		rejectInvitation: rejectInvitation(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -615,7 +627,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-invitations)
 		 */
-		listInvitations: listInvitations(options as O),
+		listInvitations: listInvitations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -631,7 +643,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member)
 		 */
-		getActiveMember: getActiveMember(options as O),
+		getActiveMember: getActiveMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -647,7 +659,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-check-slug)
 		 */
-		checkOrganizationSlug: checkOrganizationSlug(options as O),
+		checkOrganizationSlug: checkOrganizationSlug(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -661,7 +673,7 @@ export function organization<O extends OrganizationOptions>(
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-add-member)
 		 */
 
-		addMember: addMember<O>(options as O),
+		addMember: addMember<O>(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -677,7 +689,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-member)
 		 */
-		removeMember: removeMember(options as O),
+		removeMember: removeMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -693,7 +705,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-member-role)
 		 */
-		updateMemberRole: updateMemberRole(options as O),
+		updateMemberRole: updateMemberRole(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -709,8 +721,8 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-leave)
 		 */
-		leaveOrganization: leaveOrganization(options as O),
-		listUserInvitations: listUserInvitations(options as O),
+		leaveOrganization: leaveOrganization(opts),
+		listUserInvitations: listUserInvitations(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -724,7 +736,7 @@ export function organization<O extends OrganizationOptions>(
 		 * **client:**
 		 * `authClient.organization.listMembers`
 		 */
-		listMembers: listMembers(options as O),
+		listMembers: listMembers(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -740,9 +752,9 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-get-active-member-role)
 		 */
-		getActiveMemberRole: getActiveMemberRole(options as O),
+		getActiveMemberRole: getActiveMemberRole(opts),
 	};
-	const teamSupport = options?.teams?.enabled;
+	const teamSupport = opts.teams?.enabled;
 	const teamEndpoints = {
 		/**
 		 * ### Endpoint
@@ -759,7 +771,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-create-team)
 		 */
-		createTeam: createTeam(options as O),
+		createTeam: createTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -775,7 +787,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-list-teams)
 		 */
-		listOrganizationTeams: listOrganizationTeams(options as O),
+		listOrganizationTeams: listOrganizationTeams(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -791,7 +803,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-remove-team)
 		 */
-		removeTeam: removeTeam(options as O),
+		removeTeam: removeTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -807,7 +819,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-update-team)
 		 */
-		updateTeam: updateTeam(options as O),
+		updateTeam: updateTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -823,7 +835,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		setActiveTeam: setActiveTeam(options as O),
+		setActiveTeam: setActiveTeam(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -839,7 +851,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		listUserTeams: listUserTeams(options as O),
+		listUserTeams: listUserTeams(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -855,7 +867,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-set-active-team)
 		 */
-		listTeamMembers: listTeamMembers(options as O),
+		listTeamMembers: listTeamMembers(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -871,7 +883,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-add-team-member)
 		 */
-		addTeamMember: addTeamMember(options as O),
+		addTeamMember: addTeamMember(opts),
 		/**
 		 * ### Endpoint
 		 *
@@ -887,7 +899,7 @@ export function organization<O extends OrganizationOptions>(
 		 *
 		 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-remove-team-member)
 		 */
-		removeTeamMember: removeTeamMember(options as O),
+		removeTeamMember: removeTeamMember(opts),
 	};
 	if (teamSupport) {
 		endpoints = {
@@ -897,13 +909,13 @@ export function organization<O extends OrganizationOptions>(
 	}
 
 	const dynamicAccessControlEndpoints = {
-		createOrgRole: createOrgRole(options as O),
-		deleteOrgRole: deleteOrgRole(options as O),
-		listOrgRoles: listOrgRoles(options as O),
-		getOrgRole: getOrgRole(options as O),
-		updateOrgRole: updateOrgRole(options as O),
+		createOrgRole: createOrgRole(opts),
+		deleteOrgRole: deleteOrgRole(opts),
+		listOrgRoles: listOrgRoles(opts),
+		getOrgRole: getOrgRole(opts),
+		updateOrgRole: updateOrgRole(opts),
 	};
-	if (options?.dynamicAccessControl?.enabled) {
+	if (opts.dynamicAccessControl?.enabled) {
 		endpoints = {
 			...endpoints,
 			...dynamicAccessControlEndpoints,
@@ -911,19 +923,19 @@ export function organization<O extends OrganizationOptions>(
 	}
 	const roles = {
 		...defaultRoles,
-		...options?.roles,
+		...opts.roles,
 	};
 
 	// Build team schema in a way that never introduces undefined values when spreading
 	const teamSchema = teamSupport
 		? ({
 				team: {
-					modelName: options?.schema?.team?.modelName,
+					modelName: opts.schema?.team?.modelName,
 					fields: {
 						name: {
 							type: "string",
 							required: true,
-							fieldName: options?.schema?.team?.fields?.name,
+							fieldName: opts.schema?.team?.fields?.name,
 						},
 						organizationId: {
 							type: "string",
@@ -932,25 +944,25 @@ export function organization<O extends OrganizationOptions>(
 								model: "organization",
 								field: "id",
 							},
-							fieldName: options?.schema?.team?.fields?.organizationId,
+							fieldName: opts.schema?.team?.fields?.organizationId,
 							index: true,
 						},
 						createdAt: {
 							type: "date",
 							required: true,
-							fieldName: options?.schema?.team?.fields?.createdAt,
+							fieldName: opts.schema?.team?.fields?.createdAt,
 						},
 						updatedAt: {
 							type: "date",
 							required: false,
-							fieldName: options?.schema?.team?.fields?.updatedAt,
+							fieldName: opts.schema?.team?.fields?.updatedAt,
 							onUpdate: () => new Date(),
 						},
-						...(options?.schema?.team?.additionalFields || {}),
+						...(opts.schema?.team?.additionalFields || {}),
 					},
 				},
 				teamMember: {
-					modelName: options?.schema?.teamMember?.modelName,
+					modelName: opts.schema?.teamMember?.modelName,
 					fields: {
 						teamId: {
 							type: "string",
@@ -959,7 +971,7 @@ export function organization<O extends OrganizationOptions>(
 								model: "team",
 								field: "id",
 							},
-							fieldName: options?.schema?.teamMember?.fields?.teamId,
+							fieldName: opts.schema?.teamMember?.fields?.teamId,
 							index: true,
 						},
 						userId: {
@@ -969,20 +981,20 @@ export function organization<O extends OrganizationOptions>(
 								model: "user",
 								field: "id",
 							},
-							fieldName: options?.schema?.teamMember?.fields?.userId,
+							fieldName: opts.schema?.teamMember?.fields?.userId,
 							index: true,
 						},
 						createdAt: {
 							type: "date",
 							required: false,
-							fieldName: options?.schema?.teamMember?.fields?.createdAt,
+							fieldName: opts.schema?.teamMember?.fields?.createdAt,
 						},
 					},
 				},
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
 
-	const organizationRoleSchema = options?.dynamicAccessControl?.enabled
+	const organizationRoleSchema = opts.dynamicAccessControl?.enabled
 		? ({
 				organizationRole: {
 					fields: {
@@ -993,36 +1005,35 @@ export function organization<O extends OrganizationOptions>(
 								model: "organization",
 								field: "id",
 							},
-							fieldName:
-								options?.schema?.organizationRole?.fields?.organizationId,
+							fieldName: opts.schema?.organizationRole?.fields?.organizationId,
 							index: true,
 						},
 						role: {
 							type: "string",
 							required: true,
-							fieldName: options?.schema?.organizationRole?.fields?.role,
+							fieldName: opts.schema?.organizationRole?.fields?.role,
 							index: true,
 						},
 						permission: {
 							type: "string",
 							required: true,
-							fieldName: options?.schema?.organizationRole?.fields?.permission,
+							fieldName: opts.schema?.organizationRole?.fields?.permission,
 						},
 						createdAt: {
 							type: "date",
 							required: true,
 							defaultValue: () => new Date(),
-							fieldName: options?.schema?.organizationRole?.fields?.createdAt,
+							fieldName: opts.schema?.organizationRole?.fields?.createdAt,
 						},
 						updatedAt: {
 							type: "date",
 							required: false,
-							fieldName: options?.schema?.organizationRole?.fields?.updatedAt,
+							fieldName: opts.schema?.organizationRole?.fields?.updatedAt,
 							onUpdate: () => new Date(),
 						},
-						...(options?.schema?.organizationRole?.additionalFields || {}),
+						...(opts.schema?.organizationRole?.additionalFields || {}),
 					},
-					modelName: options?.schema?.organizationRole?.modelName,
+					modelName: opts.schema?.organizationRole?.modelName,
 				},
 			} satisfies BetterAuthPluginDBSchema)
 		: {};
@@ -1030,38 +1041,38 @@ export function organization<O extends OrganizationOptions>(
 	const schema = {
 		...({
 			organization: {
-				modelName: options?.schema?.organization?.modelName,
+				modelName: opts.schema?.organization?.modelName,
 				fields: {
 					name: {
 						type: "string",
 						required: true,
 						sortable: true,
-						fieldName: options?.schema?.organization?.fields?.name,
+						fieldName: opts.schema?.organization?.fields?.name,
 					},
 					slug: {
 						type: "string",
 						required: true,
 						unique: true,
 						sortable: true,
-						fieldName: options?.schema?.organization?.fields?.slug,
+						fieldName: opts.schema?.organization?.fields?.slug,
 						index: true,
 					},
 					logo: {
 						type: "string",
 						required: false,
-						fieldName: options?.schema?.organization?.fields?.logo,
+						fieldName: opts.schema?.organization?.fields?.logo,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
-						fieldName: options?.schema?.organization?.fields?.createdAt,
+						fieldName: opts.schema?.organization?.fields?.createdAt,
 					},
 					metadata: {
 						type: "string",
 						required: false,
-						fieldName: options?.schema?.organization?.fields?.metadata,
+						fieldName: opts.schema?.organization?.fields?.metadata,
 					},
-					...(options?.schema?.organization?.additionalFields || {}),
+					...(opts.schema?.organization?.additionalFields || {}),
 				},
 			},
 		} satisfies BetterAuthPluginDBSchema),
@@ -1069,7 +1080,7 @@ export function organization<O extends OrganizationOptions>(
 		...teamSchema,
 		...({
 			member: {
-				modelName: options?.schema?.member?.modelName,
+				modelName: opts.schema?.member?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -1078,13 +1089,13 @@ export function organization<O extends OrganizationOptions>(
 							model: "organization",
 							field: "id",
 						},
-						fieldName: options?.schema?.member?.fields?.organizationId,
+						fieldName: opts.schema?.member?.fields?.organizationId,
 						index: true,
 					},
 					userId: {
 						type: "string",
 						required: true,
-						fieldName: options?.schema?.member?.fields?.userId,
+						fieldName: opts.schema?.member?.fields?.userId,
 						references: {
 							model: "user",
 							field: "id",
@@ -1096,18 +1107,18 @@ export function organization<O extends OrganizationOptions>(
 						required: true,
 						sortable: true,
 						defaultValue: "member",
-						fieldName: options?.schema?.member?.fields?.role,
+						fieldName: opts.schema?.member?.fields?.role,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
-						fieldName: options?.schema?.member?.fields?.createdAt,
+						fieldName: opts.schema?.member?.fields?.createdAt,
 					},
-					...(options?.schema?.member?.additionalFields || {}),
+					...(opts.schema?.member?.additionalFields || {}),
 				},
 			},
 			invitation: {
-				modelName: options?.schema?.invitation?.modelName,
+				modelName: opts.schema?.invitation?.modelName,
 				fields: {
 					organizationId: {
 						type: "string",
@@ -1116,21 +1127,21 @@ export function organization<O extends OrganizationOptions>(
 							model: "organization",
 							field: "id",
 						},
-						fieldName: options?.schema?.invitation?.fields?.organizationId,
+						fieldName: opts.schema?.invitation?.fields?.organizationId,
 						index: true,
 					},
 					email: {
 						type: "string",
 						required: true,
 						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.email,
+						fieldName: opts.schema?.invitation?.fields?.email,
 						index: true,
 					},
 					role: {
 						type: "string",
 						required: false,
 						sortable: true,
-						fieldName: options?.schema?.invitation?.fields?.role,
+						fieldName: opts.schema?.invitation?.fields?.role,
 					},
 					...(teamSupport
 						? {
@@ -1138,7 +1149,7 @@ export function organization<O extends OrganizationOptions>(
 									type: "string",
 									required: false,
 									sortable: true,
-									fieldName: options?.schema?.invitation?.fields?.teamId,
+									fieldName: opts.schema?.invitation?.fields?.teamId,
 								},
 							}
 						: {}),
@@ -1147,17 +1158,17 @@ export function organization<O extends OrganizationOptions>(
 						required: true,
 						sortable: true,
 						defaultValue: "pending",
-						fieldName: options?.schema?.invitation?.fields?.status,
+						fieldName: opts.schema?.invitation?.fields?.status,
 					},
 					expiresAt: {
 						type: "date",
 						required: true,
-						fieldName: options?.schema?.invitation?.fields?.expiresAt,
+						fieldName: opts.schema?.invitation?.fields?.expiresAt,
 					},
 					createdAt: {
 						type: "date",
 						required: true,
-						fieldName: options?.schema?.invitation?.fields?.createdAt,
+						fieldName: opts.schema?.invitation?.fields?.createdAt,
 						defaultValue: () => new Date(),
 					},
 					inviterId: {
@@ -1166,10 +1177,10 @@ export function organization<O extends OrganizationOptions>(
 							model: "user",
 							field: "id",
 						},
-						fieldName: options?.schema?.invitation?.fields?.inviterId,
+						fieldName: opts.schema?.invitation?.fields?.inviterId,
 						required: true,
 					},
-					...(options?.schema?.invitation?.additionalFields || {}),
+					...(opts.schema?.invitation?.additionalFields || {}),
 				},
 			},
 		} satisfies BetterAuthPluginDBSchema),
@@ -1180,7 +1191,7 @@ export function organization<O extends OrganizationOptions>(
 	 * This `shimContext` function is used to add those missing properties to the context object.
 	 */
 	const api = shimContext(endpoints, {
-		orgOptions: options || {},
+		orgOptions: opts,
 		roles,
 		getSession: async (context: AuthContext) => {
 			//@ts-expect-error
@@ -1192,7 +1203,7 @@ export function organization<O extends OrganizationOptions>(
 		id: "organization",
 		endpoints: {
 			...(api as OrganizationEndpoints<O>),
-			hasPermission: createHasPermission(options as O),
+			hasPermission: createHasPermission(opts),
 		},
 		schema: {
 			...(schema as BetterAuthPluginDBSchema),
@@ -1201,14 +1212,14 @@ export function organization<O extends OrganizationOptions>(
 					activeOrganizationId: {
 						type: "string",
 						required: false,
-						fieldName: options?.schema?.session?.fields?.activeOrganizationId,
+						fieldName: opts.schema?.session?.fields?.activeOrganizationId,
 					},
 					...(teamSupport
 						? {
 								activeTeamId: {
 									type: "string",
 									required: false,
-									fieldName: options?.schema?.session?.fields?.activeTeamId,
+									fieldName: opts.schema?.session?.fields?.activeTeamId,
 								},
 							}
 						: {}),
@@ -1237,8 +1248,8 @@ export function organization<O extends OrganizationOptions>(
 			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
-			Team: teamSupport ? ({} as Team) : ({} as any),
-			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
+			Team: teamSupport ? ({} as Team) : ({} as never),
+			TeamMember: teamSupport ? ({} as TeamMember) : ({} as never),
 			ActiveOrganization: {} as O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O, false>[];
@@ -1251,6 +1262,6 @@ export function organization<O extends OrganizationOptions>(
 					} & InferOrganization<O, false>,
 		},
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
-		options: options as NoInfer<O>,
+		options: opts as NoInfer<O>,
 	} satisfies BetterAuthPlugin;
 }

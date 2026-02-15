@@ -24,41 +24,37 @@ const client = new OramaClient({
 export function CustomSearchDialog(props: SharedProps) {
 	const { locale } = useI18n();
 	const { search, setSearch, query } = useDocsSearch({
-		type: "orama-cloud",
+		type: "orama-cloud-legacy",
 		client,
 		locale,
 	});
 
 	return (
-		<>
-			<SearchDialog
-				search={search}
-				onSearchChange={setSearch}
-				isLoading={query.isLoading}
-				{...props}
-			>
-				<SearchDialogOverlay />
-				<SearchDialogContent className="mt-12 md:mt-0">
-					<SearchDialogHeader>
-						<SearchDialogIcon />
-						<SearchDialogInput />
+		<SearchDialog
+			search={search}
+			onSearchChange={setSearch}
+			isLoading={query.isLoading}
+			{...props}
+		>
+			<SearchDialogOverlay />
+			<SearchDialogContent className="mt-12 md:mt-0">
+				<SearchDialogHeader>
+					<SearchDialogIcon />
+					<SearchDialogInput />
 
-						<SearchDialogClose className="hidden md:block" />
-					</SearchDialogHeader>
-					<SearchDialogList
-						items={query.data !== "empty" ? query.data : null}
-					/>
-					<SearchDialogFooter>
-						<a
-							href="https://orama.com"
-							rel="noreferrer noopener"
-							className="ms-auto text-xs text-fd-muted-foreground"
-						>
-							Search powered by Orama
-						</a>
-					</SearchDialogFooter>
-				</SearchDialogContent>
-			</SearchDialog>
-		</>
+					<SearchDialogClose className="hidden md:block" />
+				</SearchDialogHeader>
+				<SearchDialogList items={query.data !== "empty" ? query.data : null} />
+				<SearchDialogFooter>
+					<a
+						href="https://orama.com"
+						rel="noreferrer noopener"
+						className="ms-auto text-xs text-fd-muted-foreground"
+					>
+						Search powered by Orama
+					</a>
+				</SearchDialogFooter>
+			</SearchDialogContent>
+		</SearchDialog>
 	);
 }

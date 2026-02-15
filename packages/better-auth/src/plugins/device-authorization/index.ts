@@ -14,6 +14,14 @@ import {
 } from "./routes";
 import { schema } from "./schema";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"device-authorization": {
+			creator: typeof deviceAuthorization;
+		};
+	}
+}
+
 const timeStringSchema = z.custom<TimeString>(
 	(val) => {
 		if (typeof val !== "string") return false;

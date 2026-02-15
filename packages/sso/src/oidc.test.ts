@@ -3,11 +3,11 @@ import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 
-let server = new OAuth2Server();
+const server = new OAuth2Server();
 
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
@@ -253,6 +253,118 @@ describe("SSO", async () => {
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
 		expect(callbackURL).toContain("/dashboard");
 	});
+
+	it("should normalize email to lowercase in OIDC authentication", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Register a new provider for this test
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "email-case-oidc-provider",
+				issuer: server.issuer.url!,
+				domain: "email-case-test.com",
+				oidcConfig: {
+					clientId: "email-case-test-client",
+					clientSecret: "test-client-secret",
+					discoveryEndpoint: `${server.issuer.url!}/.well-known/openid-configuration`,
+					pkce: false,
+				},
+			},
+			headers,
+		});
+
+		// Store original listeners and set up mixed-case email
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+
+		const mixedCaseEmail = "OIDCUser@Example.COM";
+
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: mixedCaseEmail,
+				name: "OIDC Test User",
+				sub: "oidc-email-case-test-user",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.email = mixedCaseEmail;
+			token.payload.email_verified = true;
+			token.payload.name = "OIDC Test User";
+			token.payload.sub = "oidc-email-case-test-user";
+		});
+
+		try {
+			// First sign in - should create user with lowercase email
+			const signInHeaders1 = new Headers();
+			const res1 = await authClient.signIn.sso({
+				email: `user@email-case-test.com`,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders1),
+				},
+			});
+
+			const { callbackURL: callbackURL1, headers: sessionHeaders1 } =
+				await simulateOAuthFlow(res1.url, signInHeaders1);
+			expect(callbackURL1).toContain("/dashboard");
+
+			// Get session and verify email is lowercase
+			const session1 = await authClient.getSession({
+				fetchOptions: {
+					headers: sessionHeaders1,
+				},
+			});
+
+			expect(session1.data?.user.email).toBe("oidcuser@example.com");
+			const firstUserId = session1.data?.user.id;
+			expect(firstUserId).toBeDefined();
+
+			// Second sign in with same mixed-case email - should find existing user
+			const signInHeaders2 = new Headers();
+			const res2 = await authClient.signIn.sso({
+				email: `user@email-case-test.com`,
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders2),
+				},
+			});
+
+			const { callbackURL: callbackURL2, headers: sessionHeaders2 } =
+				await simulateOAuthFlow(res2.url, signInHeaders2);
+			expect(callbackURL2).toContain("/dashboard");
+
+			// Verify same user is returned
+			const session2 = await authClient.getSession({
+				fetchOptions: {
+					headers: sessionHeaders2,
+				},
+			});
+
+			expect(session2.data?.user.id).toBe(firstUserId);
+			expect(session2.data?.user.email).toBe("oidcuser@example.com");
+		} finally {
+			// Restore original listeners
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener);
+			}
+		}
+	});
 });
 
 describe("SSO disable implicit sign in", async () => {
@@ -393,9 +505,7 @@ describe("SSO disable implicit sign in", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
-		expect(callbackURL).toContain(
-			"/api/auth/error/error?error=signup disabled",
-		);
+		expect(callbackURL).toContain("/api/auth/error?error=signup disabled");
 	});
 
 	it("should create user with SSO provider when sign ups are disabled but sign up is requested", async () => {
@@ -572,5 +682,141 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7857
+ */
+describe("provisionUser should only be called for new users", async () => {
+	const provisionUserFn = vi.fn();
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					provisionUser: provisionUserFn,
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "provision-test@localhost.com",
+				name: "Provision Test",
+				sub: "provision-test-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.email = "provision-test@localhost.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Provision Test";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+
+		let callbackURL = "";
+		const newHeaders = new Headers();
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should call provisionUser only on first sign-in (new user), not on subsequent sign-ins", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "provision-test",
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+
+		// First sign-in: new user -> provisionUser should be called
+		const signInHeaders1 = new Headers();
+		const res1 = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders1),
+			},
+		});
+		await simulateOAuthFlow(res1.url, signInHeaders1);
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+
+		provisionUserFn.mockClear();
+
+		// Second sign-in: existing user -> provisionUser should NOT be called
+		const signInHeaders2 = new Headers();
+		const res2 = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders2),
+			},
+		});
+		await simulateOAuthFlow(res2.url, signInHeaders2);
+		expect(provisionUserFn).toHaveBeenCalledTimes(0);
 	});
 });

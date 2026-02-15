@@ -16,6 +16,14 @@ import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 
 export type { PhoneNumberOptions, UserWithPhoneNumber };
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"phone-number": {
+			creator: typeof phoneNumber;
+		};
+	}
+}
+
 export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 	const opts = {
 		expiresIn: options?.expiresIn || 300,
