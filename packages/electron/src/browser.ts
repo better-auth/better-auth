@@ -311,7 +311,7 @@ function setupBridges(
 
 		let user = state?.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
-			user = await opts.sanitizeUser(user);
+			user = await opts.sanitizeUser(user).catch(() => null);
 		}
 
 		webContents
@@ -334,7 +334,7 @@ function setupBridges(
 		let user: (User & Record<string, any>) | null | undefined =
 			result?.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
-			user = await opts.sanitizeUser(user);
+			user = await opts.sanitizeUser(user).catch(() => null);
 		}
 
 		return user ?? null;

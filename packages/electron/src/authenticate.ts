@@ -144,7 +144,7 @@ export async function authenticate({
 		onSuccess: async (ctx) => {
 			let user: User & Record<string, any> = ctx.data.user;
 			if (user !== null && typeof options.sanitizeUser === "function") {
-				user = await options.sanitizeUser(user);
+				user = await options.sanitizeUser(user).catch(() => null);
 			}
 
 			await fetchOptions?.onSuccess?.(ctx);
