@@ -2437,9 +2437,12 @@ describe("Additional Fields", async () => {
 		};
 
 		const startClientSideQuery = () => {
+			const previousWindow = global.window as
+				| (Window & typeof globalThis)
+				| undefined;
 			global.window = {} as unknown as Window & typeof globalThis;
 			return () => {
-				global.window = undefined as unknown as Window & typeof globalThis;
+				global.window = previousWindow as unknown as Window & typeof globalThis;
 			};
 		};
 
@@ -2449,6 +2452,9 @@ describe("Additional Fields", async () => {
 				await client.organization
 					.setActive({
 						organizationId: org.id,
+						fetchOptions: {
+							headers,
+						},
 					})
 					.catch(() => undefined);
 			});
@@ -2460,12 +2466,13 @@ describe("Additional Fields", async () => {
 			triggerFetch = false,
 		) => {
 			return new Promise<T>((resolve, reject) => {
+				let unsubscribe = () => {};
 				const timeoutId = setTimeout(() => {
 					unsubscribe();
 					reject(new Error("Timed out waiting for query data"));
 				}, 1000);
 
-				const unsubscribe = query.subscribe((state) => {
+				unsubscribe = query.subscribe((state) => {
 					if (state.isPending || state.isRefetching || state.data === null) {
 						return;
 					}
@@ -2486,6 +2493,9 @@ describe("Additional Fields", async () => {
 		it("updates active member when setActive changes organization", async () => {
 			await client.organization.setActive({
 				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
 			});
 
 			const secondOrganization = await auth.api.createOrganization({
@@ -2520,6 +2530,9 @@ describe("Additional Fields", async () => {
 
 			await client.organization.setActive({
 				organizationId: secondOrganization.id,
+				fetchOptions: {
+					headers,
+				},
 			});
 
 			const updatedMember = await switchedMember;
@@ -2529,6 +2542,9 @@ describe("Additional Fields", async () => {
 		it("updates session and active member when create switches active organization", async () => {
 			await client.organization.setActive({
 				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
 			});
 
 			const restoreWindow = startClientSideQuery();
@@ -2568,6 +2584,9 @@ describe("Additional Fields", async () => {
 				name: "test-issue-7981-create",
 				slug: "test-issue-7981-create",
 				someRequiredField: "issue-7981-create-required",
+				fetchOptions: {
+					headers,
+				},
 			});
 			if (!createdOrganization.data) {
 				throw createdOrganization.error || new Error("Create failed");
