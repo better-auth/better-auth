@@ -142,11 +142,7 @@ export const apple = (options: AppleOptions) => {
 			: async (refreshToken) => {
 					return refreshAccessToken({
 						refreshToken,
-						options: {
-							clientId: options.clientId,
-							clientKey: options.clientKey,
-							clientSecret: options.clientSecret,
-						},
+						options,
 						tokenEndpoint: "https://appleid.apple.com/auth/token",
 					});
 				},
@@ -161,9 +157,18 @@ export const apple = (options: AppleOptions) => {
 			if (!profile) {
 				return null;
 			}
-			const name = token.user
-				? `${token.user.name?.firstName} ${token.user.name?.lastName}`
-				: profile.name || profile.email;
+
+			// TODO: "" masking will be removed when the name field is made optional
+			let name: string;
+			if (token.user?.name) {
+				const firstName = token.user.name.firstName || "";
+				const lastName = token.user.name.lastName || "";
+				const fullName = `${firstName} ${lastName}`.trim();
+				name = fullName;
+			} else {
+				name = profile.name || "";
+			}
+
 			const emailVerified =
 				typeof profile.email_verified === "boolean"
 					? profile.email_verified

@@ -1,7 +1,8 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { OAuth2Tokens } from "@better-auth/core/oauth2";
-import { safeJSONParse } from "@better-auth/core/utils";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
 import { parseState } from "../../oauth2/state";
@@ -68,7 +69,14 @@ export const callbackOAuth = createAuthEndpoint(
 			throw c.redirect(`${defaultErrorURL}?error=invalid_callback_request`);
 		}
 
-		const { code, error, state, error_description, device_id } = queryOrBody;
+		const {
+			code,
+			error,
+			state,
+			error_description,
+			device_id,
+			user: userData,
+		} = queryOrBody;
 
 		if (!state) {
 			c.context.logger.error("State not found", error);
@@ -106,9 +114,10 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("Code not found");
 			throw redirectOnError("no_code");
 		}
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.params.id,
-		);
+
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.params.id,
+		});
 
 		if (!provider) {
 			c.context.logger.error(
@@ -119,7 +128,7 @@ export const callbackOAuth = createAuthEndpoint(
 			throw redirectOnError("oauth_provider_not_found");
 		}
 
-		let tokens: OAuth2Tokens;
+		let tokens: OAuth2Tokens | null;
 		try {
 			tokens = await provider.validateAuthorizationCode({
 				code: code,
@@ -131,10 +140,27 @@ export const callbackOAuth = createAuthEndpoint(
 			c.context.logger.error("", e);
 			throw redirectOnError("invalid_code");
 		}
+		if (!tokens) {
+			throw redirectOnError("invalid_code");
+		}
+		const parsedUserData = userData
+			? safeJSONParse<{
+					name?: {
+						firstName?: string;
+						lastName?: string;
+					};
+					email?: string;
+				}>(userData)
+			: null;
+
 		const userInfo = await provider
 			.getUserInfo({
 				...tokens,
-				user: c.body?.user ? safeJSONParse<any>(c.body.user) : undefined,
+				/**
+				 * The user object from the provider
+				 * This is only available for some providers like Apple
+				 */
+				user: parsedUserData ?? undefined,
 			})
 			.then((res) => res?.user);
 
@@ -151,9 +177,7 @@ export const callbackOAuth = createAuthEndpoint(
 		if (link) {
 			const trustedProviders =
 				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(
-				provider.id as "apple",
-			);
+			const isTrustedProvider = trustedProviders?.includes(provider.id);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -163,7 +187,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			if (
-				userInfo.email !== link.email &&
+				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				return redirectOnError("email_doesn't_match");
@@ -232,7 +256,7 @@ export const callbackOAuth = createAuthEndpoint(
 				...userInfo,
 				id: String(userInfo.id),
 				email: userInfo.email,
-				name: userInfo.name || userInfo.email,
+				name: userInfo.name || "",
 			},
 			account: accountData,
 			callbackURL,

@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, getSessionFromCtx } from "better-auth/api";
-import { authorizeEndpoint, formatErrorURL } from "./authorize";
+import { authorizeEndpoint, formatErrorURL, getIssuer } from "./authorize";
 import { oAuthState } from "./oauth";
 import type { OAuthConsent, OAuthOptions, Scope } from "./types";
 import { deleteFromPrompt } from "./utils";
@@ -48,6 +48,7 @@ export async function consentEndpoint(
 				"access_denied",
 				"User denied access",
 				query.get("state") ?? undefined,
+				getIssuer(ctx, opts),
 			),
 		};
 	}
@@ -114,6 +115,9 @@ export async function consentEndpoint(
 			});
 
 	// Return authorization code
+	if (requestedScopes) {
+		query.set("scope", consent.scopes.join(" "));
+	}
 	ctx?.headers?.set("accept", "application/json");
 	ctx.query = deleteFromPrompt(query, "consent");
 	ctx.context.postLogin = true;

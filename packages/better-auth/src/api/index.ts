@@ -6,12 +6,13 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
 import { createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import type { UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit } from "./rate-limiter";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -272,17 +273,11 @@ export const router = <Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		allowedMediaTypes: ["application/json"],
+		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
-
-			const normalizedPath =
-				basePath === "/"
-					? pathname
-					: pathname.startsWith(basePath)
-						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
-						: pathname;
+			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
@@ -307,7 +302,8 @@ export const router = <Option extends BetterAuthOptions>(
 
 			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
+			await onResponseRateLimit(req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await plugin.onResponse(res, ctx);
@@ -384,3 +380,8 @@ export { getIp } from "../utils/get-request-ip";
 export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
+export { getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";

@@ -4,11 +4,11 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
 import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
+import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"one-tap": {
 			creator: typeof oneTap;
 		};
@@ -85,14 +85,16 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
+						const googleProvider =
+							typeof ctx.context.options.socialProviders?.google === "function"
+								? await ctx.context.options.socialProviders?.google()
+								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
+								audience: options?.clientId || googleProvider?.clientId,
 							},
 						);
 						payload = verifiedPayload;
@@ -142,15 +144,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						});
 						return ctx.json({
 							token: session.token,
-							user: {
-								id: newUser.user.id,
-								email: newUser.user.email,
-								emailVerified: newUser.user.emailVerified,
-								name: newUser.user.name,
-								image: newUser.user.image,
-								createdAt: newUser.user.createdAt,
-								updatedAt: newUser.user.updatedAt,
-							},
+							user: parseUserOutput(ctx.context.options, newUser.user),
 						});
 					}
 					const account = await ctx.context.internalAdapter.findAccount(sub);
@@ -184,15 +178,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: user.user.id,
-							email: user.user.email,
-							emailVerified: user.user.emailVerified,
-							name: user.user.name,
-							image: user.user.image,
-							createdAt: user.user.createdAt,
-							updatedAt: user.user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user.user),
 					});
 				},
 			),

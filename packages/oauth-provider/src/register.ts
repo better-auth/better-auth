@@ -4,7 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { storeClientSecret } from "./utils";
+import { parseClientMetadata, storeClientSecret } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
@@ -128,6 +128,13 @@ export async function checkOAuthClient(
 			}
 		}
 	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -165,7 +172,7 @@ export async function createOAuthClientEndpoint(
 				session: session?.session,
 			})
 		: undefined;
-	let schema = oauthToSchema({
+	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
@@ -251,7 +258,9 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
 		reference_id: referenceId,
+		metadata: inputMetadata,
 		// All other metadata
 		...rest
 	} = input;
@@ -260,8 +269,15 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const expiresAt = _expiresAt ? new Date(_expiresAt * 1000) : undefined;
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
-	const metadata =
-		rest && Object.keys(rest).length ? JSON.stringify(rest) : undefined;
+	const metadataObj = {
+		...(rest && Object.keys(rest).length ? rest : {}),
+		...(inputMetadata && typeof inputMetadata === "object"
+			? inputMetadata
+			: {}),
+	};
+	const metadata = Object.keys(metadataObj).length
+		? JSON.stringify(metadataObj)
+		: undefined;
 
 	return {
 		// Important Fields
@@ -296,6 +312,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata,
 	};
@@ -342,19 +359,20 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(new Date(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(new Date(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = parseClientMetadata(metadata);
 
 	return {
 		// All other metadata
@@ -394,6 +412,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

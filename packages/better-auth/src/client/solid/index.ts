@@ -3,7 +3,7 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import { useStore } from "./solid-store";
 
@@ -54,7 +55,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$fetch,
 		atomListeners,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
@@ -87,6 +88,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				isPending: boolean;
 				isRefetching: boolean;
 				error: BetterFetchError | null;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$Infer: {
 				Session: NonNullable<Session>;

@@ -11,7 +11,6 @@ import {
 	vi,
 } from "vitest";
 import * as apiModule from "../../api";
-import { createAuthClient } from "../../client";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -58,9 +57,9 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+	vi.restoreAllMocks();
 	server.resetHandlers();
 	server.use(...handlers);
-	vi.restoreAllMocks();
 });
 
 afterAll(() => server.close());

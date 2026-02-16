@@ -16,6 +16,7 @@ import {
 import type { StripePlugin } from "../src";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
+import { customerMetadata, subscriptionMetadata } from "../src/metadata";
 import type { StripeOptions, Subscription } from "../src/types";
 
 describe("stripe type", () => {
@@ -57,6 +58,89 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["restoreSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["upgradeSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["createBillingPortal"]>().toBeFunction();
+	});
+
+	it("should infer plugin schema fields on user type", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
+
+	it("should infer plugin schema fields alongside additional user fields", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				stripe({
+					stripeClient: {} as Stripe,
+					stripeWebhookSecret: "test",
+				}),
+			],
+			user: {
+				additionalFields: {
+					customField: {
+						type: "string",
+						required: false,
+					},
+				},
+			},
+		});
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["stripeCustomerId"]
+		>().toEqualTypeOf<string | null | undefined>();
+		expectTypeOf<
+			(typeof auth)["$Infer"]["Session"]["user"]["customField"]
+		>().toEqualTypeOf<string | null | undefined>();
+	});
+});
+
+describe("stripe - metadata helpers", () => {
+	it("customerMetadata.set protects internal fields", () => {
+		const result = customerMetadata.set(
+			{ userId: "real", customerType: "user" },
+			{ userId: "fake", custom: "value" },
+		);
+		expect(result.userId).toBe("real");
+		expect(result.customerType).toBe("user");
+		expect(result.custom).toBe("value");
+	});
+
+	it("customerMetadata.get extracts typed fields", () => {
+		const result = customerMetadata.get({
+			userId: "u1",
+			customerType: "organization",
+			extra: "ignored",
+		});
+		expect(result.userId).toBe("u1");
+		expect(result.customerType).toBe("organization");
+		expect(result).not.toHaveProperty("extra");
+	});
+
+	it("subscriptionMetadata.set protects internal fields", () => {
+		const result = subscriptionMetadata.set(
+			{ userId: "u1", subscriptionId: "s1", referenceId: "r1" },
+			{ subscriptionId: "fake" },
+		);
+		expect(result.subscriptionId).toBe("s1");
+	});
+
+	it("subscriptionMetadata.get extracts typed fields", () => {
+		const result = subscriptionMetadata.get({
+			userId: "u1",
+			subscriptionId: "s1",
+			referenceId: "r1",
+			extra: "ignored",
+		});
+		expect(result.userId).toBe("u1");
+		expect(result.subscriptionId).toBe("s1");
+		expect(result.referenceId).toBe("r1");
+		expect(result).not.toHaveProperty("extra");
 	});
 });
 
@@ -146,8 +230,6 @@ describe("stripe", () => {
 		data.account = [];
 		data.customer = [];
 		data.subscription = [];
-
-		vi.clearAllMocks();
 	});
 
 	const memory = memoryAdapter(data);
@@ -890,7 +972,12 @@ describe("stripe", () => {
 					items: {
 						data: [
 							{
-								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+									recurring: {
+										interval: "year",
+									},
+								},
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -935,6 +1022,141 @@ describe("stripe", () => {
 		expect(subscription?.status).toBe("active");
 		expect(subscription?.plan).toBe("starter");
 		expect(subscription?.seats).toBe(1);
+		expect(subscription?.billingInterval).toBe("year");
+	});
+
+	it("should store billingInterval as year for annual subscriptions", async () => {
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn(),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		};
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+		const testCtx = await testAuth.$context;
+
+		// Create a user with stripeCustomerId
+		const userWithCustomerId = await testCtx.adapter.create({
+			model: "user",
+			data: {
+				email: "annual-user@test.com",
+				name: "Annual User",
+				emailVerified: true,
+				stripeCustomerId: "cus_annual_test",
+			},
+		});
+
+		const mockEvent = {
+			type: "customer.subscription.created",
+			data: {
+				object: {
+					id: "sub_annual_created",
+					customer: "cus_annual_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								price: {
+									id: process.env.STRIPE_PRICE_ID_1,
+									recurring: { interval: "year" },
+								},
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 365 * 24 * 60 * 60,
+							},
+						],
+					},
+					cancel_at_period_end: false,
+				},
+			},
+		};
+
+		(stripeForTest.webhooks.constructEventAsync as any).mockResolvedValue(
+			mockEvent,
+		);
+
+		const mockRequest = new Request(
+			"http://localhost:3000/api/auth/stripe/webhook",
+			{
+				method: "POST",
+				headers: {
+					"stripe-signature": "test_signature",
+				},
+				body: JSON.stringify(mockEvent),
+			},
+		);
+
+		const response = await testAuth.handler(mockRequest);
+		expect(response.status).toBe(200);
+
+		// Verify subscription was created with annual billing interval
+		const subscription = await testCtx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_annual_created" }],
+		});
+
+		expect(subscription).toBeDefined();
+		expect(subscription?.referenceId).toBe(userWithCustomerId.id);
+		expect(subscription?.billingInterval).toBe("year");
+	});
+
+	it("should return billingInterval in subscription.list() response", async () => {
+		const {
+			client,
+			auth: testAuth,
+			sessionSetter,
+		} = await getTestInstance(
+			{ database: memory, plugins: [stripe(stripeOptions)] },
+			{
+				disableTestUser: true,
+				clientOptions: { plugins: [stripeClient({ subscription: true })] },
+			},
+		);
+
+		const testCtx = await testAuth.$context;
+
+		const headers = new Headers();
+		const userRes = await client.signUp.email(
+			{
+				email: "billing-interval-test@example.com",
+				password: "password",
+				name: "Test",
+			},
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+		await testCtx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_1",
+				stripeSubscriptionId: "sub_1",
+				status: "active",
+				plan: "starter",
+				billingInterval: "year",
+			},
+		});
+
+		const result = await client.subscription.list({
+			fetchOptions: { headers, throw: true },
+		});
+
+		expect(result[0]?.billingInterval).toBe("year");
 	});
 
 	it("should not create duplicate subscription if already exists", async () => {
@@ -1806,10 +2028,26 @@ describe("stripe", () => {
 	});
 
 	it("should prevent duplicate subscriptions with same plan and same seats", async () => {
+		const starterPriceId = "price_starter_duplicate_test";
+		const subscriptionId = "sub_duplicate_test_123";
+
+		const stripeOptionsWithPrice = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: starterPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
 				database: memory,
-				plugins: [stripe(stripeOptions)],
+				plugins: [stripe(stripeOptionsWithPrice)],
 			},
 			{
 				disableTestUser: true,
@@ -1855,11 +2093,33 @@ describe("stripe", () => {
 			update: {
 				status: "active",
 				seats: 3,
+				stripeSubscriptionId: subscriptionId,
 			},
 			where: [
 				{
 					field: "referenceId",
 					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Mock Stripe to return the existing subscription with the same price ID
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_duplicate_item",
+								price: {
+									id: starterPriceId,
+								},
+								quantity: 3,
+							},
+						],
+					},
 				},
 			],
 		});
@@ -1874,6 +2134,224 @@ describe("stripe", () => {
 
 		expect(upgradeRes.error).toBeDefined();
 		expect(upgradeRes.error?.message).toContain("already subscribed");
+	});
+
+	it("should allow upgrade from monthly to annual billing for the same plan", async () => {
+		const monthlyPriceId = "price_monthly_starter_123";
+		const annualPriceId = "price_annual_starter_456";
+		const subscriptionId = "sub_monthly_to_annual_123";
+
+		const stripeOptionsWithAnnual = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: monthlyPriceId,
+						annualDiscountPriceId: annualPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithAnnual)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(testUser, { throw: true });
+
+		const headers = new Headers();
+		await client.signIn.email(testUser, {
+			throw: true,
+			onSuccess: sessionSetter(headers),
+		});
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 1,
+				stripeSubscriptionId: subscriptionId,
+			},
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_monthly_item",
+								price: { id: monthlyPriceId },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Clear mocks before the upgrade call
+		mockStripe.checkout.sessions.create.mockClear();
+		mockStripe.billingPortal.sessions.create.mockClear();
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			annual: true,
+			subscriptionId,
+			fetchOptions: { headers },
+		});
+
+		// Should succeed and return a billing portal URL
+		expect(upgradeRes.error).toBeNull();
+		expect(upgradeRes.data?.url).toBeDefined();
+
+		// Verify billing portal was called with the annual price ID
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalledWith(
+			expect.objectContaining({
+				flow_data: expect.objectContaining({
+					type: "subscription_update_confirm",
+					subscription_update_confirm: expect.objectContaining({
+						items: expect.arrayContaining([
+							expect.objectContaining({ price: annualPriceId }),
+						]),
+					}),
+				}),
+			}),
+		);
+
+		// Should use billing portal, not checkout (since user has existing subscription)
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+	});
+
+	it.for([
+		{
+			name: "past",
+			periodEnd: new Date(Date.now() - 24 * 60 * 60 * 1000),
+			shouldAllow: true,
+		},
+		{
+			name: "future",
+			periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			shouldAllow: false,
+		},
+	])("should handle re-subscribing when periodEnd is in the $name", async ({
+		periodEnd,
+		shouldAllow,
+	}) => {
+		const starterPriceId = "price_starter_periodend_test";
+		const subscriptionId = "sub_periodend_test_123";
+
+		const stripeOptionsWithPrice = {
+			...stripeOptions,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						name: "starter",
+						priceId: starterPriceId,
+					},
+				],
+			},
+		} satisfies StripeOptions;
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithPrice)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: `periodend-${periodEnd.getTime()}@email.com` },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		await ctx.adapter.update({
+			model: "subscription",
+			update: {
+				status: "active",
+				seats: 1,
+				periodEnd,
+				stripeSubscriptionId: subscriptionId,
+			},
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+
+		// Mock Stripe to return the existing subscription with the same price ID
+		mockStripe.subscriptions.list.mockResolvedValue({
+			data: [
+				{
+					id: subscriptionId,
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_periodend_item",
+								price: {
+									id: starterPriceId,
+								},
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			seats: 1,
+			fetchOptions: { headers },
+		});
+
+		if (shouldAllow) {
+			expect(upgradeRes.error).toBeNull();
+			expect(upgradeRes.data?.url).toBeDefined();
+		} else {
+			expect(upgradeRes.error?.message).toContain("already subscribed");
+		}
 	});
 
 	it("should only call Stripe customers.create once for signup and upgrade", async () => {
@@ -2166,85 +2644,6 @@ describe("stripe", () => {
 			(s: Subscription) => s.trialStart || s.trialEnd,
 		);
 		expect(hasTrialData).toBe(true);
-	});
-
-	it("should prevent trial abuse when processing incomplete subscription with past trial history", async () => {
-		const { client, auth, sessionSetter } = await getTestInstance(
-			{
-				database: memory,
-				plugins: [
-					stripe({
-						...stripeOptions,
-						subscription: {
-							...stripeOptions.subscription,
-							plans: stripeOptions.subscription.plans.map((plan) => ({
-								...plan,
-								freeTrial: { days: 7 },
-							})),
-						},
-					}),
-				],
-			},
-			{
-				disableTestUser: true,
-				clientOptions: {
-					plugins: [stripeClient({ subscription: true })],
-				},
-			},
-		);
-		const ctx = await auth.$context;
-
-		const userRes = await client.signUp.email(
-			{ ...testUser, email: "trial-findone-test@email.com" },
-			{ throw: true },
-		);
-
-		const headers = new Headers();
-		await client.signIn.email(
-			{ ...testUser, email: "trial-findone-test@email.com" },
-			{ throw: true, onSuccess: sessionSetter(headers) },
-		);
-
-		// Create a canceled subscription with trial history first
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: userRes.user.id,
-				stripeCustomerId: "cus_old_customer",
-				status: "canceled",
-				plan: "starter",
-				stripeSubscriptionId: "sub_canceled_with_trial",
-				trialStart: new Date(Date.now() - 1000000),
-				trialEnd: new Date(Date.now() - 500000),
-			},
-		});
-
-		// Create an new incomplete subscription (without trial info)
-		const incompleteSubId = "sub_incomplete_new";
-		await ctx.adapter.create({
-			model: "subscription",
-			data: {
-				referenceId: userRes.user.id,
-				stripeCustomerId: "cus_old_customer",
-				status: "incomplete",
-				plan: "premium",
-				stripeSubscriptionId: incompleteSubId,
-			},
-		});
-
-		// When upgrading with a specific subscriptionId pointing to the incomplete one,
-		// the system should still check ALL subscriptions for trial history
-		const upgradeRes = await client.subscription.upgrade({
-			plan: "premium",
-			subscriptionId: incompleteSubId,
-			fetchOptions: { headers },
-		});
-
-		expect(upgradeRes.data?.url).toBeDefined();
-
-		// Verify that NO trial was granted despite processing the incomplete subscription
-		const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
-		expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 	});
 
 	it("should upgrade existing subscription instead of creating new one", async () => {
@@ -2563,7 +2962,7 @@ describe("stripe", () => {
 		// Update the user's email using internal adapter (which triggers hooks)
 		await runWithEndpointContext(
 			{
-				context: ctx,
+				context: ctx as never,
 			},
 			() =>
 				ctx.internalAdapter.updateUserByEmail(testUser.email, {
@@ -3718,6 +4117,159 @@ describe("stripe", () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7959
+	 */
+	describe("Search API fallback for unsupported regions", () => {
+		function mockStripeList(data: any[] = []) {
+			const p = Promise.resolve({ data, has_more: false });
+			(p as any)[Symbol.asyncIterator] = async function* () {
+				yield* data;
+			};
+			return p;
+		}
+
+		it("should fall back to customers.list when customers.search is unavailable (user signup)", async () => {
+			const fallbackEmail = "fallback-user@example.com";
+			const existingCustomerId = "cus_fallback_123";
+
+			const testOptions = {
+				...stripeOptions,
+				createCustomerOnSignUp: true,
+			} satisfies StripeOptions;
+
+			const { client: testAuthClient } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			vi.clearAllMocks();
+
+			// Make search fail, list succeed
+			mockStripe.customers.search.mockRejectedValueOnce(
+				new Error("search feature unavailable for merchant"),
+			);
+			mockStripe.customers.list.mockReturnValueOnce(
+				mockStripeList([
+					{
+						id: existingCustomerId,
+						email: fallbackEmail,
+						metadata: { customerType: "user" },
+					},
+				]),
+			);
+
+			await testAuthClient.signUp.email(
+				{
+					email: fallbackEmail,
+					password: "password",
+					name: "Fallback User",
+				},
+				{ throw: true },
+			);
+
+			// Search was attempted first
+			expect(mockStripe.customers.search).toHaveBeenCalled();
+			// Fell back to list after search failure
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: fallbackEmail,
+				limit: 100,
+			});
+			// Should NOT create duplicate — used existing customer from list fallback
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+		});
+
+		it("should fall back to customers.list when customers.search is unavailable (user upgrade)", async () => {
+			const fallbackEmail = "fallback-upgrade@example.com";
+			const existingCustomerId = "cus_fallback_upgrade_123";
+
+			const {
+				client: testAuthClient,
+				auth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			// Create user without stripeCustomerId
+			const userRes = await testAuthClient.signUp.email(
+				{
+					email: fallbackEmail,
+					password: "password",
+					name: "Fallback Upgrade User",
+				},
+				{ throw: true },
+			);
+
+			// Remove stripeCustomerId to force customer lookup during upgrade
+			await ctx.adapter.update({
+				model: "user",
+				update: { stripeCustomerId: null },
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+
+			const headers = new Headers();
+			await testAuthClient.signIn.email(
+				{ email: fallbackEmail, password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			vi.clearAllMocks();
+
+			// Make search fail, list succeed with existing customer
+			mockStripe.customers.search.mockRejectedValueOnce(
+				new Error("search feature unavailable for merchant"),
+			);
+			mockStripe.customers.list.mockReturnValueOnce(
+				mockStripeList([
+					{
+						id: existingCustomerId,
+						email: fallbackEmail,
+						metadata: { customerType: "user" },
+					},
+				]),
+			);
+
+			mockStripe.checkout.sessions.create.mockResolvedValueOnce({
+				url: "https://checkout.stripe.com/mock-fallback",
+				id: "cs_fallback",
+			});
+
+			await testAuthClient.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			// Search was attempted first
+			expect(mockStripe.customers.search).toHaveBeenCalled();
+			// Fell back to list after search failure
+			expect(mockStripe.customers.list).toHaveBeenCalledWith({
+				email: fallbackEmail,
+				limit: 100,
+			});
+			// Should use existing customer, not create a new one
+			expect(mockStripe.customers.create).not.toHaveBeenCalled();
+		});
+	});
+
 	describe("webhook: cancel_at_period_end cancellation", () => {
 		it("should sync cancelAtPeriodEnd and canceledAt when user cancels via Billing Portal (at_period_end mode)", async () => {
 			const { auth } = await getTestInstance(
@@ -4116,6 +4668,420 @@ describe("stripe", () => {
 
 			// endedAt should be the actual termination time (now), not the cancellation request time
 			expect(updatedSub!.endedAt!.getTime()).toBe(now * 1000);
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6863
+	 */
+	describe("trial abuse prevention", () => {
+		it("should check all subscriptions for trial history even when processing a specific incomplete subscription", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({
+							...stripeOptions,
+							subscription: {
+								...stripeOptions.subscription,
+								plans: stripeOptions.subscription.plans.map((plan) => ({
+									...plan,
+									freeTrial: { days: 7 },
+								})),
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "trial-findone-test@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "trial-findone-test@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// Create a canceled subscription with trial history first
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_old_customer",
+					status: "canceled",
+					plan: "starter",
+					stripeSubscriptionId: "sub_canceled_with_trial",
+					trialStart: new Date(Date.now() - 1000000),
+					trialEnd: new Date(Date.now() - 500000),
+				},
+			});
+
+			// Create an new incomplete subscription (without trial info)
+			const incompleteSubId = "sub_incomplete_new";
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_old_customer",
+					status: "incomplete",
+					plan: "premium",
+					stripeSubscriptionId: incompleteSubId,
+				},
+			});
+
+			// When upgrading with a specific subscriptionId pointing to the incomplete one,
+			// the system should still check ALL subscriptions for trial history
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "premium",
+				subscriptionId: incompleteSubId,
+				fetchOptions: { headers },
+			});
+
+			expect(upgradeRes.data?.url).toBeDefined();
+
+			// Verify that NO trial was granted despite processing the incomplete subscription
+			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
+		});
+
+		it("should propagate trial data from Stripe event on subscription.deleted", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "trial-deleted-propagate@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 3 * 24 * 60 * 60; // 3 days ago
+			const trialEnd = now + 4 * 24 * 60 * 60; // 4 days from now
+
+			// Create subscription WITHOUT trial data (simulates checkout.session.completed webhook failure)
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_trial_deleted_propagate",
+					stripeSubscriptionId: "sub_trial_deleted_propagate",
+					status: "trialing",
+					plan: "starter",
+					// Note: no trialStart/trialEnd set (simulating missed checkout webhook)
+				},
+			});
+
+			// customer.subscription.deleted fires with trial data from Stripe
+			const webhookEvent = {
+				type: "customer.subscription.deleted",
+				data: {
+					object: {
+						id: "sub_trial_deleted_propagate",
+						customer: "cus_trial_deleted_propagate",
+						status: "canceled",
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: now,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("canceled");
+			// Trial data should be propagated from the Stripe event
+			expect(updatedSub!.trialStart).not.toBeNull();
+			expect(updatedSub!.trialEnd).not.toBeNull();
+			expect(updatedSub!.trialStart!.getTime()).toBe(trialStart * 1000);
+			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
+		});
+
+		it("should propagate trial data from Stripe event on subscription.updated", async () => {
+			const { auth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const ctx = await auth.$context;
+
+			const { id: userId } = await ctx.adapter.create({
+				model: "user",
+				data: { email: "trial-updated-propagate@test.com" },
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 7 * 24 * 60 * 60; // 7 days ago
+			const trialEnd = now; // Trial just ended
+			const periodEnd = now + 30 * 24 * 60 * 60; // 30 days from now
+
+			// Create subscription WITHOUT trial data (simulates checkout.session.completed webhook failure)
+			const { id: subscriptionId } = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userId,
+					stripeCustomerId: "cus_trial_updated_propagate",
+					stripeSubscriptionId: "sub_trial_updated_propagate",
+					status: "trialing",
+					plan: "starter",
+					// Note: no trialStart/trialEnd set
+				},
+			});
+
+			// customer.subscription.updated fires when trial ends (status: trialing → active)
+			const webhookEvent = {
+				type: "customer.subscription.updated",
+				data: {
+					object: {
+						id: "sub_trial_updated_propagate",
+						customer: "cus_trial_updated_propagate",
+						status: "active",
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: null,
+						ended_at: null,
+						metadata: {
+							subscriptionId,
+						},
+						items: {
+							data: [
+								{
+									id: "si_test_item",
+									price: { id: process.env.STRIPE_PRICE_ID_1 },
+									quantity: 1,
+									current_period_start: now,
+									current_period_end: periodEnd,
+								},
+							],
+						},
+					},
+				},
+			};
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(webhookEvent),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{ disableTestUser: true },
+			);
+			const webhookCtx = await webhookAuth.$context;
+
+			const response = await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(webhookEvent),
+				}),
+			);
+
+			expect(response.status).toBe(200);
+
+			const updatedSub = await webhookCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: subscriptionId }],
+			});
+
+			expect(updatedSub).not.toBeNull();
+			expect(updatedSub!.status).toBe("active");
+			// Trial data should be propagated from the Stripe event
+			expect(updatedSub!.trialStart).not.toBeNull();
+			expect(updatedSub!.trialEnd).not.toBeNull();
+			expect(updatedSub!.trialStart!.getTime()).toBe(trialStart * 1000);
+			expect(updatedSub!.trialEnd!.getTime()).toBe(trialEnd * 1000);
+		});
+
+		it("should prevent trial abuse after subscription canceled during trial", async () => {
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({
+							...stripeOptions,
+							subscription: {
+								...stripeOptions.subscription,
+								plans: stripeOptions.subscription.plans.map((plan) => ({
+									...plan,
+									freeTrial: { days: 7 },
+								})),
+							},
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "trial-abuse-cancel@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "trial-abuse-cancel@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const now = Math.floor(Date.now() / 1000);
+			const trialStart = now - 3 * 24 * 60 * 60;
+			const trialEnd = now + 4 * 24 * 60 * 60;
+
+			// Step 1: Create a subscription that was trialing (simulates checkout completed
+			// but trial data was NOT set in DB due to webhook failure)
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_trial_abuse",
+					stripeSubscriptionId: "sub_trial_abuse_old",
+					status: "canceled",
+					plan: "starter",
+					// No trialStart/trialEnd — simulates the scenario where
+					// onCheckoutSessionCompleted failed to set trial data
+				},
+			});
+
+			// Step 2: Simulate customer.subscription.deleted with trial data from Stripe
+			const deleteEvent = {
+				type: "customer.subscription.deleted" as const,
+				data: {
+					object: {
+						id: "sub_trial_abuse_old",
+						customer: "cus_trial_abuse",
+						status: "canceled" as const,
+						trial_start: trialStart,
+						trial_end: trialEnd,
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: now,
+						ended_at: now,
+					},
+				},
+			};
+
+			const stripeForWebhook = {
+				...stripeOptions.stripeClient,
+				webhooks: {
+					constructEventAsync: vi.fn().mockResolvedValue(deleteEvent),
+				},
+			};
+
+			const webhookOptions = {
+				...stripeOptions,
+				stripeClient: stripeForWebhook as unknown as Stripe,
+				stripeWebhookSecret: "test_secret",
+				subscription: {
+					...stripeOptions.subscription,
+					plans: stripeOptions.subscription.plans.map((plan) => ({
+						...plan,
+						freeTrial: { days: 7 },
+					})),
+				},
+			};
+
+			const { auth: webhookAuth } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(webhookOptions)],
+				},
+				{ disableTestUser: true },
+			);
+
+			await webhookAuth.handler(
+				new Request("http://localhost:3000/api/auth/stripe/webhook", {
+					method: "POST",
+					headers: { "stripe-signature": "test_signature" },
+					body: JSON.stringify(deleteEvent),
+				}),
+			);
+
+			// Step 3: User tries to subscribe again — should NOT get a trial
+			const upgradeRes = await client.subscription.upgrade({
+				plan: "starter",
+				fetchOptions: { headers },
+			});
+
+			expect(upgradeRes.data?.url).toBeDefined();
+
+			// Verify no trial was granted (trial_period_days should be absent)
+			const callArgs = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+			expect(callArgs?.subscription_data?.trial_period_days).toBeUndefined();
 		});
 	});
 
@@ -4622,7 +5588,7 @@ describe("stripe", () => {
 					fetchOptions: { headers },
 				});
 
-				expect(res.error?.code).toBe("ORGANIZATION_SUBSCRIPTION_NOT_ENABLED");
+				expect(res.error?.code).toBe("AUTHORIZE_REFERENCE_REQUIRED");
 			});
 
 			it("should reject when no referenceId or activeOrganizationId", async () => {
@@ -4764,5 +5730,101 @@ describe("stripe", () => {
 				expect(res.error?.code).not.toBe("UNAUTHORIZED");
 			});
 		});
+	});
+
+	it("should upgrade existing active subscription even when canceled subscription exists for same referenceId", async () => {
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		// Create a user
+		const userRes = await client.signUp.email({ ...testUser }, { throw: true });
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser },
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		// Update the user with the Stripe customer ID
+		await ctx.adapter.update({
+			model: "user",
+			update: {
+				stripeCustomerId: "cus_findone_test",
+			},
+			where: [
+				{
+					field: "id",
+					value: userRes.user.id,
+				},
+			],
+		});
+
+		// Create a CANCELED subscription first (simulating old subscription)
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_findone_test",
+				stripeSubscriptionId: "sub_stripe_canceled",
+				status: "canceled",
+			},
+		});
+
+		// Create an ACTIVE subscription (simulating current subscription)
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				stripeCustomerId: "cus_findone_test",
+				stripeSubscriptionId: "sub_stripe_active",
+				status: "active",
+				periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+			},
+		});
+
+		// Mock Stripe subscriptions.list to return the active subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_stripe_active",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_test_item",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Try to upgrade to premium (without providing subscriptionId)
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Should use billing portal to upgrade existing subscription (not create new checkout)
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 	});
 });

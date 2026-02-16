@@ -12,9 +12,7 @@ import {
 } from "../utils/url";
 
 export const createBetterAuth = <Options extends BetterAuthOptions>(
-	options: Options &
-		// fixme(alex): do we need Record<never, never> here?
-		Record<never, never>,
+	options: Options,
 	initFn: (options: Options) => Promise<AuthContext>,
 ): Auth<Options> => {
 	const authContext = initFn(options);

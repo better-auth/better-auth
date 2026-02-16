@@ -5,8 +5,7 @@ import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		bearer: {
 			creator: typeof bearer;
 		};

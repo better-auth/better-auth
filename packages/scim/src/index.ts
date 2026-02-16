@@ -2,14 +2,17 @@ import type { BetterAuthPlugin } from "better-auth";
 import { authMiddlewareFactory } from "./middlewares";
 import {
 	createSCIMUser,
+	deleteSCIMProviderConnection,
 	deleteSCIMUser,
 	generateSCIMToken,
+	getSCIMProviderConnection,
 	getSCIMResourceType,
 	getSCIMResourceTypes,
 	getSCIMSchema,
 	getSCIMSchemas,
 	getSCIMServiceProviderConfig,
 	getSCIMUser,
+	listSCIMProviderConnections,
 	listSCIMUsers,
 	patchSCIMUser,
 	updateSCIMUser,
@@ -17,8 +20,7 @@ import {
 import type { SCIMOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		scim: {
 			creator: typeof scim;
 		};
@@ -28,6 +30,7 @@ declare module "@better-auth/core" {
 export const scim = (options?: SCIMOptions) => {
 	const opts = {
 		storeSCIMToken: "plain",
+		providerOwnership: { enabled: false },
 		...options,
 	} satisfies SCIMOptions;
 
@@ -37,6 +40,9 @@ export const scim = (options?: SCIMOptions) => {
 		id: "scim",
 		endpoints: {
 			generateSCIMToken: generateSCIMToken(opts),
+			listSCIMProviderConnections: listSCIMProviderConnections(),
+			getSCIMProviderConnection: getSCIMProviderConnection(),
+			deleteSCIMProviderConnection: deleteSCIMProviderConnection(),
 			getSCIMUser: getSCIMUser(authMiddleware),
 			createSCIMUser: createSCIMUser(authMiddleware),
 			patchSCIMUser: patchSCIMUser(authMiddleware),
@@ -66,9 +72,19 @@ export const scim = (options?: SCIMOptions) => {
 						type: "string",
 						required: false,
 					},
+					...(opts.providerOwnership?.enabled
+						? {
+								userId: {
+									type: "string",
+									required: false,
+								},
+							}
+						: {}),
 				},
 			},
 		},
 		options,
 	} satisfies BetterAuthPlugin;
 };
+
+export * from "./types";

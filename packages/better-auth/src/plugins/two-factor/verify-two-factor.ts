@@ -2,7 +2,9 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import { createHMAC } from "@better-auth/utils/hmac";
 import { getSessionFromCtx } from "../../api";
-import { setSessionCookie } from "../../cookies";
+import { expireCookie, setSessionCookie } from "../../cookies";
+import { generateRandomString } from "../../crypto/random";
+import { parseUserOutput } from "../../db/schema";
 import {
 	TRUST_DEVICE_COOKIE_MAX_AGE,
 	TRUST_DEVICE_COOKIE_NAME,
@@ -18,19 +20,23 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
-		const cookieName = ctx.context.createAuthCookie(TWO_FACTOR_COOKIE_NAME);
-		const twoFactorCookie = await ctx.getSignedCookie(
-			cookieName.name,
+		const twoFactorCookie = ctx.context.createAuthCookie(
+			TWO_FACTOR_COOKIE_NAME,
+		);
+		const signedTwoFactorCookie = await ctx.getSignedCookie(
+			twoFactorCookie.name,
 			ctx.context.secret,
 		);
-		if (!twoFactorCookie) {
+		if (!signedTwoFactorCookie) {
 			throw APIError.from(
 				"UNAUTHORIZED",
 				TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
 			);
 		}
 		const verificationToken =
-			await ctx.context.internalAdapter.findVerificationValue(twoFactorCookie);
+			await ctx.context.internalAdapter.findVerificationValue(
+				signedTwoFactorCookie,
+			);
 		if (!verificationToken) {
 			throw APIError.from(
 				"UNAUTHORIZED",
@@ -71,46 +77,44 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					user,
 				});
 				// Always clear the two factor cookie after successful verification
-				ctx.setCookie(cookieName.name, "", {
-					maxAge: 0,
-				});
+				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
+					const plugin = ctx.context.getPlugin("two-factor");
+					const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
+					const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,
 						{
-							maxAge: TRUST_DEVICE_COOKIE_MAX_AGE,
+							maxAge,
 						},
 					);
 					/**
-					 * create a token that will be used to
-					 * verify the device
+					 * Create a random identifier for the trust device record.
+					 * Store it in the verification table with an expiration
+					 * so the server can validate and revoke it.
 					 */
+					const trustIdentifier = `trust-device-${generateRandomString(32)}`;
 					const token = await createHMAC("SHA-256", "base64urlnopad").sign(
 						ctx.context.secret,
-						`${user.id}!${session.token}`,
+						`${user.id}!${trustIdentifier}`,
 					);
+					await ctx.context.internalAdapter.createVerificationValue({
+						value: user.id,
+						identifier: trustIdentifier,
+						expiresAt: new Date(Date.now() + maxAge * 1000),
+					});
 					await ctx.setSignedCookie(
 						trustDeviceCookie.name,
-						`${token}!${session.token}`,
+						`${token}!${trustIdentifier}`,
 						ctx.context.secret,
 						trustDeviceCookie.attributes,
 					);
 					// delete the dont remember me cookie
-					ctx.setCookie(ctx.context.authCookies.dontRememberToken.name, "", {
-						maxAge: 0,
-					});
+					expireCookie(ctx, ctx.context.authCookies.dontRememberToken);
 				}
 				return ctx.json({
 					token: session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					},
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			},
 			invalid,
@@ -118,22 +122,14 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				session: null,
 				user,
 			},
-			key: twoFactorCookie,
+			key: signedTwoFactorCookie,
 		};
 	}
 	return {
 		valid: async (ctx: GenericEndpointContext) => {
 			return ctx.json({
 				token: session.session.token,
-				user: {
-					id: session.user.id,
-					email: session.user.email,
-					emailVerified: session.user.emailVerified,
-					name: session.user.name,
-					image: session.user.image,
-					createdAt: session.user.createdAt,
-					updatedAt: session.user.updatedAt,
-				},
+				user: parseUserOutput(ctx.context.options, session.user),
 			});
 		},
 		invalid,

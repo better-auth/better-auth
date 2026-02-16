@@ -4,6 +4,8 @@ import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
+import { parseUserInput } from "../../db";
+import { parseUserOutput } from "../../db/schema";
 import type { User } from "../../types";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
@@ -195,17 +197,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 			return ctx.json({
 				token: session.token,
-				user: {
-					id: user.id,
-					email: user.email,
-					emailVerified: user.emailVerified,
-					name: user.name,
-					image: user.image,
-					phoneNumber: user.phoneNumber,
-					phoneNumberVerified: user.phoneNumberVerified,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-				} as UserWithPhoneNumber,
+				user: parseUserOutput(ctx.context.options, user),
 			});
 		},
 	);
@@ -301,42 +293,44 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 		},
 	);
 
-const verifyPhoneNumberBodySchema = z.object({
-	/**
-	 * Phone number
-	 */
-	phoneNumber: z.string().meta({
-		description: 'Phone number to verify. Eg: "+1234567890"',
-	}),
-	/**
-	 * OTP code
-	 */
-	code: z.string().meta({
-		description: 'OTP code. Eg: "123456"',
-	}),
-	/**
-	 * Disable session creation after verification
-	 * @default false
-	 */
-	disableSession: z
-		.boolean()
-		.meta({
-			description: "Disable session creation after verification. Eg: false",
-		})
-		.optional(),
-	/**
-	 * This checks if there is a session already
-	 * and updates the phone number with the provided
-	 * phone number
-	 */
-	updatePhoneNumber: z
-		.boolean()
-		.meta({
-			description:
-				"Check if there is a session and update the phone number. Eg: true",
-		})
-		.optional(),
-});
+const verifyPhoneNumberBodySchema = z
+	.object({
+		/**
+		 * Phone number
+		 */
+		phoneNumber: z.string().meta({
+			description: 'Phone number to verify. Eg: "+1234567890"',
+		}),
+		/**
+		 * OTP code
+		 */
+		code: z.string().meta({
+			description: 'OTP code. Eg: "123456"',
+		}),
+		/**
+		 * Disable session creation after verification
+		 * @default false
+		 */
+		disableSession: z
+			.boolean()
+			.meta({
+				description: "Disable session creation after verification. Eg: false",
+			})
+			.optional(),
+		/**
+		 * This checks if there is a session already
+		 * and updates the phone number with the provided
+		 * phone number
+		 */
+		updatePhoneNumber: z
+			.boolean()
+			.meta({
+				description:
+					"Check if there is a session and update the phone number. Eg: true",
+			})
+			.optional(),
+	})
+	.and(z.record(z.string(), z.any()));
 
 /**
  * ### Endpoint
@@ -542,7 +536,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 						PHONE_NUMBER_ERROR_CODES.PHONE_NUMBER_EXIST,
 					);
 				}
-				let user =
+				const user =
 					await ctx.context.internalAdapter.updateUser<UserWithPhoneNumber>(
 						session.user.id,
 						{
@@ -553,17 +547,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						phoneNumber: user.phoneNumber,
-						phoneNumberVerified: user.phoneNumberVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					} as UserWithPhoneNumber,
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			}
 
@@ -578,8 +562,21 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			});
 			if (!user) {
 				if (opts?.signUpOnVerification) {
+					const {
+						phoneNumber,
+						code,
+						disableSession,
+						updatePhoneNumber,
+						...rest
+					} = ctx.body;
+					const additionalFields = parseUserInput(
+						ctx.context.options,
+						rest,
+						"create",
+					);
 					user =
 						await ctx.context.internalAdapter.createUser<UserWithPhoneNumber>({
+							...additionalFields,
 							email: opts.signUpOnVerification.getTempEmail(
 								ctx.body.phoneNumber,
 							),
@@ -637,34 +634,14 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				return ctx.json({
 					status: true,
 					token: session.token,
-					user: {
-						id: user.id,
-						email: user.email,
-						emailVerified: user.emailVerified,
-						name: user.name,
-						image: user.image,
-						phoneNumber: user.phoneNumber,
-						phoneNumberVerified: user.phoneNumberVerified,
-						createdAt: user.createdAt,
-						updatedAt: user.updatedAt,
-					} as UserWithPhoneNumber,
+					user: parseUserOutput(ctx.context.options, user),
 				});
 			}
 
 			return ctx.json({
 				status: true,
 				token: null,
-				user: {
-					id: user.id,
-					email: user.email,
-					emailVerified: user.emailVerified,
-					name: user.name,
-					image: user.image,
-					phoneNumber: user.phoneNumber,
-					phoneNumberVerified: user.phoneNumberVerified,
-					createdAt: user.createdAt,
-					updatedAt: user.updatedAt,
-				} as UserWithPhoneNumber,
+				user: parseUserOutput(ctx.context.options, user),
 			});
 		},
 	);

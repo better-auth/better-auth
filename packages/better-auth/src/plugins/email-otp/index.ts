@@ -10,6 +10,7 @@ import {
 	createVerificationOTP,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
+	requestPasswordResetEmailOTP,
 	resetPasswordEmailOTP,
 	sendVerificationOTP,
 	signInEmailOTP,
@@ -18,8 +19,7 @@ import {
 import type { EmailOTPOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"email-otp": {
 			creator: typeof emailOTP;
 		};
@@ -53,13 +53,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						async sendVerificationEmail(data, request) {
 							await ctx.runInBackgroundOrAwait(
 								sendVerificationOTPAction({
-									//@ts-expect-error - we need to pass the context
 									context: ctx,
 									request: request,
 									body: {
 										email: data.user.email,
 										type: "email-verification",
 									},
+									//@ts-expect-error
 									ctx,
 								}),
 							);
@@ -75,6 +75,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			checkVerificationOTP: checkVerificationOTP(opts),
 			verifyEmailOTP: verifyEmailOTP(opts),
 			signInEmailOTP: signInEmailOTP(opts),
+			requestPasswordResetEmailOTP: requestPasswordResetEmailOTP(opts),
 			forgetPasswordEmailOTP: forgetPasswordEmailOTP(opts),
 			resetPasswordEmailOTP: resetPasswordEmailOTP(opts),
 		},
@@ -97,7 +98,7 @@ export const emailOTP = (options: EmailOTPOptions) => {
 							const otp =
 								opts.generateOTP({ email, type: ctx.body.type }, ctx) ||
 								defaultOTPGenerator(opts);
-							let storedOTP = await storeOTP(ctx, opts, otp);
+							const storedOTP = await storeOTP(ctx, opts, otp);
 							await ctx.context.internalAdapter.createVerificationValue({
 								value: `${storedOTP}:0`,
 								identifier: `email-verification-otp-${email}`,
@@ -124,29 +125,50 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				pathMatcher(path) {
 					return path === "/email-otp/send-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/check-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/verify-email";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-password-reset";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/reset-password";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/forget-password/email-otp";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 		],
 		options,

@@ -57,7 +57,16 @@ Better Auth includes multiple safeguards to prevent Cross-Site Request Forgery (
 5. **No Mutations on GET Requests (with additional safeguards)**
   `GET` requests are assumed to be read-only and should not alter the application's state. In cases where a `GET` request must perform a mutation—such as during OAuth callbacks - Better Auth applies extra security measures, including validating `nonce` and `state` parameters to ensure the request's authenticity.
 
-You can skip the CSRF check for all requests by setting the `disableCSRFCheck` option to `true` in the configuration.
+### Disabling Security Checks
+
+Better Auth provides two separate options to disable security checks. These options control different aspects of security:
+
+#### `disableCSRFCheck`
+
+Disables **all CSRF protection**, including:
+- Origin header validation when cookies are present
+- Fetch Metadata checks (`Sec-Fetch-Site`, `Sec-Fetch-Mode`, `Sec-Fetch-Dest`)
+- Cross-site navigation blocking for first-login scenarios
 
 ```typescript
 {
@@ -67,7 +76,17 @@ You can skip the CSRF check for all requests by setting the `disableCSRFCheck` o
 }
 ```
 
-You can skip the origin check for all requests by setting the `disableOriginCheck` option to `true` in the configuration.
+<Callout type="warning">
+  Disabling CSRF checks allows requests from any origin to use cookies and perform actions on behalf of users. This opens your application to CSRF attacks.
+</Callout>
+
+#### `disableOriginCheck`
+
+Disables **URL validation** against `trustedOrigins`, including:
+- `callbackURL` validation
+- `redirectTo` validation
+- `errorCallbackURL` validation
+- `newUserCallbackURL` validation
 
 ```typescript
 {
@@ -78,8 +97,19 @@ You can skip the origin check for all requests by setting the `disableOriginChec
 ```
 
 <Callout type="warning">
-  Skipping csrf check will open your application to CSRF attacks. And skipping origin check may open up your application to other security vulnerabilities including open redirects.
+  Disabling origin checks allows any URL to be used in redirects and callbacks. This opens your application to open redirect vulnerabilities.
 </Callout>
+
+<Callout type="info">
+  For backward compatibility, `disableOriginCheck: true` also disables CSRF protection. If you only want to disable URL validation without affecting CSRF protection, this is not currently possible - both checks are disabled together when using this option.
+</Callout>
+
+#### Summary
+
+| Option | What it disables |
+|--------|-----------------|
+| `disableCSRFCheck` | CSRF protection only (origin header validation, Fetch Metadata checks) |
+| `disableOriginCheck` | URL validation AND CSRF protection (for backward compatibility) |
 
 ## OAuth State and PKCE
 
@@ -125,6 +155,36 @@ This ensures that Better Auth only accepts IP addresses from your trusted proxy'
 - When setting a custom IP address header, ensure that your proxy or load balancer is properly configured to set this header, and that it cannot be set by end users directly.
 - In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
 </Callout>
+
+## Trusted Proxy Headers
+
+If your application runs behind a reverse proxy or load balancer, Better Auth can derive the base URL from the inbound request's `X-Forwarded-Host` and `X-Forwarded-Proto` headers. This is useful when your app is accessible from multiple domains (e.g. `example.com` and `app.example.dev`) and you don't want to hardcode a single `baseURL` in the configuration.
+
+When `trustedProxyHeaders` is enabled and no `baseURL` is set in the configuration (or via environment variables), Better Auth uses the forwarded headers to construct the base URL on each request. This means OAuth callbacks, email verification links, and redirects will automatically use whichever domain the user loaded the app on.
+
+```typescript
+{
+  advanced: {
+    trustedProxyHeaders: true
+  }
+}
+```
+
+<Callout type="warning">
+Only enable this option if you trust the proxy headers reaching your application. Your reverse proxy or load balancer must be configured to set `X-Forwarded-Host` and `X-Forwarded-Proto` correctly, and end users must not be able to set these headers directly. If untrusted clients can forge these headers, they could manipulate redirects and callback URLs.
+</Callout>
+
+When enabled, the base URL resolution follows this priority:
+
+1. Static `baseURL` from the configuration (if set, proxy headers are ignored)
+2. Environment variables (`BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.)
+3. `X-Forwarded-Host` + `X-Forwarded-Proto` headers (when `trustedProxyHeaders` is `true`)
+4. The request URL origin as a final fallback
+
+If you're serving your app from multiple approved domains, you'll typically want to:
+- **Omit `baseURL`** from the configuration so it's derived per-request from the proxy headers
+- Set **`trustedOrigins`** to an allowlist of your approved domains (see below)
+- Leave `crossSubDomainCookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
 
 ## Trusted Origins
 

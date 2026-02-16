@@ -6,6 +6,8 @@ import {
 	initGetModelName,
 } from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
 	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
@@ -16,8 +18,6 @@ import type {
 	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
@@ -241,7 +241,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
+		const toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -274,9 +274,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
@@ -419,7 +417,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				let builder = db.schema.alterTable(table.table);
+				const builder = db.schema.alterTable(table.table);
 
 				if (field.index) {
 					const index = db.schema
@@ -428,7 +426,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 					migrations.push(index);
 				}
 
-				let built = builder.addColumn(fieldName, type, (col) => {
+				const built = builder.addColumn(fieldName, type, (col) => {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
@@ -461,13 +459,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 		}
 	}
 
-	let toBeIndexed: CreateIndexBuilder[] = [];
-
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
-	}
+	const toBeIndexed: CreateIndexBuilder[] = [];
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
@@ -531,7 +523,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 				});
 
 				if (field.index) {
-					let builder = db.schema
+					const builder = db.schema
 						.createIndex(
 							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
 						)

@@ -4,7 +4,7 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
@@ -88,9 +88,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			};
 
 			if (typeof body !== "object" || Array.isArray(body)) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Body must be an object",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
+				);
 			}
 
 			if (body.email) {
@@ -307,15 +308,7 @@ export const changePassword = createAuthEndpoint(
 
 		return ctx.json({
 			token,
-			user: {
-				id: session.user.id,
-				email: session.user.email,
-				name: session.user.name,
-				image: session.user.image,
-				emailVerified: session.user.emailVerified,
-				createdAt: session.user.createdAt,
-				updatedAt: session.user.updatedAt,
-			},
+			user: parseUserOutput(ctx.context.options, session.user),
 		});
 	},
 );
@@ -367,10 +360,7 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw APIError.from("BAD_REQUEST", {
-			message: "user already has a password",
-			code: "USER_ALREADY_HAS_PASSWORD",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );
 
@@ -821,8 +811,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		const sendConfirmationToOldEmail =
 			ctx.context.session.user.emailVerified &&
-			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (sendConfirmationToOldEmail) {
 			const token = await createEmailVerificationToken(
@@ -838,8 +827,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
+				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 			if (sendFn) {
 				await ctx.context.runInBackgroundOrAwait(
 					sendFn(
