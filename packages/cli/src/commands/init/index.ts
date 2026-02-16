@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
+import open from "open";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import z from "zod";
@@ -1503,7 +1504,7 @@ export const auth = betterAuth({
 		initial: true,
 	});
 	if (connectResponse.connect) {
-		await open("https://www.better-auth.com/onboarding");
+		await open("https://alpha.better-auth.com/onboarding");
 		console.log(
 			chalk.cyan("\n→ ") +
 				"Opening Better Auth onboarding in your browser...\n",
