@@ -45,13 +45,19 @@ export function listAgents() {
 					id: agent.id,
 					name: agent.name,
 					status: agent.status,
-					scopes: agent.scopes,
+					scopes:
+						typeof agent.scopes === "string"
+							? JSON.parse(agent.scopes)
+							: agent.scopes,
 					role: agent.role,
 					orgId: agent.orgId,
 					lastUsedAt: agent.lastUsedAt,
 					createdAt: agent.createdAt,
 					updatedAt: agent.updatedAt,
-					metadata: agent.metadata,
+					metadata:
+						typeof agent.metadata === "string"
+							? JSON.parse(agent.metadata)
+							: agent.metadata,
 				})),
 			);
 		},
