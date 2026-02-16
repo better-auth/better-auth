@@ -362,10 +362,14 @@ export const getSessionCookie = (
 	}
 	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
-	const getCookie = (name: string) => parsedCookie.get(name) || parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+	const getCookie = (name: string) =>
+		parsedCookie.get(name) ||
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
 
 	const parsedCookie = parseCookies(cookies);
-	const sessionToken = getCookie(`${cookiePrefix}.${cookieName}`) || getCookie(`${cookiePrefix}-${cookieName}`);
+	const sessionToken =
+		getCookie(`${cookiePrefix}.${cookieName}`) ||
+		getCookie(`${cookiePrefix}-${cookieName}`);
 	if (sessionToken) {
 		return sessionToken;
 	}

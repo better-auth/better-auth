@@ -383,16 +383,23 @@ describe("getSessionCookie", async () => {
 				[{}, "better-auth", "session_token"],
 				[{ cookiePrefix: "myprefix" }, "myprefix", "session_token"],
 				[{ cookieName: "my_token" }, "better-auth", "my_token"],
-				[{ cookiePrefix: "myprefix", cookieName: "my_token" }, "myprefix", "my_token"],
+				[
+					{ cookiePrefix: "myprefix", cookieName: "my_token" },
+					"myprefix",
+					"my_token",
+				],
 			])("finds cookie with config %j", (config, prefix, name) => {
 				const headers = new Headers();
-				headers.set("cookie", `${securePrefix}${prefix}${separator}${name}=token-123`);
+				headers.set(
+					"cookie",
+					`${securePrefix}${prefix}${separator}${name}=token-123`,
+				);
 
 				const request = new Request("https://example.com/api/auth/session", {
 					headers,
 				});
 
-				expect(getSessionCookie(request, config)).toBe("token-123"); 
+				expect(getSessionCookie(request, config)).toBe("token-123");
 			});
 		});
 	});
