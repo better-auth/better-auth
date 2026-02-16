@@ -8,6 +8,10 @@
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/core"
   },
+  "files": [
+    "dist",
+    "src"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
