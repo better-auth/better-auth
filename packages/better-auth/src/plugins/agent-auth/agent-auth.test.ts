@@ -128,6 +128,9 @@ describe("agent-auth", async () => {
 		expect(found).toBeDefined();
 		expect(found?.name).toBe("Test Agent");
 		expect(found?.status).toBe("active");
+		// Verify scopes come back as a parsed array, not a JSON string
+		expect(Array.isArray(found?.scopes)).toBe(true);
+		expect(found?.scopes).toEqual(["email.send", "reports.read"]);
 	});
 
 	// =========================================================================
@@ -145,6 +148,9 @@ describe("agent-auth", async () => {
 		expect(res.data?.id).toBe(agentId);
 		expect(res.data?.name).toBe("Test Agent");
 		expect(res.data?.status).toBe("active");
+		// Verify scopes come back as a parsed array, not a JSON string
+		expect(Array.isArray(res.data?.scopes)).toBe(true);
+		expect(res.data?.scopes).toEqual(["email.send", "reports.read"]);
 	});
 
 	// =========================================================================
