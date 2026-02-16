@@ -15,7 +15,7 @@ import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
 
-export let possiblePaths = [
+let possiblePaths = [
 	"auth.ts",
 	"auth.tsx",
 	"auth.js",
@@ -237,9 +237,6 @@ async function resolveConfigFilePath(
 			"Couldn't find a configuration file. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
 	}
-	console.error(
-		"Couldn't find a configuration file. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
-	);
 	return null;
 }
 
@@ -253,29 +250,33 @@ async function loadConfigWithVite(cwd: string, resolvedConfigPath: string) {
 		} catch {
 			return null;
 		}
-		const viteConfig = await vite.loadConfigFromFile(
-			{
-				command: "serve",
-				mode: "development",
-				isSsrBuild: true,
-			},
-			undefined, // configPath (optional)
-			cwd, // configRoot
-		);
-		if (!viteConfig) {
+		try {
+			const viteConfig = await vite.loadConfigFromFile(
+				{
+					command: "serve",
+					mode: "development",
+					isSsrBuild: true,
+				},
+				undefined, // configPath (optional)
+				cwd, // configRoot
+			);
+			if (!viteConfig) {
+				return null;
+			}
+
+			if (typeof vite.runnerImport !== "function") {
+				return null;
+			}
+
+			const { module: config } = await vite.runnerImport<BetterAuthConfig>(
+				resolvedConfigPath,
+				viteConfig.config,
+			);
+
+			return config as BetterAuthConfig;
+		} catch {
 			return null;
 		}
-
-		if (typeof vite.runnerImport !== "function") {
-			return null;
-		}
-
-		const { module: config } = await vite.runnerImport<BetterAuthConfig>(
-			resolvedConfigPath,
-			viteConfig.config,
-		);
-
-		return config as BetterAuthConfig;
 	}
 	return null;
 }
@@ -313,17 +314,6 @@ export async function getConfig({
 				cwd,
 			});
 			config = jitiConfigResult.config;
-			if (!("auth" in config) && !isDefaultExport(config)) {
-				if (shouldThrowOnError) {
-					throw new Error(
-						"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
-					);
-				}
-				console.error(
-					`[#better-auth]: Couldn't read your auth config in ${resolvedConfigPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
-				);
-				process.exit(1);
-			}
 		} catch (e) {
 			if (
 				typeof e === "object" &&
@@ -353,6 +343,18 @@ export async function getConfig({
 	}
 
 	if (!config) return null;
+
+	if (!("auth" in config) && !isDefaultExport(config)) {
+		if (shouldThrowOnError) {
+			throw new Error(
+				"Couldn't read your auth config. Make sure to default export your auth instance or to export as a variable named auth.",
+			);
+		}
+		console.error(
+			`[#better-auth]: Couldn't read your auth config in ${resolvedConfigPath}. Make sure to default export your auth instance or to export as a variable named auth.`,
+		);
+		process.exit(1);
+	}
 
 	return "auth" in config
 		? config.auth?.options
