@@ -215,6 +215,21 @@
       "types": "./dist/plugins/admin/access/index.d.mts",
       "default": "./dist/plugins/admin/access/index.mjs"
     },
+    "./plugins/agent-auth": {
+      "dev-source": "./src/plugins/agent-auth/index.ts",
+      "types": "./dist/plugins/agent-auth/index.d.mts",
+      "default": "./dist/plugins/agent-auth/index.mjs"
+    },
+    "./plugins/agent-auth/client": {
+      "dev-source": "./src/plugins/agent-auth/client.ts",
+      "types": "./dist/plugins/agent-auth/client.d.mts",
+      "default": "./dist/plugins/agent-auth/client.mjs"
+    },
+    "./plugins/agent-auth/agent-client": {
+      "dev-source": "./src/plugins/agent-auth/agent-client.ts",
+      "types": "./dist/plugins/agent-auth/agent-client.d.mts",
+      "default": "./dist/plugins/agent-auth/agent-client.mjs"
+    },
     "./plugins/anonymous": {
       "dev-source": "./src/plugins/anonymous/index.ts",
       "types": "./dist/plugins/anonymous/index.d.mts",
@@ -414,6 +429,15 @@
       ],
       "plugins/admin/access": [
         "./dist/plugins/admin/access/index.d.mts"
+      ],
+      "plugins/agent-auth": [
+        "./dist/plugins/agent-auth/index.d.mts"
+      ],
+      "plugins/agent-auth/client": [
+        "./dist/plugins/agent-auth/client.d.mts"
+      ],
+      "plugins/agent-auth/agent-client": [
+        "./dist/plugins/agent-auth/agent-client.d.mts"
       ],
       "plugins/anonymous": [
         "./dist/plugins/anonymous/index.d.mts"
