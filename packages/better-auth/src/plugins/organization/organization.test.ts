@@ -1,7 +1,7 @@
 import type { APIError } from "@better-auth/core/error";
 import { memoryAdapter } from "@better-auth/memory-adapter";
 import type { Prettify } from "better-call";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, onTestFinished } from "vitest";
 import type {
 	BetterFetchError,
 	PreinitializedWritableAtom,
@@ -2419,6 +2419,188 @@ describe("Additional Fields", async () => {
 		expect(data.someRequiredField).toBe("hey2");
 		expect(data.someOptionalField).toBe("hey");
 		expect(data.someHiddenField).toBeUndefined();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7981
+	 */
+	describe("active organization hook refresh", () => {
+		type QueryState<T> = {
+			data: T | null;
+			isPending: boolean;
+			isRefetching: boolean;
+		};
+
+		type QueryAtomLike<T> = {
+			get: () => QueryState<T>;
+			subscribe: (listener: (state: QueryState<T>) => void) => () => void;
+		};
+
+		const startClientSideQuery = () => {
+			const previousWindow = global.window as
+				| (Window & typeof globalThis)
+				| undefined;
+			global.window = {} as unknown as Window & typeof globalThis;
+			return () => {
+				global.window = previousWindow as unknown as Window & typeof globalThis;
+			};
+		};
+
+		const registerActiveOrganizationCleanup = (restoreWindow: () => void) => {
+			onTestFinished(async () => {
+				restoreWindow();
+				await client.organization
+					.setActive({
+						organizationId: org.id,
+						fetchOptions: {
+							headers,
+						},
+					})
+					.catch(() => undefined);
+			});
+		};
+
+		const waitForQueryData = async <T>(
+			query: QueryAtomLike<T>,
+			matches: (data: T) => boolean,
+			triggerFetch = false,
+		) => {
+			return new Promise<T>((resolve, reject) => {
+				let unsubscribe = () => {};
+				const timeoutId = setTimeout(() => {
+					unsubscribe();
+					reject(new Error("Timed out waiting for query data"));
+				}, 1000);
+
+				unsubscribe = query.subscribe((state) => {
+					if (state.isPending || state.isRefetching || state.data === null) {
+						return;
+					}
+					if (!matches(state.data)) {
+						return;
+					}
+					clearTimeout(timeoutId);
+					unsubscribe();
+					resolve(state.data);
+				});
+
+				if (triggerFetch) {
+					query.get();
+				}
+			});
+		};
+
+		it("updates active member when setActive changes organization", async () => {
+			await client.organization.setActive({
+				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const secondOrganization = await auth.api.createOrganization({
+				body: {
+					name: "test-issue-7981",
+					slug: "test-issue-7981",
+					someRequiredField: "issue-7981-required",
+					keepCurrentActiveOrganization: true,
+				},
+				headers,
+			});
+
+			if (!secondOrganization) {
+				throw new Error("Second organization is null");
+			}
+
+			const restoreWindow = startClientSideQuery();
+			registerActiveOrganizationCleanup(restoreWindow);
+
+			const activeMemberQuery = orgClientPlugin.getAtoms(
+				client.$fetch,
+			).activeMember;
+			await waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId === org.id,
+				true,
+			);
+			const switchedMember = waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId === secondOrganization.id,
+			);
+
+			await client.organization.setActive({
+				organizationId: secondOrganization.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const updatedMember = await switchedMember;
+			expect(updatedMember.organizationId).toBe(secondOrganization.id);
+		});
+
+		it("updates session and active member when create switches active organization", async () => {
+			await client.organization.setActive({
+				organizationId: org.id,
+				fetchOptions: {
+					headers,
+				},
+			});
+
+			const restoreWindow = startClientSideQuery();
+			registerActiveOrganizationCleanup(restoreWindow);
+
+			const activeMemberQuery = orgClientPlugin.getAtoms(
+				client.$fetch,
+			).activeMember;
+			const sessionQuery = client.useSession;
+
+			await Promise.all([
+				waitForQueryData(
+					activeMemberQuery,
+					(member) => member.organizationId === org.id,
+					true,
+				),
+				waitForQueryData(
+					sessionQuery,
+					(session) => session.session.activeOrganizationId === org.id,
+					true,
+				),
+			]);
+			await new Promise((resolve) => setTimeout(resolve, 30));
+
+			const switchedMember = waitForQueryData(
+				activeMemberQuery,
+				(member) => member.organizationId !== org.id,
+			);
+			const switchedSession = waitForQueryData(
+				sessionQuery,
+				(session) =>
+					Boolean(session.session.activeOrganizationId) &&
+					session.session.activeOrganizationId !== org.id,
+			);
+
+			const createdOrganization = await client.organization.create({
+				name: "test-issue-7981-create",
+				slug: "test-issue-7981-create",
+				someRequiredField: "issue-7981-create-required",
+				fetchOptions: {
+					headers,
+				},
+			});
+			if (!createdOrganization.data) {
+				throw createdOrganization.error || new Error("Create failed");
+			}
+
+			const [updatedMember, updatedSession] = await Promise.all([
+				switchedMember,
+				switchedSession,
+			]);
+			expect(updatedMember.organizationId).toBe(createdOrganization.data.id);
+			expect(updatedSession.session.activeOrganizationId).toBe(
+				createdOrganization.data.id,
+			);
+		});
 	});
 
 	it("getFullOrganization", async () => {
