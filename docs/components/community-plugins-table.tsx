@@ -323,6 +323,16 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/C-W-D-Harshit.png",
 		},
 	},
+	{
+		name: "@nuntly/better-email",
+		url: "https://github.com/nuntly/better-email",
+		description: "Better Auth emails made simple with Better Email.",
+		author: {
+			name: "obazoud",
+			github: "nuntly",
+			avatar: "https://github.com/obazoud.png",
+		},
+	},
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
