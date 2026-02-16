@@ -47,10 +47,7 @@ jobs:
         run: pnpm build
 
       - name: Start Docker Containers
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - uses: oven-sh/setup-bun@v2
 
@@ -107,10 +104,7 @@ jobs:
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Integration
         if: github.event_name != 'merge_group'
@@ -167,10 +161,7 @@ jobs:
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Adapter Integration
         if: github.event_name != 'merge_group'
