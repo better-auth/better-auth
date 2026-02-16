@@ -63,13 +63,22 @@ export function updateAgent() {
 				update: updates,
 			});
 
+			const parsedScopes =
+				typeof updated.scopes === "string"
+					? JSON.parse(updated.scopes)
+					: updated.scopes;
+			const parsedMetadata =
+				typeof updated.metadata === "string"
+					? JSON.parse(updated.metadata)
+					: updated.metadata;
+
 			return ctx.json({
 				id: updated.id,
 				name: updated.name,
-				scopes: updated.scopes,
+				scopes: parsedScopes,
 				role: updated.role,
 				status: updated.status,
-				metadata: updated.metadata,
+				metadata: parsedMetadata,
 				updatedAt: updated.updatedAt,
 			});
 		},

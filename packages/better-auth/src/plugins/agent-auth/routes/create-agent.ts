@@ -60,9 +60,9 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PUBLIC_KEY);
 			}
 
-			const resolvedScopes =
-				scopes ?? (role && opts.roles?.[role]) ?? [];
 			const resolvedRole = role ?? opts.defaultRole ?? null;
+			const resolvedScopes =
+				scopes ?? (resolvedRole && opts.roles?.[resolvedRole]) ?? [];
 
 			const now = new Date();
 			const kid = (publicKey.kid as string) ?? null;

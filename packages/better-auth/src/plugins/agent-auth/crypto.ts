@@ -6,7 +6,11 @@ import { generateId } from "@better-auth/core/utils/id";
  * Adds a unique `kid` to both keys.
  * The private key should never be sent to or stored on any server.
  */
-export async function generateAgentKeypair() {
+export async function generateAgentKeypair(): Promise<{
+	publicKey: Record<string, unknown>;
+	privateKey: Record<string, unknown>;
+	kid: string;
+}> {
 	const { publicKey, privateKey } = await generateKeyPair("EdDSA", {
 		crv: "Ed25519",
 		extractable: true,
@@ -19,7 +23,11 @@ export async function generateAgentKeypair() {
 	publicWebKey.kid = kid;
 	privateWebKey.kid = kid;
 
-	return { publicKey: publicWebKey, privateKey: privateWebKey, kid };
+	return {
+		publicKey: { ...publicWebKey },
+		privateKey: { ...privateWebKey },
+		kid,
+	};
 }
 
 export interface SignAgentJWTOptions {
