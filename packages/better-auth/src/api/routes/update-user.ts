@@ -527,9 +527,9 @@ export const deleteUser = createAuthEndpoint(
 			});
 			const url = `${
 				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{
