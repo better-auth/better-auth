@@ -75,6 +75,10 @@ To register an OIDC provider, use the `registerSSOProvider` endpoint and provide
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
 
 <Callout type="info">
+If you need all providers to share a single callback URL (e.g., when migrating from another auth provider), see [Shared Redirect URI](#shared-redirect-uri).
+</Callout>
+
+<Callout type="info">
 When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
 </Callout>
 
@@ -1190,6 +1194,47 @@ sso({
 For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
 </Callout>
 
+## Shared Redirect URI
+
+By default, each OIDC provider gets its own callback URL (`/sso/callback/:providerId`). You can configure all providers to share a single redirect URI instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            redirectURI: "/sso/callback" // [!code highlight]
+        })
+    ]
+});
+```
+
+The value can be a relative path or a full URL:
+
+```ts
+// Relative path (appended to your baseURL)
+sso({ redirectURI: "/sso/callback" })
+
+// Full URL
+sso({ redirectURI: "https://login.example.com/callback" })
+```
+
+The provider ID is stored in the OAuth state so the callback can identify which provider initiated the flow.
+
+<Callout type="info">
+When using a full URL, make sure it routes to your Better Auth instance.
+</Callout>
+
+<Callout type="info">
+This option only affects OIDC providers. SAML providers already support custom callback URLs via `callbackUrl` in `samlConfig`.
+</Callout>
+
+<Callout type="info">
+Both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) are always registered for backward compatibility, so existing integrations continue to work regardless of this setting.
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1443,6 +1488,11 @@ If you want to allow account linking for specific trusted providers, enable the 
         description: "Configure the maximum number of SSO providers a user can register. Set to 0 to disable SSO provider registration.",
         type: "number | function",
         default: 10,
+    },
+    redirectURI: {
+        description: "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+        type: "string",
+        required: false,
     },
     domainVerification: {
         description: "Configure the domain verification feature",

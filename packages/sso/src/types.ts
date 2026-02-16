@@ -286,6 +286,11 @@ export interface SSOOptions {
 		tokenPrefix?: string;
 	};
 	/**
+	 * A shared redirect URI used by all OIDC providers instead of
+	 * per-provider callback URLs. Can be a path or a full URL.
+	 */
+	redirectURI?: string;
+	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
 	 */
