@@ -83,6 +83,11 @@ export type StripePlan = {
 	seatPriceId?: string | undefined;
 	/**
 	 * Additional line items to include in the checkout session.
+	 *
+	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
+	 * Stripe does not support mixed-interval subscriptions via Checkout Sessions.
+	 *
+	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
 	 */
 	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
 	/**
@@ -218,6 +223,12 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
 }
 
 export type SubscriptionOptions = {
