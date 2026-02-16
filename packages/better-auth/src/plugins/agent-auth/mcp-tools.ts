@@ -38,6 +38,25 @@ export interface MCPAgentStorage {
 			scopes: string[];
 		}>
 	>;
+	/** Store a pending device auth flow so connect_complete can finish it. */
+	savePendingFlow?(
+		appUrl: string,
+		flow: {
+			deviceCode: string;
+			clientId: string;
+			name: string;
+			scopes: string[];
+		},
+	): Promise<void>;
+	/** Retrieve a pending device auth flow. */
+	getPendingFlow?(appUrl: string): Promise<{
+		deviceCode: string;
+		clientId: string;
+		name: string;
+		scopes: string[];
+	} | null>;
+	/** Remove a pending device auth flow. */
+	removePendingFlow?(appUrl: string): Promise<void>;
 }
 
 export interface MCPToolDefinition {
@@ -52,16 +71,15 @@ export interface MCPToolDefinition {
 export interface CreateAgentMCPToolsOptions {
 	storage: MCPAgentStorage;
 	/**
-	 * Auth headers to attach when creating/revoking agents.
-	 * The `/agent/create` endpoint requires a user session, so the MCP
-	 * server must forward the user's auth context.
-	 *
-	 * Can be a static object or a function that resolves dynamically
-	 * (e.g. reading a cookie from a config file).
+	 * Auth headers to attach when creating/revoking agents via direct method.
+	 * If not provided, the `connect_agent` tool will use the device
+	 * authorization flow instead (recommended).
 	 */
 	getAuthHeaders?: () =>
 		| Record<string, string>
 		| Promise<Record<string, string>>;
+	/** Client ID for device auth flow. Default: "agent-auth" */
+	clientId?: string;
 }
 
 /**
@@ -71,7 +89,7 @@ export interface CreateAgentMCPToolsOptions {
 export function createAgentMCPTools(
 	options: CreateAgentMCPToolsOptions,
 ): MCPToolDefinition[] {
-	const { storage, getAuthHeaders } = options;
+	const { storage, getAuthHeaders, clientId = "agent-auth" } = options;
 
 	async function resolveAuthHeaders(): Promise<Record<string, string>> {
 		if (!getAuthHeaders) return {};
@@ -87,11 +105,12 @@ export function createAgentMCPTools(
 		return keypair;
 	}
 
-	return [
+	const tools: MCPToolDefinition[] = [
 		{
 			name: "connect_agent",
-			description:
-				"Connect to an app as an agent. Auto-generates a keypair if needed and registers the public key with the app.",
+			description: getAuthHeaders
+				? "Connect to an app as an agent. Auto-generates a keypair if needed and registers the public key with the app."
+				: "Start connecting to an app as an agent. Returns a user code that the user must approve in their browser. After approval, call connect_agent_complete to finish.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z
@@ -109,52 +128,117 @@ export function createAgentMCPTools(
 				const scopes = (input.scopes as string[]) ?? [];
 
 				const keypair = await getOrCreateKeypair();
-				const authHeaders = await resolveAuthHeaders();
 
-				const res = await globalThis.fetch(
-					`${url}/api/auth/agent/create`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							...authHeaders,
+				// If auth headers are available, use direct registration
+				if (getAuthHeaders) {
+					const authHeaders = await resolveAuthHeaders();
+					const res = await globalThis.fetch(
+						`${url}/api/auth/agent/create`,
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								...authHeaders,
+							},
+							body: JSON.stringify({
+								name,
+								publicKey: keypair.publicKey,
+								scopes,
+							}),
 						},
-						body: JSON.stringify({
-							name,
-							publicKey: keypair.publicKey,
-							scopes,
-						}),
-					},
-				);
+					);
 
-				if (!res.ok) {
-					const err = await res.text();
+					if (!res.ok) {
+						const err = await res.text();
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Failed to connect: ${err}`,
+								},
+							],
+						};
+					}
+
+					const data = (await res.json()) as {
+						agentId: string;
+						scopes: string[];
+					};
+
+					await storage.saveConnection(url, {
+						agentId: data.agentId,
+						name,
+						scopes: data.scopes,
+					});
+
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Failed to connect: ${err}`,
+								text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
 							},
 						],
 					};
 				}
 
-				const data = (await res.json()) as {
-					agentId: string;
-					scopes: string[];
+				// Device authorization flow
+				const codeRes = await globalThis.fetch(
+					`${url}/api/auth/device/code`,
+					{
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({
+							client_id: clientId,
+							scope: scopes.join(" "),
+						}),
+					},
+				);
+
+				if (!codeRes.ok) {
+					const err = await codeRes.text();
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Failed to start device auth: ${err}`,
+							},
+						],
+					};
+				}
+
+				const codeData = (await codeRes.json()) as {
+					device_code: string;
+					user_code: string;
+					verification_uri: string;
+					verification_uri_complete: string;
+					expires_in: number;
 				};
 
-				await storage.saveConnection(url, {
-					agentId: data.agentId,
-					name,
-					scopes: data.scopes,
-				});
+				// Store pending flow so connect_agent_complete can finish
+				if (storage.savePendingFlow) {
+					await storage.savePendingFlow(url, {
+						deviceCode: codeData.device_code,
+						clientId,
+						name,
+						scopes,
+					});
+				}
 
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
+							text: [
+								`To connect your agent, open this URL in your browser:`,
+								``,
+								`  ${codeData.verification_uri_complete}`,
+								``,
+								`Or go to ${codeData.verification_uri} and enter code: ${codeData.user_code}`,
+								``,
+								`The code expires in ${Math.floor(codeData.expires_in / 60)} minutes.`,
+								``,
+								`After approving, call connect_agent_complete with url "${url}" to finish.`,
+							].join("\n"),
 						},
 					],
 				};
@@ -205,7 +289,6 @@ export function createAgentMCPTools(
 					};
 				}
 
-				// Try to revoke server-side too
 				const keypair = await storage.getKeypair();
 				if (keypair) {
 					const authHeaders = await resolveAuthHeaders();
@@ -230,7 +313,7 @@ export function createAgentMCPTools(
 					content: [
 						{
 							type: "text" as const,
-							text: `Disconnected from ${url}. Agent ${connection.agentId} removed locally${keypair ? " and revoked server-side" : ""}.`,
+							text: `Disconnected from ${url}. Agent ${connection.agentId} removed.`,
 						},
 					],
 				};
@@ -387,4 +470,190 @@ export function createAgentMCPTools(
 			},
 		},
 	];
+
+	// Only add connect_agent_complete when using device auth flow
+	if (!getAuthHeaders) {
+		tools.push({
+			name: "connect_agent_complete",
+			description:
+				"Complete the agent connection after the user has approved in their browser. Call this after connect_agent.",
+			inputSchema: {
+				url: z
+					.string()
+					.describe("App URL (same one used in connect_agent)"),
+			},
+			handler: async (input) => {
+				const url = (input.url as string).replace(/\/+$/, "");
+
+				const pendingFlow = storage.getPendingFlow
+					? await storage.getPendingFlow(url)
+					: null;
+				if (!pendingFlow) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `No pending connection for ${url}. Run connect_agent first.`,
+							},
+						],
+					};
+				}
+
+				const keypair = await getOrCreateKeypair();
+
+				// Poll for the token (try up to 60 times, ~5 min)
+				const maxAttempts = 60;
+				const interval = 5000;
+				let accessToken: string | null = null;
+
+				for (let i = 0; i < maxAttempts; i++) {
+					const tokenRes = await globalThis.fetch(
+						`${url}/api/auth/device/token`,
+						{
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+							},
+							body: JSON.stringify({
+								grant_type:
+									"urn:ietf:params:oauth:grant-type:device_code",
+								device_code: pendingFlow.deviceCode,
+								client_id: pendingFlow.clientId,
+							}),
+						},
+					);
+
+					if (tokenRes.ok) {
+						const tokenData = (await tokenRes.json()) as {
+							access_token: string;
+						};
+						accessToken = tokenData.access_token;
+						break;
+					}
+
+					const errorData = (await tokenRes.json()) as {
+						error: string;
+					};
+
+					if (errorData.error === "authorization_pending") {
+						await new Promise((resolve) =>
+							setTimeout(resolve, interval),
+						);
+						continue;
+					}
+					if (errorData.error === "slow_down") {
+						await new Promise((resolve) =>
+							setTimeout(resolve, interval * 2),
+						);
+						continue;
+					}
+					if (errorData.error === "access_denied") {
+						if (storage.removePendingFlow)
+							await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "User denied the connection.",
+								},
+							],
+						};
+					}
+					if (errorData.error === "expired_token") {
+						if (storage.removePendingFlow)
+							await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "Device code expired. Please run connect_agent again.",
+								},
+							],
+						};
+					}
+
+					// Unknown error, abort
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Device auth failed: ${errorData.error}`,
+							},
+						],
+					};
+				}
+
+				if (!accessToken) {
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Timed out waiting for approval. Run connect_agent again.",
+							},
+						],
+					};
+				}
+
+				// Register the agent
+				const createRes = await globalThis.fetch(
+					`${url}/api/auth/agent/create`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${accessToken}`,
+						},
+						body: JSON.stringify({
+							name: pendingFlow.name,
+							publicKey: keypair.publicKey,
+							scopes: pendingFlow.scopes,
+						}),
+					},
+				);
+
+				if (!createRes.ok) {
+					const err = await createRes.text();
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Failed to register agent: ${err}`,
+							},
+						],
+					};
+				}
+
+				const data = (await createRes.json()) as {
+					agentId: string;
+					scopes: string[];
+				};
+
+				await storage.saveConnection(url, {
+					agentId: data.agentId,
+					name: pendingFlow.name,
+					scopes: data.scopes,
+				});
+
+				if (storage.removePendingFlow)
+					await storage.removePendingFlow(url);
+
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
+						},
+					],
+				};
+			},
+		});
+	}
+
+	return tools;
 }

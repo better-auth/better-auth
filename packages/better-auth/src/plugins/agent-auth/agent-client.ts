@@ -3,6 +3,244 @@ import type { AgentSession } from "./types";
 
 export { generateAgentKeypair as generateKeypair } from "./crypto";
 
+// =========================================================================
+// DEVICE AUTH CONNECT FLOW
+// =========================================================================
+
+export interface ConnectAgentOptions {
+	/** Base URL of the app (e.g. "https://app-x.com") */
+	appURL: string;
+	/** Agent name. Default: "Agent" */
+	name?: string;
+	/** Scopes to request. */
+	scopes?: string[];
+	/** Role to request. */
+	role?: string;
+	/** Pre-generated keypair. If not provided, one will be generated. */
+	keypair?: {
+		publicKey: Record<string, unknown>;
+		privateKey: Record<string, unknown>;
+		kid: string;
+	};
+	/** Client ID for the device auth flow. Default: "agent-auth" */
+	clientId?: string;
+	/** Polling interval in ms. Default: 5000 */
+	pollInterval?: number;
+	/** Max wait time in ms before giving up. Default: 300000 (5 min) */
+	timeout?: number;
+	/**
+	 * Called when the user code is ready.
+	 * Show this to the user so they can approve in their browser.
+	 */
+	onUserCode?: (info: {
+		userCode: string;
+		verificationUri: string;
+		verificationUriComplete: string;
+		expiresIn: number;
+	}) => void;
+	/**
+	 * Called on each poll attempt.
+	 * Useful for showing a spinner or progress indicator.
+	 */
+	onPoll?: (attempt: number) => void;
+}
+
+export interface ConnectAgentResult {
+	agentId: string;
+	name: string;
+	scopes: string[];
+	publicKey: Record<string, unknown>;
+	privateKey: Record<string, unknown>;
+	kid: string;
+}
+
+/**
+ * Connect an agent to an app using the device authorization flow.
+ *
+ * 1. Generates a keypair (or uses the provided one)
+ * 2. Requests a device code from the app
+ * 3. Calls onUserCode so you can show the code to the user
+ * 4. Polls until the user approves (or times out)
+ * 5. Uses the session token to register the agent's public key
+ * 6. Returns the agent ID, keypair, and scopes
+ *
+ * The app must have both `agentAuth()` and `deviceAuthorization()` plugins enabled.
+ *
+ * @example
+ * ```ts
+ * const result = await connectAgent({
+ *   appURL: "https://myapp.com",
+ *   name: "My Agent",
+ *   scopes: ["reports.read"],
+ *   onUserCode: ({ userCode, verificationUri }) => {
+ *     console.log(`Go to ${verificationUri} and enter: ${userCode}`);
+ *   },
+ * });
+ * // result.agentId, result.privateKey, result.publicKey
+ * ```
+ */
+export async function connectAgent(
+	options: ConnectAgentOptions,
+): Promise<ConnectAgentResult> {
+	const {
+		appURL,
+		name = "Agent",
+		scopes = [],
+		role,
+		clientId = "agent-auth",
+		pollInterval = 5000,
+		timeout = 300_000,
+		onUserCode,
+		onPoll,
+	} = options;
+
+	const base = appURL.replace(/\/+$/, "");
+
+	// Step 1: Generate or reuse keypair
+	const keypair = options.keypair ?? (await generateAgentKeypair());
+
+	// Step 2: Request a device code
+	const codeRes = await globalThis.fetch(`${base}/api/auth/device/code`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({
+			client_id: clientId,
+			scope: scopes.join(" "),
+		}),
+	});
+
+	if (!codeRes.ok) {
+		const err = await codeRes.text();
+		throw new Error(`Failed to request device code: ${err}`);
+	}
+
+	const codeData = (await codeRes.json()) as {
+		device_code: string;
+		user_code: string;
+		verification_uri: string;
+		verification_uri_complete: string;
+		expires_in: number;
+		interval: number;
+	};
+
+	// Step 3: Notify caller to show the code
+	if (onUserCode) {
+		onUserCode({
+			userCode: codeData.user_code,
+			verificationUri: codeData.verification_uri,
+			verificationUriComplete: codeData.verification_uri_complete,
+			expiresIn: codeData.expires_in,
+		});
+	}
+
+	// Step 4: Poll for approval
+	const effectiveInterval = Math.max(
+		pollInterval,
+		codeData.interval * 1000,
+	);
+	const deadline = Date.now() + timeout;
+	let attempt = 0;
+	let accessToken: string | null = null;
+
+	while (Date.now() < deadline) {
+		await new Promise((resolve) =>
+			setTimeout(resolve, effectiveInterval),
+		);
+		attempt++;
+		if (onPoll) onPoll(attempt);
+
+		const tokenRes = await globalThis.fetch(
+			`${base}/api/auth/device/token`,
+			{
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					grant_type:
+						"urn:ietf:params:oauth:grant-type:device_code",
+					device_code: codeData.device_code,
+					client_id: clientId,
+				}),
+			},
+		);
+
+		if (tokenRes.ok) {
+			const tokenData = (await tokenRes.json()) as {
+				access_token: string;
+			};
+			accessToken = tokenData.access_token;
+			break;
+		}
+
+		const errorData = (await tokenRes.json()) as {
+			error: string;
+			error_description?: string;
+		};
+
+		if (errorData.error === "authorization_pending") {
+			continue;
+		}
+		if (errorData.error === "slow_down") {
+			// Back off by adding the interval
+			await new Promise((resolve) =>
+				setTimeout(resolve, effectiveInterval),
+			);
+			continue;
+		}
+		if (errorData.error === "access_denied") {
+			throw new Error("User denied the agent connection.");
+		}
+		if (errorData.error === "expired_token") {
+			throw new Error("Device code expired. Please try again.");
+		}
+
+		throw new Error(
+			`Device auth failed: ${errorData.error} — ${errorData.error_description ?? ""}`,
+		);
+	}
+
+	if (!accessToken) {
+		throw new Error("Timed out waiting for user approval.");
+	}
+
+	// Step 5: Register the agent with the app using the session token
+	const createRes = await globalThis.fetch(
+		`${base}/api/auth/agent/create`,
+		{
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				Authorization: `Bearer ${accessToken}`,
+			},
+			body: JSON.stringify({
+				name,
+				publicKey: keypair.publicKey,
+				scopes,
+				role,
+			}),
+		},
+	);
+
+	if (!createRes.ok) {
+		const err = await createRes.text();
+		throw new Error(`Failed to register agent: ${err}`);
+	}
+
+	const createData = (await createRes.json()) as {
+		agentId: string;
+		name: string;
+		scopes: string[];
+	};
+
+	return {
+		agentId: createData.agentId,
+		name: createData.name,
+		scopes: createData.scopes,
+		publicKey: keypair.publicKey,
+		privateKey: keypair.privateKey,
+		kid: keypair.kid,
+	};
+}
+
 export interface AgentClientOptions {
 	/** Base URL of the app (e.g. "https://app-x.com") */
 	baseURL: string;

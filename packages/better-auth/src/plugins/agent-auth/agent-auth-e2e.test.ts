@@ -8,7 +8,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { agentAuth } from ".";
 import { agentAuthClient } from "./client";
-import { createAgentClient, generateKeypair } from "./agent-client";
+import {
+	connectAgent,
+	createAgentClient,
+	generateKeypair,
+} from "./agent-client";
+import { deviceAuthorization } from "../device-authorization";
 import { createAgentMCPTools } from "./mcp-tools";
 import type { MCPAgentStorage } from "./mcp-tools";
 
@@ -32,6 +37,7 @@ describe("agent-auth e2e", async () => {
 						},
 						defaultRole: "reader",
 					}),
+					deviceAuthorization(),
 				],
 			},
 			{
@@ -210,7 +216,120 @@ describe("agent-auth e2e", async () => {
 	});
 
 	// =========================================================================
-	// 3. PORTABLE IDENTITY — same keypair, two registrations
+	// 3. DEVICE AUTH CONNECT FLOW
+	// =========================================================================
+
+	describe("device auth connect flow", () => {
+		it("should connect via connectAgent with device auth", async () => {
+			let capturedUserCode = "";
+			let capturedVerificationUri = "";
+
+			// Start connectAgent in the background — it will request a device
+			// code and then poll. We simulate browser approval in between.
+			const connectPromise = connectAgent({
+				appURL: "http://localhost:3000",
+				name: "Device Auth Agent",
+				scopes: ["reports.read"],
+				pollInterval: 500,
+				timeout: 15_000,
+				onUserCode: (info) => {
+					capturedUserCode = info.userCode;
+					capturedVerificationUri = info.verificationUri;
+				},
+			});
+
+			// Wait a tick for the device code request to complete
+			await new Promise((resolve) => setTimeout(resolve, 200));
+
+			// Verify we got a user code
+			expect(capturedUserCode).toBeTruthy();
+			expect(capturedUserCode.length).toBeGreaterThan(0);
+
+			// Simulate user approving in the browser (using server API directly)
+			const approveRes = await auth.api.deviceApprove({
+				body: { userCode: capturedUserCode },
+				headers,
+			});
+			expect(
+				"success" in approveRes && approveRes.success,
+			).toBe(true);
+
+			// Now connectAgent's polling should pick up the approval
+			const result = await connectPromise;
+
+			expect(result.agentId).toBeDefined();
+			expect(result.name).toBe("Device Auth Agent");
+			expect(result.scopes).toEqual(["reports.read"]);
+			expect(result.publicKey).toBeDefined();
+			expect(result.privateKey).toBeDefined();
+
+			// Verify the agent can authenticate
+			const agentClient = createAgentClient({
+				baseURL: "http://localhost:3000",
+				agentId: result.agentId,
+				privateKey: result.privateKey,
+			});
+
+			const session = await agentClient.getSession();
+			expect(session?.agent.id).toBe(result.agentId);
+			expect(session?.agent.name).toBe("Device Auth Agent");
+			expect(session?.user.id).toBe(user.id);
+		});
+
+		it("should work with MCP tools in device auth mode", async () => {
+			const memStorage = createInMemoryStorage();
+			const tools = createAgentMCPTools({ storage: memStorage });
+
+			const connectTool = tools.find(
+				(t) => t.name === "connect_agent",
+			)!;
+			const completeTool = tools.find(
+				(t) => t.name === "connect_agent_complete",
+			)!;
+
+			expect(connectTool).toBeDefined();
+			expect(completeTool).toBeDefined();
+
+			// Step 1: Start connection (returns user code)
+			const startResult = await connectTool.handler({
+				url: "http://localhost:3000",
+				name: "MCP Device Agent",
+				scopes: ["reports.read"],
+			});
+
+			const text = startResult.content[0].text;
+			expect(text).toContain("enter code:");
+
+			// Extract user code from the output
+			const codeMatch = text.match(/enter code:\s*(\S+)/);
+			expect(codeMatch).toBeTruthy();
+			const userCode = codeMatch![1];
+
+			// Step 2: Simulate user approval
+			await auth.api.deviceApprove({
+				body: { userCode },
+				headers,
+			});
+
+			// Step 3: Complete the connection
+			const completeResult = await completeTool.handler({
+				url: "http://localhost:3000",
+			});
+
+			expect(completeResult.content[0].text).toContain("Connected to");
+			expect(completeResult.content[0].text).toContain("Agent ID:");
+
+			// Verify connection was saved
+			const listTool = tools.find((t) => t.name === "list_agents")!;
+			const listResult = await listTool.handler({});
+			expect(listResult.content[0].text).toContain(
+				"MCP Device Agent",
+			);
+		});
+	});
+
+	// =========================================================================
+	// 4. PORTABLE IDENTITY — same keypair, two registrations
 	// =========================================================================
 
 	describe("portable agent identity", () => {
@@ -290,6 +409,16 @@ function createInMemoryStorage(): MCPAgentStorage {
 		{ agentId: string; name: string; scopes: string[] }
 	>();
 
+	const pendingFlows = new Map<
+		string,
+		{
+			deviceCode: string;
+			clientId: string;
+			name: string;
+			scopes: string[];
+		}
+	>();
+
 	return {
 		async getKeypair() {
 			return keypair;
@@ -311,6 +440,15 @@ function createInMemoryStorage(): MCPAgentStorage {
 				appUrl,
 				...c,
 			}));
+		},
+		async savePendingFlow(appUrl, flow) {
+			pendingFlows.set(appUrl, flow);
+		},
+		async getPendingFlow(appUrl) {
+			return pendingFlows.get(appUrl) ?? null;
+		},
+		async removePendingFlow(appUrl) {
+			pendingFlows.delete(appUrl);
 		},
 	};
 }

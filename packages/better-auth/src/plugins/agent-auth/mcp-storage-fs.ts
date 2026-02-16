@@ -43,6 +43,7 @@ export function createFileStorage(
 	const dir = options?.directory ?? defaultDir();
 	const keypairFile = path.join(dir, "keypair.json");
 	const connectionsFile = path.join(dir, "connections.json");
+	const pendingFlowsFile = path.join(dir, "pending-flows.json");
 
 	function ensureDir() {
 		if (!fs.existsSync(dir)) {
@@ -131,6 +132,46 @@ export function createFileStorage(
 				name: c.name,
 				scopes: c.scopes,
 			}));
+		},
+
+		async savePendingFlow(appUrl, flow) {
+			const flows =
+				readJSON<
+					Record<
+						string,
+						{
+							deviceCode: string;
+							clientId: string;
+							name: string;
+							scopes: string[];
+						}
+					>
+				>(pendingFlowsFile) ?? {};
+			flows[appUrl] = flow;
+			writeJSON(pendingFlowsFile, flows);
+		},
+
+		async getPendingFlow(appUrl) {
+			const flows =
+				readJSON<
+					Record<
+						string,
+						{
+							deviceCode: string;
+							clientId: string;
+							name: string;
+							scopes: string[];
+						}
+					>
+				>(pendingFlowsFile) ?? {};
+			return flows[appUrl] ?? null;
+		},
+
+		async removePendingFlow(appUrl) {
+			const flows =
+				readJSON<Record<string, unknown>>(pendingFlowsFile) ?? {};
+			delete flows[appUrl];
+			writeJSON(pendingFlowsFile, flows);
 		},
 	};
 }

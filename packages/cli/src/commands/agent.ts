@@ -4,7 +4,7 @@ import * as path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
 
-const STORAGE_DIR = path.join(os.homedir(), ".better-auth", "agent-keys");
+const STORAGE_DIR = path.join(os.homedir(), ".better-auth", "agents");
 const STORAGE_FILE = path.join(STORAGE_DIR, "keypair.json");
 const CONNECTIONS_FILE = path.join(STORAGE_DIR, "connections.json");
 
@@ -70,7 +70,9 @@ async function keygenAction() {
 		console.log(chalk.gray(`  Created: ${existing.createdAt}`));
 		console.log(chalk.gray(`  Location: ${STORAGE_FILE}`));
 		console.log(
-			chalk.gray("  Use --force to regenerate (will break existing connections)."),
+			chalk.gray(
+				"  Use --force to regenerate (will break existing connections).",
+			),
 		);
 		return;
 	}
@@ -97,57 +99,102 @@ async function keygenAction() {
 	console.log(chalk.cyan(JSON.stringify(publicKey, null, 2)));
 }
 
-async function registerAction(url: string, options: { name?: string; scopes?: string }) {
-	const keypair = readKeypair();
-	if (!keypair) {
-		console.log(chalk.red("No keypair found. Run `better-auth agent keygen` first."));
-		return;
-	}
-
+async function connectAction(
+	url: string,
+	options: { name?: string; scopes?: string },
+) {
 	const appUrl = url.replace(/\/+$/, "");
 	const name = options.name ?? "CLI Agent";
-	const scopes = options.scopes ? options.scopes.split(",").map((s) => s.trim()) : [];
+	const scopes = options.scopes
+		? options.scopes.split(",").map((s) => s.trim())
+		: [];
 
-	console.log(chalk.blue(`Registering with ${appUrl}...`));
+	// Ensure keypair exists
+	let keypair = readKeypair();
+	if (!keypair) {
+		console.log(chalk.blue("No keypair found. Generating one..."));
+		const { generateKeypair: generateAgentKeypair } = await import(
+			"better-auth/plugins/agent-auth/agent-client"
+		);
+		const kp = await generateAgentKeypair();
+		keypair = {
+			...kp,
+			createdAt: new Date().toISOString(),
+		};
+		writeKeypair(keypair);
+		console.log(chalk.green(`Keypair generated (kid: ${keypair.kid})`));
+	}
 
-	const res = await fetch(`${appUrl}/api/auth/agent/create`, {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
+	const { connectAgent } = await import(
+		"better-auth/plugins/agent-auth/agent-client"
+	);
+
+	console.log(chalk.blue(`Connecting to ${appUrl}...`));
+	console.log();
+
+	try {
+		const result = await connectAgent({
+			appURL: appUrl,
 			name,
-			publicKey: keypair.publicKey,
 			scopes,
-		}),
-	});
+			keypair: {
+				publicKey: keypair.publicKey,
+				privateKey: keypair.privateKey,
+				kid: keypair.kid,
+			},
+			onUserCode: ({ userCode, verificationUri, verificationUriComplete }) => {
+				console.log(chalk.bold("Approve the connection in your browser:"));
+				console.log();
+				console.log(chalk.cyan(`  ${verificationUriComplete}`));
+				console.log();
+				console.log(
+					chalk.gray(`Or go to ${verificationUri} and enter code:`),
+				);
+				console.log(chalk.bold.white(`  ${userCode}`));
+				console.log();
+				console.log(chalk.gray("Waiting for approval..."));
+			},
+			onPoll: (attempt) => {
+				if (attempt % 6 === 0) {
+					console.log(
+						chalk.gray(`  Still waiting... (${attempt * 5}s)`),
+					);
+				}
+			},
+		});
 
-	if (!res.ok) {
-		const err = await res.text();
-		console.log(chalk.red(`Failed: ${err}`));
-		return;
+		// Save connection locally
+		const connections = readConnections();
+		const existing = connections.findIndex((c) => c.appUrl === appUrl);
+		const connection: StoredConnection = {
+			appUrl,
+			agentId: result.agentId,
+			name: result.name,
+			scopes: result.scopes,
+			connectedAt: new Date().toISOString(),
+		};
+
+		if (existing >= 0) {
+			connections[existing] = connection;
+		} else {
+			connections.push(connection);
+		}
+		writeConnections(connections);
+
+		console.log();
+		console.log(chalk.green("Connected!"));
+		console.log(chalk.gray(`  Agent ID: ${result.agentId}`));
+		console.log(
+			chalk.gray(`  Scopes: ${result.scopes.join(", ") || "none"}`),
+		);
+		console.log(chalk.gray(`  App: ${appUrl}`));
+	} catch (err) {
+		console.log(
+			chalk.red(
+				`Failed: ${err instanceof Error ? err.message : String(err)}`,
+			),
+		);
 	}
-
-	const data = (await res.json()) as { agentId: string; scopes: string[] };
-
-	const connections = readConnections();
-	const existing = connections.findIndex((c) => c.appUrl === appUrl);
-	const connection: StoredConnection = {
-		appUrl,
-		agentId: data.agentId,
-		name,
-		scopes: data.scopes,
-		connectedAt: new Date().toISOString(),
-	};
-
-	if (existing >= 0) {
-		connections[existing] = connection;
-	} else {
-		connections.push(connection);
-	}
-	writeConnections(connections);
-
-	console.log(chalk.green(`Registered with ${appUrl}.`));
-	console.log(chalk.gray(`  Agent ID: ${data.agentId}`));
-	console.log(chalk.gray(`  Scopes: ${data.scopes.join(", ") || "none"}`));
 }
 
 function listAction() {
@@ -159,7 +206,9 @@ function listAction() {
 		console.log(chalk.gray(`  kid: ${keypair.kid}`));
 		console.log(chalk.gray(`  Created: ${keypair.createdAt}`));
 	} else {
-		console.log(chalk.yellow("No keypair. Run `better-auth agent keygen`."));
+		console.log(
+			chalk.yellow("No keypair. Run `better-auth agent keygen`."),
+		);
 	}
 
 	console.log();
@@ -190,9 +239,15 @@ async function revokeAction(agentId: string) {
 	const updated = connections.filter((c) => c.agentId !== agentId);
 	writeConnections(updated);
 
-	console.log(chalk.green(`Removed local connection for ${agentId} (${connection.appUrl}).`));
 	console.log(
-		chalk.gray("Note: To fully revoke server-side, use the app's agent management UI."),
+		chalk.green(
+			`Removed local connection for ${agentId} (${connection.appUrl}).`,
+		),
+	);
+	console.log(
+		chalk.gray(
+			"Note: To fully revoke server-side, use the app's agent management UI.",
+		),
 	);
 }
 
@@ -200,12 +255,17 @@ const keygen = new Command("keygen")
 	.description("Generate an Ed25519 keypair for agent identity")
 	.action(keygenAction);
 
-const register = new Command("register")
-	.description("Register this agent's public key with an app")
+const connect = new Command("connect")
+	.description(
+		"Connect to an app via device authorization (opens browser for approval)",
+	)
 	.argument("<url>", "App URL (e.g. https://app-x.com)")
 	.option("--name <name>", "Friendly name for this agent")
-	.option("--scopes <scopes>", "Comma-separated scopes (e.g. email.send,reports.read)")
-	.action(registerAction);
+	.option(
+		"--scopes <scopes>",
+		"Comma-separated scopes (e.g. email.send,reports.read)",
+	)
+	.action(connectAction);
 
 const list = new Command("list")
 	.description("List keypair and all agent connections")
@@ -219,6 +279,6 @@ const revoke = new Command("revoke")
 export const agent = new Command("agent")
 	.description("Manage agent identity and connections")
 	.addCommand(keygen)
-	.addCommand(register)
+	.addCommand(connect)
 	.addCommand(list)
 	.addCommand(revoke);

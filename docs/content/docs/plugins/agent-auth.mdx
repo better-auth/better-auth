@@ -9,6 +9,7 @@ The Agent Auth plugin gives AI agent runtimes their own identity so they can act
 
 ## Features
 
+- [Device authorization connect flow](#connecting-an-agent) — user approves in browser, no manual tokens
 - Ed25519 keypair-based authentication (agent owns its private key)
 - [Scoped permissions](#roles-and-scopes) via roles and scopes
 - [Agent session resolution](#agent-session-resolution) via a `before` hook
@@ -81,12 +82,92 @@ The Agent Auth plugin gives AI agent runtimes their own identity so they can act
 
 ```
 1. Agent generates an Ed25519 keypair (private key never leaves the agent)
-2. User registers the agent's public key via the dashboard or API
-3. For each request, the agent signs a short-lived JWT with its private key
-4. Better Auth verifies the JWT, resolves the agent session, and attaches it to the request
+2. Agent connects via device authorization — user approves in their browser
+3. Agent's public key is registered with the app
+4. For each request, the agent signs a short-lived JWT with its private key
+5. Better Auth verifies the JWT, resolves the agent session, and attaches it to the request
 ```
 
 The agent's identity is its keypair. The private key stays on the agent's machine. The server only ever sees the public key.
+
+## Connecting an Agent
+
+The recommended way to connect an agent is via the **device authorization flow** (like `gh auth login` or `gcloud auth login`). The agent displays a code, the user approves in their browser, and the agent is registered. No manual token copying needed.
+
+<Callout>
+This requires the `deviceAuthorization()` plugin to be enabled alongside `agentAuth()`.
+</Callout>
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { agentAuth } from "better-auth/plugins"
+import { deviceAuthorization } from "better-auth/plugins" // [!code highlight]
+
+export const auth = betterAuth({
+    plugins: [
+        agentAuth({ /* ... */ }),
+        deviceAuthorization(), // [!code highlight]
+    ]
+})
+```
+
+### Via CLI
+
+```bash
+npx better-auth agent connect https://myapp.com --name "My Agent" --scopes "reports.read,email.send"
+```
+
+This will:
+1. Generate a keypair (if one doesn't exist)
+2. Display a URL and code for the user to approve
+3. Poll until the user approves in their browser
+4. Register the agent's public key with the app
+5. Store the connection locally
+
+```
+Connecting to https://myapp.com...
+
+Approve the connection in your browser:
+
+  https://myapp.com/device?user_code=ABCD-1234
+
+Or go to https://myapp.com/device and enter code:
+  ABCD-1234
+
+Waiting for approval...
+
+Connected!
+  Agent ID: agt_9f3c2e
+  Scopes: reports.read, email.send
+  App: https://myapp.com
+```
+
+### Via SDK (Programmatic)
+
+```ts title="agent-setup.ts"
+import { connectAgent } from "better-auth/plugins/agent-auth/agent-client"
+
+const result = await connectAgent({
+    appURL: "https://myapp.com",
+    name: "Finance Agent",
+    scopes: ["reports.read", "email.send"],
+    onUserCode: ({ userCode, verificationUri }) => {
+        console.log(`Go to ${verificationUri} and enter: ${userCode}`)
+    },
+})
+
+// result.agentId — the registered agent ID
+// result.privateKey — store this securely
+// result.publicKey — already registered with the app
+```
+
+### Why Device Auth?
+
+- **Familiar UX** — same flow as `gh auth login`, `gcloud auth login`, Spotify on TVs
+- **Works from anywhere** — SSH sessions, remote servers, CI/CD, headless containers
+- **Secure** — user authenticates in their trusted browser, agent never sees passwords
+- **Multi-machine** — each machine generates its own keypair and gets its own agent ID
+- **Standard** — RFC 8628 (OAuth 2.0 Device Authorization Grant)
 
 ## Usage
 
@@ -369,10 +450,7 @@ Add the MCP server to your AI tool's configuration:
     "mcpServers": {
         "better-auth-agent": {
             "command": "npx",
-            "args": ["tsx", "node_modules/better-auth/src/plugins/agent-auth/mcp-server.ts"],
-            "env": {
-                "BETTER_AUTH_AGENT_COOKIE": "<your-session-cookie>"
-            }
+            "args": ["tsx", "node_modules/better-auth/src/plugins/agent-auth/mcp-server.ts"]
         }
     }
 }
@@ -386,9 +464,13 @@ The MCP server requires `@modelcontextprotocol/sdk` as a peer dependency. Instal
 
 | Variable | Description |
 |---|---|
-| `BETTER_AUTH_AGENT_COOKIE` | Session cookie for authenticated operations (creating/revoking agents) |
-| `BETTER_AUTH_AGENT_TOKEN` | Bearer token alternative to cookies |
 | `BETTER_AUTH_AGENT_DIR` | Custom storage directory (default: `~/.better-auth/agents`) |
+| `BETTER_AUTH_AGENT_COOKIE` | Optional: session cookie for direct registration (skips device auth) |
+| `BETTER_AUTH_AGENT_TOKEN` | Optional: bearer token alternative to cookies |
+
+<Callout>
+When no cookie/token is configured, the MCP server uses the **device authorization flow**. The AI tool shows a code and URL — the user approves in their browser. No manual token copying needed.
+</Callout>
 
 ### MCP Tools
 
@@ -396,7 +478,8 @@ Once configured, the following tools are available to your AI assistant:
 
 | Tool | Description |
 |---|---|
-| `connect_agent` | Connect to an app. Auto-generates a keypair and registers the public key. |
+| `connect_agent` | Start connecting to an app. Shows a code for the user to approve in their browser. |
+| `connect_agent_complete` | Finish the connection after the user approves. |
 | `list_agents` | List all connected apps and agent connections. |
 | `agent_status` | Check if a connection is healthy by verifying the agent session. |
 | `agent_request` | Make an authenticated API request to a connected app. |
@@ -407,6 +490,11 @@ Once configured, the following tools are available to your AI assistant:
 ```
 You: "Connect my agent to https://myapp.com with reports.read scope"
 AI:  → calls connect_agent(url: "https://myapp.com", scopes: ["reports.read"])
+     "Open https://myapp.com/device?user_code=ABCD-1234 to approve."
+
+You: (opens browser, approves)
+You: "Done, I approved it"
+AI:  → calls connect_agent_complete(url: "https://myapp.com")
      "Connected! Agent ID: agt_abc123. Scopes: reports.read"
 
 You: "Check if it's working"
