@@ -2,7 +2,6 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
-import { generateRandomString } from "../../../crypto/random";
 import { AGENT_AUTH_ERROR_CODES as ERROR_CODES } from "../error-codes";
 import type { ResolvedAgentAuthOptions, Agent } from "../types";
 
@@ -68,28 +67,22 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 			const now = new Date();
 			const kid = (publicKey.kid as string) ?? null;
 
-			const agentId =
-				ctx.context.generateId({ model: AGENT_TABLE }) ||
-				`agt_${generateRandomString(24, "a-z", "A-Z", "0-9")}`;
-
-			const data = {
-				name,
-				userId: session.user.id,
-				orgId: orgId ?? null,
-				scopes: JSON.stringify(resolvedScopes),
-				role: resolvedRole,
-				status: "active" as const,
-				publicKey: JSON.stringify(publicKey),
-				kid,
-				lastUsedAt: null,
-				metadata: metadata ? JSON.stringify(metadata) : null,
-				createdAt: now,
-				updatedAt: now,
-			};
-
-			const agent = await ctx.context.adapter.create<typeof data, Agent>({
+			const agent = await ctx.context.adapter.create<Record<string, unknown>, Agent>({
 				model: AGENT_TABLE,
-				data,
+				data: {
+					name,
+					userId: session.user.id,
+					orgId: orgId ?? null,
+					scopes: JSON.stringify(resolvedScopes),
+					role: resolvedRole,
+					status: "active",
+					publicKey: JSON.stringify(publicKey),
+					kid,
+					lastUsedAt: null,
+					metadata: metadata ? JSON.stringify(metadata) : null,
+					createdAt: now,
+					updatedAt: now,
+				},
 			});
 
 			return ctx.json({

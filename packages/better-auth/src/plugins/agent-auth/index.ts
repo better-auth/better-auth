@@ -140,16 +140,15 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 							agentSession;
 
 						// Update lastUsedAt in background
-						ctx.context
-							.runInBackground(
-								ctx.context.adapter
-									.update({
-										model: AGENT_TABLE,
-										where: [{ field: "id", value: agent.id }],
-										update: { lastUsedAt: new Date() },
-									})
-									.catch(() => {}),
-							);
+						ctx.context.runInBackground(
+							ctx.context.adapter
+								.update({
+									model: AGENT_TABLE,
+									where: [{ field: "id", value: agent.id }],
+									update: { lastUsedAt: new Date() },
+								})
+								.catch(() => {}),
+						);
 
 						// For get-agent-session endpoint, return the session directly
 						if (ctx.path === "/agent/get-session") {
