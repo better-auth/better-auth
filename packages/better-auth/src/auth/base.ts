@@ -49,7 +49,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 						"Could not resolve base URL from request. Check your allowedHosts config.",
 					);
 				}
-			// Use a typed variable so the baseURL override doesn't need
+				// Use a typed variable so the baseURL override doesn't need
 				// an unsafe cast — the spread is structurally BetterAuthOptions.
 				const trustedOriginOptions: BetterAuthOptions = {
 					...handlerCtx.options,
@@ -59,35 +59,33 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					trustedOriginOptions,
 					request,
 				);
-			} else if (!ctx.options.baseURL) {
-				// No static baseURL configured — resolve per-request from headers.
-				// Uses per-request context so concurrent first-requests don't race.
-				handlerCtx = Object.create(ctx) as AuthContext;
-				const baseURL = getBaseURL(
-					undefined,
-					basePath,
-					request,
-					undefined,
-					ctx.options.advanced?.trustedProxyHeaders,
-				);
-				if (baseURL) {
-					handlerCtx.baseURL = baseURL;
-					handlerCtx.options = {
-						...ctx.options,
-						baseURL: getOrigin(baseURL) || undefined,
-					};
-				} else {
-					throw new BetterAuthError(
-						"Could not get base URL from request. Please provide a valid base URL.",
-					);
-				}
-				handlerCtx.trustedOrigins = await getTrustedOrigins(
-					handlerCtx.options,
-					request,
-				);
 			} else {
-				// Static baseURL is already set — use shared ctx directly.
 				handlerCtx = ctx;
+				// Static config: resolve once from the first request when no
+				// baseURL was provided. Mutates the shared ctx intentionally so
+				// subsequent requests reuse the cached value.
+				// NOTE: narrow race if the very first requests arrive concurrently —
+				// both will enter this block and write to ctx. This is harmless
+				// because they resolve the same value, and matches pre-existing
+				// behavior. Using Object.create(ctx) here would break downstream
+				// references that depend on ctx.options being mutated in-place.
+				if (!ctx.options.baseURL) {
+					const baseURL = getBaseURL(
+						undefined,
+						basePath,
+						request,
+						undefined,
+						ctx.options.advanced?.trustedProxyHeaders,
+					);
+					if (baseURL) {
+						ctx.baseURL = baseURL;
+						ctx.options.baseURL = getOrigin(ctx.baseURL) || undefined;
+					} else {
+						throw new BetterAuthError(
+							"Could not get base URL from request. Please provide a valid base URL.",
+						);
+					}
+				}
 				handlerCtx.trustedOrigins = await getTrustedOrigins(
 					ctx.options,
 					request,

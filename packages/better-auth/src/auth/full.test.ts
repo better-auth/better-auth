@@ -287,4 +287,101 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		});
 		expect(baseURL).toBe("https://preview-feature-branch.myapp.com/api/auth");
 	});
+
+	test("should isolate per-request context for concurrent requests", async () => {
+		const resolvedBaseURLs: string[] = [];
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["tenant-a.example.com", "tenant-b.example.com"],
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					if (ctx.context.baseURL) {
+						resolvedBaseURLs.push(ctx.context.baseURL);
+					}
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		// Clear any URLs captured during test setup
+		resolvedBaseURLs.length = 0;
+
+		// Fire two requests with different hosts concurrently
+		await Promise.all([
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-a.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+			client.$fetch("/ok", {
+				headers: {
+					"x-forwarded-host": "tenant-b.example.com",
+					"x-forwarded-proto": "https",
+				},
+			}),
+		]);
+
+		// Both requests should have resolved to their respective hosts
+		expect(resolvedBaseURLs).toContain(
+			"https://tenant-a.example.com/api/auth",
+		);
+		expect(resolvedBaseURLs).toContain(
+			"https://tenant-b.example.com/api/auth",
+		);
+		// Verify no cross-contamination: each URL should appear exactly once
+		const tenantACount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-a.example.com/api/auth",
+		).length;
+		const tenantBCount = resolvedBaseURLs.filter(
+			(u) => u === "https://tenant-b.example.com/api/auth",
+		).length;
+		expect(tenantACount).toBe(1);
+		expect(tenantBCount).toBe(1);
+	});
+
+	test("should include all allowedHosts in trustedOrigins", async () => {
+		let trustedOrigins: string[] = [];
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: [
+					"myapp.com",
+					"*.vercel.app",
+					"localhost:3000",
+				],
+				fallback: "https://fallback.example.com",
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					trustedOrigins = ctx.context.trustedOrigins;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		// Request resolves to myapp.com, but trustedOrigins should include ALL hosts
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "myapp.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+
+		expect(trustedOrigins).toContain("https://myapp.com");
+		expect(trustedOrigins).toContain("https://*.vercel.app");
+		expect(trustedOrigins).toContain("https://localhost:3000");
+		expect(trustedOrigins).toContain("http://localhost:3000");
+		expect(trustedOrigins).toContain("https://fallback.example.com");
+	});
 });
