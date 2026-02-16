@@ -128,12 +128,12 @@ If you're using database persistence (`persistSubscriptions: true`), generate an
 <Tabs items={["migrate", "generate"]}>
     <Tab value="migrate">
     ```package-install
-    npx @better-auth/cli migrate
+    npx auth migrate
     ```
     </Tab>
     <Tab value="generate">
     ```package-install
-    npx @better-auth/cli generate
+    npx auth generate
     ```
     </Tab>
 </Tabs>
@@ -820,7 +820,7 @@ If subscription statuses aren't updating:
 If database persistence isn't functioning:
 
 1. Ensure `persistSubscriptions: true` is set (it's the default)
-2. Run migrations: `npx @better-auth/cli migrate`
+2. Run migrations: `npx auth migrate`
 3. Verify database connection is working
 4. Check that schema tables were created successfully
 5. Review database adapter configuration
