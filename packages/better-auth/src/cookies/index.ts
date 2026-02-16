@@ -39,6 +39,19 @@ export function createCookieGetter(options: BetterAuthOptions) {
 			? options.baseURL.protocol
 			: undefined;
 
+	/**
+	 * Determines whether cookies should use the `Secure` flag.
+	 *
+	 * Resolution order:
+	 * 1. `advanced.useSecureCookies` — explicit user override, always wins.
+	 * 2. Dynamic config `protocol: "https"` / `"http"` — honour the explicit setting.
+	 * 3. Static `baseURL` string — check if it starts with `https://`.
+	 * 4. Fallback — `isProduction` (i.e. `NODE_ENV === "production"`).
+	 *
+	 * For dynamic configs with `protocol: "auto"` or unset, the actual
+	 * protocol depends on each incoming request and is unknown at init time,
+	 * so we fall back to step 4.
+	 */
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
@@ -46,7 +59,7 @@ export function createCookieGetter(options: BetterAuthOptions) {
 				? true
 				: dynamicProtocol === "http"
 					? false
-					: baseURLString !== undefined
+					: baseURLString
 						? baseURLString.startsWith("https://")
 						: isProduction;
 	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";

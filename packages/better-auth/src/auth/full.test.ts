@@ -127,6 +127,9 @@ describe("auth with trusted proxy headers", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
 describe("auth with dynamic baseURL (allowedHosts)", () => {
 	test("should throw error for empty allowedHosts array", async () => {
 		await expect(

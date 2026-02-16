@@ -271,6 +271,9 @@ describe("getBaseURL", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/4151
+ */
 describe("matchesHostPattern", () => {
 	describe("exact matches", () => {
 		it("should match exact hostname", () => {

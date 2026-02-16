@@ -92,8 +92,12 @@ export const auth = betterAuth({
 |-------|----------|
 | `"https"` | Always use HTTPS |
 | `"http"` | Always use HTTP |
-| `"auto"` | Derive from `x-forwarded-proto` header or request URL |
-| Not set | Derive from headers, default to HTTPS |
+| `"auto"` | Derive from `x-forwarded-proto` header, then request URL; defaults to HTTPS if neither is available |
+| Not set | Same as `"auto"` |
+
+<Callout type="info">
+The `protocol` setting controls how the **URL is constructed** for each request. For the cookie `Secure` flag, Better Auth uses `protocol: "https"` → secure, `protocol: "http"` → not secure, and for `"auto"` or unset → falls back to `NODE_ENV === "production"`. You can always override this with `advanced.useSecureCookies`.
+</Callout>
 
 For mixed environments (local dev + production), you can use environment variables:
 
@@ -201,4 +205,4 @@ This differs from some other auth libraries that auto-trust platforms or accept 
 |----------|------|---------|-------------|
 | `allowedHosts` | `string[]` | Required | List of allowed host patterns |
 | `fallback` | `string` | - | URL to use when host doesn't match |
-| `protocol` | `"http" \| "https" \| "auto"` | Derived | Protocol to use |
+| `protocol` | `"http" \| "https" \| "auto"` | `"auto"` | Protocol for URL construction. `"auto"` derives from request headers, defaults to HTTPS |

@@ -106,7 +106,7 @@ export async function createAuthContext<Options extends BetterAuthOptions>(
 
 	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
 
-	if (isDynamicConfig) {
+	if (isDynamicBaseURLConfig(options.baseURL)) {
 		const { allowedHosts } = options.baseURL;
 		if (!allowedHosts || allowedHosts.length === 0) {
 			throw new BetterAuthError(
@@ -153,7 +153,7 @@ Most of the features of Better Auth will not work correctly.`,
 		...options,
 		secret,
 		baseURL: isDynamicConfig
-			? (options.baseURL as any)
+			? options.baseURL
 			: baseURL
 				? new URL(baseURL).origin
 				: "",
