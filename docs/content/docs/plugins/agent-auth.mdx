@@ -15,6 +15,8 @@ The Agent Auth plugin gives AI agent runtimes their own identity so they can act
 - [Key rotation](#rotate-key) without downtime
 - [Revocation](#revoke-an-agent) with credential wipe
 - [Agent SDK](#agent-sdk) for agent runtimes
+- [MCP server](#mcp-server) for Cursor, Claude Desktop, and other AI tools
+- [Portable identity](#file-storage) — one keypair, multiple apps
 - [AAP-compatible JWT claims](#aap-format) (IETF Agent Authorization Profile)
 
 ## Installation
@@ -346,13 +348,123 @@ The private key should be stored securely and never committed to version control
 
 | Environment | Recommended storage |
 |---|---|
-| Local dev | Environment variable or `~/.better-auth/agent-keys/keypair.json` |
+| Local dev | Environment variable or `~/.better-auth/agents/keypair.json` |
 | Production | Secret manager (AWS Secrets Manager, Vault, etc.) |
 | CI/CD | Pipeline secrets / environment variables |
 
 <Callout type="warn">
 Never store private keys in git, logs, or client-side code. The private key is the agent's identity — if compromised, revoke the agent immediately and rotate the key.
 </Callout>
+
+## MCP Server
+
+The Agent Auth plugin includes a standalone MCP server that lets AI tools (Cursor, Claude Desktop, etc.) manage agent connections through natural language. The server exposes five tools: `connect_agent`, `list_agents`, `disconnect_agent`, `agent_status`, and `agent_request`.
+
+### Setup
+
+Add the MCP server to your AI tool's configuration:
+
+```json title="MCP client config (e.g. .cursor/mcp.json)"
+{
+    "mcpServers": {
+        "better-auth-agent": {
+            "command": "npx",
+            "args": ["tsx", "node_modules/better-auth/src/plugins/agent-auth/mcp-server.ts"],
+            "env": {
+                "BETTER_AUTH_AGENT_COOKIE": "<your-session-cookie>"
+            }
+        }
+    }
+}
+```
+
+<Callout>
+The MCP server requires `@modelcontextprotocol/sdk` as a peer dependency. Install it alongside better-auth: `npm install @modelcontextprotocol/sdk`.
+</Callout>
+
+### Environment Variables
+
+| Variable | Description |
+|---|---|
+| `BETTER_AUTH_AGENT_COOKIE` | Session cookie for authenticated operations (creating/revoking agents) |
+| `BETTER_AUTH_AGENT_TOKEN` | Bearer token alternative to cookies |
+| `BETTER_AUTH_AGENT_DIR` | Custom storage directory (default: `~/.better-auth/agents`) |
+
+### MCP Tools
+
+Once configured, the following tools are available to your AI assistant:
+
+| Tool | Description |
+|---|---|
+| `connect_agent` | Connect to an app. Auto-generates a keypair and registers the public key. |
+| `list_agents` | List all connected apps and agent connections. |
+| `agent_status` | Check if a connection is healthy by verifying the agent session. |
+| `agent_request` | Make an authenticated API request to a connected app. |
+| `disconnect_agent` | Revoke an agent server-side and remove the local connection. |
+
+**Example conversation with your AI tool:**
+
+```
+You: "Connect my agent to https://myapp.com with reports.read scope"
+AI:  → calls connect_agent(url: "https://myapp.com", scopes: ["reports.read"])
+     "Connected! Agent ID: agt_abc123. Scopes: reports.read"
+
+You: "Check if it's working"
+AI:  → calls agent_status(url: "https://myapp.com")
+     "Healthy. Agent: MCP Agent (agt_abc123). User: Maria (maria@co.com)"
+
+You: "Fetch the Q4 report"
+AI:  → calls agent_request(url: "https://myapp.com", path: "/api/reports/Q4")
+     "200 OK — { ... report data ... }"
+```
+
+### Custom MCP Integration
+
+If you're building your own MCP server, use `createAgentMCPTools` to get the tool definitions and register them manually:
+
+```ts title="my-mcp-server.ts"
+import { createAgentMCPTools } from "better-auth/plugins/agent-auth/mcp-tools"
+import { createFileStorage } from "better-auth/plugins/agent-auth/mcp-storage-fs"
+
+const tools = createAgentMCPTools({
+    storage: createFileStorage(), // file-based, or implement your own
+    getAuthHeaders: () => ({
+        cookie: process.env.SESSION_COOKIE ?? "",
+    }),
+})
+
+// Register with your MCP server
+for (const tool of tools) {
+    mcpServer.tool(tool.name, tool.description, tool.inputSchema, tool.handler)
+}
+```
+
+You can also implement a custom `MCPAgentStorage` if you want to store keypairs and connections somewhere other than the filesystem (e.g. a database or secret manager):
+
+```ts title="custom-storage.ts"
+import type { MCPAgentStorage } from "better-auth/plugins/agent-auth/mcp-tools"
+
+const myStorage: MCPAgentStorage = {
+    getKeypair: async () => { /* ... */ },
+    saveKeypair: async (keypair) => { /* ... */ },
+    getConnection: async (appUrl) => { /* ... */ },
+    saveConnection: async (appUrl, connection) => { /* ... */ },
+    removeConnection: async (appUrl) => { /* ... */ },
+    listConnections: async () => { /* ... */ },
+}
+```
+
+### File Storage
+
+The default file storage saves data to `~/.better-auth/agents/`:
+
+```
+~/.better-auth/agents/
+├── keypair.json       # Ed25519 keypair (chmod 0600, owner-only)
+└── connections.json   # App connections (agent IDs, scopes)
+```
+
+The keypair is shared across all connections — one identity, multiple apps. This is the **portable identity** model: the same agent can register with different apps and each app grants its own scopes independently.
 
 ## Roles and Scopes
 

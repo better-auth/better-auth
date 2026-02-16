@@ -230,6 +230,21 @@
       "types": "./dist/plugins/agent-auth/agent-client.d.mts",
       "default": "./dist/plugins/agent-auth/agent-client.mjs"
     },
+    "./plugins/agent-auth/mcp-tools": {
+      "dev-source": "./src/plugins/agent-auth/mcp-tools.ts",
+      "types": "./dist/plugins/agent-auth/mcp-tools.d.mts",
+      "default": "./dist/plugins/agent-auth/mcp-tools.mjs"
+    },
+    "./plugins/agent-auth/mcp-storage-fs": {
+      "dev-source": "./src/plugins/agent-auth/mcp-storage-fs.ts",
+      "types": "./dist/plugins/agent-auth/mcp-storage-fs.d.mts",
+      "default": "./dist/plugins/agent-auth/mcp-storage-fs.mjs"
+    },
+    "./plugins/agent-auth/mcp-server": {
+      "dev-source": "./src/plugins/agent-auth/mcp-server.ts",
+      "types": "./dist/plugins/agent-auth/mcp-server.d.mts",
+      "default": "./dist/plugins/agent-auth/mcp-server.mjs"
+    },
     "./plugins/anonymous": {
       "dev-source": "./src/plugins/anonymous/index.ts",
       "types": "./dist/plugins/anonymous/index.d.mts",
@@ -438,6 +453,15 @@
       ],
       "plugins/agent-auth/agent-client": [
         "./dist/plugins/agent-auth/agent-client.d.mts"
+      ],
+      "plugins/agent-auth/mcp-tools": [
+        "./dist/plugins/agent-auth/mcp-tools.d.mts"
+      ],
+      "plugins/agent-auth/mcp-storage-fs": [
+        "./dist/plugins/agent-auth/mcp-storage-fs.d.mts"
+      ],
+      "plugins/agent-auth/mcp-server": [
+        "./dist/plugins/agent-auth/mcp-server.d.mts"
       ],
       "plugins/anonymous": [
         "./dist/plugins/anonymous/index.d.mts"

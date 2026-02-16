@@ -51,6 +51,17 @@ export interface MCPToolDefinition {
 
 export interface CreateAgentMCPToolsOptions {
 	storage: MCPAgentStorage;
+	/**
+	 * Auth headers to attach when creating/revoking agents.
+	 * The `/agent/create` endpoint requires a user session, so the MCP
+	 * server must forward the user's auth context.
+	 *
+	 * Can be a static object or a function that resolves dynamically
+	 * (e.g. reading a cookie from a config file).
+	 */
+	getAuthHeaders?: () =>
+		| Record<string, string>
+		| Promise<Record<string, string>>;
 }
 
 /**
@@ -60,7 +71,12 @@ export interface CreateAgentMCPToolsOptions {
 export function createAgentMCPTools(
 	options: CreateAgentMCPToolsOptions,
 ): MCPToolDefinition[] {
-	const { storage } = options;
+	const { storage, getAuthHeaders } = options;
+
+	async function resolveAuthHeaders(): Promise<Record<string, string>> {
+		if (!getAuthHeaders) return {};
+		return await getAuthHeaders();
+	}
 
 	async function getOrCreateKeypair() {
 		const existing = await storage.getKeypair();
@@ -93,12 +109,16 @@ export function createAgentMCPTools(
 				const scopes = (input.scopes as string[]) ?? [];
 
 				const keypair = await getOrCreateKeypair();
+				const authHeaders = await resolveAuthHeaders();
 
 				const res = await globalThis.fetch(
 					`${url}/api/auth/agent/create`,
 					{
 						method: "POST",
-						headers: { "Content-Type": "application/json" },
+						headers: {
+							"Content-Type": "application/json",
+							...authHeaders,
+						},
 						body: JSON.stringify({
 							name,
 							publicKey: keypair.publicKey,
@@ -110,7 +130,12 @@ export function createAgentMCPTools(
 				if (!res.ok) {
 					const err = await res.text();
 					return {
-						content: [{ type: "text" as const, text: `Failed to connect: ${err}` }],
+						content: [
+							{
+								type: "text" as const,
+								text: `Failed to connect: ${err}`,
+							},
+						],
 					};
 				}
 
@@ -144,12 +169,16 @@ export function createAgentMCPTools(
 				if (connections.length === 0) {
 					return {
 						content: [
-							{ type: "text" as const, text: "No agent connections." },
+							{
+								type: "text" as const,
+								text: "No agent connections.",
+							},
 						],
 					};
 				}
 				const lines = connections.map(
-					(c) => `${c.appUrl} — ${c.name} (${c.agentId}) [${c.scopes.join(", ")}]`,
+					(c) =>
+						`${c.appUrl} — ${c.name} (${c.agentId}) [${c.scopes.join(", ")}]`,
 				);
 				return {
 					content: [{ type: "text" as const, text: lines.join("\n") }],
@@ -176,12 +205,32 @@ export function createAgentMCPTools(
 					};
 				}
 
+				// Try to revoke server-side too
+				const keypair = await storage.getKeypair();
+				if (keypair) {
+					const authHeaders = await resolveAuthHeaders();
+					try {
+						await globalThis.fetch(`${url}/api/auth/agent/revoke`, {
+							method: "POST",
+							headers: {
+								"Content-Type": "application/json",
+								...authHeaders,
+							},
+							body: JSON.stringify({
+								agentId: connection.agentId,
+							}),
+						});
+					} catch {
+						// Best-effort server-side revocation
+					}
+				}
+
 				await storage.removeConnection(url);
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: `Disconnected from ${url}. Agent ${connection.agentId} removed.`,
+							text: `Disconnected from ${url}. Agent ${connection.agentId} removed locally${keypair ? " and revoked server-side" : ""}.`,
 						},
 					],
 				};
@@ -199,7 +248,10 @@ export function createAgentMCPTools(
 				if (!connection) {
 					return {
 						content: [
-							{ type: "text" as const, text: `No connection for ${url}` },
+							{
+								type: "text" as const,
+								text: `No connection for ${url}`,
+							},
 						],
 					};
 				}
@@ -208,7 +260,10 @@ export function createAgentMCPTools(
 				if (!keypair) {
 					return {
 						content: [
-							{ type: "text" as const, text: "No keypair found." },
+							{
+								type: "text" as const,
+								text: "No keypair found.",
+							},
 						],
 					};
 				}
@@ -236,12 +291,96 @@ export function createAgentMCPTools(
 					};
 				}
 
-				const session = await res.json();
+				const session = (await res.json()) as {
+					agent: { name: string; scopes: string[] };
+					user: { name: string; email: string };
+				};
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: `Healthy. Agent: ${connection.name} (${connection.agentId}). Scopes: ${connection.scopes.join(", ")}`,
+							text: `Healthy. Agent: ${session.agent.name} (${connection.agentId}). User: ${session.user.name} (${session.user.email}). Scopes: ${session.agent.scopes.join(", ")}`,
+						},
+					],
+				};
+			},
+		},
+		{
+			name: "agent_request",
+			description:
+				"Make an authenticated request to a connected app as the agent. Signs a fresh JWT automatically.",
+			inputSchema: {
+				url: z
+					.string()
+					.describe("App URL (must have an existing connection)"),
+				path: z.string().describe("API path (e.g. /api/reports/Q4)"),
+				method: z
+					.string()
+					.optional()
+					.describe("HTTP method (default: GET)"),
+				body: z
+					.string()
+					.optional()
+					.describe("Request body as JSON string"),
+			},
+			handler: async (input) => {
+				const appUrl = (input.url as string).replace(/\/+$/, "");
+				const reqPath = input.path as string;
+				const method = (input.method as string) ?? "GET";
+				const body = input.body as string | undefined;
+
+				const connection = await storage.getConnection(appUrl);
+				if (!connection) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `No connection for ${appUrl}. Run connect_agent first.`,
+							},
+						],
+					};
+				}
+
+				const keypair = await storage.getKeypair();
+				if (!keypair) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "No keypair found.",
+							},
+						],
+					};
+				}
+
+				const jwt = await signAgentJWT({
+					agentId: connection.agentId,
+					privateKey: keypair.privateKey,
+				});
+
+				const fullUrl = reqPath.startsWith("http")
+					? reqPath
+					: `${appUrl}${reqPath}`;
+
+				const headers: Record<string, string> = {
+					Authorization: `Bearer ${jwt}`,
+				};
+				if (body) {
+					headers["Content-Type"] = "application/json";
+				}
+
+				const res = await globalThis.fetch(fullUrl, {
+					method,
+					headers,
+					body: body ?? undefined,
+				});
+
+				const text = await res.text();
+				return {
+					content: [
+						{
+							type: "text" as const,
+							text: `${res.status} ${res.statusText}\n${text}`,
 						},
 					],
 				};

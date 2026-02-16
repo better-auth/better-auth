@@ -122,11 +122,17 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 							agent: {
 								id: agent.id,
 								name: agent.name,
-								scopes: agent.scopes,
+								scopes:
+									typeof agent.scopes === "string"
+										? JSON.parse(agent.scopes)
+										: agent.scopes,
 								role: agent.role,
 								orgId: agent.orgId,
 								createdAt: agent.createdAt,
-								metadata: agent.metadata,
+								metadata:
+									typeof agent.metadata === "string"
+										? JSON.parse(agent.metadata)
+										: agent.metadata,
 							},
 							user: {
 								id: user.id,
