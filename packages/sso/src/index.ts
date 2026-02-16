@@ -145,6 +145,7 @@ export function sso<O extends SSOOptions>(
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
+	options: O;
 };
 
 export function sso<O extends SSOOptions>(
