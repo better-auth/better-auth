@@ -64,9 +64,7 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 				// per-request so the domain matches the resolved host.
 				if (options.advanced?.crossSubDomainCookies?.enabled) {
 					handlerCtx.authCookies = getCookies(handlerCtx.options);
-					handlerCtx.createAuthCookie = createCookieGetter(
-						handlerCtx.options,
-					);
+					handlerCtx.createAuthCookie = createCookieGetter(handlerCtx.options);
 				}
 			} else {
 				handlerCtx = ctx;

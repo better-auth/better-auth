@@ -329,12 +329,8 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		]);
 
 		// Both requests should have resolved to their respective hosts
-		expect(resolvedBaseURLs).toContain(
-			"https://tenant-a.example.com/api/auth",
-		);
-		expect(resolvedBaseURLs).toContain(
-			"https://tenant-b.example.com/api/auth",
-		);
+		expect(resolvedBaseURLs).toContain("https://tenant-a.example.com/api/auth");
+		expect(resolvedBaseURLs).toContain("https://tenant-b.example.com/api/auth");
 		// Verify no cross-contamination: each URL should appear exactly once
 		const tenantACount = resolvedBaseURLs.filter(
 			(u) => u === "https://tenant-a.example.com/api/auth",
@@ -350,11 +346,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		let trustedOrigins: string[] = [];
 		const { customFetchImpl } = await getTestInstance({
 			baseURL: {
-				allowedHosts: [
-					"myapp.com",
-					"*.vercel.app",
-					"localhost:3000",
-				],
+				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:3000"],
 				fallback: "https://fallback.example.com",
 			},
 			hooks: {
@@ -399,8 +391,7 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			},
 			hooks: {
 				before: createAuthMiddleware(async (ctx) => {
-					cookieDomain =
-						ctx.context.authCookies.sessionToken.attributes.domain;
+					cookieDomain = ctx.context.authCookies.sessionToken.attributes.domain;
 				}),
 			},
 		});

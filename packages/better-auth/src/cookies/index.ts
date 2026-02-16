@@ -6,7 +6,6 @@ import type {
 } from "@better-auth/core";
 import { env, isProduction } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
-import { isDynamicBaseURLConfig } from "../utils/url";
 import { filterOutputFields } from "@better-auth/core/utils/db";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { base64Url } from "@better-auth/utils/base64";
@@ -24,6 +23,7 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
+import { isDynamicBaseURLConfig } from "../utils/url";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
 	createAccountStore,
@@ -70,7 +70,11 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		? options.advanced?.crossSubDomainCookies?.domain ||
 			(baseURLString ? new URL(baseURLString).hostname : undefined)
 		: undefined;
-	if (crossSubdomainEnabled && !domain && !isDynamicBaseURLConfig(options.baseURL)) {
+	if (
+		crossSubdomainEnabled &&
+		!domain &&
+		!isDynamicBaseURLConfig(options.baseURL)
+	) {
 		throw new BetterAuthError(
 			"baseURL is required when crossSubdomainCookies are enabled.",
 		);
