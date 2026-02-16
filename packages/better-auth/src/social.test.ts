@@ -5,6 +5,7 @@ import { refreshAccessToken } from "@better-auth/core/oauth2";
 import type {
 	GoogleProfile,
 	MicrosoftEntraIDProfile,
+	RailwayProfile,
 	VercelProfile,
 } from "@better-auth/core/social-providers";
 import { betterFetch } from "@better-fetch/fetch";
@@ -1908,5 +1909,165 @@ describe("Microsoft Provider", async () => {
 			idToken: { token: wrongIssuerToken },
 		});
 		expect(invalidRes.error?.status).toBe(401);
+	});
+});
+
+describe("Railway Provider", async () => {
+	beforeAll(() => {
+		mswServer.use(
+			http.post(
+				"https://backboard.railway.com/oauth/token",
+				async ({ request }) => {
+					const authHeader = request.headers.get("authorization");
+					expect(authHeader).toMatch(/^Basic /);
+
+					const body = await request.text();
+					const params = new URLSearchParams(body);
+					expect(params.get("grant_type")).toBe("authorization_code");
+					expect(params.get("code")).toBeDefined();
+					expect(params.get("redirect_uri")).toBeDefined();
+
+					// Verify PKCE code_verifier is present (Better Auth uses PKCE by default)
+					const codeVerifier = params.get("code_verifier");
+					expect(codeVerifier).not.toBeNull();
+					expect(codeVerifier).not.toBe("");
+
+					return HttpResponse.json({
+						access_token: "railway_access_token",
+						token_type: "Bearer",
+						expires_in: 3600,
+					});
+				},
+			),
+			http.get("https://backboard.railway.com/oauth/me", async () => {
+				return HttpResponse.json({
+					sub: "user_railway_123",
+					email: "railway@test.com",
+					name: "Railway User",
+					picture: "https://avatars.githubusercontent.com/u/12345",
+				} satisfies RailwayProfile);
+			}),
+		);
+	});
+
+	it("should configure Railway provider correctly", async () => {
+		const { auth } = await getTestInstance({
+			socialProviders: {
+				railway: {
+					clientId: "railway-test-client-id",
+					clientSecret: "railway-test-client-secret",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const railwayProvider = ctx.socialProviders.find((p) => p.id === "railway");
+
+		expect(railwayProvider).toBeDefined();
+		expect(railwayProvider?.id).toBe("railway");
+		expect(railwayProvider?.name).toBe("Railway");
+	});
+
+	it("should initiate Railway OAuth flow with PKCE", async () => {
+		const { client } = await getTestInstance({
+			socialProviders: {
+				railway: {
+					clientId: "railway-test-client-id",
+					clientSecret: "railway-test-client-secret",
+				},
+			},
+		});
+
+		const signInRes = await client.signIn.social({
+			provider: "railway",
+			callbackURL: "/dashboard",
+		});
+
+		expect(signInRes.data).toBeDefined();
+		expect(signInRes.data?.url).toContain("backboard.railway.com/oauth/auth");
+		expect(signInRes.data?.redirect).toBe(true);
+
+		const authUrl = new URL(signInRes.data!.url!);
+		expect(authUrl.searchParams.get("scope")).toContain("openid");
+		expect(authUrl.searchParams.get("scope")).toContain("email");
+		expect(authUrl.searchParams.get("scope")).toContain("profile");
+
+		// Verify PKCE parameters are present (Better Auth uses PKCE by default)
+		expect(authUrl.searchParams.get("code_challenge")).not.toBeNull();
+		expect(authUrl.searchParams.get("code_challenge_method")).toBe("S256");
+	});
+
+	it("should complete Railway OAuth flow and create user", async () => {
+		const { client, cookieSetter, auth } = await getTestInstance(
+			{
+				socialProviders: {
+					railway: {
+						clientId: "railway-test-client-id",
+						clientSecret: "railway-test-client-secret",
+					},
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const headers = new Headers();
+		const signInRes = await client.signIn.social({
+			provider: "railway",
+			callbackURL: "/dashboard",
+			newUserCallbackURL: "/welcome",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toBeDefined();
+		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
+
+		await client.$fetch("/callback/railway", {
+			query: {
+				state,
+				code: "railway_test_code",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const location = context.response.headers.get("location");
+				expect(location).toBeDefined();
+				expect(location).toContain("/welcome");
+
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				expect(cookies.get("better-auth.session_token")?.value).toBeDefined();
+
+				cookieSetter(headers)(context as any);
+			},
+		});
+
+		const session = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(session.data).toBeDefined();
+		expect(session.data?.user.email).toBe("railway@test.com");
+		expect(session.data?.user.name).toBe("Railway User");
+		expect(session.data?.user.image).toBe(
+			"https://avatars.githubusercontent.com/u/12345",
+		);
+		// Railway does not provide email_verified claim, defaults to false
+		expect(session.data?.user.emailVerified).toBe(false);
+
+		const ctx = await auth.$context;
+		const accounts = await ctx.internalAdapter.findAccounts(
+			session.data?.user.id!,
+		);
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.providerId).toBe("railway");
+		expect(accounts[0]?.accountId).toBe("user_railway_123");
 	});
 });
