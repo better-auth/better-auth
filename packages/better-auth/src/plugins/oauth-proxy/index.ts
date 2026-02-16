@@ -151,7 +151,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					const baseURLStr =
 						typeof ctx.context.options.baseURL === "string"
 							? ctx.context.options.baseURL
-							: "";
+							: getOrigin(ctx.context.baseURL) || "";
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
 						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;

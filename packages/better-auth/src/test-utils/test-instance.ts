@@ -222,9 +222,10 @@ export async function getTestInstance<
 	};
 
 	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
-		? "http://localhost:" +
-			(config?.port || 3000) +
-			(options?.basePath || "/api/auth")
+		? getBaseURL(
+				"http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			)
 		: getBaseURL(
 				typeof options?.baseURL === "string"
 					? options.baseURL

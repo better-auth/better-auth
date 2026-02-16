@@ -22,9 +22,12 @@ export const matchesHostPattern = (host: string, pattern: string): boolean => {
 		return false;
 	}
 
-	// Normalize: remove protocol if accidentally included
-	const normalizedHost = host.replace(/^https?:\/\//, "").split("/")[0]!;
-	const normalizedPattern = pattern.replace(/^https?:\/\//, "").split("/")[0]!;
+	// Normalize: remove protocol if accidentally included, lowercase for case-insensitive matching
+	const normalizedHost = host.replace(/^https?:\/\//, "").split("/")[0]!.toLowerCase();
+	const normalizedPattern = pattern
+		.replace(/^https?:\/\//, "")
+		.split("/")[0]!
+		.toLowerCase();
 
 	// Check if pattern contains wildcard characters
 	const hasWildcard =

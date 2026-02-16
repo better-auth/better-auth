@@ -324,8 +324,20 @@ export function resolveBaseURL(
 	loadEnv?: boolean,
 	trustedProxyHeaders?: boolean,
 ): string | undefined {
-	if (isDynamicBaseURLConfig(config) && request) {
-		return resolveDynamicBaseURL(config, request, basePath);
+	if (isDynamicBaseURLConfig(config)) {
+		if (request) {
+			return resolveDynamicBaseURL(config, request, basePath);
+		}
+		if (config.fallback) {
+			return withPath(config.fallback, basePath);
+		}
+		return getBaseURL(
+			undefined,
+			basePath,
+			request,
+			loadEnv,
+			trustedProxyHeaders,
+		);
 	}
 
 	if (typeof config === "string") {
