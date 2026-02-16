@@ -67,42 +67,16 @@ export const agentSchema = () =>
 					defaultValue: "active",
 				},
 				/**
-				 * Auth method: "token" or "keypair".
-				 * Inferred at creation from the presence of publicKey.
+				 * Agent's public key as JWK JSON string.
+				 * The private key is never stored server-side.
 				 */
-				authMethod: {
+				publicKey: {
 					type: "string",
 					required: true,
 					input: false,
 				},
 				/**
-				 * SHA-256 hash of the bearer token (token method only).
-				 */
-				hashedToken: {
-					type: "string",
-					required: false,
-					input: false,
-					index: true,
-				},
-				/**
-				 * First 8 characters of the token for display purposes (token method only).
-				 */
-				tokenPrefix: {
-					type: "string",
-					required: false,
-					input: false,
-				},
-				/**
-				 * Agent's public key as JWK JSON string (keypair method only).
-				 * The private key is never stored server-side.
-				 */
-				publicKey: {
-					type: "string",
-					required: false,
-					input: false,
-				},
-				/**
-				 * Key ID for the public key (keypair method only).
+				 * Key ID for the public key.
 				 */
 				kid: {
 					type: "string",

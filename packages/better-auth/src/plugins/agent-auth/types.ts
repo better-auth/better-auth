@@ -20,22 +20,7 @@ export interface AgentAuthOptions {
 	 */
 	defaultRole?: string;
 	/**
-	 * Which auth methods are allowed. Default: both.
-	 * @default ["token", "keypair"]
-	 */
-	allowedAuthMethods?: ("token" | "keypair")[];
-	/**
-	 * Prefix for generated agent tokens.
-	 * @default "ba_agt_"
-	 */
-	tokenPrefix?: string;
-	/**
-	 * Length of the random part of the token (excludes prefix).
-	 * @default 48
-	 */
-	tokenLength?: number;
-	/**
-	 * Allowed key algorithms for keypair method.
+	 * Allowed key algorithms for keypair.
 	 * @default ["Ed25519"]
 	 */
 	allowedKeyAlgorithms?: string[];
@@ -70,10 +55,7 @@ export interface Agent {
 	scopes: string[];
 	role: string | null;
 	status: "active" | "revoked";
-	authMethod: "token" | "keypair";
-	hashedToken: string | null;
-	tokenPrefix: string | null;
-	publicKey: string | null;
+	publicKey: string;
 	kid: string | null;
 	lastUsedAt: Date | null;
 	metadata: Record<string, unknown> | null;
@@ -91,7 +73,6 @@ export interface AgentSession {
 		name: string;
 		scopes: string[];
 		role: string | null;
-		authMethod: "token" | "keypair";
 		orgId: string | null;
 		createdAt: Date;
 		metadata: Record<string, unknown> | null;
@@ -110,12 +91,7 @@ export interface AgentSession {
 export type ResolvedAgentAuthOptions = Required<
 	Pick<
 		AgentAuthOptions,
-		| "allowedAuthMethods"
-		| "tokenPrefix"
-		| "tokenLength"
-		| "allowedKeyAlgorithms"
-		| "jwtFormat"
-		| "jwtMaxAge"
+		"allowedKeyAlgorithms" | "jwtFormat" | "jwtMaxAge"
 	>
 > &
 	AgentAuthOptions;

@@ -1,6 +1,4 @@
 import { SignJWT, exportJWK, generateKeyPair, importJWK, jwtVerify } from "jose";
-import { base64Url } from "@better-auth/utils/base64";
-import { createHash } from "@better-auth/utils/hash";
 import { generateId } from "@better-auth/core/utils/id";
 
 /**
@@ -93,22 +91,4 @@ export async function verifyAgentJWT(
 	} catch {
 		return null;
 	}
-}
-
-/**
- * Hash a token using SHA-256, return base64url-encoded.
- */
-export async function hashAgentToken(token: string): Promise<string> {
-	const hash = await createHash("SHA-256").digest(
-		new TextEncoder().encode(token),
-	);
-	return base64Url.encode(new Uint8Array(hash), { padding: false });
-}
-
-/**
- * Check if a bearer value looks like a JWT (three dot-separated segments).
- */
-export function isJWTFormat(value: string): boolean {
-	const parts = value.split(".");
-	return parts.length === 3 && parts.every((p) => p.length > 0);
 }
