@@ -94,3 +94,100 @@ export const auth = betterAuth({
     }
 })
 ```
+
+## Safari, ITP, and Cross-Domain Setups
+
+Safari includes a privacy feature called Intelligent Tracking Prevention (ITP) that blocks third-party cookies.
+
+If your Better Auth API is hosted on a different domain than your frontend, Safari may block authentication cookies entirely.
+
+Example that breaks in Safari:
+
+```
+Frontend: https://app.domainB.com
+API:      https://domainA.com
+```
+
+If your frontend makes a request like:
+
+```ts
+fetch("https://domainA.com/api/auth/get-session", {
+  credentials: "include"
+})
+```
+
+Safari treats `domainA.com` as a third-party and blocks its cookies. Which can result in sessions not persisting,
+`Set-Cookie` being ignored, users appearing logged out after login or auth working in Chrome but failing in Safari.
+
+To solve this, there are two solutions:
+1. Using a reverse proxy to proxy the request to the API.
+2. Using a shared parent domain.
+
+### Using a Reverse Proxy
+
+Instead of calling your API directly, you can proxy it through the same domain as your frontend.
+
+For example, instead of calling:
+```
+https://domainA.com/api/auth/*
+```
+
+you can call:
+```
+https://app.domainA.com/api/auth/*
+```
+
+Then configure your hosting provider to proxy the request to your actual API server.
+
+This makes the request appear first-party to Safari, allowing cookies to function correctly.
+
+#### Example with Netlify
+
+```toml title="netlify.toml"
+[[redirects]]
+  from = "/api/*"
+  to = "https://domainA.com/api/:splat"
+  status = 200
+  force = true
+```
+
+#### Example with Vercel
+
+```ts title="vercel.json"
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://domainA.com/api/:path*"
+    }
+  ]
+}
+```
+
+### Using a Shared Parent Domain
+
+You can also use a shared parent domain to allow cookies to be shared across subdomains:
+
+```
+https://app.example.com
+https://api.example.com
+```
+
+Then, enable cross-subdomain cookies with the domain:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+
+export const auth = betterAuth({
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+            domain: "example.com",
+        },
+    },
+})
+```
+
+Learn more about cross-subdomain cookies in the [documentation above](#cross-subdomain-cookies).
+
+This avoids Safari treating the API as third-party.

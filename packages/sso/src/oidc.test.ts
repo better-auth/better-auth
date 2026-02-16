@@ -3,7 +3,7 @@ import { createAuthClient } from "better-auth/client";
 import { organization } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import { OAuth2Server } from "oauth2-mock-server";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { sso } from ".";
 import { ssoClient } from "./client";
 
@@ -682,5 +682,141 @@ describe("provisioning", async (ctx) => {
 		});
 
 		expect(res.url).toContain("http://localhost:8080/authorize");
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7857
+ */
+describe("provisionUser should only be called for new users", async () => {
+	const provisionUserFn = vi.fn();
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					provisionUser: provisionUserFn,
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse) => {
+			userInfoResponse.body = {
+				email: "provision-test@localhost.com",
+				name: "Provision Test",
+				sub: "provision-test-sub",
+				picture: "https://test.com/picture.png",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token) => {
+			token.payload.email = "provision-test@localhost.com";
+			token.payload.email_verified = true;
+			token.payload.name = "Provision Test";
+			token.payload.picture = "https://test.com/picture.png";
+		});
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		await server.stop();
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+
+		let callbackURL = "";
+		const newHeaders = new Headers();
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should call provisionUser only on first sign-in (new user), not on subsequent sign-ins", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "localhost.com",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "provision-test",
+			},
+			headers,
+		});
+
+		provisionUserFn.mockClear();
+
+		// First sign-in: new user -> provisionUser should be called
+		const signInHeaders1 = new Headers();
+		const res1 = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders1),
+			},
+		});
+		await simulateOAuthFlow(res1.url, signInHeaders1);
+		expect(provisionUserFn).toHaveBeenCalledTimes(1);
+
+		provisionUserFn.mockClear();
+
+		// Second sign-in: existing user -> provisionUser should NOT be called
+		const signInHeaders2 = new Headers();
+		const res2 = await authClient.signIn.sso({
+			email: "user@localhost.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders2),
+			},
+		});
+		await simulateOAuthFlow(res2.url, signInHeaders2);
+		expect(provisionUserFn).toHaveBeenCalledTimes(0);
 	});
 });

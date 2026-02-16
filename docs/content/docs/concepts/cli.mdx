@@ -10,7 +10,7 @@ Better Auth comes with a built-in CLI to help you manage the database schemas, i
 The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
 ```package-install title="Terminal"
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 ### Options
@@ -25,7 +25,7 @@ npx @better-auth/cli@latest generate
 The migrate command applies the Better Auth schema directly to your database. This is available if you're using the built-in Kysely adapter. For other adapters, you'll need to apply the schema using your ORM's migration tool.
 
 ```package-install title="Terminal"
-npx @better-auth/cli@latest migrate
+npx auth@latest migrate
 ```
 
 ### Options
@@ -44,7 +44,7 @@ The migrate command automatically detects your configured `search_path` and crea
 The `init` command allows you to initialize Better Auth in your project.
 
 ```package-install title="Terminal"
-npx @better-auth/cli@latest init
+npx auth@latest init
 ```
 
 ### Options
@@ -60,7 +60,7 @@ npx @better-auth/cli@latest init
 The `info` command provides diagnostic information about your Better Auth setup and environment. Useful for debugging and sharing when seeking support.
 
 ```package-install title="Terminal"
-npx @better-auth/cli@latest info
+npx auth@latest info
 ```
 
 ### Output
@@ -81,13 +81,13 @@ The command displays:
 
 ```bash
 # Basic usage
-npx @better-auth/cli@latest info
+npx auth@latest info
 
 # Custom config path
-npx @better-auth/cli@latest info --config ./config/auth.ts
+npx auth@latest info --config ./config/auth.ts
 
 # JSON output
-npx @better-auth/cli@latest info --json > auth-info.json
+npx auth@latest info --json > auth-info.json
 ```
 
 Sensitive data like secrets, API keys, and database URLs are automatically replaced with `[REDACTED]` for safe sharing.
@@ -97,7 +97,7 @@ Sensitive data like secrets, API keys, and database URLs are automatically repla
 The CLI also provides a way to generate a secret key for your Better Auth instance.
 
 ```package-install title="Terminal"
-npx @better-auth/cli@latest secret
+npx auth@latest secret
 ```
 
 ## Common Issues
