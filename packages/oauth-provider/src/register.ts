@@ -128,6 +128,13 @@ export async function checkOAuthClient(
 			}
 		}
 	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -251,6 +258,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
 		reference_id: referenceId,
 		metadata: inputMetadata,
 		// All other metadata
@@ -304,6 +312,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata,
 	};
@@ -350,6 +359,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
@@ -402,6 +412,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

@@ -820,3 +820,168 @@ describe("provisionUser should only be called for new users", async () => {
 		expect(provisionUserFn).toHaveBeenCalledTimes(0);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7693
+ */
+describe("SSO shared redirectURI", async () => {
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [
+				sso({
+					redirectURI: "/sso/callback",
+				}),
+				organization(),
+			],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: {
+			customFetchImpl,
+		},
+	});
+
+	const userinfoHandler = (userInfoResponse: any) => {
+		userInfoResponse.body = {
+			email: "shared-redirect@test.com",
+			name: "Shared Redirect User",
+			sub: "shared-redirect-user",
+			picture: "https://test.com/shared.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	const tokenHandler = (token: any) => {
+		token.payload.email = "shared-redirect@test.com";
+		token.payload.email_verified = true;
+		token.payload.name = "Shared Redirect User";
+		token.payload.picture = "https://test.com/shared.png";
+	};
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", userinfoHandler);
+		server.service.on("beforeTokenSigning", tokenHandler);
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		server.service.removeListener("beforeUserinfo", userinfoHandler);
+		server.service.removeListener("beforeTokenSigning", tokenHandler);
+		await server.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(
+		authUrl: string,
+		headers: Headers,
+		fetchImpl?: (...args: any) => any,
+	) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl: fetchImpl || customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should return shared redirectURI when registering provider", async () => {
+		const { headers } = await signInWithTestUser();
+		const provider = await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "shared-redirect.com",
+				oidcConfig: {
+					clientId: "shared-test",
+					clientSecret: "shared-test-secret",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+				providerId: "shared-test",
+			},
+			headers,
+		});
+		// Should use the shared redirect URI, not per-provider
+		expect(provider.redirectURI).toBe(
+			"http://localhost:3000/api/auth/sso/callback",
+		);
+		expect(provider.redirectURI).not.toContain("shared-test");
+	});
+
+	it("should use shared redirect URI in authorization URL", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		// Should use shared redirect URI without providerId in path
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback",
+		);
+		// Should NOT contain the per-provider path
+		expect(res.url).not.toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fshared-test",
+		);
+	});
+
+	it("should complete OIDC flow using shared callback endpoint", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@shared-redirect.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		// Verify session was created
+		const session = await authClient.getSession({
+			fetchOptions: {
+				headers: sessionHeaders,
+			},
+		});
+		expect(session.data?.user.email).toBe("shared-redirect@test.com");
+	});
+});
