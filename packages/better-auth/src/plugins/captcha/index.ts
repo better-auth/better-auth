@@ -39,6 +39,7 @@ export const captcha = (options: CaptchaOptions) =>
 				if (!captchaResponse) {
 					return middlewareResponse({
 						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
+						code: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.code,
 						status: 400,
 					});
 				}
@@ -88,6 +89,7 @@ export const captcha = (options: CaptchaOptions) =>
 
 				return middlewareResponse({
 					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
+					code: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.code,
 					status: 500,
 				});
 			}
