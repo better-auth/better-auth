@@ -186,6 +186,46 @@ export const auth = betterAuth({
 })
 ```
 
+## Cross-Subdomain Cookies
+
+When dynamic base URL is enabled and your app runs on multiple subdomains, you can enable `crossSubDomainCookies` without specifying a static `domain`. Better Auth will automatically derive the cookie domain from the resolved host of each request:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+    baseURL: {
+        allowedHosts: [
+            "auth.example1.com",
+            "auth.example2.com",
+        ],
+        protocol: "https",
+    },
+    advanced: {
+        crossSubDomainCookies: {
+            enabled: true,
+        },
+    },
+})
+```
+
+With this configuration:
+- A request to `auth.example1.com` sets cookies with `Domain=auth.example1.com`
+- A request to `auth.example2.com` sets cookies with `Domain=auth.example2.com`
+
+You can still provide an explicit `domain` to override the automatic behavior:
+
+```ts title="auth.ts"
+advanced: {
+    crossSubDomainCookies: {
+        enabled: true,
+        domain: ".example.com", // Always use this domain regardless of host
+    },
+},
+```
+
+<Callout type="info">
+When using a static `baseURL` string, `crossSubDomainCookies` derives the domain from that string at init time. With dynamic base URL, the domain is computed per-request from the resolved host.
+</Callout>
+
 ## Security Considerations
 
 <Callout type="info">

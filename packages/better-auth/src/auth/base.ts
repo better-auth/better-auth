@@ -3,6 +3,7 @@ import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
 import { getTrustedOrigins } from "../context/helpers";
+import { createCookieGetter, getCookies } from "../cookies";
 import type { Auth } from "../types";
 import {
 	getBaseURL,
@@ -59,6 +60,14 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					trustedOriginOptions,
 					request,
 				);
+				// When crossSubDomainCookies is enabled, recompute cookies
+				// per-request so the domain matches the resolved host.
+				if (options.advanced?.crossSubDomainCookies?.enabled) {
+					handlerCtx.authCookies = getCookies(handlerCtx.options);
+					handlerCtx.createAuthCookie = createCookieGetter(
+						handlerCtx.options,
+					);
+				}
 			} else {
 				handlerCtx = ctx;
 				// Static config: resolve once from the first request when no

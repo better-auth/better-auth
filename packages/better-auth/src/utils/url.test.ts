@@ -425,7 +425,7 @@ describe("getProtocolFromRequest", () => {
 		expect(getProtocolFromRequest(request, "auto")).toBe("https");
 	});
 
-	it("should default to https for security", () => {
+	it("should use request URL protocol as fallback", () => {
 		const request = new Request("http://localhost:3000/test");
 
 		expect(getProtocolFromRequest(request, "auto")).toBe("http");

@@ -384,4 +384,47 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		expect(trustedOrigins).toContain("http://localhost:3000");
 		expect(trustedOrigins).toContain("https://fallback.example.com");
 	});
+
+	test("should set cookie domain dynamically with crossSubDomainCookies", async () => {
+		let cookieDomain: string | undefined;
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["auth.example1.com", "auth.example2.com"],
+				protocol: "https",
+			},
+			advanced: {
+				crossSubDomainCookies: {
+					enabled: true,
+				},
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					cookieDomain =
+						ctx.context.authCookies.sessionToken.attributes.domain;
+				}),
+			},
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "auth.example1.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(cookieDomain).toBe("auth.example1.com");
+
+		await client.$fetch("/ok", {
+			headers: {
+				"x-forwarded-host": "auth.example2.com",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(cookieDomain).toBe("auth.example2.com");
+	});
 });
