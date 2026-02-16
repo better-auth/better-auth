@@ -23,7 +23,10 @@ export const matchesHostPattern = (host: string, pattern: string): boolean => {
 	}
 
 	// Normalize: remove protocol if accidentally included, lowercase for case-insensitive matching
-	const normalizedHost = host.replace(/^https?:\/\//, "").split("/")[0]!.toLowerCase();
+	const normalizedHost = host
+		.replace(/^https?:\/\//, "")
+		.split("/")[0]!
+		.toLowerCase();
 	const normalizedPattern = pattern
 		.replace(/^https?:\/\//, "")
 		.split("/")[0]!
