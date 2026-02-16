@@ -157,6 +157,8 @@ function getRateLimitStorage(
 	return createDatabaseStorageWrapper(ctx);
 }
 
+let ipWarningLogged = false;
+
 async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const basePath = new URL(ctx.baseURL).pathname;
 	const path = normalizePathname(req.url, basePath);
@@ -164,6 +166,13 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	let currentMax = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
+		if (!ipWarningLogged) {
+			ctx.logger.warn(
+				"Rate limiting skipped: could not determine client IP address. " +
+					"If you're behind a reverse proxy, make sure to configure `trustedProxies` in your auth config.",
+			);
+			ipWarningLogged = true;
+		}
 		return null;
 	}
 	const key = createRateLimitKey(ip, path);
@@ -302,6 +311,19 @@ function getDefaultSpecialRules() {
 				);
 			},
 			window: 10,
+			max: 3,
+		},
+		{
+			pathMatcher(path: string) {
+				return (
+					path === "/request-password-reset" ||
+					path === "/send-verification-email" ||
+					path.startsWith("/forget-password") ||
+					path === "/email-otp/send-verification-otp" ||
+					path === "/email-otp/request-password-reset"
+				);
+			},
+			window: 60,
 			max: 3,
 		},
 	];
