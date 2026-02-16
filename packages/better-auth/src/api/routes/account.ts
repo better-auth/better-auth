@@ -564,9 +564,7 @@ export const getAccessToken = createAuthEndpoint(
 					refreshToken: newTokens?.refreshToken
 						? await setTokenUtil(newTokens.refreshToken, ctx.context)
 						: account.refreshToken,
-					refreshTokenExpiresAt:
-						newTokens?.refreshTokenExpiresAt ??
-						account.refreshTokenExpiresAt,
+					refreshTokenExpiresAt: newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {
