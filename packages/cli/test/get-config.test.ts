@@ -898,3 +898,85 @@ describe("getConfig", async () => {
 		expect(config?.emailAndPassword?.enabled).toBe(true);
 	});
 });
+
+describe("getConfig with vite", () => {
+	// Create temp dirs under packages/cli/test/ so that vite can be resolved
+	// via Node's module resolution (walks up to packages/cli/node_modules/).
+	// Use import.meta.dirname so it works regardless of where vitest is invoked from.
+	let tmpDir: string;
+
+	beforeEach(async () => {
+		tmpDir = await fs.mkdtemp(
+			path.join(import.meta.dirname, "getConfig_vite_test-"),
+		);
+	});
+
+	afterEach(async () => {
+		await fs.rm(tmpDir, { recursive: true, force: true });
+	});
+
+	it("should load config through vite using vite-specific resolve aliases", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-vite-project", type: "module" }),
+		);
+		// Set up a vite resolve alias that only vite understands
+		await fs.writeFile(
+			path.join(tmpDir, "vite.config.ts"),
+			[
+				`import path from "node:path";`,
+				`export default {`,
+				`  resolve: {`,
+				`    alias: { "@my-config": path.join(import.meta.dirname, "my-config.ts") }`,
+				`  }`,
+				`};`,
+			].join("\n"),
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "my-config.ts"),
+			`export const myOptions = { emailAndPassword: { enabled: true } };`,
+		);
+
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			[
+				`import { myOptions } from "@my-config";`,
+				`export const auth = { options: myOptions };`,
+			].join("\n"),
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+		});
+
+		expect(config).not.toBe(null);
+		expect(config?.emailAndPassword?.enabled).toBe(true);
+	});
+
+	it("should fall back to c12 when no vite config is present", async () => {
+		await fs.writeFile(
+			path.join(tmpDir, "package.json"),
+			JSON.stringify({ name: "test-no-vite", type: "module" }),
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "tsconfig.json"),
+			JSON.stringify({
+				compilerOptions: {
+					paths: {},
+				},
+			}),
+		);
+		await fs.writeFile(
+			path.join(tmpDir, "auth.ts"),
+			`export const auth = { options: { emailAndPassword: { enabled: true } } };`,
+		);
+
+		const config = await getConfig({
+			cwd: tmpDir,
+		});
+
+		expect(config).not.toBe(null);
+		expect(config?.emailAndPassword?.enabled).toBe(true);
+	});
+});
