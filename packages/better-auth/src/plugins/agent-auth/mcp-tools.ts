@@ -80,6 +80,12 @@ export interface CreateAgentMCPToolsOptions {
 		| Promise<Record<string, string>>;
 	/** Client ID for device auth flow. Default: "agent-auth" */
 	clientId?: string;
+	/**
+	 * Called when a verification URL is available during device auth flow.
+	 * Use this to automatically open the URL in the user's browser.
+	 * Receives the `verification_uri_complete` (with user code pre-filled).
+	 */
+	onVerificationUrl?: (url: string) => void | Promise<void>;
 }
 
 /**
@@ -89,7 +95,12 @@ export interface CreateAgentMCPToolsOptions {
 export function createAgentMCPTools(
 	options: CreateAgentMCPToolsOptions,
 ): MCPToolDefinition[] {
-	const { storage, getAuthHeaders, clientId = "agent-auth" } = options;
+	const {
+		storage,
+		getAuthHeaders,
+		clientId = "agent-auth",
+		onVerificationUrl,
+	} = options;
 
 	async function resolveAuthHeaders(): Promise<Record<string, string>> {
 		if (!getAuthHeaders) return {};
@@ -212,12 +223,23 @@ export function createAgentMCPTools(
 					});
 				}
 
+				// Auto-open browser if callback is provided
+				if (onVerificationUrl) {
+					try {
+						await onVerificationUrl(codeData.verification_uri_complete);
+					} catch {
+						// Best-effort — fall back to showing the URL
+					}
+				}
+
 				return {
 					content: [
 						{
 							type: "text" as const,
 							text: [
-								`To connect your agent, open this URL in your browser:`,
+								onVerificationUrl
+									? `Opening your browser to approve the agent connection...`
+									: `To connect your agent, open this URL in your browser:`,
 								``,
 								`  ${codeData.verification_uri_complete}`,
 								``,

@@ -28,8 +28,24 @@
  * Requires: @modelcontextprotocol/sdk (peer dependency)
  */
 
+import { exec } from "node:child_process";
+import { platform } from "node:os";
 import { createFileStorage } from "./mcp-storage-fs";
 import { createAgentMCPTools } from "./mcp-tools";
+
+/**
+ * Open a URL in the user's default browser.
+ * Works cross-platform (macOS, Linux, Windows).
+ */
+function openInBrowser(url: string): void {
+	const cmd =
+		platform() === "darwin"
+			? "open"
+			: platform() === "win32"
+				? "start"
+				: "xdg-open";
+	exec(`${cmd} "${url}"`);
+}
 
 async function main() {
 	// Dynamic import — @modelcontextprotocol/sdk is a peer dependency
@@ -45,17 +61,24 @@ async function main() {
 
 	const storage = createFileStorage({ directory: storageDir });
 
+	const hasAuthHeaders = !!(cookie || token);
+
 	const tools = createAgentMCPTools({
 		storage,
-		getAuthHeaders: () => {
-			const headers: Record<string, string> = {};
-			if (cookie) {
-				headers.cookie = cookie;
-			}
-			if (token) {
-				headers.authorization = `Bearer ${token}`;
-			}
-			return headers;
+		getAuthHeaders: hasAuthHeaders
+			? () => {
+					const headers: Record<string, string> = {};
+					if (cookie) {
+						headers.cookie = cookie;
+					}
+					if (token) {
+						headers.authorization = `Bearer ${token}`;
+					}
+					return headers;
+				}
+			: undefined,
+		onVerificationUrl: (url) => {
+			openInBrowser(url);
 		},
 	});
 

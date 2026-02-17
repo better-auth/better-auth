@@ -3,6 +3,22 @@ import type { AgentSession } from "./types";
 
 export { generateAgentKeypair as generateKeypair } from "./crypto";
 
+/**
+ * Open a URL in the user's default browser.
+ * Works cross-platform (macOS, Linux, Windows).
+ */
+async function openInBrowser(url: string): Promise<void> {
+	const { exec } = await import("node:child_process");
+	const { platform } = await import("node:os");
+	const cmd =
+		platform() === "darwin"
+			? "open"
+			: platform() === "win32"
+				? "start"
+				: "xdg-open";
+	exec(`${cmd} "${url}"`);
+}
+
 // =========================================================================
 // DEVICE AUTH CONNECT FLOW
 // =========================================================================
@@ -43,6 +59,12 @@ export interface ConnectAgentOptions {
 	 * Useful for showing a spinner or progress indicator.
 	 */
 	onPoll?: (attempt: number) => void;
+	/**
+	 * Automatically open the verification URL in the user's default browser.
+	 * Uses the `verification_uri_complete` (with user code pre-filled).
+	 * Default: false
+	 */
+	openBrowser?: boolean;
 }
 
 export interface ConnectAgentResult {
@@ -92,6 +114,7 @@ export async function connectAgent(
 		timeout = 300_000,
 		onUserCode,
 		onPoll,
+		openBrowser = false,
 	} = options;
 
 	const base = appURL.replace(/\/+$/, "");
@@ -131,6 +154,11 @@ export async function connectAgent(
 			verificationUriComplete: codeData.verification_uri_complete,
 			expiresIn: codeData.expires_in,
 		});
+	}
+
+	// Step 3b: Auto-open browser if requested
+	if (openBrowser) {
+		openInBrowser(codeData.verification_uri_complete).catch(() => {});
 	}
 
 	// Step 4: Poll for approval
@@ -192,11 +220,12 @@ export async function connectAgent(
 	}
 
 	// Step 5: Register the agent with the app using the session token
+	// Send as cookie — Better Auth's getSessionFromCtx reads session from cookies, not Authorization header
 	const createRes = await globalThis.fetch(`${base}/api/auth/agent/create`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			Authorization: `Bearer ${accessToken}`,
+			Cookie: `better-auth.session_token=${accessToken}`,
 		},
 		body: JSON.stringify({
 			name,
