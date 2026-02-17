@@ -774,11 +774,11 @@ describe("oauth - prompt", async () => {
 			},
 		);
 		expect(consentRes.redirect).toBeTruthy();
-		expect(consentRes.uri).toContain(redirectUri);
-		expect(consentRes.uri).toContain(`code=`);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain(`code=`);
 		vi.stubGlobal("window", {
 			location: {
-				search: new URL(consentRes.uri, authServerBaseUrl).search,
+				search: new URL(consentRes.url, authServerBaseUrl).search,
 			},
 		});
 		onTestFinished(() => {
@@ -786,7 +786,7 @@ describe("oauth - prompt", async () => {
 		});
 
 		let callbackURL = "";
-		await client.$fetch(consentRes.uri, {
+		await client.$fetch(consentRes.url, {
 			method: "GET",
 			headers: oauthHeaders,
 			onError(context) {
@@ -1085,7 +1085,7 @@ describe("oauth - prompt", async () => {
 			},
 		);
 		expect(selectedAccountRes.redirect).toBeTruthy();
-		const selectedAccountRedirectUri = selectedAccountRes?.uri;
+		const selectedAccountRedirectUri = selectedAccountRes?.url;
 		expect(selectedAccountRedirectUri).toContain(redirectUri);
 		expect(selectedAccountRedirectUri).toContain(`code=`);
 
@@ -1242,7 +1242,7 @@ describe("oauth - prompt", async () => {
 			},
 		);
 		expect(selectedAccountRes.redirect).toBeTruthy();
-		const consentRedirectUri = selectedAccountRes?.uri;
+		const consentRedirectUri = selectedAccountRes?.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
@@ -1335,7 +1335,7 @@ describe("oauth - prompt", async () => {
 			},
 		);
 		expect(selectedAccountRes.redirect).toBeTruthy();
-		const consentRedirectUri = selectedAccountRes?.uri;
+		const consentRedirectUri = selectedAccountRes?.url;
 		expect(consentRedirectUri).toContain(`/consent`);
 		expect(consentRedirectUri).toContain(`client_id=${oauthClient.client_id}`);
 		expect(consentRedirectUri).toContain(`scope=`);
@@ -1360,8 +1360,8 @@ describe("oauth - prompt", async () => {
 				onResponse: cookieSetter(headers),
 			},
 		);
-		expect(consentRes.uri).toContain(redirectUri);
-		expect(consentRes.uri).toContain(`code=`);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain(`code=`);
 
 		enablePostLogin = false;
 	});

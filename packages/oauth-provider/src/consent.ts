@@ -43,7 +43,7 @@ export async function consentEndpoint(
 	if (!accepted) {
 		return {
 			redirect: true,
-			uri: formatErrorURL(
+			url: formatErrorURL(
 				query.get("redirect_uri") ?? "",
 				"access_denied",
 				"User denied access",
@@ -124,6 +124,6 @@ export async function consentEndpoint(
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }

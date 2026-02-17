@@ -41,7 +41,7 @@ async function selected(
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }
 
@@ -61,7 +61,7 @@ async function created(
 	const { url } = await authorizeEndpoint(ctx, opts);
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }
 
@@ -84,6 +84,6 @@ async function postLogin(
 	});
 	return {
 		redirect: true,
-		uri: url,
+		url,
 	};
 }
