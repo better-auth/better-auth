@@ -20232,6 +20232,8 @@ snapshots:
 
   '@noble/hashes@1.8.0':
     optional: true
+  '@noble/hashes@1.8.0':
+    optional: true
 
   '@noble/hashes@2.0.1': {}
 
@@ -21182,6 +21184,7 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
     optional: true
+    optional: true
 
   '@orama/orama@3.1.18': {}
 
@@ -21190,6 +21193,7 @@ snapshots:
       '@orama/cuid2': 2.2.3
       '@orama/orama': 3.1.18
       lodash: 4.17.23
+    optional: true
     optional: true
 
   '@oxc-project/types@0.114.0': {}
