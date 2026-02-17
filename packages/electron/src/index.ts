@@ -68,7 +68,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		const userId =
 			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
 		if (!userId || client_id !== opts.clientID) {
-			return false;
+			return null;
 		}
 		if (!state) {
 			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_STATE);
@@ -99,7 +99,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			httpOnly: false,
 		});
 
-		return true;
+		return identifier;
 	};
 
 	return {
@@ -192,7 +192,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							transferPayload = safeJSONParse(transferCookie);
 						} else {
 							const query = querySchema.safeParse(ctx.query);
-							if (query.success) {
+							if (query.success && query.data.client_id === opts.clientID) {
 								transferPayload = query.data;
 							}
 						}
@@ -200,9 +200,15 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
-						await handleTransfer(ctx, transferPayload);
+						const identifier = await handleTransfer(ctx, transferPayload);
+						if (identifier === null) {
+							return ctx;
+						}
 
-						return ctx;
+						return ctx.json({
+							...(ctx.context.returned ?? {}),
+							electron_authorization_code: identifier,
+						});
 					}),
 				},
 			],
