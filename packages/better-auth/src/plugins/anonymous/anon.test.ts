@@ -12,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import { getSessionFromCtx } from "../../api";
+import { APIError, getSessionFromCtx } from "../../api";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -392,6 +392,24 @@ describe("anonymous", async () => {
 			},
 		} satisfies BetterAuthPlugin;
 
+		const passkeyRegistrationFailureRoutePlugin = {
+			id: "passkey-registration-failure-route-plugin",
+			endpoints: {
+				verifyRegistration: createAuthEndpoint(
+					"/passkey/verify-registration",
+					{
+						method: "POST",
+					},
+					async () => {
+						throw APIError.from("BAD_REQUEST", {
+							code: "PASSKEY_REGISTRATION_FAILED",
+							message: "Passkey registration failed",
+						});
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
 		const callbackLinkRoutePlugin = {
 			id: "callback-link-route-plugin",
 			endpoints: {
@@ -476,6 +494,51 @@ describe("anonymous", async () => {
 				fetchOptions: { headers },
 			});
 			expect(sessionAfter.data?.user.isAnonymous).toBe(false);
+		});
+
+		it("keeps anonymous flag when passkey registration fails", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
+				{
+					plugins: [anonymous(), passkeyRegistrationFailureRoutePlugin],
+				},
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
+			}
+
+			const verifyRegistrationResult = await client.$fetch(
+				"/passkey/verify-registration",
+				{
+					method: "POST",
+					headers,
+				},
+			);
+			expect(verifyRegistrationResult.error).toBeDefined();
+
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(true);
+
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(true);
 		});
 
 		it("updates anonymous flag when callback links an account without a new session cookie", async () => {

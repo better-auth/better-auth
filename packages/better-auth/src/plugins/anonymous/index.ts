@@ -8,6 +8,7 @@ import * as z from "zod";
 import {
 	APIError,
 	getSessionFromCtx,
+	isAPIError,
 	sensitiveSessionMiddleware,
 } from "../../api";
 import {
@@ -263,6 +264,9 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						// Passkey registration links a credential without creating an account.
 						// Handle it explicitly because account-based fallback cannot detect it.
 						if (ctx.path === "/passkey/verify-registration") {
+							if (isAPIError(ctx.context.returned)) {
+								return;
+							}
 							await ctx.context.internalAdapter.updateUser(session.user.id, {
 								isAnonymous: false,
 							});
