@@ -8,12 +8,12 @@ import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { beforeEach, describe, expect, vi } from "vitest";
-import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
+import { authenticate, kElectron } from "../src/authenticate";
 import { electronClient } from "../src/client";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
-import { it, testUtils } from "./utils";
+import { encodeRedirectToken, it, testUtils } from "./utils";
 
 const mockElectron = vi.hoisted(() => {
 	const BrowserWindow = {
@@ -96,8 +96,7 @@ describe("Electron", () => {
 
 		await client.requestAuth();
 
-		(globalThis as any)[kCodeVerifier] = undefined;
-		(globalThis as any)[kState] = undefined;
+		(globalThis as any)[kElectron] = undefined;
 
 		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
 			expect.stringContaining(options.signInURL),
@@ -108,8 +107,9 @@ describe("Electron", () => {
 	});
 
 	it("should set redirect cookie after signing in", async () => {
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const { error } = await proxyClient.signUp.email(
 			{
@@ -144,8 +144,9 @@ describe("Electron", () => {
 	});
 
 	it("should include `electron_authorization_code` in sign-up response", async () => {
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const { data } = await proxyClient.signUp.email(
 			{
@@ -233,8 +234,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -255,7 +257,7 @@ describe("Electron", () => {
 			authenticate({
 				$fetch: client.$fetch,
 				options,
-				token: identifier,
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 			}),
@@ -304,8 +306,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -328,7 +331,7 @@ describe("Electron", () => {
 			authenticate({
 				$fetch: client.$fetch,
 				options,
-				token: identifier,
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 				fetchOptions: { throw: true },
@@ -344,14 +347,15 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		await expect(
 			authenticate({
 				$fetch: client.$fetch,
 				options,
-				token: "non-existent",
+				token: encodeRedirectToken("non-existent", "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 				fetchOptions: { throw: true },
@@ -517,8 +521,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -535,7 +540,9 @@ describe("Electron", () => {
 			},
 		});
 
-		const result = await client.authenticate({ token: identifier });
+		const result = await client.authenticate({
+			token: encodeRedirectToken(identifier, "abc"),
+		});
 
 		expect(result.data?.user?.id).toBe(user.id);
 		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
@@ -568,8 +575,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -586,7 +594,9 @@ describe("Electron", () => {
 			},
 		});
 
-		await authenticateHandler(null, { token: identifier });
+		await authenticateHandler(null, {
+			token: encodeRedirectToken(identifier, "abc"),
+		});
 
 		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 			"better-auth:authenticated",
@@ -836,7 +846,7 @@ describe("Electron", () => {
 				authenticate({
 					$fetch: client.$fetch,
 					options,
-					token: identifier,
+					token: encodeRedirectToken(identifier, "no-match"),
 					// @ts-expect-error
 					getWindow: () => mockElectron.BrowserWindow,
 				}),
@@ -853,7 +863,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -873,11 +885,12 @@ describe("Electron", () => {
 				authenticate({
 					$fetch: client.$fetch,
 					options,
-					token: identifier,
+					token: encodeRedirectToken(identifier, "abc"),
 					// @ts-expect-error
 					getWindow: () => mockElectron.BrowserWindow,
+					fetchOptions: { throw: true },
 				}),
-			).rejects.toThrowError("State not found.");
+			).rejects.toThrowError("BAD_REQUEST");
 		});
 
 		it("should verify that state parameter matches", async ({
@@ -892,8 +905,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
-			(globalThis as any)[kState] = "abc";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -914,7 +928,7 @@ describe("Electron", () => {
 				authenticate({
 					$fetch: client.$fetch,
 					options,
-					token: identifier,
+					token: encodeRedirectToken(identifier, "abc"),
 					// @ts-expect-error
 					getWindow: () => mockElectron.BrowserWindow,
 					fetchOptions: { throw: true },
@@ -1475,8 +1489,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
-			(globalThis as any)[kState] = "abc";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -1504,7 +1519,7 @@ describe("Electron", () => {
 						return rest as typeof u;
 					},
 				},
-				token: identifier,
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 			});
@@ -1532,8 +1547,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
-			(globalThis as any)[kState] = "abc";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -1563,7 +1579,7 @@ describe("Electron", () => {
 						throw new Error("sanitize failed");
 					},
 				},
-				token: identifier,
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 			});
@@ -1715,8 +1731,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
-			(globalThis as any)[kState] = "abc";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -1744,7 +1761,7 @@ describe("Electron", () => {
 						return { ...u, name: "Sanitized" };
 					},
 				},
-				token: identifier,
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
 				getWindow: () => mockElectron.BrowserWindow,
 			});

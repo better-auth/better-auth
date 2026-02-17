@@ -4,7 +4,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
-import { APIError, getBaseURL } from "better-auth";
+import { APIError, getBaseURL, safeJSONParse } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
@@ -13,8 +13,7 @@ import type { ElectronClientOptions } from "./types/client";
 import { normalizeUserOutput } from "./user";
 import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
-export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
-export const kState = Symbol.for("better-auth:state");
+export const kElectron = Symbol.for("better-auth:electron");
 
 const requestAuthOptionsSchema = (() => {
 	const { provider, idToken, loginHint, ...signInSocialBody } =
@@ -51,8 +50,10 @@ export async function requestAuth(
 		await createHash("SHA-256").digest(codeVerifier),
 	);
 
-	(globalThis as any)[kCodeVerifier] = codeVerifier;
-	(globalThis as any)[kState] = state;
+	((globalThis as any)[kElectron] ??= new Map<string, string>()).set(
+		state,
+		codeVerifier,
+	);
 
 	let url: URL | null = null;
 	if (cfg?.provider) {
@@ -90,13 +91,14 @@ export async function requestAuth(
 	});
 }
 
-/**
- * Exchanges the authorization code for a session.
- */
 export interface ElectronAuthenticateOptions {
 	fetchOptions?: Omit<CreateFetchOption, "method"> | undefined;
 	token: string;
 }
+
+/**
+ * Exchanges the authorization code for a session.
+ */
 export async function authenticate({
 	$fetch,
 	options,
@@ -114,16 +116,15 @@ export async function authenticate({
 		);
 	}
 
-	const codeVerifier = (globalThis as any)[kCodeVerifier];
-	const state = (globalThis as any)[kState];
-	(globalThis as any)[kCodeVerifier] = undefined;
-	(globalThis as any)[kState] = undefined;
+	const decoded = safeJSONParse(
+		new TextDecoder().decode(base64Url.decode(decodeURIComponent(token))),
+	) as { identifier: string; state: string };
+
+	const codeVerifier = (globalThis as any)[kElectron]?.get(decoded?.state);
+	(globalThis as any)[kElectron]?.delete(decoded?.state);
 
 	if (!codeVerifier) {
 		throw new BetterAuthError("Code verifier not found.");
-	}
-	if (!state) {
-		throw new BetterAuthError("State not found.");
 	}
 
 	return await $fetch<{
@@ -134,8 +135,8 @@ export async function authenticate({
 		method: "POST",
 		body: {
 			...(fetchOptions?.body || {}),
-			token,
-			state,
+			token: decoded.identifier,
+			state: decoded.state,
 			code_verifier: codeVerifier,
 		},
 		onSuccess: async (ctx) => {

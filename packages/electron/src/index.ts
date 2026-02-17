@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
@@ -93,7 +94,11 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			expiresAt,
 		});
 
-		ctx.setCookie(redirectCookieName, identifier, {
+		const redirectToken = base64Url.encode(
+			new TextEncoder().encode(JSON.stringify({ identifier, state })),
+		);
+
+		ctx.setCookie(redirectCookieName, redirectToken, {
 			...ctx.context.authCookies.sessionToken.attributes,
 			maxAge: opts.redirectCookieExpiresIn,
 			httpOnly: false,
