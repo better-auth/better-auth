@@ -9,6 +9,7 @@ import type {
 	ElectronClientOptions,
 	ElectronRequestAuthOptions,
 } from "./client";
+import { fetchUserImage, normalizeUserOutput } from "./user";
 import {
 	getChannelPrefixWithDelimiter,
 	isProcessType,
@@ -51,16 +52,31 @@ export function setupMain(
 	}
 
 	if (!cfg || cfg.csp === true) {
-		setupCSP(clientOptions);
+		setupCSP(clientOptions, opts);
 	}
 	if (!cfg || cfg.scheme === true) {
-		registerProtocolScheme($fetch, opts, withGetWindowFallback(cfg?.getWindow));
+		registerProtocolScheme(
+			$fetch,
+			opts,
+			withGetWindowFallback(cfg?.getWindow),
+			clientOptions,
+		);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
 			{
 				$fetch,
 				$store,
+				getCookie,
+			},
+			opts,
+			clientOptions,
+		);
+	}
+	if (opts.userImageProxy?.enabled !== false) {
+		setupUserImageProxy(
+			{
+				$fetch,
 				getCookie,
 			},
 			opts,
@@ -77,11 +93,13 @@ export async function handleDeepLink({
 	options,
 	url,
 	getWindow,
+	clientOptions,
 }: {
 	$fetch: BetterFetch;
 	options: ElectronClientOptions;
 	url: string;
 	getWindow?: SetupMainConfig["getWindow"] | undefined;
+	clientOptions?: BetterAuthClientOptions | undefined;
 }) {
 	if (!isProcessType("browser")) {
 		throw new BetterAuthError(
@@ -126,6 +144,7 @@ export async function handleDeepLink({
 			token,
 		},
 		withGetWindowFallback(getWindow),
+		clientOptions,
 	);
 }
 
@@ -133,6 +152,7 @@ function registerProtocolScheme(
 	$fetch: BetterFetch,
 	options: ElectronClientOptions,
 	getWindow: () => electron.BrowserWindow | null | undefined,
+	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const { scheme, privileges = {} } =
 		typeof options.protocol === "string"
@@ -201,6 +221,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					clientOptions,
 				});
 			}
 		});
@@ -212,6 +233,7 @@ function registerProtocolScheme(
 					options,
 					url,
 					getWindow,
+					clientOptions,
 				});
 			}
 		});
@@ -226,13 +248,17 @@ function registerProtocolScheme(
 					options,
 					url: process.argv[1],
 					getWindow,
+					clientOptions,
 				});
 			}
 		});
 	}
 }
 
-function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
+function setupCSP(
+	clientOptions: BetterAuthClientOptions | undefined,
+	options: ElectronClientOptions,
+) {
 	app.whenReady().then(() => {
 		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
 			const origin = new URL(clientOptions?.baseURL || "", "http://localhost")
@@ -275,6 +301,18 @@ function setupCSP(clientOptions: BetterAuthClientOptions | undefined) {
 				csp.set("connect-src", ["'self'", origin]);
 			}
 
+			const userImageScheme =
+				(options.userImageProxy?.scheme || "user-image") + ":";
+			if (csp.has("img-src")) {
+				const values = csp.get("img-src") || [];
+				if (!values.includes(userImageScheme)) {
+					values.push(userImageScheme);
+				}
+				csp.set("img-src", values);
+			} else {
+				csp.set("img-src", ["'self'", userImageScheme]);
+			}
+
 			callback({
 				responseHeaders: {
 					...details.responseHeaders,
@@ -304,9 +342,10 @@ export function setupBridges(
 	ctx.$store?.atoms.session?.subscribe((state) => {
 		if (state.isPending === true) return;
 
-		webContents
-			.getFocusedWebContents()
-			?.send(`${prefix}user-updated`, state?.data?.user ?? null);
+		const user = state?.data?.user
+			? normalizeUserOutput(state.data.user, opts)
+			: null;
+		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
@@ -321,7 +360,9 @@ export function setupBridges(
 			},
 		);
 
-		return result.data?.user ?? null;
+		return result.data?.user
+			? normalizeUserOutput(result.data.user, opts)
+			: null;
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,
@@ -336,6 +377,92 @@ export function setupBridges(
 				cookie: ctx.getCookie(),
 				"content-type": "application/json",
 			},
+		});
+	});
+}
+
+function setupUserImageProxy(
+	ctx: {
+		$fetch: BetterFetch;
+		getCookie: () => string;
+	},
+	opts: ElectronClientOptions,
+	clientOptions: BetterAuthClientOptions | undefined,
+) {
+	const hasAdminPlugin =
+		clientOptions?.plugins?.some((plugin) => plugin.id === "admin") ?? false;
+	const scheme = opts.userImageProxy?.scheme || "user-image";
+
+	protocol.registerSchemesAsPrivileged([
+		{
+			scheme,
+			privileges: {
+				standard: false,
+				secure: true,
+				bypassCSP: true,
+				stream: true,
+			},
+		},
+	]);
+
+	app.whenReady().then(() => {
+		protocol.handle(scheme, async (request) => {
+			try {
+				const url = new URL(request.url);
+				const userId = url.hostname;
+				if (!userId) {
+					return new Response(null, { status: 400 });
+				}
+
+				const headers = {
+					cookie: ctx.getCookie(),
+					"content-type": "application/json",
+				};
+
+				let imageUrl: string | null | undefined = null;
+
+				// Check if the requested user is the current session user
+				const sessionResult = await ctx.$fetch<{
+					user: User & Record<string, any>;
+				}>("/get-session", {
+					method: "GET",
+					headers,
+				});
+
+				if (sessionResult.data?.user?.id === userId) {
+					imageUrl = sessionResult.data.user.image;
+				} else if (hasAdminPlugin) {
+					const userResult = await ctx.$fetch<{
+						user: User & Record<string, any>;
+					}>(`/admin/get-user?id=${encodeURIComponent(userId)}`, {
+						method: "GET",
+						headers,
+					});
+					imageUrl = userResult.data?.user?.image;
+				}
+
+				if (!imageUrl) {
+					return new Response(null, { status: 404 });
+				}
+
+				const result = await fetchUserImage(
+					clientOptions?.baseURL,
+					imageUrl,
+					opts,
+				);
+				if (!result) {
+					return new Response(null, { status: 404 });
+				}
+
+				return new Response(result.stream, {
+					headers: {
+						"content-type": result.mimeType,
+						"cache-control": "private, max-age=3600",
+					},
+				});
+			} catch {
+				return new Response(null, { status: 500 });
+			}
 		});
 	});
 }
