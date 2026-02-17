@@ -3,11 +3,13 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
 import { beforeEach, describe, expect, vi } from "vitest";
 import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
+import { electronClient } from "../src/client";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
 import { fetchUserImage, normalizeUserOutput } from "../src/user";
@@ -1457,6 +1459,301 @@ describe("Electron", () => {
 		);
 
 		await expect(client.requestAuth()).rejects.toThrow();
+	});
+
+	describe("sanitizeUser", () => {
+		it("should strip fields from user sent in authenticated event", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-strip@test.com",
+					password: "password",
+					name: "Sanitize Strip",
+				},
+			});
+
+			(globalThis as any)[kCodeVerifier] = "test-challenge";
+			(globalThis as any)[kState] = "abc";
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: (u) => {
+						const { email, ...rest } = u;
+						return rest as typeof u;
+					},
+				},
+				token: identifier,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.not.objectContaining({ email: expect.any(String) }),
+			);
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id }),
+			);
+		});
+
+		it("should not emit authenticated event when sanitizeUser throws", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-throw@test.com",
+					password: "password",
+					name: "Sanitize Throw",
+				},
+			});
+
+			(globalThis as any)[kCodeVerifier] = "test-challenge";
+			(globalThis as any)[kState] = "abc";
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+			const consoleSpy = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: () => {
+						throw new Error("sanitize failed");
+					},
+				},
+				token: identifier,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Error while sanitizing user",
+				expect.any(Error),
+			);
+			expect(
+				mockElectron.BrowserWindow.webContents.send,
+			).not.toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.anything(),
+			);
+
+			consoleSpy.mockRestore();
+		});
+
+		it("should apply sanitizeUser to user-updated event", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const sanitizeUser = vi.fn((u: any) => {
+				const { email, ...rest } = u;
+				return rest;
+			});
+
+			const { client: sanitizedClient } = (() => {
+				const sanitizedOptions = { ...options, sanitizeUser };
+				const sanitizedClient = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: {
+						customFetchImpl: (url, init) => {
+							const req = new Request(url.toString(), init);
+							return auth.handler(req);
+						},
+					},
+					plugins: [electronClient(sanitizedOptions)],
+				});
+				return { client: sanitizedClient };
+			})();
+
+			sanitizedClient.setupMain({
+				bridges: true,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			mockElectron.BrowserWindow.send.mockClear();
+
+			sanitizedClient.$store.atoms.session!.set({
+				data: {
+					user: {
+						id: "user-123",
+						email: "secret@test.com",
+						name: "Test",
+					},
+				},
+			});
+
+			// Flush
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(sanitizeUser).toHaveBeenCalled();
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				expect.objectContaining({ id: "user-123" }),
+			);
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				expect.not.objectContaining({ email: expect.any(String) }),
+			);
+		});
+
+		it("should send null user-updated event when sanitizeUser throws", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { client: sanitizedClient } = (() => {
+				const sanitizedOptions = {
+					...options,
+					sanitizeUser: () => {
+						throw new Error("sanitize boom");
+					},
+				};
+				const sanitizedClient = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: {
+						customFetchImpl: (url, init) => {
+							const req = new Request(url.toString(), init);
+							return auth.handler(req);
+						},
+					},
+					plugins: [electronClient(sanitizedOptions)],
+				});
+				return { client: sanitizedClient };
+			})();
+
+			sanitizedClient.setupMain({
+				bridges: true,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			mockElectron.BrowserWindow.send.mockClear();
+			const consoleSpy = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			sanitizedClient.$store.atoms.session!.set({
+				data: {
+					user: {
+						id: "user-456",
+						email: "test@test.com",
+						name: "Test",
+					},
+				},
+			});
+
+			// Flush
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Error while sanitizing user",
+				expect.any(Error),
+			);
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				null,
+			);
+
+			consoleSpy.mockRestore();
+		});
+
+		it("should apply async sanitizeUser", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-async@test.com",
+					password: "password",
+					name: "Sanitize Async",
+				},
+			});
+
+			(globalThis as any)[kCodeVerifier] = "test-challenge";
+			(globalThis as any)[kState] = "abc";
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: async (u) => {
+						await Promise.resolve();
+						return { ...u, name: "Sanitized" };
+					},
+				},
+				token: identifier,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id, name: "Sanitized" }),
+			);
+		});
 	});
 
 	describe("user normalization", () => {
