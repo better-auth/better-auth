@@ -376,19 +376,26 @@ describe("anonymous", async () => {
 
 	describe("anonymous cleanup safeguards", () => {
 		function createMiddlewareContext({
+			path = "/sign-in/anonymous",
+			setCookieHeader = "better-auth.session_token=new-token.value; Path=/; HttpOnly",
 			newSessionUser,
 			deleteUser,
+			updateUser,
+			findAccounts,
 		}: {
-			newSessionUser: Record<string, any>;
+			path?: string;
+			setCookieHeader?: string;
+			newSessionUser?: Record<string, unknown>;
 			deleteUser: ReturnType<typeof vi.fn>;
+			updateUser?: ReturnType<typeof vi.fn>;
+			findAccounts?: ReturnType<typeof vi.fn>;
 		}) {
 			return {
-				path: "/sign-in/anonymous",
+				path,
 				context: {
-					responseHeaders: new Headers({
-						"set-cookie":
-							"better-auth.session_token=new-token.value; Path=/; HttpOnly",
-					}),
+					responseHeaders: new Headers(
+						setCookieHeader ? { "set-cookie": setCookieHeader } : {},
+					),
 					authCookies: {
 						sessionToken: {
 							name: "better-auth.session_token",
@@ -403,14 +410,23 @@ describe("anonymous", async () => {
 							options: {},
 						},
 					},
-					newSession: {
-						user: newSessionUser,
-						session: {
-							token: "new-token",
-						},
-					},
+					newSession: newSessionUser
+						? {
+								user: newSessionUser,
+								session: {
+									token: "new-token",
+								},
+							}
+						: undefined,
 					internalAdapter: {
 						deleteUser,
+						updateUser:
+							updateUser ??
+							vi.fn(async () => ({
+								id: "anon-user",
+								isAnonymous: false,
+							})),
+						findAccounts: findAccounts ?? vi.fn(async () => []),
 					},
 					options: {},
 					secret: "secret",
@@ -425,6 +441,114 @@ describe("anonymous", async () => {
 				setSignedCookie: vi.fn(),
 			} as any;
 		}
+
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7985
+		 */
+		it("updates anonymous flag when credential link is completed", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const sessionSpy = vi.spyOn(apiModule, "getSessionFromCtx");
+			const scenarios = [
+				{
+					path: "/passkey/verify-registration",
+					setCookieHeader:
+						"better-auth.session_token=new-token.value; Path=/; HttpOnly",
+					findAccountsResult: [],
+					shouldCallFindAccounts: false,
+				},
+				{
+					path: "/callback/google",
+					setCookieHeader: "",
+					findAccountsResult: [{ id: "account-id" }],
+					shouldCallFindAccounts: true,
+				},
+				{
+					path: "/oauth2/callback/test-provider",
+					setCookieHeader: "",
+					findAccountsResult: [{ id: "oauth2-account-id" }],
+					shouldCallFindAccounts: true,
+				},
+				{
+					path: "/set-password",
+					setCookieHeader: "",
+					findAccountsResult: [{ id: "credential-account-id" }],
+					shouldCallFindAccounts: true,
+				},
+				{
+					path: "/link-social",
+					setCookieHeader: "",
+					findAccountsResult: [{ id: "social-account-id" }],
+					shouldCallFindAccounts: true,
+				},
+			] as const;
+
+			for (const scenario of scenarios) {
+				const deleteUser = vi.fn();
+				const updateUser = vi.fn();
+				const findAccounts = vi.fn(async () => scenario.findAccountsResult);
+				const ctx = createMiddlewareContext({
+					path: scenario.path,
+					setCookieHeader: scenario.setCookieHeader,
+					deleteUser,
+					updateUser,
+					findAccounts,
+				});
+
+				sessionSpy.mockResolvedValue({
+					user: {
+						id: "anon-user",
+						isAnonymous: true,
+					},
+					session: {
+						token: "old-token",
+					},
+				} as any);
+
+				await handler?.(ctx);
+
+				expect(updateUser).toHaveBeenCalledWith("anon-user", {
+					isAnonymous: false,
+				});
+				expect(deleteUser).not.toHaveBeenCalled();
+				if (scenario.shouldCallFindAccounts) {
+					expect(findAccounts).toHaveBeenCalledWith("anon-user");
+				} else {
+					expect(findAccounts).not.toHaveBeenCalled();
+				}
+			}
+		});
+
+		it("keeps anonymous flag when no linked credential evidence exists", async () => {
+			const plugin = anonymous();
+			const handler = plugin.hooks?.after?.[0]?.handler;
+			const deleteUser = vi.fn();
+			const updateUser = vi.fn();
+			const findAccounts = vi.fn(async () => []);
+			const ctx = createMiddlewareContext({
+				path: "/callback/google",
+				setCookieHeader: "",
+				deleteUser,
+				updateUser,
+				findAccounts,
+			});
+
+			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
+				user: {
+					id: "anon-user",
+					isAnonymous: true,
+				},
+				session: {
+					token: "old-token",
+				},
+			} as any);
+
+			await handler?.(ctx);
+
+			expect(findAccounts).toHaveBeenCalledWith("anon-user");
+			expect(updateUser).not.toHaveBeenCalled();
+			expect(deleteUser).not.toHaveBeenCalled();
+		});
 
 		it("does not delete when the new session is still anonymous", async () => {
 			const plugin = anonymous();
