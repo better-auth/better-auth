@@ -47,33 +47,37 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 		},
 		async (ctx) => {
 			// Try cookie-based session first
-			let session = await getSessionFromCtx(ctx);
+			const cookieSession = await getSessionFromCtx(ctx);
 
-			// Fallback: check Authorization header for a Bearer session token
-			// This supports the device authorization flow where the agent script
-			// receives a session token from /device/token and needs to create itself
-			if (!session) {
+			// Resolve the user ID — either from cookie session or Bearer token fallback
+			let userId: string;
+
+			if (cookieSession) {
+				userId = cookieSession.user.id;
+			} else {
+				// Fallback: check Authorization header for a Bearer session token.
+				// This supports the device authorization flow where the agent script
+				// receives a session token from /device/token and needs to create itself.
 				const authHeader = ctx.headers?.get("authorization");
-				if (authHeader) {
-					const token = authHeader.replace(/^Bearer\s+/i, "");
-					if (token && token !== authHeader) {
-						const dbSession =
-							await ctx.context.internalAdapter.findSession(token);
-						if (
-							dbSession &&
-							new Date(dbSession.session.expiresAt) > new Date()
-						) {
-							session = {
-								session: dbSession.session,
-								user: dbSession.user,
-							} as typeof session;
-						}
-					}
+				const token = authHeader?.replace(/^Bearer\s+/i, "");
+				if (!token || token === authHeader) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_SESSION,
+					);
 				}
-			}
-
-			if (!session) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				const dbSession =
+					await ctx.context.internalAdapter.findSession(token);
+				if (
+					!dbSession ||
+					new Date(dbSession.session.expiresAt) <= new Date()
+				) {
+					throw APIError.from(
+						"UNAUTHORIZED",
+						ERROR_CODES.UNAUTHORIZED_SESSION,
+					);
+				}
+				userId = dbSession.user.id;
 			}
 
 			const { name, publicKey, scopes, role, orgId, metadata } = ctx.body;
@@ -97,7 +101,7 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 					model: AGENT_TABLE,
 					where: [
 						{ field: "kid", value: kid },
-						{ field: "userId", value: session.user.id },
+						{ field: "userId", value: userId },
 					],
 				});
 
@@ -133,7 +137,7 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 				model: AGENT_TABLE,
 				data: {
 					name,
-					userId: session.user.id,
+					userId,
 					orgId: orgId ?? null,
 					scopes: JSON.stringify(resolvedScopes),
 					role: resolvedRole,

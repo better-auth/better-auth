@@ -62,6 +62,10 @@ export function updateAgent() {
 				update: updates,
 			});
 
+			if (!updated) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.AGENT_NOT_FOUND);
+			}
+
 			const parsedScopes =
 				typeof updated.scopes === "string"
 					? JSON.parse(updated.scopes)

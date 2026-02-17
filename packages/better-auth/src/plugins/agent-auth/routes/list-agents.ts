@@ -29,7 +29,7 @@ export function listAgents() {
 				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
 
-			const where: Array<{ field: string; value: unknown }> = [
+			const where: Array<{ field: string; value: string }> = [
 				{ field: "userId", value: session.user.id },
 			];
 

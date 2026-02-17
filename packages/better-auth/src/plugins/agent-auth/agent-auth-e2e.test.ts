@@ -154,16 +154,16 @@ describe("agent-auth e2e", async () => {
 				scopes: ["reports.read", "reports.write"],
 			});
 
-			expect(result.content[0].text).toContain("Connected to");
-			expect(result.content[0].text).toContain("Agent ID:");
+			expect(result.content[0]!.text).toContain("Connected to");
+			expect(result.content[0]!.text).toContain("Agent ID:");
 		});
 
 		it("should list connections via MCP tool", async () => {
 			const listTool = findTool("list_agents");
 			const result = await listTool.handler({});
 
-			expect(result.content[0].text).toContain("http://localhost:3000");
-			expect(result.content[0].text).toContain("MCP E2E Agent");
+			expect(result.content[0]!.text).toContain("http://localhost:3000");
+			expect(result.content[0]!.text).toContain("MCP E2E Agent");
 		});
 
 		it("should check status via MCP tool", async () => {
@@ -172,8 +172,8 @@ describe("agent-auth e2e", async () => {
 				url: "http://localhost:3000",
 			});
 
-			expect(result.content[0].text).toContain("Healthy");
-			expect(result.content[0].text).toContain("MCP E2E Agent");
+			expect(result.content[0]!.text).toContain("Healthy");
+			expect(result.content[0]!.text).toContain("MCP E2E Agent");
 		});
 
 		it("should make authenticated request via MCP tool", async () => {
@@ -184,8 +184,8 @@ describe("agent-auth e2e", async () => {
 				method: "GET",
 			});
 
-			expect(result.content[0].text).toContain("200");
-			expect(result.content[0].text).toContain("MCP E2E Agent");
+			expect(result.content[0]!.text).toContain("200");
+			expect(result.content[0]!.text).toContain("MCP E2E Agent");
 		});
 
 		it("should disconnect via MCP tool", async () => {
@@ -194,14 +194,14 @@ describe("agent-auth e2e", async () => {
 				url: "http://localhost:3000",
 			});
 
-			expect(result.content[0].text).toContain("Disconnected");
+			expect(result.content[0]!.text).toContain("Disconnected");
 		});
 
 		it("should show no connections after disconnect", async () => {
 			const listTool = findTool("list_agents");
 			const result = await listTool.handler({});
 
-			expect(result.content[0].text).toBe("No agent connections.");
+			expect(result.content[0]!.text).toBe("No agent connections.");
 		});
 	});
 
@@ -283,13 +283,13 @@ describe("agent-auth e2e", async () => {
 				scopes: ["reports.read"],
 			});
 
-			const text = startResult.content[0].text;
+			const text = startResult.content[0]!.text;
 			expect(text).toContain("enter code:");
 
 			// Extract user code from the output
 			const codeMatch = text.match(/enter code:\s*(\S+)/);
 			expect(codeMatch).toBeTruthy();
-			const userCode = codeMatch![1];
+			const userCode = codeMatch![1]!;
 
 			// Step 2: Simulate user approval
 			await auth.api.deviceApprove({
@@ -302,13 +302,13 @@ describe("agent-auth e2e", async () => {
 				url: "http://localhost:3000",
 			});
 
-			expect(completeResult.content[0].text).toContain("Connected to");
-			expect(completeResult.content[0].text).toContain("Agent ID:");
+			expect(completeResult.content[0]!.text).toContain("Connected to");
+			expect(completeResult.content[0]!.text).toContain("Agent ID:");
 
 			// Verify connection was saved
 			const listTool = tools.find((t) => t.name === "list_agents")!;
 			const listResult = await listTool.handler({});
-			expect(listResult.content[0].text).toContain("MCP Device Agent");
+			expect(listResult.content[0]!.text).toContain("MCP Device Agent");
 		});
 	});
 

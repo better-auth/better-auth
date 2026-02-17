@@ -101,7 +101,7 @@ export function createFileStorage(
 				...keypair,
 				createdAt: new Date().toISOString(),
 			};
-			if (idx >= 0) {
+			if (idx >= 0 && connections[idx]) {
 				connections[idx].keypair = storedKeypair;
 			} else {
 				// Connection doesn't exist yet — create a placeholder that saveConnection will overwrite
@@ -137,7 +137,7 @@ export function createFileStorage(
 				...connection,
 				connectedAt: new Date().toISOString(),
 				// Preserve existing keypair if present
-				keypair: idx >= 0 ? connections[idx].keypair : undefined,
+				keypair: idx >= 0 ? connections[idx]?.keypair : undefined,
 			};
 			if (idx >= 0) {
 				connections[idx] = entry;

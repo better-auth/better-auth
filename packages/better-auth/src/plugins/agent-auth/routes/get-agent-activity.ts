@@ -6,7 +6,7 @@ import { AGENT_AUTH_ERROR_CODES as ERROR_CODES } from "../error-codes";
 
 const ACTIVITY_TABLE = "agentActivity";
 
-interface AgentActivity {
+export interface AgentActivity {
 	id: string;
 	agentId: string;
 	userId: string;
