@@ -134,11 +134,11 @@ type AddOptionalFields<
 	T extends Record<string, any>,
 	Fields extends Record<keyof T, DBFieldAttribute>,
 > = {
-	// Required fields: required === true
-	[K in keyof T as Fields[K] extends { required: true } ? K : never]: T[K];
+	// Required fields: required !== false
+	[K in keyof T as Fields[K] extends { required: false } ? never : K]: T[K];
 } & {
-	// Optional fields: required !== true
-	[K in keyof T as Fields[K] extends { required: true } ? never : K]?: T[K];
+	// Optional fields: required === false
+	[K in keyof T as Fields[K] extends { required: false } ? K : never]?: T[K];
 };
 
 /**
