@@ -121,7 +121,7 @@ export function createAgentMCPTools(
 			name: "connect_agent",
 			description: getAuthHeaders
 				? "Connect to an app as an agent. Auto-generates a keypair if needed and registers the public key with the app."
-				: "Start connecting to an app as an agent. Returns a user code that the user must approve in their browser. After approval, call connect_agent_complete to finish.",
+				: "Connect to an app as an agent via device authorization. Opens the browser for user approval, waits for it, then registers automatically.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z.string().optional().describe("Friendly name for this agent"),
@@ -211,9 +211,10 @@ export function createAgentMCPTools(
 					verification_uri: string;
 					verification_uri_complete: string;
 					expires_in: number;
+					interval: number;
 				};
 
-				// Store pending flow so connect_agent_complete can finish
+				// Store pending flow as fallback for connect_agent_complete
 				if (storage.savePendingFlow) {
 					await storage.savePendingFlow(url, {
 						deviceCode: codeData.device_code,
@@ -232,23 +233,154 @@ export function createAgentMCPTools(
 					}
 				}
 
+				// Poll for approval automatically — no need for a separate tool call
+				const maxAttempts = 60;
+				const interval = Math.max(5000, (codeData.interval ?? 5) * 1000);
+				let accessToken: string | null = null;
+
+				for (let i = 0; i < maxAttempts; i++) {
+					await new Promise((resolve) => setTimeout(resolve, interval));
+
+					const tokenRes = await globalThis.fetch(
+						`${url}/api/auth/device/token`,
+						{
+							method: "POST",
+							headers: { "Content-Type": "application/json" },
+							body: JSON.stringify({
+								grant_type:
+									"urn:ietf:params:oauth:grant-type:device_code",
+								device_code: codeData.device_code,
+								client_id: clientId,
+							}),
+						},
+					);
+
+					if (tokenRes.ok) {
+						const tokenData = (await tokenRes.json()) as {
+							access_token: string;
+						};
+						accessToken = tokenData.access_token;
+						break;
+					}
+
+					const errorData = (await tokenRes.json()) as {
+						error: string;
+					};
+
+					if (errorData.error === "authorization_pending") {
+						continue;
+					}
+					if (errorData.error === "slow_down") {
+						await new Promise((resolve) =>
+							setTimeout(resolve, interval),
+						);
+						continue;
+					}
+					if (errorData.error === "access_denied") {
+						if (storage.removePendingFlow)
+							await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "User denied the connection.",
+								},
+							],
+						};
+					}
+					if (errorData.error === "expired_token") {
+						if (storage.removePendingFlow)
+							await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "Device code expired. Please try again.",
+								},
+							],
+						};
+					}
+
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Device auth failed: ${errorData.error}`,
+							},
+						],
+					};
+				}
+
+				if (!accessToken) {
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: "Timed out waiting for approval. Please try again.",
+							},
+						],
+					};
+				}
+
+				// Register the agent with the session token
+				// Use correct cookie name based on HTTPS (secure cookies use __Secure- prefix)
+				const cookieName = url.startsWith("https://")
+					? "__Secure-better-auth.session_token"
+					: "better-auth.session_token";
+				const createRes = await globalThis.fetch(
+					`${url}/api/auth/agent/create`,
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Cookie: `${cookieName}=${accessToken}`,
+							Origin: url,
+						},
+						body: JSON.stringify({
+							name,
+							publicKey: keypair.publicKey,
+							scopes,
+						}),
+					},
+				);
+
+				if (!createRes.ok) {
+					const err = await createRes.text();
+					if (storage.removePendingFlow)
+						await storage.removePendingFlow(url);
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Failed to register agent: ${err}`,
+							},
+						],
+					};
+				}
+
+				const data = (await createRes.json()) as {
+					agentId: string;
+					scopes: string[];
+				};
+
+				await storage.saveConnection(url, {
+					agentId: data.agentId,
+					name,
+					scopes: data.scopes,
+				});
+
+				if (storage.removePendingFlow)
+					await storage.removePendingFlow(url);
+
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: [
-								onVerificationUrl
-									? `Opening your browser to approve the agent connection...`
-									: `To connect your agent, open this URL in your browser:`,
-								``,
-								`  ${codeData.verification_uri_complete}`,
-								``,
-								`Or go to ${codeData.verification_uri} and enter code: ${codeData.user_code}`,
-								``,
-								`The code expires in ${Math.floor(codeData.expires_in / 60)} minutes.`,
-								``,
-								`After approving, call connect_agent_complete with url "${url}" to finish.`,
-							].join("\n"),
+							text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
 						},
 					],
 				};
@@ -590,13 +722,18 @@ export function createAgentMCPTools(
 				}
 
 				// Register the agent
+				// Use correct cookie name based on HTTPS (secure cookies use __Secure- prefix)
+				const completeCookieName = url.startsWith("https://")
+					? "__Secure-better-auth.session_token"
+					: "better-auth.session_token";
 				const createRes = await globalThis.fetch(
 					`${url}/api/auth/agent/create`,
 					{
 						method: "POST",
 						headers: {
 							"Content-Type": "application/json",
-							Authorization: `Bearer ${accessToken}`,
+							Cookie: `${completeCookieName}=${accessToken}`,
+							Origin: url,
 						},
 						body: JSON.stringify({
 							name: pendingFlow.name,
