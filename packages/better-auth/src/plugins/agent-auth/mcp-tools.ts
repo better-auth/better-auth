@@ -9,17 +9,17 @@
 import * as z from "zod";
 import { generateAgentKeypair, signAgentJWT } from "./crypto";
 
+export interface AgentKeypair {
+	privateKey: Record<string, unknown>;
+	publicKey: Record<string, unknown>;
+	kid: string;
+}
+
 export interface MCPAgentStorage {
-	getKeypair(): Promise<{
-		privateKey: Record<string, unknown>;
-		publicKey: Record<string, unknown>;
-		kid: string;
-	} | null>;
-	saveKeypair(keypair: {
-		privateKey: Record<string, unknown>;
-		publicKey: Record<string, unknown>;
-		kid: string;
-	}): Promise<void>;
+	/** Get the keypair for a specific connection (by appUrl). Falls back to global keypair for migration. */
+	getKeypair(appUrl: string): Promise<AgentKeypair | null>;
+	/** Save a keypair for a specific connection (stored inline with the connection). */
+	saveKeypair(appUrl: string, keypair: AgentKeypair): Promise<void>;
 	getConnection(appUrl: string): Promise<{
 		agentId: string;
 		name: string;
@@ -107,12 +107,14 @@ export function createAgentMCPTools(
 		return await getAuthHeaders();
 	}
 
-	async function getOrCreateKeypair() {
-		const existing = await storage.getKeypair();
-		if (existing) return existing;
-
+	async function getOrCreateKeypair(appUrl?: string) {
+		if (appUrl) {
+			const existing = await storage.getKeypair(appUrl);
+			if (existing) return existing;
+		}
+		// Generate a fresh keypair for new connections
 		const keypair = await generateAgentKeypair();
-		await storage.saveKeypair(keypair);
+		// Don't save here — caller saves alongside the connection
 		return keypair;
 	}
 
@@ -126,26 +128,36 @@ export function createAgentMCPTools(
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z.string().optional().describe("Friendly name for this agent"),
 				scopes: z.array(z.string()).optional().describe("Scopes to request"),
+				force: z
+					.boolean()
+					.optional()
+					.describe("Force a new agent identity even if already connected"),
 			},
 			handler: async (input) => {
 				const url = (input.url as string).replace(/\/+$/, "");
 				const name = (input.name as string) ?? "MCP Agent";
 				const scopes = (input.scopes as string[]) ?? [];
+				const force = (input.force as boolean) ?? false;
 
 				// Check if already connected to this app
-				const existing = await storage.getConnection(url);
-				if (existing) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: `Already connected to ${url} as "${existing.name}" (Agent ID: ${existing.agentId}). Scopes: ${existing.scopes.join(", ") || "none"}. Use disconnect_agent first if you want to reconnect.`,
-							},
-						],
-					};
+				if (!force) {
+					const existing = await storage.getConnection(url);
+					if (existing) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Already connected to ${url} as "${existing.name}" (Agent ID: ${existing.agentId}). Scopes: ${existing.scopes.join(", ") || "none"}. Use disconnect_agent first or pass force=true to reconnect with a new identity.`,
+								},
+							],
+						};
+					}
 				}
 
-				const keypair = await getOrCreateKeypair();
+				// Always generate a fresh keypair for new connections (or forced reconnects)
+				const keypair = force
+					? await generateAgentKeypair()
+					: await getOrCreateKeypair(url);
 
 				// If auth headers are available, use direct registration
 				if (getAuthHeaders) {
@@ -180,6 +192,7 @@ export function createAgentMCPTools(
 						scopes: string[];
 					};
 
+					await storage.saveKeypair(url, keypair);
 					await storage.saveConnection(url, {
 						agentId: data.agentId,
 						name,
@@ -368,6 +381,7 @@ export function createAgentMCPTools(
 					scopes: string[];
 				};
 
+				await storage.saveKeypair(url, keypair);
 				await storage.saveConnection(url, {
 					agentId: data.agentId,
 					name,
@@ -431,7 +445,7 @@ export function createAgentMCPTools(
 					};
 				}
 
-				const keypair = await storage.getKeypair();
+				const keypair = await storage.getKeypair(url);
 				if (keypair) {
 					const authHeaders = await resolveAuthHeaders();
 					try {
@@ -481,13 +495,13 @@ export function createAgentMCPTools(
 					};
 				}
 
-				const keypair = await storage.getKeypair();
+				const keypair = await storage.getKeypair(url);
 				if (!keypair) {
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: "No keypair found.",
+								text: "No keypair found for this connection.",
 							},
 						],
 					};
@@ -558,13 +572,13 @@ export function createAgentMCPTools(
 					};
 				}
 
-				const keypair = await storage.getKeypair();
+				const keypair = await storage.getKeypair(appUrl);
 				if (!keypair) {
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: "No keypair found.",
+								text: "No keypair found for this connection.",
 							},
 						],
 					};
@@ -757,6 +771,7 @@ export function createAgentMCPTools(
 					scopes: string[];
 				};
 
+				await storage.saveKeypair(url, keypair);
 				await storage.saveConnection(url, {
 					agentId: data.agentId,
 					name: pendingFlow.name,

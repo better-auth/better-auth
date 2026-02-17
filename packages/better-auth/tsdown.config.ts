@@ -73,4 +73,5 @@ export default defineConfig({
 	treeshake: true,
 	clean: true,
 	unbundle: true,
+	external: ["@modelcontextprotocol/sdk"],
 });

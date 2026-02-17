@@ -26,6 +26,8 @@ interface StoredConnection {
 	name: string;
 	scopes: string[];
 	connectedAt: string;
+	/** Per-connection keypair. Absent on legacy connections (fall back to global keypair.json). */
+	keypair?: StoredKeypair;
 }
 
 export interface FileStorageOptions {
@@ -69,7 +71,20 @@ export function createFileStorage(
 	}
 
 	return {
-		async getKeypair() {
+		async getKeypair(appUrl) {
+			// First try per-connection keypair
+			const connections = readJSON<StoredConnection[]>(connectionsFile);
+			if (connections) {
+				const conn = connections.find((c) => c.appUrl === appUrl);
+				if (conn?.keypair) {
+					return {
+						privateKey: conn.keypair.privateKey,
+						publicKey: conn.keypair.publicKey,
+						kid: conn.keypair.kid,
+					};
+				}
+			}
+			// Migration fallback: use legacy global keypair.json
 			const stored = readJSON<StoredKeypair>(keypairFile);
 			if (!stored) return null;
 			return {
@@ -79,12 +94,27 @@ export function createFileStorage(
 			};
 		},
 
-		async saveKeypair(keypair) {
-			const stored: StoredKeypair = {
+		async saveKeypair(appUrl, keypair) {
+			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
+			const idx = connections.findIndex((c) => c.appUrl === appUrl);
+			const storedKeypair: StoredKeypair = {
 				...keypair,
 				createdAt: new Date().toISOString(),
 			};
-			writeJSON(keypairFile, stored, true);
+			if (idx >= 0) {
+				connections[idx].keypair = storedKeypair;
+			} else {
+				// Connection doesn't exist yet — create a placeholder that saveConnection will overwrite
+				connections.push({
+					appUrl,
+					agentId: "",
+					name: "",
+					scopes: [],
+					connectedAt: new Date().toISOString(),
+					keypair: storedKeypair,
+				});
+			}
+			writeJSON(connectionsFile, connections, true);
 		},
 
 		async getConnection(appUrl) {
@@ -106,13 +136,15 @@ export function createFileStorage(
 				appUrl,
 				...connection,
 				connectedAt: new Date().toISOString(),
+				// Preserve existing keypair if present
+				keypair: idx >= 0 ? connections[idx].keypair : undefined,
 			};
 			if (idx >= 0) {
 				connections[idx] = entry;
 			} else {
 				connections.push(entry);
 			}
-			writeJSON(connectionsFile, connections);
+			writeJSON(connectionsFile, connections, true);
 		},
 
 		async removeConnection(appUrl) {

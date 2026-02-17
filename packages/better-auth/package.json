@@ -585,7 +585,8 @@
     "solid-js": "^1.0.0",
     "svelte": "^4.0.0 || ^5.0.0",
     "vitest": "^2.0.0 || ^3.0.0 || ^4.0.0",
-    "vue": "^3.0.0"
+    "vue": "^3.0.0",
+    "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "peerDependenciesMeta": {
     "@lynx-js/react": {
@@ -643,6 +644,9 @@
       "optional": true
     },
     "vitest": {
+      "optional": true
+    },
+    "@modelcontextprotocol/sdk": {
       "optional": true
     }
   }

@@ -382,11 +382,14 @@ describe("agent-auth e2e", async () => {
  * In-memory implementation of MCPAgentStorage for testing.
  */
 function createInMemoryStorage(): MCPAgentStorage {
-	let keypair: {
-		privateKey: Record<string, unknown>;
-		publicKey: Record<string, unknown>;
-		kid: string;
-	} | null = null;
+	const keypairs = new Map<
+		string,
+		{
+			privateKey: Record<string, unknown>;
+			publicKey: Record<string, unknown>;
+			kid: string;
+		}
+	>();
 
 	const connections = new Map<
 		string,
@@ -404,11 +407,11 @@ function createInMemoryStorage(): MCPAgentStorage {
 	>();
 
 	return {
-		async getKeypair() {
-			return keypair;
+		async getKeypair(appUrl) {
+			return keypairs.get(appUrl) ?? null;
 		},
-		async saveKeypair(kp) {
-			keypair = kp;
+		async saveKeypair(appUrl, kp) {
+			keypairs.set(appUrl, kp);
 		},
 		async getConnection(appUrl) {
 			return connections.get(appUrl) ?? null;
