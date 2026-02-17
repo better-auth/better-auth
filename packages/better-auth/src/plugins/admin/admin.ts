@@ -95,7 +95,7 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 										session.userId,
 									)) as UserWithRole;
 
-									if (user.banned) {
+									if (user?.banned) {
 										if (
 											user.banExpires &&
 											new Date(user.banExpires).getTime() < Date.now()
