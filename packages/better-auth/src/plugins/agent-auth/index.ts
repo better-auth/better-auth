@@ -189,6 +189,13 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 							status = returned.statusCode;
 						}
 
+						// Use x-agent-path/x-agent-method if present (set by verifyAgentRequest helper)
+						// so custom routes log the actual business path, not "/agent/get-session"
+						const loggedMethod =
+							ctx.headers?.get("x-agent-method") ?? ctx.method ?? "GET";
+						const loggedPath =
+							ctx.headers?.get("x-agent-path") ?? ctx.path ?? "";
+
 						// Log activity with response status
 						ctx.context.runInBackground(
 							ctx.context.adapter
@@ -197,8 +204,8 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 									data: {
 										agentId: agentSession.agent.id,
 										userId: agentSession.user.id,
-										method: ctx.method ?? "GET",
-										path: ctx.path ?? "",
+										method: loggedMethod,
+										path: loggedPath,
 										status,
 										ipAddress:
 											ctx.headers?.get("x-forwarded-for") ??
@@ -230,3 +237,4 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 };
 
 export type * from "./types";
+export { verifyAgentRequest } from "./verify-agent-request";
