@@ -341,16 +341,15 @@ function setupBridges(
 	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
-		let user = state?.data?.user
-			? normalizeUserOutput(state.data.user, opts)
-			: null;
+		let user = state.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
 			user = await opts.sanitizeUser(user).catch(() => null);
 		}
+		if (user !== null) {
+			user = normalizeUserOutput(user, opts);
+		}
 
-		webContents
-			.getFocusedWebContents()
-			?.send(`${prefix}user-updated`, user);
+		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
 
 	ipcMain.handle(`${prefix}getUser`, async () => {
@@ -364,11 +363,12 @@ function setupBridges(
 				},
 			},
 		);
-		let user = result?.data?.user
-			? normalizeUserOutput(result.data.user, opts)
-			: null;
+		let user = result.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
 			user = await opts.sanitizeUser(user).catch(() => null);
+		}
+		if (user !== null) {
+			user = normalizeUserOutput(user, opts);
 		}
 
 		return user ?? null;

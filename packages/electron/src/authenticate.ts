@@ -139,11 +139,12 @@ export async function authenticate({
 			code_verifier: codeVerifier,
 		},
 		onSuccess: async (ctx) => {
-			let user = ctx.data.user
-				? normalizeUserOutput(ctx.data.user, options)
-				: null;
+			let user = ctx.data?.user ?? null;
 			if (user !== null && typeof options.sanitizeUser === "function") {
 				user = await options.sanitizeUser(user).catch(() => null);
+			}
+			if (user !== null) {
+				user = normalizeUserOutput(user, options);
 			}
 
 			await fetchOptions?.onSuccess?.(ctx);
