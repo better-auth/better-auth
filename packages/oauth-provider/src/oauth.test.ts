@@ -1367,24 +1367,29 @@ describe("oauth - prompt", async () => {
 	});
 });
 
-describe("oauth - config", async () => {
-	const tempServer = await listen(
-		toNodeHandler(async () => new Response("temp")),
-		{
-			port: 0,
-		},
-	);
-	const port = tempServer.address?.port ?? 3002;
-	await tempServer.close();
-
-	const authServerBaseUrl = `http://localhost:${port}`;
-	const authServerUrl = `${authServerBaseUrl}/api/auth`;
+describe("oauth - config", () => {
+	let port = 3002;
+	let authServerBaseUrl = `http://localhost:${port}`;
+	let authServerUrl = `${authServerBaseUrl}/api/auth`;
 	const rpBaseUrl = "http://localhost:5000";
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
 
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
+
+	beforeAll(async () => {
+		const tempServer = await listen(
+			toNodeHandler(async () => new Response("temp")),
+			{
+				port: 0,
+			},
+		);
+		port = tempServer.address?.port ?? 3002;
+		authServerBaseUrl = `http://localhost:${port}`;
+		authServerUrl = `${authServerBaseUrl}/api/auth`;
+		await tempServer.close();
+	});
 
 	afterEach(async () => {
 		if (server) {
