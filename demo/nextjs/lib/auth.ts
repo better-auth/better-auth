@@ -1,4 +1,4 @@
-// import { dash, sendEmail } from "@better-auth/dash";
+import { dash, sendEmail } from "@better-auth/dash";
 import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
@@ -59,19 +59,19 @@ const authOptions = {
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			// await sendEmail({
-			// 	to: user.email,
-			// 	subject: "Verify your email address",
-			// 	template: "verify-email",
-			// 	variables: {
-			// 		verificationUrl: url,
-			// 		userEmail: user.email,
-			// 		userName: user.name,
-			// 		appName: "Better Auth Demo",
-			// 		expirationMinutes: "10",
-			// 		verificationCode: "",
-			// 	},
-			// });
+			await sendEmail({
+				to: user.email,
+				subject: "Verify your email address",
+				template: "verify-email",
+				variables: {
+					verificationUrl: url,
+					userEmail: user.email,
+					userName: user.name,
+					appName: "Better Auth Demo",
+					expirationMinutes: "10",
+					verificationCode: "",
+				},
+			});
 		},
 	},
 	account: {
@@ -93,16 +93,16 @@ const authOptions = {
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword({ user, url }) {
-			// await sendEmail({
-			// 	to: user.email,
-			// 	subject: "Reset your password",
-			// 	template: "reset-password",
-			// 	variables: {
-			// 		userEmail: user.email,
-			// 		resetLink: url,
-			// 		userName: user.name,
-			// 	},
-			// });
+			await sendEmail({
+				to: user.email,
+				subject: "Reset your password",
+				template: "reset-password",
+				variables: {
+					userEmail: user.email,
+					resetLink: url,
+					userName: user.name,
+				},
+			});
 		},
 	},
 	socialProviders: {
@@ -146,37 +146,37 @@ const authOptions = {
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				// sendEmail({
-				// 	to: data.email,
-				// 	subject: "You've been invited to join an organization",
-				// 	template: "invitation",
-				// 	variables: {
-				// 		inviterEmail: data.inviter.user.email,
-				// 		inviterName: data.inviter.user.name,
-				// 		organizationName: data.organization.name,
-				// 		role: data.role,
-				// 		inviteLink:
-				// 			process.env.NODE_ENV === "development"
-				// 				? `http://localhost:3000/accept-invitation/${data.id}`
-				// 				: `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/accept-invitation/${data.id}`,
-				// 	},
-				// });
+				sendEmail({
+					to: data.email,
+					subject: "You've been invited to join an organization",
+					template: "invitation",
+					variables: {
+						inviterEmail: data.inviter.user.email,
+						inviterName: data.inviter.user.name,
+						organizationName: data.organization.name,
+						role: data.role,
+						inviteLink:
+							process.env.NODE_ENV === "development"
+								? `http://localhost:3000/accept-invitation/${data.id}`
+								: `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/accept-invitation/${data.id}`,
+					},
+				});
 			},
 		}),
 		twoFactor({
 			otpOptions: {
 				async sendOTP({ user, otp }) {
-					// await sendEmail({
-					// 	to: user.email,
-					// 	subject: "Your two-factor authentication code",
-					// 	template: "two-factor",
-					// 	variables: {
-					// 		otpCode: otp,
-					// 		userEmail: user.email,
-					// 		userName: user.name,
-					// 		appName: "Better Auth Demo",
-					// 	},
-					// });
+					await sendEmail({
+						to: user.email,
+						subject: "Your two-factor authentication code",
+						template: "two-factor",
+						variables: {
+							otpCode: otp,
+							userEmail: user.email,
+							userName: user.name,
+							appName: "Better Auth Demo",
+						},
+					});
 				},
 			},
 		}),
@@ -464,7 +464,7 @@ export const auth = betterAuth({
 			authOptions,
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
-		// dash(),
+		dash(),
 	],
 });
 
