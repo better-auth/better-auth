@@ -159,10 +159,7 @@ jobs:
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Test
         if: github.event_name != 'merge_group'

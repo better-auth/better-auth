@@ -10,6 +10,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
 import type { ElectronClientOptions } from "./types/client";
+import { normalizeUserOutput } from "./user";
 import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
@@ -138,7 +139,9 @@ export async function authenticate({
 			code_verifier: codeVerifier,
 		},
 		onSuccess: async (ctx) => {
-			let user: User & Record<string, any> = ctx.data.user;
+			let user = ctx.data.user
+				? normalizeUserOutput(ctx.data.user, options)
+				: null;
 			if (user !== null && typeof options.sanitizeUser === "function") {
 				user = await options.sanitizeUser(user).catch(() => null);
 			}

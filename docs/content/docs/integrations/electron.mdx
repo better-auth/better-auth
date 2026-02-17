@@ -233,6 +233,7 @@ Better Auth can be integrated into Electron apps to provide secure authenticatio
       
       This will:
       - Register the protocol handler for deep links.
+      - Register the [user image proxy](#user-image-proxy) protocol.
       - Set up content security policies.
       - Set up IPC bridges for communication between main and renderer processes.
       
@@ -404,6 +405,19 @@ useEffect(() => {
   return () => unsubscribe();
 }, []);
 ```
+
+### User Image Proxy
+
+To avoid CSP issues, the Electron plugin securely proxies user avatar images through a custom `user-image://` protocol.
+
+You can use the image URL directly in your renderer:
+
+```tsx title="electron/App.tsx"
+<img src={user.image} alt="Avatar" />
+{/* or <img src="user-image://<user-id>" /> */}
+```
+
+To configure or disable the proxy, see the [`userImageProxy`](#userimageproxy) option.
 
 ### Creating IPC bridges
 
@@ -701,6 +715,29 @@ Make sure this matches the clientID provided to both the server and proxy client
 ```ts title="electron/auth-client.ts"
 electronClient({
   clientID: "electron",
+});
+```
+
+#### `userImageProxy?`
+
+Configuration for the user image proxy. See [User Image Proxy](#user-image-proxy) for details.
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  userImageProxy: {
+    enabled: true, // default: true
+    maxSize: 1024 * 1024 * 5, // default: 5MB
+  },
+});
+```
+
+To disable the proxy entirely:
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  userImageProxy: {
+    enabled: false,
+  },
 });
 ```
 
