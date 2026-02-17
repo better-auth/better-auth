@@ -2093,61 +2093,64 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					someRequiredField: {
 						type: "string",
-						required: true,
 					},
 					someOptionalField: {
 						type: "string",
 						required: false,
 					},
-					someHiddenField: {
-						type: "string",
-						input: false,
-					},
+				someHiddenField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 				},
 			},
 			member: {
 				additionalFields: {
 					memberRequiredField: {
 						type: "string",
-						required: true,
 					},
-					memberOptionalField: {
-						type: "string",
-					},
-					memberHiddenField: {
-						type: "string",
-						input: false,
-					},
+				memberOptionalField: {
+					type: "string",
+					required: false,
+				},
+				memberHiddenField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 				},
 			},
 			team: {
 				additionalFields: {
 					teamRequiredField: {
 						type: "string",
-						required: true,
 					},
-					teamOptionalField: {
-						type: "string",
-					},
-					teamHiddenField: {
-						type: "string",
-						input: false,
-					},
+				teamOptionalField: {
+					type: "string",
+					required: false,
+				},
+				teamHiddenField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 				},
 			},
 			invitation: {
 				additionalFields: {
 					invitationRequiredField: {
 						type: "string",
-						required: true,
 					},
-					invitationOptionalField: {
-						type: "string",
-					},
-					invitationHiddenField: {
-						type: "string",
-						input: false,
-					},
+				invitationOptionalField: {
+					type: "string",
+					required: false,
+				},
+				invitationHiddenField: {
+					type: "string",
+					required: false,
+					input: false,
+				},
 				},
 			},
 		},
