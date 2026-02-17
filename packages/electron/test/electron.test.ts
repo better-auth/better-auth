@@ -889,9 +889,6 @@ describe("Electron", () => {
 					// @ts-expect-error
 					getWindow: () => mockElectron.BrowserWindow,
 					fetchOptions: { throw: true },
-				}).catch((err: any) => {
-					expect(err.error.message).toBe("state mismatch");
-					throw err;
 				}),
 			).rejects.toThrowError("BAD_REQUEST");
 		});

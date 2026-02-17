@@ -4,7 +4,7 @@ import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import type { BetterFetch, CreateFetchOption } from "@better-fetch/fetch";
-import { APIError, getBaseURL } from "better-auth";
+import { APIError, getBaseURL, safeJSONParse } from "better-auth";
 import { signInSocial } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
@@ -116,12 +116,12 @@ export async function authenticate({
 		);
 	}
 
-	const decoded = JSON.parse(
+	const decoded = safeJSONParse(
 		new TextDecoder().decode(base64Url.decode(decodeURIComponent(token))),
 	) as { identifier: string; state: string };
 
-	const codeVerifier = (globalThis as any)[kElectron]?.get(decoded.state);
-	(globalThis as any)[kElectron]?.delete(decoded.state);
+	const codeVerifier = (globalThis as any)[kElectron]?.get(decoded?.state);
+	(globalThis as any)[kElectron]?.delete(decoded?.state);
 
 	if (!codeVerifier) {
 		throw new BetterAuthError("Code verifier not found.");
