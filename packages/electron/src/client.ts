@@ -42,7 +42,7 @@ const storageAdapter = (storage: Storage) => {
 	};
 };
 
-export const electronClient = (options: ElectronClientOptions) => {
+export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 	const opts = {
 		storagePrefix: "better-auth",
 		cookiePrefix: "better-auth",
@@ -229,7 +229,7 @@ export const electronClient = (options: ElectronClientOptions) => {
 					);
 				},
 				$Infer: {} as {
-					Bridges: ExposedBridges;
+					Bridges: ExposedBridges<O>;
 				},
 			};
 		},
@@ -237,5 +237,5 @@ export const electronClient = (options: ElectronClientOptions) => {
 };
 
 export { handleDeepLink } from "./browser";
-export * from "./types/client";
+export type * from "./types/client";
 export { normalizeUserOutput } from "./user";

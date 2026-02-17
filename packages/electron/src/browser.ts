@@ -381,12 +381,12 @@ function setupBridges(
 	ipcMain.handle(
 		`${prefix}authenticate`,
 		async (_evt, data: { token: string }) => {
-			void (await authenticate({
+			await authenticate({
 				$fetch: ctx.$fetch,
 				getWindow: ctx.getWindow,
 				options: opts,
 				token: data.token,
-			}));
+			});
 		},
 	);
 	ipcMain.handle(`${prefix}signOut`, async () => {

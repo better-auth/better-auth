@@ -147,5 +147,7 @@ export interface ElectronProxyClientOptions
 	cookiePrefix?: string | undefined;
 }
 
-export type { ElectronRequestAuthOptions } from "../authenticate";
+export type * from "../authenticate";
+export type * from "../preload";
+export type * from "../user";
 export type { ElectronSharedOptions };

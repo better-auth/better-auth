@@ -59,7 +59,7 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 
 					const handleRedirect = () => {
 						const authorizationCode = getAuthorizationCode();
-						if (authorizationCode === "" || authorizationCode === null) {
+						if (!authorizationCode) {
 							return false;
 						}
 						document.cookie = `${redirectCookieName}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
