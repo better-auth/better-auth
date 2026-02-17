@@ -89,6 +89,43 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 			const now = new Date();
 			const kid = (publicKey.kid as string) ?? null;
 
+			// Check if an agent with the same kid already exists for this user
+			// This makes the endpoint idempotent — reconnecting with the same
+			// keypair reuses/reactivates the existing agent instead of creating duplicates
+			if (kid) {
+				const existing = await ctx.context.adapter.findOne<Agent>({
+					model: AGENT_TABLE,
+					where: [
+						{ field: "kid", value: kid },
+						{ field: "userId", value: session.user.id },
+					],
+				});
+
+				if (existing) {
+					// Reactivate and update the existing agent
+					await ctx.context.adapter.update({
+						model: AGENT_TABLE,
+						where: [{ field: "id", value: existing.id }],
+						update: {
+							name,
+							scopes: JSON.stringify(resolvedScopes),
+							role: resolvedRole,
+							status: "active",
+							publicKey: JSON.stringify(publicKey),
+							metadata: metadata ? JSON.stringify(metadata) : null,
+							updatedAt: now,
+						},
+					});
+
+					return ctx.json({
+						agentId: existing.id,
+						name,
+						scopes: resolvedScopes,
+						role: resolvedRole,
+					});
+				}
+			}
+
 			const agent = await ctx.context.adapter.create<
 				Record<string, unknown>,
 				Agent
