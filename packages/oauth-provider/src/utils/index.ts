@@ -425,3 +425,50 @@ export function deleteFromPrompt(query: URLSearchParams, prompt: Prompt) {
 	}
 	return Object.fromEntries(query);
 }
+
+enum PKCERequirementErrors {
+	PUBLIC_CLIENT = "pkce is required for public clients",
+	OFFLINE_ACCESS_SCOPE = "pkce is required when requesting offline_access scope",
+	CLIENT_REQUIRE_PKCE = "pkce is required for this client",
+}
+/**
+ * Determines if PKCE is required for a given client and scope.
+ *
+ * PKCE is always required for:
+ * 1. Public clients (cannot securely store client_secret)
+ * 2. Requests with offline_access scope (refresh token security)
+ *
+ * For confidential clients without offline_access:
+ * - Uses client.requirePKCE if set (defaults to true)
+ *
+ * Returns false if PKCE is not required, or the reason it is required.
+ *
+ * @internal
+ */
+export function isPKCERequired(
+	client: SchemaClient<Scope[]>,
+	requestedScopes?: string[],
+): false | PKCERequirementErrors {
+	// Determine if client is public
+	const isPublicClient =
+		client.tokenEndpointAuthMethod === "none" ||
+		client.type === "native" ||
+		client.type === "user-agent-based" ||
+		client.public === true;
+
+	// PKCE always required for public clients
+	if (isPublicClient) {
+		return PKCERequirementErrors.PUBLIC_CLIENT;
+	}
+
+	// PKCE always required for offline_access scope (refresh tokens)
+	if (requestedScopes?.includes("offline_access")) {
+		return PKCERequirementErrors.OFFLINE_ACCESS_SCOPE;
+	}
+
+	if (client.requirePKCE ?? true) {
+		return PKCERequirementErrors.CLIENT_REQUIRE_PKCE;
+	}
+
+	return false;
+}
