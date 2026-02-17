@@ -188,7 +188,11 @@ export async function createOAuthClientEndpoint(
 	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
 	// Format the response according to RFC7591
 	return ctx.json(
