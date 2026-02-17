@@ -978,18 +978,18 @@ describe("oauth - prompt", async () => {
 		);
 
 		expect(consentRes.redirect).toBeTruthy();
-		expect(consentRes.uri).toContain(redirectUri);
-		expect(consentRes.uri).toContain(`code=`);
-		expect(consentRes.uri).not.toContain(`/consent`);
+		expect(consentRes.url).toContain(redirectUri);
+		expect(consentRes.url).toContain(`code=`);
+		expect(consentRes.url).not.toContain(`/consent`);
 
 		// Exchange code for tokens and verify narrowed scopes
-		const callbackUrl = new URL(consentRes.uri);
+		const callbackUrl = new URL(consentRes.url);
 		const code = callbackUrl.searchParams.get("code")!;
 		expect(code).toBeTruthy();
 
 		// Follow the RP callback to exchange the code for tokens
 		let authToken: string | undefined;
-		await client.$fetch(consentRes.uri, {
+		await client.$fetch(consentRes.url, {
 			method: "GET",
 			headers: oauthHeaders,
 			onError(context) {
