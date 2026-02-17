@@ -327,7 +327,7 @@ describe("mcp - server-client flows", async () => {
 					},
 				},
 			);
-			const url = new URL(consentRes.data?.uri ?? "");
+			const url = new URL(consentRes.data?.url ?? "");
 			const _state = url.searchParams.get("state");
 			if ((state || _state) && state !== _state) {
 				throw new Error("state mismatch");
