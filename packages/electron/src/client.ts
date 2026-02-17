@@ -3,9 +3,12 @@ import { base64 } from "@better-auth/utils/base64";
 import type { BetterAuthClientPlugin, ClientStore } from "better-auth";
 import { isDevelopment, isTest } from "better-auth";
 import electron from "electron";
-import type { ElectronRequestAuthOptions } from "./authenticate";
-import { requestAuth } from "./authenticate";
-import { setupMain } from "./browser";
+import type {
+	ElectronAuthenticateOptions,
+	ElectronRequestAuthOptions,
+} from "./authenticate";
+import { authenticate, requestAuth } from "./authenticate";
+import { setupMain, withGetWindowFallback } from "./browser";
 import {
 	getCookie,
 	getSetCookie,
@@ -39,7 +42,7 @@ const storageAdapter = (storage: Storage) => {
 	};
 };
 
-export const electronClient = (options: ElectronClientOptions) => {
+export const electronClient = <O extends ElectronClientOptions>(options: O) => {
 	const opts = {
 		storagePrefix: "better-auth",
 		cookiePrefix: "better-auth",
@@ -150,6 +153,8 @@ export const electronClient = (options: ElectronClientOptions) => {
 		],
 		getActions: ($fetch, $store, clientOptions) => {
 			store = $store;
+			let getWindow: () => electron.BrowserWindow | null | undefined = () =>
+				null;
 
 			const getCookieFn = () => {
 				const cookie = getDecrypted(cookieName);
@@ -175,6 +180,24 @@ export const electronClient = (options: ElectronClientOptions) => {
 				 */
 				getCookie: getCookieFn,
 				/**
+				 * Exchanges the authorization code for a session.
+				 *
+				 * Use this when you need to manually complete the exchange
+				 * (e.g., when another app registered the scheme or deep linking fails).
+				 *
+				 * The authorization code is returned when the user is authorized in the browser. (`electron_authorization_code`)
+				 *
+				 * Note: Must be called after `requestAuth`, since the code verifier and state are stored when the auth flow is initiated.
+				 */
+				authenticate: async (data: ElectronAuthenticateOptions) => {
+					return await authenticate({
+						...data,
+						$fetch,
+						options,
+						getWindow: withGetWindowFallback(getWindow),
+					});
+				},
+				/**
 				 * Initiates the authentication process.
 				 * Opens the system's default browser for user authentication.
 				 */
@@ -192,9 +215,21 @@ export const electronClient = (options: ElectronClientOptions) => {
 					bridges?: boolean | undefined;
 					scheme?: boolean | undefined;
 					getWindow?: () => electron.BrowserWindow | null | undefined;
-				}) => setupMain($fetch, store, getCookieFn, opts, clientOptions, cfg),
+				}) => {
+					if (cfg?.getWindow) {
+						getWindow = cfg.getWindow;
+					}
+					return setupMain(
+						$fetch,
+						store,
+						getCookieFn,
+						opts,
+						clientOptions,
+						cfg,
+					);
+				},
 				$Infer: {} as {
-					Bridges: ExposedBridges;
+					Bridges: ExposedBridges<O>;
 				},
 			};
 		},
@@ -202,5 +237,5 @@ export const electronClient = (options: ElectronClientOptions) => {
 };
 
 export { handleDeepLink } from "./browser";
-export * from "./types/client";
+export type * from "./types/client";
 export { normalizeUserOutput } from "./user";

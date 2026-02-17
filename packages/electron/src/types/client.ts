@@ -1,4 +1,5 @@
 import type { Awaitable } from "@better-auth/core";
+import type { User } from "@better-auth/core/db";
 import type { ElectronSharedOptions } from "./options";
 
 export interface Storage {
@@ -59,6 +60,16 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	 * @default "better-auth"
 	 */
 	storagePrefix?: string | undefined;
+	/**
+	 * A function to sanitize the user object before it is sent to the renderer process.
+	 *
+	 * @default undefined
+	 */
+	sanitizeUser?:
+		| ((
+				user: User & Record<string, any>,
+		  ) => Awaitable<User & Record<string, any>>)
+		| undefined;
 	/**
 	 * User image proxy configuration.
 	 */
@@ -136,5 +147,7 @@ export interface ElectronProxyClientOptions
 	cookiePrefix?: string | undefined;
 }
 
-export type { ElectronRequestAuthOptions } from "../authenticate";
+export type * from "../authenticate";
+export type * from "../preload";
+export type * from "../user";
 export type { ElectronSharedOptions };

@@ -406,6 +406,75 @@ useEffect(() => {
 }, []);
 ```
 
+### Manual Token Exchange
+
+In some environments, deep link redirects may not work reliably (e.g. certain Linux desktop environments, sandboxed browsers, or when the Electron app isn't registered as the default handler for the protocol scheme).
+As a fallback, users can manually copy the authorization code from the web UI and paste it into the Electron app.
+
+**Front-end:**
+
+After authentication completes, the authorization code is available via the `electron.getAuthorizationCode()` method on the proxy client. You can display this code to the user so they can copy it:
+
+```tsx title="web/components/providers.tsx"
+import { useEffect } from "react";
+import { authClient } from "../auth-client";
+
+function Providers({ children }) {
+  useEffect(() => {
+    const authorizationCode = authClient.electron.getAuthorizationCode();
+    if (authorizationCode) {
+      // Display the code to the user
+      console.log("Authorization code:", authorizationCode);
+    }
+  }, []);
+
+  return <>{children}</>;
+}
+```
+
+The authorization code is also returned after a successful sign-in initiated from the Electron app or when using the `transferUser` method.
+
+
+```tsx title="web/pages/sign-in.tsx"
+const { data } = await authClient.electron.transferUser({
+  fetchOptions: {
+    query: params,
+  },
+});
+
+if (data?.electron_authorization_code) {
+  // Display the code to the user
+}
+```
+
+**Electron:**
+
+In the Electron renderer, provide an input for the user to paste the authorization code, then call `window.authenticate()` to exchange it for a session:
+
+```tsx title="electron/App.tsx"
+function ManualCodeEntry() {
+  return (
+    <input
+      type="text"
+      placeholder="Paste code here"
+      maxLength={32}
+      onChange={(e) => {
+        if (e.target.value.length === 32) {
+          // Important: requestAuth() must have been called before
+          window.authenticate({ token: e.target.value }); // [!code highlight]
+        }
+      }}
+    />
+  );
+}
+```
+
+The `authenticate` bridge sends the authorization code to the main process, which exchanges it for a session using the stored PKCE code verifier and state. On success, the `onAuthenticated` bridge is triggered.
+
+<Callout type="info">
+  The authorization code is a short-lived 32-character string. A `requestAuth()` call must have been made before `authenticate()` can be used, as it relies on the code verifier and state generated during the initial request.
+</Callout>
+
 ### User Image Proxy
 
 To avoid CSP issues, the Electron plugin securely proxies user avatar images through a custom `user-image://` protocol.
@@ -715,6 +784,19 @@ Make sure this matches the clientID provided to both the server and proxy client
 ```ts title="electron/auth-client.ts"
 electronClient({
   clientID: "electron",
+});
+```
+
+#### `sanitizeUser?`
+
+A function to sanitize the user object before it is sent to the renderer process. Use this to strip sensitive fields.
+
+```ts title="electron/auth-client.ts"
+electronClient({
+  sanitizeUser: (user) => {
+    const { sensitiveField, ...rest } = user;
+    return rest;
+  },
 });
 ```
 

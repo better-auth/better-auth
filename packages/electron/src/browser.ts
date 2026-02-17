@@ -51,16 +51,13 @@ export function setupMain(
 		);
 	}
 
+	const getWindow = withGetWindowFallback(cfg?.getWindow);
+
 	if (!cfg || cfg.csp === true) {
 		setupCSP(clientOptions, opts);
 	}
 	if (!cfg || cfg.scheme === true) {
-		registerProtocolScheme(
-			$fetch,
-			opts,
-			withGetWindowFallback(cfg?.getWindow),
-			clientOptions,
-		);
+		registerProtocolScheme($fetch, opts, getWindow, clientOptions);
 	}
 	if (!cfg || cfg.bridges === true) {
 		setupBridges(
@@ -68,6 +65,7 @@ export function setupMain(
 				$fetch,
 				$store,
 				getCookie,
+				getWindow,
 			},
 			opts,
 			clientOptions,
@@ -137,15 +135,15 @@ export async function handleDeepLink({
 
 	const token = hash.substring("#token=".length);
 
-	await authenticate(
+	await authenticate({
 		$fetch,
-		options,
-		{
-			token,
+		fetchOptions: {
+			throw: true,
 		},
-		withGetWindowFallback(getWindow),
-		clientOptions,
-	);
+		token,
+		getWindow: withGetWindowFallback(getWindow),
+		options,
+	});
 }
 
 function registerProtocolScheme(
@@ -328,23 +326,34 @@ function setupCSP(
 /**
  * Sets up IPC bridges in the main process.
  */
-export function setupBridges(
+function setupBridges(
 	ctx: {
 		$fetch: BetterFetch;
 		$store: ClientStore | null;
 		getCookie: () => string;
+		getWindow: () => electron.BrowserWindow | null | undefined;
 	},
 	opts: ElectronClientOptions,
 	clientOptions: BetterAuthClientOptions | undefined,
 ) {
 	const prefix = getChannelPrefixWithDelimiter(opts.channelPrefix);
 
-	ctx.$store?.atoms.session?.subscribe((state) => {
+	ctx.$store?.atoms.session?.subscribe(async (state) => {
 		if (state.isPending === true) return;
 
-		const user = state?.data?.user
-			? normalizeUserOutput(state.data.user, opts)
-			: null;
+		let user = state.data?.user ?? null;
+		if (user !== null && typeof opts.sanitizeUser === "function") {
+			try {
+				user = await opts.sanitizeUser(user);
+			} catch (error) {
+				console.error("Error while sanitizing user", error);
+				user = null;
+			}
+		}
+		if (user !== null) {
+			user = normalizeUserOutput(user, opts);
+		}
+
 		webContents.getFocusedWebContents()?.send(`${prefix}user-updated`, user);
 	});
 
@@ -359,15 +368,36 @@ export function setupBridges(
 				},
 			},
 		);
+		let user = result.data?.user ?? null;
+		if (user !== null && typeof opts.sanitizeUser === "function") {
+			try {
+				user = await opts.sanitizeUser(user);
+			} catch (error) {
+				console.error("Error while sanitizing user", error);
+				user = null;
+			}
+		}
+		if (user !== null) {
+			user = normalizeUserOutput(user, opts);
+		}
 
-		return result.data?.user
-			? normalizeUserOutput(result.data.user, opts)
-			: null;
+		return user ?? null;
 	});
 	ipcMain.handle(
 		`${prefix}requestAuth`,
-		(_evt, options?: ElectronRequestAuthOptions | undefined) =>
+		async (_evt, options?: ElectronRequestAuthOptions | undefined) =>
 			requestAuth(clientOptions, opts, options),
+	);
+	ipcMain.handle(
+		`${prefix}authenticate`,
+		async (_evt, data: { token: string }) => {
+			await authenticate({
+				$fetch: ctx.$fetch,
+				getWindow: ctx.getWindow,
+				options: opts,
+				token: data.token,
+			});
+		},
 	);
 	ipcMain.handle(`${prefix}signOut`, async () => {
 		await ctx.$fetch("/sign-out", {

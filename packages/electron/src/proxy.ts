@@ -17,7 +17,22 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 	return {
 		id: "electron-proxy",
 		getActions: () => {
+			const getAuthorizationCode = () => {
+				if (typeof document === "undefined") return null;
+
+				const authorizationCode = parseCookies(document.cookie).get(
+					redirectCookieName,
+				);
+				return authorizationCode ?? null;
+			};
+
 			return {
+				electron: {
+					/**
+					 * Gets the current authorization code from the cookie.
+					 */
+					getAuthorizationCode,
+				},
 				/**
 				 * Ensures redirecting to the Electron app.
 				 *
@@ -43,12 +58,7 @@ export const electronProxyClient = (options: ElectronProxyClientOptions) => {
 					const interval = cfg?.interval || 100;
 
 					const handleRedirect = () => {
-						if (typeof document === "undefined") {
-							return false;
-						}
-						const authorizationCode = parseCookies(document.cookie).get(
-							redirectCookieName,
-						);
+						const authorizationCode = getAuthorizationCode();
 						if (!authorizationCode) {
 							return false;
 						}

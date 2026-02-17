@@ -32,9 +32,13 @@ export function UserProvider({
 		const unsubscribeUserUpdated = window.onUserUpdated((u) => {
 			setUser(u);
 		});
+		const unsubscribeError = window.onAuthError((ctx) => {
+			console.error("Authentication error:", ctx);
+		});
 		return () => {
 			unsubscribe();
 			unsubscribeUserUpdated();
+			unsubscribeError();
 			setUser(null);
 		};
 	}, []);
