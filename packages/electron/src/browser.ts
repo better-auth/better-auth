@@ -343,7 +343,12 @@ function setupBridges(
 
 		let user = state.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
-			user = await opts.sanitizeUser(user).catch(() => null);
+			try {
+				user = await opts.sanitizeUser(user);
+			} catch (error) {
+				console.error("Error while sanitizing user", error);
+				user = null;
+			}
 		}
 		if (user !== null) {
 			user = normalizeUserOutput(user, opts);
@@ -365,7 +370,12 @@ function setupBridges(
 		);
 		let user = result.data?.user ?? null;
 		if (user !== null && typeof opts.sanitizeUser === "function") {
-			user = await opts.sanitizeUser(user).catch(() => null);
+			try {
+				user = await opts.sanitizeUser(user);
+			} catch (error) {
+				console.error("Error while sanitizing user", error);
+				user = null;
+			}
 		}
 		if (user !== null) {
 			user = normalizeUserOutput(user, opts);

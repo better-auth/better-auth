@@ -57,7 +57,9 @@ export function ElectronTransferUser({
 	const [users, setUsers] = useState<(typeof authClient.$Infer.Session)[]>([
 		activeSession,
 	]);
-	const [authorizationCode, setAuthorizationCode] = useState<string | null>();
+	const [authorizationCode, setAuthorizationCode] = useState<string | null>(
+		null,
+	);
 	const [copied, setCopied] = useState(false);
 
 	useEffect(() => {

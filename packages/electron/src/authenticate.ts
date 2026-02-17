@@ -130,8 +130,8 @@ export async function authenticate({
 		token: string;
 		user: User & Record<string, any>;
 	}>("/electron/token", {
-		method: "POST",
 		...fetchOptions,
+		method: "POST",
 		body: {
 			...(fetchOptions?.body || {}),
 			token,
@@ -139,13 +139,17 @@ export async function authenticate({
 			code_verifier: codeVerifier,
 		},
 		onSuccess: async (ctx) => {
-			let user = ctx.data?.user ?? null;
+			let user: (User & Record<string, any>) | null = ctx.data?.user ?? null;
 			if (user !== null && typeof options.sanitizeUser === "function") {
-				user = await options.sanitizeUser(user).catch(() => null);
+				try {
+					user = await options.sanitizeUser(user);
+				} catch (error) {
+					console.error("Error while sanitizing user", error);
+					user = null;
+				}
 			}
-			if (user !== null) {
-				user = normalizeUserOutput(user, options);
-			}
+			if (user === null) return;
+			user = normalizeUserOutput(user, options);
 
 			await fetchOptions?.onSuccess?.(ctx);
 			getWindow()?.webContents.send(

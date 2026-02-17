@@ -242,7 +242,7 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			if (setCookie) {
 				ctx.setHeader("set-cookie", setCookie);
 			}
-			if (res.data.url) {
+			if (res.data.url && res.data.redirect) {
 				ctx.setHeader("Location", res.data.url);
 				ctx.setStatus(302);
 				return;
@@ -305,8 +305,15 @@ export const electronTransferUser = (
 											redirect: {
 												type: "boolean",
 											},
+											electron_authorization_code: {
+												type: "string",
+											},
 										},
-										required: ["url", "redirect"],
+										required: [
+											"url",
+											"redirect",
+											"electron_authorization_code",
+										],
 									},
 								},
 							},
