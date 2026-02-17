@@ -132,6 +132,19 @@ export function createAgentMCPTools(
 				const name = (input.name as string) ?? "MCP Agent";
 				const scopes = (input.scopes as string[]) ?? [];
 
+				// Check if already connected to this app
+				const existing = await storage.getConnection(url);
+				if (existing) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Already connected to ${url} as "${existing.name}" (Agent ID: ${existing.agentId}). Scopes: ${existing.scopes.join(", ") || "none"}. Use disconnect_agent first if you want to reconnect.`,
+							},
+						],
+					};
+				}
+
 				const keypair = await getOrCreateKeypair();
 
 				// If auth headers are available, use direct registration

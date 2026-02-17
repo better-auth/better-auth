@@ -149,15 +149,35 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 						(ctx.context as Record<string, unknown>).agentSession =
 							agentSession;
 
-						// Update lastUsedAt in background
+						// Update lastUsedAt and log activity in background
+						const now = new Date();
 						ctx.context.runInBackground(
-							ctx.context.adapter
-								.update({
-									model: AGENT_TABLE,
-									where: [{ field: "id", value: agent.id }],
-									update: { lastUsedAt: new Date() },
-								})
-								.catch(() => {}),
+							Promise.all([
+								ctx.context.adapter
+									.update({
+										model: AGENT_TABLE,
+										where: [{ field: "id", value: agent.id }],
+										update: { lastUsedAt: now },
+									})
+									.catch(() => {}),
+								ctx.context.adapter
+									.create({
+										model: "agentActivity",
+										data: {
+											agentId: agent.id,
+											userId: user.id,
+											method: ctx.method ?? "GET",
+											path: ctx.path ?? "",
+											ipAddress:
+												ctx.headers?.get("x-forwarded-for") ??
+												ctx.headers?.get("x-real-ip") ??
+												null,
+											userAgent: ctx.headers?.get("user-agent") ?? null,
+											createdAt: now,
+										},
+									})
+									.catch(() => {}),
+							]),
 						);
 
 						// For get-agent-session endpoint, return the session directly
@@ -178,6 +198,7 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 			revokeAgent: routes.revokeAgent,
 			rotateKey: routes.rotateKey,
 			getAgentSession: routes.getAgentSession,
+			getAgentActivity: routes.getAgentActivity,
 		},
 		schema,
 		options,

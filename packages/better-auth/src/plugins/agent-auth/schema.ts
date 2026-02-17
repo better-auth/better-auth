@@ -126,4 +126,76 @@ export const agentSchema = () =>
 				},
 			},
 		},
+		agentActivity: {
+			fields: {
+				/**
+				 * The agent that performed the action.
+				 */
+				agentId: {
+					type: "string",
+					references: { model: "agent", field: "id", onDelete: "cascade" },
+					required: true,
+					input: false,
+					index: true,
+				},
+				/**
+				 * The user the agent acted on behalf of.
+				 */
+				userId: {
+					type: "string",
+					references: { model: "user", field: "id", onDelete: "cascade" },
+					required: true,
+					input: false,
+					index: true,
+				},
+				/**
+				 * HTTP method (GET, POST, PUT, DELETE, etc.)
+				 */
+				method: {
+					type: "string",
+					required: true,
+					input: false,
+				},
+				/**
+				 * Request path (e.g. "/api/reports/Q4")
+				 */
+				path: {
+					type: "string",
+					required: true,
+					input: false,
+				},
+				/**
+				 * HTTP status code of the response.
+				 */
+				status: {
+					type: "number",
+					required: false,
+					input: false,
+				},
+				/**
+				 * IP address of the request.
+				 */
+				ipAddress: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+				/**
+				 * User-Agent header.
+				 */
+				userAgent: {
+					type: "string",
+					required: false,
+					input: false,
+				},
+				/**
+				 * When the action occurred.
+				 */
+				createdAt: {
+					type: "date",
+					required: true,
+					input: false,
+				},
+			},
+		},
 	}) satisfies BetterAuthPluginDBSchema;
