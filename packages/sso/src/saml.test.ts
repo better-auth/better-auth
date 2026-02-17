@@ -15,7 +15,10 @@ import type {
 	Response as ExpressResponse,
 } from "express";
 import express from "express";
-import * as saml from "samlify";
+import * as _saml from "samlify";
+
+const saml = ((_saml as any).default ?? _saml) as typeof _saml;
+
 import {
 	afterAll,
 	afterEach,
@@ -1013,7 +1016,7 @@ describe("SAML SSO", async () => {
 		expect(spMetadataRes.status).toBe(200);
 		expect(spMetadataResResValue).toBe(spMetadata);
 	});
-	it("should fetch generated SP metadata without SPMetadata interop runtime errors", async () => {
+	it("should fetch generated SP metadata when no metadata XML is provided", async () => {
 		const headers = await getAuthHeaders();
 		await authClient.signIn.email(testUser, {
 			throw: true,
