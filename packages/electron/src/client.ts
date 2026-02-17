@@ -203,3 +203,4 @@ export const electronClient = (options: ElectronClientOptions) => {
 
 export { handleDeepLink } from "./browser";
 export * from "./types/client";
+export { normalizeUserOutput } from "./user";

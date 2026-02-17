@@ -1,3 +1,4 @@
+import type { Awaitable } from "@better-auth/core";
 import type { ElectronSharedOptions } from "./options";
 
 export interface Storage {
@@ -58,6 +59,47 @@ export interface ElectronClientOptions extends ElectronSharedClientOptions {
 	 * @default "better-auth"
 	 */
 	storagePrefix?: string | undefined;
+	/**
+	 * User image proxy configuration.
+	 */
+	userImageProxy?:
+		| {
+				/**
+				 * Whether to enable user image proxy.
+				 *
+				 * @default true
+				 */
+				enabled?: boolean | undefined;
+				/**
+				 * The protocol scheme to use for user image proxy.
+				 *
+				 * @default "user-image"
+				 */
+				scheme?: string | undefined;
+				/**
+				 * The maximum size of user images in bytes.
+				 *
+				 * @default 1024 * 1024 * 5 (5MB)
+				 */
+				maxSize?: number | undefined;
+				/**
+				 * Allowed image mime types that should be passed to Accept header.
+				 *
+				 * @default "image/*"
+				 */
+				accept?: string | undefined;
+				/**
+				 * Custom user image validator.
+				 *
+				 * Note: This will override the default validator, and can have security implications if not handled properly.
+				 * Only use this if you know what you are doing.
+				 *
+				 * @param bytes The user image bytes.
+				 * @returns The image mime type or null if the image is not valid.
+				 */
+				customValidator?: (bytes: Uint8Array) => Awaitable<string | null>;
+		  }
+		| undefined;
 	/**
 	 * Prefix(es) for server cookie names to filter (e.g., "better-auth.session_token")
 	 * This is used to identify which cookies belong to better-auth to prevent

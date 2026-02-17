@@ -9,6 +9,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { shell } from "electron";
 import * as z from "zod";
 import type { ElectronClientOptions } from "./types/client";
+import { normalizeUserOutput } from "./user";
 import { getChannelPrefixWithDelimiter, isProcessType } from "./utils";
 
 export const kCodeVerifier = Symbol.for("better-auth:code_verifier");
@@ -102,6 +103,7 @@ export async function authenticate(
 		token: string;
 	},
 	getWindow: () => Electron.BrowserWindow | null | undefined,
+	clientOptions?: BetterAuthClientOptions | undefined,
 ) {
 	const codeVerifier = (globalThis as any)[kCodeVerifier];
 	const state = (globalThis as any)[kState];
@@ -122,10 +124,13 @@ export async function authenticate(
 			state,
 			code_verifier: codeVerifier,
 		},
-		onSuccess: (ctx) => {
+		onSuccess: async (ctx) => {
+			const user = ctx.data.user
+				? normalizeUserOutput(ctx.data.user, options)
+				: null;
 			getWindow()?.webContents.send(
 				`${getChannelPrefixWithDelimiter(options.channelPrefix)}authenticated`,
-				ctx.data.user,
+				user,
 			);
 		},
 		throw: true,
