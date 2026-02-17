@@ -239,14 +239,12 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 							ctx.path?.startsWith("/sign-up") ||
 							ctx.path?.startsWith("/callback") ||
 							ctx.path?.startsWith("/oauth2/callback") ||
-							ctx.path?.startsWith("/link-social") ||
 							ctx.path?.startsWith("/magic-link/verify") ||
 							ctx.path?.startsWith("/email-otp/verify-email") ||
 							ctx.path?.startsWith("/one-tap/callback") ||
 							ctx.path?.startsWith("/passkey/verify-registration") ||
 							ctx.path?.startsWith("/passkey/verify-authentication") ||
 							ctx.path?.startsWith("/phone-number/verify") ||
-							ctx.path?.startsWith("/set-password") ||
 							false
 						);
 					},
