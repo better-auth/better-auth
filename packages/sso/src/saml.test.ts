@@ -962,7 +962,7 @@ describe("SAML SSO", async () => {
 			},
 		});
 	});
-	it("Should fetch sp metadata", async () => {
+	it("should fetch provided SP metadata as-is", async () => {
 		const headers = await getAuthHeaders();
 		await authClient.signIn.email(testUser, {
 			throw: true,
@@ -1013,7 +1013,7 @@ describe("SAML SSO", async () => {
 		expect(spMetadataRes.status).toBe(200);
 		expect(spMetadataResResValue).toBe(spMetadata);
 	});
-	it("Should fetch sp metadata", async () => {
+	it("should fetch generated SP metadata without SPMetadata interop runtime errors", async () => {
 		const headers = await getAuthHeaders();
 		await authClient.signIn.email(testUser, {
 			throw: true,
