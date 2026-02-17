@@ -131,22 +131,26 @@ export const google = (options: GoogleOptions) => {
 			// Verify JWT integrity
 			// See https://developers.google.com/identity/sign-in/web/backend-auth#verify-the-integrity-of-the-id-token
 
-			const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
-			if (!kid || !jwtAlg) return false;
+			try {
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!kid || !jwtAlg) return false;
 
-			const publicKey = await getGooglePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: ["https://accounts.google.com", "accounts.google.com"],
-				audience: options.clientId,
-				maxTokenAge: "1h",
-			});
+				const publicKey = await getGooglePublicKey(kid);
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: ["https://accounts.google.com", "accounts.google.com"],
+					audience: options.clientId,
+					maxTokenAge: "1h",
+				});
 
-			if (nonce && jwtClaims.nonce !== nonce) {
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				return true;
+			} catch {
 				return false;
 			}
-
-			return true;
 		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
