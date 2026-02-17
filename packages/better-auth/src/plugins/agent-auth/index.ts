@@ -7,7 +7,12 @@ import { verifyAgentJWT } from "./crypto";
 import { AGENT_AUTH_ERROR_CODES } from "./error-codes";
 import { createAgentRoutes } from "./routes";
 import { agentSchema } from "./schema";
-import type { Agent, AgentAuthOptions, AgentSession, ResolvedAgentAuthOptions } from "./types";
+import type {
+	Agent,
+	AgentAuthOptions,
+	AgentSession,
+	ResolvedAgentAuthOptions,
+} from "./types";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -106,10 +111,9 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 						}
 
 						// Load the user who owns this agent
-						const user =
-							await ctx.context.internalAdapter.findUserById(
-								agent.userId,
-							);
+						const user = await ctx.context.internalAdapter.findUserById(
+							agent.userId,
+						);
 						if (!user) {
 							throw APIError.from(
 								"UNAUTHORIZED",

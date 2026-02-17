@@ -134,34 +134,25 @@ export async function connectAgent(
 	}
 
 	// Step 4: Poll for approval
-	const effectiveInterval = Math.max(
-		pollInterval,
-		codeData.interval * 1000,
-	);
+	const effectiveInterval = Math.max(pollInterval, codeData.interval * 1000);
 	const deadline = Date.now() + timeout;
 	let attempt = 0;
 	let accessToken: string | null = null;
 
 	while (Date.now() < deadline) {
-		await new Promise((resolve) =>
-			setTimeout(resolve, effectiveInterval),
-		);
+		await new Promise((resolve) => setTimeout(resolve, effectiveInterval));
 		attempt++;
 		if (onPoll) onPoll(attempt);
 
-		const tokenRes = await globalThis.fetch(
-			`${base}/api/auth/device/token`,
-			{
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					grant_type:
-						"urn:ietf:params:oauth:grant-type:device_code",
-					device_code: codeData.device_code,
-					client_id: clientId,
-				}),
-			},
-		);
+		const tokenRes = await globalThis.fetch(`${base}/api/auth/device/token`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				grant_type: "urn:ietf:params:oauth:grant-type:device_code",
+				device_code: codeData.device_code,
+				client_id: clientId,
+			}),
+		});
 
 		if (tokenRes.ok) {
 			const tokenData = (await tokenRes.json()) as {
@@ -181,9 +172,7 @@ export async function connectAgent(
 		}
 		if (errorData.error === "slow_down") {
 			// Back off by adding the interval
-			await new Promise((resolve) =>
-				setTimeout(resolve, effectiveInterval),
-			);
+			await new Promise((resolve) => setTimeout(resolve, effectiveInterval));
 			continue;
 		}
 		if (errorData.error === "access_denied") {
@@ -203,22 +192,19 @@ export async function connectAgent(
 	}
 
 	// Step 5: Register the agent with the app using the session token
-	const createRes = await globalThis.fetch(
-		`${base}/api/auth/agent/create`,
-		{
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${accessToken}`,
-			},
-			body: JSON.stringify({
-				name,
-				publicKey: keypair.publicKey,
-				scopes,
-				role,
-			}),
+	const createRes = await globalThis.fetch(`${base}/api/auth/agent/create`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${accessToken}`,
 		},
-	);
+		body: JSON.stringify({
+			name,
+			publicKey: keypair.publicKey,
+			scopes,
+			role,
+		}),
+	});
 
 	if (!createRes.ok) {
 		const err = await createRes.text();
@@ -303,10 +289,7 @@ export function createAgentClient(options: AgentClientOptions) {
 		 * Make an authenticated fetch to the app.
 		 * Automatically signs a fresh JWT and attaches it as a Bearer token.
 		 */
-		async fetch(
-			path: string,
-			init?: RequestInit,
-		): Promise<Response> {
+		async fetch(path: string, init?: RequestInit): Promise<Response> {
 			const url = path.startsWith("http") ? path : `${base}${path}`;
 			const auth = await getAuthHeader();
 			return globalThis.fetch(url, {
@@ -324,12 +307,9 @@ export function createAgentClient(options: AgentClientOptions) {
 		 */
 		async getSession(): Promise<AgentSession | null> {
 			const auth = await getAuthHeader();
-			const res = await globalThis.fetch(
-				`${base}/api/auth/agent/get-session`,
-				{
-					headers: { Authorization: auth },
-				},
-			);
+			const res = await globalThis.fetch(`${base}/api/auth/agent/get-session`, {
+				headers: { Authorization: auth },
+			});
 			if (!res.ok) return null;
 			return res.json();
 		},

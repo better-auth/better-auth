@@ -113,14 +113,8 @@ export function createAgentMCPTools(
 				: "Start connecting to an app as an agent. Returns a user code that the user must approve in their browser. After approval, call connect_agent_complete to finish.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
-				name: z
-					.string()
-					.optional()
-					.describe("Friendly name for this agent"),
-				scopes: z
-					.array(z.string())
-					.optional()
-					.describe("Scopes to request"),
+				name: z.string().optional().describe("Friendly name for this agent"),
+				scopes: z.array(z.string()).optional().describe("Scopes to request"),
 			},
 			handler: async (input) => {
 				const url = (input.url as string).replace(/\/+$/, "");
@@ -132,21 +126,18 @@ export function createAgentMCPTools(
 				// If auth headers are available, use direct registration
 				if (getAuthHeaders) {
 					const authHeaders = await resolveAuthHeaders();
-					const res = await globalThis.fetch(
-						`${url}/api/auth/agent/create`,
-						{
-							method: "POST",
-							headers: {
-								"Content-Type": "application/json",
-								...authHeaders,
-							},
-							body: JSON.stringify({
-								name,
-								publicKey: keypair.publicKey,
-								scopes,
-							}),
+					const res = await globalThis.fetch(`${url}/api/auth/agent/create`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							...authHeaders,
 						},
-					);
+						body: JSON.stringify({
+							name,
+							publicKey: keypair.publicKey,
+							scopes,
+						}),
+					});
 
 					if (!res.ok) {
 						const err = await res.text();
@@ -182,17 +173,14 @@ export function createAgentMCPTools(
 				}
 
 				// Device authorization flow
-				const codeRes = await globalThis.fetch(
-					`${url}/api/auth/device/code`,
-					{
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({
-							client_id: clientId,
-							scope: scopes.join(" "),
-						}),
-					},
-				);
+				const codeRes = await globalThis.fetch(`${url}/api/auth/device/code`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						client_id: clientId,
+						scope: scopes.join(" "),
+					}),
+				});
 
 				if (!codeRes.ok) {
 					const err = await codeRes.text();
@@ -393,18 +381,10 @@ export function createAgentMCPTools(
 			description:
 				"Make an authenticated request to a connected app as the agent. Signs a fresh JWT automatically.",
 			inputSchema: {
-				url: z
-					.string()
-					.describe("App URL (must have an existing connection)"),
+				url: z.string().describe("App URL (must have an existing connection)"),
 				path: z.string().describe("API path (e.g. /api/reports/Q4)"),
-				method: z
-					.string()
-					.optional()
-					.describe("HTTP method (default: GET)"),
-				body: z
-					.string()
-					.optional()
-					.describe("Request body as JSON string"),
+				method: z.string().optional().describe("HTTP method (default: GET)"),
+				body: z.string().optional().describe("Request body as JSON string"),
 			},
 			handler: async (input) => {
 				const appUrl = (input.url as string).replace(/\/+$/, "");
@@ -478,9 +458,7 @@ export function createAgentMCPTools(
 			description:
 				"Complete the agent connection after the user has approved in their browser. Call this after connect_agent.",
 			inputSchema: {
-				url: z
-					.string()
-					.describe("App URL (same one used in connect_agent)"),
+				url: z.string().describe("App URL (same one used in connect_agent)"),
 			},
 			handler: async (input) => {
 				const url = (input.url as string).replace(/\/+$/, "");
@@ -515,8 +493,7 @@ export function createAgentMCPTools(
 								"Content-Type": "application/json",
 							},
 							body: JSON.stringify({
-								grant_type:
-									"urn:ietf:params:oauth:grant-type:device_code",
+								grant_type: "urn:ietf:params:oauth:grant-type:device_code",
 								device_code: pendingFlow.deviceCode,
 								client_id: pendingFlow.clientId,
 							}),
@@ -536,20 +513,15 @@ export function createAgentMCPTools(
 					};
 
 					if (errorData.error === "authorization_pending") {
-						await new Promise((resolve) =>
-							setTimeout(resolve, interval),
-						);
+						await new Promise((resolve) => setTimeout(resolve, interval));
 						continue;
 					}
 					if (errorData.error === "slow_down") {
-						await new Promise((resolve) =>
-							setTimeout(resolve, interval * 2),
-						);
+						await new Promise((resolve) => setTimeout(resolve, interval * 2));
 						continue;
 					}
 					if (errorData.error === "access_denied") {
-						if (storage.removePendingFlow)
-							await storage.removePendingFlow(url);
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
 						return {
 							content: [
 								{
@@ -560,8 +532,7 @@ export function createAgentMCPTools(
 						};
 					}
 					if (errorData.error === "expired_token") {
-						if (storage.removePendingFlow)
-							await storage.removePendingFlow(url);
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
 						return {
 							content: [
 								{
@@ -573,8 +544,7 @@ export function createAgentMCPTools(
 					}
 
 					// Unknown error, abort
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -586,8 +556,7 @@ export function createAgentMCPTools(
 				}
 
 				if (!accessToken) {
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -617,8 +586,7 @@ export function createAgentMCPTools(
 
 				if (!createRes.ok) {
 					const err = await createRes.text();
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -640,8 +608,7 @@ export function createAgentMCPTools(
 					scopes: data.scopes,
 				});
 
-				if (storage.removePendingFlow)
-					await storage.removePendingFlow(url);
+				if (storage.removePendingFlow) await storage.removePendingFlow(url);
 
 				return {
 					content: [

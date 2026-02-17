@@ -1,5 +1,11 @@
-import { SignJWT, exportJWK, generateKeyPair, importJWK, jwtVerify } from "jose";
 import { generateId } from "@better-auth/core/utils/id";
+import {
+	exportJWK,
+	generateKeyPair,
+	importJWK,
+	jwtVerify,
+	SignJWT,
+} from "jose";
 
 /**
  * Generate an Ed25519 keypair and export as JWK.

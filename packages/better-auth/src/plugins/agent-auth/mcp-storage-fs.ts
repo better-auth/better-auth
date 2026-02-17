@@ -100,8 +100,7 @@ export function createFileStorage(
 		},
 
 		async saveConnection(appUrl, connection) {
-			const connections =
-				readJSON<StoredConnection[]>(connectionsFile) ?? [];
+			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
 			const idx = connections.findIndex((c) => c.appUrl === appUrl);
 			const entry: StoredConnection = {
 				appUrl,
@@ -117,15 +116,13 @@ export function createFileStorage(
 		},
 
 		async removeConnection(appUrl) {
-			const connections =
-				readJSON<StoredConnection[]>(connectionsFile) ?? [];
+			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
 			const updated = connections.filter((c) => c.appUrl !== appUrl);
 			writeJSON(connectionsFile, updated);
 		},
 
 		async listConnections() {
-			const connections =
-				readJSON<StoredConnection[]>(connectionsFile) ?? [];
+			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
 			return connections.map((c) => ({
 				appUrl: c.appUrl,
 				agentId: c.agentId,
@@ -168,8 +165,7 @@ export function createFileStorage(
 		},
 
 		async removePendingFlow(appUrl) {
-			const flows =
-				readJSON<Record<string, unknown>>(pendingFlowsFile) ?? {};
+			const flows = readJSON<Record<string, unknown>>(pendingFlowsFile) ?? {};
 			delete flows[appUrl];
 			writeJSON(pendingFlowsFile, flows);
 		},

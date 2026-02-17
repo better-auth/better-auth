@@ -1,4 +1,3 @@
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import type { InferOptionSchema } from "../../types";
 import type { agentSchema } from "./schema";
 
@@ -89,9 +88,6 @@ export interface AgentSession {
  * Resolved options with defaults applied.
  */
 export type ResolvedAgentAuthOptions = Required<
-	Pick<
-		AgentAuthOptions,
-		"allowedKeyAlgorithms" | "jwtFormat" | "jwtMaxAge"
-	>
+	Pick<AgentAuthOptions, "allowedKeyAlgorithms" | "jwtFormat" | "jwtMaxAge">
 > &
 	AgentAuthOptions;

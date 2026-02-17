@@ -54,8 +54,7 @@ export function updateAgent() {
 			if (name !== undefined) updates.name = name;
 			if (scopes !== undefined) updates.scopes = JSON.stringify(scopes);
 			if (role !== undefined) updates.role = role;
-			if (metadata !== undefined)
-				updates.metadata = JSON.stringify(metadata);
+			if (metadata !== undefined) updates.metadata = JSON.stringify(metadata);
 
 			const updated = await ctx.context.adapter.update<Agent>({
 				model: AGENT_TABLE,

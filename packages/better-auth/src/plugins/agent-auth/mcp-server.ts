@@ -33,13 +33,11 @@ import { createAgentMCPTools } from "./mcp-tools";
 
 async function main() {
 	// Dynamic import — @modelcontextprotocol/sdk is a peer dependency
-	const { McpServer } = await import(
-		"@modelcontextprotocol/sdk/server/mcp.js"
-	);
+	const { McpServer } = await import("@modelcontextprotocol/sdk/server/mcp.js");
 	const { StdioServerTransport } = await import(
 		"@modelcontextprotocol/sdk/server/stdio.js"
 	);
-	const { z } = await import("zod");
+	const z = await import("zod");
 
 	const storageDir = process.env.BETTER_AUTH_AGENT_DIR ?? undefined;
 	const cookie = process.env.BETTER_AUTH_AGENT_COOKIE ?? undefined;
@@ -80,9 +78,7 @@ async function main() {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 
-	process.stderr.write(
-		"[better-auth-agent] MCP server running on stdio\n",
-	);
+	process.stderr.write("[better-auth-agent] MCP server running on stdio\n");
 }
 
 main().catch((err) => {

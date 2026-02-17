@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { agentAuth, AGENT_AUTH_ERROR_CODES as ERROR_CODES } from ".";
+import { agentAuth } from ".";
 import { agentAuthClient } from "./client";
 import { generateAgentKeypair, signAgentJWT } from "./crypto";
 
@@ -122,9 +122,7 @@ describe("agent-auth", async () => {
 		// We created 3 agents in the tests above
 		expect(res.data!.length).toBeGreaterThanOrEqual(3);
 
-		const found = res.data!.find(
-			(a: { id: string }) => a.id === agentId,
-		);
+		const found = res.data!.find((a: { id: string }) => a.id === agentId);
 		expect(found).toBeDefined();
 		expect(found?.name).toBe("Test Agent");
 		expect(found?.status).toBe("active");
@@ -138,10 +136,7 @@ describe("agent-auth", async () => {
 	// =========================================================================
 
 	it("should get a single agent by ID", async () => {
-		const res = await client.agent.get(
-			{ query: { agentId } },
-			{ headers },
-		);
+		const res = await client.agent.get({ query: { agentId } }, { headers });
 
 		expect(res.error).toBeNull();
 		expect(res.data).toBeDefined();
@@ -173,10 +168,7 @@ describe("agent-auth", async () => {
 		expect(res.data?.scopes).toEqual(["reports.read", "calendar.write"]);
 
 		// Verify with get
-		const getRes = await client.agent.get(
-			{ query: { agentId } },
-			{ headers },
-		);
+		const getRes = await client.agent.get({ query: { agentId } }, { headers });
 		expect(getRes.data?.name).toBe("Updated Agent");
 	});
 
@@ -269,22 +261,16 @@ describe("agent-auth", async () => {
 			privateKey: keypair.privateKey,
 		});
 
-		await customFetchImpl(
-			"http://localhost:3000/api/auth/agent/get-session",
-			{
-				headers: {
-					Authorization: `Bearer ${jwt}`,
-				},
+		await customFetchImpl("http://localhost:3000/api/auth/agent/get-session", {
+			headers: {
+				Authorization: `Bearer ${jwt}`,
 			},
-		);
+		});
 
 		// Give the background update a moment to complete
 		await new Promise((resolve) => setTimeout(resolve, 200));
 
-		const getRes = await client.agent.get(
-			{ query: { agentId } },
-			{ headers },
-		);
+		const getRes = await client.agent.get({ query: { agentId } }, { headers });
 
 		expect(getRes.data?.lastUsedAt).toBeDefined();
 		expect(getRes.data?.lastUsedAt).not.toBeNull();
@@ -384,10 +370,7 @@ describe("agent-auth", async () => {
 		const revokedId = createRes.data!.agentId;
 
 		// Revoke it
-		await client.agent.revoke(
-			{ agentId: revokedId },
-			{ headers },
-		);
+		await client.agent.revoke({ agentId: revokedId }, { headers });
 
 		// Try to auth with it
 		const jwt = await signAgentJWT({
@@ -441,21 +424,24 @@ describe("agent-auth", async () => {
 
 	it("should work with AAP format JWT claims", async () => {
 		// Create a separate instance with AAP format
-		const { auth: aapAuth, signInWithTestUser: aapSignIn, customFetchImpl: aapFetch } =
-			await getTestInstance(
-				{
-					plugins: [
-						agentAuth({
-							jwtFormat: "aap",
-						}),
-					],
+		const {
+			auth: aapAuth,
+			signInWithTestUser: aapSignIn,
+			customFetchImpl: aapFetch,
+		} = await getTestInstance(
+			{
+				plugins: [
+					agentAuth({
+						jwtFormat: "aap",
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [agentAuthClient()],
 				},
-				{
-					clientOptions: {
-						plugins: [agentAuthClient()],
-					},
-				},
-			);
+			},
+		);
 
 		const { headers: aapHeaders, user: aapUser } = await aapSignIn();
 		const aapKeypair = await generateAgentKeypair();

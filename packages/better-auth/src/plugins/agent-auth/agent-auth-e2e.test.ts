@@ -6,16 +6,16 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
+import { deviceAuthorization } from "../device-authorization";
 import { agentAuth } from ".";
-import { agentAuthClient } from "./client";
 import {
 	connectAgent,
 	createAgentClient,
 	generateKeypair,
 } from "./agent-client";
-import { deviceAuthorization } from "../device-authorization";
-import { createAgentMCPTools } from "./mcp-tools";
+import { agentAuthClient } from "./client";
 import type { MCPAgentStorage } from "./mcp-tools";
+import { createAgentMCPTools } from "./mcp-tools";
 
 describe("agent-auth e2e", async () => {
 	// =========================================================================
@@ -29,11 +29,7 @@ describe("agent-auth e2e", async () => {
 					agentAuth({
 						roles: {
 							reader: ["reports.read"],
-							writer: [
-								"reports.read",
-								"reports.write",
-								"email.send",
-							],
+							writer: ["reports.read", "reports.write", "email.send"],
 						},
 						defaultRole: "reader",
 					}),
@@ -111,17 +107,12 @@ describe("agent-auth e2e", async () => {
 			expect(session).toBeDefined();
 			expect(session?.agent.id).toBe(agentId);
 			expect(session?.agent.name).toBe("SDK E2E Agent");
-			expect(session?.agent.scopes).toEqual([
-				"reports.read",
-				"email.send",
-			]);
+			expect(session?.agent.scopes).toEqual(["reports.read", "email.send"]);
 			expect(session?.user.id).toBe(user.id);
 		});
 
 		it("should make authenticated fetch via SDK", async () => {
-			const res = await agentClient.fetch(
-				"/api/auth/agent/get-session",
-			);
+			const res = await agentClient.fetch("/api/auth/agent/get-session");
 			expect(res.ok).toBe(true);
 
 			const body = (await res.json()) as {
@@ -151,8 +142,7 @@ describe("agent-auth e2e", async () => {
 
 		function findTool(name: string) {
 			const tool = tools.find((t) => t.name === name);
-			if (!tool)
-				throw new Error(`Tool ${name} not found in MCP tools`);
+			if (!tool) throw new Error(`Tool ${name} not found in MCP tools`);
 			return tool;
 		}
 
@@ -222,7 +212,7 @@ describe("agent-auth e2e", async () => {
 	describe("device auth connect flow", () => {
 		it("should connect via connectAgent with device auth", async () => {
 			let capturedUserCode = "";
-			let capturedVerificationUri = "";
+			let _capturedVerificationUri = "";
 
 			// Start connectAgent in the background — it will request a device
 			// code and then poll. We simulate browser approval in between.
@@ -234,7 +224,7 @@ describe("agent-auth e2e", async () => {
 				timeout: 15_000,
 				onUserCode: (info) => {
 					capturedUserCode = info.userCode;
-					capturedVerificationUri = info.verificationUri;
+					_capturedVerificationUri = info.verificationUri;
 				},
 			});
 
@@ -250,9 +240,7 @@ describe("agent-auth e2e", async () => {
 				body: { userCode: capturedUserCode },
 				headers,
 			});
-			expect(
-				"success" in approveRes && approveRes.success,
-			).toBe(true);
+			expect("success" in approveRes && approveRes.success).toBe(true);
 
 			// Now connectAgent's polling should pick up the approval
 			const result = await connectPromise;
@@ -280,9 +268,7 @@ describe("agent-auth e2e", async () => {
 			const memStorage = createInMemoryStorage();
 			const tools = createAgentMCPTools({ storage: memStorage });
 
-			const connectTool = tools.find(
-				(t) => t.name === "connect_agent",
-			)!;
+			const connectTool = tools.find((t) => t.name === "connect_agent")!;
 			const completeTool = tools.find(
 				(t) => t.name === "connect_agent_complete",
 			)!;
@@ -322,9 +308,7 @@ describe("agent-auth e2e", async () => {
 			// Verify connection was saved
 			const listTool = tools.find((t) => t.name === "list_agents")!;
 			const listResult = await listTool.handler({});
-			expect(listResult.content[0].text).toContain(
-				"MCP Device Agent",
-			);
+			expect(listResult.content[0].text).toContain("MCP Device Agent");
 		});
 	});
 

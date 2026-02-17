@@ -12,9 +12,11 @@ export function listAgents() {
 		"/agent/list",
 		{
 			method: "GET",
-			query: z.object({
-				orgId: z.string().optional(),
-			}).optional(),
+			query: z
+				.object({
+					orgId: z.string().optional(),
+				})
+				.optional(),
 			metadata: {
 				openapi: {
 					description: "List agents for the current user",

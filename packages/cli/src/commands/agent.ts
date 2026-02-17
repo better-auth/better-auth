@@ -147,18 +147,14 @@ async function connectAction(
 				console.log();
 				console.log(chalk.cyan(`  ${verificationUriComplete}`));
 				console.log();
-				console.log(
-					chalk.gray(`Or go to ${verificationUri} and enter code:`),
-				);
+				console.log(chalk.gray(`Or go to ${verificationUri} and enter code:`));
 				console.log(chalk.bold.white(`  ${userCode}`));
 				console.log();
 				console.log(chalk.gray("Waiting for approval..."));
 			},
 			onPoll: (attempt) => {
 				if (attempt % 6 === 0) {
-					console.log(
-						chalk.gray(`  Still waiting... (${attempt * 5}s)`),
-					);
+					console.log(chalk.gray(`  Still waiting... (${attempt * 5}s)`));
 				}
 			},
 		});
@@ -184,15 +180,11 @@ async function connectAction(
 		console.log();
 		console.log(chalk.green("Connected!"));
 		console.log(chalk.gray(`  Agent ID: ${result.agentId}`));
-		console.log(
-			chalk.gray(`  Scopes: ${result.scopes.join(", ") || "none"}`),
-		);
+		console.log(chalk.gray(`  Scopes: ${result.scopes.join(", ") || "none"}`));
 		console.log(chalk.gray(`  App: ${appUrl}`));
 	} catch (err) {
 		console.log(
-			chalk.red(
-				`Failed: ${err instanceof Error ? err.message : String(err)}`,
-			),
+			chalk.red(`Failed: ${err instanceof Error ? err.message : String(err)}`),
 		);
 	}
 }
@@ -206,9 +198,7 @@ function listAction() {
 		console.log(chalk.gray(`  kid: ${keypair.kid}`));
 		console.log(chalk.gray(`  Created: ${keypair.createdAt}`));
 	} else {
-		console.log(
-			chalk.yellow("No keypair. Run `better-auth agent keygen`."),
-		);
+		console.log(chalk.yellow("No keypair. Run `better-auth agent keygen`."));
 	}
 
 	console.log();
