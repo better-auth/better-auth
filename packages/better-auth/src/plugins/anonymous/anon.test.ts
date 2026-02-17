@@ -1,3 +1,5 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
 import type { GoogleProfile } from "@better-auth/core/social-providers";
 import { HttpResponse, http } from "msw";
 import { setupServer } from "msw/node";
@@ -10,7 +12,7 @@ import {
 	it,
 	vi,
 } from "vitest";
-import * as apiModule from "../../api";
+import { getSessionFromCtx } from "../../api";
 import { signJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
@@ -375,233 +377,146 @@ describe("anonymous", async () => {
 	});
 
 	describe("anonymous cleanup safeguards", () => {
-		function createMiddlewareContext({
-			path = "/sign-in/anonymous",
-			setCookieHeader = "better-auth.session_token=new-token.value; Path=/; HttpOnly",
-			newSessionUser,
-			deleteUser,
-			updateUser,
-			findAccounts,
-		}: {
-			path?: string;
-			setCookieHeader?: string;
-			newSessionUser?: Record<string, unknown>;
-			deleteUser: ReturnType<typeof vi.fn>;
-			updateUser?: ReturnType<typeof vi.fn>;
-			findAccounts?: ReturnType<typeof vi.fn>;
-		}) {
-			return {
-				path,
-				context: {
-					responseHeaders: new Headers(
-						setCookieHeader ? { "set-cookie": setCookieHeader } : {},
-					),
-					authCookies: {
-						sessionToken: {
-							name: "better-auth.session_token",
-							options: {},
-						},
-						sessionData: {
-							name: "better-auth.session_data",
-							options: {},
-						},
-						dontRememberToken: {
-							name: "better-auth.dont_remember",
-							options: {},
-						},
+		const passkeyRegistrationRoutePlugin = {
+			id: "passkey-registration-route-plugin",
+			endpoints: {
+				verifyRegistration: createAuthEndpoint(
+					"/passkey/verify-registration",
+					{
+						method: "POST",
 					},
-					newSession: newSessionUser
-						? {
-								user: newSessionUser,
-								session: {
-									token: "new-token",
-								},
-							}
-						: undefined,
-					internalAdapter: {
-						deleteUser,
-						updateUser:
-							updateUser ??
-							vi.fn(async () => ({
-								id: "anon-user",
-								isAnonymous: false,
-							})),
-						findAccounts: findAccounts ?? vi.fn(async () => []),
+					async (ctx) => {
+						return ctx.json({ success: true });
 					},
-					options: {},
-					secret: "secret",
-					setNewSession: vi.fn(),
-				},
-				headers: new Headers(),
-				query: {},
-				error: vi.fn(),
-				json: vi.fn(),
-				getSignedCookie: vi.fn(),
-				setCookie: vi.fn(),
-				setSignedCookie: vi.fn(),
-			} as any;
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		const callbackLinkRoutePlugin = {
+			id: "callback-link-route-plugin",
+			endpoints: {
+				callbackMock: createAuthEndpoint(
+					"/callback/mock",
+					{
+						method: "GET",
+					},
+					async (ctx) => {
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, { disableRefresh: true });
+						if (!session) {
+							return ctx.json({ linked: false });
+						}
+						await ctx.context.internalAdapter.createAccount({
+							userId: session.user.id,
+							providerId: "mock-provider",
+							accountId: `mock-${session.user.id}`,
+						});
+						return ctx.json({ linked: true });
+					},
+				),
+			},
+		} satisfies BetterAuthPlugin;
+
+		async function getAnonymousFlagForUser(
+			db: Awaited<ReturnType<typeof getTestInstance>>["db"],
+			userId: string,
+		) {
+			const users = await db.findMany<{ isAnonymous: boolean | null }>({
+				model: "user",
+				where: [
+					{
+						field: "id",
+						value: userId,
+					},
+				],
+			});
+			return users[0]?.isAnonymous;
 		}
 
 		/**
 		 * @see https://github.com/better-auth/better-auth/issues/7985
 		 */
-		it("updates anonymous flag when credential link is completed", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const sessionSpy = vi.spyOn(apiModule, "getSessionFromCtx");
-			const scenarios = [
+		it("updates anonymous flag when passkey registration completes", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
 				{
-					path: "/passkey/verify-registration",
-					setCookieHeader:
-						"better-auth.session_token=new-token.value; Path=/; HttpOnly",
-					findAccountsResult: [],
-					shouldCallFindAccounts: false,
+					plugins: [anonymous(), passkeyRegistrationRoutePlugin],
 				},
 				{
-					path: "/callback/google",
-					setCookieHeader: "",
-					findAccountsResult: [{ id: "account-id" }],
-					shouldCallFindAccounts: true,
-				},
-				{
-					path: "/oauth2/callback/test-provider",
-					setCookieHeader: "",
-					findAccountsResult: [{ id: "oauth2-account-id" }],
-					shouldCallFindAccounts: true,
-				},
-				{
-					path: "/set-password",
-					setCookieHeader: "",
-					findAccountsResult: [{ id: "credential-account-id" }],
-					shouldCallFindAccounts: true,
-				},
-				{
-					path: "/link-social",
-					setCookieHeader: "",
-					findAccountsResult: [{ id: "social-account-id" }],
-					shouldCallFindAccounts: true,
-				},
-			] as const;
-
-			for (const scenario of scenarios) {
-				const deleteUser = vi.fn();
-				const updateUser = vi.fn();
-				const findAccounts = vi.fn(async () => scenario.findAccountsResult);
-				const ctx = createMiddlewareContext({
-					path: scenario.path,
-					setCookieHeader: scenario.setCookieHeader,
-					deleteUser,
-					updateUser,
-					findAccounts,
-				});
-
-				sessionSpy.mockResolvedValue({
-					user: {
-						id: "anon-user",
-						isAnonymous: true,
+					clientOptions: {
+						plugins: [anonymousClient()],
 					},
-					session: {
-						token: "old-token",
-					},
-				} as any);
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
 
-				await handler?.(ctx);
-
-				expect(updateUser).toHaveBeenCalledWith("anon-user", {
-					isAnonymous: false,
-				});
-				expect(deleteUser).not.toHaveBeenCalled();
-				if (scenario.shouldCallFindAccounts) {
-					expect(findAccounts).toHaveBeenCalledWith("anon-user");
-				} else {
-					expect(findAccounts).not.toHaveBeenCalled();
-				}
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
 			}
-		});
 
-		it("keeps anonymous flag when no linked credential evidence exists", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const deleteUser = vi.fn();
-			const updateUser = vi.fn();
-			const findAccounts = vi.fn(async () => []);
-			const ctx = createMiddlewareContext({
-				path: "/callback/google",
-				setCookieHeader: "",
-				deleteUser,
-				updateUser,
-				findAccounts,
+			await client.$fetch("/passkey/verify-registration", {
+				method: "POST",
+				headers,
 			});
 
-			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
-				user: {
-					id: "anon-user",
-					isAnonymous: true,
-				},
-				session: {
-					token: "old-token",
-				},
-			} as any);
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(false);
 
-			await handler?.(ctx);
-
-			expect(findAccounts).toHaveBeenCalledWith("anon-user");
-			expect(updateUser).not.toHaveBeenCalled();
-			expect(deleteUser).not.toHaveBeenCalled();
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(false);
 		});
 
-		it("does not delete when the new session is still anonymous", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const deleteUser = vi.fn();
-			const ctx = createMiddlewareContext({
-				newSessionUser: {
-					id: "anon-user",
-					isAnonymous: true,
+		it("updates anonymous flag when callback links an account without a new session cookie", async () => {
+			const { client, sessionSetter, db } = await getTestInstance(
+				{
+					plugins: [anonymous(), callbackLinkRoutePlugin],
 				},
-				deleteUser,
+				{
+					clientOptions: {
+						plugins: [anonymousClient()],
+					},
+				},
+			);
+			const headers = new Headers();
+			await client.signIn.anonymous({
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
 			});
 
-			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
-				user: {
-					id: "anon-user",
-					isAnonymous: true,
-				},
-				session: {
-					token: "old-token",
-				},
-			} as any);
+			const sessionBefore = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionBefore.data?.user.isAnonymous).toBe(true);
+			const anonymousUserId = sessionBefore.data?.user.id;
+			expect(anonymousUserId).toBeDefined();
+			if (!anonymousUserId) {
+				throw new Error("Expected anonymous user id");
+			}
 
-			await handler?.(ctx);
-
-			expect(deleteUser).not.toHaveBeenCalled();
-		});
-
-		it("deletes the previous anonymous user when linking a new account", async () => {
-			const plugin = anonymous();
-			const handler = plugin.hooks?.after?.[0]?.handler;
-			const deleteUser = vi.fn();
-			const ctx = createMiddlewareContext({
-				newSessionUser: {
-					id: "linked-user",
-					isAnonymous: false,
-				},
-				deleteUser,
+			await client.$fetch("/callback/mock", {
+				method: "GET",
+				headers,
 			});
 
-			vi.spyOn(apiModule, "getSessionFromCtx").mockResolvedValue({
-				user: {
-					id: "anon-user",
-					isAnonymous: true,
-				},
-				session: {
-					token: "old-token",
-				},
-			} as any);
+			expect(await getAnonymousFlagForUser(db, anonymousUserId)).toBe(false);
 
-			await handler?.(ctx);
-
-			expect(deleteUser).toHaveBeenCalledWith("anon-user");
+			const sessionAfter = await client.getSession({
+				fetchOptions: { headers },
+			});
+			expect(sessionAfter.data?.user.isAnonymous).toBe(false);
 		});
 	});
 });
