@@ -3,6 +3,7 @@ import { createAuthMiddleware } from "@better-auth/core/api";
 import { decodeJwt } from "jose";
 import { APIError } from "../../api";
 import { mergeSchema } from "../../db";
+import { isAPIError } from "../../utils/is-api-error";
 import { verifyAgentJWT } from "./crypto";
 import { AGENT_AUTH_ERROR_CODES } from "./error-codes";
 import { createAgentRoutes } from "./routes";
@@ -149,35 +150,16 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 						(ctx.context as Record<string, unknown>).agentSession =
 							agentSession;
 
-						// Update lastUsedAt and log activity in background
+						// Update lastUsedAt in background
 						const now = new Date();
 						ctx.context.runInBackground(
-							Promise.all([
-								ctx.context.adapter
-									.update({
-										model: AGENT_TABLE,
-										where: [{ field: "id", value: agent.id }],
-										update: { lastUsedAt: now },
-									})
-									.catch(() => {}),
-								ctx.context.adapter
-									.create({
-										model: "agentActivity",
-										data: {
-											agentId: agent.id,
-											userId: user.id,
-											method: ctx.method ?? "GET",
-											path: ctx.path ?? "",
-											ipAddress:
-												ctx.headers?.get("x-forwarded-for") ??
-												ctx.headers?.get("x-real-ip") ??
-												null,
-											userAgent: ctx.headers?.get("user-agent") ?? null,
-											createdAt: now,
-										},
-									})
-									.catch(() => {}),
-							]),
+							ctx.context.adapter
+								.update({
+									model: AGENT_TABLE,
+									where: [{ field: "id", value: agent.id }],
+									update: { lastUsedAt: now },
+								})
+								.catch(() => {}),
 						);
 
 						// For get-agent-session endpoint, return the session directly
@@ -186,6 +168,48 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 						}
 
 						return { context: ctx };
+					}),
+				},
+			],
+			after: [
+				{
+					matcher: (ctx) => {
+						// Run after hook only for requests that went through agent auth
+						return !!(ctx.context as Record<string, unknown>).agentSession;
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						const agentSession = (ctx.context as Record<string, unknown>)
+							.agentSession as AgentSession;
+						if (!agentSession) return;
+
+						// Derive HTTP status from the response
+						let status = 200;
+						const returned = (ctx.context as Record<string, unknown>).returned;
+						if (isAPIError(returned)) {
+							status = returned.statusCode;
+						}
+
+						// Log activity with response status
+						ctx.context.runInBackground(
+							ctx.context.adapter
+								.create({
+									model: "agentActivity",
+									data: {
+										agentId: agentSession.agent.id,
+										userId: agentSession.user.id,
+										method: ctx.method ?? "GET",
+										path: ctx.path ?? "",
+										status,
+										ipAddress:
+											ctx.headers?.get("x-forwarded-for") ??
+											ctx.headers?.get("x-real-ip") ??
+											null,
+										userAgent: ctx.headers?.get("user-agent") ?? null,
+										createdAt: new Date(),
+									},
+								})
+								.catch(() => {}),
+						);
 					}),
 				},
 			],
