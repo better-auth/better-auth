@@ -247,8 +247,7 @@ export function createAgentMCPTools(
 							method: "POST",
 							headers: { "Content-Type": "application/json" },
 							body: JSON.stringify({
-								grant_type:
-									"urn:ietf:params:oauth:grant-type:device_code",
+								grant_type: "urn:ietf:params:oauth:grant-type:device_code",
 								device_code: codeData.device_code,
 								client_id: clientId,
 							}),
@@ -271,14 +270,11 @@ export function createAgentMCPTools(
 						continue;
 					}
 					if (errorData.error === "slow_down") {
-						await new Promise((resolve) =>
-							setTimeout(resolve, interval),
-						);
+						await new Promise((resolve) => setTimeout(resolve, interval));
 						continue;
 					}
 					if (errorData.error === "access_denied") {
-						if (storage.removePendingFlow)
-							await storage.removePendingFlow(url);
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
 						return {
 							content: [
 								{
@@ -289,8 +285,7 @@ export function createAgentMCPTools(
 						};
 					}
 					if (errorData.error === "expired_token") {
-						if (storage.removePendingFlow)
-							await storage.removePendingFlow(url);
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
 						return {
 							content: [
 								{
@@ -301,8 +296,7 @@ export function createAgentMCPTools(
 						};
 					}
 
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -314,8 +308,7 @@ export function createAgentMCPTools(
 				}
 
 				if (!accessToken) {
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -326,18 +319,14 @@ export function createAgentMCPTools(
 					};
 				}
 
-				// Register the agent with the session token
-				// Use correct cookie name based on HTTPS (secure cookies use __Secure- prefix)
-				const cookieName = url.startsWith("https://")
-					? "__Secure-better-auth.session_token"
-					: "better-auth.session_token";
+				// Register the agent with the session token via Bearer auth
 				const createRes = await globalThis.fetch(
 					`${url}/api/auth/agent/create`,
 					{
 						method: "POST",
 						headers: {
 							"Content-Type": "application/json",
-							Cookie: `${cookieName}=${accessToken}`,
+							Authorization: `Bearer ${accessToken}`,
 							Origin: url,
 						},
 						body: JSON.stringify({
@@ -350,8 +339,7 @@ export function createAgentMCPTools(
 
 				if (!createRes.ok) {
 					const err = await createRes.text();
-					if (storage.removePendingFlow)
-						await storage.removePendingFlow(url);
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
@@ -373,8 +361,7 @@ export function createAgentMCPTools(
 					scopes: data.scopes,
 				});
 
-				if (storage.removePendingFlow)
-					await storage.removePendingFlow(url);
+				if (storage.removePendingFlow) await storage.removePendingFlow(url);
 
 				return {
 					content: [
@@ -721,18 +708,14 @@ export function createAgentMCPTools(
 					};
 				}
 
-				// Register the agent
-				// Use correct cookie name based on HTTPS (secure cookies use __Secure- prefix)
-				const completeCookieName = url.startsWith("https://")
-					? "__Secure-better-auth.session_token"
-					: "better-auth.session_token";
+				// Register the agent with the session token via Bearer auth
 				const createRes = await globalThis.fetch(
 					`${url}/api/auth/agent/create`,
 					{
 						method: "POST",
 						headers: {
 							"Content-Type": "application/json",
-							Cookie: `${completeCookieName}=${accessToken}`,
+							Authorization: `Bearer ${accessToken}`,
 							Origin: url,
 						},
 						body: JSON.stringify({

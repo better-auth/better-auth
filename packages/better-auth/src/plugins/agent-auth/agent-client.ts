@@ -220,18 +220,11 @@ export async function connectAgent(
 	}
 
 	// Step 5: Register the agent with the app using the session token
-	// Send as cookie — Better Auth's getSessionFromCtx reads session from cookies, not Authorization header
-	// Include Origin header for CSRF validation
-	// Send both cookie variants (secure and non-secure) so it works regardless of HTTPS config
-	const cookieName = base.startsWith("https://")
-		? `__Secure-better-auth.session_token`
-		: `better-auth.session_token`;
 	const createRes = await globalThis.fetch(`${base}/api/auth/agent/create`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			Cookie: `${cookieName}=${accessToken}`,
-			Origin: base,
+			Authorization: `Bearer ${accessToken}`,
 		},
 		body: JSON.stringify({
 			name,

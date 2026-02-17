@@ -46,7 +46,32 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 			},
 		},
 		async (ctx) => {
-			const session = await getSessionFromCtx(ctx);
+			// Try cookie-based session first
+			let session = await getSessionFromCtx(ctx);
+
+			// Fallback: check Authorization header for a Bearer session token
+			// This supports the device authorization flow where the agent script
+			// receives a session token from /device/token and needs to create itself
+			if (!session) {
+				const authHeader = ctx.headers?.get("authorization");
+				if (authHeader) {
+					const token = authHeader.replace(/^Bearer\s+/i, "");
+					if (token && token !== authHeader) {
+						const dbSession =
+							await ctx.context.internalAdapter.findSession(token);
+						if (
+							dbSession &&
+							new Date(dbSession.session.expiresAt) > new Date()
+						) {
+							session = {
+								session: dbSession.session,
+								user: dbSession.user,
+							} as typeof session;
+						}
+					}
+				}
+			}
+
 			if (!session) {
 				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 			}
