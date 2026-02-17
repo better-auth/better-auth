@@ -133,7 +133,7 @@ describe("oauth register", async () => {
 			scope: "create:test delete:test",
 			//---- Recommended client data ----//
 			user_id: "bad-actor",
-			client_id_issued_at: Math.round(Date.now() / 1000),
+			client_id_issued_at: Math.floor(Date.now() / 1000),
 			//---- UI Metadata ----//
 			client_name: "accept name",
 			client_uri: "https://example.com/ok",

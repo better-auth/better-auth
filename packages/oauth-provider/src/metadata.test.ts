@@ -100,6 +100,7 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
@@ -150,6 +151,7 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 		});
 	});
 

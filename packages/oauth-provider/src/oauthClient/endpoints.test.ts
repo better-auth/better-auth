@@ -55,6 +55,7 @@ describe("oauthClient", async () => {
 		expect(client?.data?.client_id).toBeDefined();
 		expect(client?.data?.user_id).toBeDefined();
 		expect(client?.data?.client_secret).toBeDefined();
+		expect(client.data?.client_id_issued_at).toBeDefined();
 		oauthClient = client.data!;
 
 		const publicClient = await authClient.oauth2.createClient({
@@ -64,6 +65,7 @@ describe("oauthClient", async () => {
 		expect(publicClient?.data?.client_id).toBeDefined();
 		expect(publicClient?.data?.user_id).toBeDefined();
 		expect(publicClient?.data?.client_secret).toBeUndefined();
+		expect(publicClient.data?.client_id_issued_at).toBeDefined();
 		oauthPublicClient = publicClient.data!;
 
 		const uiClient = await authClient.oauth2.createClient({
@@ -73,6 +75,7 @@ describe("oauthClient", async () => {
 		expect(uiClient?.data?.client_id).toBeDefined();
 		expect(uiClient?.data?.user_id).toBeDefined();
 		expect(uiClient?.data?.client_secret).toBeDefined();
+		expect(uiClient.data?.client_id_issued_at).toBeDefined();
 		oauthUiClient = uiClient.data!;
 	});
 
