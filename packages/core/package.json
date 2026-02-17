@@ -76,6 +76,11 @@
       "dev-source": "./src/oauth2/index.ts",
       "types": "./dist/oauth2/index.d.mts",
       "default": "./dist/oauth2/index.mjs"
+    },
+    "./instrumentation": {
+      "dev-source": "./src/instrumentation/index.ts",
+      "types": "./dist/instrumentation/index.d.mts",
+      "default": "./dist/instrumentation/index.mjs"
     }
   },
   "typesVersions": {
@@ -115,6 +120,9 @@
       ],
       "oauth2": [
         "dist/oauth2/index.d.mts"
+      ],
+      "instrumentation": [
+        "dist/instrumentation/index.d.mts"
       ]
     }
   },
@@ -130,6 +138,9 @@
   "devDependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/sdk-trace-base": "^1.30.0",
+    "@opentelemetry/sdk-trace-node": "^1.30.0",
     "better-call": "catalog:",
     "jose": "^6.1.0",
     "kysely": "^0.28.10",
@@ -137,12 +148,14 @@
     "tsdown": "catalog:"
   },
   "dependencies": {
+    "@opentelemetry/semantic-conventions": "^1.39.0",
     "@standard-schema/spec": "^1.0.0",
     "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
+    "@opentelemetry/api": "^1.9.0",
     "better-call": "catalog:",
     "jose": "^6.1.0",
     "kysely": "^0.28.5",

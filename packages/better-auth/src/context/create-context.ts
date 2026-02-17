@@ -310,7 +310,9 @@ Most of the features of Better Auth will not work correctly.`,
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			logger,
-			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			hooks: options.databaseHooks
+				? [{ source: "user", hooks: options.databaseHooks }]
+				: [],
 			generateId: generateIdFunc,
 		}),
 		createAuthCookie: createCookieGetter(options),
