@@ -501,7 +501,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create", "share", "update", "delete"], // <-- Permissions available for created roles
     } as const;
 
-    const ac = createAccessControl(statement);
+    export const ac = createAccessControl(statement);
 
     export const user = ac.newRole({ // [!code highlight]
         project: ["create"], // [!code highlight]
