@@ -1,3 +1,4 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { createClientCredentialsTokenRequest } from "@better-auth/core/oauth2";
 import { createAuthClient } from "better-auth/client";
 import { jwtClient } from "better-auth/client/plugins";
@@ -14,8 +15,9 @@ import { createLocalJWKSet, decodeJwt, jwtVerify } from "jose";
 import { beforeAll, describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProvider } from "./oauth";
-import type { OAuthOptions, Scope } from "./types";
+import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
+import { validateClientCredentials } from "./utils";
 
 type MakeRequired<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>;
 
@@ -1476,5 +1478,80 @@ describe("oauth token - config", async () => {
 		);
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
+	});
+});
+
+describe("oauth token - client secret validation", () => {
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8016
+	 */
+	it("should return invalid_client for encrypted client secret format mismatch", async () => {
+		const storedClientSecret = "Mda8BIefhR8eFkYfFq8H7XAW-fj8GNjQYKPfN8LZ6u8";
+		const dbClient: SchemaClient<Scope[]> = {
+			clientId: "client-id",
+			clientSecret: storedClientSecret,
+			disabled: false,
+			scopes: ["openid"],
+		};
+		const ctx = {
+			context: {
+				secret: "test-secret",
+				adapter: {
+					findOne: async () => dbClient,
+				},
+			},
+		} as unknown as GenericEndpointContext;
+
+		await expect(
+			validateClientCredentials(
+				ctx,
+				{
+					loginPage: "/login",
+					consentPage: "/consent",
+					storeClientSecret: "encrypted",
+					disableJwtPlugin: true,
+				},
+				"client-id",
+				"plain-client-secret",
+			),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+				error_description: "invalid client_secret",
+			},
+		});
+	});
+
+	it("should rethrow non-decryption errors during client secret verification", async () => {
+		const dbClient: SchemaClient<Scope[]> = {
+			clientId: "client-id",
+			clientSecret: "stored-secret",
+			disabled: false,
+			scopes: ["openid"],
+		};
+		const ctx = {
+			context: {
+				adapter: {
+					findOne: async () => dbClient,
+				},
+			},
+		} as unknown as GenericEndpointContext;
+
+		await expect(
+			validateClientCredentials(
+				ctx,
+				{
+					loginPage: "/login",
+					consentPage: "/consent",
+					storeClientSecret: {
+						hash: async () => {
+							throw new Error("hash service unavailable");
+						},
+					},
+				},
+				"client-id",
+				"plain-client-secret",
+			),
+		).rejects.toThrow("hash service unavailable");
 	});
 });
