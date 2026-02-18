@@ -194,6 +194,19 @@ describe("agent-auth e2e", async () => {
 			expect(result.content[0]!.text).toContain("MCP E2E Agent");
 		});
 
+		it("should auto-reuse identity when calling connect_agent again for the same URL", async () => {
+			const connectTool = findTool("connect_agent");
+			const result = await connectTool.handler({
+				url: "http://localhost:3000",
+				name: "Different Name Attempt",
+				scopes: ["reports.read"],
+			});
+
+			expect(result.content[0]!.text).toContain("Already connected");
+			expect(result.content[0]!.text).toContain(connectedAgentId);
+			expect(result.content[0]!.text).toContain("Reusing existing identity");
+		});
+
 		it("should disconnect via MCP tool", async () => {
 			const disconnectTool = findTool("disconnect_agent");
 			const result = await disconnectTool.handler({
@@ -322,14 +335,13 @@ describe("agent-auth e2e", async () => {
 	// 4. PORTABLE IDENTITY — same keypair, two registrations
 	// =========================================================================
 
-	describe("portable agent identity", () => {
-		it("should use same keypair for multiple app registrations", async () => {
+	describe("idempotent agent upsert", () => {
+		it("should upsert agent when same keypair is registered twice", async () => {
 			const keypair = await generateKeypair();
 
-			// Register same public key twice with different names/scopes
 			const res1 = await client.agent.create(
 				{
-					name: "Agent for App1",
+					name: "Original Agent",
 					publicKey: keypair.publicKey,
 					scopes: ["reports.read"],
 				},
@@ -338,7 +350,7 @@ describe("agent-auth e2e", async () => {
 
 			const res2 = await client.agent.create(
 				{
-					name: "Agent for App2",
+					name: "Updated Agent",
 					publicKey: keypair.publicKey,
 					role: "writer",
 				},
@@ -348,30 +360,19 @@ describe("agent-auth e2e", async () => {
 			expect(res1.error).toBeNull();
 			expect(res2.error).toBeNull();
 
-			// Both registrations work, but get different agent IDs
-			expect(res1.data!.agentId).not.toBe(res2.data!.agentId);
+			// Same kid + same user = same agent (upsert, not duplicate)
+			expect(res1.data!.agentId).toBe(res2.data!.agentId);
 
-			// Both can authenticate with the same private key
-			const client1 = createAgentClient({
+			// Session reflects the updated name and scopes from the second call
+			const agentClient = createAgentClient({
 				baseURL: "http://localhost:3000",
 				agentId: res1.data!.agentId,
 				privateKey: keypair.privateKey,
 			});
 
-			const client2 = createAgentClient({
-				baseURL: "http://localhost:3000",
-				agentId: res2.data!.agentId,
-				privateKey: keypair.privateKey,
-			});
-
-			const session1 = await client1.getSession();
-			const session2 = await client2.getSession();
-
-			expect(session1?.agent.name).toBe("Agent for App1");
-			expect(session1?.agent.scopes).toEqual(["reports.read"]);
-
-			expect(session2?.agent.name).toBe("Agent for App2");
-			expect(session2?.agent.scopes).toEqual([
+			const session = await agentClient.getSession();
+			expect(session?.agent.name).toBe("Updated Agent");
+			expect(session?.agent.scopes).toEqual([
 				"reports.read",
 				"reports.write",
 				"email.send",
