@@ -86,9 +86,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									}
 									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
-									)) as UserWithRole;
+									)) as UserWithRole | null;
 
-									if (user.banned) {
+									if (user?.banned) {
 										if (
 											user.banExpires &&
 											new Date(user.banExpires).getTime() < Date.now()
