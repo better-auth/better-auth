@@ -887,11 +887,43 @@ export type BetterAuthOptions = {
 					 */
 					disableImplicitLinking?: boolean;
 					/**
-					 * List of trusted providers
+					 * List of trusted providers. Can be a static array or a function
+					 * that returns providers dynamically. The function is called
+					 * during context init (with `request` undefined) and again
+					 * on each request (with the incoming Request). It must be
+					 * resilient to `request` being undefined.
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: ["google", "github"]
+					 * ```
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: async (request) => {
+					 *   if (!request) return [];
+					 *   const providers = await getTrustedProvidersForTenant(request);
+					 *   return providers;
+					 * }
+					 * ```
 					 */
-					trustedProviders?: Array<
-						LiteralUnion<SocialProviderList[number] | "email-password", string>
-					>;
+					trustedProviders?:
+						| Array<
+								LiteralUnion<
+									SocialProviderList[number] | "email-password",
+									string
+								>
+						  >
+						| ((
+								request?: Request | undefined,
+						  ) => Awaitable<
+								Array<
+									LiteralUnion<
+										SocialProviderList[number] | "email-password",
+										string
+									>
+								>
+						  >);
 					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
 					 *

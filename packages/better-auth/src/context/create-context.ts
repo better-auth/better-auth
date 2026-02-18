@@ -23,6 +23,7 @@ import { getBaseURL } from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
+	getTrustedProviders,
 	runPluginInit,
 } from "./helpers";
 
@@ -205,6 +206,7 @@ Most of the features of Better Auth will not work correctly.`,
 	const hasPluginFn = (id: string) => pluginIds.has(id);
 
 	const trustedOrigins = await getTrustedOrigins(options);
+	const trustedProviders = await getTrustedProviders(options);
 
 	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
@@ -220,6 +222,7 @@ Most of the features of Better Auth will not work correctly.`,
 		},
 		tables,
 		trustedOrigins,
+		trustedProviders,
 		isTrustedOrigin(
 			url: string,
 			settings?: {

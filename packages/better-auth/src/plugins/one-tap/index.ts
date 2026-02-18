@@ -152,7 +152,7 @@ export const oneTap = (options?: OneTapOptions | undefined) =>
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
 							accountLinking?.enabled !== false &&
-							(accountLinking?.trustedProviders?.includes("google") ||
+							(ctx.context.trustedProviders.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
