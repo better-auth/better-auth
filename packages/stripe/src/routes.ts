@@ -28,11 +28,12 @@ import type {
 import {
 	escapeStripeSearchValue,
 	getPlanByName,
-	getPlanByPriceInfo,
 	getPlans,
 	isActiveOrTrialing,
 	isPendingCancel,
 	isStripePendingCancel,
+	resolvePlanItem,
+	resolveQuantity,
 } from "./utils";
 
 /**
@@ -333,13 +334,32 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					// If org doesn't have a customer ID, create one
 					if (!customerId) {
 						try {
-							// First, search for existing organization customer by organizationId
-							const existingOrgCustomers = await client.customers.search({
-								query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
-								limit: 1,
-							});
-
-							let stripeCustomer = existingOrgCustomers.data[0];
+							// Find existing organization customer by organizationId metadata
+							let stripeCustomer: Stripe.Customer | undefined;
+							try {
+								const result = await client.customers.search({
+									query: `metadata["${customerMetadata.keys.organizationId}"]:"${org.id}"`,
+									limit: 1,
+								});
+								stripeCustomer = result.data[0];
+							} catch {
+								// Search API unavailable in some regions, so fall back to paginated list
+								ctx.context.logger.warn(
+									"Stripe customers.search failed, falling back to customers.list",
+								);
+								for await (const customer of client.customers.list({
+									limit: 100,
+								})) {
+									if (
+										customer.metadata?.[
+											customerMetadata.keys.organizationId
+										] === org.id
+									) {
+										stripeCustomer = customer;
+										break;
+									}
+								}
+							}
 
 							if (!stripeCustomer) {
 								// Get custom params if provided
@@ -413,13 +433,32 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					subscriptionToUpdate?.stripeCustomerId || user.stripeCustomerId;
 				if (!customerId) {
 					try {
-						// Try to find existing user Stripe customer by email
-						const existingCustomers = await client.customers.search({
-							query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
-							limit: 1,
-						});
-
-						let stripeCustomer = existingCustomers.data[0];
+						// Find existing user Stripe customer by email
+						let stripeCustomer: Stripe.Customer | undefined;
+						try {
+							const result = await client.customers.search({
+								query: `email:"${escapeStripeSearchValue(user.email)}" AND -metadata["${customerMetadata.keys.customerType}"]:"organization"`,
+								limit: 1,
+							});
+							stripeCustomer = result.data[0];
+						} catch {
+							// Search API unavailable in some regions, so fall back to paginated list
+							ctx.context.logger.warn(
+								"Stripe customers.search failed, falling back to customers.list",
+							);
+							for await (const customer of client.customers.list({
+								email: user.email,
+								limit: 100,
+							})) {
+								if (
+									customer.metadata?.[customerMetadata.keys.customerType] !==
+									"organization"
+								) {
+									stripeCustomer = customer;
+									break;
+								}
+							}
+						}
 
 						if (!stripeCustomer) {
 							stripeCustomer = await client.customers.create({
@@ -501,8 +540,11 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			});
 
 			// Get the current price ID from the active Stripe subscription
-			const stripeSubscriptionPriceId =
-				activeSubscription?.items.data[0]?.price.id;
+			const resolvedPlan = activeSubscription
+				? await resolvePlanItem(options, activeSubscription.items.data)
+				: undefined;
+			const planItem = resolvedPlan?.item;
+			const stripeSubscriptionPriceId = planItem?.price.id;
 
 			// Also find any incomplete subscription that we can reuse
 			const incompleteSubscription = subscriptions.find(
@@ -526,13 +568,29 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				});
 			}
 
+			// For org subscriptions with seat-based billing, seats are auto-managed.
+			// Quantity = memberCount; use Stripe graduated pricing for free tiers.
+			const isAutoManagedSeats = !!(
+				plan.seatPriceId && customerType === "organization"
+			);
+			let memberCount = 0;
+			if (isAutoManagedSeats) {
+				memberCount = await ctx.context.adapter.count({
+					model: "member",
+					where: [{ field: "organizationId", value: referenceId }],
+				});
+			}
+
 			const isSamePlan = activeOrTrialingSubscription?.plan === ctx.body.plan;
-			const isSameSeats =
-				activeOrTrialingSubscription?.seats === (ctx.body.seats || 1);
+			const isSameSeats = isAutoManagedSeats
+				? true // seats are auto-managed, don't block upgrade
+				: activeOrTrialingSubscription?.seats === (ctx.body.seats || 1);
 			const isSamePriceId = stripeSubscriptionPriceId === priceIdToUse;
 			const isSubscriptionStillValid =
 				!activeOrTrialingSubscription?.periodEnd ||
 				activeOrTrialingSubscription.periodEnd > new Date();
+			const isSeatOnlyPlan =
+				isAutoManagedSeats && plan.seatPriceId === plan.priceId;
 
 			const isAlreadySubscribed =
 				activeOrTrialingSubscription?.status === "active" &&
@@ -577,38 +635,117 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					dbSubscription = activeOrTrialingSubscription;
 				}
 
-				const { url } = await client.billingPortal.sessions
-					.create({
-						customer: customerId,
-						return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
-						flow_data: {
-							type: "subscription_update_confirm",
-							after_completion: {
-								type: "redirect",
-								redirect: {
-									return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+				if (!planItem) {
+					throw APIError.from(
+						"NOT_FOUND",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
+
+				// When upgrading plans with auto-managed seats, include
+				// the seat item update if seatPriceId changed between plans.
+				const seatPortalItems: Array<{
+					id: string;
+					price: string;
+					quantity: number;
+				}> = [];
+				if (isAutoManagedSeats && plan.seatPriceId) {
+					const oldPlan = activeOrTrialingSubscription
+						? await getPlanByName(options, activeOrTrialingSubscription.plan)
+						: undefined;
+					if (
+						oldPlan?.seatPriceId &&
+						oldPlan.seatPriceId !== plan.seatPriceId
+					) {
+						const oldSeatItem = activeSubscription.items.data.find(
+							(item) => item.price.id === oldPlan.seatPriceId,
+						);
+						if (oldSeatItem) {
+							seatPortalItems.push({
+								id: oldSeatItem.id,
+								price: plan.seatPriceId,
+								quantity: memberCount,
+							});
+						}
+					}
+				}
+
+				// Billing portal supports only 1 item update at a time.
+				// When seat price changes between plans, use direct API.
+				let upgradeUrl: string;
+				if (seatPortalItems.length > 0) {
+					// For seat-only plans, planItem and seatItem are the same subscription item.
+					// Skip the base entry to avoid duplicates.
+					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
+					await client.subscriptions
+						.update(activeSubscription.id, {
+							items: isSeatItem
+								? seatPortalItems
+								: [
+										{
+											id: planItem.id,
+											price: priceIdToUse,
+										},
+										...seatPortalItems,
+									],
+							proration_behavior: "create_prorations",
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+
+					if (dbSubscription) {
+						await ctx.context.adapter.update<Subscription>({
+							model: "subscription",
+							update: {
+								plan: plan.name.toLowerCase(),
+								seats: memberCount,
+								updatedAt: new Date(),
+							},
+							where: [{ field: "id", value: dbSubscription.id }],
+						});
+					}
+
+					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
+				} else {
+					({ url: upgradeUrl } = await client.billingPortal.sessions
+						.create({
+							customer: customerId,
+							return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+							flow_data: {
+								type: "subscription_update_confirm",
+								after_completion: {
+									type: "redirect",
+									redirect: {
+										return_url: getUrl(ctx, ctx.body.returnUrl || "/"),
+									},
+								},
+								subscription_update_confirm: {
+									subscription: activeSubscription.id,
+									items: [
+										{
+											id: planItem.id,
+											price: priceIdToUse,
+											...(isAutoManagedSeats
+												? {}
+												: { quantity: ctx.body.seats || 1 }),
+										},
+									],
 								},
 							},
-							subscription_update_confirm: {
-								subscription: activeSubscription.id,
-								items: [
-									{
-										id: activeSubscription.items.data[0]?.id as string,
-										quantity: ctx.body.seats || 1,
-										price: priceIdToUse,
-									},
-								],
-							},
-						},
-					})
-					.catch(async (e) => {
-						throw ctx.error("BAD_REQUEST", {
-							message: e.message,
-							code: e.code,
-						});
-					});
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						}));
+				}
 				return ctx.json({
-					url,
+					url: upgradeUrl,
 					redirect: !ctx.body.disableRedirect,
 				});
 			}
@@ -621,7 +758,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					model: "subscription",
 					update: {
 						plan: plan.name.toLowerCase(),
-						seats: ctx.body.seats || 1,
+						seats: isAutoManagedSeats ? memberCount : ctx.body.seats || 1,
 						updatedAt: new Date(),
 					},
 					where: [
@@ -642,7 +779,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						stripeCustomerId: customerId,
 						status: "incomplete",
 						referenceId,
-						seats: ctx.body.seats || 1,
+						seats: isAutoManagedSeats ? memberCount : ctx.body.seats || 1,
 					},
 				});
 			}
@@ -710,10 +847,21 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						),
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
-							{
-								price: priceIdToUse,
-								quantity: ctx.body.seats || 1,
-							},
+							// Base price
+							...(!isSeatOnlyPlan
+								? [
+										{
+											price: priceIdToUse,
+											quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+										},
+									]
+								: []),
+							// Per-seat
+							...(isAutoManagedSeats
+								? [{ price: plan.seatPriceId, quantity: memberCount }]
+								: []),
+							// Additional line items (metered prices, add-ons, etc.)
+							...(plan.lineItems ?? []),
 						],
 						subscription_data: {
 							...freeTrial,
@@ -784,74 +932,78 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const { user } = session;
 			const { callbackURL, subscriptionId } = ctx.query;
 
-			if (user?.stripeCustomerId) {
-				try {
-					const subscription = await ctx.context.adapter.findOne<Subscription>({
+			try {
+				const subscription = await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscriptionId,
+						},
+					],
+				});
+				if (
+					!subscription ||
+					subscription.status === "canceled" ||
+					isPendingCancel(subscription)
+				) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				// Use the subscription's own stripeCustomerId so this works
+				// for both user and organization subscriptions.
+				const customerId = subscription.stripeCustomerId;
+				if (!customerId) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				const stripeSubscription = await client.subscriptions.list({
+					customer: customerId,
+					status: "active",
+				});
+				const currentSubscription = stripeSubscription.data.find(
+					(sub) => sub.id === subscription.stripeSubscriptionId,
+				);
+
+				const isNewCancellation =
+					currentSubscription &&
+					isStripePendingCancel(currentSubscription) &&
+					!isPendingCancel(subscription);
+				if (isNewCancellation) {
+					await ctx.context.adapter.update({
 						model: "subscription",
+						update: {
+							status: currentSubscription?.status,
+							cancelAtPeriodEnd:
+								currentSubscription?.cancel_at_period_end || false,
+							cancelAt: currentSubscription?.cancel_at
+								? new Date(currentSubscription.cancel_at * 1000)
+								: null,
+							canceledAt: currentSubscription?.canceled_at
+								? new Date(currentSubscription.canceled_at * 1000)
+								: null,
+						},
 						where: [
 							{
 								field: "id",
-								value: subscriptionId,
+								value: subscription.id,
 							},
 						],
 					});
-					if (
-						!subscription ||
-						subscription.status === "canceled" ||
-						isPendingCancel(subscription)
-					) {
-						throw ctx.redirect(getUrl(ctx, callbackURL));
-					}
-
-					const stripeSubscription = await client.subscriptions.list({
-						customer: user.stripeCustomerId,
-						status: "active",
+					await subscriptionOptions.onSubscriptionCancel?.({
+						subscription,
+						cancellationDetails: currentSubscription.cancellation_details,
+						stripeSubscription: currentSubscription,
+						event: undefined,
 					});
-					const currentSubscription = stripeSubscription.data.find(
-						(sub) => sub.id === subscription.stripeSubscriptionId,
-					);
-
-					const isNewCancellation =
-						currentSubscription &&
-						isStripePendingCancel(currentSubscription) &&
-						!isPendingCancel(subscription);
-					if (isNewCancellation) {
-						await ctx.context.adapter.update({
-							model: "subscription",
-							update: {
-								status: currentSubscription?.status,
-								cancelAtPeriodEnd:
-									currentSubscription?.cancel_at_period_end || false,
-								cancelAt: currentSubscription?.cancel_at
-									? new Date(currentSubscription.cancel_at * 1000)
-									: null,
-								canceledAt: currentSubscription?.canceled_at
-									? new Date(currentSubscription.canceled_at * 1000)
-									: null,
-							},
-							where: [
-								{
-									field: "id",
-									value: subscription.id,
-								},
-							],
-						});
-						await subscriptionOptions.onSubscriptionCancel?.({
-							subscription,
-							cancellationDetails: currentSubscription.cancellation_details,
-							stripeSubscription: currentSubscription,
-							event: undefined,
-						});
-					}
-				} catch (error) {
-					ctx.context.logger.error(
-						"Error checking subscription status from Stripe",
-						error,
-					);
 				}
+			} catch (error) {
+				ctx.context.logger.error(
+					"Error checking subscription status from Stripe",
+					error,
+				);
 			}
 			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},
@@ -1375,19 +1527,18 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			const subscriptionItem = stripeSubscription.items.data[0];
-			if (!subscriptionItem) {
+			const resolved = await resolvePlanItem(
+				options,
+				stripeSubscription.items.data,
+			);
+			if (!resolved) {
 				ctx.context.logger.warn(
 					`No subscription items found for Stripe subscription ${stripeSubscription.id}`,
 				);
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			const plan = await getPlanByPriceInfo(
-				options,
-				subscriptionItem.price.id,
-				subscriptionItem.price.lookup_key,
-			);
+			const { item: subscriptionItem, plan } = resolved;
 			if (!plan) {
 				ctx.context.logger.warn(
 					`Plan not found for price ${subscriptionItem.price.id}`,
@@ -1395,12 +1546,26 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
+			const seats =
+				resolveQuantity(
+					stripeSubscription.items.data,
+					subscriptionItem,
+					plan.seatPriceId,
+				) || 1;
+
 			await ctx.context.adapter.update({
 				model: "subscription",
 				update: {
+					...(stripeSubscription.trial_start && stripeSubscription.trial_end
+						? {
+								trialStart: new Date(stripeSubscription.trial_start * 1000),
+								trialEnd: new Date(stripeSubscription.trial_end * 1000),
+							}
+						: {}),
 					status: stripeSubscription.status,
-					seats: subscriptionItem.quantity || 1,
+					seats,
 					plan: plan.name.toLowerCase(),
+					billingInterval: subscriptionItem.price.recurring?.interval,
 					periodEnd: new Date(subscriptionItem.current_period_end * 1000),
 					periodStart: new Date(subscriptionItem.current_period_start * 1000),
 					stripeSubscriptionId: stripeSubscription.id,
@@ -1411,12 +1576,6 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 					canceledAt: stripeSubscription.canceled_at
 						? new Date(stripeSubscription.canceled_at * 1000)
 						: null,
-					...(stripeSubscription.trial_start && stripeSubscription.trial_end
-						? {
-								trialStart: new Date(stripeSubscription.trial_start * 1000),
-								trialEnd: new Date(stripeSubscription.trial_end * 1000),
-							}
-						: {}),
 				},
 				where: [
 					{

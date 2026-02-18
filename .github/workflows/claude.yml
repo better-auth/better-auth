@@ -19,7 +19,7 @@ jobs:
         (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.review.author_association)) ||
         (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) && contains(fromJSON('["MEMBER", "OWNER", "COLLABORATOR"]'), github.event.issue.author_association))
       )
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
     permissions:
       contents: write
       pull-requests: write

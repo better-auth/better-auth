@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/redis-storage",
-  "version": "1.5.0-beta.11",
+  "version": "1.5.0-beta.16",
   "description": "Redis storage for Better Auth secondary storage",
   "type": "module",
   "repository": {
@@ -30,7 +30,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@types/node": "^25.0.10",
+    "@types/node": "^25.2.2",
     "ioredis": "^5.9.2",
     "tsdown": "catalog:",
     "typescript": "catalog:",

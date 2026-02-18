@@ -1,5 +1,6 @@
 /// <reference types="electron" />
 
+import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import type { FetchEsque } from "better-auth/client";
@@ -124,4 +125,10 @@ export function testUtils(overrideOpts?: BetterAuthOptions) {
 	});
 
 	return testInstance;
+}
+
+export function encodeRedirectToken(identifier: string, state: string) {
+	return base64Url.encode(
+		new TextEncoder().encode(JSON.stringify({ identifier, state })),
+	);
 }

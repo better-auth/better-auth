@@ -301,25 +301,27 @@ export interface DBAdapterFactoryConfig<
 	disableTransformJoin?: boolean | undefined;
 }
 
+export const whereOperators = [
+	"eq",
+	"ne",
+	"lt",
+	"lte",
+	"gt",
+	"gte",
+	"in",
+	"not_in",
+	"contains",
+	"starts_with",
+	"ends_with",
+] as const;
+
+export type WhereOperator = (typeof whereOperators)[number];
+
 export type Where = {
 	/**
 	 * @default eq
 	 */
-	operator?:
-		| (
-				| "eq"
-				| "ne"
-				| "lt"
-				| "lte"
-				| "gt"
-				| "gte"
-				| "in"
-				| "not_in"
-				| "contains"
-				| "starts_with"
-				| "ends_with"
-		  )
-		| undefined;
+	operator?: WhereOperator | undefined;
 	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	/**

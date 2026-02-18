@@ -112,30 +112,34 @@ export const apple = (options: AppleOptions) => {
 			if (options.verifyIdToken) {
 				return options.verifyIdToken(token, nonce);
 			}
-			const decodedHeader = decodeProtectedHeader(token);
-			const { kid, alg: jwtAlg } = decodedHeader;
-			if (!kid || !jwtAlg) return false;
-			const publicKey = await getApplePublicKey(kid);
-			const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
-				algorithms: [jwtAlg],
-				issuer: "https://appleid.apple.com",
-				audience:
-					options.audience && options.audience.length
-						? options.audience
-						: options.appBundleIdentifier
-							? options.appBundleIdentifier
-							: options.clientId,
-				maxTokenAge: "1h",
-			});
-			["email_verified", "is_private_email"].forEach((field) => {
-				if (jwtClaims[field] !== undefined) {
-					jwtClaims[field] = Boolean(jwtClaims[field]);
+			try {
+				const decodedHeader = decodeProtectedHeader(token);
+				const { kid, alg: jwtAlg } = decodedHeader;
+				if (!kid || !jwtAlg) return false;
+				const publicKey = await getApplePublicKey(kid);
+				const { payload: jwtClaims } = await jwtVerify(token, publicKey, {
+					algorithms: [jwtAlg],
+					issuer: "https://appleid.apple.com",
+					audience:
+						options.audience && options.audience.length
+							? options.audience
+							: options.appBundleIdentifier
+								? options.appBundleIdentifier
+								: options.clientId,
+					maxTokenAge: "1h",
+				});
+				["email_verified", "is_private_email"].forEach((field) => {
+					if (jwtClaims[field] !== undefined) {
+						jwtClaims[field] = Boolean(jwtClaims[field]);
+					}
+				});
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
 				}
-			});
-			if (nonce && jwtClaims.nonce !== nonce) {
+				return !!jwtClaims;
+			} catch {
 				return false;
 			}
-			return !!jwtClaims;
 		},
 		refreshAccessToken: options.refreshAccessToken
 			? options.refreshAccessToken
@@ -158,15 +162,15 @@ export const apple = (options: AppleOptions) => {
 				return null;
 			}
 
-			// TODO: " " masking will be removed when the name field is made optional
+			// TODO: "" masking will be removed when the name field is made optional
 			let name: string;
 			if (token.user?.name) {
 				const firstName = token.user.name.firstName || "";
 				const lastName = token.user.name.lastName || "";
 				const fullName = `${firstName} ${lastName}`.trim();
-				name = fullName || " ";
+				name = fullName;
 			} else {
-				name = profile.name || " ";
+				name = profile.name || "";
 			}
 
 			const emailVerified =

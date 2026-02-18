@@ -294,10 +294,9 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-
-			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			const isTrustedProvider = c.context.trustedProviders.includes(
+				provider.id,
+			);
 			if (
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -309,7 +308,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			if (
-				linkingUserInfo.user.email !== session.user.email &&
+				linkingUserInfo.user.email?.toLowerCase() !==
+					session.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				throw APIError.from("UNAUTHORIZED", {

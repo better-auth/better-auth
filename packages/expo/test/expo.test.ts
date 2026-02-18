@@ -463,8 +463,6 @@ describe("expo", async () => {
 	});
 
 	it("should NOT include oauthState param in proxy URL when using database strategy", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -686,8 +684,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should include oauthState param in proxy URL", async () => {
-		fn.mockClear();
-
 		await client.signIn.social({
 			provider: "google",
 			callbackURL: "/dashboard",
@@ -702,8 +698,6 @@ describe("expo with cookie storeStateStrategy", async () => {
 	});
 
 	it("should set oauth_state cookie in browser context via expo-authorization-proxy (cookie strategy)", async () => {
-		fn.mockClear();
-
 		const expoWebBrowser = await import("expo-web-browser");
 		const { parseSetCookieHeader } = await import("../src/client");
 
@@ -786,6 +780,7 @@ describe("expo deep link cookie injection", async () => {
 			callbackURL: "myapp:///dashboard",
 		});
 
+		let redirectHandled = false;
 		const { error } = await client.magicLink.verify({
 			query: {
 				token: magicLinkToken,
@@ -793,6 +788,7 @@ describe("expo deep link cookie injection", async () => {
 			},
 			fetchOptions: {
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -804,7 +800,73 @@ describe("expo deep link cookie injection", async () => {
 				},
 			},
 		});
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/6810
+ */
+describe("expo deep link cookie injection with wildcard trustedOrigins", async () => {
+	let magicLinkToken = "";
+	const storage = new Map<string, string>();
+
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				expo(),
+				magicLink({
+					async sendMagicLink({ token }) {
+						magicLinkToken = token;
+					},
+				}),
+			],
+			trustedOrigins: ["myapp://*"],
+		},
+		{
+			clientOptions: {
+				plugins: [
+					expoClient({
+						storage: {
+							getItem: (key) => storage.get(key) || null,
+							setItem: async (key, value) => storage.set(key, value),
+						},
+					}),
+					magicLinkClient(),
+				],
+			},
+		},
+	);
+
+	it("should inject cookie into deep link for wildcard trusted origin", async () => {
+		await client.signIn.magicLink({
+			email: "wildcard-test@example.com",
+			callbackURL: "myapp:///dashboard",
+		});
+
+		let redirectHandled = false;
+		const { error } = await client.magicLink.verify({
+			query: {
+				token: magicLinkToken,
+				callbackURL: "myapp:///dashboard",
+			},
+			fetchOptions: {
+				onError(context) {
+					redirectHandled = true;
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("myapp://");
+
+					const url = new URL(location!);
+					const cookie = url.searchParams.get("cookie");
+					expect(cookie).toBeDefined();
+					expect(cookie).toContain("better-auth.session_token");
+				},
+			},
+		});
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
 	});
 });
 
@@ -850,6 +912,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 
 		expect(verificationToken).toBeTruthy();
 
+		let redirectHandled = false;
 		const { error } = await client.verifyEmail(
 			{
 				query: {
@@ -859,6 +922,7 @@ describe("expo deep link cookie injection for verify-email", async () => {
 			},
 			{
 				onError(context) {
+					redirectHandled = true;
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
 					expect(location).toContain("myapp://");
@@ -870,7 +934,8 @@ describe("expo deep link cookie injection for verify-email", async () => {
 				},
 			},
 		);
-		expect(error).toBeDefined();
+		expect(redirectHandled).toBe(true);
+		expect(error?.status).toBe(302);
 	});
 });
 

@@ -540,12 +540,32 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
+				if (fieldAttr.type === "boolean" && typeof newValue === "string") {
+					newValue = newValue === "true";
+				}
+
+				if (fieldAttr.type === "number") {
+					if (typeof newValue === "string" && newValue.trim() !== "") {
+						const parsed = Number(newValue);
+						if (!Number.isNaN(parsed)) {
+							newValue = parsed;
+						}
+					} else if (Array.isArray(newValue)) {
+						const parsed = newValue.map((v) =>
+							typeof v === "string" && v.trim() !== "" ? Number(v) : NaN,
+						);
+						if (parsed.every((n) => !Number.isNaN(n))) {
+							newValue = parsed;
+						}
+					}
+				}
+
 				if (
 					fieldAttr.type === "boolean" &&
-					typeof value === "boolean" &&
+					typeof newValue === "boolean" &&
 					!config.supportsBooleans
 				) {
-					newValue = value ? 1 : 0;
+					newValue = newValue ? 1 : 0;
 				}
 
 				if (
