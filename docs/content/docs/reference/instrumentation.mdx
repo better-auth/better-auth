@@ -79,7 +79,7 @@ Additionally, when defined, the following spans are also emitted for database ho
 | `db {operation}.before {model}` | Before-hook for a create/update/delete | When a `databaseHooks` before hook runs |
 | `db {operation}.after {model}`  | After-hook for a create/update/delete  | When a `databaseHooks` after hook runs   |
 
-- **Operations:** `create`, `findOne`, `findMany`, `update`, `updateMany`, `delete`, `deleteMany`, `count`
+- **Operations:** `create`, `update`, `updateMany`, `delete`, `deleteMany`
 - **Attributes:**
   - `better_auth.hook.type` - The hook type (e.g. `create.before`, `create.after`, `update.before`)
   - `better_auth.context` - Execution context: `"user"` or `"plugin:{pluginId}"`
