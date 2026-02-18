@@ -1478,3 +1478,152 @@ describe("oauth token - config", async () => {
 		expect(tokens.data?.access_token).toBeDefined();
 	});
 });
+
+describe("oauth token - client secret validation", async () => {
+	const authServerBaseUrl = "http://localhost:3010";
+	const rpBaseUrl = "http://localhost:5010";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const scopes = [
+		"openid",
+		"email",
+		"profile",
+		"offline_access",
+		"read:profile",
+	];
+
+	async function createValidationInstance(opts?: {
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
+	}) {
+		const { auth, customFetchImpl, signInWithTestUser, db } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						validAudiences: [validAudience],
+						scopes,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						...opts?.oauthProviderConfig,
+					}),
+					...(opts?.oauthProviderConfig?.disableJwtPlugin
+						? []
+						: [
+								jwt({
+									jwt: {
+										issuer: authServerBaseUrl,
+									},
+								}),
+							]),
+				],
+			});
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		return { client, oauthClient, db };
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8016
+	 */
+	it("should return invalid_client for encrypted client secret format mismatch", async () => {
+		const storedClientSecret = "Mda8BIefhR8eFkYfFq8H7XAW-fj8GNjQYKPfN8LZ6u8";
+		const { client, oauthClient, db } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: "encrypted",
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		await db.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+			update: { clientSecret: storedClientSecret },
+		});
+
+		let responseStatus = 0;
+		const tokenResponse = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(401);
+		expect(tokenResponse.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "invalid client_secret",
+		});
+	});
+
+	it("should propagate custom decrypt storage errors during client secret verification", async () => {
+		const { client, oauthClient } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: {
+					encrypt: async (clientSecret) => clientSecret,
+					decrypt: async () => {
+						throw new Error("decrypt service unavailable");
+					},
+				},
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseStatus = 0;
+		await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(500);
+	});
+});

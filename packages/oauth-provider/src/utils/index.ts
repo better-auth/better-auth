@@ -174,10 +174,20 @@ async function verifyStoredClientSecret(
 				constantTimeEqual(hashedClientSecret, storedClientSecret)
 			);
 		}
-	} else if (
-		storageMethod === "encrypted" ||
-		(typeof storageMethod === "object" && "decrypt" in storageMethod)
-	) {
+	} else if (storageMethod === "encrypted") {
+		try {
+			const decryptedClientSecret = await decryptStoredClientSecret(
+				ctx,
+				storageMethod,
+				storedClientSecret,
+			);
+			return (
+				!!clientSecret && constantTimeEqual(decryptedClientSecret, clientSecret)
+			);
+		} catch {
+			return false;
+		}
+	} else if (typeof storageMethod === "object" && "decrypt" in storageMethod) {
 		const decryptedClientSecret = await decryptStoredClientSecret(
 			ctx,
 			storageMethod,
