@@ -182,8 +182,8 @@ export function createAgentMCPTools(
 		{
 			name: "connect_agent",
 			description: getAuthHeaders
-				? "Connect to an app as an agent. If an active connection exists for this URL, you'll be prompted to reuse it or create a new identity."
-				: "Connect to an app as an agent via device authorization. If an active connection exists for this URL, you'll be prompted to reuse it or create a new identity.",
+				? "Connect to an app as an agent. Returns an Agent ID that you MUST save and pass back as agentId on every subsequent connect_agent call in this conversation."
+				: "Connect to an app as an agent via device authorization. Returns an Agent ID that you MUST save and pass back as agentId on every subsequent connect_agent call in this conversation.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z
@@ -196,13 +196,7 @@ export function createAgentMCPTools(
 					.string()
 					.optional()
 					.describe(
-						"Agent ID from a previous connect_agent call. Pass this to reuse an existing connection.",
-					),
-				forceNew: z
-					.boolean()
-					.optional()
-					.describe(
-						"Force creation of a new agent identity even if one already exists for this URL.",
+						"IMPORTANT: If you already received an Agent ID from a previous connect_agent call in this conversation, you MUST pass it here to reuse your identity. Only omit this on your very first connection.",
 					),
 			},
 			handler: async (input) => {
@@ -210,9 +204,8 @@ export function createAgentMCPTools(
 				const name = (input.name as string) ?? "MCP Agent";
 				const scopes = (input.scopes as string[]) ?? [];
 				const existingAgentId = input.agentId as string | undefined;
-				const forceNew = (input.forceNew as boolean) ?? false;
 
-				// 1. Explicit agentId — reuse that specific connection
+				// Explicit agentId — reuse that specific connection
 				if (existingAgentId) {
 					const existing = await storage.getConnection(existingAgentId);
 					if (existing) {
@@ -231,38 +224,10 @@ export function createAgentMCPTools(
 							};
 						}
 					}
+					// agentId invalid or stale — fall through to create fresh
 				}
 
-				// 2. No explicit agentId and not forcing new — check for existing connection by URL
-				if (!forceNew && !existingAgentId) {
-					const allConnections = await storage.listConnections();
-					const existingForUrl = allConnections.find((c) => c.appUrl === url);
-					if (existingForUrl) {
-						const existing = await storage.getConnection(
-							existingForUrl.agentId,
-						);
-						if (existing) {
-							const healthy = await isConnectionHealthy(
-								existingForUrl.agentId,
-								existing,
-							);
-							if (healthy) {
-								return {
-									content: [
-										{
-											type: "text" as const,
-											text: `Active connection found for ${url}.\nAgent ID: ${existingForUrl.agentId} | Name: "${existingForUrl.name}" | Scopes: ${existingForUrl.scopes.join(", ") || "none"}\n\nTo reuse this identity, call connect_agent with agentId: "${existingForUrl.agentId}".\nTo create a brand new identity, call connect_agent with forceNew: true.`,
-										},
-									],
-								};
-							}
-							// Stale — clean up
-							await storage.removeConnection(existingForUrl.agentId);
-						}
-					}
-				}
-
-				// 3. Create a fresh identity (forceNew, no existing, or stale connection)
+				// No agentId — create a fresh identity
 				const keypair = await generateAgentKeypair();
 
 				// Direct auth mode (cookie/token in env)

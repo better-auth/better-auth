@@ -17,7 +17,7 @@ The Agent Auth plugin gives AI agent runtimes their own identity so they can act
 - [Revocation](#revoke-an-agent) with credential wipe
 - [Agent SDK](#agent-sdk) for agent runtimes
 - [MCP server](#mcp-server) for Cursor, Claude Desktop, and other AI tools
-- [Portable identity](#file-storage) — one keypair, multiple apps
+- [Pluggable storage](#storage-options) — memory (default), file, or database
 - [AAP-compatible JWT claims](#aap-format) (IETF Agent Authorization Profile)
 
 ## Installation
@@ -464,12 +464,13 @@ The MCP server requires `@modelcontextprotocol/sdk` as a peer dependency. Instal
 
 | Variable | Description |
 |---|---|
-| `BETTER_AUTH_AGENT_DIR` | Custom storage directory (default: `~/.better-auth/agents`) |
+| `BETTER_AUTH_AGENT_STORAGE` | Storage type: `memory` (default) or `file` |
+| `BETTER_AUTH_AGENT_DIR` | Custom directory for file storage (default: `~/.better-auth/agents`) |
 | `BETTER_AUTH_AGENT_COOKIE` | Optional: session cookie for direct registration (skips device auth) |
 | `BETTER_AUTH_AGENT_TOKEN` | Optional: bearer token alternative to cookies |
 
 <Callout>
-When no cookie/token is configured, the MCP server uses the **device authorization flow**. The AI tool shows a code and URL — the user approves in their browser. No manual token copying needed.
+When no cookie/token is configured, the MCP server uses the **device authorization flow**. The AI tool opens the browser automatically — the user approves, and the agent is registered. No manual token copying needed.
 </Callout>
 
 ### MCP Tools
@@ -478,32 +479,35 @@ Once configured, the following tools are available to your AI assistant:
 
 | Tool | Description |
 |---|---|
-| `connect_agent` | Start connecting to an app. Shows a code for the user to approve in their browser. |
-| `connect_agent_complete` | Finish the connection after the user approves. |
-| `list_agents` | List all connected apps and agent connections. |
+| `connect_agent` | Connect to an app. Creates a fresh agent identity (device auth) or reuses an existing one via `agentId`. If an active connection exists for the URL, prompts the AI to reuse or create new. |
+| `list_agents` | List all agent connections in the current session. |
 | `agent_status` | Check if a connection is healthy by verifying the agent session. |
 | `agent_request` | Make an authenticated API request to a connected app. |
 | `disconnect_agent` | Revoke an agent server-side and remove the local connection. |
 
+Each `connect_agent` call creates a **unique agent identity** with its own Ed25519 keypair. The AI passes the returned `agentId` to all subsequent tool calls within the same conversation.
+
 **Example conversation with your AI tool:**
 
 ```
-You: "Connect my agent to https://myapp.com with reports.read scope"
-AI:  → calls connect_agent(url: "https://myapp.com", scopes: ["reports.read"])
-     "Open https://myapp.com/device?user_code=ABCD-1234 to approve."
+You: "Connect to https://myapp.com with reports.read scope"
+AI:  → calls connect_agent(url: "https://myapp.com", name: "Report Agent", scopes: ["reports.read"])
+     → browser opens for approval
+     "Approve the connection in your browser."
 
-You: (opens browser, approves)
-You: "Done, I approved it"
-AI:  → calls connect_agent_complete(url: "https://myapp.com")
-     "Connected! Agent ID: agt_abc123. Scopes: reports.read"
-
-You: "Check if it's working"
-AI:  → calls agent_status(url: "https://myapp.com")
-     "Healthy. Agent: MCP Agent (agt_abc123). User: Maria (maria@co.com)"
+You: (approves in browser)
+AI:  "Connected! Agent ID: abc123. Scopes: reports.read."
 
 You: "Fetch the Q4 report"
-AI:  → calls agent_request(url: "https://myapp.com", path: "/api/reports/Q4")
+AI:  → calls agent_request(agentId: "abc123", path: "/api/reports/Q4")
      "200 OK — { ... report data ... }"
+
+You: "Connect to the same app again"
+AI:  → calls connect_agent(url: "https://myapp.com", name: "Report Agent")
+     "Active connection found. Agent ID: abc123.
+      To reuse, call with agentId. To create new, use forceNew: true."
+AI:  → calls connect_agent(url: "https://myapp.com", agentId: "abc123")
+     "Reusing connection. Agent ID: abc123."
 ```
 
 ### Custom MCP Integration
@@ -512,13 +516,10 @@ If you're building your own MCP server, use `createAgentMCPTools` to get the too
 
 ```ts title="my-mcp-server.ts"
 import { createAgentMCPTools } from "better-auth/plugins/agent-auth/mcp-tools"
-import { createFileStorage } from "better-auth/plugins/agent-auth/mcp-storage-fs"
+import { createMemoryStorage } from "better-auth/plugins/agent-auth/mcp-storage-memory"
 
 const tools = createAgentMCPTools({
-    storage: createFileStorage(), // file-based, or implement your own
-    getAuthHeaders: () => ({
-        cookie: process.env.SESSION_COOKIE ?? "",
-    }),
+    storage: createMemoryStorage(),
 })
 
 // Register with your MCP server
@@ -527,32 +528,91 @@ for (const tool of tools) {
 }
 ```
 
-You can also implement a custom `MCPAgentStorage` if you want to store keypairs and connections somewhere other than the filesystem (e.g. a database or secret manager):
+### Storage Options
 
-```ts title="custom-storage.ts"
-import type { MCPAgentStorage } from "better-auth/plugins/agent-auth/mcp-tools"
+Each agent connection stores the agent's keypair, scopes, and app URL. You choose where to persist this data based on your use case.
 
-const myStorage: MCPAgentStorage = {
-    getKeypair: async () => { /* ... */ },
-    saveKeypair: async (keypair) => { /* ... */ },
-    getConnection: async (appUrl) => { /* ... */ },
-    saveConnection: async (appUrl, connection) => { /* ... */ },
-    removeConnection: async (appUrl) => { /* ... */ },
-    listConnections: async () => { /* ... */ },
-}
+#### Memory Storage (Default)
+
+Connections live in-process memory. When the MCP server process exits, all connections are gone and the AI must reconnect (requiring user approval). Best for interactive AI tools like Cursor and Claude Desktop where each session should have its own agent identity.
+
+```ts
+import { createMemoryStorage } from "better-auth/plugins/agent-auth/mcp-storage-memory"
+
+const tools = createAgentMCPTools({
+    storage: createMemoryStorage(),
+})
 ```
 
-### File Storage
+#### File Storage
 
-The default file storage saves data to `~/.better-auth/agents/`:
+Connections persist to disk as JSON files. Survives process restarts. Best for long-running agent scripts or local development where you don't want to re-approve on every restart.
+
+```ts
+import { createFileStorage } from "better-auth/plugins/agent-auth/mcp-storage-fs"
+
+const tools = createAgentMCPTools({
+    storage: createFileStorage({
+        directory: "~/.better-auth/agents", // default
+    }),
+})
+```
+
+Files are stored at `~/.better-auth/agents/`:
 
 ```
 ~/.better-auth/agents/
-├── keypair.json       # Ed25519 keypair (chmod 0600, owner-only)
-└── connections.json   # App connections (agent IDs, scopes)
+├── connections/
+│   └── <agentId>.json   # One file per agent (keypair + connection data)
+└── pending-flows.json   # In-progress device auth flows
 ```
 
-The keypair is shared across all connections — one identity, multiple apps. This is the **portable identity** model: the same agent can register with different apps and each app grants its own scopes independently.
+All secret files are written with `chmod 0600` (owner-only).
+
+#### Database Storage
+
+For production agent deployments or when you need to manage many agents, implement the `MCPAgentStorage` interface with your own database:
+
+```ts title="my-db-storage.ts"
+import type { MCPAgentStorage } from "better-auth/plugins/agent-auth/mcp-tools"
+
+const dbStorage: MCPAgentStorage = {
+    async getConnection(agentId) {
+        const row = await db.query("SELECT * FROM agent_connections WHERE agent_id = ?", [agentId])
+        if (!row) return null
+        return {
+            appUrl: row.app_url,
+            keypair: JSON.parse(row.keypair), // encrypted at rest
+            name: row.name,
+            scopes: JSON.parse(row.scopes),
+        }
+    },
+    async saveConnection(agentId, connection) {
+        await db.query(
+            "INSERT INTO agent_connections (agent_id, app_url, keypair, name, scopes) VALUES (?, ?, ?, ?, ?) ON CONFLICT (agent_id) DO UPDATE SET ...",
+            [agentId, connection.appUrl, JSON.stringify(connection.keypair), connection.name, JSON.stringify(connection.scopes)]
+        )
+    },
+    async removeConnection(agentId) {
+        await db.query("DELETE FROM agent_connections WHERE agent_id = ?", [agentId])
+    },
+    async listConnections() {
+        const rows = await db.query("SELECT agent_id, app_url, name, scopes FROM agent_connections")
+        return rows.map(r => ({
+            agentId: r.agent_id,
+            appUrl: r.app_url,
+            name: r.name,
+            scopes: JSON.parse(r.scopes),
+        }))
+    },
+}
+
+const tools = createAgentMCPTools({ storage: dbStorage })
+```
+
+<Callout type="warn">
+The `keypair` field contains the agent's **private key**. If you store it in a database, encrypt it at rest (AES-256 or similar) and restrict access to the MCP service account only. Never expose private keys in API responses or logs.
+</Callout>
 
 ## Roles and Scopes
 
