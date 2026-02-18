@@ -9,6 +9,40 @@ import { ssoClient } from "./client";
 
 let server = new OAuth2Server();
 
+async function simulateOAuthFlow(
+	authUrl: string,
+	headers: Headers,
+	opts: {
+		customFetchImpl: (...args: any) => any;
+		cookieSetter: (headers: Headers) => (context: any) => void;
+		fetchImpl?: (...args: any) => any;
+	},
+) {
+	let location: string | null = null;
+	await betterFetch(authUrl, {
+		method: "GET",
+		redirect: "manual",
+		onError(context) {
+			location = context.response.headers.get("location");
+		},
+	});
+
+	if (!location) throw new Error("No redirect location found");
+	const newHeaders = new Headers();
+	let callbackURL = "";
+	await betterFetch(location, {
+		method: "GET",
+		customFetchImpl: opts.fetchImpl || opts.customFetchImpl,
+		headers,
+		onError(context) {
+			callbackURL = context.response.headers.get("location") || "";
+			opts.cookieSetter(newHeaders)(context);
+		},
+	});
+
+	return { callbackURL, headers: newHeaders };
+}
+
 describe("SSO", async () => {
 	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
 		await getTestInstance({
@@ -25,7 +59,7 @@ describe("SSO", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
+	
 		await server.start(8080, "localhost");
 		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
@@ -51,36 +85,6 @@ describe("SSO", async () => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
-	async function simulateOAuthFlow(
-		authUrl: string,
-		headers: Headers,
-		fetchImpl?: (...args: any) => any,
-	) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-		const newHeaders = new Headers();
-		let callbackURL = "";
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl: fetchImpl || customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return { callbackURL, headers: newHeaders };
-	}
 
 	it("should register a new SSO provider", async () => {
 		const { headers } = await signInWithTestUser();
@@ -209,7 +213,10 @@ describe("SSO", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 		expect(res.url).toContain("login_hint=my-email%40localhost.com");
-		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 
@@ -228,7 +235,10 @@ describe("SSO", async () => {
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 
@@ -249,7 +259,10 @@ describe("SSO", async () => {
 		);
 		expect(res.url).toContain("login_hint=user%40example.com");
 
-		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
@@ -270,7 +283,7 @@ describe("SSO disable implicit sign in", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
+	
 		await server.start(8080, "localhost");
 		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
@@ -296,36 +309,6 @@ describe("SSO disable implicit sign in", async () => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
-	async function simulateOAuthFlow(
-		authUrl: string,
-		headers: Headers,
-		fetchImpl?: (...args: any) => any,
-	) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-		const newHeaders = new Headers(headers);
-		let callbackURL = "";
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl: fetchImpl || customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return { callbackURL, headers: newHeaders };
-	}
 
 	it("should register a new SSO provider", async () => {
 		const { headers } = await signInWithTestUser();
@@ -390,7 +373,10 @@ describe("SSO disable implicit sign in", async () => {
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain(
 			"/api/auth/error/error?error=signup disabled",
 		);
@@ -411,7 +397,10 @@ describe("SSO disable implicit sign in", async () => {
 		expect(res.url).toContain(
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
-		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
@@ -432,7 +421,7 @@ describe("provisioning", async (ctx) => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
+	
 		await server.start(8080, "localhost");
 		console.log("Issuer URL:", server.issuer.url); // -> http://localhost:8080
 	});
@@ -440,36 +429,6 @@ describe("provisioning", async (ctx) => {
 	afterAll(async () => {
 		await server.stop();
 	});
-	async function simulateOAuthFlow(
-		authUrl: string,
-		headers: Headers,
-		fetchImpl?: (...args: any) => any,
-	) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-
-		let callbackURL = "";
-		const newHeaders = new Headers();
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl: fetchImpl || customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return callbackURL;
-	}
 
 	server.service.on("beforeUserinfo", (userInfoResponse, req) => {
 		userInfoResponse.body = {
@@ -538,7 +497,10 @@ describe("provisioning", async (ctx) => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Ftest",
 		);
 
-		const callbackURL = await simulateOAuthFlow(res.url, newHeaders);
+		const { callbackURL } = await simulateOAuthFlow(res.url, newHeaders, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 		const org = await auth.api.getFullOrganization({
 			query: {
@@ -588,7 +550,7 @@ describe("SSO storeSecretAs: encrypted", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
+	
 		await server.start(8080, "localhost");
 	});
 
@@ -613,36 +575,6 @@ describe("SSO storeSecretAs: encrypted", async () => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
-	async function simulateOAuthFlow(
-		authUrl: string,
-		headers: Headers,
-		fetchImpl?: (...args: any) => any,
-	) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-		const newHeaders = new Headers();
-		let callbackURL = "";
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl: fetchImpl || customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return { callbackURL, headers: newHeaders };
-	}
 
 	it("should encrypt clientSecret at rest and decrypt on read", async () => {
 		const { headers } = await signInWithTestUser();
@@ -702,7 +634,10 @@ describe("SSO storeSecretAs: encrypted", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fenc-provider",
 		);
 
-		const { callbackURL } = await simulateOAuthFlow(res.url, hdrs);
+		const { callbackURL } = await simulateOAuthFlow(res.url, hdrs, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
@@ -736,7 +671,7 @@ describe("SSO storeSecretAs: custom encryptor", async () => {
 
 	beforeAll(async () => {
 		await server.issuer.keys.generate("RS256");
-		server.issuer.on;
+	
 		await server.start(8080, "localhost");
 	});
 
@@ -761,36 +696,6 @@ describe("SSO storeSecretAs: custom encryptor", async () => {
 		token.payload.name = "Test User";
 		token.payload.picture = "https://test.com/picture.png";
 	});
-
-	async function simulateOAuthFlow(
-		authUrl: string,
-		headers: Headers,
-		fetchImpl?: (...args: any) => any,
-	) {
-		let location: string | null = null;
-		await betterFetch(authUrl, {
-			method: "GET",
-			redirect: "manual",
-			onError(context) {
-				location = context.response.headers.get("location");
-			},
-		});
-
-		if (!location) throw new Error("No redirect location found");
-		const newHeaders = new Headers();
-		let callbackURL = "";
-		await betterFetch(location, {
-			method: "GET",
-			customFetchImpl: fetchImpl || customFetchImpl,
-			headers,
-			onError(context) {
-				callbackURL = context.response.headers.get("location") || "";
-				cookieSetter(newHeaders)(context);
-			},
-		});
-
-		return { callbackURL, headers: newHeaders };
-	}
 
 	it("should use custom encryptor for clientSecret at rest and decrypt on read", async () => {
 		const { headers } = await signInWithTestUser();
@@ -845,7 +750,10 @@ describe("SSO storeSecretAs: custom encryptor", async () => {
 			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fcust-provider",
 		);
 
-		const { callbackURL } = await simulateOAuthFlow(res.url, hdrs);
+		const { callbackURL } = await simulateOAuthFlow(res.url, hdrs, {
+			customFetchImpl,
+			cookieSetter,
+		});
 		expect(callbackURL).toContain("/dashboard");
 	});
 });
