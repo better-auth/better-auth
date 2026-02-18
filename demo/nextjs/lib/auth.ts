@@ -1,5 +1,9 @@
+<<<<<<< Updated upstream
 import { dash, sendEmail } from "@better-auth/dash";
 import { electron } from "@better-auth/electron";
+=======
+import { dash, sendEmail, sentinel } from "@better-auth/infra";
+>>>>>>> Stashed changes
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { passkey } from "@better-auth/passkey";
 import { scim } from "@better-auth/scim";
@@ -465,6 +469,7 @@ export const auth = betterAuth({
 			{ shouldMutateListDeviceSessionsEndpoint: true },
 		),
 		dash(),
+		sentinel(),
 	],
 });
 
