@@ -772,74 +772,78 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const { user } = session;
 			const { callbackURL, subscriptionId } = ctx.query;
 
-			if (user?.stripeCustomerId) {
-				try {
-					const subscription = await ctx.context.adapter.findOne<Subscription>({
+			try {
+				const subscription = await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscriptionId,
+						},
+					],
+				});
+				if (
+					!subscription ||
+					subscription.status === "canceled" ||
+					isPendingCancel(subscription)
+				) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				// Use the subscription's own stripeCustomerId so this works
+				// for both user and organization subscriptions.
+				const customerId = subscription.stripeCustomerId;
+				if (!customerId) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				const stripeSubscription = await client.subscriptions.list({
+					customer: customerId,
+					status: "active",
+				});
+				const currentSubscription = stripeSubscription.data.find(
+					(sub) => sub.id === subscription.stripeSubscriptionId,
+				);
+
+				const isNewCancellation =
+					currentSubscription &&
+					isStripePendingCancel(currentSubscription) &&
+					!isPendingCancel(subscription);
+				if (isNewCancellation) {
+					await ctx.context.adapter.update({
 						model: "subscription",
+						update: {
+							status: currentSubscription?.status,
+							cancelAtPeriodEnd:
+								currentSubscription?.cancel_at_period_end || false,
+							cancelAt: currentSubscription?.cancel_at
+								? new Date(currentSubscription.cancel_at * 1000)
+								: null,
+							canceledAt: currentSubscription?.canceled_at
+								? new Date(currentSubscription.canceled_at * 1000)
+								: null,
+						},
 						where: [
 							{
 								field: "id",
-								value: subscriptionId,
+								value: subscription.id,
 							},
 						],
 					});
-					if (
-						!subscription ||
-						subscription.status === "canceled" ||
-						isPendingCancel(subscription)
-					) {
-						throw ctx.redirect(getUrl(ctx, callbackURL));
-					}
-
-					const stripeSubscription = await client.subscriptions.list({
-						customer: user.stripeCustomerId,
-						status: "active",
+					await subscriptionOptions.onSubscriptionCancel?.({
+						subscription,
+						cancellationDetails: currentSubscription.cancellation_details,
+						stripeSubscription: currentSubscription,
+						event: undefined,
 					});
-					const currentSubscription = stripeSubscription.data.find(
-						(sub) => sub.id === subscription.stripeSubscriptionId,
-					);
-
-					const isNewCancellation =
-						currentSubscription &&
-						isStripePendingCancel(currentSubscription) &&
-						!isPendingCancel(subscription);
-					if (isNewCancellation) {
-						await ctx.context.adapter.update({
-							model: "subscription",
-							update: {
-								status: currentSubscription?.status,
-								cancelAtPeriodEnd:
-									currentSubscription?.cancel_at_period_end || false,
-								cancelAt: currentSubscription?.cancel_at
-									? new Date(currentSubscription.cancel_at * 1000)
-									: null,
-								canceledAt: currentSubscription?.canceled_at
-									? new Date(currentSubscription.canceled_at * 1000)
-									: null,
-							},
-							where: [
-								{
-									field: "id",
-									value: subscription.id,
-								},
-							],
-						});
-						await subscriptionOptions.onSubscriptionCancel?.({
-							subscription,
-							cancellationDetails: currentSubscription.cancellation_details,
-							stripeSubscription: currentSubscription,
-							event: undefined,
-						});
-					}
-				} catch (error) {
-					ctx.context.logger.error(
-						"Error checking subscription status from Stripe",
-						error,
-					);
 				}
+			} catch (error) {
+				ctx.context.logger.error(
+					"Error checking subscription status from Stripe",
+					error,
+				);
 			}
 			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},

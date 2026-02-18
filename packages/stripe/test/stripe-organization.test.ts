@@ -2,7 +2,7 @@ import { organizationClient } from "better-auth/client/plugins";
 import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { stripe } from "../src";
 import { stripeClient } from "../src/client";
 import type { StripeOptions, Subscription } from "../src/types";
@@ -457,6 +457,135 @@ describe("stripe - organization customer", () => {
 						subscription: "sub_org_cancel_123",
 					},
 				}),
+			}),
+		);
+	});
+
+	it("should update subscription on cancel callback using subscription's stripeCustomerId", async () => {
+		const cancelAt = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
+		const canceledAt = Math.floor(Date.now() / 1000);
+
+		// Mock Stripe to return the subscription as pending cancel
+		mockStripeOrg.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_org_cb_123",
+					status: "active",
+					cancel_at_period_end: true,
+					cancel_at: cancelAt,
+					canceled_at: canceledAt,
+					cancellation_details: {
+						reason: "cancellation_requested",
+					},
+				},
+			],
+		});
+
+		// Clean up mocks even if assertions fail to prevent leaking into subsequent tests
+		onTestFinished(() => {
+			mockStripeOrg.subscriptions.list.mockReset();
+			mockStripeOrg.subscriptions.list.mockResolvedValue({ data: [] });
+			mockStripeOrg.subscriptions.update.mockReset();
+		});
+
+		const onSubscriptionCancel = vi.fn();
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				plugins: [
+					organization(),
+					stripe({
+						...baseOrgStripeOptions,
+						subscription: {
+							...baseOrgStripeOptions.subscription,
+							onSubscriptionCancel,
+						},
+					}),
+				],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [organizationClient(), stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		await client.signUp.email(
+			{ ...testUser, email: "org-cancel-cb-test@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "org-cancel-cb-test@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		const org = await client.organization.create({
+			name: "Cancel Callback Org",
+			slug: "cancel-cb-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data?.id as string;
+
+		// Organization has stripeCustomerId, user does NOT
+		await ctx.adapter.update({
+			model: "organization",
+			update: { stripeCustomerId: "cus_cb_org_123" },
+			where: [{ field: "id", value: orgId }],
+		});
+
+		const sub = await ctx.adapter.create<Subscription>({
+			model: "subscription",
+			data: {
+				referenceId: orgId,
+				stripeCustomerId: "cus_cb_org_123",
+				stripeSubscriptionId: "sub_org_cb_123",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		// Call the cancel callback endpoint directly (simulating redirect from Stripe Portal)
+		const callbackUrl = new URL(
+			"http://localhost:3000/api/auth/subscription/cancel/callback",
+		);
+		callbackUrl.searchParams.set("callbackURL", "/dashboard");
+		callbackUrl.searchParams.set("subscriptionId", sub.id);
+
+		const response = await auth.handler(
+			new Request(callbackUrl.toString(), {
+				method: "GET",
+				headers,
+			}),
+		);
+
+		// Should redirect to the callbackURL
+		expect(response.status).toBe(302);
+
+		// Verify DB was updated with cancellation info
+		const updatedSub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "id", value: sub.id }],
+		});
+		expect(updatedSub?.cancelAtPeriodEnd).toBe(true);
+		expect(updatedSub?.cancelAt).toBeDefined();
+		expect(updatedSub?.canceledAt).toBeDefined();
+
+		// Verify the Stripe API was called with the subscription's customer ID, not the user's
+		expect(mockStripeOrg.subscriptions.list).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customer: "cus_cb_org_123",
+				status: "active",
+			}),
+		);
+
+		// Verify onSubscriptionCancel callback was invoked
+		expect(onSubscriptionCancel).toHaveBeenCalledWith(
+			expect.objectContaining({
+				subscription: expect.objectContaining({ id: sub.id }),
+				event: undefined,
 			}),
 		);
 	});
