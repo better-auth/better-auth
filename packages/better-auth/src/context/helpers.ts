@@ -80,6 +80,7 @@ export async function getTrustedOrigins(
 	}
 	return trustedOrigins.filter((v): v is string => Boolean(v));
 }
+
 export async function getAwaitableValue<T extends Record<string, any>>(
 	arr: AwaitableFunction<T>[] | undefined,
 	item: { field?: string; value: string },
@@ -92,4 +93,19 @@ export async function getAwaitableValue<T extends Record<string, any>>(
 		}
 	}
 	return undefined;
+}
+
+export async function getTrustedProviders(
+	options: BetterAuthOptions,
+	request?: Request,
+): Promise<string[]> {
+	const trustedProviders = options.account?.accountLinking?.trustedProviders;
+	if (!trustedProviders) {
+		return [];
+	}
+	if (Array.isArray(trustedProviders)) {
+		return trustedProviders.filter((v): v is string => Boolean(v));
+	}
+	const resolved = await trustedProviders(request);
+	return (resolved ?? []).filter((v): v is string => Boolean(v));
 }
