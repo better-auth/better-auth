@@ -1,6 +1,7 @@
-import { clsx, type ClassValue } from "clsx";
-import { twMerge } from "tailwind-merge";
+import type { ClassValue } from "clsx";
+import { clsx } from "clsx";
 import type * as React from "react";
+import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -24,11 +25,14 @@ export function kFormatter(num: number) {
 }
 
 export const baseUrl =
-	process.env.NODE_ENV === "development" || !process.env.VERCEL_URL
+	process.env.NODE_ENV === "development" ||
+	(!process.env.VERCEL_PROJECT_PRODUCTION_URL && !process.env.VERCEL_URL)
 		? new URL("http://localhost:3000")
-		: new URL(`https://${process.env.VERCEL_URL}`);
+		: new URL(
+				`https://${process.env.VERCEL_PROJECT_PRODUCTION_URL || process.env.VERCEL_URL}`,
+			);
 export function formatDate(date: Date) {
-	let d = new Date(date);
+	const d = new Date(date);
 	return d
 		.toLocaleDateString("en-US", { month: "short", day: "numeric" })
 		.replace(",", "");
@@ -46,4 +50,20 @@ export function mergeRefs<T>(
 			}
 		});
 	};
+}
+
+/**
+ * Check if a slug is a subpage of a given parent path.
+ * @param slug - The slug array
+ * @param parentPath - The parent path segments (e.g. ["reference", "errors"])
+ */
+export function isSubpageOf(
+	slug: string[] | undefined,
+	parentPath: string[],
+): boolean {
+	if (!slug || slug.length <= parentPath.length) return false;
+
+	return parentPath.every(
+		(parentSegment, index) => slug[index] === parentSegment,
+	);
 }

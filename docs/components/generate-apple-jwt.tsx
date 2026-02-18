@@ -1,10 +1,11 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+
+import { KJUR } from "jsrsasign";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { KJUR } from "jsrsasign";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
 // Zod schema for validation
 const appleJwtSchema = z.object({
 	teamId: z.string().min(1, { message: "Team ID is required." }),
@@ -46,7 +48,7 @@ export const GenerateAppleJwt = () => {
 	const [isLoading, startTransition] = useTransition();
 
 	const form = useForm<AppleJwtFormValues>({
-		resolver: zodResolver(appleJwtSchema),
+		resolver: standardSchemaResolver(appleJwtSchema),
 		defaultValues: {
 			teamId: "",
 			clientId: "",
@@ -60,7 +62,7 @@ export const GenerateAppleJwt = () => {
 		setError(null);
 		startTransition(() => {
 			try {
-				//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
+				//normalize the private key by replacing \r\n with \n and trimming whitespace just in-case lol
 				const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
 				//since jose is not working with safari, we are using jsrsasign
@@ -72,6 +74,11 @@ export const GenerateAppleJwt = () => {
 				};
 
 				const issuedAtSeconds = Math.floor(Date.now() / 1000);
+				/**
+				 * Apple allows a maximum expiration of 6 months (180 days) for the client secret JWT.
+				 *
+				 * @see {@link https://developer.apple.com/documentation/accountorganizationaldatasharing/creating-a-client-secret}
+				 */
 				const expirationSeconds = issuedAtSeconds + 180 * 24 * 60 * 60; // 180 days. Should we let the user choose this ? MAX is 6 months
 
 				const payload = {

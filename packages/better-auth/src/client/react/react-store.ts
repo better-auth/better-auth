@@ -1,7 +1,7 @@
-import { listenKeys } from "nanostores";
-import { useCallback, useRef, useSyncExternalStore } from "react";
 import type { Store, StoreValue } from "nanostores";
+import { listenKeys } from "nanostores";
 import type { DependencyList } from "react";
+import { useCallback, useRef, useSyncExternalStore } from "react";
 
 type StoreKeys<T> = T extends { setKey: (k: infer K, v: any) => unknown }
 	? K
@@ -14,12 +14,12 @@ export interface UseStoreOptions<SomeStore> {
 	 * [store, options.keys]
 	 * ```
 	 */
-	deps?: DependencyList;
+	deps?: DependencyList | undefined;
 
 	/**
 	 * Will re-render components only on specific key changes.
 	 */
-	keys?: StoreKeys<SomeStore>[];
+	keys?: StoreKeys<SomeStore>[] | undefined;
 }
 
 /**
@@ -49,11 +49,11 @@ export function useStore<SomeStore extends Store>(
 	store: SomeStore,
 	options: UseStoreOptions<SomeStore> = {},
 ): StoreValue<SomeStore> {
-	let snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
+	const snapshotRef = useRef<StoreValue<SomeStore>>(store.get());
 
 	const { keys, deps = [store, keys] } = options;
 
-	let subscribe = useCallback((onChange: () => void) => {
+	const subscribe = useCallback((onChange: () => void) => {
 		const emitChange = (value: StoreValue<SomeStore>) => {
 			if (snapshotRef.current === value) return;
 			snapshotRef.current = value;
@@ -67,7 +67,7 @@ export function useStore<SomeStore extends Store>(
 		return store.listen(emitChange);
 	}, deps);
 
-	let get = () => snapshotRef.current as StoreValue<SomeStore>;
+	const get = () => snapshotRef.current as StoreValue<SomeStore>;
 
 	return useSyncExternalStore(subscribe, get, get);
 }

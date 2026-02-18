@@ -3,7 +3,7 @@ import type { Provider } from "./types";
 export const defaultEndpoints = [
 	"/sign-up/email",
 	"/sign-in/email",
-	"/forget-password",
+	"/request-password-reset",
 ];
 
 export const Providers = {

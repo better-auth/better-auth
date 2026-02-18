@@ -1,27 +1,44 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../api";
+import { APIError } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import type { BetterAuthPlugin } from "../../types";
-import { jwtVerify, createRemoteJWKSet } from "jose";
+import { parseUserOutput } from "../../db/schema";
 import { toBoolean } from "../../utils/boolean";
 
-interface OneTapOptions {
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"one-tap": {
+			creator: typeof oneTap;
+		};
+	}
+}
+
+export interface OneTapOptions {
 	/**
 	 * Disable the signup flow
 	 *
 	 * @default false
 	 */
-	disableSignup?: boolean;
+	disableSignup?: boolean | undefined;
 	/**
 	 * Google Client ID
 	 *
 	 * If a client ID is provided in the social provider configuration,
 	 * it will be used.
 	 */
-	clientId?: string;
+	clientId?: string | undefined;
 }
 
-export const oneTap = (options?: OneTapOptions) =>
+const oneTapCallbackBodySchema = z.object({
+	idToken: z.string().meta({
+		description:
+			"Google ID token, which the client obtains from the One Tap API",
+	}),
+});
+
+export const oneTap = (options?: OneTapOptions | undefined) =>
 	({
 		id: "one-tap",
 		endpoints: {
@@ -29,12 +46,7 @@ export const oneTap = (options?: OneTapOptions) =>
 				"/one-tap/callback",
 				{
 					method: "POST",
-					body: z.object({
-						idToken: z.string().meta({
-							description:
-								"Google ID token, which the client obtains from the One Tap API",
-						}),
-					}),
+					body: oneTapCallbackBodySchema,
 					metadata: {
 						openapi: {
 							summary: "One tap callback",
@@ -73,18 +85,20 @@ export const oneTap = (options?: OneTapOptions) =>
 						const JWKS = createRemoteJWKSet(
 							new URL("https://www.googleapis.com/oauth2/v3/certs"),
 						);
+						const googleProvider =
+							typeof ctx.context.options.socialProviders?.google === "function"
+								? await ctx.context.options.socialProviders?.google()
+								: ctx.context.options.socialProviders?.google;
 						const { payload: verifiedPayload } = await jwtVerify(
 							idToken,
 							JWKS,
 							{
 								issuer: ["https://accounts.google.com", "accounts.google.com"],
-								audience:
-									options?.clientId ||
-									ctx.context.options.socialProviders?.google?.clientId,
+								audience: options?.clientId || googleProvider?.clientId,
 							},
 						);
 						payload = verifiedPayload;
-					} catch (error) {
+					} catch {
 						throw new APIError("BAD_REQUEST", {
 							message: "invalid id token",
 						});
@@ -115,7 +129,6 @@ export const oneTap = (options?: OneTapOptions) =>
 								providerId: "google",
 								accountId: sub,
 							},
-							ctx,
 						);
 						if (!newUser) {
 							throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -124,7 +137,6 @@ export const oneTap = (options?: OneTapOptions) =>
 						}
 						const session = await ctx.context.internalAdapter.createSession(
 							newUser.user.id,
-							ctx,
 						);
 						await setSessionCookie(ctx, {
 							user: newUser.user,
@@ -132,23 +144,15 @@ export const oneTap = (options?: OneTapOptions) =>
 						});
 						return ctx.json({
 							token: session.token,
-							user: {
-								id: newUser.user.id,
-								email: newUser.user.email,
-								emailVerified: newUser.user.emailVerified,
-								name: newUser.user.name,
-								image: newUser.user.image,
-								createdAt: newUser.user.createdAt,
-								updatedAt: newUser.user.updatedAt,
-							},
+							user: parseUserOutput(ctx.context.options, newUser.user),
 						});
 					}
 					const account = await ctx.context.internalAdapter.findAccount(sub);
 					if (!account) {
 						const accountLinking = ctx.context.options.account?.accountLinking;
 						const shouldLinkAccount =
-							accountLinking?.enabled &&
-							(accountLinking.trustedProviders?.includes("google") ||
+							accountLinking?.enabled !== false &&
+							(ctx.context.trustedProviders.includes("google") ||
 								email_verified);
 						if (shouldLinkAccount) {
 							await ctx.context.internalAdapter.linkAccount({
@@ -166,7 +170,6 @@ export const oneTap = (options?: OneTapOptions) =>
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						user.user.id,
-						ctx,
 					);
 
 					await setSessionCookie(ctx, {
@@ -175,17 +178,10 @@ export const oneTap = (options?: OneTapOptions) =>
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: user.user.id,
-							email: user.user.email,
-							emailVerified: user.user.emailVerified,
-							name: user.user.name,
-							image: user.user.image,
-							createdAt: user.user.createdAt,
-							updatedAt: user.user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user.user),
 					});
 				},
 			),
 		},
+		options,
 	}) satisfies BetterAuthPlugin;

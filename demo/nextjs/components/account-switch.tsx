@@ -1,13 +1,10 @@
 "use client";
 
+import { ChevronDown, PlusCircle } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@/components/ui/popover";
+import { Button } from "@/components/ui/button";
 import {
 	Command,
 	CommandGroup,
@@ -15,15 +12,30 @@ import {
 	CommandList,
 	CommandSeparator,
 } from "@/components/ui/command";
-import { ChevronDown, PlusCircle } from "lucide-react";
-import { Session } from "@/lib/auth-types";
-import { client, useSession } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@/components/ui/popover";
+import { getQueryClient } from "@/data/query-client";
+import { userKeys } from "@/data/user/keys";
+import type { SessionData } from "@/data/user/session-query";
+import { useSessionQuery } from "@/data/user/session-query";
+import type { DeviceSession } from "@/lib/auth";
+import { authClient } from "@/lib/auth-client";
 
-export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
-	const { data: currentUser } = useSession();
+export default function AccountSwitcher({
+	deviceSessions,
+	initialSession,
+}: {
+	deviceSessions: DeviceSession[];
+	initialSession: SessionData;
+}) {
+	const queryClient = getQueryClient();
+	const { data: currentUser } = useSessionQuery(initialSession);
 	const [open, setOpen] = useState(false);
 	const router = useRouter();
+
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
 			<PopoverTrigger asChild>
@@ -70,16 +82,24 @@ export default function AccountSwitcher({ sessions }: { sessions: Session[] }) {
 						</CommandGroup>
 						<CommandSeparator />
 						<CommandGroup heading="Switch Account">
-							{sessions
+							{deviceSessions
 								.filter((s) => s.user.id !== currentUser?.user.id)
 								.map((u, i) => (
 									<CommandItem
 										key={i}
 										onSelect={async () => {
-											await client.multiSession.setActive({
-												sessionToken: u.session.token,
-											});
-											setOpen(false);
+											try {
+												await authClient.multiSession.setActive({
+													sessionToken: u.session.token,
+												});
+												await queryClient.invalidateQueries({
+													queryKey: userKeys.all(),
+												});
+												setOpen(false);
+												router.refresh();
+											} catch (error) {
+												console.error("Failed to switch account:", error);
+											}
 										}}
 										className="text-sm"
 									>

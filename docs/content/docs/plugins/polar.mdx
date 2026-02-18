@@ -95,7 +95,7 @@ You will be using the BetterAuth Client to interact with the Polar functionaliti
 
 ```typescript
 import { createAuthClient } from "better-auth/react";
-import { polarClient } from "@polar-sh/better-auth";
+import { polarClient } from "@polar-sh/better-auth/client";
 
 // This is all that is needed
 // All Polar plugins, etc. should be attached to the server-side BetterAuth config
@@ -177,7 +177,7 @@ const auth = betterAuth({
                     products: [ { productId: "123-456-789", slug: "pro" } ],
                     // Relative URL to return to when checkout is successfully completed
                     successUrl: "/success?checkout_id={CHECKOUT_ID}",
-                    // Wheather you want to allow unauthenticated checkout sessions or not
+                    // Whether you want to allow unauthenticated checkout sessions or not
                     authenticatedUsersOnly: true
                 })
             ],
@@ -384,7 +384,7 @@ The authenticated user is automatically associated with the ingested event.
 
 A simple method for listing the authenticated user's Usage Meters, or as we call them, Customer Meters.
 
-Customer Meter's contains all information about their consumtion on your defined meters.
+Customer Meter's contains all information about their consumption on your defined meters.
 
 - Customer Information
 - Meter Information

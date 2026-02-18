@@ -1,12 +1,14 @@
 "use client";
 
+import {
+	SidebarTrigger,
+	useSidebar,
+} from "fumadocs-ui/components/sidebar/base";
 import { Menu, X } from "lucide-react";
-import { type ButtonHTMLAttributes, type HTMLAttributes } from "react";
+import type { ComponentProps, HTMLAttributes } from "react";
 import { cn } from "../../lib/utils";
-import { buttonVariants } from "./ui/button";
-import { useSidebar } from "fumadocs-ui/provider";
 import { useNav } from "./layout/nav";
-import { SidebarTrigger } from "fumadocs-core/sidebar";
+import { buttonVariants } from "./ui/button";
 
 export function Navbar(props: HTMLAttributes<HTMLElement>) {
 	const { open } = useSidebar();
@@ -28,7 +30,7 @@ export function Navbar(props: HTMLAttributes<HTMLElement>) {
 }
 
 export function NavbarSidebarTrigger(
-	props: ButtonHTMLAttributes<HTMLButtonElement>,
+	props: ComponentProps<typeof SidebarTrigger>,
 ) {
 	const { open } = useSidebar();
 

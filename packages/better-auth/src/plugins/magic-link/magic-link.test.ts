@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAuthClient } from "../../client";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { magicLink } from ".";
-import { createAuthClient } from "../../client";
 import { magicLinkClient } from "./client";
 import { defaultKeyHasher } from "./utils";
 
@@ -34,6 +34,10 @@ describe("magic link", async () => {
 		},
 		baseURL: "http://localhost:3000",
 		basePath: "/api/auth",
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("should send magic link", async () => {
@@ -73,7 +77,7 @@ describe("magic link", async () => {
 				onError(context) {
 					expect(context.response.status).toBe(302);
 					const location = context.response.headers.get("location");
-					expect(location).toContain("?error=INVALID_TOKEN");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
 				},
 			},
 		);
@@ -103,6 +107,36 @@ describe("magic link", async () => {
 		);
 	});
 
+	it("should redirect to errorCallbackURL in case of error", async () => {
+		const errorCallbackURL = new URL("http://localhost:3000/error-page");
+		errorCallbackURL.searchParams.set("foo", "bar");
+		errorCallbackURL.searchParams.set("baz", "qux");
+
+		await client.magicLink.verify(
+			{
+				query: {
+					token: "invalid-token",
+					errorCallbackURL: errorCallbackURL.toString(),
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+
+					const location = context.response.headers.get("location");
+					expect(location).toBeDefined();
+
+					const url = new URL(location!);
+					expect(url.origin).toBe(errorCallbackURL.origin);
+					expect(url.pathname).toBe(errorCallbackURL.pathname);
+					expect(url.searchParams.get("foo")).toBe("bar");
+					expect(url.searchParams.get("baz")).toBe("qux");
+					expect(url.searchParams.get("error")).toBe("INVALID_TOKEN");
+				},
+			},
+		);
+	});
+
 	it("should sign up with magic link", async () => {
 		const email = "new-email@email.com";
 		await client.signIn.magicLink({
@@ -116,7 +150,7 @@ describe("magic link", async () => {
 			),
 		});
 		const headers = new Headers();
-		const response = await client.magicLink.verify({
+		await client.magicLink.verify({
 			query: {
 				token: new URL(verificationEmail.url).searchParams.get("token") || "",
 			},
@@ -134,6 +168,83 @@ describe("magic link", async () => {
 			email: "new-email@email.com",
 			emailVerified: true,
 		});
+	});
+
+	it("should verify email and return emailVerified true in session for existing unverified user", async () => {
+		// Create an unverified user with a separate test instance
+		const email = "unverified-user@email.com";
+		let magicLinkEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const {
+			auth,
+			customFetchImpl: testFetchImpl,
+			sessionSetter: testSessionSetter,
+		} = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						magicLinkEmail = data;
+					},
+				}),
+			],
+		});
+
+		const testClient = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl: testFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		const internalAdapter = (await auth.$context).internalAdapter;
+
+		// Create user with emailVerified: false
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email,
+				name: "Unverified User",
+				password: "password123",
+			},
+		});
+
+		expect(newUser.user?.emailVerified).toBe(false);
+
+		// Send magic link
+		await testClient.signIn.magicLink({
+			email,
+		});
+
+		// Verify magic link
+		const headers = new Headers();
+		const response = await testClient.magicLink.verify({
+			query: {
+				token: new URL(magicLinkEmail.url).searchParams.get("token") || "",
+			},
+			fetchOptions: {
+				onSuccess: testSessionSetter(headers),
+			},
+		});
+
+		// Check that the response contains emailVerified: true
+		expect(response.data?.user.emailVerified).toBe(true);
+
+		// Also verify session has emailVerified: true
+		const session = await testClient.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		expect(session.data?.user.emailVerified).toBe(true);
+
+		// Verify DB was actually updated
+		const updatedUser = await internalAdapter.findUserByEmail(email);
+		expect(updatedUser?.user.emailVerified).toBe(true);
 	});
 
 	it("should use custom generateToken function", async () => {
@@ -219,6 +330,55 @@ describe("magic link verify", async () => {
 	});
 });
 
+describe("magic link verify origin validation", async () => {
+	it("should reject untrusted callbackURL on verify", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+
+		const { customFetchImpl, testUser } = await getTestInstance({
+			trustedOrigins: ["http://localhost:3000"],
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+		const res = await client.magicLink.verify({
+			query: {
+				token,
+				callbackURL: "http://malicious.com",
+			},
+		});
+
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid callbackURL");
+	});
+});
+
 describe("magic link storeToken", async () => {
 	it("should store token in hashed", async () => {
 		let verificationEmail: VerificationEmail = {
@@ -226,21 +386,20 @@ describe("magic link storeToken", async () => {
 			token: "",
 			url: "",
 		};
-		const { auth, signInWithTestUser, client, testUser } =
-			await getTestInstance({
-				plugins: [
-					magicLink({
-						storeToken: "hashed",
-						sendMagicLink(data, request) {
-							verificationEmail = data;
-						},
-					}),
-				],
-			});
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: "hashed",
+					sendMagicLink(data, request) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 		const internalAdapter = (await auth.$context).internalAdapter;
 		const { headers } = await signInWithTestUser();
-		const response = await auth.api.signInMagicLink({
+		await auth.api.signInMagicLink({
 			body: {
 				email: testUser.email,
 			},
@@ -265,22 +424,21 @@ describe("magic link storeToken", async () => {
 			token: "",
 			url: "",
 		};
-		const { auth, signInWithTestUser, client, testUser } =
-			await getTestInstance({
-				plugins: [
-					magicLink({
-						storeToken: {
-							type: "custom-hasher",
-							async hash(token) {
-								return token + "hashed";
-							},
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			plugins: [
+				magicLink({
+					storeToken: {
+						type: "custom-hasher",
+						async hash(token) {
+							return token + "hashed";
 						},
-						sendMagicLink(data, request) {
-							verificationEmail = data;
-						},
-					}),
-				],
-			});
+					},
+					sendMagicLink(data, request) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
 
 		const internalAdapter = (await auth.$context).internalAdapter;
 		const { headers } = await signInWithTestUser();
@@ -301,5 +459,265 @@ describe("magic link storeToken", async () => {
 			headers,
 		});
 		expect(response2.status).toBe(true);
+	});
+});
+
+describe("magic link allowedAttempts", async () => {
+	it("should reject second verification attempt with default allowedAttempts (1)", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// First attempt should succeed
+		const headers = new Headers();
+		const response = await client.magicLink.verify({
+			query: {
+				token,
+			},
+			fetchOptions: {
+				onSuccess: sessionSetter(headers),
+			},
+		});
+
+		expect(response.data?.token).toBeDefined();
+		const betterAuthCookie = headers.get("set-cookie");
+		expect(betterAuthCookie).toBeDefined();
+
+		// Second attempt should be rejected with ATTEMPTS_EXCEEDED
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("should respect allowedAttempts value of 3", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: 3,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// 3 attempts should succeed
+		for (let i = 0; i < 3; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
+
+		// Fourth attempt should be rejected with ATTEMPTS_EXCEEDED
+		await client.magicLink.verify(
+			{
+				query: {
+					token,
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=ATTEMPTS_EXCEEDED");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("shouldn't verify magic link with an expired token on second attempt", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: 3,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// 2 attempts should succeed
+		for (let i = 0; i < 2; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
+
+		// Third attempt after expiration should be rejected with EXPIRED_TOKEN
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 60 * 5 + 1);
+		const _response = await client.magicLink.verify(
+			{
+				query: {
+					token,
+					callbackURL: "/callback",
+				},
+			},
+			{
+				onError(context) {
+					expect(context.response.status).toBe(302);
+					const location = context.response.headers.get("location");
+					expect(location).toContain("?error=EXPIRED_TOKEN");
+				},
+				onSuccess() {
+					throw new Error("Should not succeed");
+				},
+			},
+		);
+	});
+
+	it("should respect allowedAttempts value of Infinity", async () => {
+		let verificationEmail: VerificationEmail = {
+			email: "",
+			token: "",
+			url: "",
+		};
+		const { customFetchImpl, testUser, sessionSetter } = await getTestInstance({
+			plugins: [
+				magicLink({
+					allowedAttempts: Infinity,
+					async sendMagicLink(data) {
+						verificationEmail = data;
+					},
+				}),
+			],
+		});
+
+		const client = createAuthClient({
+			plugins: [magicLinkClient()],
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+			basePath: "/api/auth",
+		});
+
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+
+		const token =
+			new URL(verificationEmail.url).searchParams.get("token") || "";
+
+		// verify that at least 10 attempts succeed
+		for (let i = 0; i < 10; i++) {
+			const headers = new Headers();
+			const response = await client.magicLink.verify({
+				query: {
+					token,
+				},
+				fetchOptions: {
+					onSuccess: sessionSetter(headers),
+				},
+			});
+			expect(response.data?.token).toBeDefined();
+			const betterAuthCookie = headers.get("set-cookie");
+			expect(betterAuthCookie).toBeDefined();
+		}
 	});
 });

@@ -1,5 +1,5 @@
+import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { magicLink } from ".";
-import type { BetterAuthClientPlugin } from "../../client/types";
 
 export const magicLinkClient = () => {
 	return {

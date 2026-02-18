@@ -1,25 +1,26 @@
 "use client";
 import { Check, Copy } from "lucide-react";
-import {
+import type {
 	ButtonHTMLAttributes,
-	type ComponentProps,
+	ComponentProps,
+	HTMLAttributes,
+	ReactElement,
+	ReactNode,
+	RefObject,
+} from "react";
+import {
 	createContext,
 	forwardRef,
-	type HTMLAttributes,
-	ReactElement,
-	type ReactNode,
-	type RefObject,
 	useCallback,
 	useContext,
 	useMemo,
 	useRef,
 } from "react";
-import { cn } from "@/lib/utils";
-import { useCopyButton } from "./use-copy-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { mergeRefs } from "@/lib/utils";
+import { cn, mergeRefs } from "@/lib/utils";
 import { ScrollArea, ScrollBar, ScrollViewport } from "./scroll-area";
+import { useCopyButton } from "./use-copy-button";
 
 export interface CodeBlockProps extends ComponentProps<"figure"> {
 	/**
@@ -234,8 +235,6 @@ export function CodeBlockTabs({ ref, ...props }: ComponentProps<typeof Tabs>) {
 	);
 }
 export function CodeBlockTabsList(props: ComponentProps<typeof TabsList>) {
-	const { containerRef, nested } = useContext(TabsContext)!;
-
 	return (
 		<TabsList
 			{...props}

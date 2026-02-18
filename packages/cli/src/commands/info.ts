@@ -1,9 +1,9 @@
-import { Command } from "commander";
-import os from "os";
-import { execSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import path from "path";
+import { execSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import chalk from "chalk";
+import { Command } from "commander";
 import { getConfig } from "../utils/get-config";
 import { getPackageInfo } from "../utils/get-package-info";
 
@@ -83,7 +83,7 @@ function getFrameworkInfo(projectRoot: string) {
 			express: deps["express"],
 			fastify: deps["fastify"],
 			hono: deps["hono"],
-			remix: deps["@remix-run/react"],
+			"react-router": deps["react-router"],
 			astro: deps["astro"],
 			solid: deps["solid-js"],
 			qwik: deps["@builder.io/qwik"],
@@ -328,7 +328,7 @@ async function getBetterAuthInfo(
 			const config = await getConfig({
 				cwd: projectRoot,
 				configPath,
-				shouldThrowOnError: false,
+				shouldThrowOnError: true,
 			});
 			const packageInfo = await getPackageInfo();
 			const betterAuthVersion =

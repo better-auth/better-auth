@@ -1,32 +1,31 @@
-import { blogs } from "@/lib/source";
-import { notFound } from "next/navigation";
-import { absoluteUrl, formatDate } from "@/lib/utils";
-import DatabaseTable from "@/components/mdx/database-tables";
-import { cn } from "@/lib/utils";
-import { Step, Steps } from "fumadocs-ui/components/steps";
-import { Tab, Tabs } from "fumadocs-ui/components/tabs";
-import { GenerateSecret } from "@/components/generate-secret";
-import { AnimatePresence } from "@/components/ui/fade-in";
-import { TypeTable } from "fumadocs-ui/components/type-table";
-import { Features } from "@/components/blocks/features";
-import { ForkButton } from "@/components/fork-button";
-import Link from "next/link";
-import defaultMdxComponents from "fumadocs-ui/mdx";
-import { File, Folder, Files } from "fumadocs-ui/components/files";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Pre } from "fumadocs-ui/components/codeblock";
+import { File, Files, Folder } from "fumadocs-ui/components/files";
+import { Step, Steps } from "fumadocs-ui/components/steps";
+import { Tab, Tabs } from "fumadocs-ui/components/tabs";
+import { TypeTable } from "fumadocs-ui/components/type-table";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import { ArrowLeftIcon, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { Features } from "@/components/blocks/features";
+import { Contributors } from "@/components/contributors";
+import { ForkButton } from "@/components/fork-button";
+import { GenerateSecret } from "@/components/generate-secret";
+import DatabaseTable from "@/components/mdx/database-tables";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Callout } from "@/components/ui/callout";
+import { AnimatePresence } from "@/components/ui/fade-in";
+import { blogs } from "@/lib/source";
+import { absoluteUrl, cn, formatDate } from "@/lib/utils";
+import { BlogPage } from "../_components/blog-list";
 import { Glow } from "../_components/default-changelog";
 import { XIcon } from "../_components/icons";
 import { StarField } from "../_components/stat-field";
-import Image from "next/image";
-import { BlogPage } from "../_components/blog-list";
-import { Callout } from "@/components/ui/callout";
-import { ArrowLeftIcon, ExternalLink } from "lucide-react";
 import { Support } from "../_components/support";
 
 const metaTitle = "Blogs";
 const metaDescription = "Latest changes , fixes and updates.";
-const ogImage = "https://better-auth.com/release-og/changelog-og.png";
 
 export default async function Page({
 	params,
@@ -59,15 +58,17 @@ export default async function Page({
 					</p>
 				)}
 				<div className="my-2 flex items-center justify-center gap-3">
-					{page.data?.author?.avatar && (
-						<Image
-							src={page.data.author.avatar}
-							alt={page.data?.author?.name ?? "Author"}
-							width={40}
-							height={40}
-							className="rounded-full border"
-						/>
-					)}
+					<div>
+						<Avatar>
+							<AvatarImage
+								src={page.data?.author?.avatar}
+								alt={page.data?.author?.name ?? "Author"}
+							/>
+							<AvatarFallback>
+								{page.data?.author?.name?.charAt(0)?.toUpperCase() ?? ""}
+							</AvatarFallback>
+						</Avatar>
+					</div>
 					<div className="flex items-center gap-2 text-sm text-muted-foreground">
 						{page.data?.author?.name && (
 							<span className="font-medium text-foreground">
@@ -179,6 +180,7 @@ export default async function Page({
 							DatabaseTable,
 							Accordion,
 							Accordions,
+							Contributors,
 							Callout: ({
 								children,
 								type,
@@ -207,9 +209,14 @@ export async function generateMetadata({
 	params: Promise<{ slug?: string[] }>;
 }) {
 	const { slug } = await params;
+	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
+	const ogImage = `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/release-og/blogs.png`;
+
 	if (!slug) {
 		return {
-			metadataBase: new URL("https://better-auth.com/blogs"),
+			metadataBase: new URL(
+				`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/blogs`,
+			),
 			title: metaTitle,
 			description: metaDescription,
 			openGraph: {
@@ -220,7 +227,7 @@ export async function generateMetadata({
 						url: ogImage,
 					},
 				],
-				url: "https://better-auth.com/blogs",
+				url: `${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}/blogs`,
 			},
 			twitter: {
 				card: "summary_large_image",
@@ -232,7 +239,6 @@ export async function generateMetadata({
 	}
 	const page = blogs.getPage(slug);
 	if (page == null) notFound();
-	const baseUrl = process.env.NEXT_PUBLIC_URL || process.env.VERCEL_URL;
 	const url = new URL(
 		`${baseUrl?.startsWith("http") ? baseUrl : `https://${baseUrl}`}${
 			page.data?.image

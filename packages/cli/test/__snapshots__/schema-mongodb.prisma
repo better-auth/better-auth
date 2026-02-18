@@ -15,7 +15,7 @@ model User {
   emailVerified    Boolean     @default(false)
   image            String?
   createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @default(now()) @updatedAt
+  updatedAt        DateTime    @updatedAt
   twoFactorEnabled Boolean?    @default(false)
   username         String?
   displayUsername  String?
@@ -40,6 +40,7 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
+  @@index([userId])
   @@map("session")
 }
 
@@ -59,6 +60,7 @@ model Account {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  @@index([userId])
   @@map("account")
 }
 
@@ -68,8 +70,9 @@ model Verification {
   value      String
   expiresAt  DateTime
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt
+  updatedAt  DateTime @updatedAt
 
+  @@index([identifier])
   @@map("verification")
 }
 
@@ -80,5 +83,7 @@ model TwoFactor {
   userId      String
   user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@index([secret])
+  @@index([userId])
   @@map("twoFactor")
 }

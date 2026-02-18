@@ -136,13 +136,13 @@ export const auth = betterAuth({
 If you're using a custom database adapter, generate the schema:
 
 ```sh
-npx @better-auth/cli generate
+npx auth generate
 ```
 
 or if you're using the default adapter, you can use the following command:
 
 ```sh
-npx @better-auth/cli migrate
+npx auth migrate
 ```
 </Step>
 <Step>
@@ -555,6 +555,39 @@ Important considerations:
 5. The script handles bcrypt password hashes by default. For custom password hashing algorithms, you'll need to modify the `migratePassword` function
 </Callout>
 
+</Step>
+
+<Step>
+ ### Change password hashing algorithm
+
+ By default, Better Auth uses the `scrypt` algorithm to hash passwords. Since Auth0 uses `bcrypt`, you'll need to configure Better Auth to use bcrypt for password verification.
+
+ First, install bcrypt:
+
+ ```bash
+ npm install bcrypt
+ npm install -D @types/bcrypt
+ ```
+
+ Then update your auth configuration:
+
+ ```ts title="auth.ts"
+ import { betterAuth } from "better-auth";
+ import bcrypt from "bcrypt";
+ 
+ export const auth = betterAuth({
+    emailAndPassword: {
+        password: {
+            hash: async (password) => {
+                return await bcrypt.hash(password, 10);
+            },
+            verify: async ({ hash, password }) => {
+                return await bcrypt.compare(password, hash);
+            }
+        }
+    }
+ })
+ ```
 </Step>
 <Step>
 ### Verify the migration

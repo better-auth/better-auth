@@ -41,11 +41,11 @@ The Email OTP plugin allows user to sign in, verify their email, or reset their 
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { emailOTPClient } from "better-auth/client/plugins"
+    import { emailOTPClient } from "better-auth/client/plugins" // [!code highlight]
     
     export const authClient = createAuthClient({
         plugins: [
-            emailOTPClient()
+            emailOTPClient() // [!code highlight]
         ]
     })
     ```
@@ -121,19 +121,27 @@ Once the user provides the OTP, you can sign in the user using the `signIn.email
 ```ts
 type signInEmailOTP = {
     /**
-     * Email address to sign in. 
+     * Email address to sign in.
      */
     email: string = "user@example.com"
     /**
-     * OTP sent to the email. 
+     * OTP sent to the email.
      */
     otp: string = "123456"
+    /**
+     * User display name. Only used when the user is registering for the first time.
+     */
+    name?: string = "John Doe"
+    /**
+     * User profile image URL. Only used when the user is registering for the first time.
+     */
+    image?: string = "https://example.com/image.png"
 }
 ```
 </APIMethod>
 
 <Callout>
-If the user is not registered, they'll be automatically registered. If you want to prevent this, you can pass `disableSignUp` as `true` in the [options](#options).
+If the user is not registered, they'll be automatically registered. Configured [additional fields](/docs/concepts/typescript#additional-fields) are also accepted for new users. To prevent automatic sign-up, pass `disableSignUp` as `true` in the [options](#options).
 </Callout>
 
 ### Verify Email with OTP
@@ -174,18 +182,22 @@ type verifyEmailOTP = {
 
 ### Reset Password with OTP
 
-To reset the user's password with OTP, use the `forgetPassword.emailOTP()` method to send a "forget-password" OTP to the user's email address.
+To reset the user's password with OTP, use the `emailOtp.requestPasswordReset()` method to send a "forget-password" OTP to the user's email address.
 
-<APIMethod path="/forget-password/email-otp" method="POST">
+<APIMethod path="/email-otp/request-password-reset" method="POST">
 ```ts
-type forgetPasswordEmailOTP = {
+type requestPasswordResetEmailOTP = {
     /**
-     * Email address to send the OTP. 
+     * Email address to send the OTP.
      */
     email: string = "user@example.com"
 }
 ```
 </APIMethod>
+
+<Callout type="warn">
+The `/forget-password/email-otp` endpoint is deprecated. Please use `/email-otp/request-password-reset` instead.
+</Callout>
 
 Once the user provides the OTP, use the `checkVerificationOtp()` method to check if it's valid (optional).
 
@@ -235,6 +247,7 @@ To override the default email verification, pass `overrideDefaultEmailVerificati
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth";
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
   plugins: [
@@ -256,12 +269,17 @@ export const auth = betterAuth({
   - `otp`: The OTP to send.
   - `type`: The type of OTP to send. Can be "sign-in", "email-verification", or "forget-password".
 
+  <Callout type="warn">
+  It is recommended to not await the email sending to avoid timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent.
+  </Callout>
+
 - `otpLength`: The length of the OTP. Defaults to `6`.
 
 - `expiresIn`: The expiry time of the OTP in seconds. Defaults to `300` seconds.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -283,6 +301,7 @@ export const auth = betterAuth({
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { emailOTP } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [
@@ -296,7 +315,7 @@ export const auth = betterAuth({
 
 When the maximum attempts are exceeded, the `verifyOTP`, `signIn.emailOtp`, `verifyEmail`, and `resetPassword` methods will return an error with code `TOO_MANY_ATTEMPTS`.
 
-- `storeOTP`: The method to store the OTP in your database, wether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
+- `storeOTP`: The method to store the OTP in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 <Callout>
 Note: This will not affect the OTP sent to the user, it will only affect the OTP stored in your database.

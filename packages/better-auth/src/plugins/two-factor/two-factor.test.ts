@@ -1,19 +1,24 @@
+import { createOTP } from "@better-auth/utils/otp";
 import { describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
-import type { TwoFactorTable, UserWithTwoFactor } from "./types";
-import { DEFAULT_SECRET } from "../../utils/constants";
 import { symmetricDecrypt } from "../../crypto";
 import { convertSetCookieToCookie } from "../../test-utils/headers";
-import { createOTP } from "@better-auth/utils/otp";
+import { getTestInstance } from "../../test-utils/test-instance";
+import { DEFAULT_SECRET } from "../../utils/constants";
+import { TWO_FACTOR_ERROR_CODES, twoFactor, twoFactorClient } from ".";
+import type { TwoFactorTable, UserWithTwoFactor } from "./types";
 
 describe("two factor", async () => {
 	let OTP = "";
 	const { testUser, customFetchImpl, sessionSetter, db, auth } =
 		await getTestInstance({
 			secret: DEFAULT_SECRET,
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
 			plugins: [
 				twoFactor({
 					otpOptions: {
@@ -149,6 +154,7 @@ describe("two factor", async () => {
 						context.response.headers.get("Set-Cookie") || "",
 					);
 					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					expect(parsed.get("better-auth.session_data")?.value).toBe("");
 					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
 					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
 					headers.append(
@@ -193,14 +199,65 @@ describe("two factor", async () => {
 	});
 
 	it("should fail if two factor cookie is missing", async () => {
+		const headers = new Headers();
+		const res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			rememberMe: false,
+			fetchOptions: {
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.session_token")?.value).toBe("");
+					// 2FA Cookie is in response, but we are not setting it in headers
+					expect(parsed.get("better-auth.two_factor")?.value).toBeDefined();
+					expect(parsed.get("better-auth.dont_remember")?.value).toBeDefined();
+					headers.append(
+						"cookie",
+						`better-auth.dont_remember=${
+							parsed.get("better-auth.dont_remember")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect((res.data as any)?.twoFactorRedirect).toBe(true);
+		await client.twoFactor.sendOtp({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		const verifyRes = await client.twoFactor.verifyOtp({
+			code: OTP,
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					// Session should not be defined when two factor cookie is missing
+					expect(
+						parsed.get("better-auth.session_token")?.value,
+					).not.toBeDefined();
+				},
+			},
+		});
+		expect(verifyRes.error?.message).toBe(
+			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE.message,
+		);
+	});
+
+	it("should fail when passing invalid TOTP code with expected error code", async () => {
 		const res = await client.twoFactor.verifyTotp({
-			code: "123456",
+			code: "invalid-code",
 			fetchOptions: {
 				headers,
 			},
 		});
 		expect(res.error?.message).toBe(
-			TWO_FACTOR_ERROR_CODES.INVALID_TWO_FACTOR_COOKIE,
+			TWO_FACTOR_ERROR_CODES.INVALID_CODE.message,
 		);
 	});
 
@@ -267,10 +324,30 @@ describe("two factor", async () => {
 		expect(currentBackupCodes.backupCodes).toBeDefined();
 		expect(currentBackupCodes.backupCodes).not.toContain(backupCode);
 
+		// Start a new 2FA session to test invalid backup code
+		const headers2 = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					headers2.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
 		const res = await client.twoFactor.verifyBackupCode({
 			code: "invalid-code",
 			fetchOptions: {
-				headers,
+				headers: headers2,
 				onSuccess(context) {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
@@ -303,7 +380,7 @@ describe("two factor", async () => {
 			},
 		});
 		expect((res.data as any)?.twoFactorRedirect).toBe(true);
-		const otpRes = await client.twoFactor.sendOtp({
+		await client.twoFactor.sendOtp({
 			fetchOptions: {
 				headers,
 				onSuccess(context) {
@@ -329,6 +406,7 @@ describe("two factor", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("Set-Cookie") || "",
 					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
 					newHeaders.set(
 						"cookie",
 						`better-auth.trust_device=${
@@ -339,14 +417,48 @@ describe("two factor", async () => {
 			},
 		});
 
+		const updatedHeaders = new Headers();
 		const signInRes = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: newHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					expect(parsed.get("better-auth.trust_device")?.value).toBeDefined();
+					updatedHeaders.set(
+						"cookie",
+						`better-auth.trust_device=${
+							parsed.get("better-auth.trust_device")?.value
+						}`,
+					);
+				},
+			},
+		});
+		expect(signInRes.data?.user).toBeDefined();
+
+		// Old trust device cookie should no longer work because the
+		// server-side record was rotated on sign-in
+		const signIn2Res = await client.signIn.email({
 			email: testUser.email,
 			password: testUser.password,
 			fetchOptions: {
 				headers: newHeaders,
 			},
 		});
-		expect(signInRes.data?.user).toBeDefined();
+		expect((signIn2Res.data as any)?.twoFactorRedirect).toBe(true);
+
+		// Should work with the refreshed (rotated) headers
+		const signIn3Res = await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				headers: updatedHeaders,
+			},
+		});
+		expect(signIn3Res.data?.user).toBeDefined();
 	});
 
 	it("should limit OTP verification attempts", async () => {
@@ -536,5 +648,956 @@ describe("two factor auth API", async () => {
 			headers,
 		});
 		expect(session?.user.twoFactorEnabled).toBe(false);
+	});
+});
+
+describe("view backup codes", async () => {
+	const sendOTP = vi.fn();
+	const { auth, signInWithTestUser, testUser, customFetchImpl } =
+		await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							sendOTP(otp);
+						},
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+	let { headers } = await signInWithTestUser();
+
+	const session = await auth.api.getSession({ headers });
+	const userId = session?.user.id!;
+
+	const client = createAuthClient({
+		plugins: [twoFactorClient()],
+		fetchOptions: {
+			customFetchImpl,
+			baseURL: "http://localhost:3000/api/auth",
+		},
+	});
+
+	it("should return parsed array of backup codes, not JSON string", async () => {
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		const enableJson = (await enableRes.json()) as {
+			backupCodes: string[];
+		};
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(enableJson.backupCodes);
+		expect(viewResult.status).toBe(true);
+	});
+
+	it("should return array after generating new backup codes", async () => {
+		const generateResult = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+
+		expect(generateResult.backupCodes).toBeDefined();
+		expect(generateResult.backupCodes.length).toBe(10);
+
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(viewResult.status).toBe(true);
+		expect(typeof viewResult.backupCodes).not.toBe("string");
+		expect(Array.isArray(viewResult.backupCodes)).toBe(true);
+		expect(viewResult.backupCodes.length).toBe(10);
+		viewResult.backupCodes.forEach((code) => {
+			expect(typeof code).toBe("string");
+			expect(code.length).toBeGreaterThan(0);
+		});
+		expect(viewResult.backupCodes).toEqual(generateResult.backupCodes);
+	});
+
+	it("should successfully regenerate backup codes multiple times", async () => {
+		// First generation
+		const firstGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(firstGeneration.backupCodes).toBeDefined();
+		expect(firstGeneration.backupCodes.length).toBe(10);
+		expect(firstGeneration.status).toBe(true);
+
+		// Second generation - this should update the existing record using id
+		const secondGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(secondGeneration.backupCodes).toBeDefined();
+		expect(secondGeneration.backupCodes.length).toBe(10);
+		expect(secondGeneration.status).toBe(true);
+
+		// Verify the codes are different
+		expect(secondGeneration.backupCodes).not.toEqual(
+			firstGeneration.backupCodes,
+		);
+
+		// Third generation - ensure it still works
+		const thirdGeneration = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		expect(thirdGeneration.backupCodes).toBeDefined();
+		expect(thirdGeneration.backupCodes.length).toBe(10);
+		expect(thirdGeneration.status).toBe(true);
+
+		// Verify the latest codes are in the database
+		const viewResult = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+		expect(viewResult.backupCodes).toEqual(thirdGeneration.backupCodes);
+	});
+
+	it("should correctly update backup codes after verification", async () => {
+		// Generate fresh backup codes for this test
+		const generation = await auth.api.generateBackupCodes({
+			body: { password: testUser.password },
+			headers,
+		});
+		const backupCodes = generation.backupCodes;
+		expect(backupCodes.length).toBe(10);
+
+		// Sign in to get the two-factor cookie (similar to existing test pattern)
+		const verifyHeaders = new Headers();
+		await client.signIn.email({
+			email: testUser.email,
+			password: testUser.password,
+			fetchOptions: {
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					verifyHeaders.append(
+						"cookie",
+						`better-auth.two_factor=${
+							parsed.get("better-auth.two_factor")?.value
+						}`,
+					);
+				},
+			},
+		});
+
+		// Use the first backup code
+		const usedBackupCode = backupCodes[0]!;
+		let sessionToken = "";
+		await client.twoFactor.verifyBackupCode({
+			code: usedBackupCode,
+			fetchOptions: {
+				headers: verifyHeaders,
+				onSuccess(context) {
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("Set-Cookie") || "",
+					);
+					sessionToken = parsed.get("better-auth.session_token")?.value || "";
+				},
+			},
+		});
+
+		// Verify we got a session token
+		expect(sessionToken.length).toBeGreaterThan(0);
+
+		// Verify the used backup code was removed from the database
+		const updatedCodes = await auth.api.viewBackupCodes({
+			body: { userId },
+		});
+
+		expect(updatedCodes.backupCodes).toBeDefined();
+		expect(updatedCodes.backupCodes.length).toBe(9); // One code was used
+		expect(updatedCodes.backupCodes).not.toContain(usedBackupCode);
+
+		// Verify remaining codes are still valid
+		backupCodes.slice(1).forEach((code) => {
+			expect(updatedCodes.backupCodes).toContain(code);
+		});
+	});
+
+	it("should not expose viewBackupCodes to client", async () => {
+		const response = await customFetchImpl(
+			"http://localhost:3000/api/auth/two-factor/view-backup-codes",
+			{
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ userId }),
+			},
+		);
+		expect(response.status).toBe(404);
+	});
+});
+
+describe("trust device server-side validation", async () => {
+	let OTP = "";
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						OTP = otp;
+					},
+				},
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should force 2FA when server-side trust record is expired", async () => {
+		// Enable 2FA
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// Send and verify OTP with trustDevice
+		await auth.api.sendTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {},
+		});
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {
+				code: OTP,
+				trustDevice: true,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+
+		// Extract the trust device cookie
+		const parsed = parseSetCookieHeader(
+			verifyRes.headers.get("Set-Cookie") || "",
+		);
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
+		expect(trustDeviceCookieValue).toBeDefined();
+
+		// The cookie value is signed: "value.signature" where value is "token!trustIdentifier"
+		// Extract the unsigned value (everything before the last dot)
+		const lastDotIndex = trustDeviceCookieValue!.lastIndexOf(".");
+		const unsignedValue = trustDeviceCookieValue!.substring(0, lastDotIndex);
+		const [, trustIdentifier] = unsignedValue.split("!");
+		expect(trustIdentifier).toBeDefined();
+
+		const verificationRecord = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationRecord).toBeDefined();
+
+		// Manually expire the record by setting expiresAt to the past
+		await db.update({
+			model: "verification",
+			where: [{ field: "id", value: verificationRecord!.id }],
+			update: {
+				expiresAt: new Date(Date.now() - 1000), // 1 second ago
+			},
+		});
+
+		// Now sign in with the trust device cookie - should require 2FA again
+		const trustHeaders = new Headers();
+		trustHeaders.set(
+			"cookie",
+			`better-auth.trust_device=${trustDeviceCookieValue}`,
+		);
+
+		const signIn2Res = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers: trustHeaders,
+			asResponse: true,
+		});
+
+		const signIn2Json = (await signIn2Res.json()) as {
+			twoFactorRedirect?: boolean;
+		};
+		expect(signIn2Json.twoFactorRedirect).toBe(true);
+
+		// The expired trust cookie should have been cleared
+		const signIn2Parsed = parseSetCookieHeader(
+			signIn2Res.headers.get("Set-Cookie") || "",
+		);
+		const clearedTrustCookie = signIn2Parsed.get("better-auth.trust_device");
+		expect(clearedTrustCookie?.value).toBe("");
+	});
+
+	it("should preserve trust device after sign-out", async () => {
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// Send and verify OTP with trustDevice
+		await auth.api.sendTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {},
+		});
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {
+				code: OTP,
+				trustDevice: true,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		const sessionHeaders = convertSetCookieToCookie(verifyRes.headers);
+
+		// Extract the trust device cookie
+		const parsed = parseSetCookieHeader(
+			verifyRes.headers.get("Set-Cookie") || "",
+		);
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
+		expect(trustDeviceCookieValue).toBeDefined();
+
+		// Extract trust identifier (cookie is signed: "value.signature")
+		const lastDotIndex = trustDeviceCookieValue!.lastIndexOf(".");
+		const unsignedValue = trustDeviceCookieValue!.substring(0, lastDotIndex);
+		const [, trustIdentifier] = unsignedValue.split("!");
+		expect(trustIdentifier).toBeDefined();
+
+		const verificationBefore = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationBefore).toBeDefined();
+
+		// Sign out
+		const signOutRes = await auth.api.signOut({
+			headers: sessionHeaders,
+			asResponse: true,
+		});
+		expect(signOutRes.status).toBe(200);
+
+		// Verify the trust device cookie was NOT cleared (trust survives sign-out)
+		const signOutParsed = parseSetCookieHeader(
+			signOutRes.headers.get("Set-Cookie") || "",
+		);
+		const trustCookieAfterSignOut = signOutParsed.get(
+			"better-auth.trust_device",
+		);
+		// Cookie should either not be set (unchanged) or still have its value
+		expect(trustCookieAfterSignOut?.value || "preserved").not.toBe("");
+
+		// Verify the DB record still exists
+		const verificationAfter = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationAfter).toBeDefined();
+
+		// Sign in again with the trust device cookie - should skip 2FA
+		const trustHeaders = new Headers();
+		trustHeaders.set(
+			"cookie",
+			`better-auth.trust_device=${trustDeviceCookieValue}`,
+		);
+
+		const signIn2Res = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			headers: trustHeaders,
+			asResponse: true,
+		});
+
+		const signIn2Json = (await signIn2Res.json()) as {
+			user?: { email: string };
+		};
+		// Should NOT require 2FA - trust device survived sign-out
+		expect(signIn2Json.user?.email).toBe(testUser.email);
+	});
+
+	it("should revoke trust device when disabling 2FA", async () => {
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// Send and verify OTP with trustDevice
+		await auth.api.sendTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {},
+		});
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {
+				code: OTP,
+				trustDevice: true,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+		const sessionHeaders = convertSetCookieToCookie(verifyRes.headers);
+
+		// Extract the trust device cookie
+		const parsed = parseSetCookieHeader(
+			verifyRes.headers.get("Set-Cookie") || "",
+		);
+		const trustDeviceCookieValue = parsed.get(
+			"better-auth.trust_device",
+		)?.value;
+		expect(trustDeviceCookieValue).toBeDefined();
+
+		// Extract trust identifier (cookie is signed: "value.signature")
+		const lastDotIndex = trustDeviceCookieValue!.lastIndexOf(".");
+		const unsignedValue = trustDeviceCookieValue!.substring(0, lastDotIndex);
+		const [, trustIdentifier] = unsignedValue.split("!");
+		expect(trustIdentifier).toBeDefined();
+
+		const verificationBefore = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationBefore).toBeDefined();
+
+		// Disable 2FA
+		const disableRes = await auth.api.disableTwoFactor({
+			headers: sessionHeaders,
+			body: {
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		expect(disableRes.status).toBe(200);
+
+		// Verify the trust device cookie was cleared
+		const disableParsed = parseSetCookieHeader(
+			disableRes.headers.get("Set-Cookie") || "",
+		);
+		const clearedCookie = disableParsed.get("better-auth.trust_device");
+		expect(clearedCookie?.value).toBe("");
+
+		// Verify the DB record was deleted
+		const verificationAfter = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationAfter).toBeNull();
+	});
+});
+
+describe("trustDeviceMaxAge", async () => {
+	const customMaxAge = 7 * 24 * 60 * 60; // 7 days instead of default 30
+
+	let OTP = "";
+	const { auth, signInWithTestUser, testUser, db } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				otpOptions: {
+					sendOTP({ otp }) {
+						OTP = otp;
+					},
+				},
+				skipVerificationOnEnable: true,
+				trustDeviceMaxAge: customMaxAge,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should use custom trustDeviceMaxAge for the trust device cookie", async () => {
+		// Enable 2FA
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// Send and verify OTP with trustDevice
+		await auth.api.sendTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {},
+		});
+
+		const verifyRes = await auth.api.verifyTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {
+				code: OTP,
+				trustDevice: true,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+
+		// Verify the trust device cookie has the custom max-age
+		const parsed = parseSetCookieHeader(
+			verifyRes.headers.get("Set-Cookie") || "",
+		);
+		const trustDeviceCookie = parsed.get("better-auth.trust_device");
+		expect(trustDeviceCookie).toBeDefined();
+		expect(Number(trustDeviceCookie?.["max-age"])).toBe(customMaxAge);
+
+		// Also verify the DB record has the correct expiration
+		const trustDeviceCookieValue = trustDeviceCookie?.value;
+		// Extract trust identifier (cookie is signed: "value.signature")
+		const lastDotIndex = trustDeviceCookieValue!.lastIndexOf(".");
+		const unsignedValue = trustDeviceCookieValue!.substring(0, lastDotIndex);
+		const [, trustIdentifier] = unsignedValue.split("!");
+		expect(trustIdentifier).toBeDefined();
+
+		const verificationRecord = await db.findOne<{
+			id: string;
+			identifier: string;
+			value: string;
+			expiresAt: Date;
+		}>({
+			model: "verification",
+			where: [{ field: "identifier", value: trustIdentifier! }],
+		});
+		expect(verificationRecord).toBeDefined();
+
+		// Expiration should be approximately customMaxAge seconds from now
+		const expiresAt = new Date(verificationRecord!.expiresAt).getTime();
+		const expectedExpiry = Date.now() + customMaxAge * 1000;
+		// Allow 5 second tolerance for test execution time
+		expect(Math.abs(expiresAt - expectedExpiry)).toBeLessThan(5000);
+	});
+
+	it("should use default 30 days when trustDeviceMaxAge is not specified", async () => {
+		let defaultOTP = "";
+		const { auth: authDefault, signInWithTestUser: signInDefault } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						otpOptions: {
+							sendOTP({ otp }) {
+								defaultOTP = otp;
+							},
+						},
+						skipVerificationOnEnable: true,
+					}),
+				],
+			});
+
+		const { headers: defaultHeaders } = await signInDefault();
+
+		// Enable 2FA
+		await authDefault.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: defaultHeaders,
+			asResponse: true,
+		});
+
+		// Sign in to trigger 2FA
+		const signInRes = await authDefault.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+		const twoFactorHeaders = convertSetCookieToCookie(signInRes.headers);
+
+		// Send and verify OTP with trustDevice
+		await authDefault.api.sendTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {},
+		});
+
+		const verifyRes = await authDefault.api.verifyTwoFactorOTP({
+			headers: twoFactorHeaders,
+			body: {
+				code: defaultOTP,
+				trustDevice: true,
+			},
+			asResponse: true,
+		});
+		expect(verifyRes.status).toBe(200);
+
+		// Verify the trust device cookie has the default max-age (30 days)
+		const parsed = parseSetCookieHeader(
+			verifyRes.headers.get("Set-Cookie") || "",
+		);
+		const trustDeviceCookie = parsed.get("better-auth.trust_device");
+		expect(trustDeviceCookie).toBeDefined();
+		// Default is 30 days = 30 * 24 * 60 * 60 = 2592000 seconds
+		expect(Number(trustDeviceCookie?.["max-age"])).toBe(30 * 24 * 60 * 60);
+	});
+});
+
+describe("twoFactorCookieMaxAge", async () => {
+	const customMaxAge = 15 * 60; // 15 minutes
+	const { auth, signInWithTestUser, testUser } = await getTestInstance({
+		secret: DEFAULT_SECRET,
+		plugins: [
+			twoFactor({
+				twoFactorCookieMaxAge: customMaxAge,
+				skipVerificationOnEnable: true,
+			}),
+		],
+	});
+
+	let { headers } = await signInWithTestUser();
+
+	it("should use custom twoFactorCookieMaxAge for the two-factor cookie", async () => {
+		// Enable 2FA
+		const enableRes = await auth.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+		headers = convertSetCookieToCookie(enableRes.headers);
+
+		// Sign in to trigger 2FA
+		const signInRes = await auth.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		expect(Number(twoFactorCookie?.["max-age"])).toBe(customMaxAge);
+	});
+
+	it("should use default 10 minutes when twoFactorCookieMaxAge is not specified", async () => {
+		const { auth: authDefault, signInWithTestUser: signInDefault } =
+			await getTestInstance({
+				secret: DEFAULT_SECRET,
+				plugins: [
+					twoFactor({
+						skipVerificationOnEnable: true,
+					}),
+				],
+			});
+
+		const { headers: defaultHeaders } = await signInDefault();
+
+		// Enable 2FA
+		const enableRes = await authDefault.api.enableTwoFactor({
+			body: { password: testUser.password },
+			headers: defaultHeaders,
+			asResponse: true,
+		});
+		expect(enableRes.status).toBe(200);
+
+		// Sign in to trigger 2FA
+		const signInRes = await authDefault.api.signInEmail({
+			body: {
+				email: testUser.email,
+				password: testUser.password,
+			},
+			asResponse: true,
+		});
+
+		const parsed = parseSetCookieHeader(
+			signInRes.headers.get("Set-Cookie") || "",
+		);
+		const twoFactorCookie = parsed.get("better-auth.two_factor");
+		expect(twoFactorCookie).toBeDefined();
+		// Default is 10 minutes = 600 seconds
+		expect(Number(twoFactorCookie?.["max-age"])).toBe(600);
+	});
+});
+
+describe("OTP storage modes", async () => {
+	describe("hashed OTP storage", async () => {
+		let OTP = "";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: "hashed",
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP when stored as hashed", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed with the correct code
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
+
+		it("should reject invalid OTP when stored as hashed", async () => {
+			// Sign in to trigger 2FA again
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			const newHeaders = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers: newHeaders,
+				body: {},
+			});
+
+			// Verify with wrong OTP should fail
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers: newHeaders,
+				body: {
+					code: "000000",
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(401);
+			const json = (await verifyRes.json()) as { message: string };
+			expect(json.message).toBe(TWO_FACTOR_ERROR_CODES.INVALID_CODE.message);
+		});
+	});
+
+	describe("encrypted OTP storage", async () => {
+		let OTP = "";
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: "encrypted",
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP when stored as encrypted", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
+	});
+
+	describe("custom hash function OTP storage", async () => {
+		let OTP = "";
+		const customHashFn = async (token: string) => {
+			// Simple custom hash for testing (just reverse + prefix)
+			return `custom_${token.split("").reverse().join("")}`;
+		};
+
+		const { auth, signInWithTestUser, testUser } = await getTestInstance({
+			secret: DEFAULT_SECRET,
+			plugins: [
+				twoFactor({
+					otpOptions: {
+						sendOTP({ otp }) {
+							OTP = otp;
+						},
+						storeOTP: { hash: customHashFn },
+					},
+					skipVerificationOnEnable: true,
+				}),
+			],
+		});
+
+		let { headers } = await signInWithTestUser();
+
+		it("should verify OTP with custom hash function", async () => {
+			// Enable 2FA
+			const enableRes = await auth.api.enableTwoFactor({
+				body: { password: testUser.password },
+				headers,
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(enableRes.headers);
+
+			// Sign in to trigger 2FA
+			const signInRes = await auth.api.signInEmail({
+				body: {
+					email: testUser.email,
+					password: testUser.password,
+				},
+				asResponse: true,
+			});
+			headers = convertSetCookieToCookie(signInRes.headers);
+
+			// Send OTP
+			await auth.api.sendTwoFactorOTP({
+				headers,
+				body: {},
+			});
+			expect(OTP.length).toBe(6);
+
+			// Verify OTP should succeed
+			const verifyRes = await auth.api.verifyTwoFactorOTP({
+				headers,
+				body: {
+					code: OTP,
+				},
+				asResponse: true,
+			});
+			expect(verifyRes.status).toBe(200);
+		});
 	});
 });

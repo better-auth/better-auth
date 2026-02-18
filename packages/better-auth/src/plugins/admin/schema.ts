@@ -1,4 +1,4 @@
-import { type AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
 export const schema = {
 	user: {
@@ -34,6 +34,6 @@ export const schema = {
 			},
 		},
 	},
-} satisfies AuthPluginSchema;
+} satisfies BetterAuthPluginDBSchema;
 
 export type AdminSchema = typeof schema;

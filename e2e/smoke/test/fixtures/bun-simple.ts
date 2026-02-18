@@ -1,6 +1,6 @@
-import { betterAuth } from "better-auth";
 import Database from "bun:sqlite";
-import { getMigrations } from "better-auth/db";
+import { betterAuth } from "better-auth";
+import { getMigrations } from "better-auth/db/migration";
 
 const database = new Database(":memory:");
 
@@ -10,6 +10,9 @@ export const auth = betterAuth({
 	emailAndPassword: {
 		enabled: true,
 	},
+	trustedOrigins: [
+		"http://localhost:*", // Allow any localhost port for smoke tests
+	],
 	logger: {
 		level: "debug",
 	},

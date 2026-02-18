@@ -1,17 +1,16 @@
-import { type Session, type User } from "../../types";
-import { type InferOptionSchema } from "../../types";
-import { type AccessControl, type Role } from "../access";
-import { type AdminSchema } from "./schema";
+import type { InferOptionSchema, Session, User } from "../../types";
+import type { AccessControl, Role } from "../access";
+import type { AdminSchema } from "./schema";
 
 export interface UserWithRole extends User {
-	role?: string;
-	banned?: boolean | null;
-	banReason?: string | null;
-	banExpires?: Date | null;
+	role?: string | undefined;
+	banned: boolean | null;
+	banReason?: (string | null) | undefined;
+	banExpires?: (Date | null) | undefined;
 }
 
 export interface SessionWithImpersonatedBy extends Session {
-	impersonatedBy?: string;
+	impersonatedBy?: string | undefined;
 }
 
 export interface AdminOptions {
@@ -20,7 +19,7 @@ export interface AdminOptions {
 	 *
 	 * @default "user"
 	 */
-	defaultRole?: string;
+	defaultRole?: string | undefined;
 	/**
 	 * Roles that are considered admin roles.
 	 *
@@ -29,52 +28,60 @@ export interface AdminOptions {
 	 *
 	 * @default ["admin"]
 	 */
-	adminRoles?: string | string[];
+	adminRoles?: (string | string[]) | undefined;
 	/**
 	 * A default ban reason
 	 *
 	 * By default, no reason is provided
 	 */
-	defaultBanReason?: string;
+	defaultBanReason?: string | undefined;
 	/**
 	 * Number of seconds until the ban expires
 	 *
 	 * By default, the ban never expires
 	 */
-	defaultBanExpiresIn?: number;
+	defaultBanExpiresIn?: number | undefined;
 	/**
 	 * Duration of the impersonation session in seconds
 	 *
 	 * By default, the impersonation session lasts 1 hour
 	 */
-	impersonationSessionDuration?: number;
+	impersonationSessionDuration?: number | undefined;
 	/**
 	 * Custom schema for the admin plugin
 	 */
-	schema?: InferOptionSchema<AdminSchema>;
+	schema?: InferOptionSchema<AdminSchema> | undefined;
 	/**
 	 * Configure the roles and permissions for the admin
 	 * plugin.
 	 */
-	ac?: AccessControl;
+	ac?: AccessControl | undefined;
 	/**
 	 * Custom permissions for roles.
 	 */
-	roles?: {
-		[key in string]?: Role;
-	};
+	roles?:
+		| {
+				[key in string]?: Role;
+		  }
+		| undefined;
 	/**
 	 * List of user ids that should have admin access
 	 *
 	 * If this is set, the `adminRole` option is ignored
 	 */
-	adminUserIds?: string[];
+	adminUserIds?: string[] | undefined;
 	/**
 	 * Message to show when a user is banned
 	 *
 	 * By default, the message is "You have been banned from this application"
 	 */
-	bannedUserMessage?: string;
+	bannedUserMessage?: string | undefined;
+	/**
+	 * Whether to allow impersonating other admins
+	 *
+	 * @default false
+	 */
+	allowImpersonatingAdmins?: boolean | undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

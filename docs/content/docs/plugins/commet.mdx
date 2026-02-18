@@ -1,0 +1,344 @@
+---
+title: Commet
+description: Better Auth Plugin for Billing and Subscriptions using Commet
+---
+
+[Commet](https://commet.co) is the billing and payments solution for SaaS and AI products. As a Merchant of Record, Commet handles subscriptions, usage-based billing, tax compliance, and global payments—so you can start monetizing in minutes.
+
+<Callout>
+  This plugin is maintained by the Commet team. For bugs, issues or feature requests,
+  please contact [Commet support](https://commet.co).
+</Callout>
+
+## Features
+
+- Automatic customer creation on signup
+- Customer Portal for self-service billing management
+- Subscription management (get, change plan, cancel)
+- Feature access control (boolean, metered, seats)
+- Usage tracking for metered billing
+- Seat management for per-user pricing
+- Optional webhook handling with signature verification
+
+## Installation
+
+```bash
+pnpm add better-auth @commet/better-auth @commet/node
+```
+
+## Preparation
+
+Get your API key from the [Commet dashboard](https://sandbox.commet.co).
+
+```bash title=".env"
+COMMET_API_KEY=ck_...
+COMMET_ENVIRONMENT=sandbox # or production
+```
+
+## Server Configuration
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import {
+  commet,
+  portal,
+  subscriptions,
+  features,
+  usage,
+  seats,
+} from "@commet/better-auth";
+import { Commet } from "@commet/node";
+
+const commetClient = new Commet({
+  apiKey: process.env.COMMET_API_KEY,
+  environment: process.env.COMMET_ENVIRONMENT, // 'sandbox' or 'production'
+});
+
+export const auth = betterAuth({
+  // ... your config
+  plugins: [
+    commet({
+      client: commetClient,
+      createCustomerOnSignUp: true,
+      use: [
+        portal(),
+        subscriptions(),
+        features(),
+        usage(),
+        seats(),
+      ],
+    }),
+  ],
+});
+```
+
+## Client Configuration
+
+```typescript title="auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { commetClient } from "@commet/better-auth";
+
+export const authClient = createAuthClient({
+  plugins: [commetClient()],
+});
+```
+
+## Configuration Options
+
+```typescript
+commet({
+  client: commetClient,                    // Required: Commet SDK instance
+  createCustomerOnSignUp: true,            // Auto-create customer on signup
+  getCustomerCreateParams: ({ user }) => ({
+    legalName: user.name,
+    metadata: { source: "web" },
+  }),
+  use: [/* plugins */],
+})
+```
+
+When `createCustomerOnSignUp` is enabled, a Commet customer is automatically created with `externalId` set to the user's ID. No database mapping required.
+
+## Portal Plugin
+
+Redirects users to the Commet customer portal for self-service billing management.
+
+```typescript title="Server"
+import { commet, portal } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [
+    portal({ returnUrl: "/dashboard" }),
+  ],
+})
+```
+
+```typescript title="Client"
+// Redirects to Commet customer portal
+await authClient.customer.portal();
+```
+
+## Subscriptions Plugin
+
+Manage customer subscriptions.
+
+```typescript title="Server"
+import { commet, subscriptions } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [subscriptions()],
+})
+```
+
+```typescript title="Client"
+// Get current subscription
+const { data: subscription } = await authClient.subscription.get();
+
+// Change plan
+await authClient.subscription.changePlan({
+  subscriptionId: "sub_xxx",
+  planCode: "enterprise",
+  billingInterval: "yearly",
+});
+
+// Cancel subscription
+await authClient.subscription.cancel({
+  subscriptionId: "sub_xxx",
+  reason: "Too expensive",
+  immediate: false, // Cancel at period end
+});
+```
+
+## Features Plugin
+
+Check feature access for the authenticated user.
+
+```typescript title="Server"
+import { commet, features } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [features()],
+})
+```
+
+```typescript title="Client"
+// List all features
+const { data: featuresList } = await authClient.features.list();
+
+// Get specific feature
+const { data: feature } = await authClient.features.get("api_calls");
+
+// Check if feature is enabled (boolean)
+const { data: check } = await authClient.features.check("sso");
+
+// Check if user can use one more unit (metered)
+const { data: canUse } = await authClient.features.canUse("api_calls");
+// Returns: { allowed: boolean, willBeCharged: boolean }
+```
+
+## Usage Plugin
+
+Track usage events for metered billing.
+
+```typescript title="Server"
+import { commet, usage } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [usage()],
+})
+```
+
+```typescript title="Client"
+await authClient.usage.track({
+  eventType: "api_call",
+  value: 1,
+  idempotencyKey: `evt_${Date.now()}`,
+  properties: { endpoint: "/api/generate" },
+});
+```
+
+The authenticated user is automatically associated with the event.
+
+## Seats Plugin
+
+Manage seat-based licenses.
+
+```typescript title="Server"
+import { commet, seats } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [seats()],
+})
+```
+
+```typescript title="Client"
+// List all seat balances
+const { data: seatBalances } = await authClient.seats.list();
+
+// Add seats
+await authClient.seats.add({ seatType: "member", count: 5 });
+
+// Remove seats
+await authClient.seats.remove({ seatType: "member", count: 2 });
+
+// Set exact count
+await authClient.seats.set({ seatType: "admin", count: 3 });
+
+// Set all seat types at once
+await authClient.seats.setAll({ admin: 2, member: 10, viewer: 50 });
+```
+
+## Webhooks Plugin (Optional)
+
+Handle Commet webhooks. This is optional since you can always query state directly.
+
+```typescript title="Server"
+import { commet, webhooks } from "@commet/better-auth";
+
+commet({
+  client: commetClient,
+  use: [
+    webhooks({
+      secret: process.env.COMMET_WEBHOOK_SECRET,
+      onPayload: (payload) => {
+        // Catch-all handler
+      },
+      onSubscriptionCreated: (payload) => {},
+      onSubscriptionActivated: (payload) => {},
+      onSubscriptionCanceled: (payload) => {},
+      onSubscriptionUpdated: (payload) => {},
+    }),
+  ],
+})
+```
+
+Configure the webhook endpoint in your Commet dashboard: `/api/auth/commet/webhooks`
+
+## Full Example
+
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import {
+  commet as commetPlugin,
+  portal,
+  subscriptions,
+  features,
+  usage,
+  seats,
+} from "@commet/better-auth";
+import { Commet } from "@commet/node";
+import { db } from "./db";
+import * as schema from "./schema";
+
+const commetClient = new Commet({
+  apiKey: process.env.COMMET_API_KEY!,
+  environment: process.env.COMMET_ENVIRONMENT as "sandbox" | "production",
+});
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: "pg", schema }),
+  emailAndPassword: { enabled: true },
+  plugins: [
+    commetPlugin({
+      client: commetClient,
+      createCustomerOnSignUp: true,
+      getCustomerCreateParams: ({ user }) => ({
+        legalName: user.name,
+      }),
+      use: [
+        portal({ returnUrl: "/dashboard" }),
+        subscriptions(),
+        features(),
+        usage(),
+        seats(),
+      ],
+    }),
+  ],
+});
+```
+
+```typescript title="auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { commetClient } from "@commet/better-auth";
+
+export const authClient = createAuthClient({
+  baseURL: process.env.NEXT_PUBLIC_BETTER_AUTH_URL,
+  plugins: [commetClient()],
+});
+
+export const { signIn, signUp, signOut, useSession } = authClient;
+```
+
+```tsx title="dashboard.tsx"
+"use client";
+
+import { authClient } from "@/lib/auth-client";
+
+export function BillingSection() {
+  const handlePortal = async () => {
+    await authClient.customer.portal();
+  };
+
+  const checkFeature = async () => {
+    const { data } = await authClient.features.canUse("api_calls");
+    if (data?.allowed) {
+      // Proceed with action
+      await authClient.usage.track({ eventType: "api_call" });
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={handlePortal}>Manage Billing</button>
+      <button onClick={checkFeature}>Use Feature</button>
+    </div>
+  );
+}
+```
+

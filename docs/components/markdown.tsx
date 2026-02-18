@@ -1,21 +1,15 @@
+import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
+import defaultMdxComponents from "fumadocs-ui/mdx";
+import type { ElementContent, Root, RootContent } from "hast";
+import { toJsxRuntime } from "hast-util-to-jsx-runtime";
+import { js_beautify } from "js-beautify";
+import type { ComponentProps, ReactElement, ReactNode } from "react";
+import { Children, Suspense, use, useDeferredValue, useMemo } from "react";
+import { Fragment, jsx, jsxs } from "react/jsx-runtime";
 import { remark } from "remark";
 import remarkGfm from "remark-gfm";
 import remarkRehype from "remark-rehype";
-import { toJsxRuntime } from "hast-util-to-jsx-runtime";
-import {
-	Children,
-	type ComponentProps,
-	type ReactElement,
-	type ReactNode,
-	Suspense,
-	use,
-	useDeferredValue,
-} from "react";
-import { Fragment, jsx, jsxs } from "react/jsx-runtime";
-import { DynamicCodeBlock } from "fumadocs-ui/components/dynamic-codeblock";
-import defaultMdxComponents from "fumadocs-ui/mdx";
 import { visit } from "unist-util-visit";
-import type { ElementContent, Root, RootContent } from "hast";
 
 export interface Processor {
 	process: (content: string) => Promise<ReactNode>;
@@ -80,21 +74,88 @@ function createProcessor(): Processor {
 	};
 }
 
-function Pre(props: ComponentProps<"pre">) {
-	const code = Children.only(props.children) as ReactElement;
-	const codeProps = code.props as ComponentProps<"code">;
-	const content = codeProps.children;
-	if (typeof content !== "string") return null;
+/**
+ * Fixes inconsistent indentation in the AI response.
+ */
+function reindent(code: string): string {
+	const lines = code.split("\n");
+	let level = 0;
+	const result: string[] = [];
 
-	let lang =
-		codeProps.className
+	for (const line of lines) {
+		const trimmed = line.trim();
+		if (trimmed.length === 0) {
+			result.push("");
+			continue;
+		}
+
+		const withoutStrings = trimmed
+			.replace(/"(?:[^"\\]|\\.)*"/g, '""')
+			.replace(/'(?:[^'\\]|\\.)*'/g, "''")
+			.replace(/`(?:[^`\\]|\\.)*`/g, "``")
+			.replace(/\/\/.*$/g, "")
+			.replace(/\/\*[\s\S]*?\*\//g, "");
+
+		const opens = (withoutStrings.match(/[{\[\(]/g) || []).length;
+		const closes = (withoutStrings.match(/[}\]\)]/g) || []).length;
+
+		let currentLineLevel = level;
+		if (withoutStrings.match(/^[}\]\)]/)) {
+			currentLineLevel = Math.max(0, level - 1);
+		}
+
+		result.push("\t".repeat(currentLineLevel) + trimmed);
+		level = Math.max(0, level + opens - closes);
+	}
+
+	return result.join("\n");
+}
+
+function CodeBlock({
+	content,
+	className,
+}: {
+	content: string;
+	className?: string;
+}) {
+	const lang =
+		className
 			?.split(" ")
 			.find((v) => v.startsWith("language-"))
 			?.slice("language-".length) ?? "text";
 
-	if (lang === "mdx") lang = "md";
+	const displayLang = lang === "mdx" ? "md" : lang;
 
-	return <DynamicCodeBlock lang={lang} code={content.trimEnd()} />;
+	const formattedCode = useMemo(() => {
+		if (
+			["ts", "tsx", "typescript", "js", "javascript", "json"].includes(
+				displayLang,
+			)
+		) {
+			return js_beautify(content, {
+				indent_size: 2,
+				indent_with_tabs: true,
+				brace_style: "preserve-inline",
+			}).trim();
+		}
+		return reindent(content.trimEnd());
+	}, [content, displayLang]);
+
+	return (
+		<div style={{ tabSize: 2 }}>
+			<DynamicCodeBlock lang={displayLang} code={formattedCode} />
+		</div>
+	);
+}
+
+function Pre(props: ComponentProps<"pre">) {
+	const code = Children.only(props.children) as ReactElement;
+	const codeProps = code.props as ComponentProps<"code">;
+	const content = codeProps.children;
+
+	if (typeof content !== "string") return null;
+
+	return <CodeBlock content={content} className={codeProps.className} />;
 }
 
 const processor = createProcessor();

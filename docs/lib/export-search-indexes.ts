@@ -1,5 +1,12 @@
 import { source } from "@/lib/source";
-import type { OramaDocument } from "fumadocs-core/search/orama-cloud";
+
+type SearchIndexRecord = {
+	id: string;
+	structured: unknown;
+	url: string;
+	title: string;
+	description: string | undefined;
+};
 
 export async function exportSearchIndexes() {
 	return source.getPages().map((page) => {
@@ -9,6 +16,6 @@ export async function exportSearchIndexes() {
 			url: page.url,
 			title: page.data.title,
 			description: page.data.description,
-		} satisfies OramaDocument;
+		} satisfies SearchIndexRecord;
 	});
 }

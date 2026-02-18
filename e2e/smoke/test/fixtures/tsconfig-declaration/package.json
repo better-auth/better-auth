@@ -1,0 +1,16 @@
+{
+  "name": "@better-auth-test/fixtures-tsconfig-declaration",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --project tsconfig.json"
+  },
+  "dependencies": {
+    "@better-auth/oauth-provider": "workspace:*",
+    "@better-auth/passkey": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "@better-auth/stripe": "workspace:*",
+    "better-auth": "workspace:*",
+    "stripe": "^20.2.0"
+  }
+}

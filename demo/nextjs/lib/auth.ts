@@ -1,31 +1,32 @@
-import { betterAuth } from "better-auth";
+import { dash, sendEmail } from "@better-auth/dash";
+import { electron } from "@better-auth/electron";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import { passkey } from "@better-auth/passkey";
+import { scim } from "@better-auth/scim";
+import { sso } from "@better-auth/sso";
+import { stripe } from "@better-auth/stripe";
+import { LibsqlDialect } from "@libsql/kysely-libsql";
+import type { BetterAuthOptions } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
+import type { Organization } from "better-auth/plugins";
 import {
-	bearer,
 	admin,
-	multiSession,
-	organization,
-	twoFactor,
-	oneTap,
-	oAuthProxy,
-	openAPI,
+	bearer,
 	customSession,
 	deviceAuthorization,
+	jwt,
 	lastLoginMethod,
+	multiSession,
+	oAuthProxy,
+	oneTap,
+	openAPI,
+	organization,
+	twoFactor,
 } from "better-auth/plugins";
-import { reactInvitationEmail } from "./email/invitation";
-import { LibsqlDialect } from "@libsql/kysely-libsql";
-import { reactResetPasswordEmail } from "./email/reset-password";
-import { resend } from "./email/resend";
 import { MysqlDialect } from "kysely";
 import { createPool } from "mysql2/promise";
-import { nextCookies } from "better-auth/next-js";
-import { passkey } from "better-auth/plugins/passkey";
-import { stripe } from "@better-auth/stripe";
-import { sso } from "@better-auth/sso";
 import { Stripe } from "stripe";
-
-const from = process.env.BETTER_AUTH_EMAIL || "delivered@resend.dev";
-const to = process.env.TEST_EMAIL || "";
 
 const dialect = (() => {
 	if (process.env.USE_MYSQL) {
@@ -50,58 +51,57 @@ if (!dialect) {
 	throw new Error("No dialect found");
 }
 
-const baseURL: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? process.env.BETTER_AUTH_URL
-			: process.env.VERCEL_ENV === "preview"
-				? `https://${process.env.VERCEL_URL}`
-				: undefined
-		: undefined;
-
-const cookieDomain: string | undefined =
-	process.env.VERCEL === "1"
-		? process.env.VERCEL_ENV === "production"
-			? ".better-auth.com"
-			: process.env.VERCEL_ENV === "preview"
-				? `.${process.env.VERCEL_URL}`
-				: undefined
-		: undefined;
-
-export const auth = betterAuth({
+const authOptions = {
 	appName: "Better Auth Demo",
-	baseURL,
 	database: {
 		dialect,
 		type: "sqlite",
 	},
 	emailVerification: {
 		async sendVerificationEmail({ user, url }) {
-			const res = await resend.emails.send({
-				from,
-				to: to || user.email,
+			await sendEmail({
+				to: user.email,
 				subject: "Verify your email address",
-				html: `<a href="${url}">Verify your email address</a>`,
+				template: "verify-email",
+				variables: {
+					verificationUrl: url,
+					userEmail: user.email,
+					userName: user.name,
+					appName: "Better Auth Demo",
+					expirationMinutes: "10",
+					verificationCode: "",
+				},
 			});
-			console.log(res, user.email);
 		},
 	},
 	account: {
 		accountLinking: {
-			trustedProviders: ["google", "github", "demo-app", "sso"],
+			trustedProviders: [
+				"email-password",
+				"facebook",
+				"github",
+				"google",
+				"discord",
+				"microsoft",
+				"twitch",
+				"twitter",
+				"paypal",
+				"vercel",
+			],
 		},
 	},
 	emailAndPassword: {
 		enabled: true,
 		async sendResetPassword({ user, url }) {
-			await resend.emails.send({
-				from,
+			await sendEmail({
 				to: user.email,
 				subject: "Reset your password",
-				react: reactResetPasswordEmail({
-					username: user.email,
+				template: "reset-password",
+				variables: {
+					userEmail: user.email,
 					resetLink: url,
-				}),
+					userName: user.name,
+				},
 			});
 		},
 	},
@@ -138,38 +138,44 @@ export const auth = betterAuth({
 			clientId: process.env.PAYPAL_CLIENT_ID || "",
 			clientSecret: process.env.PAYPAL_CLIENT_SECRET || "",
 		},
+		vercel: {
+			clientId: process.env.VERCEL_CLIENT_ID || "",
+			clientSecret: process.env.VERCEL_CLIENT_SECRET || "",
+		},
 	},
 	plugins: [
 		organization({
 			async sendInvitationEmail(data) {
-				await resend.emails.send({
-					from,
+				sendEmail({
 					to: data.email,
 					subject: "You've been invited to join an organization",
-					react: reactInvitationEmail({
-						username: data.email,
-						invitedByUsername: data.inviter.user.name,
-						invitedByEmail: data.inviter.user.email,
-						teamName: data.organization.name,
+					template: "invitation",
+					variables: {
+						inviterEmail: data.inviter.user.email,
+						inviterName: data.inviter.user.name,
+						organizationName: data.organization.name,
+						role: data.role,
 						inviteLink:
 							process.env.NODE_ENV === "development"
 								? `http://localhost:3000/accept-invitation/${data.id}`
-								: `${
-										process.env.BETTER_AUTH_URL ||
-										"https://demo.better-auth.com"
-									}/accept-invitation/${data.id}`,
-					}),
+								: `${process.env.BETTER_AUTH_URL || "https://demo.better-auth.com"}/accept-invitation/${data.id}`,
+					},
 				});
 			},
 		}),
 		twoFactor({
 			otpOptions: {
 				async sendOTP({ user, otp }) {
-					await resend.emails.send({
-						from,
+					await sendEmail({
 						to: user.email,
-						subject: "Your OTP",
-						html: `Your OTP is ${otp}`,
+						subject: "Your two-factor authentication code",
+						template: "two-factor",
+						variables: {
+							otpCode: otp,
+							userEmail: user.email,
+							userName: user.name,
+							appName: "Better Auth Demo",
+						},
 					});
 				},
 			},
@@ -177,22 +183,14 @@ export const auth = betterAuth({
 		passkey(),
 		openAPI(),
 		bearer(),
-		admin({
-			adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"],
-		}),
+		admin(),
 		multiSession(),
-		oAuthProxy(),
+		oAuthProxy({
+			productionURL:
+				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
+		}),
 		nextCookies(),
 		oneTap(),
-		customSession(async (session) => {
-			return {
-				...session,
-				user: {
-					...session.user,
-					dd: "test",
-				},
-			};
-		}),
 		stripe({
 			stripeClient: new Stripe(process.env.STRIPE_KEY || "sk_test_"),
 			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
@@ -344,17 +342,148 @@ export const auth = betterAuth({
 				},
 			],
 		}),
+		scim(),
 		deviceAuthorization({
 			expiresIn: "3min",
 			interval: "5s",
 		}),
 		lastLoginMethod(),
+		jwt({
+			jwt: {
+				issuer: process.env.BETTER_AUTH_URL,
+			},
+		}),
+		oauthProvider({
+			loginPage: "/sign-in",
+			consentPage: "/oauth/consent",
+			allowDynamicClientRegistration: true,
+			allowUnauthenticatedClientRegistration: true,
+			scopes: [
+				"openid",
+				"profile",
+				"email",
+				"offline_access",
+				"read:organization",
+			],
+			validAudiences: [
+				process.env.BETTER_AUTH_URL || "https://demo.better-auth.com",
+				(process.env.BETTER_AUTH_URL || "https://demo.better-auth.com") +
+					"/api/mcp",
+			],
+			selectAccount: {
+				page: "/oauth/select-account",
+				shouldRedirect: async ({ headers }) => {
+					const allSessions = await getAllDeviceSessions(headers);
+					return allSessions?.length >= 1;
+				},
+			},
+			customAccessTokenClaims({ referenceId, scopes }) {
+				if (referenceId && scopes.includes("read:organization")) {
+					const baseUrl =
+						process.env.BETTER_AUTH_URL || "https://demo.better-auth.com";
+					return {
+						[`${baseUrl}/org`]: referenceId,
+					};
+				}
+				return {};
+			},
+			postLogin: {
+				page: "/oauth/select-organization",
+				async shouldRedirect({ session, scopes, headers }) {
+					const userOnlyScopes = [
+						"openid",
+						"profile",
+						"email",
+						"offline_access",
+					];
+					if (scopes.every((sc) => userOnlyScopes.includes(sc))) {
+						return false;
+					}
+					// Check if user has multiple organizations to select from
+					try {
+						const organizations = (await getAllUserOrganizations(
+							headers,
+						)) as Organization[];
+						return (
+							organizations.length > 1 ||
+							!(
+								organizations.length === 1 &&
+								organizations.at(0)?.id === session.activeOrganizationId
+							)
+						);
+					} catch {
+						return true;
+					}
+				},
+				consentReferenceId({ session, scopes }) {
+					if (scopes.includes("read:organization")) {
+						const activeOrganizationId = (session?.activeOrganizationId ??
+							undefined) as string | undefined;
+						if (!activeOrganizationId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "set_organization",
+								error_description: "must set organization for these scopes",
+							});
+						}
+						return activeOrganizationId;
+					} else {
+						return undefined;
+					}
+				},
+			},
+			silenceWarnings: {
+				openidConfig: true,
+				oauthAuthServerConfig: true,
+			},
+		}),
+		electron(),
 	],
-	trustedOrigins: ["exp://"],
-	advanced: {
-		crossSubDomainCookies: {
-			enabled: process.env.NODE_ENV === "production",
-			domain: cookieDomain,
-		},
-	},
+	trustedOrigins: [
+		"https://*.better-auth.com",
+		"https://better-auth-demo-*-better-auth.vercel.app",
+		"exp://",
+		"com.better-auth.demo:/",
+		"https://appleid.apple.com",
+	],
+} satisfies BetterAuthOptions;
+
+export const auth = betterAuth({
+	...authOptions,
+	plugins: [
+		...(authOptions.plugins ?? []),
+		customSession(
+			async ({ user, session }) => {
+				return {
+					user: {
+						...user,
+						customField: "customField",
+					},
+					session,
+				};
+			},
+			authOptions,
+			{ shouldMutateListDeviceSessionsEndpoint: true },
+		),
+		dash(),
+	],
 });
+
+export type Session = typeof auth.$Infer.Session;
+export type ActiveOrganization = typeof auth.$Infer.ActiveOrganization;
+export type OrganizationRole = ActiveOrganization["members"][number]["role"];
+export type Invitation = typeof auth.$Infer.Invitation;
+export type DeviceSession = Awaited<
+	ReturnType<typeof auth.api.listDeviceSessions>
+>[number];
+
+async function getAllDeviceSessions(headers: Headers): Promise<unknown[]> {
+	return await auth.api.listDeviceSessions({
+		headers,
+	});
+}
+
+async function getAllUserOrganizations(headers: Headers): Promise<unknown[]> {
+	return await auth.api.listOrganizations({
+		headers,
+	});
+}

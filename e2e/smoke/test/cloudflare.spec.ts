@@ -1,8 +1,9 @@
-import { describe, it } from "node:test";
-import { spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
-import { join } from "node:path";
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import fs from "node:fs/promises";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+import { fileURLToPath } from "node:url";
 
 const fixturesDir = fileURLToPath(new URL("./fixtures", import.meta.url));
 
@@ -17,11 +18,11 @@ describe("(cloudflare) simple server", () => {
 			cp.kill("SIGINT");
 		});
 
-		const unexpectedStrings = new Set(["node:sqlite"]);
+		const unexpectedWarnings = new Set(["node:sqlite", "node:async_hooks"]);
 
 		cp.stdout.on("data", (data) => {
 			console.log(data.toString());
-			for (const str of unexpectedStrings) {
+			for (const str of unexpectedWarnings) {
 				assert(
 					!data.toString().includes(str),
 					`Output should not contain "${str}"`,
@@ -31,7 +32,7 @@ describe("(cloudflare) simple server", () => {
 
 		cp.stderr.on("data", (data) => {
 			console.error(data.toString());
-			for (const str of unexpectedStrings) {
+			for (const str of unexpectedWarnings) {
 				assert(
 					!data.toString().includes(str),
 					`Error output should not contain "${str}"`,
@@ -46,5 +47,22 @@ describe("(cloudflare) simple server", () => {
 				}
 			});
 		});
+
+		const indexJs = await fs.readFile(
+			join(fixturesDir, "cloudflare", "dist", "index.js"),
+			"utf-8",
+		);
+
+		const unexpectedContents = new Set([
+			"createRequire",
+			"node:fs",
+			"node:module",
+		]);
+		for (const content of unexpectedContents) {
+			assert(
+				!indexJs.includes(content),
+				`index.js should not contain "${content}"`,
+			);
+		}
 	});
 });

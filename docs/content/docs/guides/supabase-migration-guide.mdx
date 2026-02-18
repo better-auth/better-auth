@@ -9,13 +9,17 @@ In this guide, we'll walk through the steps to migrate a project from Supabase A
 This migration will invalidate all active sessions. While this guide doesn't currently cover migrating two-factor (2FA) or Row Level Security (RLS) configurations, both should be possible with additional steps.
 </Callout>
 
+<Callout type="error">
+**Back up your database before running any migration scripts.** This guide modifies production data. Create a full backup of both your Supabase database and target database before proceeding.
+</Callout>
+
 
 ## Before You Begin
 
 Before starting the migration process, set up Better Auth in your project. Follow the [installation guide](/docs/installation) to get started.
 
-
 <Steps>
+
 <Step>
 ### Connect to your database
 
@@ -24,10 +28,10 @@ You'll need to connect to your database to migrate the users and accounts. Copy 
 ```package-install
 npm install pg
 ```
-
 And then you can use the following code to connect to your database.
 
 ```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
 import { Pool } from "pg";
 
 export const auth = betterAuth({
@@ -37,37 +41,39 @@ export const auth = betterAuth({
 })
 ```
 </Step>
+
 <Step>
-### Enable Email and Password (Optional)
+### Enable Email and Password
 
 Enable the email and password in your auth config.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
 
 export const auth = betterAuth({
     database: new Pool({ 
         connectionString: process.env.DATABASE_URL 
     }),
-	emailVerification: {
-		sendEmailVerification: async(user)=>{
-			// send email verification email
-			// implement your own logic here
-		}
-	},
     emailAndPassword: { // [!code highlight]
         enabled: true, // [!code highlight]
     } // [!code highlight]
 })
 ```
+
+<Callout type="info">
+If you want to require email verification, add the `emailVerification` config separately. See the [Email Verification docs](/docs/authentication/email-password#email-verification) for details.
+</Callout>
 </Step>
+
 <Step>
 ### Setup Social Providers (Optional)
 
-Add social providers you have enabled in your Supabase project in your auth config.
+Add all the social providers used in Supabase to the auth config. Missing any may cause user data loss during migration.
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -78,20 +84,31 @@ export const auth = betterAuth({
     },
     socialProviders: { // [!code highlight]
         github: { // [!code highlight]
-            clientId: process.env.GITHUB_CLIENT_ID, // [!code highlight]
-            clientSecret: process.env.GITHUB_CLIENT_SECRET, // [!code highlight]
+            clientId: process.env.GITHUB_CLIENT_ID!, // [!code highlight]
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!, // [!code highlight]
         } // [!code highlight]
     } // [!code highlight]
 })
 ```
 </Step>
-<Step>
-### Add admin and anonymous plugins (Optional)
 
-Add the [admin](/docs/plugins/admin) and [anonymous](/docs/plugins/anonymous) plugins to your auth config.
+<Step>
+### Add plugins based on your Supabase features
+
+Add plugins that match the features you used in Supabase. Include only what you need:
+
+- **[admin](/docs/plugins/admin)**: If you have users with `is_super_admin` or `banned_until` fields
+- **[anonymous](/docs/plugins/anonymous)**: If you used anonymous authentication (`signInAnonymously`)
+- **[phoneNumber](/docs/plugins/phone-number)**: If you have users who signed up with phone numbers
+
+<Callout type="info">
+Only include plugins for features you actually used in Supabase. The migration script will automatically detect which plugins are enabled and migrate data accordingly.
+</Callout>
 
 ```ts title="auth.ts"
-import { admin, anonymous } from "better-auth/plugins";
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
 
 export const auth = betterAuth({
     database: new Pool({ 
@@ -106,170 +123,896 @@ export const auth = betterAuth({
             clientSecret: process.env.GITHUB_CLIENT_SECRET!,
         }
     },
-    plugins: [admin(), anonymous()], // [!code highlight]
+    plugins: [admin(), anonymous(), phoneNumber()], // [!code highlight]
 })
 ```
 </Step>
+
+<Step>
+### Add the additional fields
+
+To minimize data loss from Supabase Auth, the following additional fields are required. You can adjust them as needed after the migration is complete.
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
+
+export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+    emailAndPassword: { 
+        enabled: true,
+    },
+    socialProviders: {
+        github: {
+            clientId: process.env.GITHUB_CLIENT_ID!,
+            clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+        }
+    },
+    plugins: [admin(), anonymous(), phoneNumber()],
+    user: { // [!code highlight]
+        additionalFields: { // [!code highlight]
+            userMetadata: { // [!code highlight]
+                type: 'json', // [!code highlight]
+                required: false, // [!code highlight]
+                input: false, // [!code highlight]
+            }, // [!code highlight]
+            appMetadata: { // [!code highlight]
+                type: 'json', // [!code highlight]
+                required: false, // [!code highlight]
+                input: false, // [!code highlight]
+            }, // [!code highlight]
+            invitedAt: { // [!code highlight]
+                type: 'date', // [!code highlight]
+                required: false, // [!code highlight]
+                input: false, // [!code highlight]
+            }, // [!code highlight]
+            lastSignInAt: { // [!code highlight]
+                type: 'date', // [!code highlight]
+                required: false, // [!code highlight]
+                input: false, // [!code highlight]
+            }, // [!code highlight]
+        }, // [!code highlight]
+    }, // [!code highlight]
+})
+```
+</Step>
+
 <Step>
 ### Run the migration
 
 Run the migration to create the necessary tables in your database.
 
 ```bash title="Terminal"
-npx @better-auth/cli migrate
+npx auth migrate
 ```
 
-This will create the following tables in your database:
-
-- [`user`](/docs/concepts/database#user)
-- [`account`](/docs/concepts/database#account)
-- [`session`](/docs/concepts/database#session)
-- [`verification`](/docs/concepts/database#verification)
-
-This tables will be created on the `public` schema.
-</Step>
-<Step>
-### Copy the migration script
+This will create the necessary tables in the `public` schema of your Better Auth instance.
 
 Now that we have the necessary tables in our database, we can run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
-Start by creating a `.ts` file in your project.
+</Step>
 
-```bash title="Terminal"
-touch migration.ts
+<Step>
+### Copy the migration script
+
+First, set up the environment variables used by the script.
+
+```dotenv title=".env"
+FROM_DATABASE_URL= # Supabase database connection string (reads from auth.users)
+TO_DATABASE_URL= # Target Postgres database connection string (writes to public.user)
 ```
+
+<Callout type="info">
+**Same database?** If you're migrating within the same Supabase Postgres database (from `auth` schema to `public` schema), both URLs can be the same `DATABASE_URL`. If you're migrating to a different database (e.g., PlanetScale, separate Postgres), use different URLs.
+</Callout>
 
 And then copy and paste the following code into the file.
 
 ```ts title="migration.ts"
-import { Pool } from "pg";
-import { auth } from "./auth";
-import { User as SupabaseUser } from "@supabase/supabase-js";
+import { generateId } from 'better-auth';
+import { DBFieldAttribute } from 'better-auth/db';
+import { Pool } from 'pg';
+import { auth } from './auth'; // <- Your Better Auth Instance
 
-type User = SupabaseUser & {
-	is_super_admin: boolean;
-	raw_user_meta_data: {
-		avatar_url: string;
-	};
-	encrypted_password: string;
-	email_confirmed_at: string;
-	created_at: string;
-	updated_at: string;
-	is_anonymous: boolean;
-	identities: {
-		provider: string;
-		identity_data: {
-			sub: string;
-			email: string;
-		};
-		created_at: string;
-		updated_at: string;
-	};
+// ============================================================================
+// CONFIGURATION
+// ============================================================================
+
+const CONFIG = {
+  /**
+   * Number of users to process in each batch
+   * Higher values = faster migration but more memory usage
+   * Recommended: 5000-10000 for most cases
+   */
+  batchSize: 5000,
+  /**
+   * Resume from a specific user ID (cursor-based pagination)
+   * Useful for resuming interrupted migrations
+   * Set to null to start from the beginning
+   */
+  resumeFromId: null as string | null,
+  /**
+   * Temporary email domain for phone-only users
+   * Phone-only users need an email for Better Auth
+   * Format: {phone_number}@{tempEmailDomain}
+   */
+  tempEmailDomain: 'temp.better-auth.com',
 };
 
-const migrateFromSupabase = async () => {
-	const ctx = await auth.$context;
-	const db = ctx.options.database as Pool;
-	const users = await db
-		.query(`
-			SELECT 
-				u.*,
-				COALESCE(
-					json_agg(
-						i.* ORDER BY i.id
-					) FILTER (WHERE i.id IS NOT NULL),
-					'[]'::json
-				) as identities
-			FROM auth.users u
-			LEFT JOIN auth.identities i ON u.id = i.user_id
-			GROUP BY u.id
-		`)
-		.then((res) => res.rows as User[]);
-	for (const user of users) {
-		if (!user.email) {
-			continue;
-		}
-		await ctx.adapter
-			.create({
-				model: "user",
-				data: {
-					id: user.id,
-					email: user.email,
-					name: user.email,
-					role: user.is_super_admin ? "admin" : user.role,
-					emailVerified: !!user.email_confirmed_at,
-					image: user.raw_user_meta_data.avatar_url,
-					createdAt: new Date(user.created_at),
-					updatedAt: new Date(user.updated_at),
-					isAnonymous: user.is_anonymous,
-				},
-			})
-			.catch(() => {});
-		for (const identity of user.identities) {
-			const existingAccounts = await ctx.internalAdapter.findAccounts(user.id);
+// ============================================================================
+// TYPE DEFINITIONS
+// ============================================================================
 
-			if (identity.provider === "email") {
-				const hasCredential = existingAccounts.find(
-					(account) => account.providerId === "credential",
-				);
-				if (!hasCredential) {
-					await ctx.adapter
-						.create({
-							model: "account",
-							data: {
-								userId: user.id,
-								providerId: "credential",
-								accountId: user.id,
-								password: user.encrypted_password,
-								createdAt: new Date(user.created_at),
-								updatedAt: new Date(user.updated_at),
-							},
-						})
-						.catch(() => {});
-				}
-			}
-			const supportedProviders = Object.keys(ctx.options.socialProviders || {})
-			if (supportedProviders.includes(identity.provider)) {
-				const hasAccount = existingAccounts.find(
-					(account) => account.providerId === identity.provider,
-				);
-				if (!hasAccount) {
-					await ctx.adapter.create({
-						model: "account",
-						data: {
-							userId: user.id,
-							providerId: identity.provider,
-							accountId: identity.identity_data?.sub,
-							createdAt: new Date(identity.created_at ?? user.created_at),
-							updatedAt: new Date(identity.updated_at ?? user.updated_at),
-						},
-					});
-				}
-			}
-		}
-	}
+type MigrationStatus = 'idle' | 'running' | 'paused' | 'completed' | 'failed';
+
+type MigrationState = {
+  status: MigrationStatus;
+  totalUsers: number;
+  processedUsers: number;
+  successCount: number;
+  failureCount: number;
+  skipCount: number;
+  currentBatch: number;
+  totalBatches: number;
+  startedAt: Date | null;
+  completedAt: Date | null;
+  lastProcessedId: string | null;
+  errors: Array<{ userId: string; error: string }>;
 };
-migrateFromSupabase();
+
+type UserInsertData = {
+  id: string;
+  email: string | null;
+  name: string;
+  emailVerified: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+  image?: string;
+  [key: string]: any;
+};
+
+type AccountInsertData = {
+  id: string;
+  userId: string;
+  providerId: string;
+  accountId: string;
+  password: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+type SupabaseIdentityFromDB = {
+  id: string;
+  provider_id: string;
+  user_id: string;
+  identity_data: Record<string, any>;
+  provider: string;
+  last_sign_in_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+  email: string | null;
+};
+
+type SupabaseUserFromDB = {
+  instance_id: string | null;
+  id: string;
+  aud: string | null;
+  role: string | null;
+  email: string | null;
+  encrypted_password: string | null;
+  email_confirmed_at: string | null;
+  invited_at: string | null;
+  confirmation_token: string | null;
+  confirmation_sent_at: string | null;
+  recovery_token: string | null;
+  recovery_sent_at: string | null;
+  email_change_token_new: string | null;
+  email_change: string | null;
+  email_change_sent_at: string | null;
+  last_sign_in_at: string | null;
+  raw_app_meta_data: Record<string, any> | null;
+  raw_user_meta_data: Record<string, any> | null;
+  is_super_admin: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  phone: string | null;
+  phone_confirmed_at: string | null;
+  phone_change: string | null;
+  phone_change_token: string | null;
+  phone_change_sent_at: string | null;
+  confirmed_at: string | null;
+  email_change_token_current: string | null;
+  email_change_confirm_status: number | null;
+  banned_until: string | null;
+  reauthentication_token: string | null;
+  reauthentication_sent_at: string | null;
+  is_sso_user: boolean;
+  deleted_at: string | null;
+  is_anonymous: boolean;
+  identities: SupabaseIdentityFromDB[];
+};
+
+// ============================================================================
+// MIGRATION STATE MANAGER
+// ============================================================================
+
+class MigrationStateManager {
+  private state: MigrationState = {
+    status: 'idle',
+    totalUsers: 0,
+    processedUsers: 0,
+    successCount: 0,
+    failureCount: 0,
+    skipCount: 0,
+    currentBatch: 0,
+    totalBatches: 0,
+    startedAt: null,
+    completedAt: null,
+    lastProcessedId: null,
+    errors: [],
+  };
+
+  start(totalUsers: number, batchSize: number) {
+    this.state = {
+      status: 'running',
+      totalUsers,
+      processedUsers: 0,
+      successCount: 0,
+      failureCount: 0,
+      skipCount: 0,
+      currentBatch: 0,
+      totalBatches: Math.ceil(totalUsers / batchSize),
+      startedAt: new Date(),
+      completedAt: null,
+      lastProcessedId: null,
+      errors: [],
+    };
+  }
+
+  updateProgress(
+    processed: number,
+    success: number,
+    failure: number,
+    skip: number,
+    lastId: string | null,
+  ) {
+    this.state.processedUsers += processed;
+    this.state.successCount += success;
+    this.state.failureCount += failure;
+    this.state.skipCount += skip;
+    this.state.currentBatch++;
+    if (lastId) {
+      this.state.lastProcessedId = lastId;
+    }
+  }
+
+  addError(userId: string, error: string) {
+    if (this.state.errors.length < 100) {
+      this.state.errors.push({ userId, error });
+    }
+  }
+
+  complete() {
+    this.state.status = 'completed';
+    this.state.completedAt = new Date();
+  }
+
+  fail() {
+    this.state.status = 'failed';
+    this.state.completedAt = new Date();
+  }
+
+  getState(): MigrationState {
+    return { ...this.state };
+  }
+
+  getProgress(): number {
+    if (this.state.totalUsers === 0) return 0;
+    return Math.round((this.state.processedUsers / this.state.totalUsers) * 100);
+  }
+
+  getETA(): string | null {
+    if (!this.state.startedAt || this.state.processedUsers === 0) {
+      return null;
+    }
+
+    const elapsed = Date.now() - this.state.startedAt.getTime();
+    const avgTimePerUser = elapsed / this.state.processedUsers;
+    const remainingUsers = this.state.totalUsers - this.state.processedUsers;
+    const remainingMs = avgTimePerUser * remainingUsers;
+
+    const seconds = Math.floor(remainingMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+
+    if (hours > 0) {
+      return `${hours}h ${minutes % 60}m`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds % 60}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+}
+
+// ============================================================================
+// DATABASE CONNECTIONS
+// ============================================================================
+
+const fromDB = new Pool({
+  connectionString: process.env.FROM_DATABASE_URL,
+});
+
+const toDB = new Pool({
+  connectionString: process.env.TO_DATABASE_URL,
+});
+
+// ============================================================================
+// BETTER AUTH VALIDATION
+// ============================================================================
+
+/**
+ * Validates that the imported Better Auth instance meets migration requirements
+ */
+async function validateAuthConfig() {
+  const ctx = await auth.$context;
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  // Check emailAndPassword (required)
+  if (!ctx.options.emailAndPassword?.enabled) {
+    errors.push('emailAndPassword.enabled must be true');
+  }
+
+  // Check optional plugins - warn if missing, migration will skip related data
+  const optionalPlugins = ['admin', 'anonymous', 'phone-number'];
+  const plugins = ctx.options.plugins || [];
+  const pluginIds = plugins.map((p: any) => p.id);
+
+  for (const plugin of optionalPlugins) {
+    if (!pluginIds.includes(plugin)) {
+      warnings.push(`Plugin '${plugin}' not found - related Supabase data will be skipped`);
+    }
+  }
+
+  // Check required additional fields
+  const additionalFields = ctx.options.user?.additionalFields || {};
+  const requiredFields: Record<string, DBFieldAttribute> = {
+    userMetadata: { type: 'json', required: false, input: false },
+    appMetadata: { type: 'json', required: false, input: false },
+    invitedAt: { type: 'date', required: false, input: false },
+    lastSignInAt: { type: 'date', required: false, input: false },
+  };
+
+  for (const [fieldName, expectedConfig] of Object.entries(requiredFields)) {
+    const fieldConfig = additionalFields[fieldName];
+
+    if (!fieldConfig) {
+      errors.push(`Missing required user.additionalFields: ${fieldName}`);
+    } else {
+      // Validate field configuration
+      if (fieldConfig.type !== expectedConfig.type) {
+        errors.push(
+          `user.additionalFields.${fieldName} must have type: '${expectedConfig.type}' (got '${fieldConfig.type}')`,
+        );
+      }
+      if (fieldConfig.required !== expectedConfig.required) {
+        errors.push(
+          `user.additionalFields.${fieldName} must have required: ${expectedConfig.required}`,
+        );
+      }
+      if (fieldConfig.input !== expectedConfig.input) {
+        errors.push(`user.additionalFields.${fieldName} must have input: ${expectedConfig.input}`);
+      }
+    }
+  }
+
+  // Show warnings (non-blocking)
+  if (warnings.length > 0) {
+    console.warn('\n⚠️  Migration Warnings:\n');
+    warnings.forEach((warn) => console.warn(`   ${warn}`));
+    console.warn('\n   Add plugins for features you used in Supabase to migrate that data.\n');
+  }
+
+  // Show errors (blocking)
+  if (errors.length > 0) {
+    console.error('\n🟧 Better Auth Configuration Errors:\n');
+    errors.forEach((err) => console.error(`   ${err}`));
+    console.error('\n🟧 Please update your Better Auth configuration to include:\n');
+    console.error('   1. emailAndPassword: { enabled: true }');
+    console.error(
+      '   2. user.additionalFields: { userMetadata, appMetadata, invitedAt, lastSignInAt }\n',
+    );
+    process.exit(1);
+  }
+
+  return ctx;
+}
+
+// ============================================================================
+// MIGRATION LOGIC
+// ============================================================================
+
+const stateManager = new MigrationStateManager();
+
+let ctxCache: {
+  hasAnonymousPlugin: boolean;
+  hasAdminPlugin: boolean;
+  hasPhoneNumberPlugin: boolean;
+  supportedProviders: string[];
+} | null = null;
+
+async function processBatch(
+  users: SupabaseUserFromDB[],
+  ctx: any,
+): Promise<{
+  success: number;
+  failure: number;
+  skip: number;
+  errors: Array<{ userId: string; error: string }>;
+}> {
+  const stats = {
+    success: 0,
+    failure: 0,
+    skip: 0,
+    errors: [] as Array<{ userId: string; error: string }>,
+  };
+
+  if (!ctxCache) {
+    ctxCache = {
+      hasAdminPlugin: ctx.options.plugins?.some((p: any) => p.id === 'admin') || false,
+      hasAnonymousPlugin: ctx.options.plugins?.some((p: any) => p.id === 'anonymous') || false,
+      hasPhoneNumberPlugin: ctx.options.plugins?.some((p: any) => p.id === 'phone-number') || false,
+      supportedProviders: Object.keys(ctx.options.socialProviders || {}),
+    };
+  }
+
+  const { hasAdminPlugin, hasAnonymousPlugin, hasPhoneNumberPlugin, supportedProviders } = ctxCache;
+
+  const validUsersData: Array<{ user: SupabaseUserFromDB; userData: UserInsertData }> = [];
+
+  for (const user of users) {
+    if (!user.email && !user.phone) {
+      stats.skip++;
+      continue;
+    }
+    if (!user.email && !hasPhoneNumberPlugin) {
+      stats.skip++;
+      continue;
+    }
+    if (user.deleted_at) {
+      stats.skip++;
+      continue;
+    }
+    if (user.banned_until && !hasAdminPlugin) {
+      stats.skip++;
+      continue;
+    }
+
+    const getTempEmail = (phone: string) =>
+      `${phone.replace(/[^0-9]/g, '')}@${CONFIG.tempEmailDomain}`;
+
+    const getName = (): string => {
+      if (user.raw_user_meta_data?.name) return user.raw_user_meta_data.name;
+      if (user.raw_user_meta_data?.full_name) return user.raw_user_meta_data.full_name;
+      if (user.raw_user_meta_data?.username) return user.raw_user_meta_data.username;
+      if (user.raw_user_meta_data?.user_name) return user.raw_user_meta_data.user_name;
+
+      const firstId = user.identities?.[0];
+      if (firstId?.identity_data?.name) return firstId.identity_data.name;
+      if (firstId?.identity_data?.full_name) return firstId.identity_data.full_name;
+      if (firstId?.identity_data?.username) return firstId.identity_data.username;
+      if (firstId?.identity_data?.preferred_username)
+        return firstId.identity_data.preferred_username;
+
+      if (user.email) return user.email.split('@')[0]!;
+      if (user.phone) return user.phone;
+
+      return 'Unknown';
+    };
+
+    const getImage = (): string | undefined => {
+      if (user.raw_user_meta_data?.avatar_url) return user.raw_user_meta_data.avatar_url;
+      if (user.raw_user_meta_data?.picture) return user.raw_user_meta_data.picture;
+      const firstId = user.identities?.[0];
+      if (firstId?.identity_data?.avatar_url) return firstId.identity_data.avatar_url;
+      if (firstId?.identity_data?.picture) return firstId.identity_data.picture;
+      return undefined;
+    };
+
+    const userData: UserInsertData = {
+      id: user.id,
+      email: user.email || (user.phone ? getTempEmail(user.phone) : null),
+      emailVerified: !!user.email_confirmed_at,
+      name: getName(),
+      image: getImage(),
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+    };
+
+    if (hasAnonymousPlugin) userData.isAnonymous = user.is_anonymous;
+    if (hasPhoneNumberPlugin && user.phone) {
+      userData.phoneNumber = user.phone;
+      userData.phoneNumberVerified = !!user.phone_confirmed_at;
+    }
+
+    if (hasAdminPlugin) {
+      userData.role = user.is_super_admin ? 'admin' : user.role || 'user';
+      if (user.banned_until) {
+        const banExpires = new Date(user.banned_until);
+        if (banExpires > new Date()) {
+          userData.banned = true;
+          userData.banExpires = banExpires;
+          userData.banReason = 'Migrated from Supabase (banned)';
+        } else {
+          userData.banned = false;
+        }
+      } else {
+        userData.banned = false;
+      }
+    }
+
+    if (user.raw_user_meta_data && Object.keys(user.raw_user_meta_data).length > 0) {
+      userData.userMetadata = user.raw_user_meta_data;
+    }
+    if (user.raw_app_meta_data && Object.keys(user.raw_app_meta_data).length > 0) {
+      userData.appMetadata = user.raw_app_meta_data;
+    }
+    if (user.invited_at) userData.invitedAt = user.invited_at;
+    if (user.last_sign_in_at) userData.lastSignInAt = user.last_sign_in_at;
+
+    validUsersData.push({ user, userData });
+  }
+
+  if (validUsersData.length === 0) {
+    return stats;
+  }
+
+  try {
+    await toDB.query('BEGIN');
+
+    const allFields = new Set<string>();
+    validUsersData.forEach(({ userData }) => {
+      Object.keys(userData).forEach((key) => allFields.add(key));
+    });
+    const fields = Array.from(allFields);
+
+    const maxParamsPerQuery = 65000;
+    const fieldsPerUser = fields.length;
+    const usersPerChunk = Math.floor(maxParamsPerQuery / fieldsPerUser);
+
+    for (let i = 0; i < validUsersData.length; i += usersPerChunk) {
+      const chunk = validUsersData.slice(i, i + usersPerChunk);
+
+      const placeholders: string[] = [];
+      const values: any[] = [];
+      let paramIndex = 1;
+
+      for (const { userData } of chunk) {
+        const userPlaceholders = fields.map((field) => {
+          values.push(userData[field] ?? null);
+          return `$${paramIndex++}`;
+        });
+        placeholders.push(`(${userPlaceholders.join(', ')})`);
+      }
+
+      await toDB.query(
+        `
+        INSERT INTO "user" (${fields.map((f) => `"${f}"`).join(', ')})
+        VALUES ${placeholders.join(', ')}
+        ON CONFLICT ("id") DO NOTHING
+      `,
+        values,
+      );
+    }
+
+    const accountsData: AccountInsertData[] = [];
+
+    for (const { user } of validUsersData) {
+      for (const identity of user.identities ?? []) {
+        if (identity.provider === 'email') {
+          accountsData.push({
+            id: generateId(),
+            userId: user.id,
+            providerId: 'credential',
+            accountId: user.id,
+            password: user.encrypted_password || null,
+            createdAt: user.created_at,
+            updatedAt: user.updated_at,
+          });
+        }
+
+        if (supportedProviders.includes(identity.provider)) {
+          accountsData.push({
+            id: generateId(),
+            userId: user.id,
+            providerId: identity.provider,
+            accountId: identity.identity_data?.sub || identity.provider_id,
+            password: null,
+            createdAt: identity.created_at ?? user.created_at,
+            updatedAt: identity.updated_at ?? user.updated_at,
+          });
+        }
+      }
+    }
+
+    if (accountsData.length > 0) {
+      const maxParamsPerQuery = 65000;
+      const fieldsPerAccount = 7;
+      const accountsPerChunk = Math.floor(maxParamsPerQuery / fieldsPerAccount);
+
+      for (let i = 0; i < accountsData.length; i += accountsPerChunk) {
+        const chunk = accountsData.slice(i, i + accountsPerChunk);
+
+        const accountPlaceholders: string[] = [];
+        const accountValues: any[] = [];
+        let paramIndex = 1;
+
+        for (const acc of chunk) {
+          accountPlaceholders.push(
+            `($${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++})`,
+          );
+          accountValues.push(
+            acc.id,
+            acc.userId,
+            acc.providerId,
+            acc.accountId,
+            acc.password,
+            acc.createdAt,
+            acc.updatedAt,
+          );
+        }
+
+        await toDB.query(
+          `
+          INSERT INTO "account" ("id", "userId", "providerId", "accountId", "password", "createdAt", "updatedAt")
+          VALUES ${accountPlaceholders.join(', ')}
+          ON CONFLICT ("id") DO NOTHING
+        `,
+          accountValues,
+        );
+      }
+    }
+
+    await toDB.query('COMMIT');
+    stats.success = validUsersData.length;
+  } catch (error: any) {
+    await toDB.query('ROLLBACK');
+    console.error('[TRANSACTION] Batch failed, rolled back:', error.message);
+    stats.failure = validUsersData.length;
+    if (stats.errors.length < 100) {
+      stats.errors.push({ userId: 'bulk', error: error.message });
+    }
+  }
+
+  return stats;
+}
+
+async function migrateFromSupabase() {
+  const { batchSize, resumeFromId } = CONFIG;
+
+  console.log('[MIGRATION] Starting migration with config:', CONFIG);
+
+  // Validate Better Auth configuration
+  const ctx = await validateAuthConfig();
+
+  try {
+    const countResult = await fromDB.query<{ count: string }>(
+      `
+      SELECT COUNT(*) as count FROM auth.users
+      ${resumeFromId ? 'WHERE id > $1' : ''}
+    `,
+      resumeFromId ? [resumeFromId] : [],
+    );
+
+    const totalUsers = parseInt(countResult.rows[0]?.count || '0', 10);
+
+    console.log(`[MIGRATION] Starting migration for ${totalUsers.toLocaleString()} users`);
+    console.log(`[MIGRATION] Batch size: ${batchSize}\n`);
+
+    stateManager.start(totalUsers, batchSize);
+
+    let lastProcessedId: string | null = resumeFromId;
+    let hasMore = true;
+    let batchNumber = 0;
+
+    while (hasMore) {
+      batchNumber++;
+      const batchStart = Date.now();
+
+      const result: { rows: SupabaseUserFromDB[] } = await fromDB.query<SupabaseUserFromDB>(
+        `
+        SELECT 
+          u.*,
+          COALESCE(
+            json_agg(
+              i.* ORDER BY i.id
+            ) FILTER (WHERE i.id IS NOT NULL),
+            '[]'::json
+          ) as identities
+        FROM auth.users u
+        LEFT JOIN auth.identities i ON u.id = i.user_id
+        ${lastProcessedId ? 'WHERE u.id > $1' : ''}
+        GROUP BY u.id
+        ORDER BY u.id ASC
+        LIMIT $${lastProcessedId ? '2' : '1'}
+      `,
+        lastProcessedId ? [lastProcessedId, batchSize] : [batchSize],
+      );
+
+      const batch: SupabaseUserFromDB[] = result.rows;
+      hasMore = batch.length === batchSize;
+
+      if (batch.length === 0) break;
+
+      console.log(
+        `\nBatch ${batchNumber}/${Math.ceil(totalUsers / batchSize)} (${batch.length} users)`,
+      );
+
+      const stats = await processBatch(batch, ctx);
+
+      lastProcessedId = batch[batch.length - 1]!.id;
+      stateManager.updateProgress(
+        batch.length,
+        stats.success,
+        stats.failure,
+        stats.skip,
+        lastProcessedId,
+      );
+
+      stats.errors.forEach((err) => stateManager.addError(err.userId, err.error));
+
+      const batchTime = ((Date.now() - batchStart) / 1000).toFixed(2);
+      const usersPerSec = (batch.length / parseFloat(batchTime)).toFixed(0);
+
+      const state = stateManager.getState();
+      console.log(`Success: ${stats.success} | Skip: ${stats.skip} | Failure: ${stats.failure}`);
+      console.log(
+        `Progress: ${stateManager.getProgress()}% (${state.processedUsers.toLocaleString()}/${state.totalUsers.toLocaleString()})`,
+      );
+      console.log(`Speed: ${usersPerSec} users/sec (${batchTime}s for this batch)`);
+
+      const eta = stateManager.getETA();
+      if (eta) {
+        console.log(`ETA: ${eta}`);
+      }
+    }
+
+    stateManager.complete();
+    const finalState = stateManager.getState();
+
+    console.log('\n🎉 Migration completed');
+    console.log(`   - Success: ${finalState.successCount.toLocaleString()}`);
+    console.log(`   - Skipped: ${finalState.skipCount.toLocaleString()}`);
+    console.log(`   - Failed: ${finalState.failureCount.toLocaleString()}`);
+
+    const totalTime =
+      finalState.completedAt && finalState.startedAt
+        ? ((finalState.completedAt.getTime() - finalState.startedAt.getTime()) / 1000 / 60).toFixed(
+            1,
+          )
+        : '0';
+    console.log(`   Total time: ${totalTime} minutes`);
+
+    if (finalState.errors.length > 0) {
+      console.log(`\nFirst ${Math.min(10, finalState.errors.length)} errors:`);
+      finalState.errors.slice(0, 10).forEach((err) => {
+        console.log(`- User ${err.userId}: ${err.error}`);
+      });
+    }
+
+    return finalState;
+  } catch (error) {
+    stateManager.fail();
+    console.error('\nMigration failed:', error);
+    throw error;
+  } finally {
+    await fromDB.end();
+    await toDB.end();
+  }
+}
+
+// ============================================================================
+// MAIN ENTRY POINT
+// ============================================================================
+
+async function main() {
+  console.log('🚀 Supabase Auth → Better Auth Migration\n');
+
+  if (!process.env.FROM_DATABASE_URL) {
+    console.error('Error: FROM_DATABASE_URL environment variable is required');
+    process.exit(1);
+  }
+  if (!process.env.TO_DATABASE_URL) {
+    console.error('Error: TO_DATABASE_URL environment variable is required');
+    process.exit(1);
+  }
+
+  try {
+    await migrateFromSupabase();
+    process.exit(0);
+  } catch (error) {
+    console.error('\nMigration failed:', error);
+    process.exit(1);
+  }
+}
+main();
 ```
+
+You can configure the script using `CONFIG` inside the script.
+
+- `batchSize`: Number of users to process in each batch. Default: 5000
+- `resumeFromId`: Resume from a specific user ID (cursor-based pagination). Default: null
+- `tempEmailDomain`: Temporary email domain for phone-only users. Default: "temp.better-auth.com"
 </Step>
 
-<Step>
-### Customize the migration script (Optional)
-
-- `name`: the migration script will use the user's email as the name. You might want to customize it if you have the user display name in your database.
-- `socialProviderList`: the migration script will use the social providers you have enabled in your auth config. You might want to customize it if you have additional social providers that you haven't enabled in your auth config.
-- `role`: remove `role` if you're not using the `admin` plugin 
-- `isAnonymous`: remove `isAnonymous` if you're not using the `anonymous` plugin.
-- update other tables that reference the `users` table to use the `id` field.
-</Step>
 <Step>
 ### Run the migration script
+
+<Callout type="info">
+The migration script uses **keyset pagination** (cursor-based) which efficiently handles large datasets without loading everything into memory. For very large migrations (500k+ users), you may need to increase Node's memory limit with `NODE_OPTIONS="--max-old-space-size=8192"`.
+</Callout>
 
 Run the migration script to migrate the users and accounts from Supabase to Better Auth.
 
 ```bash title="Terminal"
-bun migration.ts # or use node, ts-node, etc.
+npx tsx migration.ts
 ```
+
+You can also use other TypeScript runners like `bun migration.ts`, `ts-node migration.ts`, or compile to JS first.
+</Step>
+<Step>
+ ### Change password hashing algorithm
+
+ By default, Better Auth uses the `scrypt` algorithm to hash passwords. Since Supabase uses `bcrypt`, you'll need to configure Better Auth to use bcrypt for password verification.
+
+ First, install bcrypt:
+
+ ```package-install
+ npm install bcrypt
+ ```
+
+ ```bash title="Terminal"
+ npm install -D @types/bcrypt
+ ```
+
+ Then add the password configuration to your existing auth config:
+
+ ```ts title="auth.ts"
+ import { betterAuth } from "better-auth";
+ import { Pool } from "pg";
+ import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
+ import bcrypt from "bcrypt"; // [!code highlight]
+ 
+ export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+    emailAndPassword: {
+        enabled: true,
+        password: { // [!code highlight]
+            hash: async (password) => { // [!code highlight]
+                return await bcrypt.hash(password, 10); // [!code highlight]
+            }, // [!code highlight]
+            verify: async ({ hash, password }) => { // [!code highlight]
+                return await bcrypt.compare(password, hash); // [!code highlight]
+            } // [!code highlight]
+        } // [!code highlight]
+    },
+    socialProviders: {
+        // ... your social providers
+    },
+    plugins: [admin(), anonymous(), phoneNumber()],
+    user: {
+        additionalFields: {
+            // ... your additional fields
+        },
+    },
+ })
+ ```
 </Step>
 <Step>
 ### Update your code
@@ -287,18 +1030,454 @@ Here's a list of the Supabase auth API calls and their Better Auth counterparts.
 
 Learn more:
 - [Basic Usage](/docs/basic-usage): Learn how to use the auth client to sign up, sign in, and sign out.
-- [Email and Password](/docs/authentication/email-and-password): Learn how to add email and password authentication to your project.
+- [Email and Password](/docs/authentication/email-password): Learn how to add email and password authentication to your project.
 - [Anonymous](/docs/plugins/anonymous): Learn how to add anonymous authentication to your project.
 - [Admin](/docs/plugins/admin): Learn how to add admin authentication to your project.
-- [Email OTP](/docs/authentication/email-otp): Learn how to add email OTP authentication to your project.
+- [Email OTP](/docs/plugins/email-otp): Learn how to add email OTP authentication to your project.
 - [Hooks](/docs/concepts/hooks): Learn how to use the hooks to listen for events.
 - [Next.js](/docs/integrations/next): Learn how to use the auth client in a Next.js project.
 </Step>
 </Steps>
 
-### Middleware
+## Migrating Enterprise SSO
 
-To protect routes with middleware, refer to the [Next.js middleware guide](/docs/integrations/next#middleware) or your framework's documentation.
+<Callout type="info">
+**Skip this section** if you're not using Supabase's Enterprise SSO feature. This section is only for users who have SAML SSO providers configured in Supabase.
+</Callout>
+
+If you're using Supabase's Enterprise SSO (SAML), follow these additional steps to migrate your SSO providers and users.
+
+<Callout type="warn">
+SSO migration requires updating your Identity Provider (IdP) configuration with new callback URLs. Plan for a brief cutover window as existing SSO sessions will be invalidated.
+</Callout>
+
+<Steps>
+
+<Step>
+### Install the SSO plugin
+
+Install the Better Auth SSO package:
+
+```package-install
+npm install @better-auth/sso
+```
+
+Add the SSO plugin to your auth configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from 'better-auth';
+import { Pool } from "pg";
+import { admin, anonymous, phoneNumber } from 'better-auth/plugins';
+import { sso } from '@better-auth/sso'; // [!code highlight]
+
+export const auth = betterAuth({
+    database: new Pool({ 
+        connectionString: process.env.DATABASE_URL 
+    }),
+    emailAndPassword: { 
+        enabled: true,
+    },
+    plugins: [
+        admin(), 
+        anonymous(), 
+        phoneNumber(),
+        sso(), // [!code highlight]
+    ],
+})
+```
+</Step>
+
+<Step>
+### Run the SSO database migration
+
+Run the migration to create the `ssoProvider` table:
+
+```bash title="Terminal"
+npx auth migrate
+```
+</Step>
+
+<Step>
+### Export your Supabase SSO providers
+
+List and export your existing SSO providers from Supabase using the CLI:
+
+```bash title="Terminal"
+# List all SSO providers
+supabase sso list --project-ref <your-project-ref>
+
+# Export each provider's details to a JSON file
+supabase sso show <provider-id> --project-ref <your-project-ref> -o json > sso-provider.json
+```
+
+A typical Supabase SSO provider export looks like this:
+
+```json title="sso-provider.json"
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "saml": {
+    "entity_id": "https://idp.example.com/saml",
+    "metadata_url": "https://idp.example.com/saml/metadata",
+    "attribute_mapping": {
+      "keys": {
+        "email": { "name": "mail" },
+        "first_name": { "name": "givenName" },
+        "last_name": { "name": "surname" }
+      }
+    }
+  },
+  "domains": [
+    { "id": "domain-uuid", "domain": "company.com" }
+  ]
+}
+```
+
+<Callout type="info">
+If you have multiple SSO providers, export each one separately. You'll need all of them for the migration script.
+</Callout>
+</Step>
+
+<Step>
+### Add SSO types to the migration script
+
+Add these type definitions to your migration script:
+
+```ts title="migration.ts"
+// ============================================================================
+// SSO MIGRATION TYPES
+// ============================================================================
+
+type SupabaseSSOProvider = {
+  id: string;
+  saml: {
+    entity_id: string;
+    metadata_url?: string;
+    metadata_xml?: string;
+    attribute_mapping?: {
+      keys: Record<string, { name: string }>;
+    };
+    name_id_format?: string;
+  };
+  domains: Array<{ id: string; domain: string }>;
+};
+
+type SSOProviderInsertData = {
+  id: string;
+  providerId: string;
+  issuer: string;
+  domain: string;
+  oidcConfig: null;
+  samlConfig: string;
+  organizationId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+```
+</Step>
+
+<Step>
+### Add the SSO provider migration function
+
+Add this function to migrate your SSO providers:
+
+```ts title="migration.ts"
+// ============================================================================
+// SSO PROVIDER MIGRATION
+// ============================================================================
+
+/**
+ * Migrates Supabase SSO providers to Better Auth format
+ * 
+ * @param providers - Array of exported Supabase SSO providers
+ * @param betterAuthUrl - Your Better Auth base URL (e.g., https://app.example.com)
+ */
+async function migrateSSOProviders(
+  providers: SupabaseSSOProvider[], 
+  betterAuthUrl: string
+) {
+  console.log(`\n[SSO] Migrating ${providers.length} SSO provider(s)...\n`);
+
+  for (const provider of providers) {
+    // Create a unique provider ID that references the original Supabase ID
+    const providerId = `sso-${provider.id}`;
+    
+    // Combine all domains into a comma-separated string
+    const domains = provider.domains.map(d => d.domain).join(',');
+    
+    // Transform Supabase attribute mapping to Better Auth format
+    const mapping = provider.saml.attribute_mapping?.keys || {};
+    
+    const samlConfig = {
+      issuer: provider.saml.entity_id,
+      // These will be auto-populated from metadata
+      entryPoint: '',
+      cert: '',
+      // Callback URL for SAML responses
+      callbackUrl: `${betterAuthUrl}/api/auth/sso/saml2/callback/${providerId}`,
+      // IdP metadata - Better Auth will fetch and parse this
+      idpMetadata: provider.saml.metadata_url 
+        ? { metadataUrl: provider.saml.metadata_url }
+        : { metadata: provider.saml.metadata_xml },
+      // SP metadata configuration
+      spMetadata: {
+        entityID: `${betterAuthUrl}/api/auth/sso/saml2/sp/metadata`,
+      },
+      // Name ID format from Supabase config
+      identifierFormat: provider.saml.name_id_format || 
+        'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+      // Map Supabase attribute names to Better Auth fields
+      mapping: {
+        id: 'nameID',
+        email: mapping.email?.name || 'email',
+        name: mapping.name?.name || 'displayName',
+        firstName: mapping.first_name?.name || 'givenName',
+        lastName: mapping.last_name?.name || 'surname',
+      },
+    };
+
+    const ssoProviderData: SSOProviderInsertData = {
+      id: generateId(),
+      providerId,
+      issuer: provider.saml.entity_id,
+      domain: domains,
+      oidcConfig: null,
+      samlConfig: JSON.stringify(samlConfig),
+      organizationId: null, // Set this if linking to a Better Auth organization
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      await toDB.query(`
+        INSERT INTO "ssoProvider" (
+          "id", "providerId", "issuer", "domain", 
+          "oidcConfig", "samlConfig", "organizationId",
+          "createdAt", "updatedAt"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        ON CONFLICT ("providerId") DO UPDATE SET
+          "issuer" = EXCLUDED."issuer",
+          "domain" = EXCLUDED."domain",
+          "samlConfig" = EXCLUDED."samlConfig",
+          "updatedAt" = EXCLUDED."updatedAt"
+      `, [
+        ssoProviderData.id,
+        ssoProviderData.providerId,
+        ssoProviderData.issuer,
+        ssoProviderData.domain,
+        ssoProviderData.oidcConfig,
+        ssoProviderData.samlConfig,
+        ssoProviderData.organizationId,
+        ssoProviderData.createdAt,
+        ssoProviderData.updatedAt,
+      ]);
+
+      console.log(`[SSO] ✓ Migrated provider: ${providerId}`);
+      console.log(`      Domains: ${domains}`);
+      console.log(`      Issuer: ${provider.saml.entity_id}\n`);
+    } catch (error: any) {
+      console.error(`[SSO] ✗ Failed to migrate provider ${providerId}:`, error.message);
+    }
+  }
+
+  console.log('[SSO] Provider migration complete.\n');
+}
+```
+</Step>
+
+<Step>
+### Update user migration to link SSO accounts
+
+In the `processBatch` function, add handling for SSO identities. Find the section that processes identities and add:
+
+```ts title="migration.ts"
+// Inside the identity processing loop in processBatch()
+for (const identity of user.identities ?? []) {
+  // ... existing email and social provider handling ...
+
+  // Handle SSO identities // [!code highlight]
+  if (identity.provider.startsWith('sso:')) { // [!code highlight]
+    const supabaseProviderId = identity.provider.replace('sso:', ''); // [!code highlight]
+    
+    accountsData.push({ // [!code highlight]
+      id: generateId(), // [!code highlight]
+      userId: user.id, // [!code highlight]
+      providerId: `sso-${supabaseProviderId}`, // Matches the migrated provider ID // [!code highlight]
+      accountId: identity.identity_data?.sub || identity.provider_id, // [!code highlight]
+      password: null, // [!code highlight]
+      createdAt: identity.created_at ?? user.created_at, // [!code highlight]
+      updatedAt: identity.updated_at ?? user.updated_at, // [!code highlight]
+    }); // [!code highlight]
+  } // [!code highlight]
+}
+```
+
+This ensures that users who previously signed in via SSO will have their accounts linked to the migrated SSO provider.
+</Step>
+
+<Step>
+### Run the SSO migration
+
+Create a separate script or add to your main migration to run the SSO provider migration:
+
+```ts title="run-sso-migration.ts"
+import { readFileSync } from 'fs';
+
+// Load your exported Supabase SSO providers
+const providers: SupabaseSSOProvider[] = [
+  JSON.parse(readFileSync('./sso-provider-1.json', 'utf-8')),
+  // Add more providers if you have multiple
+];
+
+// Your Better Auth application URL
+const BETTER_AUTH_URL = process.env.BETTER_AUTH_URL || 'https://app.example.com';
+
+async function main() {
+  // First, migrate users (including SSO user accounts)
+  await migrateFromSupabase();
+  
+  // Then, migrate SSO providers
+  await migrateSSOProviders(providers, BETTER_AUTH_URL);
+}
+
+main();
+```
+
+Run the migration:
+
+```bash title="Terminal"
+npx tsx run-sso-migration.ts
+```
+</Step>
+
+<Step>
+### Update your Identity Provider
+
+After migrating, you need to update your IdP (Okta, Azure AD, Google Workspace, etc.) with the new Better Auth endpoints.
+
+**Update these settings in your IdP:**
+
+| Setting | Old Value (Supabase) | New Value (Better Auth) |
+|---------|----------------------|-------------------------|
+| ACS URL / Reply URL | `https://<project>.supabase.co/auth/v1/sso/saml/acs` | `https://yourapp.com/api/auth/sso/saml2/callback/<providerId>` |
+| Entity ID / Audience | `https://<project>.supabase.co/auth/v1/sso/saml/metadata` | `https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=<providerId>` |
+
+Replace `<providerId>` with your migrated provider ID (e.g., `sso-550e8400-e29b-41d4-a716-446655440000`).
+
+<Callout type="info">
+You can retrieve the SP metadata for your provider at:
+`GET https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=<providerId>`
+
+Share this URL with your IdP administrator if they need the full metadata XML.
+</Callout>
+</Step>
+
+<Step>
+### Update your client code
+
+Replace Supabase SSO authentication calls with Better Auth:
+
+```ts title="Before (Supabase)"
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Sign in with SSO
+await supabase.auth.signInWithSSO({ 
+  domain: 'company.com' 
+});
+```
+
+```ts title="After (Better Auth)"
+import { createAuthClient } from 'better-auth/client';
+import { ssoClient } from '@better-auth/sso/client'; // [!code highlight]
+
+const authClient = createAuthClient({
+  plugins: [ssoClient()], // [!code highlight]
+});
+
+// Sign in with SSO by domain // [!code highlight]
+await authClient.signIn.sso({  // [!code highlight]
+  domain: 'company.com', // [!code highlight]
+  callbackURL: '/dashboard', // [!code highlight]
+}); // [!code highlight]
+```
+
+You can also initiate SSO by email (the domain is extracted automatically):
+
+```ts title="auth-client.ts"
+// Sign in by email - domain is extracted from email
+await authClient.signIn.sso({ 
+  email: 'user@company.com',
+  callbackURL: '/dashboard',
+});
+
+// Or sign in by provider ID directly
+await authClient.signIn.sso({ 
+  providerId: 'sso-550e8400-e29b-41d4-a716-446655440000',
+  callbackURL: '/dashboard',
+});
+```
+</Step>
+
+<Step>
+### Test the SSO flow
+
+Before going live, test the complete SSO flow:
+
+1. **Test SP-initiated SSO**: Start from your app's login page, enter an SSO-enabled email domain
+2. **Verify user attributes**: Check that name, email, and other attributes are mapped correctly
+3. **Test existing users**: Ensure users who previously logged in via SSO can still access their accounts
+4. **Test new users**: Verify that new SSO users are created correctly
+
+```ts title="test-sso.ts"
+// Quick test - check if SSO provider is configured correctly
+const response = await fetch(
+  'https://yourapp.com/api/auth/sso/saml2/sp/metadata?providerId=sso-your-provider-id'
+);
+const metadata = await response.text();
+console.log('SP Metadata:', metadata);
+```
+</Step>
+
+</Steps>
+
+### SSO Migration Checklist
+
+Use this checklist to ensure a complete SSO migration:
+
+```
+- [ ] SSO plugin installed and configured
+- [ ] Database migration run (`ssoProvider` table created)
+- [ ] Supabase SSO providers exported
+- [ ] Providers migrated to Better Auth database
+- [ ] User accounts linked to SSO providers
+- [ ] IdP settings updated (ACS URL, Entity ID)
+- [ ] Client code updated to use Better Auth SSO
+- [ ] SP-initiated SSO flow tested
+- [ ] Existing SSO users can log in
+- [ ] New SSO users can be created
+```
+
+### Troubleshooting SSO
+
+<Callout type="warn">
+**SAML Signature Errors**: If you see signature validation errors, ensure your IdP's certificate is current. Some IdPs rotate certificates periodically—check the metadata URL for the latest certificate.
+</Callout>
+
+<Callout type="info">
+**Attribute Mapping Issues**: If user attributes aren't populating correctly, inspect the SAML assertion from your IdP using browser developer tools. Update the `mapping` field in your `samlConfig` to match the exact attribute names your IdP sends.
+</Callout>
+
+<Callout type="info">
+**Multiple Domains**: If you have multiple domains for a single SSO provider, separate them with commas in the `domain` field: `"company.com,company.org"`.
+</Callout>
+
+Learn more about SSO configuration in the [SSO Plugin Documentation](/docs/plugins/sso).
+
+### Auth Protection
+
+To protect routes with proxy(middleware), refer to the [Next.js Auth Protection Guide](/docs/integrations/next#auth-protection) or your framework's documentation.
 
 ## Wrapping Up
 

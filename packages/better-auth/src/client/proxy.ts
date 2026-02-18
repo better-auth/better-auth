@@ -1,18 +1,25 @@
-import type { BetterFetch, BetterFetchOption } from "@better-fetch/fetch";
-import type { Atom, PreinitializedWritableAtom } from "nanostores";
-import type { ProxyRequest } from "./path-to-object";
-import type { BetterAuthClientPlugin } from "./types";
+import type {
+	BetterAuthClientPlugin,
+	ClientAtomListener,
+	ClientFetchOption,
+} from "@better-auth/core";
+import type { BetterFetch } from "@better-fetch/fetch";
+import type { Atom } from "nanostores";
 import { isAtom } from "../utils/is-atom";
+import type { ProxyRequest } from "./path-to-object";
 
 function getMethod(
 	path: string,
 	knownPathMethods: Record<string, "POST" | "GET">,
 	args:
-		| { fetchOptions?: BetterFetchOption; query?: Record<string, any> }
+		| {
+				fetchOptions?: ClientFetchOption | undefined;
+				query?: Record<string, any> | undefined;
+		  }
 		| undefined,
 ) {
 	const method = knownPathMethods[path];
-	const { fetchOptions, query, ...body } = args || {};
+	const { fetchOptions, query: _query, ...body } = args || {};
 	if (method) {
 		return method;
 	}
@@ -25,11 +32,6 @@ function getMethod(
 	return "GET";
 }
 
-export type AuthProxySignal = {
-	atom: PreinitializedWritableAtom<boolean>;
-	matcher: (path: string) => boolean;
-};
-
 export function createDynamicPathProxy<T extends Record<string, any>>(
 	routes: T,
 	client: BetterFetch,
@@ -39,7 +41,10 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 ): T {
 	function createProxy(path: string[] = []): any {
 		return new Proxy(function () {}, {
-			get(target, prop: string) {
+			get(_, prop) {
+				if (typeof prop !== "string") {
+					return undefined;
+				}
 				if (prop === "then" || prop === "catch" || prop === "finally") {
 					return undefined;
 				}
@@ -70,12 +75,12 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 						)
 						.join("/");
 				const arg = (args[0] || {}) as ProxyRequest;
-				const fetchOptions = (args[1] || {}) as BetterFetchOption;
+				const fetchOptions = (args[1] || {}) as ClientFetchOption;
 				const { query, fetchOptions: argFetchOptions, ...body } = arg;
 				const options = {
 					...fetchOptions,
 					...argFetchOptions,
-				} as BetterFetchOption;
+				} as ClientFetchOption;
 				const method = getMethod(routePath, knownPathMethods, arg);
 				return await client(routePath, {
 					...options,
@@ -90,21 +95,30 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 					method,
 					async onSuccess(context) {
 						await options?.onSuccess?.(context);
+						if (!atomListeners || options.disableSignal) return;
 						/**
 						 * We trigger listeners
 						 */
-						const matches = atomListeners?.find((s) => s.matcher(routePath));
-						if (!matches) return;
-						const signal = atoms[matches.signal as any];
-						if (!signal) return;
-						/**
-						 * To avoid race conditions we set the signal in a setTimeout
-						 */
-						const val = signal.get();
-						setTimeout(() => {
-							//@ts-expect-error
-							signal.set(!val);
-						}, 10);
+						const matches = atomListeners.filter((s) => s.matcher(routePath));
+						if (!matches.length) return;
+
+						const visited = new Set<ClientAtomListener["signal"]>();
+						for (const match of matches) {
+							const signal = atoms[match.signal as any];
+							if (!signal) return;
+							if (visited.has(match.signal)) {
+								continue;
+							}
+							visited.add(match.signal);
+							/**
+							 * To avoid race conditions we set the signal in a setTimeout
+							 */
+							const val = signal.get();
+							setTimeout(() => {
+								//@ts-expect-error
+								signal.set(!val);
+							}, 10);
+						}
 					},
 				});
 			},

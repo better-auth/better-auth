@@ -1,12 +1,12 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
-import { $deviceAuthorizationOptionsSchema, deviceAuthorization } from ".";
+import { deviceAuthorization, deviceAuthorizationOptionsSchema } from ".";
 import { deviceAuthorizationClient } from "./client";
 import type { DeviceCode } from "./schema";
 
 describe("device authorization plugin input validation", () => {
 	it("basic validation", async () => {
-		const options = $deviceAuthorizationOptionsSchema.parse({});
+		const options = deviceAuthorizationOptionsSchema.parse({});
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "deviceCodeLength": 40,
@@ -18,17 +18,17 @@ describe("device authorization plugin input validation", () => {
 	});
 
 	it("should validate custom options", async () => {
-		const options = $deviceAuthorizationOptionsSchema.parse({
-			expiresIn: 60 * 1000,
-			interval: 2 * 1000,
+		const options = deviceAuthorizationOptionsSchema.parse({
+			expiresIn: "1m",
+			interval: "2s",
 			deviceCodeLength: 50,
 			userCodeLength: 10,
 		});
 		expect(options).toMatchInlineSnapshot(`
 			{
 			  "deviceCodeLength": 50,
-			  "expiresIn": 60000,
-			  "interval": 2000,
+			  "expiresIn": "1m",
+			  "interval": "2s",
 			  "userCodeLength": 10,
 			}
 		`);
@@ -120,22 +120,21 @@ describe("client validation", async () => {
 });
 
 describe("device authorization flow", async () => {
-	const { auth, client, sessionSetter, signInWithTestUser } =
-		await getTestInstance(
-			{
-				plugins: [
-					deviceAuthorization({
-						expiresIn: "5min",
-						interval: "2s",
-					}),
-				],
+	const { auth, signInWithTestUser, db } = await getTestInstance(
+		{
+			plugins: [
+				deviceAuthorization({
+					expiresIn: "5min",
+					interval: "2s",
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [deviceAuthorizationClient()],
 			},
-			{
-				clientOptions: {
-					plugins: [deviceAuthorizationClient()],
-				},
-			},
-		);
+		},
+	);
 
 	describe("device code request", () => {
 		it("should generate device and user codes", async () => {
@@ -148,11 +147,15 @@ describe("device authorization flow", async () => {
 			expect(response.device_code).toBeDefined();
 			expect(response.user_code).toBeDefined();
 			expect(response.verification_uri).toBeDefined();
+			expect(response.verification_uri).toContain("/device");
 			expect(response.verification_uri_complete).toBeDefined();
+			expect(response.verification_uri_complete).toContain("/device");
+			expect(response.verification_uri_complete).toContain(
+				`user_code=${response.user_code}`,
+			);
 			expect(response.expires_in).toBe(300);
 			expect(response.interval).toBe(2);
 			expect(response.user_code).toMatch(/^[A-Z0-9]{8}$/);
-			expect(response.verification_uri_complete).toContain(response.user_code);
 		});
 
 		it("should support custom client ID and scope", async () => {
@@ -169,6 +172,10 @@ describe("device authorization flow", async () => {
 	});
 
 	describe("device token polling", () => {
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
 		it("should return authorization_pending when not approved", async () => {
 			const { device_code } = await auth.api.deviceCode({
 				body: {
@@ -311,6 +318,8 @@ describe("device authorization flow", async () => {
 		});
 
 		it("should deny device authorization", async () => {
+			const { headers } = await signInWithTestUser();
+
 			const { device_code, user_code } = await auth.api.deviceCode({
 				body: {
 					client_id: "test-client",
@@ -320,7 +329,7 @@ describe("device authorization flow", async () => {
 			// Deny the device
 			const denyResponse = await auth.api.deviceDeny({
 				body: { userCode: user_code },
-				headers: new Headers(),
+				headers,
 			});
 			expect("success" in denyResponse && denyResponse.success).toBe(true);
 
@@ -467,12 +476,75 @@ describe("device authorization flow", async () => {
 				"read write profile",
 			);
 		});
+
+		it("should require authentication for deny", async () => {
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			await expect(
+				auth.api.deviceDeny({
+					body: { userCode: user_code },
+					headers: new Headers(),
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "unauthorized",
+					error_description: "Authentication required",
+				},
+			});
+		});
+
+		it("should allow first user to approve but prevent re-approval", async () => {
+			// Sign in as user
+			const { headers } = await signInWithTestUser();
+
+			// Request device code
+			const { user_code } = await auth.api.deviceCode({
+				body: {
+					client_id: "test-client",
+				},
+			});
+
+			// User approves - this should succeed
+			const approveResponse = await auth.api.deviceApprove({
+				body: { userCode: user_code },
+				headers,
+			});
+			expect("success" in approveResponse && approveResponse.success).toBe(
+				true,
+			);
+
+			// Verify the device code is now approved
+			const cleanUserCode = user_code.replace(/-/g, "");
+			const deviceCodeRecord = await db.findOne<DeviceCode>({
+				model: "deviceCode",
+				where: [{ field: "userCode", value: cleanUserCode }],
+			});
+			expect(deviceCodeRecord?.status).toBe("approved");
+			expect(deviceCodeRecord?.userId).toBeDefined();
+
+			// Try to approve again - should fail because already processed
+			await expect(
+				auth.api.deviceApprove({
+					body: { userCode: user_code },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+					error_description: "Device code already processed",
+				},
+			});
+		});
 	});
 });
 
 describe("device authorization with custom options", async () => {
 	it("should correctly store interval as milliseconds in database", async () => {
-		const { auth, client, db } = await getTestInstance({
+		const { auth, db } = await getTestInstance({
 			plugins: [
 				deviceAuthorization({
 					interval: "5s",
@@ -542,5 +614,120 @@ describe("device authorization with custom options", async () => {
 			},
 		});
 		expect(response.expires_in).toBe(60);
+	});
+});
+
+describe("verificationUri option", async () => {
+	it("should validate verificationUri option at plugin initialization", async () => {
+		expect(() => {
+			deviceAuthorizationOptionsSchema.parse({
+				verificationUri: 123,
+			});
+		}).toThrow();
+	});
+
+	it("should return default /device verification URIs when not configured", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [deviceAuthorization({})],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		expect(response.verification_uri).toBeDefined();
+		expect(response.verification_uri).toContain("/device");
+		expect(response.verification_uri_complete).toBeDefined();
+		expect(response.verification_uri_complete).toContain("/device");
+		expect(response.verification_uri_complete).toContain(
+			`user_code=${response.user_code}`,
+		);
+	});
+
+	it("should use custom relative path for verificationUri", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					verificationUri: "/auth/device-verify",
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		expect(response.verification_uri).toContain("/auth/device-verify");
+		expect(response.verification_uri_complete).toContain("/auth/device-verify");
+		expect(response.verification_uri_complete).toContain(
+			`user_code=${response.user_code}`,
+		);
+	});
+
+	it("should use absolute URL for verificationUri", async () => {
+		const customUrl = "https://myapp.com/device";
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					verificationUri: customUrl,
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		expect(response.verification_uri).toBe(customUrl);
+		expect(response.verification_uri_complete).toBe(
+			`${customUrl}?user_code=${response.user_code}`,
+		);
+	});
+
+	it("should properly encode user_code in verification_uri_complete", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					verificationUri: "/device",
+					generateUserCode: () => "ABC-123",
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		expect(response.verification_uri_complete).toContain("user_code=ABC-123");
+	});
+
+	it("should support verificationUri with existing query parameters", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				deviceAuthorization({
+					verificationUri: "/device?lang=en",
+				}),
+			],
+		});
+
+		const response = await auth.api.deviceCode({
+			body: {
+				client_id: "test-client",
+			},
+		});
+
+		expect(response.verification_uri).toContain("lang=en");
+		expect(response.verification_uri_complete).toContain("lang=en");
+		expect(response.verification_uri_complete).toContain(
+			`user_code=${response.user_code}`,
+		);
 	});
 });

@@ -1,38 +1,52 @@
-import type { User } from "../../types";
-import type { AuthEndpoint } from "../../api/call";
-import type { LiteralString } from "../../types/helper";
+import type { BetterAuthPlugin, LiteralString } from "@better-auth/core";
+import type { InferOptionSchema, User } from "../../types";
 import type { BackupCodeOptions } from "./backup-codes";
 import type { OTPOptions } from "./otp";
-import type { TOTPOptions } from "./totp";
-import type { InferOptionSchema } from "../../types";
 import type { schema } from "./schema";
+import type { TOTPOptions } from "./totp";
 
 export interface TwoFactorOptions {
 	/**
 	 * Application Name
 	 */
-	issuer?: string;
+	issuer?: string | undefined;
 	/**
 	 * TOTP OPtions
 	 */
-	totpOptions?: Omit<TOTPOptions, "issuer">;
+	totpOptions?: Omit<TOTPOptions, "issuer"> | undefined;
 	/**
 	 * OTP Options
 	 */
-	otpOptions?: OTPOptions;
+	otpOptions?: OTPOptions | undefined;
 	/**
 	 * Backup code options
 	 */
-	backupCodeOptions?: BackupCodeOptions;
+	backupCodeOptions?: BackupCodeOptions | undefined;
 	/**
 	 * Skip verification on enabling two factor authentication.
 	 * @default false
 	 */
-	skipVerificationOnEnable?: boolean;
+	skipVerificationOnEnable?: boolean | undefined;
 	/**
 	 * Custom schema for the two factor plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
+	/**
+	 * Maximum age (in seconds) for the two-factor verification cookie.
+	 * This controls how long users have to complete the 2FA flow
+	 * after signing in.
+	 *
+	 * @default 600 (10 minutes)
+	 */
+	twoFactorCookieMaxAge?: number | undefined;
+	/**
+	 * Maximum age (in seconds) for the trusted device cookie.
+	 * When a user opts to trust a device, this controls how long
+	 * the device stays trusted before requiring 2FA again.
+	 *
+	 * @default 2592000 (30 days)
+	 */
+	trustDeviceMaxAge?: number | undefined;
 }
 
 export interface UserWithTwoFactor extends User {
@@ -44,10 +58,11 @@ export interface UserWithTwoFactor extends User {
 
 export interface TwoFactorProvider {
 	id: LiteralString;
-	endpoints?: Record<string, AuthEndpoint>;
+	endpoints?: BetterAuthPlugin["endpoints"] | undefined;
 }
 
 export interface TwoFactorTable {
+	id: string;
 	userId: string;
 	secret: string;
 	backupCodes: string;

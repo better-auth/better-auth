@@ -1,17 +1,25 @@
-import * as z from "zod";
-import {
-	createAuthEndpoint,
-	createAuthMiddleware,
-	getSession,
-} from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	GenericEndpointContext,
-	InferSession,
-	InferUser,
-} from "../../types";
+} from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
+import * as z from "zod";
+import { getSession } from "../../api";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getEndpointResponse } from "../../utils/plugin-helper";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
 
 const getSessionQuerySchema = z.optional(
 	z.object({
@@ -41,7 +49,7 @@ export type CustomSessionPluginOptions = {
 	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
 	 * @default false
 	 */
-	shouldMutateListDeviceSessionsEndpoint?: boolean;
+	shouldMutateListDeviceSessionsEndpoint?: boolean | undefined;
 };
 
 export const customSession = <
@@ -50,13 +58,13 @@ export const customSession = <
 >(
 	fn: (
 		session: {
-			user: InferUser<O>;
-			session: InferSession<O>;
+			user: User<O["user"], O["plugins"]>;
+			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
-	options?: O,
-	pluginOptions?: CustomSessionPluginOptions,
+	options?: O | undefined,
+	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
 	return {
 		id: "custom-session",
@@ -121,11 +129,21 @@ export const customSession = <
 					}
 					const fnResult = await fn(session.response as any, ctx);
 
-					const setCookie = session.headers.get("set-cookie");
-					if (setCookie) {
-						ctx.setHeader("set-cookie", setCookie);
-						session.headers.delete("set-cookie");
+					for (const cookieStr of session.headers.getSetCookie()) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						parsed.forEach((attrs, name) => {
+							ctx.setCookie(name, attrs.value, {
+								maxAge: attrs["max-age"],
+								expires: attrs.expires,
+								domain: attrs.domain,
+								path: attrs.path,
+								secure: attrs.secure,
+								httpOnly: attrs.httponly,
+								sameSite: attrs.samesite,
+							});
+						});
 					}
+					session.headers.delete("set-cookie");
 
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
@@ -134,5 +152,9 @@ export const customSession = <
 				},
 			),
 		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
+		},
+		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };

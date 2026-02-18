@@ -1,5 +1,5 @@
 import type { InferOptionSchema, User } from "../../types";
-import type { schema } from "./schema";
+import type { OAuthApplication, schema } from "./schema";
 
 export interface OIDCOptions {
 	/**
@@ -7,27 +7,27 @@ export interface OIDCOptions {
 	 *
 	 * @default 3600 (1 hour) - Recommended by the OIDC spec
 	 */
-	accessTokenExpiresIn?: number;
+	accessTokenExpiresIn?: number | undefined;
 	/**
 	 * Allow dynamic client registration.
 	 */
-	allowDynamicClientRegistration?: boolean;
+	allowDynamicClientRegistration?: boolean | undefined;
 	/**
 	 * The metadata for the OpenID Connect provider.
 	 */
-	metadata?: Partial<OIDCMetadata>;
+	metadata?: Partial<OIDCMetadata> | undefined;
 	/**
 	 * The amount of time in seconds that the refresh token is valid for.
 	 *
 	 * @default 604800 (7 days) - Recommended by the OIDC spec
 	 */
-	refreshTokenExpiresIn?: number;
+	refreshTokenExpiresIn?: number | undefined;
 	/**
 	 * The amount of time in seconds that the authorization code is valid for.
 	 *
 	 * @default 600 (10 minutes) - Recommended by the OIDC spec
 	 */
-	codeExpiresIn?: number;
+	codeExpiresIn?: number | undefined;
 	/**
 	 * The scopes that the client is allowed to request.
 	 *
@@ -37,13 +37,13 @@ export interface OIDCOptions {
 	 * ["openid", "profile", "email", "offline_access"]
 	 * ```
 	 */
-	scopes?: string[];
+	scopes?: string[] | undefined;
 	/**
 	 * The default scope to use if the client does not provide one.
 	 *
 	 * @default "openid"
 	 */
-	defaultScope?: string;
+	defaultScope?: string | undefined;
 	/**
 	 * A URL to the consent page where the user will be redirected if the client
 	 * requests consent.
@@ -67,20 +67,22 @@ export interface OIDCOptions {
 	 * consentPage: "/oauth/authorize"
 	 * ```
 	 */
-	consentPage?: string;
+	consentPage?: string | undefined;
 	/**
 	 * The HTML for the consent page. This is used if `consentPage` is not
 	 * provided. This should be a function that returns an HTML string.
 	 * The function will be called with the following props:
 	 */
-	getConsentHTML?: (props: {
-		clientId: string;
-		clientName: string;
-		clientIcon?: string;
-		clientMetadata: Record<string, any> | null;
-		code: string;
-		scopes: string[];
-	}) => string;
+	getConsentHTML?:
+		| ((props: {
+				clientId: string;
+				clientName: string;
+				clientIcon?: string | undefined;
+				clientMetadata: Record<string, any> | null;
+				code: string;
+				scopes: string[];
+		  }) => string)
+		| undefined;
 	/**
 	 * The URL to the login page. This is used if the client requests the `login`
 	 * prompt.
@@ -94,21 +96,21 @@ export interface OIDCOptions {
 	 *
 	 * @default true
 	 */
-	requirePKCE?: boolean;
+	requirePKCE?: boolean | undefined;
 	/**
 	 * Allow plain to be used as a code challenge method.
 	 *
 	 * @default true
 	 */
-	allowPlainCodeChallengeMethod?: boolean;
+	allowPlainCodeChallengeMethod?: boolean | undefined;
 	/**
 	 * Custom function to generate a client ID.
 	 */
-	generateClientId?: () => string;
+	generateClientId?: (() => string) | undefined;
 	/**
 	 * Custom function to generate a client secret.
 	 */
-	generateClientSecret?: () => string;
+	generateClientSecret?: (() => string) | undefined;
 	/**
 	 * Get the additional user info claims
 	 *
@@ -119,16 +121,18 @@ export interface OIDCOptions {
 	 * @param client - The client object.
 	 * @returns The user info claim.
 	 */
-	getAdditionalUserInfoClaim?: (
-		user: User & Record<string, any>,
-		scopes: string[],
-		client: Client,
-	) => Record<string, any> | Promise<Record<string, any>>;
+	getAdditionalUserInfoClaim?:
+		| ((
+				user: User & Record<string, any>,
+				scopes: string[],
+				client: Client,
+		  ) => Record<string, any> | Promise<Record<string, any>>)
+		| undefined;
 	/**
 	 * Trusted clients that are configured directly in the provider options.
 	 * These clients bypass database lookups and can optionally skip consent screens.
 	 */
-	trustedClients?: Client[];
+	trustedClients?: Client[] | undefined;
 	/**
 	 * Store the client secret in your database in a secure way
 	 * Note: This will not affect the client secret sent to the user, it will only affect the client secret stored in your database
@@ -142,24 +146,27 @@ export interface OIDCOptions {
 	 * @default "plain"
 	 */
 	storeClientSecret?:
-		| "hashed"
-		| "plain"
-		| "encrypted"
-		| { hash: (clientSecret: string) => Promise<string> }
-		| {
-				encrypt: (clientSecret: string) => Promise<string>;
-				decrypt: (clientSecret: string) => Promise<string>;
-		  };
+		| (
+				| "hashed"
+				| "plain"
+				| "encrypted"
+				| { hash: (clientSecret: string) => Promise<string> }
+				| {
+						encrypt: (clientSecret: string) => Promise<string>;
+						decrypt: (clientSecret: string) => Promise<string>;
+				  }
+		  )
+		| undefined;
 	/**
 	 * Whether to use the JWT plugin to sign the ID token.
 	 *
 	 * @default false
 	 */
-	useJWTPlugin?: boolean;
+	useJWTPlugin?: boolean | undefined;
 	/**
 	 * Custom schema for the OIDC plugin
 	 */
-	schema?: InferOptionSchema<typeof schema>;
+	schema?: InferOptionSchema<typeof schema> | undefined;
 }
 
 export interface AuthorizationQuery {
@@ -171,7 +178,7 @@ export interface AuthorizationQuery {
 	/**
 	 * The redirect URI for the client. Must be one of the registered redirect URLs for the client.
 	 */
-	redirect_uri?: string;
+	redirect_uri?: string | undefined;
 	/**
 	 * The scope of the request. Must be a space-separated list of case sensitive strings.
 	 *
@@ -180,7 +187,7 @@ export interface AuthorizationQuery {
 	 * - "email" is required for requests that require user email information.
 	 * - "offline_access" is required for requests that require a refresh token.
 	 */
-	scope?: string;
+	scope?: string | undefined;
 	/**
 	 * Opaque value used to maintain state between the request and the callback. Typically,
 	 * Cross-Site Request Forgery (CSRF, XSRF) mitigation is done by cryptographically binding the
@@ -197,12 +204,15 @@ export interface AuthorizationQuery {
 	/**
 	 * The prompt parameter is used to specify the type of user interaction that is required.
 	 */
-	prompt?: "none" | "consent" | "login" | "select_account";
+	prompt?:
+		| (string & {})
+		| ("none" | "consent" | "login" | "select_account")
+		| undefined;
 	/**
 	 * The display parameter is used to specify how the authorization server displays the
 	 * authentication and consent user interface pages to the end user.
 	 */
-	display?: "page" | "popup" | "touch" | "wap";
+	display?: ("page" | "popup" | "touch" | "wap") | undefined;
 	/**
 	 * End-User's preferred languages and scripts for the user interface, represented as a
 	 * space-separated list of BCP47 [RFC5646] language tag values, ordered by preference. For
@@ -214,7 +224,7 @@ export interface AuthorizationQuery {
 	 *
 	 * 🏗️ currently not implemented
 	 */
-	ui_locales?: string;
+	ui_locales?: string | undefined;
 	/**
 	 * The maximum authentication age.
 	 *
@@ -224,7 +234,7 @@ export interface AuthorizationQuery {
 	 *
 	 * Note that max_age=0 is equivalent to prompt=login.
 	 */
-	max_age?: number;
+	max_age?: number | undefined;
 	/**
 	 * Requested Authentication Context Class Reference values.
 	 *
@@ -235,7 +245,7 @@ export interface AuthorizationQuery {
 	 * the acr Claim Value, as specified in Section 2. The acr Claim is requested as a Voluntary
 	 * Claim by this parameter.
 	 */
-	acr_values?: string;
+	acr_values?: string | undefined;
 	/**
 	 * Hint to the Authorization Server about the login identifier the End-User might use to log in
 	 * (if necessary). This hint can be used by an RP if it first asks the End-User for their
@@ -244,22 +254,22 @@ export interface AuthorizationQuery {
 	 * for discovery. This value MAY also be a phone number in the format specified for the
 	 * phone_number Claim. The use of this parameter is left to the OP's discretion.
 	 */
-	login_hint?: string;
+	login_hint?: string | undefined;
 	/**
 	 * ID Token previously issued by the Authorization Server being passed as a hint about the
 	 * End-User's current or past authenticated session with the Client.
 	 *
 	 * 🏗️ currently not implemented
 	 */
-	id_token_hint?: string;
+	id_token_hint?: string | undefined;
 	/**
 	 * Code challenge
 	 */
-	code_challenge?: string;
+	code_challenge?: string | undefined;
 	/**
 	 * Code challenge method used
 	 */
-	code_challenge_method?: "plain" | "s256";
+	code_challenge_method?: ("plain" | "s256") | undefined;
 	/**
 	 * String value used to associate a Client session with an ID Token, and to mitigate replay
 	 * attacks. The value is passed through unmodified from the Authentication Request to the ID Token.
@@ -268,69 +278,27 @@ export interface AuthorizationQuery {
 	 * Authentication Request, Authorization Servers MUST include a nonce Claim in the ID Token
 	 * with the Claim Value being the nonce value sent in the Authentication Request.
 	 */
-	nonce?: string;
+	nonce?: string | undefined;
 }
 
-export interface Client {
-	/**
-	 * Client ID
-	 *
-	 * size 32
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.2
-	 */
-	clientId: string;
-	/**
-	 * Client Secret
-	 *
-	 * A secret for the client, if required by the authorization server.
-	 * Optional for public clients using PKCE.
-	 *
-	 * size 32
-	 */
-	clientSecret?: string;
-	/**
-	 * The client type
-	 *
-	 * as described on https://www.rfc-editor.org/rfc/rfc6749.html#section-2.1
-	 *
-	 * - web - A web application
-	 * - native - A mobile application
-	 * - user-agent-based - A user-agent-based application
-	 * - public - A public client (PKCE-enabled, no client_secret)
-	 */
-	type: "web" | "native" | "user-agent-based" | "public";
+export type Client = Omit<
+	OAuthApplication,
+	"metadata" | "updatedAt" | "createdAt" | "redirectUrls" | "userId"
+> & {
+	metadata: Record<string, any> | null;
 	/**
 	 * List of registered redirect URLs. Must include the whole URL, including the protocol, port,
 	 * and path.
 	 *
 	 * For example, `https://example.com/auth/callback`
 	 */
-	redirectURLs: string[];
-	/**
-	 * The name of the client.
-	 */
-	name: string;
-	/**
-	 * The icon of the client.
-	 */
-	icon?: string;
-	/**
-	 * Additional metadata about the client.
-	 */
-	metadata: {
-		[key: string]: any;
-	} | null;
-	/**
-	 * Whether the client is disabled or not.
-	 */
-	disabled: boolean;
+	redirectUrls: string[];
 	/**
 	 * Whether to skip the consent screen for this client.
 	 * Only applies to trusted clients.
 	 */
-	skipConsent?: boolean;
-}
+	skipConsent?: boolean | undefined;
+};
 
 export interface TokenBody {
 	/**
@@ -340,23 +308,23 @@ export interface TokenBody {
 	/**
 	 * The authorization code received from the authorization server.
 	 */
-	code?: string;
+	code?: string | undefined;
 	/**
 	 * The redirect URI of the client.
 	 */
-	redirect_uri?: string;
+	redirect_uri?: string | undefined;
 	/**
 	 * The client ID.
 	 */
-	client_id?: string;
+	client_id?: string | undefined;
 	/**
 	 * The client secret.
 	 */
-	client_secret?: string;
+	client_secret?: string | undefined;
 	/**
 	 * The refresh token received from the authorization server.
 	 */
-	refresh_token?: string;
+	refresh_token?: string | undefined;
 }
 
 export interface CodeVerificationValue {
@@ -400,15 +368,15 @@ export interface CodeVerificationValue {
 	/**
 	 * Code challenge
 	 */
-	codeChallenge?: string;
+	codeChallenge?: string | undefined;
 	/**
 	 * Code Challenge Method
 	 */
-	codeChallengeMethod?: "sha256" | "plain";
+	codeChallengeMethod?: ("sha256" | "plain") | undefined;
 	/**
 	 * Nonce
 	 */
-	nonce?: string;
+	nonce?: string | undefined;
 }
 
 export interface OAuthAccessToken {
@@ -567,4 +535,10 @@ export interface OIDCMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: ["S256"];
+	/**
+	 * The URL of the RP-initiated logout endpoint.
+	 *
+	 * @default `/oauth2/endsession`
+	 */
+	end_session_endpoint?: string;
 }

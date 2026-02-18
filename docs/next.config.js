@@ -1,9 +1,17 @@
+import { join } from "node:path";
 import { createMDX } from "fumadocs-mdx/next";
 
 const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
+	...(process.env.NODE_ENV === "development"
+		? {
+				turbopack: {
+					root: join(import.meta.dirname, ".."),
+				},
+			}
+		: {}),
 	async rewrites() {
 		return [
 			{
@@ -54,6 +62,9 @@ const config = {
 	reactStrictMode: true,
 	typescript: {
 		ignoreBuildErrors: true,
+	},
+	experimental: {
+		turbopackFileSystemCacheForDev: true,
 	},
 };
 

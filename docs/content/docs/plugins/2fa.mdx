@@ -38,20 +38,20 @@ This plugin offers two main methods to do a second factor verification:
         })
         ```
     </Step>
-      <Step>
+    <Step>
         ### Migrate the database
 
         Run the migration or generate the schema to add the necessary fields and tables to the database.
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
-            npx @better-auth/cli migrate
+            ```package-install
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
-            npx @better-auth/cli generate
+            ```package-install
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -65,11 +65,11 @@ This plugin offers two main methods to do a second factor verification:
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { twoFactorClient } from "better-auth/client/plugins"
+        import { twoFactorClient } from "better-auth/client/plugins" // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [
-                twoFactorClient()
+                twoFactorClient() // [!code highlight]
             ]
         })
         ```
@@ -105,7 +105,7 @@ When 2FA is enabled:
 - An encrypted `secret` and `backupCodes` are generated.
 - `enable` returns `totpURI` and `backupCodes`.
 
-Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about veryifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
+Note: `twoFactorEnabled` won’t be set to `true` until the user verifies their TOTP code. Learn more about verifying TOTP [here](#totp). You can skip verification by setting `skipVerificationOnEnable` to true in your plugin config.
 
 <Callout type="warn">
 Two Factor can only be enabled for credential accounts at the moment. For social accounts, it's assumed the provider already handles 2FA.
@@ -117,7 +117,9 @@ When a user with 2FA enabled tries to sign in via email, the response object wil
 
 You can handle this in the `onSuccess` callback or by providing a `onTwoFactorRedirect` callback in the plugin config.
 
-```ts title="sign-in.tsx"
+```tsx
+import { authClient } from "@/lib/auth-client"
+
 await authClient.signIn.email({
         email: "user@example.com",
         password: "password123",
@@ -134,7 +136,7 @@ await authClient.signIn.email({
 
 Using the `onTwoFactorRedirect` config:
 
-```ts title="sign-in.ts"
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 import { twoFactorClient } from "better-auth/client/plugins";
 
@@ -157,7 +159,9 @@ const authClient = createAuthClient({
 
 When you call `auth.api.signInEmail` on the server, and the user has 2FA enabled, it will return an object where `twoFactorRedirect` is set to `true`. This behavior isn’t inferred in TypeScript, which can be misleading. You can check using `in` instead to check if `twoFactorRedirect` is set to `true`.
 
-```ts
+```ts title="sign-in.ts"
+import { auth } from "@/lib/auth"
+
 const response = await auth.api.signInEmail({
 	body: {
 		email: "test@test.com",
@@ -220,11 +224,12 @@ type getTOTPURI = {
 
 Once you have the TOTP URI, you can use it to generate a QR code for the user to scan with their authenticator app.
 
-```tsx title="user-card.tsx"
+```tsx
+import { authClient } from "@/lib/auth-client"
 import QRCode from "react-qr-code";
 
 export default function UserCard({ password }: { password: string }){
-    const { data: session } = client.useSession();
+    const { data: session } = authClient.useSession();
 	const { data: qr } = useQuery({
 		queryKey: ["two-factor-qr"],
 		queryFn: async () => {
@@ -276,7 +281,7 @@ export const auth = betterAuth({
     plugins: [
         twoFactor({
           	otpOptions: {
-				async sendOTP({ user, otp }, request) {
+				async sendOTP({ user, otp }, ctx) {
                     // send otp to user
 				},
 			},
@@ -356,7 +361,7 @@ When you generate backup codes, the old backup codes will be deleted and new one
 
 #### Using Backup Codes
 
-You can now allow users to provider backup code as account recover method.
+You can now allow users to provide a backup code as an account recovery method.
 
 
 <APIMethod path="/two-factor/verify-backup-code" method="POST">
@@ -384,11 +389,11 @@ Once a backup code is used, it will be removed from the database and can't be us
 
 #### Viewing Backup Codes
 
-To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only this if the user has a fresh session - a session that was just created.
+To display the backup codes to the user, you can call `viewBackupCodes` on the server. This will return the backup codes in the response. You should only do this if the user has a fresh session - a session that was just created.
 
 <APIMethod
   path="/two-factor/view-backup-codes"
-  method="GET"
+  method="POST"
   isServerOnly
   forceAsBody
 >
@@ -410,8 +415,7 @@ You can mark a device as trusted by passing `trustDevice` to `verifyTotp` or `ve
 const verify2FA = async (code: string) => {
     const { data, error } = await authClient.twoFactor.verifyTotp({
         code,
-        callbackURL: "/dashboard",
-        trustDevice: true // Mark this device as trusted
+        trustDevice: true, // Mark this device as trusted // [!code highlight]
     })
     if (data) {
         // 2FA verified and device trusted
@@ -419,7 +423,7 @@ const verify2FA = async (code: string) => {
 }
 ```
 
-When `trustDevice` is set to `true`, the current device will be remembered for 60 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
+When `trustDevice` is set to `true`, the current device will be remembered for 30 days. During this period, the user won't be prompted for 2FA on subsequent sign-ins from this device. The trust period is refreshed each time the user signs in successfully.
 
 ### Issuer
 
@@ -436,7 +440,7 @@ twoFactor({
 
 ## Schema
 
-The plugin requires 1 additional fields in the `user` table and 1 additional table to store the two factor authentication data.
+The plugin requires 1 additional field in the `user` table and 1 additional table to store the two factor authentication data.
 
 Table: `user`
 

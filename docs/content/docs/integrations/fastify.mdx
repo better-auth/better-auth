@@ -53,7 +53,7 @@ fastify.route({
       const req = new Request(url.toString(), {
         method: request.method,
         headers,
-        body: request.body ? JSON.stringify(request.body) : undefined,
+        ...(request.body ? { body: JSON.stringify(request.body) } : {}),
       });
 
       // Process authentication request

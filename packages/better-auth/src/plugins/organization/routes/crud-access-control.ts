@@ -1,16 +1,17 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { createAuthEndpoint } from "@better-auth/core/api";
+import type { Where } from "@better-auth/core/db/adapter";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { APIError, createAuthEndpoint } from "../../../api";
-import type { OrganizationOptions } from "../types";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
+import type { User } from "../../../types";
+import type { AccessControl } from "../../access";
 import { orgSessionMiddleware } from "../call";
+import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { hasPermission } from "../has-permission";
 import type { Member, OrganizationRole } from "../schema";
-import type { GenericEndpointContext, User, Where } from "../../../types";
-import type { AccessControl } from "../../access";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
-import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import type { OrganizationOptions } from "../types";
 
 type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
@@ -30,7 +31,7 @@ const getAdditionalFields = <
 	options: O,
 	shouldBePartial: AllPartial = false as AllPartial,
 ) => {
-	let additionalFields =
+	const additionalFields =
 		options?.schema?.organizationRole?.additionalFields || {};
 	if (shouldBePartial) {
 		for (const key in additionalFields) {
@@ -57,6 +58,19 @@ const getAdditionalFields = <
 	};
 };
 
+const baseCreateOrgRoleSchema = z.object({
+	organizationId: z.string().optional().meta({
+		description:
+			"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+	}),
+	role: z.string().meta({
+		description: "The name of the role to create",
+	}),
+	permission: z.record(z.string(), z.array(z.string())).meta({
+		description: "The permission to assign to the role",
+	}),
+});
+
 export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
 		getAdditionalFields<O>(options, false);
@@ -67,17 +81,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/create-role",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().optional().meta({
-					description:
-						"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-				}),
-				role: z.string().meta({
-					description: "The name of the role to create",
-				}),
-				permission: z.record(z.string(), z.array(z.string())).meta({
-					description: "The permission to assign to the role",
-				}),
+			body: baseCreateOrgRoleSchema.safeExtend({
 				additionalFields: z
 					.object({ ...additionalFieldsSchema.shape })
 					.optional(),
@@ -89,7 +93,7 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: string;
 						permission: Record<string, string[]>;
 					} & (IsExactlyEmptyObject<AdditionalFields> extends true
-						? { additionalFields?: {} }
+						? { additionalFields?: {} | undefined }
 						: { additionalFields: AdditionalFields }),
 				},
 			},
@@ -108,9 +112,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 					`[Dynamic Access Control] The organization plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/organization#dynamic-access-control`,
 				);
-				throw new APIError("NOT_IMPLEMENTED", {
-					message: ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
-				});
+				throw APIError.from(
+					"NOT_IMPLEMENTED",
+					ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
+				);
 			}
 
 			// Get the organization id where the role will be created.
@@ -121,10 +126,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The session is missing an active organization id to create a role. Either set an active org id, or pass an organizationId in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.YOU_MUST_BE_IN_AN_ORGANIZATION_TO_CREATE_A_ROLE,
+				);
 			}
 
 			roleName = normalizeRoleName(roleName);
@@ -163,10 +168,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			const canCreateRole = await hasPermission(
@@ -189,10 +194,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: member.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+				);
 			}
 
 			const maximumRolesPerOrganization =
@@ -223,9 +228,10 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 						rolesInDB,
 					},
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.TOO_MANY_ROLES,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.TOO_MANY_ROLES,
+				);
 			}
 
 			await checkForInvalidResources({ ac, ctx, permission });
@@ -274,64 +280,61 @@ export const createOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const deleteOrgRoleBodySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to delete",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to delete",
+				}),
+			}),
+		]),
+	);
+
 export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	return createAuthEndpoint(
 		"/organization/delete-role",
 		{
 			method: "POST",
-			body: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to create the role in. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to delete",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to delete",
-							}),
-						}),
-					]),
-				),
+			body: deleteOrgRoleBodySchema,
 			requireHeaders: true,
 			use: [orgSessionMiddleware],
 			metadata: {
 				$Infer: {
-					body: {} as (
-						| {
-								roleName: string;
-						  }
-						| {
-								roleId: string;
-						  }
-					) & { organizationId?: string | undefined },
+					body: {} as {
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+						organizationId?: string | undefined;
+					},
 				},
 			},
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
 
-			// We can verify if the org id is valid and associated with the user in the next step when we try to find the member.
 			const organizationId =
 				ctx.body.organizationId ?? session.activeOrganizationId;
 			if (!organizationId) {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The session is missing an active organization id to delete a role. Either set an active org id, or pass an organizationId in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
-			// Get the user's role associated with the organization.
-			// This also serves as a check to ensure the org id is valid.
 			const member = await ctx.context.adapter.findOne<Member>({
 				model: "member",
 				where: [
@@ -357,10 +360,10 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			const canDeleteRole = await hasPermission(
@@ -383,13 +386,13 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: member.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+				);
 			}
 
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				const roleName = ctx.body.roleName;
 				const defaultRoles = options.roles
 					? Object.keys(options.roles)
@@ -403,27 +406,38 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 							defaultRoles,
 						},
 					);
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.CANNOT_DELETE_A_PRE_DEFINED_ROLE,
+					);
 				}
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
 			const existingRoleInDB =
 				await ctx.context.adapter.findOne<OrganizationRole>({
@@ -448,14 +462,51 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
 
 			existingRoleInDB.permission = JSON.parse(
 				existingRoleInDB.permission as never as string,
 			);
+
+			// Check if any members are assigned to this role
+			const roleToDelete = existingRoleInDB.role;
+			const members = await ctx.context.adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+						operator: "eq",
+						connector: "AND",
+					},
+					{
+						field: "role",
+						value: roleToDelete,
+						operator: "contains",
+					},
+				],
+			});
+			const memberWithRole = members.find((member) => {
+				const memberRoles = member.role.split(",").map((r) => r.trim());
+				return memberRoles.includes(roleToDelete);
+			});
+			if (memberWithRole) {
+				ctx.context.logger.error(
+					`[Dynamic Access Control] Cannot delete a role that is assigned to members.`,
+					{
+						role: existingRoleInDB.role,
+						organizationId,
+					},
+				);
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS,
+				);
+			}
 
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
@@ -477,6 +528,15 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const listOrgRolesQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.optional();
+
 export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -485,24 +545,9 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 		"/organization/list-roles",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to list roles for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.optional(),
-			metadata: {
-				$Infer: {
-					query: {} as
-						| {
-								organizationId?: string | undefined;
-						  }
-						| undefined,
-				},
-			},
+			query: listOrgRolesQuerySchema,
 		},
 		async (ctx) => {
 			const { session, user } = ctx.context.session;
@@ -513,9 +558,10 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The session is missing an active organization id to list roles. Either set an active org id, or pass an organizationId in the request query.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -543,10 +589,10 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			const canListRoles = await hasPermission(
@@ -569,9 +615,10 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 						role: member.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+				);
 			}
 
 			let roles = await ctx.context.adapter.findMany<
@@ -598,6 +645,29 @@ export const listOrgRoles = <O extends OrganizationOptions>(options: O) => {
 	);
 };
 
+const getOrgRoleQuerySchema = z
+	.object({
+		organizationId: z.string().optional().meta({
+			description:
+				"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
+		}),
+	})
+	.and(
+		z.union([
+			z.object({
+				roleName: z.string().nonempty().meta({
+					description: "The name of the role to read",
+				}),
+			}),
+			z.object({
+				roleId: z.string().nonempty().meta({
+					description: "The id of the role to read",
+				}),
+			}),
+		]),
+	)
+	.optional();
+
 export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { $ReturnAdditionalFields } = getAdditionalFields<O>(options, false);
 	type ReturnAdditionalFields = typeof $ReturnAdditionalFields;
@@ -605,34 +675,16 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		"/organization/get-role",
 		{
 			method: "GET",
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
-			query: z
-				.object({
-					organizationId: z.string().optional().meta({
-						description:
-							"The id of the organization to read a role for. If not provided, the user's active organization will be used.",
-					}),
-				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to read",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to read",
-							}),
-						}),
-					]),
-				)
-				.optional(),
+			query: getOrgRoleQuerySchema,
 			metadata: {
 				$Infer: {
 					query: {} as {
 						organizationId?: string | undefined;
-					} & ({ roleName: string } | { roleId: string }),
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
 		},
@@ -645,9 +697,10 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The session is missing an active organization id to read a role. Either set an active org id, or pass an organizationId in the request query.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -675,10 +728,10 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			const canListRoles = await hasPermission(
@@ -701,28 +754,39 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						role: member.role,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message: ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE,
+				);
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.query) {
+			if (ctx.query.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.query.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.query.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.query.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request query.`,
+				);
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -744,9 +808,10 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
 
 			role.permission = JSON.parse(role.permission as never as string);
@@ -755,6 +820,19 @@ export const getOrgRole = <O extends OrganizationOptions>(options: O) => {
 		},
 	);
 };
+
+const roleNameOrIdSchema = z.union([
+	z.object({
+		roleName: z.string().nonempty().meta({
+			description: "The name of the role to update",
+		}),
+	}),
+	z.object({
+		roleId: z.string().nonempty().meta({
+			description: "The id of the role to update",
+		}),
+	}),
+]);
 
 export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 	const { additionalFieldsSchema, $AdditionalFields, $ReturnAdditionalFields } =
@@ -785,20 +863,7 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						...additionalFieldsSchema.shape,
 					}),
 				})
-				.and(
-					z.union([
-						z.object({
-							roleName: z.string().meta({
-								description: "The name of the role to update",
-							}),
-						}),
-						z.object({
-							roleId: z.string().meta({
-								description: "The id of the role to update",
-							}),
-						}),
-					]),
-				),
+				.and(roleNameOrIdSchema),
 			metadata: {
 				$Infer: {
 					body: {} as {
@@ -807,9 +872,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 							permission?: Record<string, string[]> | undefined;
 							roleName?: string | undefined;
 						} & AdditionalFields;
-					} & ({ roleName: string } | { roleId: string }),
+						roleName?: string | undefined;
+						roleId?: string | undefined;
+					},
 				},
 			},
+			requireHeaders: true,
 			use: [orgSessionMiddleware],
 		},
 		async (ctx) => {
@@ -821,9 +889,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 					`[Dynamic Access Control] The organization plugin is missing a pre-defined ac instance.`,
 					`\nPlease refer to the documentation here: https://better-auth.com/docs/plugins/organization#dynamic-access-control`,
 				);
-				throw new APIError("NOT_IMPLEMENTED", {
-					message: ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
-				});
+				throw APIError.from(
+					"NOT_IMPLEMENTED",
+					ORGANIZATION_ERROR_CODES.MISSING_AC_INSTANCE,
+				);
 			}
 
 			const organizationId =
@@ -832,9 +901,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The session is missing an active organization id to update a role. Either set an active org id, or pass an organizationId in the request body.`,
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
+				);
 			}
 
 			const member = await ctx.context.adapter.findOne<Member>({
@@ -862,10 +932,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_A_MEMBER_OF_THIS_ORGANIZATION,
+				);
 			}
 
 			const canUpdateRole = await hasPermission(
@@ -883,29 +953,39 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				ctx.context.logger.error(
 					`[Dynamic Access Control] The user is not permitted to update a role.`,
 				);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+				);
 			}
 
 			let condition: Where;
-			if ("roleName" in ctx.body) {
+			if (ctx.body.roleName) {
 				condition = {
 					field: "role",
 					value: ctx.body.roleName,
 					operator: "eq",
 					connector: "AND",
 				};
-			} else {
+			} else if (ctx.body.roleId) {
 				condition = {
 					field: "id",
 					value: ctx.body.roleId,
 					operator: "eq",
 					connector: "AND",
 				};
+			} else {
+				// shouldn't be able to reach here given the schema validation.
+				// But just in case, throw an error.
+				ctx.context.logger.error(
+					`[Dynamic Access Control] The role name/id is not provided in the request body.`,
+				);
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
-			let role = await ctx.context.adapter.findOne<OrganizationRole>({
+			const role = await ctx.context.adapter.findOne<OrganizationRole>({
 				model: "organizationRole",
 				where: [
 					{
@@ -927,9 +1007,10 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 						organizationId,
 					},
 				);
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+				);
 			}
 			role.permission = role.permission
 				? JSON.parse(role.permission as never as string)
@@ -941,12 +1022,12 @@ export const updateOrgRole = <O extends OrganizationOptions>(options: O) => {
 				...additionalFields
 			} = ctx.body.data;
 
-			let updateData: Partial<OrganizationRole> = {
+			const updateData: Partial<OrganizationRole> = {
 				...additionalFields,
 			};
 
 			if (ctx.body.data.permission) {
-				let newPermission = ctx.body.data.permission;
+				const newPermission = ctx.body.data.permission;
 
 				await checkForInvalidResources({ ac, ctx, permission: newPermission });
 
@@ -1040,9 +1121,10 @@ async function checkForInvalidResources({
 				validResources,
 			},
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.INVALID_RESOURCE,
+		);
 	}
 }
 
@@ -1093,7 +1175,7 @@ async function checkIfMemberHasPermission({
 		});
 	if (missingPermissions.length > 0) {
 		ctx.context.logger.error(
-			`[Dynamic Access Control] The user is missing permissions nessesary to ${action} a role with those set of permissions.\n`,
+			`[Dynamic Access Control] The user is missing permissions necessary to ${action} a role with those set of permissions.\n`,
 			{
 				userId: user.id,
 				organizationId,
@@ -1101,27 +1183,22 @@ async function checkIfMemberHasPermission({
 				missingPermissions,
 			},
 		);
-		let errorMessage: string;
+		let error: { code: string; message: string };
 		if (action === "create")
-			errorMessage =
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE;
 		else if (action === "update")
-			errorMessage =
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE;
 		else if (action === "delete")
-			errorMessage =
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE;
 		else if (action === "read")
-			errorMessage =
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_READ_A_ROLE;
 		else if (action === "list")
-			errorMessage =
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
-		else
-			errorMessage = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
+			error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE;
+		else error = ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_GET_A_ROLE;
 
-		throw new APIError("FORBIDDEN", {
-			message: errorMessage,
+		throw APIError.fromStatus("FORBIDDEN", {
+			message: error.message,
+			code: error.code,
 			missingPermissions,
 		});
 	}
@@ -1150,9 +1227,10 @@ async function checkIfRoleNameIsTakenByPreDefinedRole({
 				defaultRoles,
 			},
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		);
 	}
 }
 
@@ -1190,8 +1268,9 @@ async function checkIfRoleNameIsTakenByRoleInDB({
 				organizationId,
 			},
 		);
-		throw new APIError("BAD_REQUEST", {
-			message: ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
-		});
+		throw APIError.from(
+			"BAD_REQUEST",
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+		);
 	}
 }

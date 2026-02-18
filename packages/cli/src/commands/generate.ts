@@ -1,17 +1,20 @@
-import { Command } from "commander";
-import { getConfig } from "../utils/get-config";
-import * as z from "zod/v4";
-import { existsSync } from "fs";
-import path from "path";
-import { logger, createTelemetry, getTelemetryAuthConfig } from "better-auth";
-import yoctoSpinner from "yocto-spinner";
-import prompts from "prompts";
-import fs from "fs/promises";
+import { existsSync } from "node:fs";
+import fs from "node:fs/promises";
+import path from "node:path";
+import {
+	createTelemetry,
+	getTelemetryAuthConfig,
+} from "@better-auth/telemetry";
+import { getAdapter } from "better-auth/db/adapter";
 import chalk from "chalk";
-import { getAdapter } from "better-auth/db";
+import { Command } from "commander";
+import prompts from "prompts";
+import yoctoSpinner from "yocto-spinner";
+import * as z from "zod/v4";
 import { generateSchema } from "../generators";
+import { getConfig } from "../utils/get-config";
 
-export async function generateAction(opts: any) {
+async function generateAction(opts: any) {
 	const options = z
 		.object({
 			cwd: z.string(),
@@ -24,7 +27,7 @@ export async function generateAction(opts: any) {
 
 	const cwd = path.resolve(options.cwd);
 	if (!existsSync(cwd)) {
-		logger.error(`The directory "${cwd}" does not exist.`);
+		console.error(`The directory "${cwd}" does not exist.`);
 		process.exit(1);
 	}
 	const config = await getConfig({
@@ -32,14 +35,14 @@ export async function generateAction(opts: any) {
 		configPath: options.config,
 	});
 	if (!config) {
-		logger.error(
+		console.error(
 			"No configuration file found. Add a `auth.ts` file to your project or pass the path to the configuration file using the `--config` flag.",
 		);
 		return;
 	}
 
 	const adapter = await getAdapter(config).catch((e) => {
-		logger.error(e.message);
+		console.error(e.message);
 		process.exit(1);
 	});
 
@@ -53,7 +56,7 @@ export async function generateAction(opts: any) {
 
 	spinner.stop();
 	if (!schema.code) {
-		logger.info("Your schema is already up to date.");
+		console.log("Your schema is already up to date.");
 		// telemetry: track generate attempted, no changes
 		try {
 			const telemetry = await createTelemetry(config);
@@ -61,7 +64,7 @@ export async function generateAction(opts: any) {
 				type: "cli_generate",
 				payload: {
 					outcome: "no_changes",
-					config: getTelemetryAuthConfig(config, {
+					config: await getTelemetryAuthConfig(config, {
 						adapter: adapter.id,
 						database:
 							typeof config.database === "function" ? "adapter" : "kysely",
@@ -98,7 +101,7 @@ export async function generateAction(opts: any) {
 			} else {
 				await fs.appendFile(path.join(cwd, schema.fileName), schema.code);
 			}
-			logger.success(
+			console.log(
 				`🚀 Schema was ${
 					schema.overwrite ? "overwritten" : "appended"
 				} successfully!`,
@@ -110,13 +113,13 @@ export async function generateAction(opts: any) {
 					type: "cli_generate",
 					payload: {
 						outcome: schema.overwrite ? "overwritten" : "appended",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
 			process.exit(0);
 		} else {
-			logger.error("Schema generation aborted.");
+			console.error("Schema generation aborted.");
 			// telemetry: track generate aborted
 			try {
 				const telemetry = await createTelemetry(config);
@@ -124,7 +127,7 @@ export async function generateAction(opts: any) {
 					type: "cli_generate",
 					payload: {
 						outcome: "aborted",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
@@ -151,13 +154,16 @@ export async function generateAction(opts: any) {
 	}
 
 	if (!confirm) {
-		logger.error("Schema generation aborted.");
+		console.error("Schema generation aborted.");
 		// telemetry: track generate aborted before write
 		try {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
-				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+				payload: {
+					outcome: "aborted",
+					config: await getTelemetryAuthConfig(config),
+				},
 			});
 		} catch {}
 		process.exit(1);
@@ -175,13 +181,16 @@ export async function generateAction(opts: any) {
 		options.output || path.join(cwd, schema.fileName),
 		schema.code,
 	);
-	logger.success(`🚀 Schema was generated successfully!`);
+	console.log(`🚀 Schema was generated successfully!`);
 	// telemetry: track generate success
 	try {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_generate",
-			payload: { outcome: "generated", config: getTelemetryAuthConfig(config) },
+			payload: {
+				outcome: "generated",
+				config: await getTelemetryAuthConfig(config),
+			},
 		});
 	} catch {}
 	process.exit(0);

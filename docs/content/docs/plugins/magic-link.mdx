@@ -15,15 +15,15 @@ Magic link or email link is a way to authenticate users without a password. When
 
     ```ts title="server.ts"
     import { betterAuth } from "better-auth";
-    import { magicLink } from "better-auth/plugins";
+    import { magicLink } from "better-auth/plugins";  // [!code highlight]
 
     export const auth = betterAuth({
         plugins: [
-            magicLink({
-                sendMagicLink: async ({ email, token, url }, request) => {
-                    // send email to user
-                }
-            })
+            magicLink({ // [!code highlight]
+                sendMagicLink: async ({ email, token, url }, ctx) => { // [!code highlight]
+                    // send email to user // [!code highlight]
+                } // [!code highlight]
+            }) // [!code highlight]
         ]
     })
     ```
@@ -36,10 +36,11 @@ Magic link or email link is a way to authenticate users without a password. When
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client";
-    import { magicLinkClient } from "better-auth/client/plugins";
+    import { magicLinkClient } from "better-auth/client/plugins"; // [!code highlight]
+    
     export const authClient = createAuthClient({
         plugins: [
-            magicLinkClient()
+            magicLinkClient() // [!code highlight]
         ]
     });
     ```
@@ -130,9 +131,11 @@ type magicLinkVerify = {
 - `url`: The URL to be sent to the user. This URL contains the token.
 - `token`: The token if you want to send the token with custom URL.
 
-and a `request` object as the second parameter.
+and a `ctx` context object as the second parameter.
 
 **expiresIn**: specifies the time in seconds after which the magic link will expire. The default value is `300` seconds (5 minutes).
+
+**allowedAttempts**: Specifies the number of allowed attempts for verifying the magic link. The default value is `1`. When the limit is exceeded, the token is deleted and the user is redirected with `?error=ATTEMPTS_EXCEEDED`. Set to `Infinity` to allow unlimited attempts.
 
 **disableSignUp**: If set to `true`, the user will not be able to sign up using the magic link. The default value is `false`.
 

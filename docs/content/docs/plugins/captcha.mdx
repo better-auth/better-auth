@@ -21,15 +21,15 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth";
-    import { captcha } from "better-auth/plugins";
+    import { captcha } from "better-auth/plugins"; // [!code highlight]
 
     export const auth = betterAuth({
-        plugins: [ // [!code highlight]
+        plugins: [
             captcha({ // [!code highlight]
                 provider: "cloudflare-turnstile", // or google-recaptcha, hcaptcha, captchafox // [!code highlight]
                 secretKey: process.env.TURNSTILE_SECRET_KEY!, // [!code highlight]
             }), // [!code highlight]
-        ], // [!code highlight]
+        ],
     });
     ```
 
@@ -37,16 +37,21 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
   <Step>
     ### Add the captcha token to your request headers
 
+    <Callout type="warning">
+      The `x-captcha-user-remote-ip` header is no longer required—IP is now auto-detected server-side.
+    </Callout>
+
     Add the captcha token to your request headers for all protected endpoints. This example shows how to include it in a `signIn` request:
 
     ```ts
+    import { authClient } from "@/lib/auth-client"
+    
     await authClient.signIn.email({
         email: "user@example.com",
         password: "secure-password",
         fetchOptions: { // [!code highlight]
             headers: { // [!code highlight]
                 "x-captcha-response": turnstileToken, // [!code highlight]
-                "x-captcha-user-remote-ip": userIp, // optional: forwards the user's IP address to the captcha service // [!code highlight]
             }, // [!code highlight]
         }, // [!code highlight]
     });
@@ -81,7 +86,7 @@ The **Captcha Plugin** integrates bot protection into your Better Auth system by
 
 - **`provider` (required)**: your captcha provider.
 - **`secretKey` (required)**: your provider's secret key used for the server-side validation.
-- `endpoints` (optional): overrides the default array of paths where captcha validation is enforced. Default is: `["/sign-up/email", "/sign-in/email", "/forget-password",]`.
+- `endpoints` (optional): replaces the default array of paths where captcha verification is enforced. If set, only the specified paths will be protected. Default is `["/sign-up/email", "/sign-in/email", "/request-password-reset"]`.
 - `minScore` (optional - only *Google ReCAPTCHA v3*): minimum score threshold. Default is `0.5`.
 - `siteKey` (optional - only *hCaptcha* and *CaptchaFox*): prevents tokens issued on one sitekey from being redeemed elsewhere.
 - `siteVerifyURLOverride` (optional): overrides endpoint URL for the captcha verification request.

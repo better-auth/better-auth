@@ -1,9 +1,9 @@
+import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
 import { ArrowRight } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { BackgroundLines } from "./bg-line";
-import Link from "next/link";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@radix-ui/react-icons";
-import { Metadata } from "next";
 
 export const metadata: Metadata = {
 	title: "V1.0 Release",
@@ -150,7 +150,7 @@ function ReleaseRelated() {
 						<h3 className="text-xl font-semibold mb-4">Adopt the new Schema</h3>
 						<div className="dark:bg-white/5 bg-black/10 rounded-lg p-4 mb-2">
 							<code className="text-sm font-mono ">
-								pnpx @better-auth/cli migrate
+								pnpx auth migrate
 								<br />
 							</code>
 						</div>

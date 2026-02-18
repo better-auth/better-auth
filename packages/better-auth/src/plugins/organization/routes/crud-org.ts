@@ -1,77 +1,76 @@
+import { createAuthEndpoint } from "@better-auth/core/api";
+import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
-import { createAuthEndpoint } from "../../../api/call";
+import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
+import { setSessionCookie } from "../../../cookies";
+import type { InferAdditionalFieldsFromPluginOptions } from "../../../db";
+import { toZodSchema } from "../../../db";
 import { getOrgAdapter } from "../adapter";
 import { orgMiddleware, orgSessionMiddleware } from "../call";
-import { APIError } from "better-call";
-import { setSessionCookie } from "../../../cookies";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
-import { getSessionFromCtx, requestOnlySessionMiddleware } from "../../../api";
-import type { OrganizationOptions } from "../types";
+import { hasPermission } from "../has-permission";
 import type {
 	InferInvitation,
 	InferMember,
 	InferOrganization,
+	InferTeam,
 	Member,
-	Team,
 	TeamMember,
 } from "../schema";
-import { hasPermission } from "../has-permission";
-import {
-	toZodSchema,
-	type InferAdditionalFieldsFromPluginOptions,
-} from "../../../db";
+import type { OrganizationOptions } from "../types";
+
+const baseOrganizationSchema = z.object({
+	name: z.string().min(1).meta({
+		description: "The name of the organization",
+	}),
+	slug: z.string().min(1).meta({
+		description: "The slug of the organization",
+	}),
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
+		})
+		.optional(),
+	logo: z
+		.string()
+		.meta({
+			description: "The logo of the organization",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "The metadata of the organization",
+		})
+		.optional(),
+	keepCurrentActiveOrganization: z
+		.boolean()
+		.meta({
+			description:
+				"Whether to keep the current active organization active after creating a new one. Eg: true",
+		})
+		.optional(),
+});
 
 export const createOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
 		isClientSide: true,
 	});
-	const baseSchema = z.object({
-		name: z.string().meta({
-			description: "The name of the organization",
-		}),
-		slug: z.string().meta({
-			description: "The slug of the organization",
-		}),
-		userId: z.coerce
-			.string()
-			.meta({
-				description:
-					'The user id of the organization creator. If not provided, the current user will be used. Should only be used by admins or when called by the server. server-only. Eg: "user-id"',
-			})
-			.optional(),
-		logo: z
-			.string()
-			.meta({
-				description: "The logo of the organization",
-			})
-			.optional(),
-		metadata: z
-			.record(z.string(), z.any())
-			.meta({
-				description: "The metadata of the organization",
-			})
-			.optional(),
-		keepCurrentActiveOrganization: z
-			.boolean()
-			.meta({
-				description:
-					"Whether to keep the current active organization active after creating a new one. Eg: true",
-			})
-			.optional(),
-	});
 
 	type Body = InferAdditionalFieldsFromPluginOptions<"organization", O> &
-		z.infer<typeof baseSchema>;
+		z.infer<typeof baseOrganizationSchema>;
 
 	return createAuthEndpoint(
 		"/organization/create",
 		{
 			method: "POST",
 			body: z.object({
-				...baseSchema.shape,
+				...baseOrganizationSchema.shape,
 				...additionalFieldsSchema.shape,
 			}),
 			use: [orgMiddleware],
@@ -102,19 +101,17 @@ export const createOrganization = <O extends OrganizationOptions>(
 			const session = await getSessionFromCtx(ctx);
 
 			if (!session && (ctx.request || ctx.headers)) {
-				throw new APIError("UNAUTHORIZED");
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 			let user = session?.user || null;
 			if (!user) {
 				if (!ctx.body.userId) {
-					throw new APIError("UNAUTHORIZED");
+					throw APIError.fromStatus("UNAUTHORIZED");
 				}
 				user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 			}
 			if (!user) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 			const options = ctx.context.orgOptions;
 			const canCreateOrg =
@@ -124,11 +121,13 @@ export const createOrganization = <O extends OrganizationOptions>(
 						? true
 						: options.allowUserToCreateOrganization;
 
-			if (!canCreateOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
-				});
+			const isSystemAction = !session && ctx.body.userId;
+
+			if (!canCreateOrg && !isSystemAction) {
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_ORGANIZATION,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options as O);
 
@@ -141,19 +140,20 @@ export const createOrganization = <O extends OrganizationOptions>(
 						: false;
 
 			if (hasReachedOrgLimit) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_HAVE_REACHED_THE_MAXIMUM_NUMBER_OF_ORGANIZATIONS,
+				);
 			}
 
 			const existingOrganization = await adapter.findOrganizationBySlug(
 				ctx.body.slug,
 			);
 			if (existingOrganization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_ALREADY_EXISTS,
+				);
 			}
 
 			let {
@@ -161,25 +161,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 				userId: __,
 				...orgData
 			} = ctx.body;
-
-			if (options.organizationCreation?.beforeCreate) {
-				const response = await options.organizationCreation.beforeCreate(
-					{
-						organization: {
-							...orgData,
-							createdAt: new Date(),
-						},
-						user,
-					},
-					ctx.request,
-				);
-				if (response && typeof response === "object" && "data" in response) {
-					orgData = {
-						...ctx.body,
-						...response.data,
-					};
-				}
-			}
 
 			if (options?.organizationHooks?.beforeCreateOrganization) {
 				const response =
@@ -264,7 +245,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				const defaultTeam =
 					(await options.teams.defaultTeam?.customCreateDefaultTeam?.(
 						organization,
-						ctx.request,
+						ctx,
 					)) || (await adapter.createTeam(teamData));
 
 				teamMember = await adapter.findOrCreateTeamMember({
@@ -279,17 +260,6 @@ export const createOrganization = <O extends OrganizationOptions>(
 						organization,
 					});
 				}
-			}
-
-			if (options.organizationCreation?.afterCreate) {
-				await options.organizationCreation.afterCreate(
-					{
-						organization,
-						user,
-						member,
-					},
-					ctx.request,
-				);
 			}
 
 			if (options?.organizationHooks?.afterCreateOrganization) {
@@ -332,6 +302,12 @@ export const createOrganization = <O extends OrganizationOptions>(
 	);
 };
 
+const checkOrganizationSlugBodySchema = z.object({
+	slug: z.string().meta({
+		description: 'The organization slug to check. Eg: "my-org"',
+	}),
+});
+
 export const checkOrganizationSlug = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -339,11 +315,7 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 		"/organization/check-slug",
 		{
 			method: "POST",
-			body: z.object({
-				slug: z.string().meta({
-					description: 'The organization slug to check. Eg: "my-org"',
-				}),
-			}),
+			body: checkOrganizationSlugBodySchema,
 			use: [requestOnlySessionMiddleware, orgMiddleware],
 		},
 		async (ctx) => {
@@ -354,14 +326,44 @@ export const checkOrganizationSlug = <O extends OrganizationOptions>(
 					status: true,
 				});
 			}
-			throw new APIError("BAD_REQUEST", {
-				message: "slug is taken",
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+			);
 		},
 	);
 
+const baseUpdateOrganizationSchema = z.object({
+	name: z
+		.string()
+		.min(1)
+		.meta({
+			description: "The name of the organization",
+		})
+		.optional(),
+	slug: z
+		.string()
+		.min(1)
+		.meta({
+			description: "The slug of the organization",
+		})
+		.optional(),
+	logo: z
+		.string()
+		.meta({
+			description: "The logo of the organization",
+		})
+		.optional(),
+	metadata: z
+		.record(z.string(), z.any())
+		.meta({
+			description: "The metadata of the organization",
+		})
+		.optional(),
+});
+
 export const updateOrganization = <O extends OrganizationOptions>(
-	options?: O,
+	options?: O | undefined,
 ) => {
 	const additionalFieldsSchema = toZodSchema({
 		fields: options?.schema?.organization?.additionalFields || {},
@@ -369,10 +371,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	});
 	type Body = {
 		data: {
-			name?: string;
-			slug?: string;
-			logo?: string;
-			metadata?: Record<string, any>;
+			name?: string | undefined;
+			slug?: string | undefined;
+			logo?: string | undefined;
+			metadata?: Record<string, any> | undefined;
 		} & Partial<InferAdditionalFieldsFromPluginOptions<"organization", O>>;
 		organizationId?: string | undefined;
 	};
@@ -384,30 +386,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				data: z
 					.object({
 						...additionalFieldsSchema.shape,
-						name: z
-							.string()
-							.meta({
-								description: "The name of the organization",
-							})
-							.optional(),
-						slug: z
-							.string()
-							.meta({
-								description: "The slug of the organization",
-							})
-							.optional(),
-						logo: z
-							.string()
-							.meta({
-								description: "The logo of the organization",
-							})
-							.optional(),
-						metadata: z
-							.record(z.string(), z.any())
-							.meta({
-								description: "The metadata of the organization",
-							})
-							.optional(),
+						...baseUpdateOrganizationSchema.shape,
 					})
 					.partial(),
 				organizationId: z
@@ -445,16 +424,17 @@ export const updateOrganization = <O extends OrganizationOptions>(
 		async (ctx) => {
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
-				throw new APIError("UNAUTHORIZED", {
+				throw APIError.fromStatus("UNAUTHORIZED", {
 					message: "User not found",
 				});
 			}
 			const organizationId =
 				ctx.body.organizationId || session.session.activeOrganizationId;
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -462,10 +442,10 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				organizationId: organizationId,
 			});
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 			const canUpdateOrg = await hasPermission(
 				{
@@ -479,10 +459,25 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				ctx,
 			);
 			if (!canUpdateOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_ORGANIZATION,
+				);
+			}
+			// Check if slug is being updated and validate uniqueness
+			if (typeof ctx.body.data.slug === "string") {
+				const existingOrganization = await adapter.findOrganizationBySlug(
+					ctx.body.data.slug,
+				);
+				if (
+					existingOrganization &&
+					existingOrganization.id !== organizationId
+				) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_SLUG_ALREADY_TAKEN,
+					);
+				}
 			}
 			if (options?.organizationHooks?.beforeUpdateOrganization) {
 				const response =
@@ -514,6 +509,12 @@ export const updateOrganization = <O extends OrganizationOptions>(
 	);
 };
 
+const deleteOrganizationBodySchema = z.object({
+	organizationId: z.string().meta({
+		description: "The organization id to delete",
+	}),
+});
+
 export const deleteOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {
@@ -521,11 +522,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		"/organization/delete",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z.string().meta({
-					description: "The organization id to delete",
-				}),
-			}),
+			body: deleteOrganizationBodySchema,
 			requireHeaders: true,
 			use: [orgMiddleware],
 			metadata: {
@@ -549,31 +546,24 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 		async (ctx) => {
 			const disableOrganizationDeletion =
-				ctx.context.orgOptions.organizationDeletion?.disabled ||
 				ctx.context.orgOptions.disableOrganizationDeletion;
 			if (disableOrganizationDeletion) {
-				if (ctx.context.orgOptions.organizationDeletion?.disabled) {
-					ctx.context.logger.info(
-						"`organizationDeletion.disabled` is deprecated. Use `disableOrganizationDeletion` instead",
-					);
-				}
-				throw new APIError("NOT_FOUND", {
+				throw APIError.from("NOT_FOUND", {
 					message: "Organization deletion is disabled",
+					code: "ORGANIZATION_DELETION_DISABLED",
 				});
 			}
 			const session = await ctx.context.getSession(ctx);
 			if (!session) {
-				throw new APIError("UNAUTHORIZED", { status: 401 });
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -581,10 +571,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				organizationId: organizationId,
 			});
 			if (!member) {
-				throw new APIError("BAD_REQUEST", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 			const canDeleteOrg = await hasPermission(
 				{
@@ -598,10 +588,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				ctx,
 			);
 			if (!canDeleteOrg) {
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_THIS_ORGANIZATION,
+				);
 			}
 			if (organizationId === session.session.activeOrganizationId) {
 				/**
@@ -612,7 +602,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 
 			const org = await adapter.findOrganizationById(organizationId);
 			if (!org) {
-				throw new APIError("BAD_REQUEST");
+				throw APIError.fromStatus("BAD_REQUEST");
 			}
 			if (options?.organizationHooks?.beforeDeleteOrganization) {
 				await options.organizationHooks.beforeDeleteOrganization({
@@ -631,6 +621,32 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 		},
 	);
 };
+
+const getFullOrganizationQuerySchema = z.optional(
+	z.object({
+		organizationId: z
+			.string()
+			.meta({
+				description: "The organization id to get",
+			})
+			.optional(),
+		organizationSlug: z
+			.string()
+			.meta({
+				description: "The organization slug to get",
+			})
+			.optional(),
+		membersLimit: z
+			.number()
+			.or(z.string().transform((val) => parseInt(val)))
+			.meta({
+				description:
+					"The limit of members to get. By default, it uses the membershipLimit option.",
+			})
+			.optional(),
+	}),
+);
+
 export const getFullOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) =>
@@ -638,34 +654,12 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 		"/organization/get-full-organization",
 		{
 			method: "GET",
-			query: z.optional(
-				z.object({
-					organizationId: z
-						.string()
-						.meta({
-							description: "The organization id to get",
-						})
-						.optional(),
-					organizationSlug: z
-						.string()
-						.meta({
-							description: "The organization slug to get",
-						})
-						.optional(),
-					membersLimit: z
-						.number()
-						.or(z.string().transform((val) => parseInt(val)))
-						.meta({
-							description:
-								"The limit of members to get. By default, it uses the membershipLimit option which defaults to 100.",
-						})
-						.optional(),
-				}),
-			),
+			query: getFullOrganizationQuerySchema,
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
 				openapi: {
+					operationId: "getOrganization",
 					description: "Get the full organization",
 					responses: {
 						"200": {
@@ -692,7 +686,6 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				session.session.activeOrganizationId;
 			// return null if no organization is found to avoid erroring since this is a usual scenario
 			if (!organizationId) {
-				ctx.context.logger.info("No active organization found, returning null");
 				return ctx.json(null, {
 					status: 200,
 				});
@@ -705,9 +698,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 				membersLimit: ctx.query?.membersLimit,
 			});
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const isMember = await adapter.checkMembership({
 				userId: session.user.id,
@@ -715,16 +709,17 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
+
 			type OrganizationReturn = O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O>[];
 						invitations: InferInvitation<O>[];
-						teams: Team[];
+						teams: InferTeam<O>[];
 					} & InferOrganization<O>
 				: {
 						members: InferMember<O>[];
@@ -734,6 +729,24 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 		},
 	);
 
+const setActiveOrganizationBodySchema = z.object({
+	organizationId: z
+		.string()
+		.meta({
+			description:
+				'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
+		})
+		.nullable()
+		.optional(),
+	organizationSlug: z
+		.string()
+		.meta({
+			description:
+				'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
+		})
+		.optional(),
+});
+
 export const setActiveOrganization = <O extends OrganizationOptions>(
 	options: O,
 ) => {
@@ -741,26 +754,12 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 		"/organization/set-active",
 		{
 			method: "POST",
-			body: z.object({
-				organizationId: z
-					.string()
-					.meta({
-						description:
-							'The organization id to set as active. It can be null to unset the active organization. Eg: "org-id"',
-					})
-					.nullable()
-					.optional(),
-				organizationSlug: z
-					.string()
-					.meta({
-						description:
-							'The organization slug to set as active. It can be null to unset the active organization if organizationId is not provided. Eg: "org-slug"',
-					})
-					.optional(),
-			}),
+			body: setActiveOrganizationBodySchema,
 			use: [orgSessionMiddleware, orgMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
+					operationId: "setActiveOrganization",
 					description: "Set the active organization",
 					responses: {
 						"200": {
@@ -783,7 +782,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const session = ctx.context.session;
 			let organizationId = ctx.body.organizationId;
-			let organizationSlug = ctx.body.organizationSlug;
+			const organizationSlug = ctx.body.organizationSlug;
 
 			if (organizationId === null) {
 				const sessionOrgId = session.session.activeOrganizationId;
@@ -814,17 +813,19 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				const organization =
 					await adapter.findOrganizationBySlug(organizationSlug);
 				if (!organization) {
-					throw new APIError("BAD_REQUEST", {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+					);
 				}
 				organizationId = organization.id;
 			}
 
 			if (!organizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 
 			const isMember = await adapter.checkMembership({
@@ -833,17 +834,18 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 
-			let organization = await adapter.findOrganizationById(organizationId);
+			const organization = await adapter.findOrganizationById(organizationId);
 			if (!organization) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const updatedSession = await adapter.setActiveOrganization(
 				session.session.token,
@@ -858,7 +860,7 @@ export const setActiveOrganization = <O extends OrganizationOptions>(
 				? {
 						members: InferMember<O>[];
 						invitations: InferInvitation<O>[];
-						teams: Team[];
+						teams: InferTeam<O>[];
 					} & InferOrganization<O>
 				: {
 						members: InferMember<O>[];
@@ -875,6 +877,7 @@ export const listOrganizations = <O extends OrganizationOptions>(options: O) =>
 		{
 			method: "GET",
 			use: [orgMiddleware, orgSessionMiddleware],
+			requireHeaders: true,
 			metadata: {
 				openapi: {
 					description: "List all organizations",

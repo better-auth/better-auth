@@ -1,5 +1,5 @@
 {
-  "$schema": "https://turborepo.org/schema.json",
+  "$schema": "./node_modules/turbo/schema.json",
   "globalDependencies": [
     "package.json",
     "tsconfig.json",
@@ -22,23 +22,77 @@
     },
     "//#format": {},
     "lint": {},
-    "knip": {
-      "cache": true
+    "lint:types": {
+      "dependsOn": ["^build", "build"]
+    },
+    "lint:package": {
+      "dependsOn": ["^build", "build"]
     },
     "test": {
-      "dependsOn": ["build"],
-      "outputs": []
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "coverage/**", "test-results/**"],
+      "cache": true
+    },
+    "coverage": {
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"]
     },
     "e2e:smoke": {
       "dependsOn": ["^build"],
-      "outputs": []
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "cache": true
     },
     "e2e:integration": {
       "dependsOn": ["^build"],
-      "outputs": []
-    },
-    "typecheck": {
-      "outputs": [".tsbuildinfo", "dist/**"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [
+        "coverage/**",
+        "coverage-final.json",
+        ".nyc_output/**",
+        "test-results/**",
+        "playwright-report/**"
+      ],
       "cache": true
     },
     "deploy": {

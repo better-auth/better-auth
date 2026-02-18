@@ -1,23 +1,15 @@
 "use client";
-import {
-	CodeBlock,
-	type CodeBlockProps,
-	Pre,
-} from "@/components/ui/code-block";
 import type {
 	HighlightOptions,
 	HighlightOptionsCommon,
 	HighlightOptionsThemes,
 } from "fumadocs-core/highlight";
 import { useShiki } from "fumadocs-core/highlight/client";
+import type { ComponentProps, FC } from "react";
+import { createContext, Suspense, use } from "react";
+import type { CodeBlockProps } from "@/components/ui/code-block";
+import { CodeBlock, Pre } from "@/components/ui/code-block";
 import { cn } from "@/lib/utils";
-import {
-	type ComponentProps,
-	createContext,
-	type FC,
-	Suspense,
-	use,
-} from "react";
 
 export interface DynamicCodeblockProps {
 	lang: string;
