@@ -1,4 +1,4 @@
-import { trace } from "@opentelemetry/api";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
 
 const INSTRUMENTATION_SCOPE = "better-auth";
 const INSTRUMENTATION_VERSION = import.meta.env?.BETTER_AUTH_VERSION ?? "1.0.0";
@@ -40,9 +40,9 @@ export function withSpan<T>(
 					.catch((err) => {
 						span.recordException(err);
 						span.setStatus({
-							code: 2,
-							message: String(err?.message ?? err),
-						}); // 2 = ERROR
+							code: SpanStatusCode.ERROR,
+							message: err.message,
+						});
 						span.end();
 						throw err;
 					}) as Promise<T>;
@@ -52,8 +52,8 @@ export function withSpan<T>(
 		} catch (err) {
 			span.recordException(err as Error);
 			span.setStatus({
-				code: 2,
-				message: String((err as Error)?.message ?? err),
+				code: SpanStatusCode.ERROR,
+				message: (err as Error).message,
 			});
 			span.end();
 			throw err;
