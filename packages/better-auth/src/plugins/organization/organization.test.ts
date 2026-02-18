@@ -2093,7 +2093,6 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					someRequiredField: {
 						type: "string",
-						required: true,
 					},
 					someOptionalField: {
 						type: "string",
@@ -2101,6 +2100,7 @@ describe("Additional Fields", async () => {
 					},
 					someHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2109,13 +2109,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					memberRequiredField: {
 						type: "string",
-						required: true,
 					},
 					memberOptionalField: {
 						type: "string",
+						required: false,
 					},
 					memberHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2124,13 +2125,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					teamRequiredField: {
 						type: "string",
-						required: true,
 					},
 					teamOptionalField: {
 						type: "string",
+						required: false,
 					},
 					teamHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},
@@ -2139,13 +2141,14 @@ describe("Additional Fields", async () => {
 				additionalFields: {
 					invitationRequiredField: {
 						type: "string",
-						required: true,
 					},
 					invitationOptionalField: {
 						type: "string",
+						required: false,
 					},
 					invitationHiddenField: {
 						type: "string",
+						required: false,
 						input: false,
 					},
 				},

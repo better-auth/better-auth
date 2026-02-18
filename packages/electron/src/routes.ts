@@ -242,7 +242,7 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 			if (setCookie) {
 				ctx.setHeader("set-cookie", setCookie);
 			}
-			if (res.data.url) {
+			if (res.data.url && res.data.redirect) {
 				ctx.setHeader("Location", res.data.url);
 				ctx.setStatus(302);
 				return;
@@ -274,7 +274,7 @@ export const electronTransferUser = (
 				code_challenge: string;
 				code_challenge_method?: string | undefined;
 			},
-		) => Promise<boolean>;
+		) => Promise<string | null>;
 	},
 ) =>
 	createAuthEndpoint(
@@ -305,8 +305,15 @@ export const electronTransferUser = (
 											redirect: {
 												type: "boolean",
 											},
+											electron_authorization_code: {
+												type: "string",
+											},
 										},
-										required: ["url", "redirect"],
+										required: [
+											"url",
+											"redirect",
+											"electron_authorization_code",
+										],
 									},
 								},
 							},
@@ -316,8 +323,8 @@ export const electronTransferUser = (
 			},
 		},
 		async (ctx) => {
-			const success = await handleTransfer(ctx, ctx.query);
-			if (!success) {
+			const identifier = await handleTransfer(ctx, ctx.query);
+			if (identifier === null) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					ELECTRON_ERROR_CODES.INVALID_CLIENT_ID,
@@ -327,6 +334,7 @@ export const electronTransferUser = (
 			return ctx.json({
 				url: ctx.body.callbackURL ? ctx.body.callbackURL : null,
 				redirect: ctx.body.callbackURL ? true : false,
+				electron_authorization_code: identifier,
 			});
 		},
 	);
