@@ -1082,10 +1082,11 @@ export const impersonateUser = (opts: AdminOptions) =>
 			const isTargetAdmin =
 				targetUserRole.some((role) => adminRoles.includes(role)) ||
 				!!opts.adminUserIds?.includes(targetUser.id);
-			const canImpersonateTarget =
+			const canImpersonateTarget = isTargetAdmin && (
 				typeof opts.allowImpersonatingAdmins === "function"
 					? await opts.allowImpersonatingAdmins(ctx)
-					: opts.allowImpersonatingAdmins === true || !isTargetAdmin;
+					: opts.allowImpersonatingAdmins === true
+			);
 			if (!canImpersonateTarget) {
 				throw APIError.from(
 					"FORBIDDEN",

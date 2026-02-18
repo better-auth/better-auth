@@ -840,3 +840,13 @@ admin({
   allowImpersonatingAdmins: true,
 });
 ```
+
+You can also pass a function to the `allowImpersonatingAdmins` option to dynamically determine whether to allow impersonating other admin users.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: (ctx) => {
+    return ctx.context.session?.user.role === "admin";
+  },
+})
+```
