@@ -129,8 +129,9 @@ describe("agent-auth e2e", async () => {
 	// =========================================================================
 
 	describe("MCP tools flow", () => {
-		// In-memory storage for testing (simulates file storage)
+		// In-memory storage for testing
 		const memoryStorage = createInMemoryStorage();
+		let connectedAgentId: string;
 
 		const tools = createAgentMCPTools({
 			storage: memoryStorage,
@@ -156,6 +157,11 @@ describe("agent-auth e2e", async () => {
 
 			expect(result.content[0]!.text).toContain("Connected to");
 			expect(result.content[0]!.text).toContain("Agent ID:");
+
+			// Extract agentId for subsequent tests
+			const match = result.content[0]!.text.match(/Agent ID:\s*(\S+)\./);
+			expect(match).toBeTruthy();
+			connectedAgentId = match![1]!;
 		});
 
 		it("should list connections via MCP tool", async () => {
@@ -169,7 +175,7 @@ describe("agent-auth e2e", async () => {
 		it("should check status via MCP tool", async () => {
 			const statusTool = findTool("agent_status");
 			const result = await statusTool.handler({
-				url: "http://localhost:3000",
+				agentId: connectedAgentId,
 			});
 
 			expect(result.content[0]!.text).toContain("Healthy");
@@ -179,7 +185,7 @@ describe("agent-auth e2e", async () => {
 		it("should make authenticated request via MCP tool", async () => {
 			const requestTool = findTool("agent_request");
 			const result = await requestTool.handler({
-				url: "http://localhost:3000",
+				agentId: connectedAgentId,
 				path: "/api/auth/agent/get-session",
 				method: "GET",
 			});
@@ -191,7 +197,7 @@ describe("agent-auth e2e", async () => {
 		it("should disconnect via MCP tool", async () => {
 			const disconnectTool = findTool("disconnect_agent");
 			const result = await disconnectTool.handler({
-				url: "http://localhost:3000",
+				agentId: connectedAgentId,
 			});
 
 			expect(result.content[0]!.text).toContain("Disconnected");
@@ -266,44 +272,44 @@ describe("agent-auth e2e", async () => {
 
 		it("should work with MCP tools in device auth mode", async () => {
 			const memStorage = createInMemoryStorage();
-			const tools = createAgentMCPTools({ storage: memStorage });
+			let capturedUrl = "";
+
+			const tools = createAgentMCPTools({
+				storage: memStorage,
+				onVerificationUrl: (url) => {
+					capturedUrl = url;
+				},
+			});
 
 			const connectTool = tools.find((t) => t.name === "connect_agent")!;
-			const completeTool = tools.find(
-				(t) => t.name === "connect_agent_complete",
-			)!;
-
 			expect(connectTool).toBeDefined();
-			expect(completeTool).toBeDefined();
 
-			// Step 1: Start connection (returns user code)
-			const startResult = await connectTool.handler({
+			// Start connection in background — it auto-polls for approval
+			const connectPromise = connectTool.handler({
 				url: "http://localhost:3000",
 				name: "MCP Device Agent",
 				scopes: ["reports.read"],
 			});
 
-			const text = startResult.content[0]!.text;
-			expect(text).toContain("enter code:");
+			// Wait for the device code request to complete
+			await new Promise((resolve) => setTimeout(resolve, 200));
 
-			// Extract user code from the output
-			const codeMatch = text.match(/enter code:\s*(\S+)/);
-			expect(codeMatch).toBeTruthy();
-			const userCode = codeMatch![1]!;
+			// Extract user code from the captured verification URL
+			expect(capturedUrl).toBeTruthy();
+			const urlObj = new URL(capturedUrl);
+			const userCode = urlObj.searchParams.get("user_code");
+			expect(userCode).toBeTruthy();
 
-			// Step 2: Simulate user approval
+			// Simulate user approval in the browser
 			await auth.api.deviceApprove({
-				body: { userCode },
+				body: { userCode: userCode! },
 				headers,
 			});
 
-			// Step 3: Complete the connection
-			const completeResult = await completeTool.handler({
-				url: "http://localhost:3000",
-			});
-
-			expect(completeResult.content[0]!.text).toContain("Connected to");
-			expect(completeResult.content[0]!.text).toContain("Agent ID:");
+			// The connect_agent poll picks up approval and registers the agent
+			const result = await connectPromise;
+			expect(result.content[0]!.text).toContain("Connected to");
+			expect(result.content[0]!.text).toContain("Agent ID:");
 
 			// Verify connection was saved
 			const listTool = tools.find((t) => t.name === "list_agents")!;
@@ -380,20 +386,21 @@ describe("agent-auth e2e", async () => {
 
 /**
  * In-memory implementation of MCPAgentStorage for testing.
+ * Matches the new agentId-keyed interface.
  */
 function createInMemoryStorage(): MCPAgentStorage {
-	const keypairs = new Map<
-		string,
-		{
-			privateKey: Record<string, unknown>;
-			publicKey: Record<string, unknown>;
-			kid: string;
-		}
-	>();
-
 	const connections = new Map<
 		string,
-		{ agentId: string; name: string; scopes: string[] }
+		{
+			appUrl: string;
+			keypair: {
+				privateKey: Record<string, unknown>;
+				publicKey: Record<string, unknown>;
+				kid: string;
+			};
+			name: string;
+			scopes: string[];
+		}
 	>();
 
 	const pendingFlows = new Map<
@@ -407,25 +414,21 @@ function createInMemoryStorage(): MCPAgentStorage {
 	>();
 
 	return {
-		async getKeypair(appUrl) {
-			return keypairs.get(appUrl) ?? null;
+		async getConnection(agentId) {
+			return connections.get(agentId) ?? null;
 		},
-		async saveKeypair(appUrl, kp) {
-			keypairs.set(appUrl, kp);
+		async saveConnection(agentId, connection) {
+			connections.set(agentId, connection);
 		},
-		async getConnection(appUrl) {
-			return connections.get(appUrl) ?? null;
-		},
-		async saveConnection(appUrl, connection) {
-			connections.set(appUrl, connection);
-		},
-		async removeConnection(appUrl) {
-			connections.delete(appUrl);
+		async removeConnection(agentId) {
+			connections.delete(agentId);
 		},
 		async listConnections() {
-			return Array.from(connections.entries()).map(([appUrl, c]) => ({
-				appUrl,
-				...c,
+			return Array.from(connections.entries()).map(([agentId, c]) => ({
+				agentId,
+				appUrl: c.appUrl,
+				name: c.name,
+				scopes: c.scopes,
 			}));
 		},
 		async savePendingFlow(appUrl, flow) {

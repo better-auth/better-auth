@@ -61,21 +61,11 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 				const authHeader = ctx.headers?.get("authorization");
 				const token = authHeader?.replace(/^Bearer\s+/i, "");
 				if (!token || token === authHeader) {
-					throw APIError.from(
-						"UNAUTHORIZED",
-						ERROR_CODES.UNAUTHORIZED_SESSION,
-					);
+					throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 				}
-				const dbSession =
-					await ctx.context.internalAdapter.findSession(token);
-				if (
-					!dbSession ||
-					new Date(dbSession.session.expiresAt) <= new Date()
-				) {
-					throw APIError.from(
-						"UNAUTHORIZED",
-						ERROR_CODES.UNAUTHORIZED_SESSION,
-					);
+				const dbSession = await ctx.context.internalAdapter.findSession(token);
+				if (!dbSession || new Date(dbSession.session.expiresAt) <= new Date()) {
+					throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
 				}
 				userId = dbSession.user.id;
 			}

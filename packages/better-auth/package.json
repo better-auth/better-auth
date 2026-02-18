@@ -240,6 +240,11 @@
       "types": "./dist/plugins/agent-auth/mcp-storage-fs.d.mts",
       "default": "./dist/plugins/agent-auth/mcp-storage-fs.mjs"
     },
+    "./plugins/agent-auth/mcp-storage-memory": {
+      "dev-source": "./src/plugins/agent-auth/mcp-storage-memory.ts",
+      "types": "./dist/plugins/agent-auth/mcp-storage-memory.d.mts",
+      "default": "./dist/plugins/agent-auth/mcp-storage-memory.mjs"
+    },
     "./plugins/agent-auth/mcp-server": {
       "dev-source": "./src/plugins/agent-auth/mcp-server.ts",
       "types": "./dist/plugins/agent-auth/mcp-server.d.mts",
@@ -459,6 +464,9 @@
       ],
       "plugins/agent-auth/mcp-storage-fs": [
         "./dist/plugins/agent-auth/mcp-storage-fs.d.mts"
+      ],
+      "plugins/agent-auth/mcp-storage-memory": [
+        "./dist/plugins/agent-auth/mcp-storage-memory.d.mts"
       ],
       "plugins/agent-auth/mcp-server": [
         "./dist/plugins/agent-auth/mcp-server.d.mts"

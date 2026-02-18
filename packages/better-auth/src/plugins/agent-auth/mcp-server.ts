@@ -2,7 +2,7 @@
  * Standalone MCP server for Agent Auth.
  *
  * Registers agent management tools (connect, list, disconnect, status, request)
- * and uses file-based storage for keypairs and connections.
+ * and uses in-memory storage by default (agents are ephemeral per process).
  *
  * Usage:
  *   npx tsx packages/better-auth/src/plugins/agent-auth/mcp-server.ts
@@ -22,6 +22,7 @@
  *
  * Environment variables:
  *   BETTER_AUTH_AGENT_DIR     - Storage directory (default: ~/.better-auth/agents)
+ *   BETTER_AUTH_AGENT_STORAGE - "memory" (default) or "file"
  *   BETTER_AUTH_AGENT_COOKIE  - Session cookie value for authenticated operations
  *   BETTER_AUTH_AGENT_TOKEN   - Bearer token for authenticated operations (alternative)
  *
@@ -31,6 +32,7 @@
 import { exec } from "node:child_process";
 import { platform } from "node:os";
 import { createFileStorage } from "./mcp-storage-fs";
+import { createMemoryStorage } from "./mcp-storage-memory";
 import { createAgentMCPTools } from "./mcp-tools";
 
 /**
@@ -56,10 +58,14 @@ async function main() {
 	const z = await import("zod");
 
 	const storageDir = process.env.BETTER_AUTH_AGENT_DIR ?? undefined;
+	const storageType = process.env.BETTER_AUTH_AGENT_STORAGE ?? "memory";
 	const cookie = process.env.BETTER_AUTH_AGENT_COOKIE ?? undefined;
 	const token = process.env.BETTER_AUTH_AGENT_TOKEN ?? undefined;
 
-	const storage = createFileStorage({ directory: storageDir });
+	const storage =
+		storageType === "file"
+			? createFileStorage({ directory: storageDir })
+			: createMemoryStorage();
 
 	const hasAuthHeaders = !!(cookie || token);
 
@@ -101,7 +107,9 @@ async function main() {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 
-	process.stderr.write("[better-auth-agent] MCP server running on stdio\n");
+	process.stderr.write(
+		`[better-auth-agent] MCP server running on stdio (storage: ${storageType})\n`,
+	);
 }
 
 main().catch((err) => {

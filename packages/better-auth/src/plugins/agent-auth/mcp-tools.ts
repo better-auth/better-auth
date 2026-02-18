@@ -4,6 +4,10 @@
  * These are portable tool descriptors that developers register
  * in their MCP servers. The storage layer is injected so this
  * module has no Node.js dependencies.
+ *
+ * All tools are keyed by `agentId` — each connect_agent call
+ * creates a fresh identity. The AI passes the agentId it received
+ * to subsequent tools within the same conversation.
  */
 
 import * as z from "zod";
@@ -15,29 +19,41 @@ export interface AgentKeypair {
 	kid: string;
 }
 
+export interface AgentConnectionData {
+	appUrl: string;
+	keypair: AgentKeypair;
+	name: string;
+	scopes: string[];
+}
+
+/**
+ * Storage interface for MCP agent tools.
+ *
+ * Three implementations:
+ * - **Memory** (default): agents in-memory, ephemeral
+ * - **File**: one file per agent on disk
+ * - **Database**: implement this interface with your own DB
+ */
 export interface MCPAgentStorage {
-	/** Get the keypair for a specific connection (by appUrl). Falls back to global keypair for migration. */
-	getKeypair(appUrl: string): Promise<AgentKeypair | null>;
-	/** Save a keypair for a specific connection (stored inline with the connection). */
-	saveKeypair(appUrl: string, keypair: AgentKeypair): Promise<void>;
-	getConnection(appUrl: string): Promise<{
-		agentId: string;
-		name: string;
-		scopes: string[];
-	} | null>;
+	/** Get a connection by agent ID (includes keypair). */
+	getConnection(agentId: string): Promise<AgentConnectionData | null>;
+	/** Save a connection keyed by agent ID. */
 	saveConnection(
-		appUrl: string,
-		connection: { agentId: string; name: string; scopes: string[] },
+		agentId: string,
+		connection: AgentConnectionData,
 	): Promise<void>;
-	removeConnection(appUrl: string): Promise<void>;
+	/** Remove a connection by agent ID. */
+	removeConnection(agentId: string): Promise<void>;
+	/** List all stored connections. */
 	listConnections(): Promise<
 		Array<{
-			appUrl: string;
 			agentId: string;
+			appUrl: string;
 			name: string;
 			scopes: string[];
 		}>
 	>;
+
 	/** Store a pending device auth flow so connect_complete can finish it. */
 	savePendingFlow?(
 		appUrl: string,
@@ -89,6 +105,38 @@ export interface CreateAgentMCPToolsOptions {
 }
 
 /**
+ * Helper: try to register an agent with a token, return the response or null on auth failure.
+ */
+async function tryRegisterAgent(
+	url: string,
+	token: string,
+	body: { name: string; publicKey: Record<string, unknown>; scopes: string[] },
+): Promise<{ agentId: string; scopes: string[] } | null> {
+	const res = await globalThis.fetch(`${url}/api/auth/agent/create`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${token}`,
+			Origin: url,
+		},
+		body: JSON.stringify(body),
+	});
+
+	if (res.ok) {
+		return (await res.json()) as { agentId: string; scopes: string[] };
+	}
+
+	// Auth failure — token expired or invalid
+	if (res.status === 401 || res.status === 403) {
+		return null;
+	}
+
+	// Other error — throw with details
+	const err = await res.text();
+	throw new Error(`Failed to register agent: ${err}`);
+}
+
+/**
  * Create MCP tool definitions for agent management.
  * Register these in your MCP server via `server.registerTool()`.
  */
@@ -107,59 +155,63 @@ export function createAgentMCPTools(
 		return await getAuthHeaders();
 	}
 
-	async function getOrCreateKeypair(appUrl?: string) {
-		if (appUrl) {
-			const existing = await storage.getKeypair(appUrl);
-			if (existing) return existing;
-		}
-		// Generate a fresh keypair for new connections
-		const keypair = await generateAgentKeypair();
-		// Don't save here — caller saves alongside the connection
-		return keypair;
-	}
-
 	const tools: MCPToolDefinition[] = [
 		{
 			name: "connect_agent",
 			description: getAuthHeaders
-				? "Connect to an app as an agent. Auto-generates a keypair if needed and registers the public key with the app."
-				: "Connect to an app as an agent via device authorization. Opens the browser for user approval, waits for it, then registers automatically.",
+				? "Connect to an app as a new agent. Creates a fresh identity each time. Pass agentId to reuse an existing identity from this conversation."
+				: "Connect to an app as a new agent via device authorization. Creates a fresh identity each time. Pass agentId to reuse an existing identity from this conversation.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z.string().optional().describe("Friendly name for this agent"),
 				scopes: z.array(z.string()).optional().describe("Scopes to request"),
-				force: z
-					.boolean()
+				agentId: z
+					.string()
 					.optional()
-					.describe("Force a new agent identity even if already connected"),
+					.describe(
+						"Pass agentId from a previous connect_agent call to reuse that identity. Omit to create a new agent.",
+					),
 			},
 			handler: async (input) => {
 				const url = (input.url as string).replace(/\/+$/, "");
 				const name = (input.name as string) ?? "MCP Agent";
 				const scopes = (input.scopes as string[]) ?? [];
-				const force = (input.force as boolean) ?? false;
+				const existingAgentId = input.agentId as string | undefined;
 
-				// Check if already connected to this app
-				if (!force) {
-					const existing = await storage.getConnection(url);
+				// If agentId provided, try to reuse existing connection
+				if (existingAgentId) {
+					const existing = await storage.getConnection(existingAgentId);
 					if (existing) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Already connected to ${url} as "${existing.name}" (Agent ID: ${existing.agentId}). Scopes: ${existing.scopes.join(", ") || "none"}. Use disconnect_agent first or pass force=true to reconnect with a new identity.`,
-								},
-							],
-						};
+						// Quick health check
+						try {
+							const jwt = await signAgentJWT({
+								agentId: existingAgentId,
+								privateKey: existing.keypair.privateKey,
+							});
+							const healthRes = await globalThis.fetch(
+								`${existing.appUrl}/api/auth/agent/get-session`,
+								{ headers: { Authorization: `Bearer ${jwt}` } },
+							);
+							if (healthRes.ok) {
+								return {
+									content: [
+										{
+											type: "text" as const,
+											text: `Reusing existing connection to ${existing.appUrl}. Agent ID: ${existingAgentId}. Name: "${existing.name}". Scopes: ${existing.scopes.join(", ") || "none"}.`,
+										},
+									],
+								};
+							}
+						} catch {
+							// Health check failed — fall through to create new
+						}
 					}
 				}
 
-				// Always generate a fresh keypair for new connections (or forced reconnects)
-				const keypair = force
-					? await generateAgentKeypair()
-					: await getOrCreateKeypair(url);
+				// Always generate a fresh keypair for new connections
+				const keypair = await generateAgentKeypair();
 
-				// If auth headers are available, use direct registration
+				// Direct auth mode (cookie/token in env)
 				if (getAuthHeaders) {
 					const authHeaders = await resolveAuthHeaders();
 					const res = await globalThis.fetch(`${url}/api/auth/agent/create`, {
@@ -192,9 +244,9 @@ export function createAgentMCPTools(
 						scopes: string[];
 					};
 
-					await storage.saveKeypair(url, keypair);
-					await storage.saveConnection(url, {
-						agentId: data.agentId,
+					await storage.saveConnection(data.agentId, {
+						appUrl: url,
+						keypair,
 						name,
 						scopes: data.scopes,
 					});
@@ -203,13 +255,13 @@ export function createAgentMCPTools(
 						content: [
 							{
 								type: "text" as const,
-								text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
+								text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}. Use this Agent ID for subsequent requests in this conversation.`,
 							},
 						],
 					};
 				}
 
-				// Device authorization flow
+				// Device authorization flow — every new identity requires explicit approval
 				const codeRes = await globalThis.fetch(`${url}/api/auth/device/code`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -259,13 +311,13 @@ export function createAgentMCPTools(
 					}
 				}
 
-				// Poll for approval automatically — no need for a separate tool call
+				// Poll for approval
 				const maxAttempts = 60;
-				const interval = Math.max(5000, (codeData.interval ?? 5) * 1000);
+				const pollInterval = Math.max(5000, (codeData.interval ?? 5) * 1000);
 				let accessToken: string | null = null;
 
 				for (let i = 0; i < maxAttempts; i++) {
-					await new Promise((resolve) => setTimeout(resolve, interval));
+					await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
 					const tokenRes = await globalThis.fetch(
 						`${url}/api/auth/device/token`,
@@ -296,7 +348,7 @@ export function createAgentMCPTools(
 						continue;
 					}
 					if (errorData.error === "slow_down") {
-						await new Promise((resolve) => setTimeout(resolve, interval));
+						await new Promise((resolve) => setTimeout(resolve, pollInterval));
 						continue;
 					}
 					if (errorData.error === "access_denied") {
@@ -345,64 +397,59 @@ export function createAgentMCPTools(
 					};
 				}
 
-				// Register the agent with the session token via Bearer auth
-				const createRes = await globalThis.fetch(
-					`${url}/api/auth/agent/create`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							Authorization: `Bearer ${accessToken}`,
-							Origin: url,
-						},
-						body: JSON.stringify({
-							name,
-							publicKey: keypair.publicKey,
-							scopes,
-						}),
-					},
-				);
+				// Register the agent
+				try {
+					const data = await tryRegisterAgent(url, accessToken, {
+						name,
+						publicKey: keypair.publicKey,
+						scopes,
+					});
 
-				if (!createRes.ok) {
-					const err = await createRes.text();
+					if (!data) {
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "Failed to register agent: auth token was rejected.",
+								},
+							],
+						};
+					}
+
+					await storage.saveConnection(data.agentId, {
+						appUrl: url,
+						keypair,
+						name,
+						scopes: data.scopes,
+					});
+
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
+
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}. Use this Agent ID for subsequent requests in this conversation.`,
+							},
+						],
+					};
+				} catch (err) {
 					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Failed to register agent: ${err}`,
+								text: `${err instanceof Error ? err.message : String(err)}`,
 							},
 						],
 					};
 				}
-
-				const data = (await createRes.json()) as {
-					agentId: string;
-					scopes: string[];
-				};
-
-				await storage.saveKeypair(url, keypair);
-				await storage.saveConnection(url, {
-					agentId: data.agentId,
-					name,
-					scopes: data.scopes,
-				});
-
-				if (storage.removePendingFlow) await storage.removePendingFlow(url);
-
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
-						},
-					],
-				};
 			},
 		},
 		{
 			name: "list_agents",
-			description: "List all connected apps and agent connections.",
+			description: "List all agent connections.",
 			inputSchema: {},
 			handler: async () => {
 				const connections = await storage.listConnections();
@@ -427,49 +474,50 @@ export function createAgentMCPTools(
 		},
 		{
 			name: "disconnect_agent",
-			description: "Revoke and remove an agent connection.",
+			description: "Revoke and remove an agent connection by agent ID.",
 			inputSchema: {
-				url: z.string().describe("App URL to disconnect from"),
+				agentId: z
+					.string()
+					.describe("Agent ID to disconnect (from connect_agent)"),
 			},
 			handler: async (input) => {
-				const url = (input.url as string).replace(/\/+$/, "");
-				const connection = await storage.getConnection(url);
+				const agentId = input.agentId as string;
+				const connection = await storage.getConnection(agentId);
 				if (!connection) {
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `No connection found for ${url}`,
+								text: `No connection found for agent ${agentId}.`,
 							},
 						],
 					};
 				}
 
-				const keypair = await storage.getKeypair(url);
-				if (keypair) {
-					const authHeaders = await resolveAuthHeaders();
-					try {
-						await globalThis.fetch(`${url}/api/auth/agent/revoke`, {
-							method: "POST",
-							headers: {
-								"Content-Type": "application/json",
-								...authHeaders,
-							},
-							body: JSON.stringify({
-								agentId: connection.agentId,
-							}),
-						});
-					} catch {
-						// Best-effort server-side revocation
-					}
+				// Best-effort server-side revocation
+				try {
+					const jwt = await signAgentJWT({
+						agentId,
+						privateKey: connection.keypair.privateKey,
+					});
+					await globalThis.fetch(`${connection.appUrl}/api/auth/agent/revoke`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${jwt}`,
+						},
+						body: JSON.stringify({ agentId }),
+					});
+				} catch {
+					// Best-effort
 				}
 
-				await storage.removeConnection(url);
+				await storage.removeConnection(agentId);
 				return {
 					content: [
 						{
 							type: "text" as const,
-							text: `Disconnected from ${url}. Agent ${connection.agentId} removed.`,
+							text: `Disconnected agent ${agentId} from ${connection.appUrl}.`,
 						},
 					],
 				};
@@ -479,41 +527,29 @@ export function createAgentMCPTools(
 			name: "agent_status",
 			description: "Check if an agent connection is healthy.",
 			inputSchema: {
-				url: z.string().describe("App URL to check"),
+				agentId: z.string().describe("Agent ID to check (from connect_agent)"),
 			},
 			handler: async (input) => {
-				const url = (input.url as string).replace(/\/+$/, "");
-				const connection = await storage.getConnection(url);
+				const agentId = input.agentId as string;
+				const connection = await storage.getConnection(agentId);
 				if (!connection) {
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `No connection for ${url}`,
-							},
-						],
-					};
-				}
-
-				const keypair = await storage.getKeypair(url);
-				if (!keypair) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: "No keypair found for this connection.",
+								text: `No connection found for agent ${agentId}.`,
 							},
 						],
 					};
 				}
 
 				const jwt = await signAgentJWT({
-					agentId: connection.agentId,
-					privateKey: keypair.privateKey,
+					agentId,
+					privateKey: connection.keypair.privateKey,
 				});
 
 				const res = await globalThis.fetch(
-					`${url}/api/auth/agent/get-session`,
+					`${connection.appUrl}/api/auth/agent/get-session`,
 					{
 						headers: { Authorization: `Bearer ${jwt}` },
 					},
@@ -538,7 +574,7 @@ export function createAgentMCPTools(
 					content: [
 						{
 							type: "text" as const,
-							text: `Healthy. Agent: ${session.agent.name} (${connection.agentId}). User: ${session.user.name} (${session.user.email}). Scopes: ${session.agent.scopes.join(", ")}`,
+							text: `Healthy. Agent: ${session.agent.name} (${agentId}). User: ${session.user.name} (${session.user.email}). Scopes: ${session.agent.scopes.join(", ")}`,
 						},
 					],
 				};
@@ -549,49 +585,37 @@ export function createAgentMCPTools(
 			description:
 				"Make an authenticated request to a connected app as the agent. Signs a fresh JWT automatically.",
 			inputSchema: {
-				url: z.string().describe("App URL (must have an existing connection)"),
+				agentId: z.string().describe("Agent ID (from connect_agent)"),
 				path: z.string().describe("API path (e.g. /api/reports/Q4)"),
 				method: z.string().optional().describe("HTTP method (default: GET)"),
 				body: z.string().optional().describe("Request body as JSON string"),
 			},
 			handler: async (input) => {
-				const appUrl = (input.url as string).replace(/\/+$/, "");
+				const agentId = input.agentId as string;
 				const reqPath = input.path as string;
 				const method = (input.method as string) ?? "GET";
 				const body = input.body as string | undefined;
 
-				const connection = await storage.getConnection(appUrl);
+				const connection = await storage.getConnection(agentId);
 				if (!connection) {
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `No connection for ${appUrl}. Run connect_agent first.`,
-							},
-						],
-					};
-				}
-
-				const keypair = await storage.getKeypair(appUrl);
-				if (!keypair) {
-					return {
-						content: [
-							{
-								type: "text" as const,
-								text: "No keypair found for this connection.",
+								text: `No connection found for agent ${agentId}. Run connect_agent first.`,
 							},
 						],
 					};
 				}
 
 				const jwt = await signAgentJWT({
-					agentId: connection.agentId,
-					privateKey: keypair.privateKey,
+					agentId,
+					privateKey: connection.keypair.privateKey,
 				});
 
 				const fullUrl = reqPath.startsWith("http")
 					? reqPath
-					: `${appUrl}${reqPath}`;
+					: `${connection.appUrl}${reqPath}`;
 
 				const headers: Record<string, string> = {
 					Authorization: `Bearer ${jwt}`,
@@ -624,7 +648,7 @@ export function createAgentMCPTools(
 		tools.push({
 			name: "connect_agent_complete",
 			description:
-				"Complete the agent connection after the user has approved in their browser. Call this after connect_agent.",
+				"Complete the agent connection after the user has approved in their browser. Call this after connect_agent if the automatic polling timed out.",
 			inputSchema: {
 				url: z.string().describe("App URL (same one used in connect_agent)"),
 			},
@@ -645,11 +669,11 @@ export function createAgentMCPTools(
 					};
 				}
 
-				const keypair = await getOrCreateKeypair();
+				const keypair = await generateAgentKeypair();
 
-				// Poll for the token (try up to 60 times, ~5 min)
+				// Poll for the token
 				const maxAttempts = 60;
-				const interval = 5000;
+				const pollInterval = 5000;
 				let accessToken: string | null = null;
 
 				for (let i = 0; i < maxAttempts; i++) {
@@ -657,9 +681,7 @@ export function createAgentMCPTools(
 						`${url}/api/auth/device/token`,
 						{
 							method: "POST",
-							headers: {
-								"Content-Type": "application/json",
-							},
+							headers: { "Content-Type": "application/json" },
 							body: JSON.stringify({
 								grant_type: "urn:ietf:params:oauth:grant-type:device_code",
 								device_code: pendingFlow.deviceCode,
@@ -681,11 +703,13 @@ export function createAgentMCPTools(
 					};
 
 					if (errorData.error === "authorization_pending") {
-						await new Promise((resolve) => setTimeout(resolve, interval));
+						await new Promise((resolve) => setTimeout(resolve, pollInterval));
 						continue;
 					}
 					if (errorData.error === "slow_down") {
-						await new Promise((resolve) => setTimeout(resolve, interval * 2));
+						await new Promise((resolve) =>
+							setTimeout(resolve, pollInterval * 2),
+						);
 						continue;
 					}
 					if (errorData.error === "access_denied") {
@@ -711,7 +735,6 @@ export function createAgentMCPTools(
 						};
 					}
 
-					// Unknown error, abort
 					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
@@ -735,59 +758,53 @@ export function createAgentMCPTools(
 					};
 				}
 
-				// Register the agent with the session token via Bearer auth
-				const createRes = await globalThis.fetch(
-					`${url}/api/auth/agent/create`,
-					{
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							Authorization: `Bearer ${accessToken}`,
-							Origin: url,
-						},
-						body: JSON.stringify({
-							name: pendingFlow.name,
-							publicKey: keypair.publicKey,
-							scopes: pendingFlow.scopes,
-						}),
-					},
-				);
+				try {
+					const data = await tryRegisterAgent(url, accessToken, {
+						name: pendingFlow.name,
+						publicKey: keypair.publicKey,
+						scopes: pendingFlow.scopes,
+					});
 
-				if (!createRes.ok) {
-					const err = await createRes.text();
+					if (!data) {
+						if (storage.removePendingFlow) await storage.removePendingFlow(url);
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: "Failed to register agent: auth token was rejected.",
+								},
+							],
+						};
+					}
+
+					await storage.saveConnection(data.agentId, {
+						appUrl: url,
+						keypair,
+						name: pendingFlow.name,
+						scopes: data.scopes,
+					});
+
+					if (storage.removePendingFlow) await storage.removePendingFlow(url);
+
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}. Use this Agent ID for subsequent requests in this conversation.`,
+							},
+						],
+					};
+				} catch (err) {
 					if (storage.removePendingFlow) await storage.removePendingFlow(url);
 					return {
 						content: [
 							{
 								type: "text" as const,
-								text: `Failed to register agent: ${err}`,
+								text: `${err instanceof Error ? err.message : String(err)}`,
 							},
 						],
 					};
 				}
-
-				const data = (await createRes.json()) as {
-					agentId: string;
-					scopes: string[];
-				};
-
-				await storage.saveKeypair(url, keypair);
-				await storage.saveConnection(url, {
-					agentId: data.agentId,
-					name: pendingFlow.name,
-					scopes: data.scopes,
-				});
-
-				if (storage.removePendingFlow) await storage.removePendingFlow(url);
-
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Connected to ${url}. Agent ID: ${data.agentId}. Scopes: ${data.scopes.join(", ")}`,
-						},
-					],
-				};
 			},
 		});
 	}

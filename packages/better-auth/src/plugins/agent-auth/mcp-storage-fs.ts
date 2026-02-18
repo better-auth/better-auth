@@ -1,8 +1,16 @@
 /**
  * File-based MCPAgentStorage implementation.
  *
- * Stores keypairs and connections in `~/.better-auth/agents/`.
- * Private key files are chmod 0o600 (owner-only).
+ * Stores each agent connection as a separate JSON file in a
+ * `connections/` directory. Private key files are chmod 0o600.
+ *
+ * Directory structure:
+ *   ~/.better-auth/agents/
+ *     connections/
+ *       <agentId>.json   — { appUrl, keypair, name, scopes, connectedAt }
+ *     pending-flows.json — { "<appUrl>": { deviceCode, clientId, name, scopes } }
+ *
+ * Every new agent requires explicit user approval via device auth.
  *
  * This module uses Node.js APIs and is intended for server-side /
  * CLI / MCP-server usage only.
@@ -11,23 +19,18 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { MCPAgentStorage } from "./mcp-tools";
-
-interface StoredKeypair {
-	privateKey: Record<string, unknown>;
-	publicKey: Record<string, unknown>;
-	kid: string;
-	createdAt: string;
-}
+import type { AgentKeypair, MCPAgentStorage } from "./mcp-tools";
 
 interface StoredConnection {
 	appUrl: string;
-	agentId: string;
+	keypair: {
+		privateKey: Record<string, unknown>;
+		publicKey: Record<string, unknown>;
+		kid: string;
+	};
 	name: string;
 	scopes: string[];
 	connectedAt: string;
-	/** Per-connection keypair. Absent on legacy connections (fall back to global keypair.json). */
-	keypair?: StoredKeypair;
 }
 
 export interface FileStorageOptions {
@@ -43,13 +46,12 @@ export function createFileStorage(
 	options?: FileStorageOptions,
 ): MCPAgentStorage {
 	const dir = options?.directory ?? defaultDir();
-	const keypairFile = path.join(dir, "keypair.json");
-	const connectionsFile = path.join(dir, "connections.json");
+	const connectionsDir = path.join(dir, "connections");
 	const pendingFlowsFile = path.join(dir, "pending-flows.json");
 
-	function ensureDir() {
-		if (!fs.existsSync(dir)) {
-			fs.mkdirSync(dir, { recursive: true });
+	function ensureDir(d: string) {
+		if (!fs.existsSync(d)) {
+			fs.mkdirSync(d, { recursive: true });
 		}
 	}
 
@@ -63,119 +65,87 @@ export function createFileStorage(
 	}
 
 	function writeJSON(filePath: string, data: unknown, secret = false) {
-		ensureDir();
+		ensureDir(path.dirname(filePath));
 		fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
 		if (secret) {
 			fs.chmodSync(filePath, 0o600);
 		}
 	}
 
+	function connectionFile(agentId: string): string {
+		const safe = agentId.replace(/[^a-zA-Z0-9_-]/g, "_");
+		return path.join(connectionsDir, `${safe}.json`);
+	}
+
 	return {
-		async getKeypair(appUrl) {
-			// First try per-connection keypair
-			const connections = readJSON<StoredConnection[]>(connectionsFile);
-			if (connections) {
-				const conn = connections.find((c) => c.appUrl === appUrl);
-				if (conn?.keypair) {
-					return {
-						privateKey: conn.keypair.privateKey,
-						publicKey: conn.keypair.publicKey,
-						kid: conn.keypair.kid,
-					};
-				}
-			}
-			// Migration fallback: use legacy global keypair.json
-			const stored = readJSON<StoredKeypair>(keypairFile);
+		async getConnection(agentId) {
+			const stored = readJSON<StoredConnection>(connectionFile(agentId));
 			if (!stored) return null;
 			return {
-				privateKey: stored.privateKey,
-				publicKey: stored.publicKey,
-				kid: stored.kid,
+				appUrl: stored.appUrl,
+				keypair: stored.keypair as AgentKeypair,
+				name: stored.name,
+				scopes: stored.scopes,
 			};
 		},
 
-		async saveKeypair(appUrl, keypair) {
-			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
-			const idx = connections.findIndex((c) => c.appUrl === appUrl);
-			const storedKeypair: StoredKeypair = {
-				...keypair,
-				createdAt: new Date().toISOString(),
-			};
-			if (idx >= 0 && connections[idx]) {
-				connections[idx].keypair = storedKeypair;
-			} else {
-				// Connection doesn't exist yet — create a placeholder that saveConnection will overwrite
-				connections.push({
-					appUrl,
-					agentId: "",
-					name: "",
-					scopes: [],
-					connectedAt: new Date().toISOString(),
-					keypair: storedKeypair,
-				});
-			}
-			writeJSON(connectionsFile, connections, true);
-		},
-
-		async getConnection(appUrl) {
-			const connections = readJSON<StoredConnection[]>(connectionsFile);
-			if (!connections) return null;
-			const found = connections.find((c) => c.appUrl === appUrl);
-			if (!found) return null;
-			return {
-				agentId: found.agentId,
-				name: found.name,
-				scopes: found.scopes,
-			};
-		},
-
-		async saveConnection(appUrl, connection) {
-			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
-			const idx = connections.findIndex((c) => c.appUrl === appUrl);
-			const entry: StoredConnection = {
-				appUrl,
-				...connection,
+		async saveConnection(agentId, connection) {
+			const stored: StoredConnection = {
+				appUrl: connection.appUrl,
+				keypair: connection.keypair,
+				name: connection.name,
+				scopes: connection.scopes,
 				connectedAt: new Date().toISOString(),
-				// Preserve existing keypair if present
-				keypair: idx >= 0 ? connections[idx]?.keypair : undefined,
 			};
-			if (idx >= 0) {
-				connections[idx] = entry;
-			} else {
-				connections.push(entry);
-			}
-			writeJSON(connectionsFile, connections, true);
+			writeJSON(connectionFile(agentId), stored, true);
 		},
 
-		async removeConnection(appUrl) {
-			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
-			const updated = connections.filter((c) => c.appUrl !== appUrl);
-			writeJSON(connectionsFile, updated);
+		async removeConnection(agentId) {
+			const file = connectionFile(agentId);
+			try {
+				fs.unlinkSync(file);
+			} catch {
+				// File may not exist
+			}
 		},
 
 		async listConnections() {
-			const connections = readJSON<StoredConnection[]>(connectionsFile) ?? [];
-			return connections.map((c) => ({
-				appUrl: c.appUrl,
-				agentId: c.agentId,
-				name: c.name,
-				scopes: c.scopes,
-			}));
+			ensureDir(connectionsDir);
+			const result: Array<{
+				agentId: string;
+				appUrl: string;
+				name: string;
+				scopes: string[];
+			}> = [];
+
+			let files: string[];
+			try {
+				files = fs.readdirSync(connectionsDir);
+			} catch {
+				return result;
+			}
+
+			for (const file of files) {
+				if (!file.endsWith(".json")) continue;
+				const agentId = file.replace(/\.json$/, "");
+				const stored = readJSON<StoredConnection>(
+					path.join(connectionsDir, file),
+				);
+				if (stored) {
+					result.push({
+						agentId,
+						appUrl: stored.appUrl,
+						name: stored.name,
+						scopes: stored.scopes,
+					});
+				}
+			}
+
+			return result;
 		},
 
 		async savePendingFlow(appUrl, flow) {
-			const flows =
-				readJSON<
-					Record<
-						string,
-						{
-							deviceCode: string;
-							clientId: string;
-							name: string;
-							scopes: string[];
-						}
-					>
-				>(pendingFlowsFile) ?? {};
+			const flows = readJSON<Record<string, unknown>>(pendingFlowsFile) ?? {};
 			flows[appUrl] = flow;
 			writeJSON(pendingFlowsFile, flows);
 		},
