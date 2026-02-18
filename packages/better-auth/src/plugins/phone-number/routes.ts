@@ -863,7 +863,10 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
-				await ctx.context.options.emailAndPassword.onPasswordReset({ user }, ctx.request);
+				await ctx.context.options.emailAndPassword.onPasswordReset(
+					{ user },
+					ctx.request,
+				);
 			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
