@@ -1503,6 +1503,15 @@ export const auth = betterAuth({
 			"Would you like to connect your app to Better Auth infrastructure?",
 		initial: true,
 	});
+	// If the user cancels the prompt, `connect` will be undefined.
+	// Treat this as a cancellation of the remaining init flow.
+	if (connectResponse.connect === undefined) {
+		console.log(
+			chalk.yellow("\n✖ ") +
+				"Setup cancelled before connecting to Better Auth infrastructure.\n",
+		);
+		return;
+	}
 	if (connectResponse.connect) {
 		await open("https://beta.better-auth.com/onboarding");
 		console.log(
