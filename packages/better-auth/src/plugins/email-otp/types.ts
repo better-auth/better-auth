@@ -1,4 +1,4 @@
-import type { GenericEndpointContext } from "@better-auth/core";
+import type { GenericEndpointContext, User } from "@better-auth/core";
 
 export interface EmailOTPOptions {
 	/**
@@ -12,6 +12,11 @@ export interface EmailOTPOptions {
 			email: string;
 			otp: string;
 			type: "sign-in" | "email-verification" | "forget-password";
+			/**
+			 * The user object if available. This is available when the user exists
+			 * in the database and the OTP is being sent to an existing user.
+			 */
+			user?: User | null;
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void>;
