@@ -1,5 +1,5 @@
 import type { DBAdapter } from "@better-auth/core/db/adapter";
-import * as saml from "samlify";
+import saml from "samlify";
 import type { SAMLConfig, SSOOptions, SSOProvider } from "../types";
 import { safeJsonParse } from "../utils";
 
