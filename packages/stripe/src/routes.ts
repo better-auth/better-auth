@@ -909,6 +909,40 @@ const cancelSubscriptionCallbackQuerySchema = z
 	.record(z.string(), z.any())
 	.optional();
 
+/**
+ * Checks if the current user has access to the subscription.
+ * Returns true if the user owns the subscription directly (referenceId === userId)
+ * or if the user is a member of the organization that owns the subscription.
+ * @internal
+ */
+async function verifySubscriptionAccess(
+	ctx: GenericEndpointContext,
+	subscription: Subscription,
+	userId: string,
+	organizationEnabled: boolean,
+): Promise<boolean> {
+	// Check if user owns the subscription directly
+	if (subscription.referenceId === userId) {
+		return true;
+	}
+
+	// If organization support is not enabled, user can only access their own subscriptions
+	if (!organizationEnabled) {
+		return false;
+	}
+
+	// Check if user is a member of the organization that owns the subscription
+	const membership = await ctx.context.adapter.findOne({
+		model: "member",
+		where: [
+			{ field: "userId", value: userId },
+			{ field: "organizationId", value: subscription.referenceId },
+		],
+	});
+
+	return !!membership;
+}
+
 export const cancelSubscriptionCallback = (options: StripeOptions) => {
 	const client = options.stripeClient;
 	const subscriptionOptions = options.subscription as SubscriptionOptions;
@@ -934,31 +968,44 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 			}
 			const { callbackURL, subscriptionId } = ctx.query;
 
+			const subscription = await ctx.context.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [
+					{
+						field: "id",
+						value: subscriptionId,
+					},
+				],
+			});
+
+			// Verify subscription exists and user has access
+			if (!subscription) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			// Authorization check: verify the user owns this subscription
+			const hasAccess = await verifySubscriptionAccess(
+				ctx,
+				subscription,
+				session.user.id,
+				!!options.organization?.enabled,
+			);
+			if (!hasAccess) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			if (subscription.status === "canceled" || isPendingCancel(subscription)) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			// Use the subscription's own stripeCustomerId so this works
+			// for both user and organization subscriptions.
+			const customerId = subscription.stripeCustomerId;
+			if (!customerId) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
 			try {
-				const subscription = await ctx.context.adapter.findOne<Subscription>({
-					model: "subscription",
-					where: [
-						{
-							field: "id",
-							value: subscriptionId,
-						},
-					],
-				});
-				if (
-					!subscription ||
-					subscription.status === "canceled" ||
-					isPendingCancel(subscription)
-				) {
-					throw ctx.redirect(getUrl(ctx, callbackURL));
-				}
-
-				// Use the subscription's own stripeCustomerId so this works
-				// for both user and organization subscriptions.
-				const customerId = subscription.stripeCustomerId;
-				if (!customerId) {
-					throw ctx.redirect(getUrl(ctx, callbackURL));
-				}
-
 				const stripeSubscription = await client.subscriptions.list({
 					customer: customerId,
 					status: "active",
@@ -1499,6 +1546,17 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				ctx.context.logger.warn(
 					`Subscription record not found for subscriptionId: ${subscriptionId}`,
 				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			// Authorization check: verify the user owns this subscription
+			const hasAccess = await verifySubscriptionAccess(
+				ctx,
+				subscription,
+				session.user.id,
+				!!options.organization?.enabled,
+			);
+			if (!hasAccess) {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
