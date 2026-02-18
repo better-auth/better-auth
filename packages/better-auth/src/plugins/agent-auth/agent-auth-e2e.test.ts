@@ -194,7 +194,7 @@ describe("agent-auth e2e", async () => {
 			expect(result.content[0]!.text).toContain("MCP E2E Agent");
 		});
 
-		it("should auto-reuse identity when calling connect_agent again for the same URL", async () => {
+		it("should prompt about existing connection when calling connect_agent again without agentId", async () => {
 			const connectTool = findTool("connect_agent");
 			const result = await connectTool.handler({
 				url: "http://localhost:3000",
@@ -202,9 +202,24 @@ describe("agent-auth e2e", async () => {
 				scopes: ["reports.read"],
 			});
 
-			expect(result.content[0]!.text).toContain("Already connected");
+			expect(result.content[0]!.text).toContain("Active connection found");
 			expect(result.content[0]!.text).toContain(connectedAgentId);
-			expect(result.content[0]!.text).toContain("Reusing existing identity");
+			expect(result.content[0]!.text).toContain(
+				"call connect_agent with agentId",
+			);
+			expect(result.content[0]!.text).toContain("forceNew: true");
+		});
+
+		it("should reuse identity when agentId is explicitly passed", async () => {
+			const connectTool = findTool("connect_agent");
+			const result = await connectTool.handler({
+				url: "http://localhost:3000",
+				name: "Same Agent",
+				agentId: connectedAgentId,
+			});
+
+			expect(result.content[0]!.text).toContain("Reusing connection");
+			expect(result.content[0]!.text).toContain(connectedAgentId);
 		});
 
 		it("should disconnect via MCP tool", async () => {

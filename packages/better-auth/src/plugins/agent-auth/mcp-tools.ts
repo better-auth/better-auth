@@ -156,45 +156,34 @@ export function createAgentMCPTools(
 	}
 
 	/**
-	 * Health-check an existing connection and return a reuse response if valid.
-	 * Returns null if the connection is stale or unreachable.
+	 * Health-check an existing connection. Returns true if the agent session
+	 * is still valid on the server, false otherwise.
 	 */
-	async function tryReuseConnection(
+	async function isConnectionHealthy(
 		agentId: string,
-	): Promise<{ content: Array<{ type: "text"; text: string }> } | null> {
-		const existing = await storage.getConnection(agentId);
-		if (!existing) return null;
+		connection: AgentConnectionData,
+	): Promise<boolean> {
 		try {
 			const jwt = await signAgentJWT({
 				agentId,
-				privateKey: existing.keypair.privateKey,
+				privateKey: connection.keypair.privateKey,
 			});
-			const healthRes = await globalThis.fetch(
-				`${existing.appUrl}/api/auth/agent/get-session`,
+			const res = await globalThis.fetch(
+				`${connection.appUrl}/api/auth/agent/get-session`,
 				{ headers: { Authorization: `Bearer ${jwt}` } },
 			);
-			if (healthRes.ok) {
-				return {
-					content: [
-						{
-							type: "text" as const,
-							text: `Already connected to ${existing.appUrl}. Agent ID: ${agentId}. Name: "${existing.name}". Scopes: ${existing.scopes.join(", ") || "none"}. Reusing existing identity.`,
-						},
-					],
-				};
-			}
+			return res.ok;
 		} catch {
-			// Health check failed — connection is stale
+			return false;
 		}
-		return null;
 	}
 
 	const tools: MCPToolDefinition[] = [
 		{
 			name: "connect_agent",
 			description: getAuthHeaders
-				? "Connect to an app as an agent. If you already connected to this URL in this conversation, the existing identity is automatically reused."
-				: "Connect to an app as an agent via device authorization. If you already connected to this URL in this conversation, the existing identity is automatically reused.",
+				? "Connect to an app as an agent. If an active connection exists for this URL, you'll be prompted to reuse it or create a new identity."
+				: "Connect to an app as an agent via device authorization. If an active connection exists for this URL, you'll be prompted to reuse it or create a new identity.",
 			inputSchema: {
 				url: z.string().describe("App URL (e.g. https://app-x.com)"),
 				name: z
@@ -207,7 +196,13 @@ export function createAgentMCPTools(
 					.string()
 					.optional()
 					.describe(
-						"Explicit agent ID to reuse. Usually not needed — the tool auto-detects existing connections by URL.",
+						"Agent ID from a previous connect_agent call. Pass this to reuse an existing connection.",
+					),
+				forceNew: z
+					.boolean()
+					.optional()
+					.describe(
+						"Force creation of a new agent identity even if one already exists for this URL.",
 					),
 			},
 			handler: async (input) => {
@@ -215,24 +210,59 @@ export function createAgentMCPTools(
 				const name = (input.name as string) ?? "MCP Agent";
 				const scopes = (input.scopes as string[]) ?? [];
 				const existingAgentId = input.agentId as string | undefined;
+				const forceNew = (input.forceNew as boolean) ?? false;
 
-				// 1. Explicit agentId — try to reuse that specific connection
+				// 1. Explicit agentId — reuse that specific connection
 				if (existingAgentId) {
-					const reused = await tryReuseConnection(existingAgentId);
-					if (reused) return reused;
+					const existing = await storage.getConnection(existingAgentId);
+					if (existing) {
+						const healthy = await isConnectionHealthy(
+							existingAgentId,
+							existing,
+						);
+						if (healthy) {
+							return {
+								content: [
+									{
+										type: "text" as const,
+										text: `Reusing connection. Agent ID: ${existingAgentId}. Name: "${existing.name}". URL: ${existing.appUrl}. Scopes: ${existing.scopes.join(", ") || "none"}.`,
+									},
+								],
+							};
+						}
+					}
 				}
 
-				// 2. Auto-detect: check if we already have a connection to this URL
-				const allConnections = await storage.listConnections();
-				const existingForUrl = allConnections.find((c) => c.appUrl === url);
-				if (existingForUrl) {
-					const reused = await tryReuseConnection(existingForUrl.agentId);
-					if (reused) return reused;
-					// Stale — clean up before creating a new one
-					await storage.removeConnection(existingForUrl.agentId);
+				// 2. No explicit agentId and not forcing new — check for existing connection by URL
+				if (!forceNew && !existingAgentId) {
+					const allConnections = await storage.listConnections();
+					const existingForUrl = allConnections.find((c) => c.appUrl === url);
+					if (existingForUrl) {
+						const existing = await storage.getConnection(
+							existingForUrl.agentId,
+						);
+						if (existing) {
+							const healthy = await isConnectionHealthy(
+								existingForUrl.agentId,
+								existing,
+							);
+							if (healthy) {
+								return {
+									content: [
+										{
+											type: "text" as const,
+											text: `Active connection found for ${url}.\nAgent ID: ${existingForUrl.agentId} | Name: "${existingForUrl.name}" | Scopes: ${existingForUrl.scopes.join(", ") || "none"}\n\nTo reuse this identity, call connect_agent with agentId: "${existingForUrl.agentId}".\nTo create a brand new identity, call connect_agent with forceNew: true.`,
+										},
+									],
+								};
+							}
+							// Stale — clean up
+							await storage.removeConnection(existingForUrl.agentId);
+						}
+					}
 				}
 
-				// 3. No existing connection — create a fresh identity
+				// 3. Create a fresh identity (forceNew, no existing, or stale connection)
 				const keypair = await generateAgentKeypair();
 
 				// Direct auth mode (cookie/token in env)
