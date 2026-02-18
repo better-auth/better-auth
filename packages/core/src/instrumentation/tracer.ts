@@ -41,7 +41,7 @@ export function withSpan<T>(
 						span.recordException(err);
 						span.setStatus({
 							code: SpanStatusCode.ERROR,
-							message: err.message,
+							message: String(err.message ?? err),
 						});
 						span.end();
 						throw err;
@@ -53,7 +53,7 @@ export function withSpan<T>(
 			span.recordException(err as Error);
 			span.setStatus({
 				code: SpanStatusCode.ERROR,
-				message: (err as Error).message,
+				message: String((err as Error)?.message ?? err),
 			});
 			span.end();
 			throw err;
