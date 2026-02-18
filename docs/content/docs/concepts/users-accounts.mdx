@@ -368,7 +368,7 @@ Then whenever you retrieve back the account make sure to decrypt the tokens befo
 
 ### Account Linking
 
-Account linking enables users to associate multiple authentication methods with a single account. With Better Auth, users can connect additional social sign-ons or OAuth providers to their existing accounts if the provider confirms the user's email as verified.
+Account linking is [enabled by default](https://www.better-auth.com/docs/reference/options#accountlinking) and lets users associate multiple authentication methods with a single account. With Better Auth, users can connect additional social sign-ons or OAuth providers to their existing accounts if the provider confirms the user's email as verified.
 
 If account linking is disabled, no accounts can be linked, regardless of the provider or email verification status.
 
@@ -376,7 +376,7 @@ If account linking is disabled, no accounts can be linked, regardless of the pro
 export const auth = betterAuth({
     account: {
         accountLinking: {
-            enabled: true, 
+            enabled: false, 
         }
     },
 });
