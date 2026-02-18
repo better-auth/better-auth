@@ -1191,6 +1191,9 @@ importers:
       '@better-auth/redis-storage':
         specifier: workspace:*
         version: link:../../packages/redis-storage
+      '@better-auth/sso':
+        specifier: workspace:*
+        version: link:../../packages/sso
       better-auth:
         specifier: workspace:*
         version: link:../../packages/better-auth
@@ -19928,7 +19931,8 @@ snapshots:
 
   '@noble/ciphers@2.1.1': {}
 
-  '@noble/hashes@1.8.0': {}
+  '@noble/hashes@1.8.0':
+    optional: true
 
   '@noble/hashes@2.0.1': {}
 
@@ -20119,6 +20123,7 @@ snapshots:
   '@orama/cuid2@2.2.3':
     dependencies:
       '@noble/hashes': 1.8.0
+    optional: true
 
   '@orama/orama@3.1.18': {}
 
@@ -20127,6 +20132,7 @@ snapshots:
       '@orama/cuid2': 2.2.3
       '@orama/orama': 3.1.18
       lodash: 4.17.23
+    optional: true
 
   '@oxc-project/types@0.112.0': {}
 
