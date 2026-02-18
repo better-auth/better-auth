@@ -18,7 +18,13 @@ export const hasPermissionFn = (
 
 	for (const role of roles) {
 		const _role = acRoles[role as keyof typeof acRoles];
-		const result = _role?.authorize(input.permissions);
+		if (!_role) {
+			console.warn(
+				`[Better Auth] [hasPermission] Role "${role}" not found in configured roles. Available roles: ${Object.keys(acRoles).join(", ")}`,
+			);
+			continue;
+		}
+		const result = _role.authorize(input.permissions);
 		if (result?.success) {
 			return true;
 		}
