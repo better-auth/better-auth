@@ -21,6 +21,12 @@ const deviceCodeBodySchema = z.object({
 			description: "Space-separated list of scopes",
 		})
 		.optional(),
+	client_name: z
+		.string()
+		.meta({
+			description: "Friendly name of the client requesting authorization",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
@@ -151,6 +157,7 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					pollingInterval: ms(opts.interval),
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
+					clientName: ctx.body.client_name,
 				},
 			});
 
@@ -558,6 +565,9 @@ export const deviceVerify = createAuthEndpoint(
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
+			client_id: deviceCodeRecord.clientId,
+			client_name: deviceCodeRecord.clientName,
+			scope: deviceCodeRecord.scope,
 		});
 	},
 );

@@ -287,6 +287,7 @@ export function createAgentMCPTools(
 					body: JSON.stringify({
 						client_id: clientId,
 						scope: scopes.join(" "),
+						client_name: name,
 					}),
 				});
 
