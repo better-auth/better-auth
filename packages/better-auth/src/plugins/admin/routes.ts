@@ -1079,11 +1079,14 @@ export const impersonateUser = (opts: AdminOptions) =>
 				opts.defaultRole ||
 				"user"
 			).split(",");
-			if (
-				opts.allowImpersonatingAdmins !== true &&
-				(targetUserRole.some((role) => adminRoles.includes(role)) ||
-					opts.adminUserIds?.includes(targetUser.id))
-			) {
+			const isTargetAdmin =
+				targetUserRole.some((role) => adminRoles.includes(role)) ||
+				!!opts.adminUserIds?.includes(targetUser.id);
+			const canImpersonateTarget =
+				typeof opts.allowImpersonatingAdmins === "function"
+					? await opts.allowImpersonatingAdmins(ctx)
+					: opts.allowImpersonatingAdmins === true || !isTargetAdmin;
+			if (!canImpersonateTarget) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,

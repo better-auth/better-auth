@@ -1,3 +1,5 @@
+import type { Awaitable } from "@better-auth/core";
+import type { AuthEndpointContext } from "@better-auth/core/context";
 import type { InferOptionSchema, Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
 import type { AdminSchema } from "./schema";
@@ -81,7 +83,10 @@ export interface AdminOptions {
 	 *
 	 * @default false
 	 */
-	allowImpersonatingAdmins?: boolean | undefined;
+	allowImpersonatingAdmins?:
+		| boolean
+		| ((ctx: AuthEndpointContext) => Awaitable<boolean>)
+		| undefined;
 }
 
 export type InferAdminRolesFromOption<O extends AdminOptions | undefined> =

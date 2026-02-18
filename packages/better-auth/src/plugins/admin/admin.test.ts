@@ -797,6 +797,187 @@ describe("Admin plugin", async () => {
 		expect(afterStopImpersonationRes.data?.users.length).toBeGreaterThan(1);
 	});
 
+	it("should allow impersonating admins when allowImpersonatingAdmins is true", async () => {
+		const { signInWithTestUser: signInAdmin, customFetchImpl: fetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [admin({ allowImpersonatingAdmins: true })],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return { data: { ...user, role: "admin" } };
+									}
+								},
+							},
+						},
+					},
+				},
+				{ testUser: { name: "Admin" } },
+			);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-allow@test.com",
+			password: "password",
+			name: "Target Admin",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: aHeaders },
+		);
+
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.data?.session).toBeDefined();
+		expect(res.data?.user?.id).toBe(targetAdmin!.user.id);
+	});
+
+	it("should not allow impersonating admins when allowImpersonatingAdmins is false", async () => {
+		const { signInWithTestUser: signInAdmin, customFetchImpl: fetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [admin({ allowImpersonatingAdmins: false })],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return { data: { ...user, role: "admin" } };
+									}
+								},
+							},
+						},
+					},
+				},
+				{ testUser: { name: "Admin" } },
+			);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-deny@test.com",
+			password: "password",
+			name: "Target Admin Deny",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: aHeaders },
+		);
+
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should not allow impersonating users listed in adminUserIds", async () => {
+		const targetUserId = "special-admin-user-id";
+		const {
+			signInWithTestUser: signInAdmin,
+			customFetchImpl: fetchImpl,
+			auth: authInstance,
+		} = await getTestInstance(
+			{
+				plugins: [
+					admin({
+						adminUserIds: [targetUserId],
+						allowImpersonatingAdmins: false,
+					}),
+				],
+				databaseHooks: {
+					user: {
+						create: {
+							before: async (user) => {
+								if (user.name === "Admin") {
+									return { data: { ...user, role: "admin" } };
+								}
+							},
+						},
+					},
+				},
+			},
+			{ testUser: { name: "Admin" } },
+		);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const user = await authInstance.api.createUser({
+			body: {
+				email: "admin-uid@test.com",
+				password: "password",
+				name: "Admin UID User",
+				data: { id: targetUserId },
+			},
+		});
+
+		const res = await c.admin.impersonateUser(
+			{ userId: user.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
+	it("should not allow impersonating admins when allowImpersonatingAdmins function returns false", async () => {
+		const { signInWithTestUser: signInAdmin, customFetchImpl: fetchImpl } =
+			await getTestInstance(
+				{
+					plugins: [admin({ allowImpersonatingAdmins: () => false })],
+					databaseHooks: {
+						user: {
+							create: {
+								before: async (user) => {
+									if (user.name === "Admin") {
+										return { data: { ...user, role: "admin" } };
+									}
+								},
+							},
+						},
+					},
+				},
+				{ testUser: { name: "Admin" } },
+			);
+		const c = createAuthClient({
+			fetchOptions: { customFetchImpl: fetchImpl },
+			plugins: [adminClient()],
+			baseURL: "http://localhost:3000",
+		});
+		const { headers: aHeaders } = await signInAdmin();
+
+		const { data: targetAdmin } = await c.signUp.email({
+			email: "target-admin-fn-deny@test.com",
+			password: "password",
+			name: "Target Admin Fn Deny",
+		});
+		await c.admin.setRole(
+			{ userId: targetAdmin!.user.id, role: "admin" },
+			{ headers: aHeaders },
+		);
+
+		const res = await c.admin.impersonateUser(
+			{ userId: targetAdmin!.user.id },
+			{ headers: aHeaders },
+		);
+		expect(res.error?.status).toBe(403);
+	});
+
 	it("should allow admin to revoke user session", async () => {
 		const {
 			res: { user },
