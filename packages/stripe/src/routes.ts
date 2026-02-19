@@ -757,8 +757,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							continue;
 						}
 
-						// priceMap takes priority (handles seat-only plans
-						// where base price === seat price)
+						// priceMap takes priority
+						// which handles seat-only plans
+						// where base price === seat price
 						const replacement = priceMap.get(itemPriceId);
 						if (replacement) {
 							newPhaseItems.push({
