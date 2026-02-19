@@ -5549,16 +5549,16 @@ describe("stripe", () => {
 				model: "subscription",
 				data: {
 					referenceId: userRes.user.id,
-					stripeCustomerId: "cus_restore_sched",
-					stripeSubscriptionId: "sub_restore_sched",
+					stripeCustomerId: "cus_restore_schedule",
+					stripeSubscriptionId: "sub_restore_schedule",
 					status: "active",
 					plan: "premium",
-					stripeScheduleId: "sub_sched_pending",
+					stripeScheduleId: "sub_schedule_pending",
 				},
 			});
 
 			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
-				id: "sub_restore_sched",
+				id: "sub_restore_schedule",
 				status: "active",
 			});
 
@@ -5570,7 +5570,7 @@ describe("stripe", () => {
 
 			// Should release the schedule
 			expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
-				"sub_sched_pending",
+				"sub_schedule_pending",
 			);
 
 			// Should NOT call subscriptions.update (that's for cancel restore)
