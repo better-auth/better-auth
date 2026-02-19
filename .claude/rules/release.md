@@ -59,7 +59,7 @@ When cherry-picking from `canary` to a stable release branch:
 ### API Compatibility
 
 * **Check for new APIs**: Commits may use APIs that do not exist in the
-  target branch.
+  target branch
 * **Fix imports**: Some imports may need adjustment
 
 ### Handling Conflicts
