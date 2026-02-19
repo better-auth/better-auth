@@ -674,32 +674,44 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					}
 				}
 
-				// When upgrading plans with auto-managed seats, include
-				// the seat item update if seatPriceId changed between plans.
-				const seatPortalItems: Array<{
-					id: string;
-					price: string;
-					quantity: number;
-				}> = [];
+				const oldPlan = activeOrTrialingSubscription
+					? await getPlanByName(options, activeOrTrialingSubscription.plan)
+					: undefined;
+
+				// Build a price replacement map:
+				// oldPriceId -> { newPrice, quantity? }
+				// This covers base plan, seat, and line item (usage) price changes.
+				const priceMap = new Map<
+					string,
+					{ newPrice: string; quantity?: number }
+				>();
+
 				if (isAutoManagedSeats && plan.seatPriceId) {
-					const oldPlan = activeOrTrialingSubscription
-						? await getPlanByName(options, activeOrTrialingSubscription.plan)
-						: undefined;
 					if (
 						oldPlan?.seatPriceId &&
 						oldPlan.seatPriceId !== plan.seatPriceId
 					) {
-						const oldSeatItem = activeSubscription.items.data.find(
-							(item) => item.price.id === oldPlan.seatPriceId,
-						);
-						if (oldSeatItem) {
-							seatPortalItems.push({
-								id: oldSeatItem.id,
-								price: plan.seatPriceId,
-								quantity: memberCount,
-							});
-						}
+						priceMap.set(oldPlan.seatPriceId, {
+							newPrice: plan.seatPriceId,
+							quantity: memberCount,
+						});
 					}
+				}
+
+				// Multiset diff of line item prices.
+				// old -> -1, new -> +1.
+				// delta < 0 = remove, delta > 0 = add.
+				const lineItemDelta = new Map<string, number>();
+				for (const li of oldPlan?.lineItems ?? []) {
+					if (typeof li.price === "string")
+						lineItemDelta.set(li.price, (lineItemDelta.get(li.price) ?? 0) - 1);
+				}
+				for (const li of plan.lineItems ?? []) {
+					if (typeof li.price === "string")
+						lineItemDelta.set(li.price, (lineItemDelta.get(li.price) ?? 0) + 1);
+				}
+				for (const [price, delta] of lineItemDelta) {
+					if (delta === 0) lineItemDelta.delete(price);
 				}
 
 				let upgradeUrl: string;
@@ -725,40 +737,63 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						});
 					}
 
-					const newPhaseItems = currentPhase.items.map((item) => {
+					const removeQuota = new Map<string, number>();
+					for (const [p, d] of lineItemDelta) {
+						if (d < 0) removeQuota.set(p, -d);
+					}
+
+					const newPhaseItems: Array<{
+						price: string;
+						quantity?: number;
+					}> = [];
+					for (const item of currentPhase.items) {
 						const itemPriceId =
 							typeof item.price === "string" ? item.price : item.price.id;
 
-						// Replace seat price if it changed between plans
-						const seatReplacement = seatPortalItems.find((s) => {
-							const sItem = activeSubscription.items.data.find(
-								(si) => si.id === s.id,
-							);
-							return sItem?.price.id === itemPriceId;
-						});
-						if (seatReplacement) {
-							return {
-								price: seatReplacement.price,
-								quantity: seatReplacement.quantity,
-							};
+						// Remove items the new plan no longer needs
+						const quota = removeQuota.get(itemPriceId) ?? 0;
+						if (quota > 0) {
+							removeQuota.set(itemPriceId, quota - 1);
+							continue;
+						}
+
+						// priceMap takes priority
+						// which handles seat-only plans
+						// where base price === seat price
+						const replacement = priceMap.get(itemPriceId);
+						if (replacement) {
+							newPhaseItems.push({
+								price: replacement.newPrice,
+								quantity: replacement.quantity ?? item.quantity,
+							});
+							continue;
 						}
 
 						// Replace base plan price
 						if (itemPriceId === stripeSubscriptionPriceId) {
-							return {
+							newPhaseItems.push({
 								price: priceIdToUse,
-								...(isAutoManagedSeats
-									? {}
-									: { quantity: ctx.body.seats || 1 }),
-							};
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+							});
+							continue;
 						}
 
-						// Keep other items as-is
-						return {
+						// Keep as-is
+						newPhaseItems.push({
 							price: itemPriceId,
 							quantity: item.quantity,
-						};
-					});
+						});
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(itemPriceId);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(itemPriceId);
+							else lineItemDelta.set(itemPriceId, d - 1);
+						}
+					}
+					// Add line items the new plan introduces
+					for (const [price, delta] of lineItemDelta) {
+						for (let i = 0; i < delta; i++) newPhaseItems.push({ price });
+					}
 
 					await client.subscriptionSchedules
 						.update(schedule.id, {
@@ -792,22 +827,58 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					// DB is NOT updated now
 					// the webhook handles it at period end
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
-				} else if (seatPortalItems.length > 0) {
-					// Immediate change with seat price updates: use direct API.
+				} else if (priceMap.size > 0 || lineItemDelta.size > 0) {
+					// Immediate change with multi-item updates: use direct API.
 					// Billing Portal supports only 1 item update at a time,
-					// so when seat price changes between plans we call subscriptions.update directly.
-					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
+					// so when multiple prices change between plans we call
+					// subscriptions.update directly.
+					const removeQuota = new Map<string, number>();
+					for (const [p, d] of lineItemDelta) {
+						if (d < 0) removeQuota.set(p, -d);
+					}
+
+					const itemUpdates: Array<Record<string, unknown>> = [];
+					for (const si of activeSubscription.items.data) {
+						// Remove items the new plan no longer needs
+						const quota = removeQuota.get(si.price.id) ?? 0;
+						if (quota > 0) {
+							removeQuota.set(si.price.id, quota - 1);
+							itemUpdates.push({ id: si.id, deleted: true });
+							continue;
+						}
+						// priceMap takes priority (handles seat-only plans
+						// where base price === seat price)
+						const replacement = priceMap.get(si.price.id);
+						if (replacement) {
+							itemUpdates.push({
+								id: si.id,
+								price: replacement.newPrice,
+								quantity: replacement.quantity,
+							});
+							continue;
+						}
+						if (si.price.id === stripeSubscriptionPriceId) {
+							itemUpdates.push({
+								id: si.id,
+								price: priceIdToUse,
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+							});
+							continue;
+						}
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(si.price.id);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(si.price.id);
+							else lineItemDelta.set(si.price.id, d - 1);
+						}
+					}
+					// Add line items the new plan introduces
+					for (const [price, delta] of lineItemDelta) {
+						for (let i = 0; i < delta; i++) itemUpdates.push({ price });
+					}
 					await client.subscriptions
 						.update(activeSubscription.id, {
-							items: isSeatItem
-								? seatPortalItems
-								: [
-										{
-											id: planItem.id,
-											price: priceIdToUse,
-										},
-										...seatPortalItems,
-									],
+							items: itemUpdates,
 							proration_behavior: "create_prorations",
 						})
 						.catch(async (e) => {
