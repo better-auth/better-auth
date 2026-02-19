@@ -434,6 +434,253 @@ describe("stripe", () => {
 		});
 	});
 
+	it("should strip custom managed_payments when managed payments is disabled", async () => {
+		const stripeOptionsWithCustomManagedParams: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				getCheckoutSessionParams: async () => ({
+					params: {
+						managed_payments: {
+							enabled: true,
+						},
+					} as Stripe.Checkout.SessionCreateParams,
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithCustomManagedParams)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-strip-disabled-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-strip-disabled-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const checkoutParams =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(checkoutParams?.managed_payments).toBeUndefined();
+	});
+
+	it("should fail when managed payments receives unsupported checkout params", async () => {
+		const stripeOptionsWithInvalidManagedParams: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+				},
+				getCheckoutSessionParams: async () => ({
+					params: {
+						customer_update: {
+							name: "auto",
+							address: "auto",
+						},
+					},
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithInvalidManagedParams)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-invalid-params-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-invalid-params-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.error?.message).toContain(
+			"Managed payments does not support",
+		);
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should fail when managed payments apiVersion sources conflict", async () => {
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+				},
+				getCheckoutSessionParams: async () => ({
+					options: {
+						apiVersion: "2026-01-28.basil",
+					},
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-conflict-version-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-conflict-version-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.error?.message).toContain(
+			"Managed payments apiVersion conflict",
+		);
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should replace an existing managed payments preview token in apiVersion", async () => {
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					preview: "managed_payments_preview=v2",
+				},
+				getCheckoutSessionParams: async () => ({
+					options: {
+						apiVersion:
+							"2025-11-17.clover; managed_payments_preview=v1; another_preview=v3",
+					},
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-preview-replace-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-preview-replace-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const requestOptions =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[1];
+		expect(requestOptions).toMatchObject({
+			apiVersion:
+				"2025-11-17.clover; another_preview=v3; managed_payments_preview=v2",
+		});
+	});
+
 	it("should fail when managed payments is enabled without any apiVersion source", async () => {
 		const stripeOptionsWithManagedPayments: StripeOptions = {
 			...stripeOptions,

@@ -323,6 +323,8 @@ stripe({
 
 <Callout type="warning">
 Managed Payments is a Stripe preview feature. Your account must be eligible and the feature must be activated in your Stripe Dashboard before using it in production.
+
+When enabling Managed Payments, make sure your Checkout requests use a Stripe API version that supports the preview and include the managed payments preview token.
 </Callout>
 
 You can also selectively enable it per request with `isEnabled`:
@@ -338,7 +340,9 @@ managedPayments: {
 ```
 
 <Callout type="info">
-When Managed Payments is enabled, the plugin does not force `customer_update` fields. If you use `getCheckoutSessionParams`, ensuring your custom Checkout parameters are compatible with Managed Payments is your responsibility.
+When Managed Payments is enabled, the plugin does not force `customer_update` fields and rejects known unsupported Checkout parameters (for example: `customer_update`, `automatic_tax`, `tax_id_collection`, and some `subscription_data` fields such as `default_tax_rates`).
+
+If your integration needs custom Checkout params, keep them compatible with Stripe Managed Payments requirements from the Stripe docs.
 </Callout>
 
 #### Switching Plans
@@ -607,6 +611,8 @@ The plugin automatically handles common webhook events:
 - `customer.subscription.updated`: Updates subscription details when changed
 - `customer.subscription.deleted`: Marks subscription as canceled
 
+For Managed Payments integrations, Stripe can also send asynchronous checkout settlement events (for example `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`). Handle these in your application-level webhook logic as needed.
+
 You can also handle custom events:
 
 ```ts title="auth.ts"
@@ -869,9 +875,11 @@ stripe({
 | Option      | Type       | Description |
 | ----------- | ---------- | ----------- |
 | `enabled`   | `boolean`  | Base toggle for Stripe Managed Payments checkout behavior. |
-| `apiVersion` | `string`   | Optional API version override used to build the preview `Stripe-Version` request option. |
+| `apiVersion` | `string`   | Optional API version override used to build the preview `Stripe-Version` request option. If omitted, the plugin falls back to request options `apiVersion`, then Stripe client API version. |
 | `preview`   | `string`   | Preview token appended to the `Stripe-Version` request option. Default: `managed_payments_preview=v1`. |
 | `isEnabled` | `function` | Optional per-request predicate. Receives `{ user, session, plan, subscription, referenceId, customerType }`, `request`, and context. Returns `boolean` or `Promise<boolean>`. |
+
+If `managedPayments.apiVersion` and `getCheckoutSessionParams().options.apiVersion` are both provided with different values, the plugin throws a `BAD_REQUEST` to avoid ambiguous versioning.
 
 #### Plan Configuration
 

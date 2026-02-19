@@ -68,6 +68,7 @@ const MANAGED_PAYMENTS_PREVIEW_DEFAULT = "managed_payments_preview=v1";
 
 /**
  * Adds a Stripe preview token to an API version value, preserving existing suffixes.
+ * If the same preview key already exists, it is replaced with the provided token.
  * @internal
  */
 function appendStripePreviewToApiVersion(
@@ -83,11 +84,13 @@ function appendStripePreviewToApiVersion(
 		return apiVersion;
 	}
 
-	if (suffixes.includes(preview)) {
-		return `${baseVersion}; ${suffixes.join("; ")}`;
-	}
+	const previewKey = preview.split("=")[0]?.trim();
+	const normalizedSuffixes = previewKey
+		? suffixes.filter((suffix) => !suffix.startsWith(`${previewKey}=`))
+		: suffixes;
+	const nextSuffixes = [...normalizedSuffixes, preview];
 
-	return `${baseVersion}; ${[...suffixes, preview].join("; ")}`;
+	return `${baseVersion}; ${nextSuffixes.join("; ")}`;
 }
 
 /**
@@ -100,6 +103,80 @@ function getStripeClientApiVersion(stripeClient: Stripe): string | undefined {
 	};
 	const apiVersion = withGetApiField.getApiField?.("version");
 	return typeof apiVersion === "string" ? apiVersion : undefined;
+}
+
+/**
+ * Gets legacy Stripe-Version request option when provided by custom hooks.
+ * @internal
+ */
+function getLegacyStripeVersionRequestOption(
+	options: Stripe.RequestOptions | undefined,
+): string | undefined {
+	const stripeVersion = (
+		options as Stripe.RequestOptions & {
+			stripeVersion?: unknown;
+		}
+	)?.stripeVersion;
+	return typeof stripeVersion === "string" ? stripeVersion : undefined;
+}
+
+/**
+ * Removes legacy Stripe-Version request option from custom hook options.
+ * @internal
+ */
+function stripLegacyStripeVersionRequestOption(
+	options: Stripe.RequestOptions | undefined,
+): Stripe.RequestOptions | undefined {
+	if (!options) {
+		return options;
+	}
+	const { stripeVersion: _, ...rest } = options as Stripe.RequestOptions & {
+		stripeVersion?: unknown;
+	};
+	return rest;
+}
+
+function validateManagedPaymentsPreviewToken(preview: string) {
+	if (!/^[a-zA-Z0-9_]+=[^;\s=]+$/.test(preview)) {
+		throw new APIError("BAD_REQUEST", {
+			message:
+				"Invalid managed payments preview token. Expected format like managed_payments_preview=v1.",
+		});
+	}
+}
+
+function getUnsupportedManagedPaymentsParams(
+	params: Stripe.Checkout.SessionCreateParams | undefined,
+): string[] {
+	if (!params) {
+		return [];
+	}
+
+	const unsupported: string[] = [];
+	if (params.automatic_tax) unsupported.push("automatic_tax");
+	if (params.tax_id_collection) unsupported.push("tax_id_collection");
+	if (params.payment_method_configuration)
+		unsupported.push("payment_method_configuration");
+	if (params.payment_method_options) unsupported.push("payment_method_options");
+	if (params.payment_method_types) unsupported.push("payment_method_types");
+	if (params.customer_update) unsupported.push("customer_update");
+	if (params.shipping_address_collection)
+		unsupported.push("shipping_address_collection");
+	if (params.shipping_options) unsupported.push("shipping_options");
+
+	const subscriptionData = params.subscription_data;
+	if (subscriptionData?.default_tax_rates)
+		unsupported.push("subscription_data.default_tax_rates");
+	if (subscriptionData?.application_fee_percent)
+		unsupported.push("subscription_data.application_fee_percent");
+	if (subscriptionData?.on_behalf_of)
+		unsupported.push("subscription_data.on_behalf_of");
+	if (subscriptionData?.transfer_data)
+		unsupported.push("subscription_data.transfer_data");
+	if (subscriptionData?.invoice_settings)
+		unsupported.push("subscription_data.invoice_settings");
+
+	return unsupported;
 }
 
 /**
@@ -733,15 +810,60 @@ export const upgradeSubscription = (options: StripeOptions) => {
 			const customCheckoutSessionParams = checkoutSessionCustomization?.params;
 			const customCheckoutRequestOptions =
 				checkoutSessionCustomization?.options;
+			const customCheckoutRequestOptionsWithoutLegacyStripeVersion =
+				stripLegacyStripeVersionRequestOption(customCheckoutRequestOptions);
+			const customCheckoutSessionParamsWithoutManagedPayments =
+				customCheckoutSessionParams
+					? ((params) => {
+							const { managed_payments: _, ...rest } =
+								params as Stripe.Checkout.SessionCreateParams & {
+									managed_payments?: unknown;
+								};
+							return rest as Stripe.Checkout.SessionCreateParams;
+						})(customCheckoutSessionParams)
+					: customCheckoutSessionParams;
+
+			if (managedPaymentsEnabled) {
+				const unsupportedManagedPaymentsParams =
+					getUnsupportedManagedPaymentsParams(
+						customCheckoutSessionParamsWithoutManagedPayments,
+					);
+				if (unsupportedManagedPaymentsParams.length) {
+					throw ctx.error("BAD_REQUEST", {
+						message: `Managed payments does not support these Checkout parameters: ${unsupportedManagedPaymentsParams.join(
+							", ",
+						)}.`,
+					});
+				}
+			}
 
 			const managedCheckoutRequestOptions =
 				managedPaymentsEnabled && managedPayments
 					? (() => {
 							const preview =
 								managedPayments.preview || MANAGED_PAYMENTS_PREVIEW_DEFAULT;
+							validateManagedPaymentsPreviewToken(preview);
+
+							const customApiVersion =
+								customCheckoutRequestOptionsWithoutLegacyStripeVersion?.apiVersion ||
+								getLegacyStripeVersionRequestOption(
+									customCheckoutRequestOptions,
+								);
+							const configuredApiVersion = managedPayments.apiVersion;
+							if (
+								configuredApiVersion &&
+								customApiVersion &&
+								configuredApiVersion !== customApiVersion
+							) {
+								throw ctx.error("BAD_REQUEST", {
+									message:
+										"Managed payments apiVersion conflict. Use either subscription.managedPayments.apiVersion or getCheckoutSessionParams().options.apiVersion.",
+								});
+							}
+
 							const sourceApiVersion =
-								managedPayments.apiVersion ||
-								customCheckoutRequestOptions?.apiVersion ||
+								customApiVersion ||
+								configuredApiVersion ||
 								getStripeClientApiVersion(client);
 
 							if (!sourceApiVersion) {
@@ -759,10 +881,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								{
 									apiVersion,
 								},
-								customCheckoutRequestOptions,
+								customCheckoutRequestOptionsWithoutLegacyStripeVersion,
 							);
 						})()
-					: customCheckoutRequestOptions;
+					: customCheckoutRequestOptionsWithoutLegacyStripeVersion;
 
 			const checkoutSession = await client.checkout.sessions
 				.create(
@@ -800,7 +922,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 						mode: "subscription",
 						client_reference_id: referenceId,
-						...customCheckoutSessionParams,
+						...customCheckoutSessionParamsWithoutManagedPayments,
 						...(managedPaymentsEnabled
 							? {
 									managed_payments: {
@@ -811,7 +933,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						// subscription_data should come after spread to protect internal metadata fields
 						subscription_data: {
 							...freeTrial,
-							...customCheckoutSessionParams?.subscription_data,
+							...customCheckoutSessionParamsWithoutManagedPayments?.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -819,7 +941,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								customCheckoutSessionParams?.subscription_data?.metadata,
+								customCheckoutSessionParamsWithoutManagedPayments
+									?.subscription_data?.metadata,
 							),
 						},
 						// metadata should come after spread to protect internal fields
@@ -830,7 +953,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							customCheckoutSessionParams?.metadata,
+							customCheckoutSessionParamsWithoutManagedPayments?.metadata,
 						),
 					},
 					managedCheckoutRequestOptions,
