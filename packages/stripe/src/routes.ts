@@ -95,6 +95,7 @@ function appendStripePreviewToApiVersion(
 
 /**
  * Resolves the Stripe API version configured on the client.
+ * Uses Stripe's private `getApiField` helper and should be treated as a last-resort fallback.
  * @internal
  */
 function getStripeClientApiVersion(stripeClient: Stripe): string | undefined {
@@ -906,10 +907,21 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								});
 							}
 
+							const fallbackApiVersion = getStripeClientApiVersion(client);
+							if (
+								!apiVersionFromOptions &&
+								!configuredApiVersion &&
+								fallbackApiVersion
+							) {
+								ctx.context.logger.warn(
+									"Managed payments enabled without explicit apiVersion; using Stripe client private API fallback. Set subscription.managedPayments.apiVersion to avoid future breakage.",
+								);
+							}
+
 							const sourceApiVersion =
 								apiVersionFromOptions ||
 								configuredApiVersion ||
-								getStripeClientApiVersion(client);
+								fallbackApiVersion;
 
 							if (!sourceApiVersion) {
 								throw ctx.error("BAD_REQUEST", {
@@ -965,8 +977,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								quantity: ctx.body.seats || 1,
 							},
 						],
-						mode: "subscription",
-						client_reference_id: referenceId,
 						...paramsWithoutManagedPayments,
 						...(managedPaymentsEnabled
 							? {
@@ -975,6 +985,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									},
 								}
 							: {}),
+						// mode and client_reference_id should come after spread to protect internal values
+						mode: "subscription",
+						client_reference_id: referenceId,
 						// subscription_data should come after spread to protect internal metadata fields
 						subscription_data: {
 							...freeTrial,

@@ -875,7 +875,7 @@ stripe({
 | Option      | Type       | Description |
 | ----------- | ---------- | ----------- |
 | `enabled`   | `boolean`  | Base toggle for Stripe Managed Payments checkout behavior. |
-| `apiVersion` | `string`   | Optional API version override used to build the preview `Stripe-Version` request option. If omitted, the plugin falls back to request options `apiVersion`, then Stripe client API version. |
+| `apiVersion` | `string`   | Optional API version override used to build the preview `Stripe-Version` request option (strongly recommended). If omitted, the plugin falls back to request options `apiVersion`, then Stripe client API version via private SDK internals. |
 | `preview`   | `string`   | Preview token appended to the `Stripe-Version` request option. Default: `managed_payments_preview=v1`. |
 | `isEnabled` | `function` | Optional per-request predicate. Receives `{ user, session, plan, subscription, referenceId, customerType }`, `request`, and context. Returns `boolean` or `Promise<boolean>`. |
 
