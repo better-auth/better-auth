@@ -233,7 +233,7 @@ type getUser = {
 On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
 ```ts
 type GetUserResponse = {
-  data: UserWithRole | null;
+  data: User | null;
   error: null | {
     message: string;
     status: number; //HTTP status code
