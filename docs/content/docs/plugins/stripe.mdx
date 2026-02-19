@@ -263,6 +263,11 @@ type upgradeSubscription = {
      * Disable redirect after successful subscription.
      */
     disableRedirect: boolean = false
+    /**
+     * Schedule the plan change at the end of the current billing period
+     * instead of applying it immediately.
+     */
+    scheduleAtPeriodEnd?: boolean = false
 }
 ```
 </APIMethod>
@@ -314,6 +319,30 @@ await authClient.subscription.upgrade({
 });
 ```
 This ensures that the user only pays for the new plan, and not both.
+
+#### Scheduling Plan Changes at Period End
+
+By default, plan changes take effect immediately with prorated billing. You may want to defer the change to the end of the current billing period so the user can continue using their current plan until it expires:
+
+```ts title="client.ts"
+await authClient.subscription.upgrade({
+    plan: "pro",
+    successUrl: "/dashboard",
+    cancelUrl: "/pricing",
+    returnUrl: "/billing",
+    scheduleAtPeriodEnd: true, // [!code highlight] Default: false
+});
+```
+
+This uses the [Stripe Subscription Schedules API](https://docs.stripe.com/billing/subscriptions/subscription-schedules) to create a two-phase schedule: the current plan continues until the billing period ends, then the new plan starts automatically with no proration.
+
+<Callout type="info">
+When `scheduleAtPeriodEnd` is `true`:
+- The subscription record in the database is **not updated** until the change takes effect
+- No redirect to Stripe Checkout or Billing Portal occurs, the change is applied server-side
+- At the end of the billing period, Stripe fires a `customer.subscription.updated` webhook which updates the subscription record automatically
+- If a new upgrade or schedule is requested before the period ends, the existing pending schedule is released first
+</Callout>
 
 #### Listing Active Subscriptions
 
