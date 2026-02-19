@@ -14,6 +14,9 @@ export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
+	const pluginTrustedOrigins: NonNullable<
+		BetterAuthOptions["trustedOrigins"]
+	>[] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			const initPromise = plugin.init(context);
@@ -25,9 +28,12 @@ export async function runPluginInit(context: AuthContext) {
 			}
 			if (typeof result === "object") {
 				if (result.options) {
-					const { databaseHooks, ...restOpts } = result.options;
+					const { databaseHooks, trustedOrigins, ...restOpts } = result.options;
 					if (databaseHooks) {
 						dbHooks.push(databaseHooks);
+					}
+					if (trustedOrigins) {
+						pluginTrustedOrigins.push(trustedOrigins);
 					}
 					options = defu(options, restOpts);
 				}
@@ -37,6 +43,27 @@ export async function runPluginInit(context: AuthContext) {
 				}
 			}
 		}
+	}
+	if (pluginTrustedOrigins.length > 0) {
+		const originalTrustedOrigins = options.trustedOrigins;
+		options.trustedOrigins = async (request) => {
+			const origins: (string | null | undefined)[] = [];
+			if (originalTrustedOrigins) {
+				origins.push(
+					...(Array.isArray(originalTrustedOrigins)
+						? originalTrustedOrigins
+						: await originalTrustedOrigins(request)),
+				);
+			}
+			for (const pluginOrigins of pluginTrustedOrigins) {
+				origins.push(
+					...(Array.isArray(pluginOrigins)
+						? pluginOrigins
+						: await pluginOrigins(request)),
+				);
+			}
+			return origins.filter((v) => typeof v === "string" && v !== "");
+		};
 	}
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
