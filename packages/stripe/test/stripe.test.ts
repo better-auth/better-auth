@@ -183,6 +183,21 @@ describe("stripe", () => {
 			list: vi.fn().mockResolvedValue({ data: [] }),
 			update: vi.fn(),
 		},
+		subscriptionSchedules: {
+			list: vi.fn().mockResolvedValue({ data: [] }),
+			create: vi.fn().mockResolvedValue({
+				id: "sub_sched_mock",
+				phases: [
+					{
+						start_date: Math.floor(Date.now() / 1000),
+						end_date: Math.floor(Date.now() / 1000) + 30 * 86400,
+						items: [{ price: "price_mock", quantity: 1 }],
+					},
+				],
+			}),
+			update: vi.fn().mockResolvedValue({}),
+			release: vi.fn().mockResolvedValue({}),
+		},
 		webhooks: {
 			constructEventAsync: vi.fn(),
 		},
@@ -375,6 +390,7 @@ describe("stripe", () => {
 		mockStripe.billingPortal.sessions.create.mockClear();
 		mockStripe.subscriptions.list.mockClear();
 		mockStripe.subscriptions.update.mockClear();
+		mockStripe.subscriptionSchedules.list.mockClear();
 
 		const upgradeRes = await client.subscription.upgrade({
 			plan: "premium",
@@ -5826,5 +5842,388 @@ describe("stripe", () => {
 		// Should use billing portal to upgrade existing subscription (not create new checkout)
 		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should schedule plan change at period end when scheduleAtPeriodEnd is true", async () => {
+		vi.clearAllMocks();
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "schedule-downgrade@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "schedule-downgrade@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		// Set up an active subscription on the premium plan
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "premium",
+				referenceId: userRes.user.id,
+				status: "active",
+				stripeSubscriptionId: "sub_schedule_test",
+				stripeCustomerId: "cus_mock123",
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: "cus_mock123" },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+
+		// Mock Stripe subscriptions.list to return active premium subscription
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_schedule_test",
+					status: "active",
+					items: {
+						data: [
+							{
+								id: "si_premium_123",
+								price: { id: process.env.STRIPE_PRICE_ID_2 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Downgrade to starter with scheduleAtPeriodEnd
+		const res = await client.subscription.upgrade({
+			plan: "starter",
+			scheduleAtPeriodEnd: true,
+			fetchOptions: { headers },
+		});
+
+		// Should use Subscription Schedules, not billing portal or checkout
+		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
+			from_subscription: "sub_schedule_test",
+			metadata: { source: "@better-auth/stripe" },
+		});
+		expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalledWith(
+			"sub_sched_mock",
+			expect.objectContaining({
+				end_behavior: "release",
+				phases: expect.arrayContaining([
+					expect.objectContaining({
+						proration_behavior: "none",
+					}),
+				]),
+			}),
+		);
+		expect(mockStripe.billingPortal.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+
+		// DB subscription should NOT be updated (webhook handles it at period end)
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: userRes.user.id }],
+		});
+		expect(sub?.plan).toBe("premium"); // Still on premium, not starter
+
+		expect(res.data?.url).toBeDefined();
+		expect(res.data?.redirect).toBe(true);
+	});
+
+	it("should release existing schedule before scheduling a new one", async () => {
+		vi.clearAllMocks();
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "release-schedule@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "release-schedule@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "premium",
+				referenceId: userRes.user.id,
+				status: "active",
+				stripeSubscriptionId: "sub_with_schedule",
+				stripeCustomerId: "cus_mock123",
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: "cus_mock123" },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_with_schedule",
+					status: "active",
+					schedule: "sub_sched_existing",
+					items: {
+						data: [
+							{
+								id: "si_premium_456",
+								price: { id: process.env.STRIPE_PRICE_ID_2 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Mock an existing active schedule for this subscription
+		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_sched_existing",
+					subscription: "sub_with_schedule",
+					status: "active",
+					metadata: { source: "@better-auth/stripe" },
+				},
+			],
+		});
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			scheduleAtPeriodEnd: true,
+			fetchOptions: { headers },
+		});
+
+		// Should release the existing schedule first
+		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+			"sub_sched_existing",
+		);
+
+		// Then create a new one
+		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
+			from_subscription: "sub_with_schedule",
+			metadata: { source: "@better-auth/stripe" },
+		});
+	});
+
+	it("should release existing schedule before immediate upgrade", async () => {
+		vi.clearAllMocks();
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "release-then-upgrade@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "release-then-upgrade@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				status: "active",
+				stripeSubscriptionId: "sub_scheduled_then_upgrade",
+				stripeCustomerId: "cus_mock123",
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: "cus_mock123" },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_scheduled_then_upgrade",
+					status: "active",
+					schedule: "sub_sched_old",
+					items: {
+						data: [
+							{
+								id: "si_starter_789",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end: Math.floor(Date.now() / 1000) + 30 * 86400,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Mock an existing active schedule (from a previous downgrade scheduling)
+		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_sched_old",
+					subscription: "sub_scheduled_then_upgrade",
+					status: "active",
+					metadata: { source: "@better-auth/stripe" },
+				},
+			],
+		});
+
+		// Immediate upgrade (no scheduleAtPeriodEnd)
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Should release the existing schedule
+		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+			"sub_sched_old",
+		);
+
+		// Should use billing portal for immediate upgrade, not schedules
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
+		expect(mockStripe.subscriptionSchedules.create).not.toHaveBeenCalled();
+	});
+
+	it("should not release schedules created outside the plugin", async () => {
+		vi.clearAllMocks();
+
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const userRes = await client.signUp.email(
+			{ ...testUser, email: "external-schedule@email.com" },
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{ ...testUser, email: "external-schedule@email.com" },
+			{ throw: true, onSuccess: sessionSetter(headers) },
+		);
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				plan: "starter",
+				referenceId: userRes.user.id,
+				status: "active",
+				stripeSubscriptionId: "sub_external_schedule",
+				stripeCustomerId: "cus_mock123",
+			},
+		});
+
+		await ctx.adapter.update({
+			model: "user",
+			update: { stripeCustomerId: "cus_mock123" },
+			where: [{ field: "id", value: userRes.user.id }],
+		});
+
+		mockStripe.subscriptions.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_external_schedule",
+					status: "active",
+					schedule: "sub_sched_external",
+					items: {
+						data: [
+							{
+								id: "si_ext",
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+							},
+						],
+					},
+				},
+			],
+		});
+
+		// Schedule created externally (no @better-auth/stripe metadata)
+		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
+			data: [
+				{
+					id: "sub_sched_external",
+					subscription: "sub_external_schedule",
+					status: "active",
+					metadata: {}, // no source field
+				},
+			],
+		});
+
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		// Should NOT release the external schedule
+		expect(mockStripe.subscriptionSchedules.release).not.toHaveBeenCalled();
+
+		// Should still proceed with the upgrade via billing portal
+		expect(mockStripe.billingPortal.sessions.create).toHaveBeenCalled();
 	});
 });
