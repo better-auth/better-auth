@@ -471,6 +471,9 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationValue.id,
+				);
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
 			}
 
@@ -482,19 +485,22 @@ export const verifyEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
 			}
-			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
-			if (!verified) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verificationValue.id,
-					{
-						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-					},
-				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-			}
+
+			// Atomically delete token before verification to prevent race condition
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
 			);
+
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
+			if (!verified) {
+				// Re-create with incremented attempts
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+					identifier: `email-verification-otp-${email}`,
+					expiresAt: verificationValue.expiresAt,
+				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				/**
@@ -650,6 +656,9 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
 			}
 			if (verificationValue.expiresAt < new Date()) {
+				await ctx.context.internalAdapter.deleteVerificationValue(
+					verificationValue.id,
+				);
 				throw APIError.from("BAD_REQUEST", ERROR_CODES.OTP_EXPIRED);
 			}
 			const [otpValue, attempts] = splitAtLastColon(verificationValue.value);
@@ -660,19 +669,22 @@ export const signInEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
 			}
-			const verified = await verifyStoredOTP(ctx, opts, otpValue, otp);
-			if (!verified) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verificationValue.id,
-					{
-						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-					},
-				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-			}
+
+			// Atomically delete token before verification to prevent race condition
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
 			);
+
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, otp);
+			if (!verified) {
+				// Re-create with incremented attempts
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+					identifier: `sign-in-otp-${email}`,
+					expiresAt: verificationValue.expiresAt,
+				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
 				if (opts.disableSignUp) {
@@ -992,19 +1004,22 @@ export const resetPasswordEmailOTP = (opts: RequiredEmailOTPOptions) =>
 				);
 				throw APIError.from("FORBIDDEN", ERROR_CODES.TOO_MANY_ATTEMPTS);
 			}
-			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
-			if (!verified) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verificationValue.id,
-					{
-						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-					},
-				);
-				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
-			}
+
+			// Atomically delete token before verification to prevent race condition
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verificationValue.id,
 			);
+
+			const verified = await verifyStoredOTP(ctx, opts, otpValue, ctx.body.otp);
+			if (!verified) {
+				// Re-create with incremented attempts
+				await ctx.context.internalAdapter.createVerificationValue({
+					value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+					identifier: `forget-password-otp-${email}`,
+					expiresAt: verificationValue.expiresAt,
+				});
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_OTP);
+			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email, {
 				includeAccounts: true,
 			});
