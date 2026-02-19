@@ -517,6 +517,69 @@ describe("stripe", () => {
 		expect(managedPaymentsPredicate).toHaveBeenCalledTimes(2);
 	});
 
+	it("should allow predicate to enable managed payments when base config is disabled", async () => {
+		const managedPaymentsPredicate = vi.fn().mockResolvedValue(true);
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: false,
+					apiVersion: "2025-11-17.clover",
+					isEnabled: managedPaymentsPredicate,
+				},
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-predicate-enable-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-predicate-enable-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const requestOptions = mockStripe.checkout.sessions.create.mock.lastCall?.[1];
+
+		expect(checkoutParams?.managed_payments).toEqual({ enabled: true });
+		expect(checkoutParams?.customer_update).toBeUndefined();
+		expect(requestOptions).toMatchObject({
+			stripeVersion: "2025-11-17.clover; managed_payments_preview=v1",
+		});
+		expect(managedPaymentsPredicate).toHaveBeenCalledTimes(1);
+	});
+
 	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
