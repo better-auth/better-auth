@@ -145,6 +145,79 @@ function validateManagedPaymentsPreviewToken(preview: string) {
 	}
 }
 
+type ManagedPaymentsUnsupportedTopLevelKey = keyof Pick<
+	Stripe.Checkout.SessionCreateParams,
+	| "automatic_tax"
+	| "tax_id_collection"
+	| "payment_method_configuration"
+	| "payment_method_options"
+	| "payment_method_types"
+	| "customer_update"
+	| "shipping_address_collection"
+	| "shipping_options"
+>;
+
+type ManagedPaymentsUnsupportedSubscriptionData = NonNullable<
+	Stripe.Checkout.SessionCreateParams["subscription_data"]
+>;
+
+type ManagedPaymentsUnsupportedSubscriptionDataKey = keyof Pick<
+	ManagedPaymentsUnsupportedSubscriptionData,
+	| "default_tax_rates"
+	| "application_fee_percent"
+	| "on_behalf_of"
+	| "transfer_data"
+	| "invoice_settings"
+>;
+
+type ManagedPaymentsUnsupportedParam =
+	| ManagedPaymentsUnsupportedTopLevelKey
+	| `subscription_data.${ManagedPaymentsUnsupportedSubscriptionDataKey}`;
+
+type ManagedPaymentsUnsupportedRule = {
+	readonly param: ManagedPaymentsUnsupportedParam;
+	readonly isPresent: (params: Stripe.Checkout.SessionCreateParams) => boolean;
+};
+
+function isDefined<T>(value: T | undefined): value is T {
+	return value !== undefined;
+}
+
+function topLevelUnsupportedManagedPaymentsRule<
+	Key extends ManagedPaymentsUnsupportedTopLevelKey,
+>(param: Key): ManagedPaymentsUnsupportedRule {
+	return {
+		param,
+		isPresent: (params) => isDefined(params[param]),
+	};
+}
+
+function subscriptionDataUnsupportedManagedPaymentsRule<
+	Key extends ManagedPaymentsUnsupportedSubscriptionDataKey,
+>(param: Key): ManagedPaymentsUnsupportedRule {
+	return {
+		param: `subscription_data.${param}`,
+		isPresent: (params) => isDefined(params.subscription_data?.[param]),
+	};
+}
+
+const unsupportedManagedPaymentsRules: readonly ManagedPaymentsUnsupportedRule[] =
+	[
+		topLevelUnsupportedManagedPaymentsRule("automatic_tax"),
+		topLevelUnsupportedManagedPaymentsRule("tax_id_collection"),
+		topLevelUnsupportedManagedPaymentsRule("payment_method_configuration"),
+		topLevelUnsupportedManagedPaymentsRule("payment_method_options"),
+		topLevelUnsupportedManagedPaymentsRule("payment_method_types"),
+		topLevelUnsupportedManagedPaymentsRule("customer_update"),
+		topLevelUnsupportedManagedPaymentsRule("shipping_address_collection"),
+		topLevelUnsupportedManagedPaymentsRule("shipping_options"),
+		subscriptionDataUnsupportedManagedPaymentsRule("default_tax_rates"),
+		subscriptionDataUnsupportedManagedPaymentsRule("application_fee_percent"),
+		subscriptionDataUnsupportedManagedPaymentsRule("on_behalf_of"),
+		subscriptionDataUnsupportedManagedPaymentsRule("transfer_data"),
+		subscriptionDataUnsupportedManagedPaymentsRule("invoice_settings"),
+	];
+
 function getUnsupportedManagedPaymentsParams(
 	params: Stripe.Checkout.SessionCreateParams | undefined,
 ): string[] {
@@ -152,31 +225,9 @@ function getUnsupportedManagedPaymentsParams(
 		return [];
 	}
 
-	const unsupported: string[] = [];
-	if (params.automatic_tax) unsupported.push("automatic_tax");
-	if (params.tax_id_collection) unsupported.push("tax_id_collection");
-	if (params.payment_method_configuration)
-		unsupported.push("payment_method_configuration");
-	if (params.payment_method_options) unsupported.push("payment_method_options");
-	if (params.payment_method_types) unsupported.push("payment_method_types");
-	if (params.customer_update) unsupported.push("customer_update");
-	if (params.shipping_address_collection)
-		unsupported.push("shipping_address_collection");
-	if (params.shipping_options) unsupported.push("shipping_options");
-
-	const subscriptionData = params.subscription_data;
-	if (subscriptionData?.default_tax_rates)
-		unsupported.push("subscription_data.default_tax_rates");
-	if (subscriptionData?.application_fee_percent)
-		unsupported.push("subscription_data.application_fee_percent");
-	if (subscriptionData?.on_behalf_of)
-		unsupported.push("subscription_data.on_behalf_of");
-	if (subscriptionData?.transfer_data)
-		unsupported.push("subscription_data.transfer_data");
-	if (subscriptionData?.invoice_settings)
-		unsupported.push("subscription_data.invoice_settings");
-
-	return unsupported;
+	return unsupportedManagedPaymentsRules
+		.filter((rule) => rule.isPresent(params))
+		.map((rule) => rule.param);
 }
 
 /**
@@ -807,27 +858,23 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					: managedPayments.enabled
 				: false;
 
-			const customCheckoutSessionParams = checkoutSessionCustomization?.params;
-			const customCheckoutRequestOptions =
-				checkoutSessionCustomization?.options;
-			const customCheckoutRequestOptionsWithoutLegacyStripeVersion =
-				stripLegacyStripeVersionRequestOption(customCheckoutRequestOptions);
-			const customCheckoutSessionParamsWithoutManagedPayments =
-				customCheckoutSessionParams
-					? ((params) => {
-							const { managed_payments: _, ...rest } =
-								params as Stripe.Checkout.SessionCreateParams & {
-									managed_payments?: unknown;
-								};
-							return rest as Stripe.Checkout.SessionCreateParams;
-						})(customCheckoutSessionParams)
-					: customCheckoutSessionParams;
+			const params = checkoutSessionCustomization?.params;
+			const requestOptions = checkoutSessionCustomization?.options;
+			const optionsWithoutLegacyStripeVersion =
+				stripLegacyStripeVersionRequestOption(requestOptions);
+			const paramsWithoutManagedPayments = params
+				? ((checkoutParams) => {
+						const { managed_payments: _, ...rest } =
+							checkoutParams as Stripe.Checkout.SessionCreateParams & {
+								managed_payments?: unknown;
+							};
+						return rest as Stripe.Checkout.SessionCreateParams;
+					})(params)
+				: params;
 
 			if (managedPaymentsEnabled) {
 				const unsupportedManagedPaymentsParams =
-					getUnsupportedManagedPaymentsParams(
-						customCheckoutSessionParamsWithoutManagedPayments,
-					);
+					getUnsupportedManagedPaymentsParams(paramsWithoutManagedPayments);
 				if (unsupportedManagedPaymentsParams.length) {
 					throw ctx.error("BAD_REQUEST", {
 						message: `Managed payments does not support these Checkout parameters: ${unsupportedManagedPaymentsParams.join(
@@ -844,16 +891,14 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								managedPayments.preview || MANAGED_PAYMENTS_PREVIEW_DEFAULT;
 							validateManagedPaymentsPreviewToken(preview);
 
-							const customApiVersion =
-								customCheckoutRequestOptionsWithoutLegacyStripeVersion?.apiVersion ||
-								getLegacyStripeVersionRequestOption(
-									customCheckoutRequestOptions,
-								);
+							const apiVersionFromOptions =
+								optionsWithoutLegacyStripeVersion?.apiVersion ||
+								getLegacyStripeVersionRequestOption(requestOptions);
 							const configuredApiVersion = managedPayments.apiVersion;
 							if (
 								configuredApiVersion &&
-								customApiVersion &&
-								configuredApiVersion !== customApiVersion
+								apiVersionFromOptions &&
+								configuredApiVersion !== apiVersionFromOptions
 							) {
 								throw ctx.error("BAD_REQUEST", {
 									message:
@@ -862,7 +907,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							}
 
 							const sourceApiVersion =
-								customApiVersion ||
+								apiVersionFromOptions ||
 								configuredApiVersion ||
 								getStripeClientApiVersion(client);
 
@@ -881,10 +926,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								{
 									apiVersion,
 								},
-								customCheckoutRequestOptionsWithoutLegacyStripeVersion,
+								optionsWithoutLegacyStripeVersion,
 							);
 						})()
-					: customCheckoutRequestOptionsWithoutLegacyStripeVersion;
+					: optionsWithoutLegacyStripeVersion;
 
 			const checkoutSession = await client.checkout.sessions
 				.create(
@@ -922,7 +967,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						],
 						mode: "subscription",
 						client_reference_id: referenceId,
-						...customCheckoutSessionParamsWithoutManagedPayments,
+						...paramsWithoutManagedPayments,
 						...(managedPaymentsEnabled
 							? {
 									managed_payments: {
@@ -933,7 +978,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						// subscription_data should come after spread to protect internal metadata fields
 						subscription_data: {
 							...freeTrial,
-							...customCheckoutSessionParamsWithoutManagedPayments?.subscription_data,
+							...paramsWithoutManagedPayments?.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -941,8 +986,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								customCheckoutSessionParamsWithoutManagedPayments
-									?.subscription_data?.metadata,
+								paramsWithoutManagedPayments?.subscription_data?.metadata,
 							),
 						},
 						// metadata should come after spread to protect internal fields
@@ -953,7 +997,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							customCheckoutSessionParamsWithoutManagedPayments?.metadata,
+							paramsWithoutManagedPayments?.metadata,
 						),
 					},
 					managedCheckoutRequestOptions,

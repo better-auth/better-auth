@@ -556,6 +556,130 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 	});
 
+	it("should fail when managed payments receives subscription_data.application_fee_percent = 0", async () => {
+		const stripeOptionsWithInvalidManagedParams: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+				},
+				getCheckoutSessionParams: async () => ({
+					params: {
+						subscription_data: {
+							application_fee_percent: 0,
+						},
+					},
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithInvalidManagedParams)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-invalid-falsy-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-invalid-falsy-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.error?.message).toContain(
+			"subscription_data.application_fee_percent",
+		);
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
+	it("should fail when managed payments receives empty unsupported arrays or objects", async () => {
+		const stripeOptionsWithInvalidManagedParams: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+				},
+				getCheckoutSessionParams: async () => ({
+					params: {
+						shipping_options: [],
+						payment_method_options: {},
+					},
+				}),
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithInvalidManagedParams)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-invalid-empty-values-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-invalid-empty-values-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.error?.message).toContain("shipping_options");
+		expect(upgradeRes.error?.message).toContain("payment_method_options");
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
+	});
+
 	it("should fail when managed payments apiVersion sources conflict", async () => {
 		const stripeOptionsWithManagedPayments: StripeOptions = {
 			...stripeOptions,
