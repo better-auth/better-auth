@@ -710,8 +710,8 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					if (typeof li.price === "string")
 						lineItemDelta.set(li.price, (lineItemDelta.get(li.price) ?? 0) + 1);
 				}
-				for (const [p, d] of lineItemDelta) {
-					if (d === 0) lineItemDelta.delete(p);
+				for (const [price, delta] of lineItemDelta) {
+					if (delta === 0) lineItemDelta.delete(price);
 				}
 
 				let upgradeUrl: string;
@@ -757,21 +757,22 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							continue;
 						}
 
-						// Replace base plan price
-						if (itemPriceId === stripeSubscriptionPriceId) {
-							newPhaseItems.push({
-								price: priceIdToUse,
-								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
-							});
-							continue;
-						}
-
-						// Replace seat price via priceMap
+						// priceMap takes priority (handles seat-only plans
+						// where base price === seat price)
 						const replacement = priceMap.get(itemPriceId);
 						if (replacement) {
 							newPhaseItems.push({
 								price: replacement.newPrice,
 								quantity: replacement.quantity ?? item.quantity,
+							});
+							continue;
+						}
+
+						// Replace base plan price
+						if (itemPriceId === stripeSubscriptionPriceId) {
+							newPhaseItems.push({
+								price: priceIdToUse,
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
 							});
 							continue;
 						}
@@ -859,7 +860,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							itemUpdates.push({
 								id: si.id,
 								price: priceIdToUse,
-								quantity: si.quantity,
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
 							});
 							continue;
 						}
