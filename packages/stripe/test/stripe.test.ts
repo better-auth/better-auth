@@ -5921,11 +5921,11 @@ describe("stripe", () => {
 		// Should use Subscription Schedules, not billing portal or checkout
 		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_schedule_test",
-			metadata: { source: "@better-auth/stripe" },
 		});
 		expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalledWith(
 			"sub_sched_mock",
 			expect.objectContaining({
+				metadata: { source: "@better-auth/stripe" },
 				end_behavior: "release",
 				phases: expect.arrayContaining([
 					expect.objectContaining({
@@ -6041,7 +6041,6 @@ describe("stripe", () => {
 		// Then create a new one
 		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_with_schedule",
-			metadata: { source: "@better-auth/stripe" },
 		});
 	});
 
