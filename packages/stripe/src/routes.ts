@@ -781,6 +781,12 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							price: itemPriceId,
 							quantity: item.quantity,
 						});
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(itemPriceId);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(itemPriceId);
+							else lineItemDelta.set(itemPriceId, d - 1);
+						}
 					}
 					// Add line items the new plan introduces
 					for (const [price, delta] of lineItemDelta) {
@@ -856,6 +862,12 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								quantity: si.quantity,
 							});
 							continue;
+						}
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(si.price.id);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(si.price.id);
+							else lineItemDelta.set(si.price.id, d - 1);
 						}
 					}
 					// Add line items the new plan introduces

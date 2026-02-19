@@ -6716,4 +6716,231 @@ describe("stripe", () => {
 			);
 		});
 	});
+
+	describe("duplicate line item prevention", () => {
+		const asymmetricOptions: StripeOptions = {
+			stripeClient: mockStripe as unknown as Stripe,
+			stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET!,
+			createCustomerOnSignUp: true,
+			subscription: {
+				enabled: true,
+				plans: [
+					{
+						priceId: "price_basic_base",
+						name: "basic",
+						lineItems: [{ price: "price_basic_events" }],
+					},
+					{
+						priceId: "price_premium_base",
+						name: "premium",
+						lineItems: [
+							{ price: "price_premium_events" },
+							{ price: "price_premium_security" },
+						],
+					},
+				],
+			},
+		};
+
+		it("should not duplicate line items already present in the subscription (immediate)", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(asymmetricOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "dup-lineitem@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "dup-lineitem@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					plan: "basic",
+					referenceId: userRes.user.id,
+					status: "active",
+					stripeSubscriptionId: "sub_dup",
+					stripeCustomerId: "cus_mock123",
+				},
+			});
+
+			await ctx.adapter.update({
+				model: "user",
+				update: { stripeCustomerId: "cus_mock123" },
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+
+			// Subscription already has price_premium_security (shouldn't be there)
+			mockStripe.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_dup",
+						status: "active",
+						items: {
+							data: [
+								{
+									id: "si_base",
+									price: { id: "price_basic_base" },
+									quantity: 1,
+								},
+								{
+									id: "si_events",
+									price: { id: "price_basic_events" },
+									quantity: undefined,
+								},
+								{
+									id: "si_stale",
+									price: { id: "price_premium_security" },
+									quantity: undefined,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			await client.subscription.upgrade({
+				plan: "premium",
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.subscriptions.update).toHaveBeenCalled();
+			const updateCall = mockStripe.subscriptions.update.mock.calls[0]!;
+			const items = updateCall[1]!.items;
+
+			// si_stale already carries price_premium_security, so the API call
+			// should NOT add it again. Stripe keeps items not in the update list.
+			const securityAdds = items.filter(
+				(i: Record<string, unknown>) =>
+					!i.id && i.price === "price_premium_security",
+			);
+			expect(securityAdds).toHaveLength(0);
+		});
+
+		it("should not duplicate line items already present in scheduled phase", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(asymmetricOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{ ...testUser, email: "dup-lineitem-sched@email.com" },
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ ...testUser, email: "dup-lineitem-sched@email.com" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					plan: "basic",
+					referenceId: userRes.user.id,
+					status: "active",
+					stripeSubscriptionId: "sub_dup_sched",
+					stripeCustomerId: "cus_mock123",
+				},
+			});
+
+			await ctx.adapter.update({
+				model: "user",
+				update: { stripeCustomerId: "cus_mock123" },
+				where: [{ field: "id", value: userRes.user.id }],
+			});
+
+			const now = Math.floor(Date.now() / 1000);
+			const periodEnd = now + 30 * 86400;
+
+			mockStripe.subscriptions.list.mockResolvedValueOnce({
+				data: [
+					{
+						id: "sub_dup_sched",
+						status: "active",
+						items: {
+							data: [
+								{
+									id: "si_base",
+									price: { id: "price_basic_base" },
+									quantity: 1,
+								},
+								{
+									id: "si_events",
+									price: { id: "price_basic_events" },
+									quantity: undefined,
+								},
+								{
+									id: "si_stale",
+									price: { id: "price_premium_security" },
+									quantity: undefined,
+								},
+							],
+						},
+					},
+				],
+			});
+
+			mockStripe.subscriptionSchedules.create.mockResolvedValueOnce({
+				id: "sub_sched_dup",
+				phases: [
+					{
+						start_date: now,
+						end_date: periodEnd,
+						items: [
+							{ price: { id: "price_basic_base" }, quantity: 1 },
+							{ price: { id: "price_basic_events" }, quantity: undefined },
+							{ price: { id: "price_premium_security" }, quantity: undefined },
+						],
+					},
+				],
+			});
+
+			await client.subscription.upgrade({
+				plan: "premium",
+				scheduleAtPeriodEnd: true,
+				fetchOptions: { headers },
+			});
+
+			expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalled();
+			const scheduleUpdate =
+				mockStripe.subscriptionSchedules.update.mock.calls[0]!;
+			const phase2Items = scheduleUpdate[1]!.phases[1].items;
+
+			// price_premium_security should appear only once
+			const securityItems = phase2Items.filter(
+				(i: { price: string }) => i.price === "price_premium_security",
+			);
+			expect(securityItems).toHaveLength(1);
+		});
+	});
 });
