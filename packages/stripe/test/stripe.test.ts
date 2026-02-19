@@ -5999,6 +5999,7 @@ describe("stripe", () => {
 				{
 					id: "sub_with_schedule",
 					status: "active",
+					schedule: "sub_sched_existing",
 					items: {
 						data: [
 							{
@@ -6094,6 +6095,7 @@ describe("stripe", () => {
 				{
 					id: "sub_scheduled_then_upgrade",
 					status: "active",
+					schedule: "sub_sched_old",
 					items: {
 						data: [
 							{
@@ -6187,6 +6189,7 @@ describe("stripe", () => {
 				{
 					id: "sub_external_schedule",
 					status: "active",
+					schedule: "sub_sched_external",
 					items: {
 						data: [
 							{

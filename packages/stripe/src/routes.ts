@@ -652,26 +652,26 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					);
 				}
 
-				// Release any existing pending subscription schedule for this subscription.
-				// This handles cases like:
-				// - downgrade scheduled -> user changes mind -> upgrades immediately,
-				// - downgrade scheduled -> user picks a different downgrade target.
-				const { data: existingSchedules } =
-					await client.subscriptionSchedules.list({
-						customer: customerId,
-					});
-				const existingSchedule = existingSchedules.find(
-					(s) =>
-						(typeof s.subscription === "string"
-							? s.subscription
-							: s.subscription?.id) === activeSubscription.id &&
-						s.status === "active",
-				);
-				if (
-					existingSchedule &&
-					existingSchedule.metadata?.source === "@better-auth/stripe"
-				) {
-					await client.subscriptionSchedules.release(existingSchedule.id);
+				// Release any existing plugin-created subscription schedule.
+				// Only check when a schedule is attached to avoid unnecessary API calls.
+				if (activeSubscription.schedule) {
+					const { data: existingSchedules } =
+						await client.subscriptionSchedules.list({
+							customer: customerId,
+						});
+					const existingSchedule = existingSchedules.find(
+						(s) =>
+							(typeof s.subscription === "string"
+								? s.subscription
+								: s.subscription?.id) === activeSubscription.id &&
+							s.status === "active",
+					);
+					if (
+						existingSchedule &&
+						existingSchedule.metadata?.source === "@better-auth/stripe"
+					) {
+						await client.subscriptionSchedules.release(existingSchedule.id);
+					}
 				}
 
 				// When upgrading plans with auto-managed seats, include
@@ -706,10 +706,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				if (ctx.body.scheduleAtPeriodEnd) {
 					// Deferred change:
 					// schedule at billing period end via Subscription Schedules
-					const schedule = await client.subscriptionSchedules.create({
-						from_subscription: activeSubscription.id,
-						metadata: { source: "@better-auth/stripe" },
-					});
+					const schedule = await client.subscriptionSchedules
+						.create({
+							from_subscription: activeSubscription.id,
+							metadata: { source: "@better-auth/stripe" },
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
 
 					const currentPhase = schedule.phases[0];
 					if (!currentPhase) {
@@ -753,25 +760,34 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						};
 					});
 
-					await client.subscriptionSchedules.update(schedule.id, {
-						end_behavior: "release",
-						phases: [
-							{
-								items: currentPhase.items.map((item) => ({
-									price:
-										typeof item.price === "string" ? item.price : item.price.id,
-									quantity: item.quantity,
-								})),
-								start_date: currentPhase.start_date,
-								end_date: currentPhase.end_date,
-							},
-							{
-								items: newPhaseItems,
-								start_date: currentPhase.end_date,
-								proration_behavior: "none",
-							},
-						],
-					});
+					await client.subscriptionSchedules
+						.update(schedule.id, {
+							end_behavior: "release",
+							phases: [
+								{
+									items: currentPhase.items.map((item) => ({
+										price:
+											typeof item.price === "string"
+												? item.price
+												: item.price.id,
+										quantity: item.quantity,
+									})),
+									start_date: currentPhase.start_date,
+									end_date: currentPhase.end_date,
+								},
+								{
+									items: newPhaseItems,
+									start_date: currentPhase.end_date,
+									proration_behavior: "none",
+								},
+							],
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
 
 					// DB is NOT updated now
 					// the webhook handles it at period end
