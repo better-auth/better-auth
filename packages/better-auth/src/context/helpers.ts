@@ -45,25 +45,26 @@ export async function runPluginInit(context: AuthContext) {
 		}
 	}
 	if (pluginTrustedOrigins.length > 0) {
-		const originalTrustedOrigins = options.trustedOrigins;
-		options.trustedOrigins = async (request) => {
-			const origins: (string | null | undefined)[] = [];
-			if (originalTrustedOrigins) {
-				origins.push(
-					...(Array.isArray(originalTrustedOrigins)
-						? originalTrustedOrigins
-						: await originalTrustedOrigins(request)),
+		const allSources = [
+			...(options.trustedOrigins ? [options.trustedOrigins] : []),
+			...pluginTrustedOrigins,
+		];
+		const staticOrigins = allSources.filter(Array.isArray).flat();
+		const dynamicOrigins = allSources.filter(
+			(s): s is Exclude<typeof s, string[]> => typeof s === "function",
+		);
+		if (dynamicOrigins.length > 0) {
+			options.trustedOrigins = async (request) => {
+				const resolved = await Promise.all(
+					dynamicOrigins.map((fn) => fn(request)),
 				);
-			}
-			for (const pluginOrigins of pluginTrustedOrigins) {
-				origins.push(
-					...(Array.isArray(pluginOrigins)
-						? pluginOrigins
-						: await pluginOrigins(request)),
+				return [...staticOrigins, ...resolved.flat()].filter(
+					(v): v is string => typeof v === "string" && v !== "",
 				);
-			}
-			return origins.filter((v) => typeof v === "string" && v !== "");
-		};
+			};
+		} else {
+			options.trustedOrigins = staticOrigins;
+		}
 	}
 	// Add the global database hooks last
 	dbHooks.push(options.databaseHooks);
