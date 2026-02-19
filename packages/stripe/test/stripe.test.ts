@@ -362,7 +362,8 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const checkoutParams =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[0];
 		expect(checkoutParams?.managed_payments).toBeUndefined();
 		expect(checkoutParams?.customer_update).toEqual({
 			name: "auto",
@@ -421,14 +422,71 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
-		const requestOptions = mockStripe.checkout.sessions.create.mock.lastCall?.[1];
+		const checkoutParams =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const requestOptions =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[1];
 
 		expect(checkoutParams?.managed_payments).toEqual({ enabled: true });
 		expect(checkoutParams?.customer_update).toBeUndefined();
 		expect(requestOptions).toMatchObject({
-			stripeVersion: "2025-11-17.clover; managed_payments_preview=v2",
+			apiVersion: "2025-11-17.clover; managed_payments_preview=v2",
 		});
+	});
+
+	it("should fail when managed payments is enabled without any apiVersion source", async () => {
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+				},
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-missing-version-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-missing-version-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		const upgradeRes = await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		expect(upgradeRes.error?.message).toContain(
+			"subscription.managedPayments.apiVersion",
+		);
+		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 	});
 
 	it("should allow predicate to disable or enable managed payments per request", async () => {
@@ -511,7 +569,7 @@ describe("stripe", () => {
 		expect(secondCheckoutParams?.managed_payments).toEqual({ enabled: true });
 		expect(secondCheckoutParams?.customer_update).toBeUndefined();
 		expect(secondRequestOptions).toMatchObject({
-			stripeVersion: "2025-11-17.clover; managed_payments_preview=v1",
+			apiVersion: "2025-11-17.clover; managed_payments_preview=v1",
 		});
 
 		expect(managedPaymentsPredicate).toHaveBeenCalledTimes(2);
@@ -569,13 +627,15 @@ describe("stripe", () => {
 			fetchOptions: { headers },
 		});
 
-		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
-		const requestOptions = mockStripe.checkout.sessions.create.mock.lastCall?.[1];
+		const checkoutParams =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const requestOptions =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[1];
 
 		expect(checkoutParams?.managed_payments).toEqual({ enabled: true });
 		expect(checkoutParams?.customer_update).toBeUndefined();
 		expect(requestOptions).toMatchObject({
-			stripeVersion: "2025-11-17.clover; managed_payments_preview=v1",
+			apiVersion: "2025-11-17.clover; managed_payments_preview=v1",
 		});
 		expect(managedPaymentsPredicate).toHaveBeenCalledTimes(1);
 	});
@@ -817,7 +877,8 @@ describe("stripe", () => {
 		});
 		assert(subscription, "Expected subscription to be created");
 
-		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const checkoutParams =
+			mockStripe.checkout.sessions.create.mock.lastCall?.[0];
 
 		expect(checkoutParams?.metadata).toMatchObject({
 			userId: signUpRes.user.id,

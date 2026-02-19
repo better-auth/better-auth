@@ -351,12 +351,12 @@ export type SubscriptionOptions = {
 				 */
 				enabled: boolean;
 				/**
-				 * Optional API version override used when constructing preview Stripe-Version.
+				 * Optional API version override used when constructing preview request options.
 				 * Defaults to the request option version or Stripe client version.
 				 */
 				apiVersion?: string | undefined;
 				/**
-				 * Preview token appended to Stripe-Version when managed payments is enabled.
+				 * Preview token appended to apiVersion when managed payments is enabled.
 				 *
 				 * @default "managed_payments_preview=v1"
 				 */

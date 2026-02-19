@@ -67,20 +67,20 @@ async function resolvePriceIdFromLookupKey(
 const MANAGED_PAYMENTS_PREVIEW_DEFAULT = "managed_payments_preview=v1";
 
 /**
- * Adds a Stripe preview token to a Stripe-Version value, preserving existing suffixes.
+ * Adds a Stripe preview token to an API version value, preserving existing suffixes.
  * @internal
  */
-function appendStripePreviewToVersion(
-	stripeVersion: string,
+function appendStripePreviewToApiVersion(
+	apiVersion: string,
 	preview: string,
 ): string {
-	const [baseVersion, ...suffixes] = stripeVersion
+	const [baseVersion, ...suffixes] = apiVersion
 		.split(";")
 		.map((part) => part.trim())
 		.filter(Boolean);
 
 	if (!baseVersion) {
-		return stripeVersion;
+		return apiVersion;
 	}
 
 	if (suffixes.includes(preview)) {
@@ -739,21 +739,28 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? (() => {
 							const preview =
 								managedPayments.preview || MANAGED_PAYMENTS_PREVIEW_DEFAULT;
-							const sourceStripeVersion =
+							const sourceApiVersion =
 								managedPayments.apiVersion ||
-								customCheckoutRequestOptions?.stripeVersion ||
+								customCheckoutRequestOptions?.apiVersion ||
 								getStripeClientApiVersion(client);
-							const stripeVersion = sourceStripeVersion
-								? appendStripePreviewToVersion(sourceStripeVersion, preview)
-								: undefined;
-							return stripeVersion
-								? defu(
-										{
-											stripeVersion,
-										},
-										customCheckoutRequestOptions,
-									)
-								: customCheckoutRequestOptions;
+
+							if (!sourceApiVersion) {
+								throw ctx.error("BAD_REQUEST", {
+									message:
+										"Managed payments is enabled but no API version could be resolved. Set subscription.managedPayments.apiVersion.",
+								});
+							}
+
+							const apiVersion = appendStripePreviewToApiVersion(
+								sourceApiVersion,
+								preview,
+							);
+							return defu(
+								{
+									apiVersion,
+								},
+								customCheckoutRequestOptions,
+							);
 						})()
 					: customCheckoutRequestOptions;
 
