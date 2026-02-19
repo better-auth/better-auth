@@ -44,6 +44,17 @@ type UserInputContext = Partial<
 	InputContext<string, any> & EndpointContext<string, any>
 >;
 
+/**
+ * Check if a value is a redirect Response (3xx status)
+ */
+function isRedirectResponse(e: unknown): e is Response {
+	return (
+		e instanceof Response &&
+		e.status >= 300 &&
+		e.status < 400
+	);
+}
+
 export function toAuthEndpoints<
 	const E extends Record<
 		string,
@@ -132,6 +143,17 @@ export function toAuthEndpoints<
 								headers: e.headers ? new Headers(e.headers) : null,
 							};
 						}
+						/**
+						 * Handle redirect responses (e.g., from c.redirect())
+						 * so that after hooks can run and add cookies/headers
+						 */
+						if (isRedirectResponse(e)) {
+							return {
+								response: e,
+								status: e.status,
+								headers: e.headers ? new Headers(e.headers) : null,
+							};
+						}
 						throw e;
 					})) as {
 						headers: Headers;
@@ -151,6 +173,26 @@ export function toAuthEndpoints<
 
 					if (after.response) {
 						result.response = after.response;
+					}
+
+					/**
+					 * For redirect responses, merge the original redirect
+					 * with any headers set by after hooks (e.g., Set-Cookie)
+					 */
+					if (result.response instanceof Response && after.headers) {
+						const mergedHeaders = new Headers(result.response.headers);
+						after.headers.forEach((value, key) => {
+							if (key.toLowerCase() === "set-cookie") {
+								mergedHeaders.append(key, value);
+							} else {
+								mergedHeaders.set(key, value);
+							}
+						});
+						return new Response(result.response.body, {
+							status: result.response.status,
+							statusText: result.response.statusText,
+							headers: mergedHeaders,
+						});
 					}
 
 					if (
