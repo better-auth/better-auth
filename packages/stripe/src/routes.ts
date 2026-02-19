@@ -64,6 +64,44 @@ async function resolvePriceIdFromLookupKey(
 	return prices.data[0]?.id;
 }
 
+const MANAGED_PAYMENTS_PREVIEW_DEFAULT = "managed_payments_preview=v1";
+
+/**
+ * Adds a Stripe preview token to a Stripe-Version value, preserving existing suffixes.
+ * @internal
+ */
+function appendStripePreviewToVersion(
+	stripeVersion: string,
+	preview: string,
+): string {
+	const [baseVersion, ...suffixes] = stripeVersion
+		.split(";")
+		.map((part) => part.trim())
+		.filter(Boolean);
+
+	if (!baseVersion) {
+		return stripeVersion;
+	}
+
+	if (suffixes.includes(preview)) {
+		return `${baseVersion}; ${suffixes.join("; ")}`;
+	}
+
+	return `${baseVersion}; ${[...suffixes, preview].join("; ")}`;
+}
+
+/**
+ * Resolves the Stripe API version configured on the client.
+ * @internal
+ */
+function getStripeClientApiVersion(stripeClient: Stripe): string | undefined {
+	const withGetApiField = stripeClient as Stripe & {
+		getApiField?: (field: string) => unknown;
+	};
+	const apiVersion = withGetApiField.getApiField?.("version");
+	return typeof apiVersion === "string" ? apiVersion : undefined;
+}
+
 /**
  * Determines the reference ID based on customer type.
  * - `user` (default): uses userId
@@ -643,16 +681,17 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				});
 			}
 
-			const params = await subscriptionOptions.getCheckoutSessionParams?.(
-				{
-					user,
-					session,
-					plan,
-					subscription,
-				},
-				ctx.request,
-				ctx,
-			);
+			const checkoutSessionCustomization =
+				await subscriptionOptions.getCheckoutSessionParams?.(
+					{
+						user,
+						session,
+						plan,
+						subscription,
+					},
+					ctx.request,
+					ctx,
+				);
 
 			const allSubscriptions = await ctx.context.adapter.findMany<Subscription>(
 				{
@@ -673,16 +712,65 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					? { trial_period_days: plan.freeTrial.days }
 					: undefined;
 
+			const managedPayments = subscriptionOptions.managedPayments;
+			const managedPaymentsEnabled = managedPayments
+				? managedPayments.isEnabled
+					? await managedPayments.isEnabled(
+							{
+								user,
+								session,
+								plan,
+								subscription,
+								referenceId,
+								customerType,
+							},
+							ctx.request,
+							ctx,
+						)
+					: managedPayments.enabled
+				: false;
+
+			const customCheckoutSessionParams = checkoutSessionCustomization?.params;
+			const customCheckoutRequestOptions =
+				checkoutSessionCustomization?.options;
+
+			const managedCheckoutRequestOptions =
+				managedPaymentsEnabled && managedPayments
+					? (() => {
+							const preview =
+								managedPayments.preview || MANAGED_PAYMENTS_PREVIEW_DEFAULT;
+							const sourceStripeVersion =
+								managedPayments.apiVersion ||
+								customCheckoutRequestOptions?.stripeVersion ||
+								getStripeClientApiVersion(client);
+							const stripeVersion = sourceStripeVersion
+								? appendStripePreviewToVersion(sourceStripeVersion, preview)
+								: undefined;
+							return stripeVersion
+								? defu(
+										{
+											stripeVersion,
+										},
+										customCheckoutRequestOptions,
+									)
+								: customCheckoutRequestOptions;
+						})()
+					: customCheckoutRequestOptions;
+
 			const checkoutSession = await client.checkout.sessions
 				.create(
 					{
 						...(customerId
 							? {
 									customer: customerId,
-									customer_update:
-										customerType !== "user"
-											? ({ address: "auto" } as const)
-											: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
+									...(managedPaymentsEnabled
+										? {}
+										: {
+												customer_update:
+													customerType !== "user"
+														? ({ address: "auto" } as const)
+														: ({ name: "auto", address: "auto" } as const), // The customer name is automatically set only for users
+											}),
 								}
 							: {
 									customer_email: user.email,
@@ -703,8 +791,20 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								quantity: ctx.body.seats || 1,
 							},
 						],
+						mode: "subscription",
+						client_reference_id: referenceId,
+						...customCheckoutSessionParams,
+						...(managedPaymentsEnabled
+							? {
+									managed_payments: {
+										enabled: true,
+									},
+								}
+							: {}),
+						// subscription_data should come after spread to protect internal metadata fields
 						subscription_data: {
 							...freeTrial,
+							...customCheckoutSessionParams?.subscription_data,
 							metadata: subscriptionMetadata.set(
 								{
 									userId: user.id,
@@ -712,12 +812,9 @@ export const upgradeSubscription = (options: StripeOptions) => {
 									referenceId,
 								},
 								ctx.body.metadata,
-								params?.params?.subscription_data?.metadata,
+								customCheckoutSessionParams?.subscription_data?.metadata,
 							),
 						},
-						mode: "subscription",
-						client_reference_id: referenceId,
-						...params?.params,
 						// metadata should come after spread to protect internal fields
 						metadata: subscriptionMetadata.set(
 							{
@@ -726,10 +823,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								referenceId,
 							},
 							ctx.body.metadata,
-							params?.params?.metadata,
+							customCheckoutSessionParams?.metadata,
 						),
 					},
-					params?.options,
+					managedCheckoutRequestOptions,
 				)
 				.catch(async (e) => {
 					throw ctx.error("BAD_REQUEST", {

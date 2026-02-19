@@ -323,6 +323,200 @@ describe("stripe", () => {
 		});
 	});
 
+	it("should keep default checkout customer_update behavior when managed payments is disabled", async () => {
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptions)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "default-checkout-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "default-checkout-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		expect(checkoutParams?.managed_payments).toBeUndefined();
+		expect(checkoutParams?.customer_update).toEqual({
+			name: "auto",
+			address: "auto",
+		});
+	});
+
+	it("should include managed payments and preview request options when enabled", async () => {
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+					preview: "managed_payments_preview=v2",
+				},
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-checkout-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-checkout-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+		const requestOptions = mockStripe.checkout.sessions.create.mock.lastCall?.[1];
+
+		expect(checkoutParams?.managed_payments).toEqual({ enabled: true });
+		expect(checkoutParams?.customer_update).toBeUndefined();
+		expect(requestOptions).toMatchObject({
+			stripeVersion: "2025-11-17.clover; managed_payments_preview=v2",
+		});
+	});
+
+	it("should allow predicate to disable or enable managed payments per request", async () => {
+		const managedPaymentsPredicate = vi
+			.fn()
+			.mockResolvedValueOnce(false)
+			.mockResolvedValueOnce(true);
+		const stripeOptionsWithManagedPayments: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				managedPayments: {
+					enabled: true,
+					apiVersion: "2025-11-17.clover",
+					isEnabled: managedPaymentsPredicate,
+				},
+			},
+		};
+
+		const { client, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithManagedPayments)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+
+		await client.signUp.email(
+			{
+				...testUser,
+				email: "managed-predicate-user@example.com",
+			},
+			{ throw: true },
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "managed-predicate-user@example.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const firstCheckoutParams =
+			mockStripe.checkout.sessions.create.mock.calls[0]?.[0];
+		const firstRequestOptions =
+			mockStripe.checkout.sessions.create.mock.calls[0]?.[1];
+
+		expect(firstCheckoutParams?.managed_payments).toBeUndefined();
+		expect(firstCheckoutParams?.customer_update).toEqual({
+			name: "auto",
+			address: "auto",
+		});
+		expect(firstRequestOptions).toBeUndefined();
+
+		await client.subscription.upgrade({
+			plan: "premium",
+			fetchOptions: { headers },
+		});
+
+		const secondCheckoutParams =
+			mockStripe.checkout.sessions.create.mock.calls[1]?.[0];
+		const secondRequestOptions =
+			mockStripe.checkout.sessions.create.mock.calls[1]?.[1];
+
+		expect(secondCheckoutParams?.managed_payments).toEqual({ enabled: true });
+		expect(secondCheckoutParams?.customer_update).toBeUndefined();
+		expect(secondRequestOptions).toMatchObject({
+			stripeVersion: "2025-11-17.clover; managed_payments_preview=v1",
+		});
+
+		expect(managedPaymentsPredicate).toHaveBeenCalledTimes(2);
+	});
+
 	it("should not allow cross-user subscriptionId operations (upgrade/cancel/restore)", async () => {
 		const { client, auth, sessionSetter } = await getTestInstance(
 			{
@@ -486,6 +680,94 @@ describe("stripe", () => {
 			}),
 			undefined,
 		);
+	});
+
+	it("should protect internal metadata fields from checkout session param overrides", async () => {
+		const stripeOptionsWithCheckoutParams: StripeOptions = {
+			...stripeOptions,
+			subscription: {
+				...stripeOptions.subscription,
+				getCheckoutSessionParams: async () => ({
+					params: {
+						metadata: {
+							userId: "fake_user_id",
+							subscriptionId: "fake_subscription_id",
+							referenceId: "fake_reference_id",
+							topLevelCustom: "top_level_custom",
+						},
+						subscription_data: {
+							metadata: {
+								userId: "fake_user_id",
+								subscriptionId: "fake_subscription_id",
+								referenceId: "fake_reference_id",
+								nestedCustom: "nested_custom",
+							},
+						},
+					},
+				}),
+			},
+		};
+		const { client, auth, sessionSetter } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(stripeOptionsWithCheckoutParams)],
+			},
+			{
+				disableTestUser: true,
+				clientOptions: {
+					plugins: [stripeClient({ subscription: true })],
+				},
+			},
+		);
+		const ctx = await auth.$context;
+
+		const signUpRes = await client.signUp.email(
+			{
+				...testUser,
+				email: "metadata-protection-test@email.com",
+			},
+			{
+				throw: true,
+			},
+		);
+
+		const headers = new Headers();
+		await client.signIn.email(
+			{
+				...testUser,
+				email: "metadata-protection-test@email.com",
+			},
+			{
+				throw: true,
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.subscription.upgrade({
+			plan: "starter",
+			fetchOptions: { headers },
+		});
+
+		const subscription = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "referenceId", value: signUpRes.user.id }],
+		});
+		assert(subscription, "Expected subscription to be created");
+
+		const checkoutParams = mockStripe.checkout.sessions.create.mock.lastCall?.[0];
+
+		expect(checkoutParams?.metadata).toMatchObject({
+			userId: signUpRes.user.id,
+			subscriptionId: subscription.id,
+			referenceId: signUpRes.user.id,
+			topLevelCustom: "top_level_custom",
+		});
+		expect(checkoutParams?.subscription_data?.metadata).toMatchObject({
+			userId: signUpRes.user.id,
+			subscriptionId: subscription.id,
+			referenceId: signUpRes.user.id,
+			nestedCustom: "nested_custom",
+		});
 	});
 
 	it("should list active subscriptions", async () => {
