@@ -58,7 +58,7 @@ When cherry-picking from `canary` to a stable release branch:
 
 ### API Compatibility
 
-* **Check for new APIs**: Commits may use APIs that don't exist in the
+* **Check for new APIs**: Commits may use APIs that do not exist in the
   target branch.
 * **Fix imports**: Some imports may need adjustment
 
@@ -75,8 +75,8 @@ Skip commits that depend on features not in the target branch
 
 ### Squashing Fixes
 
-**Never create separate "compatibility fix" commits.** Always squash
-fixes into the original cherry-picked commit:
+**Never create separate compatibility fix commits.**
+Always squash fixes into the original cherry-picked commit:
 
 ```bash
 # Create fixup commit
