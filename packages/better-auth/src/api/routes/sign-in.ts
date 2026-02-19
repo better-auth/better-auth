@@ -466,43 +466,28 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				includeAccounts: true,
 			});
 
-			if (!user) {
-				// Hash password to prevent timing attacks from revealing valid email addresses
-				// By hashing passwords for invalid emails, we ensure consistent response times
-				await ctx.context.password.hash(password);
-				ctx.context.logger.error("User not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
-
-			const credentialAccount = user.accounts.find(
+			// Extract account details before verification to avoid timing leaks
+			const credentialAccount = user?.accounts.find(
 				(a) => a.providerId === "credential",
 			);
-			if (!credentialAccount) {
-				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Credential account not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
-			}
 			const currentPassword = credentialAccount?.password;
-			if (!currentPassword) {
+
+			// Always verify password to ensure constant-time operation
+			// This prevents timing attacks that could reveal account state
+			let validPassword = false;
+			if (currentPassword) {
+				validPassword = await ctx.context.password.verify({
+					hash: currentPassword,
+					password,
+				});
+			} else {
+				// Hash password even when user doesn't exist to maintain constant time
 				await ctx.context.password.hash(password);
-				ctx.context.logger.error("Password not found", { email });
-				throw APIError.from(
-					"UNAUTHORIZED",
-					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
-				);
 			}
-			const validPassword = await ctx.context.password.verify({
-				hash: currentPassword,
-				password,
-			});
-			if (!validPassword) {
-				ctx.context.logger.error("Invalid password");
+
+			// Single check for all failure conditions
+			if (!user || !credentialAccount || !currentPassword || !validPassword) {
+				ctx.context.logger.error("Invalid credentials", { email });
 				throw APIError.from(
 					"UNAUTHORIZED",
 					BASE_ERROR_CODES.INVALID_EMAIL_OR_PASSWORD,
