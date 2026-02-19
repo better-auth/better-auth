@@ -207,6 +207,16 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
+	 * Schedule the plan change at the end of the current billing period instead of applying immediately.
+	 */
+	scheduleAtPeriodEnd: z
+		.boolean()
+		.meta({
+			description:
+				"Schedule the plan change at the end of the current billing period instead of applying immediately.",
+		})
+		.default(false),
+	/**
 	 * Disable Redirect
 	 */
 	disableRedirect: z
@@ -642,6 +652,28 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					);
 				}
 
+				// Release any existing plugin-created subscription schedule.
+				// Only check when a schedule is attached to avoid unnecessary API calls.
+				if (activeSubscription.schedule) {
+					const { data: existingSchedules } =
+						await client.subscriptionSchedules.list({
+							customer: customerId,
+						});
+					const existingSchedule = existingSchedules.find(
+						(s) =>
+							(typeof s.subscription === "string"
+								? s.subscription
+								: s.subscription?.id) === activeSubscription.id &&
+							s.status === "active",
+					);
+					if (
+						existingSchedule &&
+						existingSchedule.metadata?.source === "@better-auth/stripe"
+					) {
+						await client.subscriptionSchedules.release(existingSchedule.id);
+					}
+				}
+
 				// When upgrading plans with auto-managed seats, include
 				// the seat item update if seatPriceId changed between plans.
 				const seatPortalItems: Array<{
@@ -670,12 +702,100 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					}
 				}
 
-				// Billing portal supports only 1 item update at a time.
-				// When seat price changes between plans, use direct API.
 				let upgradeUrl: string;
-				if (seatPortalItems.length > 0) {
-					// For seat-only plans, planItem and seatItem are the same subscription item.
-					// Skip the base entry to avoid duplicates.
+				if (ctx.body.scheduleAtPeriodEnd) {
+					// Deferred change:
+					// schedule at billing period end via Subscription Schedules
+					const schedule = await client.subscriptionSchedules
+						.create({
+							from_subscription: activeSubscription.id,
+							metadata: { source: "@better-auth/stripe" },
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+
+					const currentPhase = schedule.phases[0];
+					if (!currentPhase) {
+						throw ctx.error("BAD_REQUEST", {
+							message: "Subscription schedule has no phases",
+						});
+					}
+
+					const newPhaseItems = currentPhase.items.map((item) => {
+						const itemPriceId =
+							typeof item.price === "string" ? item.price : item.price.id;
+
+						// Replace seat price if it changed between plans
+						const seatReplacement = seatPortalItems.find((s) => {
+							const sItem = activeSubscription.items.data.find(
+								(si) => si.id === s.id,
+							);
+							return sItem?.price.id === itemPriceId;
+						});
+						if (seatReplacement) {
+							return {
+								price: seatReplacement.price,
+								quantity: seatReplacement.quantity,
+							};
+						}
+
+						// Replace base plan price
+						if (itemPriceId === stripeSubscriptionPriceId) {
+							return {
+								price: priceIdToUse,
+								...(isAutoManagedSeats
+									? {}
+									: { quantity: ctx.body.seats || 1 }),
+							};
+						}
+
+						// Keep other items as-is
+						return {
+							price: itemPriceId,
+							quantity: item.quantity,
+						};
+					});
+
+					await client.subscriptionSchedules
+						.update(schedule.id, {
+							end_behavior: "release",
+							phases: [
+								{
+									items: currentPhase.items.map((item) => ({
+										price:
+											typeof item.price === "string"
+												? item.price
+												: item.price.id,
+										quantity: item.quantity,
+									})),
+									start_date: currentPhase.start_date,
+									end_date: currentPhase.end_date,
+								},
+								{
+									items: newPhaseItems,
+									start_date: currentPhase.end_date,
+									proration_behavior: "none",
+								},
+							],
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+
+					// DB is NOT updated now
+					// the webhook handles it at period end
+					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
+				} else if (seatPortalItems.length > 0) {
+					// Immediate change with seat price updates: use direct API.
+					// Billing Portal supports only 1 item update at a time,
+					// so when seat price changes between plans we call subscriptions.update directly.
 					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
 					await client.subscriptions
 						.update(activeSubscription.id, {
@@ -711,6 +831,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
 				} else {
+					// Immediate change via Billing Portal
 					({ url: upgradeUrl } = await client.billingPortal.sessions
 						.create({
 							customer: customerId,
