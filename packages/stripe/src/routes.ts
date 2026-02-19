@@ -1540,16 +1540,34 @@ export const restoreSubscription = (options: StripeOptions) => {
 				);
 			}
 
-			// Handle pending schedule release (scheduled plan change)
+			// Pending cancel and pending schedule are mutually exclusive in Stripe.
 			if (stripeScheduleId) {
-				await client.subscriptionSchedules
-					.release(stripeScheduleId)
+				if (!subscription.stripeSubscriptionId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
+
+				const schedule = await client.subscriptionSchedules
+					.retrieve(stripeScheduleId)
 					.catch((e) => {
 						throw ctx.error("BAD_REQUEST", {
 							message: e.message,
 							code: e.code,
 						});
 					});
+
+				if (schedule.status === "active") {
+					await client.subscriptionSchedules
+						.release(stripeScheduleId)
+						.catch((e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+				}
 
 				await ctx.context.adapter.update({
 					model: "subscription",
@@ -1564,13 +1582,6 @@ export const restoreSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-
-				if (!subscription.stripeSubscriptionId) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-					);
-				}
 				const releasedSub = await client.subscriptions.retrieve(
 					subscription.stripeSubscriptionId,
 				);

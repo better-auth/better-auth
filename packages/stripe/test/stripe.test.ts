@@ -195,6 +195,9 @@ describe("stripe", () => {
 					},
 				],
 			}),
+			retrieve: vi
+				.fn()
+				.mockResolvedValue({ id: "sub_sched_mock", status: "active" }),
 			update: vi.fn().mockResolvedValue({}),
 			release: vi.fn().mockResolvedValue({}),
 		},
