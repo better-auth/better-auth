@@ -1999,6 +1999,64 @@ describe("owner can update roles", async () => {
 		expect(permissionRes.error).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/6081
+	 */
+	it("should return error when role not found in configured roles", async () => {
+		const userEmail = "undefined-role-user@email.com";
+		const userPassword = "userpassword";
+
+		const { user } = await auth.api.createUser({
+			headers: { cookie: adminCookie },
+			body: {
+				name: "undefined role user",
+				email: userEmail,
+				password: userPassword,
+			},
+		});
+
+		const addMemberRes = await auth.api.addMember({
+			headers: { cookie: adminCookie },
+			body: {
+				organizationId: org.id,
+				userId: user.id,
+				// @ts-expect-error - intentionally using undefined role for testing
+				role: ["member"], // "member" role is not defined in this test's configuration
+			},
+		});
+
+		if (!addMemberRes) {
+			throw new Error("couldn't add user as a member");
+		}
+
+		const signInRes = await auth.api.signInEmail({
+			returnHeaders: true,
+			body: {
+				email: userEmail,
+				password: userPassword,
+			},
+		});
+
+		const userCookie = signInRes.headers.getSetCookie()[0]!;
+
+		// Try to check permissions with a role that doesn't exist in configured roles
+		const permissionRes = await auth.api.hasPermission({
+			headers: { cookie: userCookie },
+			body: {
+				organizationId: org.id,
+				permissions: {
+					custom: ["custom"],
+				},
+			},
+		});
+
+		expect(permissionRes.success).toBe(false);
+		expect(permissionRes.error).not.toBeNull();
+		expect(permissionRes.error).toMatch(
+			/Role "member" not found in configured roles\. Available roles:/,
+		);
+	});
+
 	it("allows an org owner to remove their own creator role if not sole owner", async () => {
 		await auth.api.updateMemberRole({
 			headers: { cookie: adminCookie },
