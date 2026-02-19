@@ -6,7 +6,7 @@ import { setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto/random";
 import { parseUserInput } from "../../db";
 import { parseUserOutput } from "../../db/schema";
-import type { Account, User } from "../../types";
+import type { Account } from "../../types";
 import { getDate } from "../../utils/date";
 import { PHONE_NUMBER_ERROR_CODES } from "./error-codes";
 import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
@@ -811,7 +811,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			const userRes = await ctx.context.adapter.findOne<
-				User & { account: Account[] | undefined }
+				UserWithPhoneNumber & { account: Account[] | undefined }
 			>({
 				model: "user",
 				where: [
@@ -861,6 +861,13 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			await ctx.context.internalAdapter.deleteVerificationValue(
 				verification.id,
 			);
+
+			if (ctx.context.options.emailAndPassword?.onPasswordReset) {
+				await ctx.context.options.emailAndPassword.onPasswordReset(
+					{ user },
+					ctx.request,
+				);
+			}
 
 			if (ctx.context.options.emailAndPassword?.revokeSessionsOnPasswordReset) {
 				await ctx.context.internalAdapter.deleteSessions(user.id);
