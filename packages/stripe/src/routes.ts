@@ -709,7 +709,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					const schedule = await client.subscriptionSchedules
 						.create({
 							from_subscription: activeSubscription.id,
-							metadata: { source: "@better-auth/stripe" },
 						})
 						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {
@@ -762,6 +761,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 					await client.subscriptionSchedules
 						.update(schedule.id, {
+							metadata: { source: "@better-auth/stripe" },
 							end_behavior: "release",
 							phases: [
 								{
