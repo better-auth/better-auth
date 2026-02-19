@@ -1,4 +1,5 @@
 import type { ResolvedAgentAuthOptions } from "../types";
+import { cleanupAgents } from "./cleanup-agents";
 import { createAgent } from "./create-agent";
 import { getAgent } from "./get-agent";
 import { getAgentActivity } from "./get-agent-activity";
@@ -18,5 +19,6 @@ export function createAgentRoutes(opts: ResolvedAgentAuthOptions) {
 		rotateKey: rotateKey(),
 		getAgentSession: getAgentSession(),
 		getAgentActivity: getAgentActivity(),
+		cleanupAgents: cleanupAgents(),
 	};
 }

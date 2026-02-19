@@ -3,6 +3,7 @@ import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 export const AGENT_AUTH_ERROR_CODES = defineErrorCodes({
 	AGENT_NOT_FOUND: "Agent not found.",
 	AGENT_REVOKED: "Agent has been revoked.",
+	AGENT_EXPIRED: "Agent session has expired.",
 	INVALID_JWT: "Invalid or expired agent JWT.",
 	SCOPE_DENIED: "Agent does not have the required scope.",
 	UNAUTHORIZED_SESSION: "Unauthorized or invalid session.",

@@ -82,6 +82,10 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 
 			const now = new Date();
 			const kid = (publicKey.kid as string) ?? null;
+			const expiresAt =
+				opts.agentSessionTTL > 0
+					? new Date(now.getTime() + opts.agentSessionTTL * 1000)
+					: null;
 
 			// Check if an agent with the same kid already exists for this user
 			// This makes the endpoint idempotent — reconnecting with the same
@@ -107,6 +111,7 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 							status: "active",
 							publicKey: JSON.stringify(publicKey),
 							metadata: metadata ? JSON.stringify(metadata) : null,
+							expiresAt,
 							updatedAt: now,
 						},
 					});
@@ -135,6 +140,7 @@ export function createAgent(opts: ResolvedAgentAuthOptions) {
 					publicKey: JSON.stringify(publicKey),
 					kid,
 					lastUsedAt: null,
+					expiresAt,
 					metadata: metadata ? JSON.stringify(metadata) : null,
 					createdAt: now,
 					updatedAt: now,

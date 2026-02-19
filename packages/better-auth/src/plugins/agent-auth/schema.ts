@@ -92,6 +92,16 @@ export const agentSchema = () =>
 					input: false,
 				},
 				/**
+				 * When the agent session expires. Automatically extended on
+				 * each authenticated request if `agentSessionTTL` is set.
+				 * Null means the agent never expires from TTL alone.
+				 */
+				expiresAt: {
+					type: "date",
+					required: false,
+					input: false,
+				},
+				/**
 				 * Optional JSON metadata (runtime type, version, etc.)
 				 */
 				metadata: {

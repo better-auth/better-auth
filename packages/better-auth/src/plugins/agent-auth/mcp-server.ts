@@ -31,8 +31,10 @@
 
 import { exec } from "node:child_process";
 import { platform } from "node:os";
+import { signAgentJWT } from "./crypto";
 import { createFileStorage } from "./mcp-storage-fs";
 import { createMemoryStorage } from "./mcp-storage-memory";
+import type { MCPAgentStorage } from "./mcp-tools";
 import { createAgentMCPTools } from "./mcp-tools";
 
 /**
@@ -107,9 +109,62 @@ async function main() {
 	const transport = new StdioServerTransport();
 	await server.connect(transport);
 
+	// Approach 1: Revoke all agents on clean process shutdown
+	const revokeAll = buildRevokeAllConnections(storage);
+	for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+		process.on(signal, async () => {
+			process.stderr.write(
+				`[better-auth-agent] ${signal} received, revoking agents…\n`,
+			);
+			await revokeAll();
+			process.exit(0);
+		});
+	}
+
+	// Approach 2: Revoke on stdio pipe close (Cursor tab / window close)
+	transport.onclose = async () => {
+		process.stderr.write(
+			"[better-auth-agent] Transport closed, revoking agents…\n",
+		);
+		await revokeAll();
+		process.exit(0);
+	};
+
 	process.stderr.write(
 		`[better-auth-agent] MCP server running on stdio (storage: ${storageType})\n`,
 	);
+}
+
+/**
+ * Build a function that revokes every stored agent connection.
+ * Best-effort: network failures are silently ignored (server-side TTL
+ * is the real safety net for orphaned agents).
+ */
+function buildRevokeAllConnections(storage: MCPAgentStorage) {
+	return async () => {
+		const connections = await storage.listConnections();
+		for (const conn of connections) {
+			const full = await storage.getConnection(conn.agentId);
+			if (!full) continue;
+			try {
+				const jwt = await signAgentJWT({
+					agentId: conn.agentId,
+					privateKey: full.keypair.privateKey,
+				});
+				await globalThis.fetch(`${full.appUrl}/api/auth/agent/revoke`, {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/json",
+						Authorization: `Bearer ${jwt}`,
+					},
+					body: JSON.stringify({ agentId: conn.agentId }),
+				});
+			} catch {
+				// Best-effort — server-side TTL handles cleanup
+			}
+			await storage.removeConnection(conn.agentId);
+		}
+	};
 }
 
 main().catch((err) => {

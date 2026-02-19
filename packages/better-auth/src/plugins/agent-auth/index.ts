@@ -33,6 +33,7 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 		allowedKeyAlgorithms: options?.allowedKeyAlgorithms ?? ["Ed25519"],
 		jwtFormat: options?.jwtFormat ?? "simple",
 		jwtMaxAge: options?.jwtMaxAge ?? 60,
+		agentSessionTTL: options?.agentSessionTTL ?? 3600,
 	};
 
 	const schema = mergeSchema(agentSchema(), opts.schema);
@@ -96,6 +97,29 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 							);
 						}
 
+						// TTL check — reject if the agent has expired
+						if (agent.expiresAt && new Date(agent.expiresAt) <= new Date()) {
+							// Auto-revoke the expired agent in the background
+							ctx.context.runInBackground(
+								ctx.context.adapter
+									.update({
+										model: AGENT_TABLE,
+										where: [{ field: "id", value: agent.id }],
+										update: {
+											status: "revoked",
+											publicKey: "",
+											kid: null,
+											updatedAt: new Date(),
+										},
+									})
+									.catch(() => {}),
+							);
+							throw APIError.from(
+								"UNAUTHORIZED",
+								AGENT_AUTH_ERROR_CODES.AGENT_EXPIRED,
+							);
+						}
+
 						// Verify the JWT signature with the agent's stored public key
 						const publicKey = JSON.parse(agent.publicKey);
 						const payload = await verifyAgentJWT({
@@ -150,14 +174,22 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 						(ctx.context as Record<string, unknown>).agentSession =
 							agentSession;
 
-						// Update lastUsedAt in background
+						// Update lastUsedAt (and extend expiresAt if TTL is active) in background
 						const now = new Date();
+						const heartbeatUpdate: Record<string, unknown> = {
+							lastUsedAt: now,
+						};
+						if (opts.agentSessionTTL > 0) {
+							heartbeatUpdate.expiresAt = new Date(
+								now.getTime() + opts.agentSessionTTL * 1000,
+							);
+						}
 						ctx.context.runInBackground(
 							ctx.context.adapter
 								.update({
 									model: AGENT_TABLE,
 									where: [{ field: "id", value: agent.id }],
-									update: { lastUsedAt: now },
+									update: heartbeatUpdate,
 								})
 								.catch(() => {}),
 						);
@@ -230,6 +262,7 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 			rotateKey: routes.rotateKey,
 			getAgentSession: routes.getAgentSession,
 			getAgentActivity: routes.getAgentActivity,
+			cleanupAgents: routes.cleanupAgents,
 		},
 		schema,
 		options,

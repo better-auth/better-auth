@@ -38,6 +38,15 @@ export interface AgentAuthOptions {
 	 */
 	jwtMaxAge?: number;
 	/**
+	 * Sliding TTL for agent sessions in seconds. When set, agents
+	 * automatically expire if unused for longer than this duration.
+	 * Each authenticated request extends the deadline.
+	 *
+	 * Set to `0` or omit to disable TTL (agents never auto-expire).
+	 * @default 3600 (1 hour)
+	 */
+	agentSessionTTL?: number;
+	/**
 	 * Custom schema overrides for the agent table.
 	 */
 	schema?: InferOptionSchema<ReturnType<typeof agentSchema>>;
@@ -57,6 +66,7 @@ export interface Agent {
 	publicKey: string;
 	kid: string | null;
 	lastUsedAt: Date | null;
+	expiresAt: Date | null;
 	metadata: Record<string, unknown> | null;
 	createdAt: Date;
 	updatedAt: Date;
@@ -88,6 +98,9 @@ export interface AgentSession {
  * Resolved options with defaults applied.
  */
 export type ResolvedAgentAuthOptions = Required<
-	Pick<AgentAuthOptions, "allowedKeyAlgorithms" | "jwtFormat" | "jwtMaxAge">
+	Pick<
+		AgentAuthOptions,
+		"allowedKeyAlgorithms" | "jwtFormat" | "jwtMaxAge" | "agentSessionTTL"
+	>
 > &
 	AgentAuthOptions;
