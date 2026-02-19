@@ -250,6 +250,11 @@
       "types": "./dist/plugins/agent-auth/mcp-server.d.mts",
       "default": "./dist/plugins/agent-auth/mcp-server.mjs"
     },
+    "./plugins/agent-auth/mcp-gateway": {
+      "dev-source": "./src/plugins/agent-auth/gateway/index.ts",
+      "types": "./dist/plugins/agent-auth/gateway/index.d.mts",
+      "default": "./dist/plugins/agent-auth/gateway/index.mjs"
+    },
     "./plugins/anonymous": {
       "dev-source": "./src/plugins/anonymous/index.ts",
       "types": "./dist/plugins/anonymous/index.d.mts",
@@ -470,6 +475,9 @@
       ],
       "plugins/agent-auth/mcp-server": [
         "./dist/plugins/agent-auth/mcp-server.d.mts"
+      ],
+      "plugins/agent-auth/mcp-gateway": [
+        "./dist/plugins/agent-auth/gateway/index.d.mts"
       ],
       "plugins/anonymous": [
         "./dist/plugins/anonymous/index.d.mts"

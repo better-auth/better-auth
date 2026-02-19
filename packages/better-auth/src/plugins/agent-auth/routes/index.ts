@@ -5,6 +5,11 @@ import { getAgent } from "./get-agent";
 import { getAgentActivity } from "./get-agent-activity";
 import { getAgentSession } from "./get-agent-session";
 import { listAgents } from "./list-agents";
+import {
+	deleteProvider,
+	listProviders,
+	registerProvider,
+} from "./mcp-providers";
 import { revokeAgent } from "./revoke-agent";
 import { rotateKey } from "./rotate-key";
 import { updateAgent } from "./update-agent";
@@ -20,5 +25,8 @@ export function createAgentRoutes(opts: ResolvedAgentAuthOptions) {
 		getAgentSession: getAgentSession(),
 		getAgentActivity: getAgentActivity(),
 		cleanupAgents: cleanupAgents(),
+		registerProvider: registerProvider(),
+		listProviders: listProviders(),
+		deleteProvider: deleteProvider(),
 	};
 }

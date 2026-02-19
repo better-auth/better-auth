@@ -47,6 +47,22 @@ export interface AgentAuthOptions {
 	 */
 	agentSessionTTL?: number;
 	/**
+	 * MCP providers that agents can connect to through the gateway.
+	 *
+	 * Pass a string for known providers (e.g. "github", "slack"),
+	 * or a config object for custom MCP servers.
+	 *
+	 * @example
+	 * ```ts
+	 * mcpProviders: [
+	 *   "github",
+	 *   "slack",
+	 *   { name: "my-tool", command: "node", args: ["my-server.js"] },
+	 * ]
+	 * ```
+	 */
+	mcpProviders?: (string | MCPProviderConfig)[];
+	/**
 	 * Custom schema overrides for the agent table.
 	 */
 	schema?: InferOptionSchema<ReturnType<typeof agentSchema>>;
@@ -92,6 +108,74 @@ export interface AgentSession {
 		email: string;
 		[key: string]: unknown;
 	};
+}
+
+/**
+ * Configuration for an MCP provider.
+ *
+ * Mirrors the MCP server config format you already know from
+ * Cursor / Claude Desktop, plus a `name` for scope namespacing.
+ *
+ * @example Stdio provider (spawns a process)
+ * ```ts
+ * { name: "github", command: "npx", args: ["-y", "@modelcontextprotocol/server-github"] }
+ * ```
+ *
+ * @example SSE provider (connects to a remote URL)
+ * ```ts
+ * { name: "my-api", url: "https://mcp.example.com/sse" }
+ * ```
+ */
+export interface MCPProviderConfig {
+	/** Unique name used as scope namespace (e.g. "github", "slack"). */
+	name: string;
+	/** Human-readable label. Defaults to `name` if omitted. */
+	displayName?: string;
+	/** Transport type. Auto-detected: "stdio" if `command` is set, "sse" if `url` is set. */
+	transport?: "stdio" | "sse";
+	/** Command to spawn the MCP server (e.g. "npx", "node"). */
+	command?: string;
+	/** Arguments for the command (e.g. ["-y", "@modelcontextprotocol/server-github"]). */
+	args?: string[];
+	/** Extra environment variables for the spawned process. Merged with the parent env. */
+	env?: Record<string, string>;
+	/** URL for remote MCP servers using SSE transport. */
+	url?: string;
+	/** HTTP headers for SSE connections (e.g. authorization). */
+	headers?: Record<string, string>;
+	/**
+	 * Optional scope-to-tools mapping for granular access control.
+	 *
+	 * @example
+	 * ```ts
+	 * toolScopes: {
+	 *   read: ["list_files", "read_file"],
+	 *   write: ["create_file", "update_file"],
+	 * }
+	 * ```
+	 *
+	 * When omitted, all tools are accessible under `{provider}.*`.
+	 */
+	toolScopes?: Record<string, string[]>;
+}
+
+/**
+ * An MCP provider record as stored in the database.
+ */
+export interface MCPProvider {
+	id: string;
+	name: string;
+	displayName: string;
+	transport: "stdio" | "sse";
+	command: string | null;
+	args: string[];
+	env: Record<string, string> | null;
+	url: string | null;
+	headers: Record<string, string> | null;
+	toolScopes: Record<string, string[]> | null;
+	status: "active" | "disabled";
+	createdAt: Date;
+	updatedAt: Date;
 }
 
 /**
