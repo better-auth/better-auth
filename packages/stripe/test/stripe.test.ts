@@ -1982,10 +1982,10 @@ describe("stripe", () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_sched_sync",
-					customer: "cus_sched_sync",
+					id: "sub_schedule_sync",
+					customer: "cus_schedule_sync",
 					status: "active",
-					schedule: "sub_sched_from_stripe",
+					schedule: "sub_schedule_from_stripe",
 					items: {
 						data: [
 							{
@@ -2028,15 +2028,15 @@ describe("stripe", () => {
 
 		const { id: userId } = await ctx.adapter.create({
 			model: "user",
-			data: { email: "sched-sync@email.com" },
+			data: { email: "schedule-sync@email.com" },
 		});
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: userId,
-				stripeCustomerId: "cus_sched_sync",
-				stripeSubscriptionId: "sub_sched_sync",
+				stripeCustomerId: "cus_schedule_sync",
+				stripeSubscriptionId: "sub_schedule_sync",
 				status: "active",
 				plan: "starter",
 			},
@@ -2052,9 +2052,9 @@ describe("stripe", () => {
 
 		const sub = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "stripeSubscriptionId", value: "sub_sched_sync" }],
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_sync" }],
 		});
-		expect(sub?.stripeScheduleId).toBe("sub_sched_from_stripe");
+		expect(sub?.stripeScheduleId).toBe("sub_schedule_from_stripe");
 	});
 
 	it("should clear stripeScheduleId from webhook when schedule is removed", async () => {
@@ -2062,8 +2062,8 @@ describe("stripe", () => {
 			type: "customer.subscription.updated",
 			data: {
 				object: {
-					id: "sub_sched_clear",
-					customer: "cus_sched_clear",
+					id: "sub_schedule_clear",
+					customer: "cus_schedule_clear",
 					status: "active",
 					schedule: null,
 					items: {
@@ -2108,18 +2108,18 @@ describe("stripe", () => {
 
 		const { id: userId } = await ctx.adapter.create({
 			model: "user",
-			data: { email: "sched-clear@email.com" },
+			data: { email: "schedule-clear@email.com" },
 		});
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: userId,
-				stripeCustomerId: "cus_sched_clear",
-				stripeSubscriptionId: "sub_sched_clear",
+				stripeCustomerId: "cus_schedule_clear",
+				stripeSubscriptionId: "sub_schedule_clear",
 				status: "active",
 				plan: "starter",
-				stripeScheduleId: "sub_sched_old",
+				stripeScheduleId: "sub_schedule_old",
 			},
 		});
 
@@ -2133,7 +2133,7 @@ describe("stripe", () => {
 
 		const sub = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "stripeSubscriptionId", value: "sub_sched_clear" }],
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_clear" }],
 		});
 		expect(sub?.stripeScheduleId).toBeNull();
 	});
@@ -2143,8 +2143,8 @@ describe("stripe", () => {
 			type: "customer.subscription.deleted",
 			data: {
 				object: {
-					id: "sub_delete_sched",
-					customer: "cus_delete_sched",
+					id: "sub_delete_schedule",
+					customer: "cus_delete_schedule",
 					status: "canceled",
 					metadata: {},
 				},
@@ -2178,18 +2178,18 @@ describe("stripe", () => {
 
 		const { id: userId } = await ctx.adapter.create({
 			model: "user",
-			data: { email: "delete-sched@email.com" },
+			data: { email: "delete-schedule@email.com" },
 		});
 
 		await ctx.adapter.create({
 			model: "subscription",
 			data: {
 				referenceId: userId,
-				stripeCustomerId: "cus_delete_sched",
-				stripeSubscriptionId: "sub_delete_sched",
+				stripeCustomerId: "cus_delete_schedule",
+				stripeSubscriptionId: "sub_delete_schedule",
 				status: "active",
 				plan: "starter",
-				stripeScheduleId: "sub_sched_will_be_cleared",
+				stripeScheduleId: "sub_schedule_will_be_cleared",
 			},
 		});
 
@@ -2203,7 +2203,7 @@ describe("stripe", () => {
 
 		const sub = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
-			where: [{ field: "stripeSubscriptionId", value: "sub_delete_sched" }],
+			where: [{ field: "stripeSubscriptionId", value: "sub_delete_schedule" }],
 		});
 		expect(sub?.stripeScheduleId).toBeNull();
 		expect(sub?.status).toBe("canceled");
@@ -6452,7 +6452,7 @@ describe("stripe", () => {
 				{
 					id: "sub_scheduled_then_upgrade",
 					status: "active",
-					schedule: "sub_sched_old",
+					schedule: "sub_schedule_old",
 					items: {
 						data: [
 							{
@@ -6472,7 +6472,7 @@ describe("stripe", () => {
 		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
-					id: "sub_sched_old",
+					id: "sub_schedule_old",
 					subscription: "sub_scheduled_then_upgrade",
 					status: "active",
 					metadata: { source: "@better-auth/stripe" },
@@ -6488,7 +6488,7 @@ describe("stripe", () => {
 
 		// Should release the existing schedule
 		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
-			"sub_sched_old",
+			"sub_schedule_old",
 		);
 
 		// Should use billing portal for immediate upgrade, not schedules
