@@ -1,23 +1,42 @@
+#!/usr/bin/env node
 /**
- * Standalone MCP server for Agent Auth + MCP Gateway.
+ * Better Auth MCP Gateway.
  *
- * This is a zero-config entry point that reads everything from env vars.
- * For programmatic setup, use `createGatewayServer` instead:
+ * Run directly via npx:
+ *   npx better-auth-gateway
  *
+ * Configure in Cursor / Claude Desktop:
+ * ```json
+ * {
+ *   "mcpServers": {
+ *     "better-auth-agent": {
+ *       "command": "npx",
+ *       "args": ["better-auth-gateway"],
+ *       "env": {
+ *         "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_...",
+ *         "BETTER_AUTH_PROVIDERS": "github"
+ *       }
+ *     }
+ *   }
+ * }
+ * ```
+ *
+ * Environment variables:
+ *   BETTER_AUTH_PROVIDERS       - Comma-separated provider names (e.g. "github,slack")
+ *   BETTER_AUTH_AGENT_STORAGE   - "memory" (default) or "file"
+ *   BETTER_AUTH_AGENT_DIR       - Storage directory (default: ~/.better-auth/agents)
+ *   BETTER_AUTH_AGENT_COOKIE    - Session cookie for authenticated operations
+ *   BETTER_AUTH_AGENT_TOKEN     - Bearer token for authenticated operations
+ *   BETTER_AUTH_MCP_PROVIDERS   - Path to a JSON config file (advanced, overrides BETTER_AUTH_PROVIDERS)
+ *
+ * For programmatic setup, use createGatewayServer instead:
  * ```ts
  * import { createGatewayServer } from "better-auth/plugins/agent-auth/mcp-gateway"
  *
  * createGatewayServer({
- *   providers: ["github", "slack", "brave-search"],
+ *   providers: ["github", "slack"],
  * })
  * ```
- *
- * Environment variables:
- *   BETTER_AUTH_AGENT_DIR       - Storage directory (default: ~/.better-auth/agents)
- *   BETTER_AUTH_AGENT_STORAGE   - "memory" (default) or "file"
- *   BETTER_AUTH_AGENT_COOKIE    - Session cookie value for authenticated operations
- *   BETTER_AUTH_AGENT_TOKEN     - Bearer token for authenticated operations (alternative)
- *   BETTER_AUTH_MCP_PROVIDERS   - Path to a JSON providers config file
  *
  * Requires: @modelcontextprotocol/sdk (peer dependency)
  */
@@ -27,19 +46,29 @@ import { createFileStorage } from "./mcp-storage-fs";
 import { createMemoryStorage } from "./mcp-storage-memory";
 import type { MCPProviderConfig } from "./types";
 
-function loadProviderConfigs(): MCPProviderConfig[] {
-	const configPath = process.env.BETTER_AUTH_MCP_PROVIDERS;
-	if (!configPath) return [];
-	try {
-		const raw = readFileSync(configPath, "utf-8");
-		const parsed = JSON.parse(raw);
-		return Array.isArray(parsed) ? parsed : (parsed.providers ?? []);
-	} catch (err) {
-		process.stderr.write(
-			`[gateway] Failed to load providers from ${configPath}: ${err}\n`,
-		);
-		return [];
+function loadProviders(): (string | MCPProviderConfig)[] {
+	const names = process.env.BETTER_AUTH_PROVIDERS;
+	if (names) {
+		return names
+			.split(",")
+			.map((s) => s.trim())
+			.filter(Boolean);
 	}
+
+	const configPath = process.env.BETTER_AUTH_MCP_PROVIDERS;
+	if (configPath) {
+		try {
+			const raw = readFileSync(configPath, "utf-8");
+			const parsed = JSON.parse(raw);
+			return Array.isArray(parsed) ? parsed : (parsed.providers ?? []);
+		} catch (err) {
+			process.stderr.write(
+				`[gateway] Failed to load providers from ${configPath}: ${err}\n`,
+			);
+		}
+	}
+
+	return [];
 }
 
 async function main() {
@@ -61,7 +90,7 @@ async function main() {
 
 	await createGatewayServer({
 		storage,
-		providers: loadProviderConfigs(),
+		providers: loadProviders(),
 		getAuthHeaders: hasAuthHeaders
 			? () => {
 					const headers: Record<string, string> = {};
