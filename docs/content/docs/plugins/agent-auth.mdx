@@ -17,6 +17,8 @@ The Agent Auth plugin gives AI agent runtimes their own identity so they can act
 - [Revocation](#revoke-an-agent) with credential wipe
 - [Agent SDK](#agent-sdk) for agent runtimes
 - [MCP server](#mcp-server) for Cursor, Claude Desktop, and other AI tools
+- [MCP Gateway](#mcp-gateway) — proxy third-party MCP servers (GitHub, Slack, etc.) through agent scopes
+- [Dynamic tool discovery](#the-complete-flow) — agents discover available tools and request only what they need
 - [Pluggable storage](#storage-options) — memory (default), file, or database
 - [AAP-compatible JWT claims](#aap-format) (IETF Agent Authorization Profile)
 
@@ -439,18 +441,21 @@ Never store private keys in git, logs, or client-side code. The private key is t
 
 ## MCP Server
 
-The Agent Auth plugin includes a standalone MCP server that lets AI tools (Cursor, Claude Desktop, etc.) manage agent connections through natural language. The server exposes five tools: `connect_agent`, `list_agents`, `disconnect_agent`, `agent_status`, and `agent_request`.
+The Agent Auth plugin includes a standalone MCP server that lets AI tools (Cursor, Claude Desktop, etc.) manage agent connections through natural language. The server exposes tools for agent management: `connect_agent`, `list_agents`, `disconnect_agent`, `agent_status`, and `agent_request`.
 
 ### Setup
 
 Add the MCP server to your AI tool's configuration:
 
-```json title="MCP client config (e.g. .cursor/mcp.json)"
+```json title=".cursor/mcp.json"
 {
     "mcpServers": {
-        "better-auth-agent": {
+        "better-auth": {
             "command": "npx",
-            "args": ["tsx", "node_modules/better-auth/src/plugins/agent-auth/mcp-server.ts"]
+            "args": ["better-auth-gateway"],
+            "env": {
+                "BETTER_AUTH_URL": "http://localhost:3000"
+            }
         }
     }
 }
@@ -462,10 +467,12 @@ The MCP server requires `@modelcontextprotocol/sdk` as a peer dependency. Instal
 
 ### Environment Variables
 
+Only secrets go in the MCP client config. Provider configuration lives in [your plugin config](#mcp-gateway).
+
 | Variable | Description |
 |---|---|
-| `BETTER_AUTH_AGENT_STORAGE` | Storage type: `memory` (default) or `file` |
-| `BETTER_AUTH_AGENT_DIR` | Custom directory for file storage (default: `~/.better-auth/agents`) |
+| `BETTER_AUTH_URL` | Your app URL (required for provider auto-discovery) |
+| `BETTER_AUTH_ENCRYPTION_KEY` | Encrypt agent keypairs at rest (recommended for file storage) |
 | `BETTER_AUTH_AGENT_COOKIE` | Optional: session cookie for direct registration (skips device auth) |
 | `BETTER_AUTH_AGENT_TOKEN` | Optional: bearer token alternative to cookies |
 
@@ -479,7 +486,7 @@ Once configured, the following tools are available to your AI assistant:
 
 | Tool | Description |
 |---|---|
-| `connect_agent` | Connect to an app. Creates a fresh agent identity (device auth) or reuses an existing one via `agentId`. If an active connection exists for the URL, prompts the AI to reuse or create new. |
+| `connect_agent` | Connect to an app. Creates a fresh agent identity (device auth) or reuses an existing one via `agentId`. |
 | `list_agents` | List all agent connections in the current session. |
 | `agent_status` | Check if a connection is healthy by verifying the agent session. |
 | `agent_request` | Make an authenticated API request to a connected app. |
@@ -487,7 +494,7 @@ Once configured, the following tools are available to your AI assistant:
 
 Each `connect_agent` call creates a **unique agent identity** with its own Ed25519 keypair. The AI passes the returned `agentId` to all subsequent tool calls within the same conversation.
 
-**Example conversation with your AI tool:**
+**Example conversation:**
 
 ```
 You: "Connect to https://myapp.com with reports.read scope"
@@ -501,13 +508,227 @@ AI:  "Connected! Agent ID: abc123. Scopes: reports.read."
 You: "Fetch the Q4 report"
 AI:  → calls agent_request(agentId: "abc123", path: "/api/reports/Q4")
      "200 OK — { ... report data ... }"
+```
 
-You: "Connect to the same app again"
-AI:  → calls connect_agent(url: "https://myapp.com", name: "Report Agent")
-     "Active connection found. Agent ID: abc123.
-      To reuse, call with agentId. To create new, use forceNew: true."
-AI:  → calls connect_agent(url: "https://myapp.com", agentId: "abc123")
-     "Reusing connection. Agent ID: abc123."
+## MCP Gateway
+
+The MCP Gateway lets your AI agents connect to **third-party MCP servers** (GitHub, Slack, Google Drive, etc.) through Better Auth's security model. Instead of giving the AI tool direct access to third-party APIs, the gateway acts as a proxy — agents must be authorized and can only use the tools they were approved for.
+
+### How It Works
+
+```
+AI Tool (Cursor, Claude Desktop)
+    ↓ stdio
+MCP Gateway (better-auth-gateway)
+    ├── Agent tools (connect_agent, agent_request, ...)
+    └── Provider tools (github.create_issue, slack.send_message, ...)
+            ↓ stdio
+        Third-party MCP servers (spawned as child processes)
+```
+
+The gateway:
+1. Spawns third-party MCP servers as child processes
+2. Discovers all their tools on startup
+3. Exposes them as **namespaced tools** (e.g. `github.create_issue`)
+4. Enforces **per-agent scope checks** — agents can only call tools they were approved for
+
+### Setup
+
+<Steps>
+    <Step>
+        ### Configure providers in your plugin
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { agentAuth } from "better-auth/plugins"
+        import { deviceAuthorization } from "better-auth/plugins"
+
+        export const auth = betterAuth({
+            plugins: [
+                agentAuth({
+                    roles: {
+                        reader: ["reports.read"],
+                        writer: ["reports.read", "reports.write"],
+                    },
+                    mcpProviders: ["github"], // [!code highlight]
+                }),
+                deviceAuthorization(),
+            ]
+        })
+        ```
+
+        Known providers are resolved automatically. See [Supported Providers](#supported-providers) for the full list.
+    </Step>
+    <Step>
+        ### Configure the MCP client
+
+        Add the gateway to your AI tool's MCP config. Only **secrets** (API keys, tokens) go here — providers are fetched from your app on startup.
+
+        ```json title=".cursor/mcp.json"
+        {
+            "mcpServers": {
+                "better-auth": {
+                    "command": "npx",
+                    "args": ["better-auth-gateway"],
+                    "env": {
+                        "BETTER_AUTH_URL": "http://localhost:3000",
+                        "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."
+                    }
+                }
+            }
+        }
+        ```
+
+        The gateway reads `BETTER_AUTH_URL` and fetches the provider list from your app automatically. API tokens are inherited by the spawned provider processes via environment variables.
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        If you haven't already, run the migration to create the agent and device code tables:
+
+        ```package-install
+        npx @better-auth/cli migrate
+        ```
+    </Step>
+</Steps>
+
+### The Complete Flow
+
+Here's what happens when a user asks their AI agent to do something that requires a third-party tool:
+
+```
+1. User: "Create a GitHub issue about the login bug"
+
+2. Agent calls list_gateway_tools → discovers available tools:
+   ## GitHub (28 tools)
+     - github.create_issue: Create a new issue
+     - github.search_repositories: Search repositories
+     - github.create_pull_request: Create a pull request
+     ...
+
+3. Agent picks what it needs and calls connect_agent:
+   connect_agent(
+     url: "http://localhost:3000",
+     name: "Issue Creator Agent",
+     scopes: ["github.create_issue"]  ← only what's needed
+   )
+
+4. Browser opens → consent screen shows:
+   "Issue Creator Agent wants access to:
+    ✓ GitHub → create_issue: Create a new issue"
+   → User approves
+
+5. Agent calls github.create_issue(agentId: "abc123", ...)
+   → Works ✓
+
+6. Agent tries github.delete_repository(agentId: "abc123", ...)
+   → "Scope denied" ✗
+```
+
+The key principle: **agents request only the tools they need, and users see exactly what they're approving.**
+
+### Consent Screen (Rich Authorization Requests)
+
+When an agent requests access, the `deviceVerify` endpoint returns structured `authorization_details` following [RFC 9396 (Rich Authorization Requests)](https://datatracker.ietf.org/doc/html/rfc9396). This gives your consent page fine-grained, human-readable information about what the agent wants:
+
+```ts title="consent-page.tsx"
+// GET /api/auth/device?user_code=ABCD-1234
+const response = await fetch(`/api/auth/device?user_code=${userCode}`)
+const data = await response.json()
+
+// data.client_name → "Issue Creator Agent"
+// data.scope → "github.create_issue github.search_repositories"
+// data.authorization_details → [
+//   {
+//     type: "mcp_tool",
+//     locations: ["GitHub"],
+//     actions: ["execute"],
+//     identifier: "create_issue",
+//     description: "Create a new issue in a GitHub repository"
+//   },
+//   {
+//     type: "mcp_tool",
+//     locations: ["GitHub"],
+//     actions: ["execute"],
+//     identifier: "search_repositories",
+//     description: "Search for GitHub repositories"
+//   }
+// ]
+```
+
+The `authorization_details` array uses RFC 9396 common fields:
+
+| Field | Description |
+|---|---|
+| `type` | Authorization type — `"mcp_tool"` for gateway tools |
+| `locations` | Provider name or resource URL (e.g. `["GitHub"]`) |
+| `actions` | What the agent will do (e.g. `["execute"]`) |
+| `identifier` | Specific tool name (e.g. `"create_issue"`) |
+| `description` | Human-readable description of the tool |
+
+The same `authorization_details` is also returned in the token response (per RFC 9396 §7), so the agent knows exactly what was granted.
+
+### Gateway Tools
+
+In addition to the standard [MCP tools](#mcp-tools), the gateway adds:
+
+| Tool | Description |
+|---|---|
+| `list_gateway_tools` | Discover all available tools from connected providers. Call this before `connect_agent` to see what tools exist. |
+| `<provider>.<tool>` | Namespaced provider tools (e.g. `github.create_issue`). Requires `agentId` and matching scope. |
+
+### Supported Providers
+
+The following providers are auto-resolved by name. Just pass the string to `mcpProviders`:
+
+| Name | npm Package | Required Env Var |
+|---|---|---|
+| `github` | `@modelcontextprotocol/server-github` | `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| `google-drive` | `@anthropic/google-drive-mcp` | `GOOGLE_DRIVE_API_KEY` |
+| `google-maps` | `@modelcontextprotocol/server-google-maps` | `GOOGLE_MAPS_API_KEY` |
+| `slack` | `@anthropic/slack-mcp` | `SLACK_BOT_TOKEN` |
+| `brave-search` | `@anthropic/brave-search-mcp` | `BRAVE_API_KEY` |
+| `memory` | `@modelcontextprotocol/server-memory` | — |
+| `filesystem` | `@modelcontextprotocol/server-filesystem` | — |
+| `puppeteer` | `@anthropic/puppeteer-mcp` | — |
+| `fetch` | `@anthropic/fetch-mcp` | — |
+| `postgres` | `@modelcontextprotocol/server-postgres` | `POSTGRES_CONNECTION_STRING` |
+| `sqlite` | `@modelcontextprotocol/server-sqlite` | — |
+| `sentry` | `@modelcontextprotocol/server-sentry` | `SENTRY_AUTH_TOKEN` |
+| `linear` | `@modelcontextprotocol/server-linear` | `LINEAR_API_KEY` |
+| `everart` | `@modelcontextprotocol/server-everart` | `EVERART_API_KEY` |
+
+### Custom Providers
+
+For MCP servers not in the registry, pass a full config object:
+
+```ts title="auth.ts"
+agentAuth({
+    mcpProviders: [
+        "github",
+        "slack",
+        {
+            name: "my-internal-tool",
+            displayName: "Internal Tool",
+            command: "node",
+            args: ["./mcp-servers/internal-tool.js"],
+        },
+    ],
+})
+```
+
+### Programmatic Gateway
+
+For advanced use cases, use `createGatewayServer` directly instead of the CLI:
+
+```ts title="my-gateway.ts"
+import { createGatewayServer } from "better-auth/plugins/agent-auth/mcp-gateway"
+
+createGatewayServer({
+    providers: ["github", "slack"],
+    serverName: "my-gateway",
+    onVerificationUrl: (url) => console.log(`Approve: ${url}`),
+})
 ```
 
 ### Custom MCP Integration
@@ -553,10 +774,13 @@ import { createFileStorage } from "better-auth/plugins/agent-auth/mcp-storage-fs
 
 const tools = createAgentMCPTools({
     storage: createFileStorage({
-        directory: "~/.better-auth/agents", // default
+        directory: "~/.better-auth/agents",
+        encryptionKey: process.env.BETTER_AUTH_ENCRYPTION_KEY, // optional
     }),
 })
 ```
+
+When `encryptionKey` is provided, agent keypairs are encrypted at rest using XChaCha20-Poly1305.
 
 Files are stored at `~/.better-auth/agents/`:
 
@@ -582,7 +806,7 @@ const dbStorage: MCPAgentStorage = {
         if (!row) return null
         return {
             appUrl: row.app_url,
-            keypair: JSON.parse(row.keypair), // encrypted at rest
+            keypair: JSON.parse(row.keypair),
             name: row.name,
             scopes: JSON.parse(row.scopes),
         }
@@ -612,6 +836,18 @@ const tools = createAgentMCPTools({ storage: dbStorage })
 
 <Callout type="warn">
 The `keypair` field contains the agent's **private key**. If you store it in a database, encrypt it at rest (AES-256 or similar) and restrict access to the MCP service account only. Never expose private keys in API responses or logs.
+</Callout>
+
+### Agent Lifecycle
+
+The gateway handles cleanup automatically:
+
+- **Process shutdown** (SIGINT, SIGTERM) — revokes all active agents server-side before exiting
+- **Transport close** (stdio pipe breaks) — same cleanup as shutdown
+- **Server-side TTL** — for crash recovery, implement `expiresAt` on agents and run periodic cleanup
+
+<Callout>
+Each conversation in Cursor/Claude Desktop shares a single MCP server process. The agent uses a unique `agentId` per conversation to maintain separate identities. Memory storage (the default) ensures a clean slate on every MCP restart.
 </Callout>
 
 ## Roles and Scopes
@@ -652,6 +888,7 @@ This adds AAP-standard claims like `aap_agent` to the JWT payload alongside the 
 | `allowedKeyAlgorithms` | `string[]` | `["Ed25519"]` | Allowed key algorithms |
 | `jwtFormat` | `"simple" \| "aap"` | `"simple"` | JWT claim format |
 | `jwtMaxAge` | `number` | `60` | Maximum JWT age in seconds |
+| `mcpProviders` | `(string \| MCPProviderConfig)[]` | `undefined` | MCP providers for the [gateway](#mcp-gateway). Pass known names (`"github"`) or full configs. |
 
 ## Schema
 

@@ -145,12 +145,59 @@ export async function createGatewayServer(
 	);
 	const z = await import("zod");
 
+	let gateway: ProviderManager | null = null;
+	let gatewayTools: Array<{
+		name: string;
+		provider: string;
+		description: string;
+		inputSchema: unknown;
+	}> = [];
+
+	if (providers.length > 0) {
+		gateway = createProviderManager(providers);
+		await gateway.start();
+		gatewayTools = gateway.listTools();
+	}
+
 	const tools = createAgentMCPTools({
 		storage,
 		getAuthHeaders,
 		clientId,
 		onVerificationUrl:
 			onVerificationUrl === false ? undefined : onVerificationUrl,
+		resolveAuthorizationDetails:
+			gatewayTools.length > 0
+				? (scopes) => {
+						return scopes.map((scope) => {
+							const match = gatewayTools.find((gt) => gt.name === scope);
+							if (match) {
+								const config = providers.find((p) => p.name === match.provider);
+								return {
+									type: "mcp_tool",
+									locations: [config?.displayName ?? match.provider],
+									actions: ["execute"],
+									identifier: match.name.includes(".")
+										? match.name.split(".").slice(1).join(".")
+										: match.name,
+									description: match.description,
+								};
+							}
+							const dotIdx = scope.indexOf(".");
+							if (dotIdx > 0) {
+								const provName = scope.slice(0, dotIdx);
+								const toolName = scope.slice(dotIdx + 1);
+								const config = providers.find((p) => p.name === provName);
+								return {
+									type: "mcp_tool",
+									locations: [config?.displayName ?? provName],
+									actions: ["execute"],
+									identifier: toolName,
+								};
+							}
+							return { type: "mcp_tool", identifier: scope };
+						});
+					}
+				: undefined,
 	});
 
 	const server = new McpServer({
@@ -168,15 +215,51 @@ export async function createGatewayServer(
 		});
 	}
 
-	let gateway: ProviderManager | null = null;
-
-	if (providers.length > 0) {
-		gateway = createProviderManager(providers);
-		await gateway.start();
-
-		const gatewayTools = gateway.listTools();
+	if (gatewayTools.length > 0) {
 		process.stderr.write(
 			`[gateway] ${gatewayTools.length} tools from ${providers.length} provider(s)\n`,
+		);
+
+		server.tool(
+			"list_gateway_tools",
+			"List all available tools from connected MCP providers. " +
+				"Call this BEFORE connect_agent to see what tools are available, " +
+				"then request only the scopes you need (e.g. 'github.create_issue').",
+			{},
+			async () => {
+				const byProvider: Record<
+					string,
+					Array<{ tool: string; description: string }>
+				> = {};
+				for (const gt of gatewayTools) {
+					const list = byProvider[gt.provider] ?? [];
+					list.push({
+						tool: gt.name,
+						description: gt.description,
+					});
+					byProvider[gt.provider] = list;
+				}
+
+				const lines: string[] = ["Available gateway tools:\n"];
+				for (const [provider, tools] of Object.entries(byProvider)) {
+					const config = providers.find((p) => p.name === provider);
+					lines.push(
+						`## ${config?.displayName ?? provider} (${tools.length} tools)`,
+					);
+					for (const t of tools) {
+						lines.push(`  - ${t.tool}: ${t.description}`);
+					}
+					lines.push("");
+				}
+				lines.push(
+					"Pass the tool names you need as scopes to connect_agent. " +
+						"Example: scopes=['github.create_issue', 'github.search_repositories']",
+				);
+
+				return {
+					content: [{ type: "text" as const, text: lines.join("\n") }],
+				};
+			},
 		);
 
 		for (const gt of gatewayTools) {

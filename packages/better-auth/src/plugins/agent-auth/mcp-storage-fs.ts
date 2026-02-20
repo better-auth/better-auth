@@ -4,13 +4,14 @@
  * Stores each agent connection as a separate JSON file in a
  * `connections/` directory. Private key files are chmod 0o600.
  *
+ * When `encryptionKey` is provided, the keypair is encrypted at rest
+ * using XChaCha20-Poly1305 (same algorithm as the rest of Better Auth).
+ *
  * Directory structure:
  *   ~/.better-auth/agents/
  *     connections/
  *       <agentId>.json   — { appUrl, keypair, name, scopes, connectedAt }
  *     pending-flows.json — { "<appUrl>": { deviceCode, clientId, name, scopes } }
- *
- * Every new agent requires explicit user approval via device auth.
  *
  * This module uses Node.js APIs and is intended for server-side /
  * CLI / MCP-server usage only.
@@ -21,13 +22,17 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { AgentKeypair, MCPAgentStorage } from "./mcp-tools";
 
+const ENCRYPTED_PREFIX = "enc:";
+
 interface StoredConnection {
 	appUrl: string;
-	keypair: {
-		privateKey: Record<string, unknown>;
-		publicKey: Record<string, unknown>;
-		kid: string;
-	};
+	keypair:
+		| {
+				privateKey: Record<string, unknown>;
+				publicKey: Record<string, unknown>;
+				kid: string;
+		  }
+		| string;
 	name: string;
 	scopes: string[];
 	connectedAt: string;
@@ -36,16 +41,61 @@ interface StoredConnection {
 export interface FileStorageOptions {
 	/** Custom directory for storing agent data. Default: ~/.better-auth/agents */
 	directory?: string;
+	/**
+	 * Encryption key for keypairs at rest.
+	 * When set, private keys are encrypted before writing to disk
+	 * and decrypted transparently on read.
+	 *
+	 * Use any strong secret (e.g. from env: `process.env.AGENT_ENCRYPTION_KEY`).
+	 * Existing unencrypted files are read normally and re-encrypted on next write.
+	 */
+	encryptionKey?: string;
 }
 
 function defaultDir(): string {
 	return path.join(os.homedir(), ".better-auth", "agents");
 }
 
+async function encryptKeypair(
+	keypair: AgentKeypair,
+	key: string,
+): Promise<string> {
+	const { xchacha20poly1305 } = await import("@noble/ciphers/chacha.js");
+	const { bytesToHex, managedNonce, utf8ToBytes } = await import(
+		"@noble/ciphers/utils.js"
+	);
+	const { createHash } = await import("@better-auth/utils/hash");
+
+	const keyBytes = await createHash("SHA-256").digest(key);
+	const data = utf8ToBytes(JSON.stringify(keypair));
+	const cipher = managedNonce(xchacha20poly1305)(new Uint8Array(keyBytes));
+	return ENCRYPTED_PREFIX + bytesToHex(cipher.encrypt(data));
+}
+
+async function decryptKeypair(
+	encrypted: string,
+	key: string,
+): Promise<AgentKeypair> {
+	const { xchacha20poly1305 } = await import("@noble/ciphers/chacha.js");
+	const { hexToBytes, managedNonce } = await import("@noble/ciphers/utils.js");
+	const { createHash } = await import("@better-auth/utils/hash");
+
+	const hex = encrypted.slice(ENCRYPTED_PREFIX.length);
+	const keyBytes = await createHash("SHA-256").digest(key);
+	const cipher = managedNonce(xchacha20poly1305)(new Uint8Array(keyBytes));
+	const decrypted = new TextDecoder().decode(cipher.decrypt(hexToBytes(hex)));
+	return JSON.parse(decrypted) as AgentKeypair;
+}
+
+function isEncrypted(keypair: unknown): keypair is string {
+	return typeof keypair === "string" && keypair.startsWith(ENCRYPTED_PREFIX);
+}
+
 export function createFileStorage(
 	options?: FileStorageOptions,
 ): MCPAgentStorage {
 	const dir = options?.directory ?? defaultDir();
+	const encKey = options?.encryptionKey;
 	const connectionsDir = path.join(dir, "connections");
 	const pendingFlowsFile = path.join(dir, "pending-flows.json");
 
@@ -81,18 +131,35 @@ export function createFileStorage(
 		async getConnection(agentId) {
 			const stored = readJSON<StoredConnection>(connectionFile(agentId));
 			if (!stored) return null;
+
+			let keypair: AgentKeypair;
+			if (isEncrypted(stored.keypair)) {
+				if (!encKey) {
+					throw new Error(
+						"Keypair is encrypted but no encryptionKey was provided",
+					);
+				}
+				keypair = await decryptKeypair(stored.keypair, encKey);
+			} else {
+				keypair = stored.keypair as AgentKeypair;
+			}
+
 			return {
 				appUrl: stored.appUrl,
-				keypair: stored.keypair as AgentKeypair,
+				keypair,
 				name: stored.name,
 				scopes: stored.scopes,
 			};
 		},
 
 		async saveConnection(agentId, connection) {
+			const keypairData: StoredConnection["keypair"] = encKey
+				? await encryptKeypair(connection.keypair, encKey)
+				: connection.keypair;
+
 			const stored: StoredConnection = {
 				appUrl: connection.appUrl,
-				keypair: connection.keypair,
+				keypair: keypairData,
 				name: connection.name,
 				scopes: connection.scopes,
 				connectedAt: new Date().toISOString(),

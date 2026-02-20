@@ -266,6 +266,7 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 			registerProvider: routes.registerProvider,
 			listProviders: routes.listProviders,
 			deleteProvider: routes.deleteProvider,
+			gatewayConfig: routes.gatewayConfig,
 		},
 		schema,
 		options,

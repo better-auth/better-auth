@@ -1,6 +1,7 @@
 import type { ResolvedAgentAuthOptions } from "../types";
 import { cleanupAgents } from "./cleanup-agents";
 import { createAgent } from "./create-agent";
+import { gatewayConfig } from "./gateway-config";
 import { getAgent } from "./get-agent";
 import { getAgentActivity } from "./get-agent-activity";
 import { getAgentSession } from "./get-agent-session";
@@ -28,5 +29,6 @@ export function createAgentRoutes(opts: ResolvedAgentAuthOptions) {
 		registerProvider: registerProvider(),
 		listProviders: listProviders(),
 		deleteProvider: deleteProvider(),
+		gatewayConfig: gatewayConfig(opts),
 	};
 }

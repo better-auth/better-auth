@@ -2,32 +2,32 @@
 /**
  * Better Auth MCP Gateway.
  *
- * Run directly via npx:
- *   npx better-auth-gateway
- *
  * Configure in Cursor / Claude Desktop:
  * ```json
  * {
  *   "mcpServers": {
- *     "better-auth-agent": {
+ *     "better-auth": {
  *       "command": "npx",
  *       "args": ["better-auth-gateway"],
  *       "env": {
- *         "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_...",
- *         "BETTER_AUTH_PROVIDERS": "github"
+ *         "BETTER_AUTH_URL": "http://localhost:3000",
+ *         "GITHUB_PERSONAL_ACCESS_TOKEN": "ghp_..."
  *       }
  *     }
  *   }
  * }
  * ```
  *
+ * The gateway fetches its provider config from the app on startup
+ * (configured in agentAuth({ mcpProviders: ["github"] })).
+ *
+ * Only secrets (API keys, tokens) go in env.
+ *
  * Environment variables:
- *   BETTER_AUTH_PROVIDERS       - Comma-separated provider names (e.g. "github,slack")
- *   BETTER_AUTH_AGENT_STORAGE   - "memory" (default) or "file"
- *   BETTER_AUTH_AGENT_DIR       - Storage directory (default: ~/.better-auth/agents)
+ *   BETTER_AUTH_URL             - Your app URL (required for provider auto-discovery)
+ *   BETTER_AUTH_ENCRYPTION_KEY  - Encrypt keypairs at rest (recommended for file storage)
  *   BETTER_AUTH_AGENT_COOKIE    - Session cookie for authenticated operations
  *   BETTER_AUTH_AGENT_TOKEN     - Bearer token for authenticated operations
- *   BETTER_AUTH_MCP_PROVIDERS   - Path to a JSON config file (advanced, overrides BETTER_AUTH_PROVIDERS)
  *
  * For programmatic setup, use createGatewayServer instead:
  * ```ts
@@ -41,34 +41,32 @@
  * Requires: @modelcontextprotocol/sdk (peer dependency)
  */
 
-import { readFileSync } from "node:fs";
 import { createFileStorage } from "./mcp-storage-fs";
 import { createMemoryStorage } from "./mcp-storage-memory";
-import type { MCPProviderConfig } from "./types";
 
-function loadProviders(): (string | MCPProviderConfig)[] {
-	const names = process.env.BETTER_AUTH_PROVIDERS;
-	if (names) {
-		return names
-			.split(",")
-			.map((s) => s.trim())
-			.filter(Boolean);
-	}
+interface GatewayConfigResponse {
+	providers: (string | { name: string; displayName?: string })[];
+}
 
-	const configPath = process.env.BETTER_AUTH_MCP_PROVIDERS;
-	if (configPath) {
-		try {
-			const raw = readFileSync(configPath, "utf-8");
-			const parsed = JSON.parse(raw);
-			return Array.isArray(parsed) ? parsed : (parsed.providers ?? []);
-		} catch (err) {
+async function fetchProvidersFromApp(
+	appUrl: string,
+): Promise<(string | { name: string; displayName?: string })[]> {
+	try {
+		const res = await globalThis.fetch(
+			`${appUrl}/api/auth/agent/gateway-config`,
+		);
+		if (!res.ok) {
 			process.stderr.write(
-				`[gateway] Failed to load providers from ${configPath}: ${err}\n`,
+				`[gateway] Failed to fetch config from ${appUrl}: ${res.status}\n`,
 			);
+			return [];
 		}
+		const data = (await res.json()) as GatewayConfigResponse;
+		return data.providers ?? [];
+	} catch (err) {
+		process.stderr.write(`[gateway] Could not reach ${appUrl}: ${err}\n`);
+		return [];
 	}
-
-	return [];
 }
 
 async function main() {
@@ -76,21 +74,30 @@ async function main() {
 		"./gateway/create-gateway-server"
 	);
 
-	const storageDir = process.env.BETTER_AUTH_AGENT_DIR ?? undefined;
-	const storageType = process.env.BETTER_AUTH_AGENT_STORAGE ?? "memory";
+	const appUrl = process.env.BETTER_AUTH_URL;
+	const encryptionKey = process.env.BETTER_AUTH_ENCRYPTION_KEY ?? undefined;
 	const cookie = process.env.BETTER_AUTH_AGENT_COOKIE ?? undefined;
 	const token = process.env.BETTER_AUTH_AGENT_TOKEN ?? undefined;
 
-	const storage =
-		storageType === "file"
-			? createFileStorage({ directory: storageDir })
-			: createMemoryStorage();
+	const storage = encryptionKey
+		? createFileStorage({ encryptionKey })
+		: createMemoryStorage();
+
+	let providers: (string | { name: string; displayName?: string })[] = [];
+	if (appUrl) {
+		providers = await fetchProvidersFromApp(appUrl);
+		if (providers.length > 0) {
+			process.stderr.write(
+				`[gateway] Loaded ${providers.length} provider(s) from ${appUrl}\n`,
+			);
+		}
+	}
 
 	const hasAuthHeaders = !!(cookie || token);
 
 	await createGatewayServer({
 		storage,
-		providers: loadProviders(),
+		providers,
 		getAuthHeaders: hasAuthHeaders
 			? () => {
 					const headers: Record<string, string> = {};

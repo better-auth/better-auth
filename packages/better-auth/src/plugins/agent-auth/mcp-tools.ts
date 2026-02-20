@@ -102,6 +102,19 @@ export interface CreateAgentMCPToolsOptions {
 	 * Receives the `verification_uri_complete` (with user code pre-filled).
 	 */
 	onVerificationUrl?: (url: string) => void | Promise<void>;
+	/**
+	 * Build RFC 9396 authorization_details objects for the consent screen.
+	 * The gateway sets this to map tool scope names to structured details.
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9396
+	 */
+	resolveAuthorizationDetails?: (scopes: string[]) => Array<{
+		type: string;
+		locations?: string[];
+		actions?: string[];
+		identifier?: string;
+		[key: string]: unknown;
+	}>;
 }
 
 /**
@@ -148,6 +161,7 @@ export function createAgentMCPTools(
 		getAuthHeaders,
 		clientId = "agent-auth",
 		onVerificationUrl,
+		resolveAuthorizationDetails,
 	} = options;
 
 	async function resolveAuthHeaders(): Promise<Record<string, string>> {
@@ -191,7 +205,14 @@ export function createAgentMCPTools(
 					.describe(
 						"Descriptive name for this agent based on its current task (e.g. 'Code Review Agent', 'Report Generator'). Do not use generic names.",
 					),
-				scopes: z.array(z.string()).optional().describe("Scopes to request"),
+				scopes: z
+					.array(z.string())
+					.optional()
+					.describe(
+						"Scopes to request. Use specific tool names from list_gateway_tools " +
+							"(e.g. 'github.create_issue', 'github.search_repositories'). " +
+							"Only request the tools needed for the current task.",
+					),
 				agentId: z
 					.string()
 					.optional()
@@ -281,6 +302,10 @@ export function createAgentMCPTools(
 				}
 
 				// Device authorization flow — every new identity requires explicit approval
+				const authorizationDetails = resolveAuthorizationDetails
+					? resolveAuthorizationDetails(scopes)
+					: undefined;
+
 				const codeRes = await globalThis.fetch(`${url}/api/auth/device/code`, {
 					method: "POST",
 					headers: { "Content-Type": "application/json" },
@@ -288,6 +313,7 @@ export function createAgentMCPTools(
 						client_id: clientId,
 						scope: scopes.join(" "),
 						client_name: name,
+						authorization_details: authorizationDetails,
 					}),
 				});
 

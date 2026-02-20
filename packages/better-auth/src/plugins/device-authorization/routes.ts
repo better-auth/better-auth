@@ -27,6 +27,24 @@ const deviceCodeBodySchema = z.object({
 			description: "Friendly name of the client requesting authorization",
 		})
 		.optional(),
+	authorization_details: z
+		.array(
+			z
+				.object({
+					type: z.string(),
+					locations: z.array(z.string()).optional(),
+					actions: z.array(z.string()).optional(),
+					datatypes: z.array(z.string()).optional(),
+					identifier: z.string().optional(),
+					privileges: z.array(z.string()).optional(),
+				})
+				.passthrough(),
+		)
+		.meta({
+			description:
+				"Fine-grained authorization details per RFC 9396 (Rich Authorization Requests)",
+		})
+		.optional(),
 });
 
 const deviceCodeErrorSchema = z.object({
@@ -158,6 +176,9 @@ Follow [rfc8628#section-3.2](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					clientId: ctx.body.client_id,
 					scope: ctx.body.scope,
 					clientName: ctx.body.client_name,
+					authorizationDetails: ctx.body.authorization_details
+						? JSON.stringify(ctx.body.authorization_details)
+						: null,
 				},
 			});
 
@@ -302,6 +323,7 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 				pollingInterval?: number | undefined;
 				clientId?: string | undefined;
 				scope?: string | undefined;
+				authorizationDetails?: string | undefined;
 			}>({
 				model: "deviceCode",
 				where: [
@@ -459,23 +481,37 @@ Follow [rfc8628#section-3.4](https://datatracker.ietf.org/doc/html/rfc8628#secti
 					],
 				});
 
-				// Return OAuth 2.0 compliant token response
-				return ctx.json(
-					{
-						access_token: session.token,
-						token_type: "Bearer",
-						expires_in: Math.floor(
-							(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
-						),
-						scope: deviceCodeRecord.scope || "",
+				// Return OAuth 2.0 compliant token response (RFC 9396 §7)
+				let authorizationDetails: unknown[] | undefined;
+				if (deviceCodeRecord.authorizationDetails) {
+					try {
+						authorizationDetails = JSON.parse(
+							deviceCodeRecord.authorizationDetails,
+						);
+					} catch {
+						// ignore malformed JSON
+					}
+				}
+
+				const tokenResponse: Record<string, unknown> = {
+					access_token: session.token,
+					token_type: "Bearer",
+					expires_in: Math.floor(
+						(new Date(session.expiresAt).getTime() - Date.now()) / 1000,
+					),
+					scope: deviceCodeRecord.scope || "",
+				};
+
+				if (authorizationDetails) {
+					tokenResponse.authorization_details = authorizationDetails;
+				}
+
+				return ctx.json(tokenResponse, {
+					headers: {
+						"Cache-Control": "no-store",
+						Pragma: "no-cache",
 					},
-					{
-						headers: {
-							"Cache-Control": "no-store",
-							Pragma: "no-cache",
-						},
-					},
-				);
+				});
 			}
 
 			throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -523,6 +559,49 @@ export const deviceVerify = createAuthEndpoint(
 											enum: ["pending", "approved", "denied"],
 											description: "Current status of the device authorization",
 										},
+										client_id: {
+											type: "string",
+											description: "Client ID of the requesting application",
+										},
+										client_name: {
+											type: "string",
+											description: "Friendly name of the requesting agent",
+										},
+										scope: {
+											type: "string",
+											description: "Space-separated list of requested scopes",
+										},
+										authorization_details: {
+											type: "array",
+											description:
+												"Fine-grained authorization details per RFC 9396",
+											items: {
+												type: "object",
+												properties: {
+													type: {
+														type: "string",
+														description:
+															"Authorization details type (e.g. mcp_tool)",
+													},
+													locations: {
+														type: "array",
+														items: { type: "string" },
+														description:
+															"Resource locations (e.g. provider name)",
+													},
+													actions: {
+														type: "array",
+														items: { type: "string" },
+														description: "Actions to be taken (e.g. execute)",
+													},
+													identifier: {
+														type: "string",
+														description: "Specific resource (e.g. tool name)",
+													},
+												},
+												required: ["type"],
+											},
+										},
 									},
 								},
 							},
@@ -562,12 +641,24 @@ export const deviceVerify = createAuthEndpoint(
 			});
 		}
 
+		let authorizationDetails = null;
+		if (deviceCodeRecord.authorizationDetails) {
+			try {
+				authorizationDetails = JSON.parse(
+					deviceCodeRecord.authorizationDetails,
+				);
+			} catch {
+				authorizationDetails = null;
+			}
+		}
+
 		return ctx.json({
 			user_code: user_code,
 			status: deviceCodeRecord.status,
 			client_id: deviceCodeRecord.clientId,
 			client_name: deviceCodeRecord.clientName,
 			scope: deviceCodeRecord.scope,
+			authorization_details: authorizationDetails,
 		});
 	},
 );
