@@ -1,0 +1,68 @@
+name: Setup Playwright
+description: Cache and install Playwright chromium browser with system dependencies.
+
+inputs:
+  working-directory:
+    description: 'Directory containing the project with the Playwright dependency'
+    required: false
+    default: 'e2e/integration'
+  browsers:
+    description: 'Browsers to install (e.g., "chromium", "chromium firefox", or leave empty for all)'
+    required: false
+    default: 'chromium'
+
+outputs:
+  cache-hit:
+    description: 'Whether the Playwright browser cache was hit'
+    value: ${{ steps.cache.outputs.cache-hit }}
+  playwright-version:
+    description: 'Detected Playwright version'
+    value: ${{ steps.detect-version.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Determine OS Cache Path
+      id: cache-path
+      shell: bash
+      run: |
+        if [ "$RUNNER_OS" = "Windows" ]; then
+          echo "path=~/AppData/Local/ms-playwright" >> "$GITHUB_OUTPUT"
+        elif [ "$RUNNER_OS" = "macOS" ]; then
+          echo "path=~/Library/Caches/ms-playwright" >> "$GITHUB_OUTPUT"
+        else
+          echo "path=~/.cache/ms-playwright" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Detect Playwright Version
+      id: detect-version
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        PLAYWRIGHT_VERSION=$(pnpm ls @playwright/test --json | jq --raw-output '.[0].devDependencies["@playwright/test"].version')
+        if [ -z "$PLAYWRIGHT_VERSION" ] || [ "$PLAYWRIGHT_VERSION" = "null" ]; then
+          echo "::error::Could not detect @playwright/test version in ${{ inputs.working-directory }}. Ensure dependencies are installed before running this action."
+          exit 1
+        fi
+        echo "version=$PLAYWRIGHT_VERSION" >> "$GITHUB_OUTPUT"
+
+    - name: Cache Playwright Browsers
+      uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+      id: cache
+      with:
+        path: ${{ steps.cache-path.outputs.path }}
+        # Dynamically inject the requested browsers into the cache key ('all' is used as a fallback string if empty)
+        key: ${{ runner.os }}-playwright-${{ inputs.browsers || 'all' }}-${{ steps.detect-version.outputs.version }}
+
+    - name: Install Playwright Browsers & OS Deps (Cache Miss)
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      # If inputs.browsers is empty, this safely resolves to 'pnpm exec playwright install --with-deps'
+      run: pnpm exec playwright install ${{ inputs.browsers }} --with-deps
+
+    - name: Install Playwright OS Dependencies (Cache Hit)
+      if: steps.cache.outputs.cache-hit == 'true'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: pnpm exec playwright install-deps ${{ inputs.browsers }}
