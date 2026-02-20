@@ -282,7 +282,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				{
 					// Intercept OAuth callback on production to handle passthrough
 					matcher(context) {
-						return context.path === "/callback/:id";
+						return (
+							context.path === "/callback/:id" ||
+							context.path === "/oauth2/callback/:providerId"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const state = ctx.query?.state || ctx.body?.state;
@@ -354,8 +357,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "no_code");
 						}
 
-						// Find the OAuth provider
-						const providerId = ctx.params?.id;
+						const providerId = ctx.params?.id ?? ctx.params?.providerId;
+						// The generic OAuth provider is added to the socialProviders array
 						const provider = ctx.context.socialProviders.find(
 							(p) => p.id === providerId,
 						);
@@ -364,13 +367,18 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
+						const isGenericOAuthCallback = "providerId" in (ctx.params ?? {});
+						const redirectURI = isGenericOAuthCallback
+							? `${ctx.context.baseURL}/oauth2/callback/${provider.id}`
+							: `${ctx.context.baseURL}/callback/${provider.id}`;
+
 						// Exchange code for tokens
 						let tokens: OAuth2Tokens | null;
 						try {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
+								redirectURI,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
@@ -542,7 +550,10 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				},
 				{
 					matcher(context) {
-						return context.path === "/callback/:id";
+						return (
+							context.path === "/callback/:id" ||
+							context.path === "/oauth2/callback/:providerId"
+						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;
