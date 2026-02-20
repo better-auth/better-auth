@@ -14,7 +14,7 @@ import { getAdapter } from "../db/adapter-kysely";
 import { getMigrations } from "../db/get-migration";
 import { bearer } from "../plugins";
 import type { Session, User } from "../types";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 const cleanupSet = new Set<Function>();
 
@@ -221,12 +221,21 @@ export async function getTestInstance<
 		);
 	};
 
+	const clientBaseURL = isDynamicBaseURLConfig(options?.baseURL)
+		? getBaseURL(
+				"http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			)
+		: getBaseURL(
+				typeof options?.baseURL === "string"
+					? options.baseURL
+					: "http://localhost:" + (config?.port || 3000),
+				options?.basePath || "/api/auth",
+			);
+
 	const client = createAuthClient({
 		...(config?.clientOptions as C extends undefined ? {} : C),
-		baseURL: getBaseURL(
-			options?.baseURL || "http://localhost:" + (config?.port || 3000),
-			options?.basePath || "/api/auth",
-		),
+		baseURL: clientBaseURL,
 		fetchOptions: {
 			customFetchImpl,
 		},

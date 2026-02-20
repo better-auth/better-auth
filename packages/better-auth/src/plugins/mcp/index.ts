@@ -18,7 +18,11 @@ import { APIError, getSessionFromCtx } from "../../api";
 import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
-import { getBaseURL } from "../../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../../utils/url";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -49,7 +53,10 @@ export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const issuer =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: "";
 	const baseURL = ctx.context.baseURL;
 	if (!issuer || !baseURL) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -978,7 +985,15 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+		const basePath = auth.options.basePath || "/api/auth";
+		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			: getBaseURL(
+					typeof auth.options.baseURL === "string"
+						? auth.options.baseURL
+						: undefined,
+					basePath,
+				);
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}
