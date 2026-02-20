@@ -99,8 +99,7 @@ jobs:
 
       - name: Install Playwright Browsers
         if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
+        uses: ./.github/actions/setup-playwright
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
@@ -153,11 +152,6 @@ jobs:
       - name: Install
         if: github.event_name != 'merge_group'
         run: pnpm install
-
-      - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
