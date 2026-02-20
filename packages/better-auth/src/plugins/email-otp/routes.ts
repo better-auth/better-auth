@@ -369,7 +369,11 @@ export const checkVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 			}
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user) {
-				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+				if (ctx.body.type === "sign-in" && !opts.disableSignUp) {
+					// allow - user may not exist yet during signup flow
+				} else {
+					throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.USER_NOT_FOUND);
+				}
 			}
 			const verificationValue =
 				await ctx.context.internalAdapter.findVerificationValue(
