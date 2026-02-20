@@ -671,6 +671,21 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						existingSchedule.metadata?.source === "@better-auth/stripe"
 					) {
 						await client.subscriptionSchedules.release(existingSchedule.id);
+						if (dbSubscription) {
+							await ctx.context.adapter.update({
+								model: "subscription",
+								update: {
+									stripeScheduleId: null,
+									updatedAt: new Date(),
+								},
+								where: [
+									{
+										field: "id",
+										value: dbSubscription.id,
+									},
+								],
+							});
+						}
 					}
 				}
 
@@ -824,8 +839,23 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							});
 						});
 
-					// DB is NOT updated now
-					// the webhook handles it at period end
+					// Store schedule ID so clients can detect pending plan changes
+					if (dbSubscription) {
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								stripeScheduleId: schedule.id,
+								updatedAt: new Date(),
+							},
+							where: [
+								{
+									field: "id",
+									value: dbSubscription.id,
+								},
+							],
+						});
+					}
+
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
 				} else if (priceMap.size > 0 || lineItemDelta.size > 0) {
 					// Immediate change with multi-item updates: use direct API.
@@ -1500,13 +1530,65 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
-			if (!isPendingCancel(subscription)) {
+			const hasPendingCancel = isPendingCancel(subscription);
+			const { stripeScheduleId } = subscription;
+
+			if (!hasPendingCancel && !stripeScheduleId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_PENDING_CHANGE,
 				);
 			}
 
+			// Pending cancel and pending schedule are mutually exclusive in Stripe.
+			if (stripeScheduleId) {
+				if (!subscription.stripeSubscriptionId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
+
+				const schedule = await client.subscriptionSchedules
+					.retrieve(stripeScheduleId)
+					.catch((e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+
+				if (schedule.status === "active") {
+					await client.subscriptionSchedules
+						.release(stripeScheduleId)
+						.catch((e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+				}
+
+				await ctx.context.adapter.update({
+					model: "subscription",
+					update: {
+						stripeScheduleId: null,
+						updatedAt: new Date(),
+					},
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+				});
+				const releasedSub = await client.subscriptions.retrieve(
+					subscription.stripeSubscriptionId,
+				);
+				return ctx.json(releasedSub);
+			}
+
+			// Handle pending cancellation
 			const activeSubscription = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,
