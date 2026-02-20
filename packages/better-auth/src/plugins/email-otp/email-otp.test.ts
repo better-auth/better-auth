@@ -1326,8 +1326,12 @@ describe("race condition protection", async () => {
 			client.signIn.emailOtp({ email, otp }),
 		]);
 
-		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
-		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+		const successful = results.filter(
+			(r) => r.status === "fulfilled" && r.value.data,
+		);
+		const failed = results.filter(
+			(r) => r.status === "fulfilled" && r.value.error,
+		);
 
 		expect(successful.length).toBe(1);
 		expect(failed.length).toBe(2);
@@ -1335,15 +1339,25 @@ describe("race condition protection", async () => {
 
 	it("should prevent OTP reuse for email verification", async () => {
 		const email = "race-verify@domain.com";
-		await client.emailOtp.sendVerificationOtp({ email, type: "email-verification" });
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.signIn.emailOtp({ email, otp });
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
 
 		const results = await Promise.allSettled([
 			client.emailOtp.verifyEmail({ email, otp }),
 			client.emailOtp.verifyEmail({ email, otp }),
 		]);
 
-		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
-		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+		const successful = results.filter(
+			(r) => r.status === "fulfilled" && r.value.data,
+		);
+		const failed = results.filter(
+			(r) => r.status === "fulfilled" && r.value.error,
+		);
 
 		expect(successful.length).toBe(1);
 		expect(failed.length).toBe(1);
@@ -1352,7 +1366,8 @@ describe("race condition protection", async () => {
 	it("should prevent OTP reuse for password reset", async () => {
 		const email = "race-reset@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
-		await client.signIn.emailOtp({ email, otp });
+		const signInOtp = otp;
+		await client.signIn.emailOtp({ email, otp: signInOtp });
 
 		await client.emailOtp.requestPasswordReset({ email });
 
@@ -1361,8 +1376,12 @@ describe("race condition protection", async () => {
 			client.emailOtp.resetPassword({ email, otp, password: "newpass2" }),
 		]);
 
-		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
-		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+		const successful = results.filter(
+			(r) => r.status === "fulfilled" && r.value.data,
+		);
+		const failed = results.filter(
+			(r) => r.status === "fulfilled" && r.value.error,
+		);
 
 		expect(successful.length).toBe(1);
 		expect(failed.length).toBe(1);
