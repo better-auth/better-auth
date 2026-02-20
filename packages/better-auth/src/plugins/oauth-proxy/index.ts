@@ -367,10 +367,19 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
-						const isGenericOAuthCallback = "providerId" in (ctx.params ?? {});
-						const redirectURI = isGenericOAuthCallback
-							? `${ctx.context.baseURL}/oauth2/callback/${provider.id}`
-							: `${ctx.context.baseURL}/callback/${provider.id}`;
+						// Use the actual callback URL from the request so redirect_uri matches
+						// exactly what the IdP used (avoids mismatch from baseURL/env differences).
+						const redirectURI =
+							ctx.request?.url != null
+								? new URL(ctx.request.url).origin +
+									new URL(ctx.request.url).pathname
+								: (() => {
+										const isGenericOAuthCallback =
+											"providerId" in (ctx.params ?? {});
+										return isGenericOAuthCallback
+											? `${ctx.context.baseURL}/oauth2/callback/${provider.id}`
+											: `${ctx.context.baseURL}/callback/${provider.id}`;
+									})();
 
 						// Exchange code for tokens
 						let tokens: OAuth2Tokens | null;
@@ -381,9 +390,14 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								redirectURI,
 							});
 						} catch (e) {
+							const errMsg =
+								e && typeof e === "object" && e !== null && "message" in e
+									? String((e as { message?: unknown }).message)
+									: String(e);
 							ctx.context.logger.error(
 								"Failed to validate authorization code",
-								e,
+								{ error: e, redirectURI },
+								errMsg,
 							);
 							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}

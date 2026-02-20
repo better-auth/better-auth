@@ -153,6 +153,8 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						// Use data.redirectURI for token exchange so it matches the redirect_uri
+						// from the authorization request (required by OAuth2; mismatch causes invalid_code).
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
@@ -161,7 +163,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
+								redirectURI: data.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
