@@ -3921,7 +3921,7 @@ describe("api-key", async () => {
 		);
 
 		it("should create organization-owned API key", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			// Create an organization
 			const org = await auth.api.createOrganization({
@@ -3945,7 +3945,7 @@ describe("api-key", async () => {
 		});
 
 		it("should create user-owned API key", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 
 			const userKey = await auth.api.createApiKey({
 				body: {
@@ -3961,7 +3961,7 @@ describe("api-key", async () => {
 		});
 
 		it("should fail to create org key without organizationId", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { user } = await signInWithTestUser();
 
 			try {
 				await auth.api.createApiKey({
@@ -3980,7 +3980,7 @@ describe("api-key", async () => {
 		});
 
 		it("should verify organization-owned API key", async () => {
-			const { headers, user } = await signInWithTestUser();
+			const { headers } = await signInWithTestUser();
 
 			const org = await auth.api.createOrganization({
 				body: { name: "Verify Org", slug: "verify-org" },
@@ -4050,7 +4050,7 @@ describe("api-key", async () => {
 			});
 
 			// Create org-owned keys
-			const orgKey1 = await auth.api.createApiKey({
+			const _orgKey1 = await auth.api.createApiKey({
 				body: {
 					configId: "org-keys",
 					organizationId: org.id,
@@ -4058,7 +4058,7 @@ describe("api-key", async () => {
 				},
 				headers,
 			});
-			const orgKey2 = await auth.api.createApiKey({
+			const _orgKey2 = await auth.api.createApiKey({
 				body: {
 					configId: "org-keys",
 					organizationId: org.id,
@@ -4173,7 +4173,7 @@ describe("api-key", async () => {
 					},
 				);
 
-			const { headers, user } = await signIn();
+			const { headers } = await signIn();
 
 			const org = await authWithSessionMocking.api.createOrganization({
 				body: { name: "Session Org", slug: "session-org" },
@@ -4229,7 +4229,7 @@ describe("api-key", async () => {
 					},
 				);
 
-			const { headers, user } = await signIn();
+			const { user } = await signIn();
 
 			const userKey = await authWithSessionMocking.api.createApiKey({
 				body: {

@@ -48,7 +48,7 @@ export function resolveConfiguration(
 	configId?: string | null,
 ): PredefinedApiKeyOptions {
 	// Defined in a function to avoid running the code when not needed.
-	// If ran unnessesarily, it could throw an error saying "No default api-key configuration found." when the configId is provided.
+	// If ran unnecessarily, it could throw an error saying "No default api-key configuration found." when the configId is provided.
 	const getDefaultConfig = () => {
 		const defaultConfig = configurations.find(
 			(c) => !c.configId || c.configId === "default",
