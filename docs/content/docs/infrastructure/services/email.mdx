@@ -321,7 +321,7 @@ interface EmailConfig {
 
 The email service automatically reads from environment variables:
 
-```
+```dotenv
 BETTER_AUTH_API_KEY=your_api_key_here
 BETTER_AUTH_API_URL=https://api.betterauth.com  # Optional
 ```
@@ -357,48 +357,6 @@ if (result.success) {
 }
 ```
 
-## Type Safety
-
-The email service is fully type-safe. Template variables are inferred from the template ID:
-
-```ts
-// TypeScript will error if required variables are missing
-await sendEmail({
-  template: "reset-password",
-  to: "user@example.com",
-  variables: {
-    resetLink: "https://...",  // Required
-    userEmail: "user@...",     // Required
-    // userName is optional, no error if omitted
-  },
-});
-```
-
-## Custom Subject
-
-You can override the default subject line:
-
-```ts
-await sendEmail({
-  template: "verify-email",
-  to: "user@example.com",
-  subject: "Please verify your email for MyApp",  // Custom subject
-  variables: {
-    verificationUrl: "https://yourapp.com/verify?token=abc",
-    userEmail: "user@example.com",
-  },
-});
-```
-
-## Supported Providers
-
-Better Auth Infrastructure supports multiple email providers:
-
-- **AWS SES** - Amazon Simple Email Service
-- **SendGrid** - Twilio SendGrid
-- **Resend** - Modern email API
-
-The appropriate provider is automatically selected based on your configuration.
 
 ## Plan Requirements
 
@@ -408,25 +366,69 @@ The appropriate provider is automatically selected based on your configuration.
 
 Transactional email is available on Pro plans and above.
 
-## Best Practices
-
-1. **Always handle errors** - Check the `success` field and handle failures gracefully.
-
-2. **Use meaningful app names** - The `appName` variable appears in email templates. Use your product name.
-
-3. **Set appropriate expiration times** - Balance security with user convenience.
-
-4. **Test emails in development** - Use test email addresses to verify templates look correct.
-
-5. **Monitor delivery** - Check your email provider's dashboard for delivery metrics.
 
 ## Integration with Better Auth
 
-When using the `dash()` or `sentinel()` plugins, emails are automatically sent for:
+The email service integrates seamlessly with Better Auth's authentication flows. Here's a complete example:
 
-- Email verification (when configured in Better Auth)
-- Password resets
-- Two-factor authentication codes
-- Organization invitations
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { sendEmail } from "@better-auth/infra";
 
-You don't need to call `sendEmail()` manually for these flows - the plugins handle it automatically.
+export const auth = betterAuth({
+  emailAndPassword: {
+    enabled: true,
+    async sendResetPassword({ user, url }) {
+      await sendEmail({
+        template: "reset-password",
+        to: user.email,
+        variables: {
+          resetLink: url,
+          userEmail: user.email,
+          userName: user.name,
+          appName: "Your App",
+        },
+      });
+    },
+  },
+  emailVerification: {
+    sendOnSignUp: true,
+    async sendVerificationEmail({ user, url }) {
+      await sendEmail({
+        template: "verify-email",
+        to: user.email,
+        variables: {
+          verificationUrl: url,
+          userEmail: user.email,
+          userName: user.name,
+          appName: "Your App",
+        },
+      });
+    },
+  },
+  plugins: [
+    organization({
+      async sendInvitationEmail(data) {
+        const inviteLink = `https://yourapp.com/accept-invitation/${data.id}`;
+        await sendEmail({
+          template: "invitation",
+          to: data.email,
+          variables: {
+            inviteLink,
+            inviterName: data.inviter.user.name,
+            inviterEmail: data.inviter.user.email,
+            organizationName: data.organization.name,
+            role: data.role,
+            appName: "Your App",
+          },
+        });
+      },
+    }),
+  ],
+});
+```
+
+<Callout type="warn">
+  Avoid awaiting the email sending in production to prevent timing attacks. On serverless platforms, use `waitUntil` or similar to ensure the email is sent without blocking the response.
+</Callout>

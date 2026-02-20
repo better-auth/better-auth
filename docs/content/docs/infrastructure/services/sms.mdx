@@ -153,7 +153,7 @@ interface SMSConfig {
 
 The SMS service automatically reads from environment variables:
 
-```
+```dotenv
 BETTER_AUTH_API_KEY=your_api_key_here
 BETTER_AUTH_API_URL=https://api.betterauth.com  # Optional
 ```
@@ -287,73 +287,3 @@ export const auth = betterAuth({
 | Transactional SMS | - | Yes | Yes | Yes |
 
 Transactional SMS is available on Pro plans and above.
-
-## Best Practices
-
-1. **Validate phone numbers** - Ensure phone numbers are in E.164 format before sending.
-
-2. **Handle errors gracefully** - SMS delivery can fail for various reasons. Always check the result.
-
-3. **Use appropriate templates** - Choose the template that matches the use case for clear messaging.
-
-4. **Generate secure codes** - Use cryptographically secure random number generators for OTP codes.
-
-5. **Set code expiration** - Implement server-side code expiration (typically 5-10 minutes).
-
-6. **Rate limit OTP requests** - Prevent abuse by limiting how often codes can be sent.
-
-## Code Generation Example
-
-Generate secure OTP codes:
-
-```ts
-import { randomInt } from "crypto";
-
-function generateOTP(length: number = 6): string {
-  const min = Math.pow(10, length - 1);
-  const max = Math.pow(10, length) - 1;
-  return String(randomInt(min, max));
-}
-
-// Usage
-const code = generateOTP(6); // "847293"
-
-await sendSMS({
-  to: "+1234567890",
-  code,
-  template: "phone-verification",
-});
-```
-
-## Complete Example
-
-```ts
-import { sendSMS } from "@better-auth/infra";
-import { randomInt } from "crypto";
-
-async function sendVerificationCode(phoneNumber: string) {
-  // Validate E.164 format
-  if (!phoneNumber.match(/^\+[1-9]\d{1,14}$/)) {
-    throw new Error("Invalid phone number format");
-  }
-
-  // Generate OTP
-  const code = String(randomInt(100000, 999999));
-
-  // Store code with expiration (implement your own storage)
-  await storeOTPCode(phoneNumber, code, { expiresIn: 600 }); // 10 minutes
-
-  // Send SMS
-  const result = await sendSMS({
-    to: phoneNumber,
-    code,
-    template: "phone-verification",
-  });
-
-  if (!result.success) {
-    throw new Error(`Failed to send SMS: ${result.error}`);
-  }
-
-  return { success: true, messageId: result.messageId };
-}
-```
