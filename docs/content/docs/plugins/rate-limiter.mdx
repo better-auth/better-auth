@@ -1,0 +1,212 @@
+---
+title: Rate Limiter
+description: Rate limit any application route with flexible storage and detection options.
+---
+
+The **Rate Limiter** plugin lets you protect any route in your application against abuse by tracking request counts per IP address or authenticated user. It supports in-memory, database, and Redis-backed storage, and allows per-path custom rules with wildcard pattern matching. Community plugin: [better-auth-rate-limiter](https://github.com/lutz-grex/better-auth-rate-limiter).
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the plugin
+
+    ```package-install
+    better-auth-rate-limiter
+    ```
+  </Step>
+  <Step>
+    ### Add the plugin to your auth config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { rateLimiter } from "better-auth-rate-limiter";
+
+    export const auth = betterAuth({
+        // ...your config
+        plugins: [
+            rateLimiter({
+                window: 60,   // time window in seconds
+                max: 100,     // max requests per window
+            }),
+        ],
+    });
+    ```
+  </Step>
+  <Step>
+    ### Add the client plugin (optional)
+
+    Only needed if you use the Better Auth client SDK and want typed error codes. If you call `auth.api.checkRateLimit()` exclusively from server-side code, you can skip this step.
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from "better-auth/client";
+    import { rateLimiterClient } from "better-auth-rate-limiter/client";
+
+    export const authClient = createAuthClient({
+        plugins: [rateLimiterClient()],
+    });
+    ```
+  </Step>
+</Steps>
+
+## Checking Rate Limits
+
+Call `auth.api.checkRateLimit()` from your route handlers or middleware. Pass the request headers (for IP detection) and the path to check.
+
+```ts title="middleware.ts (Next.js)"
+import { NextRequest, NextResponse } from "next/server";
+import { auth } from "@/lib/auth";
+
+export async function middleware(request: NextRequest) {
+    const path = request.nextUrl.pathname;
+
+    // Skip Better Auth's own routes
+    if (path.startsWith("/api/auth")) {
+        return NextResponse.next();
+    }
+
+    const result = await auth.api.checkRateLimit({
+        headers: request.headers,
+        body: { path },
+    });
+
+    if (!result.success) {
+        return NextResponse.json(
+            { error: "Too many requests", retryAfter: result.retryAfter },
+            {
+                status: 429,
+                headers: { "Retry-After": String(result.retryAfter) },
+            },
+        );
+    }
+
+    const response = NextResponse.next();
+    response.headers.set("X-RateLimit-Limit", String(result.limit));
+    response.headers.set("X-RateLimit-Remaining", String(result.remaining));
+    if (result.resetAt) {
+        response.headers.set(
+            "X-RateLimit-Reset",
+            String(Math.ceil(result.resetAt / 1000)),
+        );
+    }
+    return response;
+}
+
+export const config = {
+    matcher: ["/api/:path*"],
+};
+```
+
+## Storage Backends
+
+### Memory (default)
+
+Fast in-process storage. Suitable for single-instance deployments. Data is lost on restart and is not shared across instances.
+
+```ts
+rateLimiter() // storage: "memory" is the default
+```
+
+### Database
+
+Persists rate limit records in your existing Better Auth database. Adds a `rateLimit` table to your schema — run `npx @better-auth/cli generate` and apply the migration before using this backend.
+
+```ts
+rateLimiter({ storage: "database" })
+```
+
+### Secondary Storage (Redis)
+
+Use a Redis-compatible store configured via Better Auth's `secondaryStorage` option.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { rateLimiter } from "better-auth-rate-limiter";
+import { Redis } from "ioredis";
+
+const redis = new Redis();
+
+export const auth = betterAuth({
+    secondaryStorage: {
+        get: (key) => redis.get(key),
+        set: (key, value, ttl) => redis.set(key, value, "EX", ttl ?? 3600),
+        delete: (key) => redis.del(key),
+    },
+    plugins: [
+        rateLimiter({
+            storage: "secondary-storage",
+            window: 60,
+            max: 100,
+        }),
+    ],
+});
+```
+
+## Detection Modes
+
+| Mode | Behaviour |
+|---|---|
+| `"ip"` (default) | Rate limit by client IP (respects `x-forwarded-for`) |
+| `"user"` | Rate limit by authenticated user ID. Unauthenticated requests pass through without being counted or blocked. |
+| `"ip-and-user"` | User ID when authenticated, IP otherwise |
+
+```ts
+rateLimiter({ detection: "ip-and-user" })
+```
+
+## Custom Rules
+
+Override limits for specific paths using the `customRules` option. Supports `*` (single path segment) and `**` (any number of segments) wildcards. Set a path to `false` to disable rate limiting for it.
+
+<Callout type="warn">
+The storage TTL for memory and secondary-storage backends is always based on the top-level `window` value, not the per-rule `window`. A custom rule with a longer window may evict entries earlier than expected if `window` (global) is shorter.
+</Callout>
+
+```ts
+rateLimiter({
+    window: 60,
+    max: 100,
+    customRules: {
+        // Stricter limits for auth endpoints
+        "/api/auth/sign-in": { window: 60, max: 5 },
+        "/api/auth/sign-up": { window: 3600, max: 3 },
+
+        // Apply a limit to all AI routes
+        "/api/ai/*": { window: 60, max: 10 },
+
+        // Disable rate limiting for health checks
+        "/api/health": false,
+    },
+})
+```
+
+## Plugin Options
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `window` | `number` | `60` | Time window in seconds |
+| `max` | `number` | `100` | Maximum requests per window |
+| `storage` | `"memory" \| "database" \| "secondary-storage"` | `"memory"` | Storage backend |
+| `detection` | `"ip" \| "user" \| "ip-and-user"` | `"ip"` | How to identify clients |
+| `customRules` | `Record<string, \{ window: number; max: number \} \| false>` | — | Per-path overrides |
+
+## Response
+
+`checkRateLimit()` returns a `CheckRateLimitResponse` object:
+
+| Field | Type | Description |
+|---|---|---|
+| `success` | `boolean` | Whether the request is within the limit |
+| `limit` | `number` | Max requests for this window |
+| `remaining` | `number` | Requests remaining in the current window |
+| `retryAfter` | `number \| undefined` | Seconds until the limit resets (only when rate limited) |
+| `resetAt` | `number \| undefined` | Milliseconds since Unix epoch when the current window resets |
+| `message` | `string \| undefined` | Error message when rate limited |
+
+## Error Codes
+
+| Code | Message |
+|---|---|
+| `RATE_LIMITED` | Too many requests. Please try again later. |
+
+These codes are available on both the server and client exports from `better-auth-rate-limiter`.
