@@ -44,3 +44,7 @@ dyld
 nsis
 ftyp
 heix
+sessionMiddleware
+SIEM
+sess
+reactivitations
