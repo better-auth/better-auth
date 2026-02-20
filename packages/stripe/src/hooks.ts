@@ -359,6 +359,11 @@ export async function onSubscriptionUpdated(
 				seats,
 				stripeSubscriptionId: subscriptionUpdated.id,
 				billingInterval: subscriptionItem.price.recurring?.interval,
+				stripeScheduleId: subscriptionUpdated.schedule
+					? typeof subscriptionUpdated.schedule === "string"
+						? subscriptionUpdated.schedule
+						: subscriptionUpdated.schedule.id
+					: null,
 			},
 			where: [
 				{
@@ -455,6 +460,7 @@ export async function onSubscriptionDeleted(
 					endedAt: subscriptionDeleted.ended_at
 						? new Date(subscriptionDeleted.ended_at * 1000)
 						: null,
+					stripeScheduleId: null,
 				},
 			});
 			await options.subscription.onSubscriptionDeleted?.({

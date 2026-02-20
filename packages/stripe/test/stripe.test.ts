@@ -195,6 +195,9 @@ describe("stripe", () => {
 					},
 				],
 			}),
+			retrieve: vi
+				.fn()
+				.mockResolvedValue({ id: "sub_sched_mock", status: "active" }),
 			update: vi.fn().mockResolvedValue({}),
 			release: vi.fn().mockResolvedValue({}),
 		},
@@ -1972,6 +1975,238 @@ describe("stripe", () => {
 			where: [{ field: "id", value: testSubscriptionId }],
 		});
 		expect(updatedSub?.seats).toBe(5);
+	});
+
+	it("should sync stripeScheduleId from webhook when schedule is present", async () => {
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_schedule_sync",
+					customer: "cus_schedule_sync",
+					status: "active",
+					schedule: "sub_schedule_from_stripe",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "schedule-sync@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_schedule_sync",
+				stripeSubscriptionId: "sub_schedule_sync",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_sync" }],
+		});
+		expect(sub?.stripeScheduleId).toBe("sub_schedule_from_stripe");
+	});
+
+	it("should clear stripeScheduleId from webhook when schedule is removed", async () => {
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_schedule_clear",
+					customer: "cus_schedule_clear",
+					status: "active",
+					schedule: null,
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "schedule-clear@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_schedule_clear",
+				stripeSubscriptionId: "sub_schedule_clear",
+				status: "active",
+				plan: "starter",
+				stripeScheduleId: "sub_schedule_old",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_clear" }],
+		});
+		expect(sub?.stripeScheduleId).toBeNull();
+	});
+
+	it("should clear stripeScheduleId on subscription deleted webhook", async () => {
+		const deleteEvent = {
+			type: "customer.subscription.deleted",
+			data: {
+				object: {
+					id: "sub_delete_schedule",
+					customer: "cus_delete_schedule",
+					status: "canceled",
+					metadata: {},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(deleteEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "delete-schedule@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_delete_schedule",
+				stripeSubscriptionId: "sub_delete_schedule",
+				status: "active",
+				plan: "starter",
+				stripeScheduleId: "sub_schedule_will_be_cleared",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(deleteEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_delete_schedule" }],
+		});
+		expect(sub?.stripeScheduleId).toBeNull();
+		expect(sub?.status).toBe("canceled");
 	});
 
 	it("should allow seat upgrades for the same plan", async () => {
@@ -5277,6 +5512,127 @@ describe("stripe", () => {
 				canceledAt: null,
 			});
 		});
+
+		it("should release schedule and clear stripeScheduleId when restoring a pending schedule", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-schedule@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-schedule@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_schedule",
+					stripeSubscriptionId: "sub_restore_schedule",
+					status: "active",
+					plan: "premium",
+					stripeScheduleId: "sub_schedule_pending",
+				},
+			});
+
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_schedule",
+				status: "active",
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.data).toBeDefined();
+
+			// Should release the schedule
+			expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+				"sub_schedule_pending",
+			);
+
+			// Should NOT call subscriptions.update (that's for cancel restore)
+			expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+
+			// DB should have stripeScheduleId cleared
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+			expect(updatedSub?.stripeScheduleId).toBeNull();
+		});
+
+		it("should reject restore when no pending cancel and no pending schedule", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-noop@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-noop@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_noop",
+					stripeSubscriptionId: "sub_restore_noop",
+					status: "active",
+					plan: "starter",
+				},
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.error?.status).toBe(400);
+		});
 	});
 
 	describe("cancel subscription fallback (missed webhook)", () => {
@@ -5938,12 +6294,14 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
 
-		// DB subscription should NOT be updated (webhook handles it at period end)
+		// Plan should remain unchanged (webhook handles it at period end),
+		// but stripeScheduleId should be stored so clients can detect pending changes
 		const sub = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "referenceId", value: userRes.user.id }],
 		});
 		expect(sub?.plan).toBe("premium"); // Still on premium, not starter
+		expect(sub?.stripeScheduleId).toBe("sub_sched_mock");
 
 		expect(res.data?.url).toBeDefined();
 		expect(res.data?.redirect).toBe(true);
@@ -6094,7 +6452,7 @@ describe("stripe", () => {
 				{
 					id: "sub_scheduled_then_upgrade",
 					status: "active",
-					schedule: "sub_sched_old",
+					schedule: "sub_schedule_old",
 					items: {
 						data: [
 							{
@@ -6114,7 +6472,7 @@ describe("stripe", () => {
 		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
-					id: "sub_sched_old",
+					id: "sub_schedule_old",
 					subscription: "sub_scheduled_then_upgrade",
 					status: "active",
 					metadata: { source: "@better-auth/stripe" },
@@ -6130,7 +6488,7 @@ describe("stripe", () => {
 
 		// Should release the existing schedule
 		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
-			"sub_sched_old",
+			"sub_schedule_old",
 		);
 
 		// Should use billing portal for immediate upgrade, not schedules
