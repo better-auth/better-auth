@@ -338,7 +338,7 @@ This uses the [Stripe Subscription Schedules API](https://docs.stripe.com/billin
 
 <Callout type="info">
 When `scheduleAtPeriodEnd` is `true`:
-- The subscription record in the database is **not updated** until the change takes effect
+- The subscription plan is **not changed** until the billing period ends — only `stripeScheduleId` is stored so clients can detect the pending change
 - No redirect to Stripe Checkout or Billing Portal occurs, the change is applied server-side
 - At the end of the billing period, Stripe fires a `customer.subscription.updated` webhook which updates the subscription record automatically
 - If a new upgrade or schedule is requested before the period ends, the existing pending schedule is released first
@@ -446,11 +446,11 @@ Stripe supports different types of cancellation, and the plugin tracks all of th
 | `status`            | Changes to "canceled" only after the subscription has actually ended.                                                            |
 </Callout>
 
-#### Restoring a Canceled Subscription
+#### Restoring a Subscription
 
-> <small className='font-normal'>**Note:** This only works for subscriptions that are still active but scheduled to cancel. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
+> <small className='font-normal'>**Note:** This only works for subscriptions that are still active but have a pending cancellation or a scheduled plan change. It cannot restore subscriptions that have already ended (`status: "canceled"` with `endedAt` set).</small>
 
-If a user changes their mind after canceling a subscription (but before the subscription period ends), you can restore the subscription:
+If a user changes their mind after canceling a subscription or scheduling a plan change, you can restore the subscription:
 
 
 <APIMethod
@@ -476,14 +476,11 @@ type restoreSubscription = {
 ```
 </APIMethod>
 
-
-This will reactivate a subscription that was previously scheduled to cancel. The subscription will continue to renew automatically.
-
 <Callout type="info">
-When a subscription is restored:
-- `cancelAtPeriodEnd` is set to `false`
-- `cancelAt` is cleared to `null`
-- `canceledAt` is cleared to `null`
+This endpoint handles two cases:
+
+- **Pending cancellation**: Sets `cancelAtPeriodEnd` to `false` and clears `cancelAt` / `canceledAt`, so the subscription continues to renew.
+- **Pending plan change** (via `scheduleAtPeriodEnd`): Releases the Stripe subscription schedule and clears `stripeScheduleId`, so the current plan remains unchanged.
 </Callout>
 
 
@@ -797,10 +794,22 @@ Table Name: `subscription`
       description: "Start date of the trial period",
       isOptional: true
     },
-    { 
-      name: "trialEnd", 
-      type: "Date", 
+    {
+      name: "trialEnd",
+      type: "Date",
       description: "End date of the trial period",
+      isOptional: true
+    },
+    {
+      name: "billingInterval",
+      type: "string",
+      description: "The billing interval of the subscription (e.g. 'month', 'year')",
+      isOptional: true
+    },
+    {
+      name: "stripeScheduleId",
+      type: "string",
+      description: "Stripe Subscription Schedule ID, present when a scheduled plan change is pending",
       isOptional: true
     }
   ]}
