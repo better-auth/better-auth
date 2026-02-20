@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import * as saml from "samlify";
+import saml from "samlify";
 import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
@@ -18,6 +18,7 @@ import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
+	callbackSSOShared,
 	initiateSLO,
 	registerSSOProvider,
 	signInSSO,
@@ -99,6 +100,7 @@ type SSOEndpoints<O extends SSOOptions> = {
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
 	sloEndpoint: ReturnType<typeof sloEndpoint>;
@@ -145,6 +147,7 @@ export function sso<O extends SSOOptions>(
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
+	options: O;
 };
 
 export function sso<O extends SSOOptions>(
@@ -157,6 +160,7 @@ export function sso<O extends SSOOptions>(
 		registerSSOProvider: registerSSOProvider(optionsWithStore),
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOShared: callbackSSOShared(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
 		sloEndpoint: sloEndpoint(optionsWithStore),

@@ -22,6 +22,7 @@ import { notion } from "./notion";
 import { paybin } from "./paybin";
 import { paypal } from "./paypal";
 import { polar } from "./polar";
+import { railway } from "./railway";
 import { reddit } from "./reddit";
 import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
@@ -67,6 +68,7 @@ export const socialProviders = {
 	paybin,
 	paypal,
 	polar,
+	railway,
 	vercel,
 };
 
@@ -113,6 +115,7 @@ export * from "./notion";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
+export * from "./railway";
 export * from "./reddit";
 export * from "./roblox";
 export * from "./salesforce";

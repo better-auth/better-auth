@@ -35,12 +35,12 @@ The Admin plugin provides a set of administrative functions for user management 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```package-install
-            npx @better-auth/cli migrate
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
             ```package-install
-            npx @better-auth/cli generate
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -208,6 +208,38 @@ const users = await authClient.admin.listUsers({
 
 const totalUsers = users.total;
 const totalPages = Math.ceil(totalUsers / pageSize)
+```
+
+### Get User
+
+Fetches a user's information using an id.
+
+<APIMethod
+  path="/admin/get-user"
+  method="GET"
+  requireSession
+>
+```ts
+type getUser = {
+  /**
+  * The id of the user you want to fetch.
+  */
+  id: string = "user-id"
+}
+```
+</APIMethod>
+
+#### Returns
+On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
+```ts
+type GetUserResponse = {
+  data: User | null;
+  error: null | {
+    message: string;
+    status: number; //HTTP status code
+    statusText: string;
+    code: string;
+}
 ```
 
 ### Set User Role
@@ -503,7 +535,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create", "share", "update", "delete"], // <-- Permissions available for created roles
     } as const;
 
-    const ac = createAccessControl(statement);
+    export const ac = createAccessControl(statement);
 
     export const user = ac.newRole({ // [!code highlight]
         project: ["create"], // [!code highlight]
@@ -764,10 +796,11 @@ admin({
 ```
 ### Admin Roles
 
-The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
+Specifies which roles are considered admin roles. Defaults to `["admin"]`. Custom roles (for example, `superadmin`) must be defined in custom access control.
 
 ```ts title="auth.ts"
 admin({
+  // Requires custom access control with `superadmin` defined in `roles`
   adminRoles: ["admin", "superadmin"],
 });
 ```
@@ -775,8 +808,9 @@ admin({
 <Callout type="warning">
   **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
   
-  **Warning:** When **not** using custom access control, any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
   
+  **Warning:** When **not** using custom access control, only `admin` and `user` exist as valid roles. Any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+
 </Callout>
 
 ### Admin userIds
