@@ -248,7 +248,29 @@ export function createAgentMCPTools(
 					// agentId invalid or stale — fall through to create fresh
 				}
 
-				// No agentId — create a fresh identity
+				// Dedup: check if we already have a healthy connection to this URL
+				const allConnections = await storage.listConnections();
+				for (const conn of allConnections) {
+					if (conn.appUrl !== url) continue;
+					const full = await storage.getConnection(conn.agentId);
+					if (!full) continue;
+					const healthy = await isConnectionHealthy(conn.agentId, full);
+					if (!healthy) continue;
+
+					const hasAllScopes = scopes.every((s) => full.scopes.includes(s));
+					if (hasAllScopes) {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Reusing existing connection. Agent ID: ${conn.agentId}. Name: "${full.name}". URL: ${full.appUrl}. Scopes: ${full.scopes.join(", ") || "none"}. Use this Agent ID for all subsequent requests.`,
+								},
+							],
+						};
+					}
+				}
+
+				// No reusable connection — create a fresh identity
 				const keypair = await generateAgentKeypair();
 
 				// Direct auth mode (cookie/token in env)
