@@ -536,6 +536,11 @@ export const contents: Content[] = [
 				],
 			},
 			{
+				title: "Pricing & Plans",
+				href: "/docs/infrastructure/pricing",
+				icon: () => <BadgeCent className="size-4" />,
+			},
+			{
 				title: "Services",
 				group: true,
 				icon: () => <Server className="size-4" />,
@@ -566,32 +571,6 @@ export const contents: Content[] = [
 				title: "Sentinel",
 				href: "/docs/infrastructure/plugins/sentinel",
 				icon: () => <ShieldCheck className="size-4" />,
-			},
-			{
-				title: "Enterprise",
-				group: true,
-				icon: Server,
-				href: "",
-			},
-			{
-				title: "SSO / SAML",
-				href: "/docs/infrastructure/enterprise/sso",
-				icon: () => <Key className="size-4" />,
-			},
-			{
-				title: "Directory Sync",
-				href: "/docs/infrastructure/enterprise/directory-sync",
-				icon: () => <Users2 className="size-4" />,
-			},
-			{
-				title: "Log Drains",
-				href: "/docs/infrastructure/enterprise/log-drains",
-				icon: () => <Database className="size-4" />,
-			},
-			{
-				title: "Pricing & Plans",
-				href: "/docs/infrastructure/pricing",
-				icon: () => <BadgeCent className="size-4" />,
 			},
 		],
 	},
