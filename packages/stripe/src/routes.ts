@@ -207,6 +207,16 @@ const upgradeSubscriptionBodySchema = z.object({
 		})
 		.optional(),
 	/**
+	 * Schedule the plan change at the end of the current billing period instead of applying immediately.
+	 */
+	scheduleAtPeriodEnd: z
+		.boolean()
+		.meta({
+			description:
+				"Schedule the plan change at the end of the current billing period instead of applying immediately.",
+		})
+		.default(false),
+	/**
 	 * Disable Redirect
 	 */
 	disableRedirect: z
@@ -642,52 +652,263 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					);
 				}
 
-				// When upgrading plans with auto-managed seats, include
-				// the seat item update if seatPriceId changed between plans.
-				const seatPortalItems: Array<{
-					id: string;
-					price: string;
-					quantity: number;
-				}> = [];
-				if (isAutoManagedSeats && plan.seatPriceId) {
-					const oldPlan = activeOrTrialingSubscription
-						? await getPlanByName(options, activeOrTrialingSubscription.plan)
-						: undefined;
+				// Release any existing plugin-created subscription schedule.
+				// Only check when a schedule is attached to avoid unnecessary API calls.
+				if (activeSubscription.schedule) {
+					const { data: existingSchedules } =
+						await client.subscriptionSchedules.list({
+							customer: customerId,
+						});
+					const existingSchedule = existingSchedules.find(
+						(s) =>
+							(typeof s.subscription === "string"
+								? s.subscription
+								: s.subscription?.id) === activeSubscription.id &&
+							s.status === "active",
+					);
 					if (
-						oldPlan?.seatPriceId &&
-						oldPlan.seatPriceId !== plan.seatPriceId
+						existingSchedule &&
+						existingSchedule.metadata?.source === "@better-auth/stripe"
 					) {
-						const oldSeatItem = activeSubscription.items.data.find(
-							(item) => item.price.id === oldPlan.seatPriceId,
-						);
-						if (oldSeatItem) {
-							seatPortalItems.push({
-								id: oldSeatItem.id,
-								price: plan.seatPriceId,
-								quantity: memberCount,
+						await client.subscriptionSchedules.release(existingSchedule.id);
+						if (dbSubscription) {
+							await ctx.context.adapter.update({
+								model: "subscription",
+								update: {
+									stripeScheduleId: null,
+									updatedAt: new Date(),
+								},
+								where: [
+									{
+										field: "id",
+										value: dbSubscription.id,
+									},
+								],
 							});
 						}
 					}
 				}
 
-				// Billing portal supports only 1 item update at a time.
-				// When seat price changes between plans, use direct API.
+				const oldPlan = activeOrTrialingSubscription
+					? await getPlanByName(options, activeOrTrialingSubscription.plan)
+					: undefined;
+
+				// Build a price replacement map:
+				// oldPriceId -> { newPrice, quantity? }
+				// This covers base plan, seat, and line item (usage) price changes.
+				const priceMap = new Map<
+					string,
+					{ newPrice: string; quantity?: number }
+				>();
+
+				if (isAutoManagedSeats && plan.seatPriceId) {
+					if (
+						oldPlan?.seatPriceId &&
+						oldPlan.seatPriceId !== plan.seatPriceId
+					) {
+						priceMap.set(oldPlan.seatPriceId, {
+							newPrice: plan.seatPriceId,
+							quantity: memberCount,
+						});
+					}
+				}
+
+				// Multiset diff of line item prices.
+				// old -> -1, new -> +1.
+				// delta < 0 = remove, delta > 0 = add.
+				const lineItemDelta = new Map<string, number>();
+				for (const li of oldPlan?.lineItems ?? []) {
+					if (typeof li.price === "string")
+						lineItemDelta.set(li.price, (lineItemDelta.get(li.price) ?? 0) - 1);
+				}
+				for (const li of plan.lineItems ?? []) {
+					if (typeof li.price === "string")
+						lineItemDelta.set(li.price, (lineItemDelta.get(li.price) ?? 0) + 1);
+				}
+				for (const [price, delta] of lineItemDelta) {
+					if (delta === 0) lineItemDelta.delete(price);
+				}
+
 				let upgradeUrl: string;
-				if (seatPortalItems.length > 0) {
-					// For seat-only plans, planItem and seatItem are the same subscription item.
-					// Skip the base entry to avoid duplicates.
-					const isSeatItem = seatPortalItems.some((s) => s.id === planItem.id);
+				if (ctx.body.scheduleAtPeriodEnd) {
+					// Deferred change:
+					// schedule at billing period end via Subscription Schedules
+					const schedule = await client.subscriptionSchedules
+						.create({
+							from_subscription: activeSubscription.id,
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+
+					const currentPhase = schedule.phases[0];
+					if (!currentPhase) {
+						throw ctx.error("BAD_REQUEST", {
+							message: "Subscription schedule has no phases",
+						});
+					}
+
+					const removeQuota = new Map<string, number>();
+					for (const [p, d] of lineItemDelta) {
+						if (d < 0) removeQuota.set(p, -d);
+					}
+
+					const newPhaseItems: Array<{
+						price: string;
+						quantity?: number;
+					}> = [];
+					for (const item of currentPhase.items) {
+						const itemPriceId =
+							typeof item.price === "string" ? item.price : item.price.id;
+
+						// Remove items the new plan no longer needs
+						const quota = removeQuota.get(itemPriceId) ?? 0;
+						if (quota > 0) {
+							removeQuota.set(itemPriceId, quota - 1);
+							continue;
+						}
+
+						// priceMap takes priority
+						// which handles seat-only plans
+						// where base price === seat price
+						const replacement = priceMap.get(itemPriceId);
+						if (replacement) {
+							newPhaseItems.push({
+								price: replacement.newPrice,
+								quantity: replacement.quantity ?? item.quantity,
+							});
+							continue;
+						}
+
+						// Replace base plan price
+						if (itemPriceId === stripeSubscriptionPriceId) {
+							newPhaseItems.push({
+								price: priceIdToUse,
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+							});
+							continue;
+						}
+
+						// Keep as-is
+						newPhaseItems.push({
+							price: itemPriceId,
+							quantity: item.quantity,
+						});
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(itemPriceId);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(itemPriceId);
+							else lineItemDelta.set(itemPriceId, d - 1);
+						}
+					}
+					// Add line items the new plan introduces
+					for (const [price, delta] of lineItemDelta) {
+						for (let i = 0; i < delta; i++) newPhaseItems.push({ price });
+					}
+
+					await client.subscriptionSchedules
+						.update(schedule.id, {
+							metadata: { source: "@better-auth/stripe" },
+							end_behavior: "release",
+							phases: [
+								{
+									items: currentPhase.items.map((item) => ({
+										price:
+											typeof item.price === "string"
+												? item.price
+												: item.price.id,
+										quantity: item.quantity,
+									})),
+									start_date: currentPhase.start_date,
+									end_date: currentPhase.end_date,
+								},
+								{
+									items: newPhaseItems,
+									start_date: currentPhase.end_date,
+									proration_behavior: "none",
+								},
+							],
+						})
+						.catch(async (e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+
+					// Store schedule ID so clients can detect pending plan changes
+					if (dbSubscription) {
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								stripeScheduleId: schedule.id,
+								updatedAt: new Date(),
+							},
+							where: [
+								{
+									field: "id",
+									value: dbSubscription.id,
+								},
+							],
+						});
+					}
+
+					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
+				} else if (priceMap.size > 0 || lineItemDelta.size > 0) {
+					// Immediate change with multi-item updates: use direct API.
+					// Billing Portal supports only 1 item update at a time,
+					// so when multiple prices change between plans we call
+					// subscriptions.update directly.
+					const removeQuota = new Map<string, number>();
+					for (const [p, d] of lineItemDelta) {
+						if (d < 0) removeQuota.set(p, -d);
+					}
+
+					const itemUpdates: Array<Record<string, unknown>> = [];
+					for (const si of activeSubscription.items.data) {
+						// Remove items the new plan no longer needs
+						const quota = removeQuota.get(si.price.id) ?? 0;
+						if (quota > 0) {
+							removeQuota.set(si.price.id, quota - 1);
+							itemUpdates.push({ id: si.id, deleted: true });
+							continue;
+						}
+						// priceMap takes priority (handles seat-only plans
+						// where base price === seat price)
+						const replacement = priceMap.get(si.price.id);
+						if (replacement) {
+							itemUpdates.push({
+								id: si.id,
+								price: replacement.newPrice,
+								quantity: replacement.quantity,
+							});
+							continue;
+						}
+						if (si.price.id === stripeSubscriptionPriceId) {
+							itemUpdates.push({
+								id: si.id,
+								price: priceIdToUse,
+								quantity: isAutoManagedSeats ? 1 : ctx.body.seats || 1,
+							});
+							continue;
+						}
+						// Consume positive delta to prevent duplicate addition
+						const d = lineItemDelta.get(si.price.id);
+						if (d !== undefined && d > 0) {
+							if (d === 1) lineItemDelta.delete(si.price.id);
+							else lineItemDelta.set(si.price.id, d - 1);
+						}
+					}
+					// Add line items the new plan introduces
+					for (const [price, delta] of lineItemDelta) {
+						for (let i = 0; i < delta; i++) itemUpdates.push({ price });
+					}
 					await client.subscriptions
 						.update(activeSubscription.id, {
-							items: isSeatItem
-								? seatPortalItems
-								: [
-										{
-											id: planItem.id,
-											price: priceIdToUse,
-										},
-										...seatPortalItems,
-									],
+							items: itemUpdates,
 							proration_behavior: "create_prorations",
 						})
 						.catch(async (e) => {
@@ -711,6 +932,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
 				} else {
+					// Immediate change via Billing Portal
 					({ url: upgradeUrl } = await client.billingPortal.sessions
 						.create({
 							customer: customerId,
@@ -932,74 +1154,78 @@ export const cancelSubscriptionCallback = (options: StripeOptions) => {
 			if (!session) {
 				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
 			}
-			const { user } = session;
 			const { callbackURL, subscriptionId } = ctx.query;
 
-			if (user?.stripeCustomerId) {
-				try {
-					const subscription = await ctx.context.adapter.findOne<Subscription>({
+			try {
+				const subscription = await ctx.context.adapter.findOne<Subscription>({
+					model: "subscription",
+					where: [
+						{
+							field: "id",
+							value: subscriptionId,
+						},
+					],
+				});
+				if (
+					!subscription ||
+					subscription.status === "canceled" ||
+					isPendingCancel(subscription)
+				) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				// Use the subscription's own stripeCustomerId so this works
+				// for both user and organization subscriptions.
+				const customerId = subscription.stripeCustomerId;
+				if (!customerId) {
+					throw ctx.redirect(getUrl(ctx, callbackURL));
+				}
+
+				const stripeSubscription = await client.subscriptions.list({
+					customer: customerId,
+					status: "active",
+				});
+				const currentSubscription = stripeSubscription.data.find(
+					(sub) => sub.id === subscription.stripeSubscriptionId,
+				);
+
+				const isNewCancellation =
+					currentSubscription &&
+					isStripePendingCancel(currentSubscription) &&
+					!isPendingCancel(subscription);
+				if (isNewCancellation) {
+					await ctx.context.adapter.update({
 						model: "subscription",
+						update: {
+							status: currentSubscription?.status,
+							cancelAtPeriodEnd:
+								currentSubscription?.cancel_at_period_end || false,
+							cancelAt: currentSubscription?.cancel_at
+								? new Date(currentSubscription.cancel_at * 1000)
+								: null,
+							canceledAt: currentSubscription?.canceled_at
+								? new Date(currentSubscription.canceled_at * 1000)
+								: null,
+						},
 						where: [
 							{
 								field: "id",
-								value: subscriptionId,
+								value: subscription.id,
 							},
 						],
 					});
-					if (
-						!subscription ||
-						subscription.status === "canceled" ||
-						isPendingCancel(subscription)
-					) {
-						throw ctx.redirect(getUrl(ctx, callbackURL));
-					}
-
-					const stripeSubscription = await client.subscriptions.list({
-						customer: user.stripeCustomerId,
-						status: "active",
+					await subscriptionOptions.onSubscriptionCancel?.({
+						subscription,
+						cancellationDetails: currentSubscription.cancellation_details,
+						stripeSubscription: currentSubscription,
+						event: undefined,
 					});
-					const currentSubscription = stripeSubscription.data.find(
-						(sub) => sub.id === subscription.stripeSubscriptionId,
-					);
-
-					const isNewCancellation =
-						currentSubscription &&
-						isStripePendingCancel(currentSubscription) &&
-						!isPendingCancel(subscription);
-					if (isNewCancellation) {
-						await ctx.context.adapter.update({
-							model: "subscription",
-							update: {
-								status: currentSubscription?.status,
-								cancelAtPeriodEnd:
-									currentSubscription?.cancel_at_period_end || false,
-								cancelAt: currentSubscription?.cancel_at
-									? new Date(currentSubscription.cancel_at * 1000)
-									: null,
-								canceledAt: currentSubscription?.canceled_at
-									? new Date(currentSubscription.canceled_at * 1000)
-									: null,
-							},
-							where: [
-								{
-									field: "id",
-									value: subscription.id,
-								},
-							],
-						});
-						await subscriptionOptions.onSubscriptionCancel?.({
-							subscription,
-							cancellationDetails: currentSubscription.cancellation_details,
-							stripeSubscription: currentSubscription,
-							event: undefined,
-						});
-					}
-				} catch (error) {
-					ctx.context.logger.error(
-						"Error checking subscription status from Stripe",
-						error,
-					);
 				}
+			} catch (error) {
+				ctx.context.logger.error(
+					"Error checking subscription status from Stripe",
+					error,
+				);
 			}
 			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},
@@ -1304,13 +1530,65 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
-			if (!isPendingCancel(subscription)) {
+			const hasPendingCancel = isPendingCancel(subscription);
+			const { stripeScheduleId } = subscription;
+
+			if (!hasPendingCancel && !stripeScheduleId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_PENDING_CHANGE,
 				);
 			}
 
+			// Pending cancel and pending schedule are mutually exclusive in Stripe.
+			if (stripeScheduleId) {
+				if (!subscription.stripeSubscriptionId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
+
+				const schedule = await client.subscriptionSchedules
+					.retrieve(stripeScheduleId)
+					.catch((e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+
+				if (schedule.status === "active") {
+					await client.subscriptionSchedules
+						.release(stripeScheduleId)
+						.catch((e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+				}
+
+				await ctx.context.adapter.update({
+					model: "subscription",
+					update: {
+						stripeScheduleId: null,
+						updatedAt: new Date(),
+					},
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+				});
+				const releasedSub = await client.subscriptions.retrieve(
+					subscription.stripeSubscriptionId,
+				);
+				return ctx.json(releasedSub);
+			}
+
+			// Handle pending cancellation
 			const activeSubscription = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,

@@ -19,7 +19,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
-import * as saml from "samlify";
+import saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
@@ -2361,9 +2361,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));
@@ -2879,9 +2877,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));

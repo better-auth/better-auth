@@ -2,7 +2,7 @@ import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
 import { runWithAdapter } from "@better-auth/core/context";
 import { BASE_ERROR_CODES, BetterAuthError } from "@better-auth/core/error";
 import { getEndpoints, router } from "../api";
-import { getTrustedOrigins } from "../context/helpers";
+import { getTrustedOrigins, getTrustedProviders } from "../context/helpers";
 import { createCookieGetter, getCookies } from "../cookies";
 import type { Auth } from "../types";
 import {
@@ -98,6 +98,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 					request,
 				);
 			}
+			handlerCtx.trustedProviders = await getTrustedProviders(
+				handlerCtx.options,
+				request,
+			);
 
 			const { handler } = router(handlerCtx, options);
 			return runWithAdapter(handlerCtx.adapter, () => handler(request));
