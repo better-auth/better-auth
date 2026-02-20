@@ -499,43 +499,6 @@ export const contents: Content[] = [
 				icon: () => <Gauge className="size-4" />,
 			},
 			{
-				title: "Dashboard",
-				href: "/docs/infrastructure/dashboard/overview",
-				icon: () => <AppWindow className="size-4" />,
-				children: [
-					{
-						title: "Analytics & Insights",
-						href: "/docs/infrastructure/dashboard/analytics",
-						icon: () => <BarChart4 className="size-4" />,
-					},
-					{
-						title: "Users",
-						href: "/docs/infrastructure/dashboard/users",
-						icon: () => <Users className="size-4" />,
-					},
-					{
-						title: "Organizations",
-						href: "/docs/infrastructure/dashboard/organizations",
-						icon: () => <Users2 className="size-4" />,
-					},
-					{
-						title: "Security",
-						href: "/docs/infrastructure/dashboard/security",
-						icon: () => <Lock className="size-4" />,
-					},
-					{
-						title: "Audit Logs",
-						href: "/docs/infrastructure/dashboard/audit-logs",
-						icon: () => <Logs className="size-4" />,
-					},
-					{
-						title: "Settings",
-						href: "/docs/infrastructure/dashboard/settings",
-						icon: () => <Settings className="size-4" />,
-					},
-				],
-			},
-			{
 				title: "Pricing & Plans",
 				href: "/docs/infrastructure/pricing",
 				icon: () => <BadgeCent className="size-4" />,
