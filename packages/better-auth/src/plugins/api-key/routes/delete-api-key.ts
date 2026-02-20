@@ -11,6 +11,7 @@ import {
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 const deleteApiKeyBodySchema = z.object({
 	keyId: z.string().meta({
@@ -19,11 +20,11 @@ const deleteApiKeyBodySchema = z.object({
 });
 
 export function deleteApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -85,11 +86,26 @@ export function deleteApiKey({
 				throw APIError.from("UNAUTHORIZED", ERROR_CODES.USER_BANNED);
 			}
 
+			// Use default config for initial lookup
+			const defaultOpts = configurations[0]!;
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, keyId, opts);
+			apiKey = await getApiKeyById(ctx, keyId, defaultOpts);
 
-			if (!apiKey || apiKey.userId !== session.user.id) {
+			if (!apiKey) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Resolve the correct config based on the API key's configId
+			const opts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				apiKey.configId,
+			);
+
+			// Verify ownership - user can only delete their own user-owned keys
+			const referencesType = opts.references ?? "user";
+			if (referencesType === "user" && apiKey.referenceId !== session.user.id) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 

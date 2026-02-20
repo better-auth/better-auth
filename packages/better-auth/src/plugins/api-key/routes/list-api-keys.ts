@@ -13,6 +13,20 @@ import type { PredefinedApiKeyOptions } from ".";
 
 const listApiKeysQuerySchema = z
 	.object({
+		configId: z
+			.string()
+			.meta({
+				description:
+					"Filter by configuration ID. If not provided, returns keys from all configurations.",
+			})
+			.optional(),
+		organizationId: z
+			.string()
+			.meta({
+				description:
+					"Organization ID to list keys for. If provided, returns organization-owned keys. If not provided, returns user-owned keys.",
+			})
+			.optional(),
 		limit: z.coerce
 			.number()
 			.int()
@@ -45,11 +59,11 @@ const listApiKeysQuerySchema = z
 	.optional();
 
 export function listApiKeys({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -64,7 +78,8 @@ export function listApiKeys({
 			query: listApiKeysQuerySchema,
 			metadata: {
 				openapi: {
-					description: "List all API keys for the authenticated user",
+					description:
+						"List all API keys for the authenticated user or for a specific organization",
 					responses: {
 						"200": {
 							description: "API keys retrieved successfully",
@@ -224,27 +239,66 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
+			const configId = ctx.query?.configId;
+			const organizationId = ctx.query?.organizationId;
 			const limit =
 				ctx.query?.limit != null ? Number(ctx.query.limit) : undefined;
 			const offset =
 				ctx.query?.offset != null ? Number(ctx.query.offset) : undefined;
 
-			const { apiKeys, total } = await listApiKeysFromStorage(
+			// Use default config for storage operations
+			const opts = configurations[0]!;
+
+			// Determine the referenceId to query - either organizationId or user.id
+			const referenceId = organizationId ?? session.user.id;
+			const expectedReferencesType = organizationId ? "organization" : "user";
+
+			// List keys by referenceId
+			const { apiKeys: allApiKeys } = await listApiKeysFromStorage(
 				ctx,
-				session.user.id,
+				referenceId,
 				opts,
 				{
-					limit,
-					offset,
+					limit: undefined, // Get all for filtering
+					offset: undefined,
 					sortBy: ctx.query?.sortBy,
 					sortDirection: ctx.query?.sortDirection,
 				},
 			);
 
+			// Filter by ownership type (user or organization) based on config's references setting
+			let filteredApiKeys = allApiKeys.filter((key) => {
+				const keyConfig = configurations.find(
+					(c) => c.configId === key.configId,
+				);
+				const referencesType = keyConfig?.references ?? "user";
+				return (
+					referencesType === expectedReferencesType &&
+					key.referenceId === referenceId
+				);
+			});
+
+			if (configId) {
+				filteredApiKeys = filteredApiKeys.filter(
+					(key) => key.configId === configId,
+				);
+			}
+
+			const total = filteredApiKeys.length;
+
+			// Apply pagination after filtering
+			let paginatedApiKeys = filteredApiKeys;
+			if (offset !== undefined) {
+				paginatedApiKeys = paginatedApiKeys.slice(offset);
+			}
+			if (limit !== undefined) {
+				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
+			}
+
 			deleteAllExpiredApiKeys(ctx.context);
 
 			// Build response with parsed metadata (synchronous, no DB calls)
-			const returningApiKeys = apiKeys.map((apiKey) => {
+			const returningApiKeys = paginatedApiKeys.map((apiKey) => {
 				const { key: _key, ...rest } = apiKey;
 				return {
 					...rest,
@@ -259,7 +313,7 @@ export function listApiKeys({
 
 			// Batch migrate legacy metadata (parallel DB updates)
 			await ctx.context.runInBackgroundOrAwait(
-				batchMigrateLegacyMetadata(ctx, apiKeys, opts),
+				batchMigrateLegacyMetadata(ctx, paginatedApiKeys, opts),
 			);
 
 			return ctx.json({

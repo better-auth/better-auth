@@ -1,16 +1,19 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
+import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { BetterAuthError } from "../..";
 import { APIError } from "../../api";
 import { generateRandomString } from "../../crypto/random";
 import { mergeSchema } from "../../db";
 import { getDate } from "../../utils/date";
 import { getIp } from "../../utils/get-request-ip";
+import { API_KEY_ERROR_CODES } from "./error-codes";
+import type { PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
-import type { ApiKeyOptions } from "./types";
+import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
@@ -30,82 +33,133 @@ export const defaultKeyHasher = async (key: string) => {
 	return hashed;
 };
 
-import { API_KEY_ERROR_CODES } from "./error-codes";
-
 export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export const apiKey = (options?: ApiKeyOptions | undefined) => {
-	const opts = {
-		...options,
-		apiKeyHeaders: options?.apiKeyHeaders ?? "x-api-key",
-		defaultKeyLength: options?.defaultKeyLength || 64,
-		maximumPrefixLength: options?.maximumPrefixLength ?? 32,
-		minimumPrefixLength: options?.minimumPrefixLength ?? 1,
-		maximumNameLength: options?.maximumNameLength ?? 32,
-		minimumNameLength: options?.minimumNameLength ?? 1,
-		enableMetadata: options?.enableMetadata ?? false,
-		disableKeyHashing: options?.disableKeyHashing ?? false,
-		requireName: options?.requireName ?? false,
-		storage: options?.storage ?? "database",
-		rateLimit: {
-			enabled:
-				options?.rateLimit?.enabled === undefined
-					? true
-					: options?.rateLimit?.enabled,
-			timeWindow: options?.rateLimit?.timeWindow ?? 1000 * 60 * 60 * 24,
-			maxRequests: options?.rateLimit?.maxRequests ?? 10,
-		},
-		keyExpiration: {
-			defaultExpiresIn: options?.keyExpiration?.defaultExpiresIn ?? null,
-			disableCustomExpiresTime:
-				options?.keyExpiration?.disableCustomExpiresTime ?? false,
-			maxExpiresIn: options?.keyExpiration?.maxExpiresIn ?? 365,
-			minExpiresIn: options?.keyExpiration?.minExpiresIn ?? 1,
-		},
-		startingCharactersConfig: {
-			shouldStore: options?.startingCharactersConfig?.shouldStore ?? true,
-			charactersLength:
-				options?.startingCharactersConfig?.charactersLength ?? 6,
-		},
-		enableSessionForAPIKeys: options?.enableSessionForAPIKeys ?? false,
-		fallbackToDatabase: options?.fallbackToDatabase ?? false,
-		customStorage: options?.customStorage,
-		deferUpdates: options?.deferUpdates ?? false,
-	} satisfies ApiKeyOptions;
+export function apiKey(
+	_configurations?:
+		| (ApiKeyConfigurationOptions & ApiKeyOptions)
+		| ApiKeyConfigurationOptions[]
+		| undefined,
+	_options?: ApiKeyOptions | undefined,
+) {
+	if (Array.isArray(_configurations) && _configurations.length > 0) {
+		if (!_configurations.every((option) => option.configId)) {
+			throw new BetterAuthError(
+				"configId is required for each API key configuration in the api-key plugin.",
+			);
+		}
+		const configIds = _configurations.map((option) => option.configId);
+		if (new Set(configIds).size !== configIds.length) {
+			throw new BetterAuthError(
+				"configId must be unique for each API key configuration in the api-key plugin.",
+			);
+		}
+	}
+
+	const options: ApiKeyOptions = _options ?? {
+		schema: Array.isArray(_configurations)
+			? undefined
+			: (_configurations as ApiKeyOptions | undefined)?.schema,
+	};
+
+	const configurations = [
+		...(Array.isArray(_configurations)
+			? _configurations
+			: [_configurations]
+		).map((config) => ({
+			...config,
+			apiKeyHeaders: config?.apiKeyHeaders ?? "x-api-key",
+			defaultKeyLength: config?.defaultKeyLength || 64,
+			maximumPrefixLength: config?.maximumPrefixLength ?? 32,
+			minimumPrefixLength: config?.minimumPrefixLength ?? 1,
+			maximumNameLength: config?.maximumNameLength ?? 32,
+			minimumNameLength: config?.minimumNameLength ?? 1,
+			enableMetadata: config?.enableMetadata ?? false,
+			disableKeyHashing: config?.disableKeyHashing ?? false,
+			requireName: config?.requireName ?? false,
+			storage: config?.storage ?? "database",
+			rateLimit: {
+				enabled:
+					config?.rateLimit?.enabled === undefined
+						? true
+						: config?.rateLimit?.enabled,
+				timeWindow: config?.rateLimit?.timeWindow ?? 1000 * 60 * 60 * 24,
+				maxRequests: config?.rateLimit?.maxRequests ?? 10,
+			},
+			keyExpiration: {
+				defaultExpiresIn: config?.keyExpiration?.defaultExpiresIn ?? null,
+				disableCustomExpiresTime:
+					config?.keyExpiration?.disableCustomExpiresTime ?? false,
+				maxExpiresIn: config?.keyExpiration?.maxExpiresIn ?? 365,
+				minExpiresIn: config?.keyExpiration?.minExpiresIn ?? 1,
+			},
+			startingCharactersConfig: {
+				shouldStore: config?.startingCharactersConfig?.shouldStore ?? true,
+				charactersLength:
+					config?.startingCharactersConfig?.charactersLength ?? 6,
+			},
+			enableSessionForAPIKeys: config?.enableSessionForAPIKeys ?? false,
+			fallbackToDatabase: config?.fallbackToDatabase ?? false,
+			customStorage: config?.customStorage,
+			deferUpdates: config?.deferUpdates ?? false,
+		})),
+	] as PredefinedApiKeyOptions[];
 
 	const schema = mergeSchema(
 		apiKeySchema({
-			rateLimitMax: opts.rateLimit.maxRequests,
-			timeWindow: opts.rateLimit.timeWindow,
+			defaultRateLimitMax:
+				(configurations.length === 1
+					? configurations[0]?.rateLimit.maxRequests
+					: undefined) ?? 10,
+			defaultTimeWindow:
+				(configurations.length === 1
+					? configurations[0]?.rateLimit.timeWindow
+					: undefined) ?? 1000 * 60 * 60 * 24,
 		}),
-		opts.schema,
+		options.schema,
 	);
 
-	const getter =
-		opts.customAPIKeyGetter ||
-		((ctx) => {
-			if (Array.isArray(opts.apiKeyHeaders)) {
-				for (const header of opts.apiKeyHeaders) {
-					const value = ctx.headers?.get(header);
-					if (value) {
-						return value;
-					}
-				}
-			} else {
-				return ctx.headers?.get(opts.apiKeyHeaders);
+	const defaultKeyGenerator = async (opts: {
+		length: number;
+		prefix: string | undefined;
+	}) => {
+		const key = generateRandomString(opts.length, "a-z", "A-Z");
+		return `${opts.prefix || ""}${key}`;
+	};
+
+	function getApiKeyFromConfig(
+		ctx: HookEndpointContext,
+		config: PredefinedApiKeyOptions,
+	): string | null | undefined {
+		if (config.customAPIKeyGetter) {
+			return config.customAPIKeyGetter(ctx);
+		}
+		if (Array.isArray(config.apiKeyHeaders)) {
+			for (const header of config.apiKeyHeaders) {
+				const value = ctx.headers?.get(header);
+				if (value) return value;
 			}
-		});
+			return null;
+		}
+		return ctx.headers?.get(config.apiKeyHeaders) ?? null;
+	}
 
-	const keyGenerator =
-		opts.customKeyGenerator ||
-		(async (options: { length: number; prefix: string | undefined }) => {
-			const key = generateRandomString(options.length, "a-z", "A-Z");
-			return `${options.prefix || ""}${key}`;
-		});
+	function findApiKeyAndConfig(ctx: HookEndpointContext) {
+		for (const config of configurations) {
+			if (!config.enableSessionForAPIKeys) continue;
+			const key = getApiKeyFromConfig(ctx, config);
+			if (key) return { key, config };
+		}
+		return null;
+	}
 
-	const routes = createApiKeyRoutes({ keyGenerator, opts, schema });
+	const routes = createApiKeyRoutes({
+		defaultKeyGenerator,
+		configurations,
+		schema,
+	});
 
 	return {
 		id: "api-key",
@@ -113,9 +167,10 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 		hooks: {
 			before: [
 				{
-					matcher: (ctx) => !!getter(ctx) && opts.enableSessionForAPIKeys,
+					matcher: (ctx) => !!findApiKeyAndConfig(ctx),
 					handler: createAuthMiddleware(async (ctx) => {
-						const key = getter(ctx)!;
+						const result = findApiKeyAndConfig(ctx)!;
+						const { key, config } = result;
 
 						if (typeof key !== "string") {
 							throw APIError.from(
@@ -124,18 +179,18 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							);
 						}
 
-						if (key.length < opts.defaultKeyLength) {
-							// if the key is shorter than the default key length, than we know the key is invalid.
-							// we can't check if the key is exactly equal to the default key length, because
-							// a prefix may be added to the key.
+						if (key.length < config.defaultKeyLength) {
 							throw APIError.from(
 								"FORBIDDEN",
 								API_KEY_ERROR_CODES.INVALID_API_KEY,
 							);
 						}
 
-						if (opts.customAPIKeyValidator) {
-							const isValid = await opts.customAPIKeyValidator({ ctx, key });
+						if (config.customAPIKeyValidator) {
+							const isValid = await config.customAPIKeyValidator({
+								ctx,
+								key,
+							});
 							if (!isValid) {
 								throw APIError.from(
 									"FORBIDDEN",
@@ -144,14 +199,14 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							}
 						}
 
-						const hashed = opts.disableKeyHashing
+						const hashed = config.disableKeyHashing
 							? key
 							: await defaultKeyHasher(key);
 
 						const apiKey = await validateApiKey({
 							hashedKey: hashed,
 							ctx,
-							opts,
+							opts: config,
 							schema,
 						});
 
@@ -163,18 +218,24 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 								);
 							},
 						);
-						if (opts.deferUpdates) {
+						if (config.deferUpdates) {
 							ctx.context.runInBackground(cleanupTask);
 						}
 
+						// Session mocking only works for user-owned API keys
+						// Determine the reference type from the configuration
+						const referencesType = config.references ?? "user";
+						if (referencesType !== "user") {
+							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
+							throw APIError.from("UNAUTHORIZED", msg);
+						}
+
 						const user = await ctx.context.internalAdapter.findUserById(
-							apiKey.userId,
+							apiKey.referenceId,
 						);
 						if (!user) {
-							throw APIError.from(
-								"UNAUTHORIZED",
-								API_KEY_ERROR_CODES.INVALID_USER_ID_FROM_API_KEY,
-							);
+							const msg = API_KEY_ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY;
+							throw APIError.from("UNAUTHORIZED", msg);
 						}
 
 						const session = {
@@ -182,7 +243,7 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							session: {
 								id: apiKey.id,
 								token: key,
-								userId: apiKey.userId,
+								userId: apiKey.referenceId,
 								userAgent: ctx.request?.headers.get("user-agent") ?? null,
 								ipAddress: ctx.request
 									? getIp(ctx.request, ctx.context.options)
@@ -198,7 +259,6 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 							},
 						};
 
-						// Always set the session context for API key authentication
 						ctx.context.session = session;
 
 						if (ctx.path === "/get-session") {
@@ -321,8 +381,8 @@ export const apiKey = (options?: ApiKeyOptions | undefined) => {
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
-		options,
-	} satisfies BetterAuthPlugin;
-};
+		configurations,
+	} satisfies BetterAuthPlugin & { configurations: PredefinedApiKeyOptions[] };
+}
 
 export type * from "./types";

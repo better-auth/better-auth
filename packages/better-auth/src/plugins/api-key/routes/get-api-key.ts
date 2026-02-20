@@ -9,6 +9,7 @@ import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 const getApiKeyQuerySchema = z.object({
 	id: z.string().meta({
@@ -17,11 +18,11 @@ const getApiKeyQuerySchema = z.object({
 });
 
 export function getApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -176,17 +177,33 @@ export function getApiKey({
 
 			const session = ctx.context.session;
 
+			// Use default config for initial lookup
+			const defaultOpts = configurations[0]!;
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, id, opts);
-
-			// Verify ownership
-			if (apiKey && apiKey.userId !== session.user.id) {
-				apiKey = null;
-			}
+			apiKey = await getApiKeyById(ctx, id, defaultOpts);
 
 			if (!apiKey) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Resolve the correct config based on the API key's configId
+			const opts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				apiKey.configId,
+			);
+
+			// Verify ownership based on config's references type
+			const referencesType = opts.references ?? "user";
+			if (referencesType === "organization") {
+				// For org keys, client can't directly access - would need org membership check
+				// For now, we don't verify org membership in the plugin itself
+			} else {
+				// User-owned keys - verify user owns the key
+				if (apiKey.referenceId !== session.user.id) {
+					throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+				}
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

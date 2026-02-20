@@ -12,8 +12,16 @@ import { setApiKey } from "../adapter";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 const createApiKeyBodySchema = z.object({
+	configId: z
+		.string()
+		.meta({
+			description:
+				"The configuration ID to use for the API key. If not provided, the default configuration will be used.",
+		})
+		.optional(),
 	name: z.string().meta({ description: "Name of the Api Key" }).optional(),
 	expiresIn: z
 		.number()
@@ -84,40 +92,33 @@ const createApiKeyBodySchema = z.object({
 			description: "Permissions of the Api Key.",
 		})
 		.optional(),
-}).and(
-					z.union([
-						z.object({
-							userId: z.coerce
-								.string()
-								.meta({
-									description:
-										'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
-								})
-								.optional(),
-						}),
-						z.object({
-							organizationId: z.coerce
-								.string()
-								.meta({
-									description:
-										"Organization Id of the organization that the Api Key belongs to. server-only. Eg: 'org-id'",
-								})
-								.optional(),
-						}),
-					]),
-				),;
+	userId: z.coerce
+		.string()
+		.meta({
+			description:
+				'User Id of the user that the Api Key belongs to. server-only. Eg: "user-id"',
+		})
+		.optional(),
+	organizationId: z.coerce
+		.string()
+		.meta({
+			description:
+				"Organization Id of the organization that the Api Key belongs to. Eg: 'org-id'",
+		})
+		.optional(),
+});
 
 export function createApiKey({
-	keyGenerator,
-	opts,
+	defaultKeyGenerator,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	keyGenerator: (options: {
+	defaultKeyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
 	}) => Awaitable<string>;
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -185,9 +186,9 @@ export function createApiKey({
 												nullable: true,
 												description: "Expiration timestamp",
 											},
-											userId: {
+											referenceId: {
 												type: "string",
-												description: "ID of the user owning the key",
+												description: "ID of the reference owning the key",
 											},
 											lastRefillAt: {
 												type: "string",
@@ -270,6 +271,7 @@ export function createApiKey({
 		},
 		async (ctx) => {
 			const {
+				configId,
 				name,
 				expiresIn,
 				prefix,
@@ -283,25 +285,15 @@ export function createApiKey({
 				rateLimitEnabled,
 			} = ctx.body;
 
+			const opts = resolveConfiguration(ctx.context, configurations, configId);
+			const keyGenerator = opts.customKeyGenerator || defaultKeyGenerator;
 			const session = await getSessionFromCtx(ctx);
-			const authRequired = ctx.request || ctx.headers;
-			const user =
-				authRequired && !session
-					? null
-					: session?.user || { id: ctx.body.userId };
+			const isClientRequest = ctx.request || ctx.headers;
 
-			if (!user?.id) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
-			}
-
-			if (session && ctx.body.userId && session?.user.id !== ctx.body.userId) {
-				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
-			}
-
-			if (authRequired) {
-				// if this endpoint was being called from the client,
-				// we must make sure they can't use server-only properties.
-				if (
+			// if this endpoint was being called from the client,
+			// we must make sure they can't use server-only properties.
+			const isUsingServerOnlyProps = (() => {
+				return (
 					refillAmount !== undefined ||
 					refillInterval !== undefined ||
 					rateLimitMax !== undefined ||
@@ -309,8 +301,61 @@ export function createApiKey({
 					rateLimitEnabled !== undefined ||
 					permissions !== undefined ||
 					remaining !== null
-				) {
-					throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+				);
+			})();
+
+			// client: can't use server-only properties
+			if (isClientRequest && isUsingServerOnlyProps) {
+				throw APIError.from("BAD_REQUEST", ERROR_CODES.SERVER_ONLY_PROPERTY);
+			}
+
+			// client: can't specify userId - it's derived from session
+			// Only check for actual HTTP requests (ctx.request is set), not direct API calls with just headers
+			if (ctx.request && ctx.body.userId !== undefined) {
+				throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+			}
+
+			// Determine the reference type and ID based on configuration
+			const referencesType = opts.references ?? "user";
+			let referenceId: string;
+
+			if (referencesType === "organization") {
+				// Organization-owned API keys
+				const orgId = ctx.body.organizationId;
+				if (!orgId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						ERROR_CODES.ORGANIZATION_ID_REQUIRED,
+					);
+				}
+				referenceId = orgId;
+			} else {
+				// User-owned API keys (default)
+				if (isClientRequest) {
+					if (!session?.user.id) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_SESSION,
+						);
+					}
+					referenceId = session.user.id;
+				} else {
+					const ctxUserId = ctx.body.userId;
+					const sessionUserId = session?.user.id;
+					if (!sessionUserId && !ctxUserId) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_SESSION,
+						);
+					}
+					// ensures no mismatching user IDs between session headers and request body
+					if (session && ctxUserId && sessionUserId !== ctxUserId) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							ERROR_CODES.UNAUTHORIZED_SESSION,
+						);
+					}
+					referenceId = (sessionUserId || ctxUserId) as string;
 				}
 			}
 
@@ -401,7 +446,7 @@ export function createApiKey({
 
 			const defaultPermissions = opts.permissions?.defaultPermissions
 				? typeof opts.permissions.defaultPermissions === "function"
-					? await opts.permissions.defaultPermissions(user.id, ctx)
+					? await opts.permissions.defaultPermissions(referenceId, ctx)
 					: opts.permissions.defaultPermissions
 				: undefined;
 			const permissionsToApply = permissions
@@ -410,7 +455,10 @@ export function createApiKey({
 					? JSON.stringify(defaultPermissions)
 					: undefined;
 
+			const resolvedConfigId = opts.configId ?? "default";
+
 			const data: Omit<ApiKey, "id"> = {
+				configId: resolvedConfigId,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -423,7 +471,7 @@ export function createApiKey({
 					: opts.keyExpiration.defaultExpiresIn
 						? getDate(opts.keyExpiration.defaultExpiresIn, "sec")
 						: null,
-				userId: user.id,
+				referenceId: referenceId,
 				lastRefillAt: null,
 				lastRequest: null,
 				metadata: null,

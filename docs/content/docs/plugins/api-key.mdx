@@ -14,6 +14,8 @@ The API Key plugin allows you to create and manage API keys for your application
 - Custom prefix
 - [Sessions from API keys](/docs/plugins/api-key#sessions-from-api-keys)
 - [Secondary storage support](/docs/plugins/api-key#secondary-storage) for high-performance API key lookups
+- [Multiple configurations](/docs/plugins/api-key#multiple-configurations) for different API key types
+- [Organization-owned API keys](/docs/plugins/api-key#organization-owned-api-keys) in addition to user-owned keys
 
 ## Installation
 
@@ -77,11 +79,15 @@ You can view the list of API Key plugin options [here](/docs/plugins/api-key#api
 <APIMethod
   path="/api-key/create"
   method="POST"
-  serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property. This is the ID of the user that the API key is associated with."
+  serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys) or `organizationId` (for organization-owned keys)."
   clientOnlyNote="You can adjust more specific API key configurations by using the server method instead."
 >
 ```ts
 type createApiKey = {
+    /**
+     * The configuration ID to use. If not provided, the default configuration is used.
+     */
+    configId?: string
     /**
      * Name of the Api Key.
      */
@@ -92,9 +98,15 @@ type createApiKey = {
     expiresIn?: number = 60 * 60 * 24 * 7
     /**
      * User Id of the user that the Api Key belongs to. server-only.
+     * Required for user-owned keys when not using session headers.
      * @serverOnly
      */
     userId?: string = "user-id"
+    /**
+     * Organization Id that the Api Key belongs to. 
+     * Required for organization-owned keys (when config has `references: "organization"`).
+     */
+    organizationId?: string = "org-id"
     /**
      * Prefix of the Api Key.
      */
@@ -142,7 +154,7 @@ type createApiKey = {
 ```
 </APIMethod>
 
-<Callout>API keys are assigned to a user.</Callout>
+<Callout>API keys can be owned by either a user or an organization, depending on the configuration's `references` setting.</Callout>
 
 #### Result
 
@@ -337,6 +349,15 @@ type Result = {
 ```ts
 type listApiKeys = {
     /**
+     * Filter by configuration ID. If not provided, returns keys from all configurations.
+     */
+    configId?: string
+    /**
+     * Organization ID to list keys for. If provided, returns organization-owned keys.
+     * If not provided, returns user-owned keys for the current session user.
+     */
+    organizationId?: string
+    /**
      * The number of API keys to return.
      */
     limit?: number
@@ -373,7 +394,7 @@ type Result = {
 #### Pagination Examples
 
 ```ts
-// Get first 10 API keys
+// Get first 10 API keys for the current user
 const result = await authClient.apiKey.list({
   query: { limit: 10 }
 });
@@ -395,6 +416,19 @@ const combined = await authClient.apiKey.list({
     offset: 0, 
     sortBy: "name", 
     sortDirection: "asc" 
+  }
+});
+
+// List organization-owned keys
+const orgKeys = await authClient.apiKey.list({
+  query: { organizationId: "org_123" }
+});
+
+// List organization keys with specific config
+const orgPublicKeys = await authClient.apiKey.list({
+  query: { 
+    organizationId: "org_123",
+    configId: "public" 
   }
 });
 ```
@@ -430,6 +464,10 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
 
 <Callout type="warn">
  This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
+</Callout>
+
+<Callout>
+  **User-Owned Keys Only**: Session mocking only works with user-owned API keys (where `references: "user"`). Organization-owned keys cannot mock user sessions.
 </Callout>
 
 <Callout>
@@ -497,6 +535,193 @@ export const auth = betterAuth({
     }),
   ],
 });
+```
+
+## Multiple Configurations
+
+You can define multiple API key configurations with different settings. Each configuration is identified by a unique `configId` and can have its own prefix, rate limits, permissions, and other options.
+
+This is useful when you need different types of API keys for different purposes, such as:
+- Public vs private API keys
+- Read-only vs read-write keys
+- Different rate limits for different tiers
+
+### Setup
+
+Pass an array of configuration objects to the `apiKey` plugin:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    apiKey([
+      {
+        configId: "public",
+        defaultPrefix: "pk_",
+        rateLimit: {
+          enabled: true,
+          maxRequests: 100,
+          timeWindow: 1000 * 60 * 60, // 1 hour
+        },
+      },
+      {
+        configId: "secret",
+        defaultPrefix: "sk_",
+        enableMetadata: true,
+        rateLimit: {
+          enabled: true,
+          maxRequests: 1000,
+          timeWindow: 1000 * 60 * 60, // 1 hour
+        },
+      },
+    ]),
+  ],
+});
+```
+
+### Creating Keys with Specific Configurations
+
+When creating an API key, specify which configuration to use via the `configId` parameter:
+
+```ts title="create-api-key.ts"
+import { auth } from "@/lib/auth"
+
+// Create a public key
+const publicKey = await auth.api.createApiKey({
+  body: {
+    configId: "public",
+    userId: user.id,
+  },
+});
+// Result: pk_...
+
+// Create a secret key
+const secretKey = await auth.api.createApiKey({
+  body: {
+    configId: "secret",
+    userId: user.id,
+    metadata: { plan: "premium" },
+  },
+});
+// Result: sk_...
+```
+
+### Filtering Keys by Configuration
+
+When listing API keys, you can filter by `configId`:
+
+```ts title="list-api-keys.ts"
+// List only public keys
+const publicKeys = await authClient.apiKey.list({
+  query: { configId: "public" }
+});
+
+// List only secret keys
+const secretKeys = await authClient.apiKey.list({
+  query: { configId: "secret" }
+});
+```
+
+### Global Options
+
+You can also pass global options (like `schema`) as a second argument:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    apiKey(
+      [
+        { configId: "public", defaultPrefix: "pk_" },
+        { configId: "secret", defaultPrefix: "sk_" },
+      ],
+      {
+        schema: {
+          // Custom schema options
+        },
+      }
+    ),
+  ],
+});
+```
+
+## Organization-Owned API Keys
+
+By default, API keys are owned by users. However, you can configure API keys to be owned by organizations instead. This is useful for team-based applications where API keys should be shared across organization members.
+
+### Configuration
+
+Set `references: "organization"` in your configuration:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { apiKey } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    apiKey([
+      {
+        configId: "user-keys",
+        defaultPrefix: "user_",
+        references: "user", // Default - owned by users
+      },
+      {
+        configId: "org-keys",
+        defaultPrefix: "org_",
+        references: "organization", // Owned by organizations
+      },
+    ]),
+  ],
+});
+```
+
+### Creating Organization-Owned Keys
+
+When creating an organization-owned API key, pass the `organizationId` instead of `userId`:
+
+```ts title="create-org-api-key.ts"
+import { auth } from "@/lib/auth"
+
+const orgKey = await auth.api.createApiKey({
+  body: {
+    configId: "org-keys",
+    organizationId: "org_123", // Required for org-owned keys
+  },
+});
+```
+
+<Callout type="warn">
+  **Session Mocking Limitation**: The `enableSessionForAPIKeys` feature only works with user-owned API keys. Organization-owned keys cannot mock user sessions, as there's no single user associated with the key.
+</Callout>
+
+### API Key Object Structure
+
+API keys include a `configId` to identify which configuration they belong to, and a `referenceId` for the owner:
+
+```ts
+type ApiKey = {
+  id: string;
+  configId: string;    // The configuration this key belongs to
+  referenceId: string; // The owner ID (userId or organizationId based on config)
+  // ... other fields
+};
+```
+
+The owner type (user vs organization) is determined by looking up the configuration:
+
+```ts
+const apiKey = await auth.api.getApiKey({
+  query: { id: keyId },
+  headers,
+});
+
+// The owner type is determined by the config's `references` setting
+// For org-keys config (references: "organization"):
+console.log(`Key owned by: ${apiKey.referenceId}`);
 ```
 
 ## Storage Modes
@@ -832,6 +1057,16 @@ console.log(apiKey.metadata.plan); // "premium"
 
 ## API Key plugin options
 
+`configId` <span className="opacity-70">`string`</span>
+
+A unique identifier for this configuration. Required when using multiple configurations. Default is `"default"`.
+
+`references` <span className="opacity-70">`"user" | "organization"`</span>
+
+What the API key references. This determines ownership over the API key. Default is `"user"`.
+- `"user"`: API keys are owned by users (requires `userId` on creation)
+- `"organization"`: API keys are owned by organizations (requires `organizationId` on creation)
+
 `apiKeyHeaders` <span className="opacity-70">`string | string[];`</span>
 
 The header name to check for API key. Default is `x-api-key`.
@@ -981,7 +1216,7 @@ Default is `false`.
   When `storage` is set to `"secondary-storage"`, you must configure `secondaryStorage` in your Better Auth options. API keys will be stored using key-value patterns:
   - `api-key:${hashedKey}` - Primary lookup by hashed key
   - `api-key:by-id:${id}` - Lookup by ID
-  - `api-key:by-user:${userId}` - User's API key list
+  - `api-key:by-ref:${referenceId}` - Reference's API key list (user or organization)
   
   If an API key has an expiration date (`expiresAt`), a TTL will be automatically set in secondary storage to ensure automatic cleanup.
 </Callout>
@@ -1088,7 +1323,7 @@ Requires `backgroundTasks.handler` to be configured in the main auth options.
   </Tab>
 </Tabs>
 
-`permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
+`permissions` <span className="opacity-70">`{ defaultPermissions?: Statements | ((referenceId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>) }`</span>
 
 Permissions for the API key.
 
@@ -1096,9 +1331,9 @@ Read more about permissions [here](/docs/plugins/api-key#permissions).
 
 <Accordions>
   <Accordion title="permissions Options">
-    `defaultPermissions` <span className="opacity-70">`Statements | ((userId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>)`</span>
+    `defaultPermissions` <span className="opacity-70">`Statements | ((referenceId: string, ctx: GenericEndpointContext) => Statements | Promise<Statements>)`</span>
 
-    The default permissions for the API key.
+    The default permissions for the API key. The `referenceId` is either the user ID or organization ID depending on the `references` setting.
 
   </Accordion>
 </Accordions>
@@ -1150,8 +1385,9 @@ export const auth = betterAuth({
   plugins: [
     apiKey({
       permissions: {
-        defaultPermissions: async (userId, ctx) => {
-          // Fetch user role or other data to determine permissions
+        defaultPermissions: async (referenceId, ctx) => {
+          // referenceId is either userId or orgId depending on config
+          // Fetch user/org role or other data to determine permissions
           return {
             files: ["read"],
             users: ["read"],
@@ -1257,6 +1493,11 @@ Table: `apikey`
       isPrimaryKey: true,
     },
     {
+      name: "configId",
+      type: "string",
+      description: "The configuration ID this key belongs to. Default is 'default'.",
+    },
+    {
       name: "name",
       type: "string",
       description: "The name of the API key.",
@@ -1281,10 +1522,10 @@ Table: `apikey`
       description: "The hashed API key itself.",
     },
     {
-      name: "userId",
+      name: "referenceId",
       type: "string",
-      description: "The ID of the user associated with the API key.",
-      isForeignKey: true,
+      description: "The ID of the owner (user ID or organization ID based on the config's `references` setting).",
+      isIndexed: true,
     },
     {
       name: "refillInterval",
@@ -1375,3 +1616,28 @@ Table: `apikey`
     },
   ]}
 />
+
+### Migration from Previous Versions
+
+If you're upgrading from a previous version, you'll need to migrate the `userId` field to the new reference system:
+
+```sql
+-- Add new columns
+ALTER TABLE apikey ADD COLUMN config_id VARCHAR(255) NOT NULL DEFAULT 'default';
+ALTER TABLE apikey ADD COLUMN reference_id VARCHAR(255);
+
+-- Migrate existing data (copy userId to referenceId)
+UPDATE apikey SET reference_id = user_id WHERE reference_id IS NULL;
+
+-- Make reference_id required and add indexes
+ALTER TABLE apikey ALTER COLUMN reference_id SET NOT NULL;
+CREATE INDEX idx_apikey_reference_id ON apikey(reference_id);
+CREATE INDEX idx_apikey_config_id ON apikey(config_id);
+
+-- Optionally drop the old column after verifying migration
+-- ALTER TABLE apikey DROP COLUMN user_id;
+```
+
+<Callout type="warn">
+  **Breaking Change**: The `userId` field has been replaced with `referenceId`. API responses now return `referenceId` instead of `userId`. The owner type (user vs organization) is determined by the configuration's `references` setting, not stored on each key.
+</Callout>

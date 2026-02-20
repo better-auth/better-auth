@@ -1,7 +1,8 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
-import { API_KEY_TABLE_NAME } from "..";
+import { APIError } from "../../..";
+import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
+import type { ApiKey, ApiKeyConfigurationOptions } from "../types";
 import { createApiKey } from "./create-api-key";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
@@ -10,10 +11,10 @@ import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
 
-export type PredefinedApiKeyOptions = ApiKeyOptions &
+export type PredefinedApiKeyOptions = ApiKeyConfigurationOptions &
 	Required<
 		Pick<
-			ApiKeyOptions,
+			ApiKeyConfigurationOptions,
 			| "apiKeyHeaders"
 			| "defaultKeyLength"
 			| "keyExpiration"
@@ -32,11 +33,40 @@ export type PredefinedApiKeyOptions = ApiKeyOptions &
 			| "deferUpdates"
 		>
 	> & {
-		keyExpiration: Required<ApiKeyOptions["keyExpiration"]>;
-		startingCharactersConfig: Required<
-			ApiKeyOptions["startingCharactersConfig"]
+		keyExpiration: Required<
+			NonNullable<ApiKeyConfigurationOptions["keyExpiration"]>
 		>;
+		startingCharactersConfig: Required<
+			NonNullable<ApiKeyConfigurationOptions["startingCharactersConfig"]>
+		>;
+		rateLimit: Required<NonNullable<ApiKeyConfigurationOptions["rateLimit"]>>;
 	};
+
+export function resolveConfiguration(
+	authContext: AuthContext,
+	configurations: PredefinedApiKeyOptions[],
+	configId?: string | null,
+): PredefinedApiKeyOptions {
+	// Defined in a function to avoid running the code when not needed.
+	// If ran unnessesarily, it could throw an error saying "No default api-key configuration found." when the configId is provided.
+	const getDefaultConfig = () => {
+		const defaultConfig = configurations.find(
+			(c) => !c.configId || c.configId === "default",
+		);
+		if (!defaultConfig) {
+			const message =
+				"No default api-key configuration found. Either provide an api-key configuration with configId 'default' or provide a configuration with no `configId` set.";
+			authContext.logger.error(message);
+			const error = API_KEY_ERROR_CODES.NO_DEFAULT_API_KEY_CONFIGURATION_FOUND;
+			throw APIError.from("BAD_REQUEST", error);
+		}
+		return defaultConfig;
+	};
+	if (!configId) return getDefaultConfig();
+	return (
+		configurations.find((c) => c.configId === configId) ?? getDefaultConfig()
+	);
+}
 
 let lastChecked: Date | null = null;
 
@@ -74,29 +104,45 @@ export async function deleteAllExpiredApiKeys(
 }
 
 export function createApiKeyRoutes({
-	keyGenerator,
-	opts,
+	defaultKeyGenerator,
+	configurations,
 	schema,
 }: {
-	keyGenerator: (options: {
+	defaultKeyGenerator: (options: {
 		length: number;
 		prefix: string | undefined;
 	}) => Awaitable<string>;
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 }) {
 	return {
 		createApiKey: createApiKey({
-			keyGenerator,
-			opts,
+			defaultKeyGenerator,
+			configurations,
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		verifyApiKey: verifyApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		getApiKey: getApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		updateApiKey: updateApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		deleteApiKey: deleteApiKey({ opts, schema, deleteAllExpiredApiKeys }),
-		listApiKeys: listApiKeys({ opts, schema, deleteAllExpiredApiKeys }),
+		verifyApiKey: verifyApiKey({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		getApiKey: getApiKey({ configurations, schema, deleteAllExpiredApiKeys }),
+		updateApiKey: updateApiKey({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		deleteApiKey: deleteApiKey({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		listApiKeys: listApiKeys({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
 			deleteAllExpiredApiKeys,
 		}),

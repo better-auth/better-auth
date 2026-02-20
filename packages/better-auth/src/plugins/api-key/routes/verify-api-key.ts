@@ -17,6 +17,7 @@ import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 export async function validateApiKey({
 	hashedKey,
@@ -230,17 +231,18 @@ const verifyApiKeyBodySchema = z.object({
 });
 
 export function verifyApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
+	const defaultOpts = configurations[0]!;
 	return createAuthEndpoint(
 		{
 			method: "POST",
@@ -249,8 +251,8 @@ export function verifyApiKey({
 		async (ctx) => {
 			const { key } = ctx.body;
 
-			if (opts.customAPIKeyValidator) {
-				const isValid = await opts.customAPIKeyValidator({ ctx, key });
+			if (defaultOpts.customAPIKeyValidator) {
+				const isValid = await defaultOpts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
 					return ctx.json({
 						valid: false,
@@ -263,7 +265,9 @@ export function verifyApiKey({
 				}
 			}
 
-			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
+			const hashed = defaultOpts.disableKeyHashing
+				? key
+				: await defaultKeyHasher(key);
 
 			let apiKey: ApiKey | null = null;
 
@@ -272,9 +276,14 @@ export function verifyApiKey({
 					hashedKey: hashed,
 					permissions: ctx.body.permissions,
 					ctx,
-					opts,
+					opts: defaultOpts,
 					schema,
 				});
+
+				// Resolve the correct config based on the API key's configId
+				const opts = apiKey
+					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
+					: defaultOpts;
 
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
@@ -314,6 +323,11 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
+
+			// Resolve the correct config for metadata migration
+			const opts = apiKey
+				? resolveConfiguration(ctx.context, configurations, apiKey.configId)
+				: defaultOpts;
 
 			// Migrate legacy double-stringified metadata if needed
 			let migratedMetadata: Record<string, any> | null = null;

@@ -26,10 +26,16 @@ export const API_KEY_ERROR_CODES = defineErrorCodes({
 	KEY_DISABLED_EXPIRATION: "Custom key expiration values are disabled.",
 	INVALID_API_KEY: "Invalid API key.",
 	INVALID_USER_ID_FROM_API_KEY: "The user id from the API key is invalid.",
+	INVALID_REFERENCE_ID_FROM_API_KEY:
+		"The reference id from the API key is invalid.",
 	INVALID_API_KEY_GETTER_RETURN_TYPE:
 		"API Key getter returned an invalid key type. Expected string.",
 	SERVER_ONLY_PROPERTY:
 		"The property you're trying to set can only be set from the server auth instance only.",
 	FAILED_TO_UPDATE_API_KEY: "Failed to update API key",
 	NAME_REQUIRED: "API Key name is required.",
+	ORGANIZATION_ID_REQUIRED:
+		"Organization ID is required for organization-owned API keys.",
+	NO_DEFAULT_API_KEY_CONFIGURATION_FOUND:
+		"No default api-key configuration found.",
 });

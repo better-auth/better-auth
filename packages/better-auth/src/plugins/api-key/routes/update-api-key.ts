@@ -14,6 +14,7 @@ import {
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 const updateApiKeyBodySchema = z.object({
 	keyId: z.string().meta({
@@ -96,11 +97,11 @@ const updateApiKeyBodySchema = z.object({
 });
 
 export function updateApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -296,16 +297,26 @@ export function updateApiKey({
 				}
 			}
 
+			// Use default config for initial lookup
+			const defaultOpts = configurations[0]!;
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, keyId, opts);
-
-			// Verify ownership
-			if (apiKey && apiKey.userId !== user.id) {
-				apiKey = null;
-			}
+			apiKey = await getApiKeyById(ctx, keyId, defaultOpts);
 
 			if (!apiKey) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Resolve the correct config based on the API key's configId
+			const opts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				apiKey.configId,
+			);
+
+			// Verify ownership based on config's references type
+			const referencesType = opts.references ?? "user";
+			if (referencesType === "user" && apiKey.referenceId !== user.id) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 

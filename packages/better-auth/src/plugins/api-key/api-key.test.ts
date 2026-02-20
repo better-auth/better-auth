@@ -58,7 +58,7 @@ describe("api-key", async () => {
 
 		expect(apiKey.data).not.toBeNull();
 		expect(apiKey.data?.key).toBeDefined();
-		expect(apiKey.data?.userId).toEqual(user.id);
+		expect(apiKey.data?.referenceId).toEqual(user.id);
 		expect(apiKey.data?.name).toBeNull();
 		expect(apiKey.data?.prefix).toBeNull();
 		expect(apiKey.data?.refillInterval).toBeNull();
@@ -140,7 +140,7 @@ describe("api-key", async () => {
 
 		expect(apiKey).not.toBeNull();
 		expect(apiKey.key).toBeDefined();
-		expect(apiKey.userId).toEqual(user.id);
+		expect(apiKey.referenceId).toEqual(user.id);
 		expect(apiKey.name).toBeNull();
 		expect(apiKey.prefix).toBeNull();
 		expect(apiKey.refillInterval).toBeNull();
@@ -2496,14 +2496,14 @@ describe("api-key", async () => {
 			expect(store.has(`api-key:by-id:${apiKey?.id}`)).toBe(true);
 
 			// Check that user's API key list is updated
-			expect(store.has(`api-key:by-user:${user.id}`)).toBe(true);
+			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
 
 			// Verify the stored data can be retrieved
 			const storedData = store.get(`api-key:by-id:${apiKey?.id}`);
 			expect(storedData).toBeDefined();
 			const parsed = JSON.parse(storedData!);
 			expect(parsed.id).toBe(apiKey?.id);
-			expect(parsed.userId).toBe(user.id);
+			expect(parsed.referenceId).toBe(user.id);
 		});
 
 		it("should get API key from secondary storage", async () => {
@@ -2522,7 +2522,7 @@ describe("api-key", async () => {
 
 			expect(retrievedKey).not.toBeNull();
 			expect(retrievedKey?.id).toBe(createdKey?.id);
-			expect(retrievedKey?.userId).toBe(user.id);
+			expect(retrievedKey?.referenceId).toBe(user.id);
 		});
 
 		it("should list API keys from secondary storage", async () => {
@@ -2590,7 +2590,7 @@ describe("api-key", async () => {
 			expect(store.has(`api-key:by-id:${createdKey!.id}`)).toBe(false);
 
 			// Verify it's removed from user's list
-			const userListData = store.get(`api-key:by-user:${user.id}`);
+			const userListData = store.get(`api-key:by-ref:${user.id}`);
 			if (userListData) {
 				const userIds = JSON.parse(userListData);
 				expect(userIds.includes(createdKey!.id)).toBe(false);
@@ -2904,6 +2904,7 @@ describe("api-key", async () => {
 			const dbKey = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 				model: "apikey",
 				data: {
+					configId: "default",
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					name: "Test Key",
@@ -2912,7 +2913,7 @@ describe("api-key", async () => {
 					key: hashedKey,
 					enabled: true,
 					expiresAt: null,
-					userId: user.id,
+					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
 					metadata: null,
@@ -2958,6 +2959,7 @@ describe("api-key", async () => {
 			const dbKey1 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 				model: "apikey",
 				data: {
+					configId: "default",
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					name: "Test Key 1",
@@ -2966,7 +2968,7 @@ describe("api-key", async () => {
 					key: hashedKey1,
 					enabled: true,
 					expiresAt: null,
-					userId: user.id,
+					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
 					metadata: null,
@@ -2984,6 +2986,7 @@ describe("api-key", async () => {
 			const dbKey2 = await context.adapter.create<Omit<ApiKey, "id">, ApiKey>({
 				model: "apikey",
 				data: {
+					configId: "default",
 					createdAt: new Date(),
 					updatedAt: new Date(),
 					name: "Test Key 2",
@@ -2992,7 +2995,7 @@ describe("api-key", async () => {
 					key: hashedKey2,
 					enabled: true,
 					expiresAt: null,
-					userId: user.id,
+					referenceId: user.id,
 					lastRefillAt: null,
 					lastRequest: null,
 					metadata: null,
@@ -3013,7 +3016,7 @@ describe("api-key", async () => {
 			// Ensure keys are NOT in storage initially
 			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(false);
 			expect(store.has(`api-key:by-id:${dbKey2!.id}`)).toBe(false);
-			expect(store.has(`api-key:by-user:${user.id}`)).toBe(false);
+			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(false);
 
 			// List keys via API (should fallback to DB and auto-populate storage)
 			const { data: keys } = await client.apiKey.list({}, { headers: headers });
@@ -3029,7 +3032,7 @@ describe("api-key", async () => {
 			expect(store.has(`api-key:${hashedKey1}`)).toBe(true);
 			expect(store.has(`api-key:${hashedKey2}`)).toBe(true);
 			// Verify user's key list is populated
-			expect(store.has(`api-key:by-user:${user.id}`)).toBe(true);
+			expect(store.has(`api-key:by-ref:${user.id}`)).toBe(true);
 		});
 
 		it("should write to secondary storage only", async () => {
@@ -3653,6 +3656,725 @@ describe("api-key", async () => {
 			});
 
 			expect(result.metadata).toBeNull();
+		});
+	});
+
+	// =========================================================================
+	// MULTIPLE CONFIGURATIONS
+	// =========================================================================
+
+	describe("multiple configurations", async () => {
+		const { auth, signInWithTestUser, client } = await getTestInstance(
+			{
+				plugins: [
+					apiKey([
+						{
+							configId: "public-api",
+							defaultPrefix: "pub_",
+							rateLimit: {
+								enabled: true,
+								maxRequests: 100,
+								timeWindow: 60000,
+							},
+						},
+						{
+							configId: "internal-api",
+							defaultPrefix: "int_",
+							rateLimit: {
+								enabled: true,
+								maxRequests: 1000,
+								timeWindow: 60000,
+							},
+						},
+						{
+							configId: "default",
+							defaultPrefix: "def_",
+						},
+					]),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		it("should create API key with specific configId", async () => {
+			const { user } = await signInWithTestUser();
+
+			const publicKey = await auth.api.createApiKey({
+				body: {
+					configId: "public-api",
+					userId: user.id,
+				},
+			});
+
+			expect(publicKey).not.toBeNull();
+			expect(publicKey.configId).toBe("public-api");
+			expect(publicKey.prefix).toBe("pub_");
+			expect(publicKey.rateLimitMax).toBe(100);
+
+			const internalKey = await auth.api.createApiKey({
+				body: {
+					configId: "internal-api",
+					userId: user.id,
+				},
+			});
+
+			expect(internalKey).not.toBeNull();
+			expect(internalKey.configId).toBe("internal-api");
+			expect(internalKey.prefix).toBe("int_");
+			expect(internalKey.rateLimitMax).toBe(1000);
+		});
+
+		it("should use default config when no configId is provided", async () => {
+			const { user } = await signInWithTestUser();
+
+			const defaultKey = await auth.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			expect(defaultKey).not.toBeNull();
+			expect(defaultKey.configId).toBe("default");
+			expect(defaultKey.prefix).toBe("def_");
+		});
+
+		it("should list keys filtered by configId", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create keys with different configs
+			await auth.api.createApiKey({
+				body: { configId: "public-api", userId: user.id },
+			});
+			await auth.api.createApiKey({
+				body: { configId: "internal-api", userId: user.id },
+			});
+			await auth.api.createApiKey({
+				body: { configId: "default", userId: user.id },
+			});
+
+			// List all keys
+			const allKeys = await auth.api.listApiKeys({ headers });
+			expect(allKeys.apiKeys.length).toBeGreaterThanOrEqual(3);
+
+			// List only public-api keys
+			const publicKeys = await client.apiKey.list(
+				{ query: { configId: "public-api" } },
+				{ headers },
+			);
+			expect(
+				publicKeys.data?.apiKeys.every((k) => k.configId === "public-api"),
+			).toBe(true);
+
+			// List only internal-api keys
+			const internalKeys = await client.apiKey.list(
+				{ query: { configId: "internal-api" } },
+				{ headers },
+			);
+			expect(
+				internalKeys.data?.apiKeys.every((k) => k.configId === "internal-api"),
+			).toBe(true);
+		});
+
+		it("should verify key and apply correct config rate limits", async () => {
+			const { user } = await signInWithTestUser();
+
+			const publicKey = await auth.api.createApiKey({
+				body: {
+					configId: "public-api",
+					userId: user.id,
+				},
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: publicKey.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key?.configId).toBe("public-api");
+			expect(result.key?.rateLimitMax).toBe(100);
+		});
+
+		it("should get key and resolve correct config", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const internalKey = await auth.api.createApiKey({
+				body: {
+					configId: "internal-api",
+					userId: user.id,
+				},
+			});
+
+			const retrievedKey = await auth.api.getApiKey({
+				query: { id: internalKey.id },
+				headers,
+			});
+
+			expect(retrievedKey.configId).toBe("internal-api");
+			expect(retrievedKey.prefix).toBe("int_");
+		});
+
+		it("should update key while preserving configId", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: {
+					configId: "public-api",
+					name: "original-name",
+					userId: user.id,
+				},
+			});
+
+			const updatedKey = await auth.api.updateApiKey({
+				body: {
+					keyId: key.id,
+					name: "updated-name",
+				},
+				headers,
+			});
+
+			expect(updatedKey.configId).toBe("public-api");
+			expect(updatedKey.name).toBe("updated-name");
+		});
+
+		it("should delete key from specific config", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const key = await auth.api.createApiKey({
+				body: {
+					configId: "internal-api",
+					userId: user.id,
+				},
+			});
+
+			const deleteResult = await auth.api.deleteApiKey({
+				body: { keyId: key.id },
+				headers,
+			});
+
+			expect(deleteResult.success).toBe(true);
+
+			// Verify key is deleted
+			try {
+				await auth.api.getApiKey({
+					query: { id: key.id },
+					headers,
+				});
+				expect.fail("Should have thrown an error");
+			} catch (error: any) {
+				expect(isAPIError(error)).toBe(true);
+			}
+		});
+
+		it("should throw error when configId array has non-unique configIds", async () => {
+			expect(() =>
+				apiKey([{ configId: "duplicate" }, { configId: "duplicate" }]),
+			).toThrow("configId must be unique");
+		});
+
+		it("should throw error when configId is missing in array config", async () => {
+			expect(() =>
+				apiKey([
+					{ configId: "valid" },
+					{}, // Missing configId
+				]),
+			).toThrow("configId is required");
+		});
+	});
+
+	// =========================================================================
+	// ORGANIZATION-OWNED API KEYS
+	// =========================================================================
+
+	describe("organization-owned API keys", async () => {
+		const { organization } = await import("../organization");
+		const { organizationClient } = await import("../organization/client");
+
+		const { auth, signInWithTestUser, client } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						async sendInvitationEmail() {},
+					}),
+					apiKey([
+						{
+							configId: "user-keys",
+							defaultPrefix: "usr_",
+							references: "user",
+						},
+						{
+							configId: "org-keys",
+							defaultPrefix: "org_",
+							references: "organization",
+						},
+					]),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient(), organizationClient()],
+				},
+			},
+		);
+
+		it("should create organization-owned API key", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create an organization
+			const org = await auth.api.createOrganization({
+				body: { name: "Test Org", slug: "test-org" },
+				headers,
+			});
+
+			// Create org-owned API key
+			const orgKey = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+				},
+				headers,
+			});
+
+			expect(orgKey).not.toBeNull();
+			expect(orgKey.configId).toBe("org-keys");
+			expect(orgKey.referenceId).toBe(org.id);
+			expect(orgKey.prefix).toBe("org_");
+		});
+
+		it("should create user-owned API key", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const userKey = await auth.api.createApiKey({
+				body: {
+					configId: "user-keys",
+					userId: user.id,
+				},
+			});
+
+			expect(userKey).not.toBeNull();
+			expect(userKey.configId).toBe("user-keys");
+			expect(userKey.referenceId).toBe(user.id);
+			expect(userKey.prefix).toBe("usr_");
+		});
+
+		it("should fail to create org key without organizationId", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			try {
+				await auth.api.createApiKey({
+					body: {
+						configId: "org-keys",
+						userId: user.id, // Wrong - should be organizationId
+					},
+				});
+				expect.fail("Should have thrown an error");
+			} catch (error: any) {
+				expect(isAPIError(error)).toBe(true);
+				expect(error.body?.code).toBe(
+					ERROR_CODES.ORGANIZATION_ID_REQUIRED.code,
+				);
+			}
+		});
+
+		it("should verify organization-owned API key", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			const org = await auth.api.createOrganization({
+				body: { name: "Verify Org", slug: "verify-org" },
+				headers,
+			});
+
+			const orgKey = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+				},
+				headers,
+			});
+
+			const result = await auth.api.verifyApiKey({
+				body: { key: orgKey.key },
+			});
+
+			expect(result.valid).toBe(true);
+			expect(result.key?.configId).toBe("org-keys");
+			expect(result.key?.referenceId).toBe(org.id);
+		});
+
+		it("should list only user-owned keys when no organizationId provided", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create an organization
+			const org = await auth.api.createOrganization({
+				body: { name: "List Org", slug: "list-org" },
+				headers,
+			});
+
+			// Create user-owned key
+			await auth.api.createApiKey({
+				body: { configId: "user-keys", userId: user.id },
+			});
+
+			// Create org-owned key
+			await auth.api.createApiKey({
+				body: { configId: "org-keys", organizationId: org.id },
+				headers,
+			});
+
+			// List from client without organizationId should only return user-owned keys
+			const result = await client.apiKey.list({}, { headers });
+
+			expect(result.data?.apiKeys).toBeDefined();
+			// All returned keys should be user-owned (from user-keys config)
+			result.data?.apiKeys.forEach((key) => {
+				expect(key.configId).toBe("user-keys");
+				expect(key.referenceId).toBe(user.id);
+			});
+		});
+
+		it("should list organization-owned keys when organizationId is provided", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create an organization
+			const org = await auth.api.createOrganization({
+				body: { name: "List Org Keys", slug: "list-org-keys" },
+				headers,
+			});
+
+			// Create user-owned key
+			const userKey = await auth.api.createApiKey({
+				body: { configId: "user-keys", userId: user.id },
+			});
+
+			// Create org-owned keys
+			const orgKey1 = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+					name: "org-key-1",
+				},
+				headers,
+			});
+			const orgKey2 = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+					name: "org-key-2",
+				},
+				headers,
+			});
+
+			// List with organizationId should only return org-owned keys
+			const result = await client.apiKey.list(
+				{ query: { organizationId: org.id } },
+				{ headers },
+			);
+
+			expect(result.data?.apiKeys).toBeDefined();
+			expect(result.data?.apiKeys.length).toBe(2);
+			// All returned keys should be org-owned
+			result.data?.apiKeys.forEach((key) => {
+				expect(key.configId).toBe("org-keys");
+				expect(key.referenceId).toBe(org.id);
+			});
+
+			// Verify user key is not in the list
+			const userKeyInList = result.data?.apiKeys.find(
+				(k) => k.id === userKey.id,
+			);
+			expect(userKeyInList).toBeUndefined();
+		});
+
+		it("should filter organization keys by configId", async () => {
+			const {
+				auth: authMultiOrg,
+				signInWithTestUser: signIn,
+				client: clientMultiOrg,
+			} = await getTestInstance(
+				{
+					plugins: [
+						organization({
+							async sendInvitationEmail() {},
+						}),
+						apiKey([
+							{
+								configId: "org-public",
+								defaultPrefix: "pub_",
+								references: "organization",
+							},
+							{
+								configId: "org-internal",
+								defaultPrefix: "int_",
+								references: "organization",
+							},
+						]),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [apiKeyClient(), organizationClient()],
+					},
+				},
+			);
+
+			const { headers } = await signIn();
+
+			const org = await authMultiOrg.api.createOrganization({
+				body: { name: "Filter Org", slug: "filter-org" },
+				headers,
+			});
+
+			// Create keys with different configs
+			await authMultiOrg.api.createApiKey({
+				body: { configId: "org-public", organizationId: org.id },
+				headers,
+			});
+			await authMultiOrg.api.createApiKey({
+				body: { configId: "org-internal", organizationId: org.id },
+				headers,
+			});
+
+			// List only org-public keys
+			const result = await clientMultiOrg.apiKey.list(
+				{ query: { organizationId: org.id, configId: "org-public" } },
+				{ headers },
+			);
+
+			expect(result.data?.apiKeys).toBeDefined();
+			expect(result.data?.apiKeys.length).toBe(1);
+			expect(result.data?.apiKeys[0]?.configId).toBe("org-public");
+		});
+
+		it("should not allow session mocking for org-owned keys", async () => {
+			const { auth: authWithSessionMocking, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							organization({
+								async sendInvitationEmail() {},
+							}),
+							apiKey([
+								{
+									configId: "org-keys",
+									defaultPrefix: "org_",
+									references: "organization",
+									enableSessionForAPIKeys: true, // Enable session mocking
+								},
+							]),
+						],
+					},
+					{
+						clientOptions: {
+							plugins: [apiKeyClient(), organizationClient()],
+						},
+					},
+				);
+
+			const { headers, user } = await signIn();
+
+			const org = await authWithSessionMocking.api.createOrganization({
+				body: { name: "Session Org", slug: "session-org" },
+				headers,
+			});
+
+			const orgKey = await authWithSessionMocking.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+				},
+				headers,
+			});
+
+			// Try to use org key for session mocking - should fail
+			try {
+				await authWithSessionMocking.api.getSession({
+					headers: {
+						"x-api-key": orgKey.key,
+					},
+				});
+				expect.fail("Should have thrown an error");
+			} catch (error: any) {
+				expect(isAPIError(error)).toBe(true);
+				expect(error.body?.code).toBe(
+					ERROR_CODES.INVALID_REFERENCE_ID_FROM_API_KEY.code,
+				);
+			}
+		});
+
+		it("should allow session mocking for user-owned keys only", async () => {
+			const { auth: authWithSessionMocking, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							organization({
+								async sendInvitationEmail() {},
+							}),
+							apiKey([
+								{
+									configId: "user-keys",
+									defaultPrefix: "usr_",
+									references: "user",
+									enableSessionForAPIKeys: true, // Enable session mocking
+								},
+							]),
+						],
+					},
+					{
+						clientOptions: {
+							plugins: [apiKeyClient(), organizationClient()],
+						},
+					},
+				);
+
+			const { headers, user } = await signIn();
+
+			const userKey = await authWithSessionMocking.api.createApiKey({
+				body: {
+					configId: "user-keys",
+					userId: user.id,
+				},
+			});
+
+			// Use user key for session mocking - should work
+			const session = await authWithSessionMocking.api.getSession({
+				headers: {
+					"x-api-key": userKey.key,
+				},
+			});
+
+			expect(session).not.toBeNull();
+			expect(session?.user.id).toBe(user.id);
+		});
+
+		it("should handle mixed user and org keys in same instance", async () => {
+			const { headers, user } = await signInWithTestUser();
+
+			// Create organization
+			const org = await auth.api.createOrganization({
+				body: { name: "Mixed Org", slug: "mixed-org" },
+				headers,
+			});
+
+			// Create both types of keys
+			const userKey = await auth.api.createApiKey({
+				body: { configId: "user-keys", userId: user.id },
+			});
+
+			const orgKey = await auth.api.createApiKey({
+				body: { configId: "org-keys", organizationId: org.id },
+				headers,
+			});
+
+			// Verify both keys work
+			const userResult = await auth.api.verifyApiKey({
+				body: { key: userKey.key },
+			});
+			expect(userResult.valid).toBe(true);
+			expect(userResult.key?.referenceId).toBe(user.id);
+
+			const orgResult = await auth.api.verifyApiKey({
+				body: { key: orgKey.key },
+			});
+			expect(orgResult.valid).toBe(true);
+			expect(orgResult.key?.referenceId).toBe(org.id);
+		});
+
+		it("should get org-owned key by id from server", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const org = await auth.api.createOrganization({
+				body: { name: "Get Org", slug: "get-org" },
+				headers,
+			});
+
+			const orgKey = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+					name: "my-org-key",
+				},
+				headers,
+			});
+
+			// Get key by ID (server-side)
+			const retrievedKey = await auth.api.getApiKey({
+				query: { id: orgKey.id },
+				headers,
+			});
+
+			expect(retrievedKey).not.toBeNull();
+			expect(retrievedKey.id).toBe(orgKey.id);
+			expect(retrievedKey.configId).toBe("org-keys");
+			expect(retrievedKey.referenceId).toBe(org.id);
+			expect(retrievedKey.name).toBe("my-org-key");
+		});
+
+		it("should delete org-owned key", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const org = await auth.api.createOrganization({
+				body: { name: "Delete Org", slug: "delete-org" },
+				headers,
+			});
+
+			const orgKey = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+				},
+				headers,
+			});
+
+			// Delete the key
+			const deleteResult = await auth.api.deleteApiKey({
+				body: { keyId: orgKey.id },
+				headers,
+			});
+
+			expect(deleteResult.success).toBe(true);
+
+			// Verify key is deleted
+			const verifyResult = await auth.api.verifyApiKey({
+				body: { key: orgKey.key },
+			});
+
+			expect(verifyResult.valid).toBe(false);
+		});
+
+		it("should update org-owned key", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const org = await auth.api.createOrganization({
+				body: { name: "Update Org", slug: "update-org" },
+				headers,
+			});
+
+			const orgKey = await auth.api.createApiKey({
+				body: {
+					configId: "org-keys",
+					organizationId: org.id,
+					name: "original-name",
+				},
+				headers,
+			});
+
+			// Update the key
+			const updatedKey = await auth.api.updateApiKey({
+				body: {
+					keyId: orgKey.id,
+					name: "updated-name",
+					enabled: false,
+				},
+				headers,
+			});
+
+			expect(updatedKey.name).toBe("updated-name");
+			expect(updatedKey.enabled).toBe(false);
+			expect(updatedKey.configId).toBe("org-keys");
+			expect(updatedKey.referenceId).toBe(org.id);
 		});
 	});
 });
