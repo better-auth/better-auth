@@ -1296,3 +1296,75 @@ describe("sign-up with additional fields via email-otp", async () => {
 		expect(session.user.isAdmin).toBe(false);
 	});
 });
+
+describe("race condition protection", async () => {
+	let otp = "";
+	const { client } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+
+	it("should prevent OTP reuse via concurrent requests", async () => {
+		const email = "race-test@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		const results = await Promise.allSettled([
+			client.signIn.emailOtp({ email, otp }),
+			client.signIn.emailOtp({ email, otp }),
+			client.signIn.emailOtp({ email, otp }),
+		]);
+
+		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
+		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+
+		expect(successful.length).toBe(1);
+		expect(failed.length).toBe(2);
+	});
+
+	it("should prevent OTP reuse for email verification", async () => {
+		const email = "race-verify@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "email-verification" });
+
+		const results = await Promise.allSettled([
+			client.emailOtp.verifyEmail({ email, otp }),
+			client.emailOtp.verifyEmail({ email, otp }),
+		]);
+
+		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
+		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+
+		expect(successful.length).toBe(1);
+		expect(failed.length).toBe(1);
+	});
+
+	it("should prevent OTP reuse for password reset", async () => {
+		const email = "race-reset@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.signIn.emailOtp({ email, otp });
+
+		await client.emailOtp.requestPasswordReset({ email });
+
+		const results = await Promise.allSettled([
+			client.emailOtp.resetPassword({ email, otp, password: "newpass1" }),
+			client.emailOtp.resetPassword({ email, otp, password: "newpass2" }),
+		]);
+
+		const successful = results.filter((r) => r.status === "fulfilled" && r.value.data);
+		const failed = results.filter((r) => r.status === "fulfilled" && r.value.error);
+
+		expect(successful.length).toBe(1);
+		expect(failed.length).toBe(1);
+	});
+});
