@@ -6,6 +6,7 @@ import { getAgent } from "./get-agent";
 import { getAgentActivity } from "./get-agent-activity";
 import { getAgentSession } from "./get-agent-session";
 import { listAgents } from "./list-agents";
+import { logActivity } from "./log-activity";
 import {
 	deleteProvider,
 	listProviders,
@@ -25,6 +26,7 @@ export function createAgentRoutes(opts: ResolvedAgentAuthOptions) {
 		rotateKey: rotateKey(),
 		getAgentSession: getAgentSession(),
 		getAgentActivity: getAgentActivity(),
+		logActivity: logActivity(),
 		cleanupAgents: cleanupAgents(),
 		registerProvider: registerProvider(),
 		listProviders: listProviders(),

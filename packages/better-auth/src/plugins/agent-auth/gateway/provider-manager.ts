@@ -15,7 +15,7 @@ import type { MCPProviderConfig } from "../types";
 
 /** A tool discovered from a provider, namespaced for the gateway. */
 export interface GatewayTool {
-	/** Namespaced name: "provider.tool_name" */
+	/** Namespaced name: "provider.tool_name" (internal only) */
 	name: string;
 	/** Provider this tool belongs to. */
 	provider: string;

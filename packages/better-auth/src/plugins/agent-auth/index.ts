@@ -262,6 +262,7 @@ export const agentAuth = (options?: AgentAuthOptions) => {
 			rotateKey: routes.rotateKey,
 			getAgentSession: routes.getAgentSession,
 			getAgentActivity: routes.getAgentActivity,
+			logActivity: routes.logActivity,
 			cleanupAgents: routes.cleanupAgents,
 			registerProvider: routes.registerProvider,
 			listProviders: routes.listProviders,

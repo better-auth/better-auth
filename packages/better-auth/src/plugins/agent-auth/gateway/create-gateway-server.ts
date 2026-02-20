@@ -169,29 +169,21 @@ export async function createGatewayServer(
 			gatewayTools.length > 0
 				? (scopes) => {
 						return scopes.map((scope) => {
-							const match = gatewayTools.find((gt) => gt.name === scope);
-							if (match) {
-								const config = providers.find((p) => p.name === match.provider);
-								return {
-									type: "mcp_tool",
-									locations: [config?.displayName ?? match.provider],
-									actions: ["execute"],
-									identifier: match.name.includes(".")
-										? match.name.split(".").slice(1).join(".")
-										: match.name,
-									description: match.description,
-								};
-							}
 							const dotIdx = scope.indexOf(".");
 							if (dotIdx > 0) {
 								const provName = scope.slice(0, dotIdx);
 								const toolName = scope.slice(dotIdx + 1);
+								const match = gatewayTools.find(
+									(gt) =>
+										gt.provider === provName && gt.originalName === toolName,
+								);
 								const config = providers.find((p) => p.name === provName);
 								return {
 									type: "mcp_tool",
 									locations: [config?.displayName ?? provName],
 									actions: ["execute"],
 									identifier: toolName,
+									description: match?.description,
 								};
 							}
 							return { type: "mcp_tool", identifier: scope };
@@ -223,8 +215,7 @@ export async function createGatewayServer(
 		server.tool(
 			"list_gateway_tools",
 			"List all available tools from connected MCP providers. " +
-				"Call this BEFORE connect_agent to see what tools are available, " +
-				"then request only the scopes you need (e.g. 'github.create_issue').",
+				"Call this BEFORE connect_agent to discover tools and pick scopes.",
 			{},
 			async () => {
 				const byProvider: Record<
@@ -232,28 +223,29 @@ export async function createGatewayServer(
 					Array<{ tool: string; description: string }>
 				> = {};
 				for (const gt of gatewayTools) {
+					const scope = `${gt.provider}.${gt.originalName}`;
 					const list = byProvider[gt.provider] ?? [];
-					list.push({
-						tool: gt.name,
-						description: gt.description,
-					});
+					list.push({ tool: scope, description: gt.description });
 					byProvider[gt.provider] = list;
 				}
 
 				const lines: string[] = ["Available gateway tools:\n"];
-				for (const [provider, tools] of Object.entries(byProvider)) {
+				for (const [provider, pTools] of Object.entries(byProvider)) {
 					const config = providers.find((p) => p.name === provider);
 					lines.push(
-						`## ${config?.displayName ?? provider} (${tools.length} tools)`,
+						`## ${config?.displayName ?? provider} (${pTools.length} tools)`,
 					);
-					for (const t of tools) {
+					for (const t of pTools) {
 						lines.push(`  - ${t.tool}: ${t.description}`);
 					}
 					lines.push("");
 				}
 				lines.push(
-					"Pass the tool names you need as scopes to connect_agent. " +
-						"Example: scopes=['github.create_issue', 'github.search_repositories']",
+					"Usage:\n" +
+						"1. Pass tool names as scopes to connect_agent.\n" +
+						"   Example: scopes=['github.create_issue']\n" +
+						"2. Call them via call_gateway_tool.\n" +
+						"   Example: call_gateway_tool(agentId: '...', tool: 'github.create_issue', args: '{\"title\": \"...\"}')",
 				);
 
 				return {
@@ -262,91 +254,135 @@ export async function createGatewayServer(
 			},
 		);
 
-		for (const gt of gatewayTools) {
-			const inputProps: Record<string, unknown> =
-				(gt.inputSchema as Record<string, unknown>).properties ??
-				gt.inputSchema;
+		server.tool(
+			"call_gateway_tool",
+			"Call a tool from a connected MCP provider. " +
+				"Use list_gateway_tools to see available tools. " +
+				"Requires a valid agentId with matching scope.",
+			{
+				agentId: z.string().describe("Your Agent ID (from connect_agent)"),
+				tool: z
+					.string()
+					.describe(
+						"Tool name in provider.tool format (e.g. github.create_issue)",
+					),
+				args: z
+					.string()
+					.optional()
+					.describe("JSON-encoded arguments to pass to the tool"),
+			},
+			async (params) => {
+				const {
+					agentId,
+					tool,
+					args: argsJson,
+				} = params as {
+					agentId: string;
+					tool: string;
+					args?: string;
+				};
 
-			const zodShape: Record<string, ReturnType<typeof z.string>> = {};
-			for (const key of Object.keys(inputProps)) {
-				zodShape[key] = z.any().optional().describe(key);
-			}
-
-			server.tool(
-				gt.name,
-				gt.description,
-				{
-					agentId: z.string().describe("Your Agent ID (from connect_agent)"),
-					...zodShape,
-				},
-				async (params) => {
-					const agentId = params.agentId as string;
-					if (!agentId) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: "agentId is required. Call connect_agent first.",
-								},
-							],
-						};
-					}
-
-					const connection = await storage.getConnection(agentId);
-					if (!connection) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `No connection found for agent ${agentId}. Call connect_agent first.`,
-								},
-							],
-						};
-					}
-
-					const parsed = gateway!.parseTool(gt.name);
-					if (!parsed) {
-						return {
-							content: [{ type: "text" as const, text: "Invalid tool name." }],
-						};
-					}
-
-					const providerConfig = providers.find(
-						(p) => p.name === parsed.provider,
-					);
-					if (
-						!isScopeAllowed(
-							connection.scopes,
-							parsed.provider,
-							parsed.tool,
-							providerConfig,
-						)
-					) {
-						return {
-							content: [
-								{
-									type: "text" as const,
-									text: `Scope denied: agent does not have access to "${gt.name}". Agent scopes: ${connection.scopes.join(", ") || "none"}.`,
-								},
-							],
-						};
-					}
-
-					const { agentId: _, ...toolArgs } = params;
-					const result = await gateway!.callTool(
-						gt.name,
-						toolArgs as Record<string, unknown>,
-					);
-
+				if (!agentId) {
 					return {
-						content: (result.content ?? []).map((c) => ({
-							type: (c.type ?? "text") as "text",
-							text: c.text ?? JSON.stringify(c),
-						})),
+						content: [
+							{
+								type: "text" as const,
+								text: "agentId is required. Call connect_agent first.",
+							},
+						],
 					};
-				},
-			);
-		}
+				}
+
+				const connection = await storage.getConnection(agentId);
+				if (!connection) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `No connection found for agent ${agentId}. Call connect_agent first.`,
+							},
+						],
+					};
+				}
+
+				const dotIdx = tool.indexOf(".");
+				if (dotIdx === -1) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Invalid tool name "${tool}". Use "provider.tool" format (e.g. github.create_issue).`,
+							},
+						],
+					};
+				}
+
+				const providerName = tool.slice(0, dotIdx);
+				const toolName = tool.slice(dotIdx + 1);
+
+				const providerConfig = providers.find((p) => p.name === providerName);
+				if (
+					!isScopeAllowed(
+						connection.scopes,
+						providerName,
+						toolName,
+						providerConfig,
+					)
+				) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Scope denied: agent does not have access to "${tool}". Agent scopes: ${connection.scopes.join(", ") || "none"}.`,
+							},
+						],
+					};
+				}
+
+				const mcpToolName = gatewayTools.find(
+					(gt) => gt.provider === providerName && gt.originalName === toolName,
+				)?.name;
+
+				if (!mcpToolName) {
+					return {
+						content: [
+							{
+								type: "text" as const,
+								text: `Tool "${tool}" not found. Use list_gateway_tools to see available tools.`,
+							},
+						],
+					};
+				}
+
+				let toolArgs: Record<string, unknown> = {};
+				if (argsJson) {
+					try {
+						toolArgs = JSON.parse(argsJson);
+					} catch {
+						return {
+							content: [
+								{
+									type: "text" as const,
+									text: `Invalid JSON in args: ${argsJson}`,
+								},
+							],
+						};
+					}
+				}
+
+				const result = await gateway!.callTool(mcpToolName, toolArgs);
+				const isError = result.isError ?? false;
+
+				reportActivity(connection, agentId, tool, isError).catch(() => {});
+
+				return {
+					content: (result.content ?? []).map((c) => ({
+						type: (c.type ?? "text") as "text",
+						text: c.text ?? JSON.stringify(c),
+					})),
+				};
+			},
+		);
 	}
 
 	const transport = new StdioServerTransport();
@@ -402,4 +438,33 @@ function buildRevokeAll(storage: MCPAgentStorage) {
 			await storage.removeConnection(conn.agentId);
 		}
 	};
+}
+
+/**
+ * Fire-and-forget: report a gateway tool call to the app's activity log.
+ * Uses the agent's keypair to sign a JWT so the app can verify the caller.
+ */
+async function reportActivity(
+	connection: { appUrl: string; keypair: { privateKey: string } },
+	agentId: string,
+	tool: string,
+	isError: boolean,
+): Promise<void> {
+	const jwt = await signAgentJWT({
+		agentId,
+		privateKey: connection.keypair.privateKey,
+	});
+
+	await globalThis.fetch(`${connection.appUrl}/api/auth/agent/log-activity`, {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			Authorization: `Bearer ${jwt}`,
+		},
+		body: JSON.stringify({
+			method: "TOOL",
+			path: tool,
+			status: isError ? 500 : 200,
+		}),
+	});
 }
