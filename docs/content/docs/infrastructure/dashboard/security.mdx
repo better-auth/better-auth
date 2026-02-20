@@ -1,0 +1,353 @@
+---
+title: Security Monitoring
+description: The Security section provides real-time visibility into security events, threats, and attack patterns detected by the Sentinel plugin.
+---
+
+## Overview
+
+The Security dashboard shows:
+
+- Security event timeline
+- Threat statistics and trends
+- Geographic threat distribution
+- Top blocked IPs and visitors
+- Event breakdown by type
+
+## Accessing Security
+
+Click **Security** in the sidebar to access the security monitoring dashboard.
+
+## Key Metrics
+
+At the top of the security dashboard:
+
+### Summary Cards
+
+- **Total Events** - All security events in the period
+- **Blocked** - Requests that were blocked
+- **Challenged** - Requests that required PoW challenges
+- **Allowed** - Requests allowed after challenge
+
+### Trend Indicators
+
+Each metric shows:
+- Current value
+- Change from previous period
+- Trend arrow (up/down)
+
+## Security Event Table
+
+The main event table shows all security events:
+
+### Columns
+
+| Column | Description |
+|--------|-------------|
+| Time | When the event occurred |
+| Type | Security event type |
+| Action | blocked, challenged, or allowed |
+| Identifier | Email, visitor ID, or IP |
+| Location | Country and city |
+| Details | Additional event information |
+
+### Filtering
+
+Filter events by:
+
+- **Event Type** - Select specific security event types
+- **Action** - blocked, challenged, allowed
+- **Date Range** - Custom time period
+- **Location** - Country or region
+- **Identifier** - Search by email or visitor ID
+
+### Sorting
+
+Sort by any column:
+- Time (newest/oldest)
+- Type
+- Action
+- Location
+
+## Event Types
+
+### Credential Stuffing
+
+Detected when multiple failed login attempts occur from the same visitor.
+
+**Event data includes:**
+- Visitor ID
+- Number of attempts
+- Target identifiers (emails)
+- Password hash patterns (for same-password detection)
+
+**Indicators:**
+- Multiple failed logins in short period
+- Same password tried across accounts
+- Automated request patterns
+
+### Impossible Travel
+
+Detected when a user logs in from distant locations in an impossibly short time.
+
+**Event data includes:**
+- User ID
+- From location (city, country)
+- To location (city, country)
+- Distance (km)
+- Time elapsed (hours)
+- Required speed (km/h)
+
+**Example:**
+> User logged in from New York, then Tokyo 30 minutes later (would require 25,000 km/h travel)
+
+### Geo-Blocking
+
+Triggered when requests come from blocked countries.
+
+**Event data includes:**
+- Country code
+- Country name
+- IP address
+- Blocked reason (deny list or not in allow list)
+
+### Bot Detection
+
+Triggered when automated bot traffic is detected.
+
+**Event data includes:**
+- Detection signals
+- User agent analysis
+- Behavioral patterns
+
+### Suspicious IP
+
+Triggered for known malicious IP addresses.
+
+**Event data includes:**
+- IP address
+- Reputation source
+- Threat category
+
+### Velocity Exceeded
+
+Triggered when rate limits are exceeded.
+
+**Event data includes:**
+- Rate type (signups, logins, password resets)
+- Current count
+- Threshold
+- Window period
+
+### Free Trial Abuse
+
+Detected when the same device creates multiple accounts.
+
+**Event data includes:**
+- Visitor fingerprint
+- Account count
+- Max allowed
+- User IDs created
+
+### Compromised Password
+
+Detected when a user tries to set a password found in data breaches.
+
+**Event data includes:**
+- Breach count (how many breaches contain this password)
+- Action taken
+
+### Stale Account Reactivation
+
+Detected when a dormant account suddenly becomes active.
+
+**Event data includes:**
+- User ID
+- Days since last activity
+- Stale threshold (days)
+- Last active date
+- Notification sent (user/admin)
+
+## Security Graph
+
+Visualize security events over time:
+
+### Graph Options
+
+- **Time Range** - 7 days, 30 days, 90 days, custom
+- **Grouping** - By hour, day, week
+- **Event Types** - Toggle specific types on/off
+
+### Overlays
+
+View multiple data series:
+- Total events
+- Blocked vs challenged vs allowed
+- By event type
+
+## Threat Breakdown
+
+A breakdown chart showing distribution of security events:
+
+### By Event Type
+
+Pie or bar chart showing:
+- Credential stuffing %
+- Geo-blocking %
+- Bot detection %
+- etc.
+
+### By Action
+
+- Blocked %
+- Challenged %
+- Allowed after challenge %
+
+### By Location
+
+Top countries generating security events.
+
+## Top Blocked IPs
+
+A ranked list of most blocked IP addresses:
+
+| IP Address | Events | Last Seen | Location | Action |
+|------------|--------|-----------|----------|--------|
+| 192.168.1.1 | 1,234 | 5 min ago | Russia | Block |
+| 10.0.0.1 | 987 | 1 hour ago | China | Block |
+| ... | ... | ... | ... | ... |
+
+### IP Details
+
+Click an IP to see:
+- All events from this IP
+- Targeted identifiers
+- Event timeline
+- Geographic information
+
+## Geographic View
+
+A world map showing threat origins:
+
+### Heat Map
+
+- Color intensity by event count
+- Click countries for details
+
+### Top Countries
+
+| Country | Events | % of Total |
+|---------|--------|------------|
+| Russia | 5,234 | 28% |
+| China | 3,891 | 21% |
+| ... | ... | ... |
+
+## Alert Indicators
+
+The dashboard highlights concerning patterns:
+
+### High Severity
+
+- Sudden spike in blocked events
+- New geographic attack source
+- Credential stuffing campaign detected
+
+### Medium Severity
+
+- Elevated failed login rate
+- Unusual traffic patterns
+- Multiple impossible travel events
+
+### Low Severity
+
+- Individual blocked requests
+- Single compromised password attempt
+- Minor rate limit triggers
+
+## Event Details
+
+Click any event for full details:
+
+### Event Information
+
+- Event type and description
+- Timestamp
+- Action taken (blocked/challenged/allowed)
+
+### Actor Information
+
+- Visitor ID (fingerprint)
+- IP address
+- User agent
+- Device information
+
+### Location Information
+
+- IP geolocation
+- City, region, country
+- ISP information
+
+### Event-Specific Data
+
+Raw JSON of all captured data:
+
+```json
+{
+  "type": "credential_stuffing",
+  "visitorId": "fp_abc123",
+  "ipAddress": "192.168.1.1",
+  "attempts": 15,
+  "uniquePasswords": 12,
+  "targetedEmails": ["user1@...", "user2@..."],
+  "action": "blocked"
+}
+```
+
+## Plan Requirements
+
+Security monitoring varies by plan:
+
+| Feature | Starter | Pro | Business | Enterprise |
+|---------|---------|-----|----------|------------|
+| Security Events | - | 1k/mo | 10k/mo | Unlimited |
+| Event History | - | 7 days | 30 days | Unlimited |
+| Real-time Alerts | - | - | Yes | Yes |
+| Custom Rules | - | - | - | Yes |
+
+## Best Practices
+
+1. **Regular review** - Check security dashboard daily for new threats.
+
+2. **Investigate patterns** - Look for coordinated attacks across IPs.
+
+3. **Tune thresholds** - Adjust Sentinel settings based on observed patterns.
+
+4. **Document incidents** - Keep records of significant security events.
+
+5. **Set up alerts** - Configure notifications for critical events (Enterprise).
+
+## Responding to Threats
+
+### Credential Stuffing Campaign
+
+1. Review targeted accounts
+2. Force password reset if compromised
+3. Consider additional authentication requirements
+4. Block persistent attackers
+
+### Geographic Attack Surge
+
+1. Review geo-blocking settings
+2. Consider expanding deny list
+3. Investigate targeted resources
+
+### Bot Attack
+
+1. Verify bot detection is enabled
+2. Consider increasing challenge difficulty
+3. Review rate limits
+
+### Compromised Credentials
+
+1. Notify affected users
+2. Force password reset
+3. Review password policies

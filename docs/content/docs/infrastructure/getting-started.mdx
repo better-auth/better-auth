@@ -1,0 +1,210 @@
+---
+title: Getting Started
+description: This guide will help you integrate Better Auth Infrastructure into your application.
+---
+
+
+<Steps>
+
+  <Step>
+    ## Prerequisites
+
+    Before you begin, make sure you have:
+
+    1. A working [Better Auth](/docs/installation) installation
+    2. An account & API Key from the [Better Auth Infrastructure](/dashboard) dashboard
+  </Step>
+
+  <Step>
+    ## Installation
+
+    Install the `@better-auth/infra` package:
+
+    ```package-install
+    @better-auth/infra
+    ```
+  </Step>
+
+  <Step>
+    ## Environment Variables
+
+    Once you've gotten the API Key from the infrastructure dashboard,
+    go ahead and add the `BETTER_AUTH_API_KEY` environment variable to your `.env` file:
+
+    ```dotenv title=".env"
+    # Required: Your Better Auth Infrastructure API key
+    BETTER_AUTH_API_KEY=your_api_key_here
+    ```
+
+    <Callout>
+      You can get your API key by signing-up and creating a new project in the
+      [Better Auth Infrastructure dashboard](/dashboard).
+    </Callout>
+  </Step>
+
+</Steps>
+
+
+## Server Setup
+
+### Basic Configuration
+
+Add the `dash()` plugin to your Better Auth configuration:
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash } from "@better-auth/infra"; // [!code highlight]
+
+export const auth = betterAuth({
+  // ... your existing Better Auth config
+  plugins: [
+    dash({ // [!code highlight]
+      apiKey: process.env.BETTER_AUTH_API_KEY, // [!code highlight]
+    }), // [!code highlight]
+  ],
+});
+```
+
+If you're on **pro** plan or above, you can use the `sentinel()` plugin to enable security checks, abuse protection, and more:
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash, sentinel } from "@better-auth/infra";  // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    dash({ /* ... */ }),
+    sentinel({ // [!code highlight]
+      apiKey: process.env.BETTER_AUTH_API_KEY, // [!code highlight]
+    }) // [!code highlight]
+  ],
+});
+```
+
+## Client Setup
+
+### Basic Client Configuration
+
+Add the client plugins to your auth client:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient, sentinelClient } from "@better-auth/infra/client";
+
+export const authClient = createAuthClient({
+  plugins: [
+    dashClient(),
+    sentinelClient({
+      autoSolveChallenge: true, // Automatically solve PoW challenges
+    }),
+  ],
+});
+```
+
+
+
+### Plugin Overview
+
+- **`dash()`** - Enables analytics tracking, audit logging, dashboard admin APIs, and more
+- **`sentinel()`** - Enables security checks and abuse protection
+
+You can use either plugin independently, but using both together provides the full Better Auth Infrastructure experience.
+
+### Activity Tracking
+
+The `dash()` plugin can track user activity to show online status and last active times:
+
+```ts
+dash({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  activityTracking: {
+    enabled: true,
+    updateInterval: 300000, // Update every 5 minutes (default)
+  },
+}),
+```
+
+This adds a `lastActiveAt` field to your user model that's automatically updated.
+
+### Security Configuration
+
+The `sentinel()` plugin supports various security features. Here's a comprehensive example:
+
+```ts
+sentinel({
+  apiKey: process.env.BETTER_AUTH_API_KEY,
+  security: {
+    // Detect and block credential stuffing attacks
+    credentialStuffing: {
+      enabled: true,
+      thresholds: { challenge: 3, block: 5 },
+      windowSeconds: 3600,
+      cooldownSeconds: 900,
+    },
+    
+    // Detect impossible travel (logging in from far locations quickly)
+    impossibleTravel: {
+      enabled: true,
+      maxSpeedKmh: 1000,
+      action: "challenge",
+    },
+    
+    // Prevent free trial abuse via device fingerprinting
+    freeTrialAbuse: {
+      enabled: true,
+      maxAccountsPerVisitor: 3,
+      action: "block",
+    },
+    
+    // Block compromised passwords
+    compromisedPassword: {
+      enabled: true,
+      action: "block",
+      minBreachCount: 1,
+    },
+    
+    // Block disposable email addresses
+    emailValidation: {
+      enabled: true,
+      strictness: "medium",
+      action: "block",
+    },
+    
+    // Monitor stale/dormant accounts
+    staleUsers: {
+      enabled: true,
+      staleDays: 90,
+      action: "log",
+      notifyUser: true,
+      notifyAdmin: true,
+      adminEmail: "admin@yourapp.com",
+    },
+    
+    // Geo-blocking
+    geoBlocking: {
+      denyList: ["XX", "YY"], // Country codes to block
+      action: "block",
+    },
+    
+    // Rate limiting
+    velocity: {
+      enabled: true,
+      maxSignupsPerVisitor: 5,
+      maxPasswordResetsPerIp: 10,
+      windowSeconds: 3600,
+      action: "challenge",
+    },
+  },
+}),
+```
+
+
+## Next Steps
+
+Now that you have the basic setup, explore these topics:
+
+- [Dashboard Plugin](/plugins/dash) - Learn about all dash() features
+- [Security Plugin](/plugins/sentinel) - Configure advanced security
+- [Email Service](/services/email) - Set up transactional emails
+- [SMS Service](/services/sms) - Enable SMS verification
+- [Dashboard UI](/dashboard/overview) - Explore the web dashboard

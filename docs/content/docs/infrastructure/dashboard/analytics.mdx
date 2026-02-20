@@ -1,0 +1,306 @@
+---
+title: Analytics & Insights
+description: The Analytics section provides visual insights into your authentication system's performance, user behavior, and growth trends.
+---
+
+## Overview Dashboard
+
+The main overview page displays key metrics and visualizations:
+
+### Key Metrics Cards
+
+At the top of the dashboard, you'll see:
+
+- **Total Users** - All registered users in your system
+- **Active Users** - Users active in the last 30 days
+- **New Users Today** - Signups in the last 24 hours
+- **Online Now** - Currently active users (real-time)
+
+### Quick Stats
+
+Additional statistics include:
+
+- Weekly signups vs. previous week
+- Monthly active users trend
+- Session count
+- Email verification rate
+
+## User Growth Graph
+
+Visualize user growth over time:
+
+### Time Periods
+
+Select from preset time ranges:
+
+- Last 7 days
+- Last 30 days
+- Last 90 days
+- Last 12 months
+- Custom range
+
+### Graph Options
+
+Toggle different data series:
+
+- **Signups** - New user registrations
+- **Active Users** - Daily active users
+- **Sign-ins** - Login events
+
+### Comparison
+
+Compare with previous periods:
+
+- Week over week
+- Month over month
+- Year over year
+
+## User Retention
+
+Understand how well you retain users:
+
+### Cohort Analysis
+
+View retention by signup cohort:
+
+```
+Signup Week    Week 1   Week 2   Week 3   Week 4
+Jan 1-7        100%     65%      52%      48%
+Jan 8-14       100%     68%      55%      --
+Jan 15-21      100%     62%      --       --
+Jan 22-28      100%     --       --       --
+```
+
+### Retention Metrics
+
+- **Day 1 Retention** - Users who return the next day
+- **Week 1 Retention** - Users active in their first week
+- **Month 1 Retention** - Users active in their first month
+
+## Geographic Distribution
+
+See where your users are located:
+
+### World Map
+
+An interactive map showing:
+
+- User distribution by country
+- Color intensity based on user count
+- Click countries for detailed breakdown
+
+### Top Countries
+
+List of countries ranked by user count:
+
+| Country | Users | % of Total |
+|---------|-------|------------|
+| United States | 12,543 | 42% |
+| United Kingdom | 3,256 | 11% |
+| Germany | 2,891 | 10% |
+| ... | ... | ... |
+
+### City-Level Data
+
+Drill down to city level for detailed geographic insights.
+
+## Activity Heatmap
+
+Visualize when users are most active:
+
+### Weekly Heatmap
+
+A grid showing activity levels:
+
+```
+         Mon  Tue  Wed  Thu  Fri  Sat  Sun
+12am     ░░   ░░   ░░   ░░   ░░   ░░   ░░
+ 4am     ░░   ░░   ░░   ░░   ░░   ░░   ░░
+ 8am     ██   ██   ██   ██   ██   ▓▓   ▓▓
+12pm     ██   ██   ██   ██   ██   ▓▓   ▓▓
+ 4pm     ▓▓   ▓▓   ▓▓   ▓▓   ▓▓   ░░   ░░
+ 8pm     ▓▓   ▓▓   ▓▓   ▓▓   ░░   ░░   ░░
+```
+
+### Timezone Options
+
+View activity in:
+
+- UTC
+- Your local timezone
+- Most common user timezone
+
+## Recent Activity Feed
+
+A real-time feed of authentication events:
+
+### Event Types Shown
+
+- Sign-ups
+- Sign-ins
+- Sign-outs
+- Password resets
+- Profile updates
+
+### Feed Options
+
+- Auto-refresh toggle
+- Filter by event type
+- Expand for details
+
+## Session Analytics
+
+Understand session patterns:
+
+### Active Sessions
+
+- Total active sessions
+- Sessions per user (average)
+- Session duration distribution
+
+### Device Breakdown
+
+| Device Type | Sessions | % |
+|-------------|----------|---|
+| Desktop | 15,234 | 62% |
+| Mobile | 8,456 | 34% |
+| Tablet | 982 | 4% |
+
+### Browser Distribution
+
+| Browser | Sessions | % |
+|---------|----------|---|
+| Chrome | 14,521 | 59% |
+| Safari | 6,234 | 25% |
+| Firefox | 2,891 | 12% |
+| Other | 1,026 | 4% |
+
+## Authentication Methods
+
+See how users authenticate:
+
+### Method Distribution
+
+| Method | Users | % |
+|--------|-------|---|
+| Email/Password | 18,234 | 61% |
+| Google OAuth | 7,456 | 25% |
+| GitHub OAuth | 2,891 | 10% |
+| Magic Link | 1,234 | 4% |
+
+### Trends
+
+- Method adoption over time
+- Comparison with previous periods
+
+## API Endpoints
+
+Access analytics data programmatically:
+
+### Get User Statistics
+
+```ts
+const stats = await authClient.dash.getUserStats({
+  session: sessionData,
+});
+```
+
+### Get Graph Data
+
+```ts
+const graphData = await authClient.dash.getUserGraphData({
+  session: sessionData,
+  period: "30d",  // 7d, 30d, 90d, 12m
+});
+```
+
+### Get Retention Data
+
+```ts
+const retention = await authClient.dash.getUserRetentionData({
+  session: sessionData,
+});
+```
+
+### Get Geographic Data
+
+```ts
+const mapData = await authClient.dash.getUserMapData({
+  session: sessionData,
+});
+```
+
+### Get Online Users Count
+
+```ts
+const online = await authClient.dash.getOnlineUsersCount({
+  session: sessionData,
+});
+```
+
+## Exporting Data
+
+Export analytics data for external analysis:
+
+1. Navigate to the desired view
+2. Click **Export**
+3. Select format (CSV, JSON)
+4. Download the file
+
+## Custom Date Ranges
+
+For all time-based analytics:
+
+1. Click the date range selector
+2. Choose **Custom Range**
+3. Select start and end dates
+4. Click **Apply**
+
+## Plan Limits
+
+Analytics features by plan:
+
+| Feature | Starter | Pro | Business | Enterprise |
+|---------|---------|-----|----------|------------|
+| Basic Stats | Yes | Yes | Yes | Yes |
+| Growth Graphs | Yes | Yes | Yes | Yes |
+| Retention Analysis | - | Yes | Yes | Yes |
+| Geographic Data | - | Yes | Yes | Yes |
+| Activity Heatmap | - | Yes | Yes | Yes |
+| Custom Date Range | - | Yes | Yes | Yes |
+| Data Export | - | Yes | Yes | Yes |
+
+## Best Practices
+
+1. **Regular monitoring** - Check analytics weekly to spot trends early.
+
+2. **Set benchmarks** - Establish baseline metrics to measure against.
+
+3. **Investigate anomalies** - Sudden changes may indicate issues or opportunities.
+
+4. **Compare periods** - Use period-over-period comparison for context.
+
+5. **Export for reporting** - Generate regular reports for stakeholders.
+
+## Interpreting Metrics
+
+### Healthy Signs
+
+- Steady or growing user count
+- Good retention rates (>40% Day 7)
+- Consistent daily active users
+- Low failed login rates
+
+### Warning Signs
+
+- Declining signups
+- Dropping retention
+- Unusual geographic patterns
+- Spike in failed authentications
+
+### Taking Action
+
+- Low retention → Improve onboarding
+- Geographic concentration → Consider localization
+- Device gaps → Test on underperforming platforms
+- Method preferences → Promote popular auth methods

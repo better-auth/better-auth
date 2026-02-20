@@ -1,0 +1,329 @@
+---
+title: Audit Logs
+description: Audit logs provide a comprehensive record of all authentication-related activities in your system. Track user actions, security events, and system changes for compliance and troubleshooting.
+---
+
+## Overview
+
+The Audit Logs section shows:
+
+- Chronological event timeline
+- Detailed event information
+- Filtering and search capabilities
+- Export functionality
+
+## Accessing Audit Logs
+
+Access audit logs from the sidebar by clicking **Audit Logs**.
+
+## Event Structure
+
+Each audit log entry contains:
+
+| Field | Description |
+|-------|-------------|
+| `eventType` | Type of event (e.g., `user_signed_in`) |
+| `eventKey` | Primary identifier (user ID, email, etc.) |
+| `eventDisplayName` | Human-readable event name |
+| `eventData` | Additional event details |
+| `createdAt` | When the event occurred |
+| `ipAddress` | Source IP address |
+| `city` | Detected city |
+| `country` | Detected country |
+| `countryCode` | ISO country code |
+
+## Event Types
+
+### User Events
+
+| Event Type | Description |
+|------------|-------------|
+| `user_signed_up` | New user registration |
+| `user_signed_in` | Successful sign-in |
+| `user_signed_out` | User sign-out |
+| `user_profile_updated` | Profile information changed |
+| `user_profile_image_updated` | Avatar/profile image changed |
+| `user_email_verified` | Email verification completed |
+| `user_banned` | User was banned |
+| `user_unbanned` | User was unbanned |
+| `user_deleted` | User account deleted |
+
+### Session Events
+
+| Event Type | Description |
+|------------|-------------|
+| `session_created` | New session started |
+| `session_revoked` | Single session terminated |
+| `sessions_revoked_all` | All user sessions terminated |
+| `user_impersonated` | Admin started impersonating user |
+| `user_impersonation_stopped` | Admin stopped impersonating |
+
+### Account Events
+
+| Event Type | Description |
+|------------|-------------|
+| `account_linked` | OAuth provider connected |
+| `account_unlinked` | OAuth provider disconnected |
+| `password_changed` | Password was updated |
+| `password_reset_requested` | Password reset initiated |
+| `password_reset_completed` | Password reset finished |
+| `email_verification_sent` | Verification email sent |
+
+### Organization Events
+
+| Event Type | Description |
+|------------|-------------|
+| `organization_created` | New organization created |
+| `organization_updated` | Organization settings changed |
+| `member_added` | Member added to organization |
+| `member_removed` | Member removed |
+| `member_role_updated` | Member role changed |
+| `member_invited` | Invitation sent |
+| `invite_accepted` | Invitation accepted |
+| `invite_cancelled` | Invitation cancelled |
+| `invite_rejected` | Invitation rejected |
+
+### Team Events
+
+| Event Type | Description |
+|------------|-------------|
+| `team_created` | Team created |
+| `team_updated` | Team settings changed |
+| `team_deleted` | Team deleted |
+| `team_member_added` | Member added to team |
+| `team_member_removed` | Member removed from team |
+
+### Security Events
+
+| Event Type | Description |
+|------------|-------------|
+| `security_blocked` | Request was blocked |
+| `security_allowed` | Request allowed after challenge |
+| `security_credential_stuffing` | Credential stuffing detected |
+| `security_impossible_travel` | Impossible travel detected |
+| `security_geo_blocked` | Geo-blocking triggered |
+| `security_bot_blocked` | Bot detected |
+| `security_suspicious_ip` | Suspicious IP detected |
+| `security_velocity_exceeded` | Rate limit exceeded |
+| `security_free_trial_abuse` | Free trial abuse detected |
+| `security_compromised_password` | Compromised password detected |
+| `security_stale_account` | Stale account reactivation |
+
+## Filtering Audit Logs
+
+### By Event Type
+
+1. Click the **Event Type** filter
+2. Select one or more event types
+3. The list updates automatically
+
+### By Date Range
+
+1. Click the **Date Range** filter
+2. Select preset (Today, Last 7 days, Last 30 days)
+3. Or choose custom date range
+
+### By User
+
+1. Enter a user ID or email in the search box
+2. Results filter to that user's events
+
+### By Organization
+
+1. Click the **Organization** filter
+2. Select an organization
+3. See only events related to that organization
+
+### By Location
+
+Filter by geographic location:
+
+1. Click the **Location** filter
+2. Select country or city
+3. Results filter to that location
+
+## Search
+
+Use the search box to find specific events:
+
+- Search by event type
+- Search by user email
+- Search by event data content
+- Search by IP address
+
+## Event Details
+
+Click on any event to see full details:
+
+### Basic Information
+
+- Event type and display name
+- Timestamp
+- User information (if applicable)
+
+### Location Data
+
+- IP address
+- City and country
+- Geographic coordinates (if available)
+
+### Event Data
+
+Raw event data showing all captured information:
+
+```json
+{
+  "eventType": "user_signed_in",
+  "eventKey": "user_abc123",
+  "eventData": {
+    "loginMethod": "email",
+    "userAgent": "Mozilla/5.0...",
+    "deviceType": "desktop"
+  },
+  "ipAddress": "192.168.1.1",
+  "city": "New York",
+  "country": "United States",
+  "countryCode": "US"
+}
+```
+
+## Retention
+
+Audit log retention varies by plan:
+
+| Plan | Retention |
+|------|-----------|
+| Starter | 1 day |
+| Pro | 7 days |
+| Business | 30 days |
+| Enterprise | Unlimited |
+
+Events older than your retention period are automatically deleted.
+
+## Exporting Audit Logs
+
+Export audit logs for compliance or analysis:
+
+1. Apply desired filters
+2. Click **Export**
+3. Choose format:
+   - CSV
+   - JSON
+4. Download the file
+
+**Exported data includes all visible fields.**
+
+## API Access
+
+Access audit logs programmatically using the `dashClient()`:
+
+```ts
+const logs = await authClient.dash.getAuditLogs({
+  session: sessionData,
+  limit: 100,
+  offset: 0,
+  eventType: "user_signed_in",  // Optional filter
+  organizationId: "org_123",     // Optional filter
+});
+```
+
+See [Dashboard Plugin](/plugins/dash) for full API documentation.
+
+## Client-Side Filtering
+
+For text search and complex filtering not supported by the API, filter client-side:
+
+```ts
+const matchesText = (event, query) => {
+  const q = query.toLowerCase().trim();
+  if (!q) return true;
+
+  const haystack = [
+    event.eventType,
+    event.eventKey,
+    JSON.stringify(event.eventData ?? {}),
+  ]
+    .join(" ")
+    .toLowerCase();
+
+  return haystack.includes(q);
+};
+
+// Fetch and filter
+const page = await authClient.dash.getAuditLogs({ session, limit: 100 });
+const filtered = page.data?.events.filter((e) => matchesText(e, "password"));
+```
+
+## Pagination
+
+Navigate through large result sets:
+
+```ts
+async function getAllLogs(session) {
+  const limit = 100;
+  let offset = 0;
+  const all = [];
+
+  while (true) {
+    const result = await authClient.dash.getAuditLogs({
+      session,
+      limit,
+      offset,
+    });
+    
+    const events = result.data?.events ?? [];
+    all.push(...events);
+
+    if (events.length < limit) break;
+    offset += limit;
+  }
+
+  return all;
+}
+```
+
+## Use Cases
+
+### Compliance Reporting
+
+Generate reports for compliance requirements:
+
+1. Filter by date range (e.g., last quarter)
+2. Export to CSV
+3. Include in compliance documentation
+
+### Security Investigations
+
+Investigate suspicious activity:
+
+1. Filter by security event types
+2. Filter by specific IP or user
+3. Examine event details and timeline
+
+### User Support
+
+Help users with account issues:
+
+1. Search by user email
+2. Review recent activity
+3. Identify the issue (failed logins, etc.)
+
+### Activity Monitoring
+
+Monitor authentication patterns:
+
+1. View real-time event feed
+2. Set up alerts for specific event types
+3. Track signup and signin trends
+
+## Best Practices
+
+1. **Regular reviews** - Periodically review audit logs for anomalies.
+
+2. **Export for long-term storage** - If you need logs beyond your retention period, export regularly.
+
+3. **Use filters effectively** - Narrow down results to find relevant events faster.
+
+4. **Monitor security events** - Pay special attention to security-related events.
+
+5. **Document investigations** - When investigating incidents, document your findings with event references.

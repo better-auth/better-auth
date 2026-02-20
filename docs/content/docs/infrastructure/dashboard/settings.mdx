@@ -1,0 +1,334 @@
+---
+title: Settings
+description: The Settings section allows you to configure your project, manage team access, customize branding, and handle billing.
+---
+
+## Accessing Settings
+
+Click **Settings** in the sidebar or the gear icon to access the settings area.
+
+## Settings Sections
+
+### Account
+
+Manage your personal account settings:
+
+- **Profile** - Name, email, avatar
+- **Password** - Change your password
+- **Two-Factor** - Enable/disable 2FA
+- **Sessions** - View and revoke your sessions
+
+### Billing
+
+Manage your subscription and payment:
+
+- **Current Plan** - View your active plan
+- **Usage** - Events used this month
+- **Payment Method** - Credit card on file
+- **Billing History** - Past invoices
+
+See [Pricing](/pricing) for plan details.
+
+### Branding
+
+Customize the appearance of authentication pages:
+
+- **Logo** - Upload your company logo
+- **Colors** - Primary and accent colors
+- **Custom CSS** - Advanced styling (Enterprise)
+
+### Email
+
+Configure email settings:
+
+- **Sender Name** - From name in emails
+- **Sender Email** - From address (requires verification)
+- **Reply-To** - Reply-to address
+- **Templates** - Preview and customize email templates
+
+### Security
+
+Configure security settings for the dashboard:
+
+- **Session Duration** - How long dashboard sessions last
+- **IP Allowlist** - Restrict dashboard access by IP
+- **Audit Log** - Dashboard access logging
+
+### Log Drains
+
+Stream events to external systems (Business+):
+
+- **Create Drain** - Add new log drain destination
+- **Manage Drains** - Edit or delete existing drains
+- **Test Connection** - Verify drain is working
+
+See [Log Drains](/enterprise/log-drains) for details.
+
+### Plugins
+
+Manage Better Auth plugins:
+
+- **Active Plugins** - Plugins currently in use
+- **Plugin Settings** - Configuration for each plugin
+- **Recommendations** - Suggested plugins for your use case
+
+### Storage
+
+Configure file storage:
+
+- **Provider** - Storage provider (R2, S3, etc.)
+- **Settings** - Bucket configuration
+- **Usage** - Storage space used
+
+### Members
+
+Manage team access to the dashboard:
+
+- **Team Members** - Users with dashboard access
+- **Pending Invitations** - Outstanding invites
+- **Roles** - Permission levels (Enterprise)
+
+## Account Settings
+
+### Updating Your Profile
+
+1. Go to **Settings** → **Account**
+2. Click **Edit Profile**
+3. Update your information:
+   - Display name
+   - Email address
+   - Profile picture
+4. Click **Save Changes**
+
+### Changing Your Password
+
+1. Go to **Settings** → **Account**
+2. Click **Change Password**
+3. Enter current password
+4. Enter new password (twice)
+5. Click **Update Password**
+
+### Enabling Two-Factor Authentication
+
+1. Go to **Settings** → **Account**
+2. Click **Enable 2FA**
+3. Scan QR code with authenticator app
+4. Enter verification code
+5. Save backup codes securely
+
+### Managing Your Sessions
+
+View all your active sessions and revoke any you don't recognize:
+
+1. Go to **Settings** → **Account**
+2. Scroll to **Active Sessions**
+3. Click **Revoke** on any suspicious session
+
+## Billing Settings
+
+### Viewing Your Plan
+
+1. Go to **Settings** → **Billing**
+2. See your current plan and features
+3. View usage against limits
+
+### Upgrading Your Plan
+
+1. Go to **Settings** → **Billing**
+2. Click **Upgrade Plan**
+3. Select your new plan
+4. Update payment if needed
+5. Confirm upgrade
+
+### Updating Payment Method
+
+1. Go to **Settings** → **Billing**
+2. Click **Update Payment Method**
+3. Enter new card details
+4. Click **Save**
+
+### Viewing Invoices
+
+1. Go to **Settings** → **Billing**
+2. Scroll to **Billing History**
+3. Click any invoice to download PDF
+
+## Branding Settings
+
+### Uploading Your Logo
+
+1. Go to **Settings** → **Branding**
+2. Click **Upload Logo**
+3. Select your logo file (PNG, SVG recommended)
+4. Adjust positioning if needed
+5. Click **Save**
+
+**Logo requirements:**
+- Max size: 2MB
+- Recommended dimensions: 200x50px
+- Formats: PNG, SVG, JPG
+
+### Customizing Colors
+
+1. Go to **Settings** → **Branding**
+2. Click the color picker for each color:
+   - **Primary Color** - Main brand color
+   - **Accent Color** - Buttons, links
+   - **Background** - Page background
+3. Click **Save Changes**
+4. Preview changes before publishing
+
+### Custom CSS (Enterprise)
+
+For advanced customization:
+
+1. Go to **Settings** → **Branding**
+2. Scroll to **Custom CSS**
+3. Enter your CSS code
+4. Click **Save and Preview**
+5. Click **Publish** when satisfied
+
+## Email Settings
+
+### Configuring Sender Information
+
+1. Go to **Settings** → **Email**
+2. Update sender details:
+   - **Sender Name** - e.g., "Your App"
+   - **Sender Email** - e.g., "noreply@yourapp.com"
+   - **Reply-To** - e.g., "support@yourapp.com"
+3. Click **Save**
+
+### Verifying Sender Email
+
+Custom sender emails require verification:
+
+1. Enter your sender email
+2. Click **Send Verification**
+3. Check inbox for verification link
+4. Click the link to verify
+
+### Previewing Templates
+
+1. Go to **Settings** → **Email**
+2. Click **Templates**
+3. Select a template to preview
+4. View desktop and mobile previews
+
+## Security Settings
+
+### Setting Session Duration
+
+1. Go to **Settings** → **Security**
+2. Select session duration:
+   - 1 hour
+   - 8 hours
+   - 24 hours
+   - 7 days
+   - 30 days
+3. Click **Save**
+
+### IP Allowlist
+
+Restrict dashboard access to specific IPs:
+
+1. Go to **Settings** → **Security**
+2. Click **Add IP Address**
+3. Enter IP or CIDR range
+4. Click **Add**
+
+**Warning:** Don't lock yourself out! Always include your current IP.
+
+## Team Members
+
+### Inviting Team Members
+
+1. Go to **Settings** → **Members**
+2. Click **Invite Member**
+3. Enter their email address
+4. Select role (if RBAC enabled)
+5. Click **Send Invite**
+
+### Managing Member Roles
+
+| Role | Permissions |
+|------|-------------|
+| Viewer | Read-only access |
+| Editor | Manage users and organizations |
+| Admin | Full access except billing |
+| Owner | Full access including billing |
+
+Dashboard RBAC requires Enterprise plan.
+
+### Removing Team Members
+
+1. Go to **Settings** → **Members**
+2. Find the member
+3. Click **Remove**
+4. Confirm the action
+
+### Seat Limits
+
+| Plan | Dashboard Seats |
+|------|-----------------|
+| Starter | 1 |
+| Pro | 3 |
+| Business | 5 |
+| Enterprise | Unlimited |
+
+Additional seats available on Pro and Business plans for $10/month each.
+
+## API Keys
+
+### Viewing API Keys
+
+1. Go to **Settings** → **API Keys**
+2. View existing keys (masked)
+3. See last used date
+
+### Creating API Keys
+
+1. Go to **Settings** → **API Keys**
+2. Click **Create New Key**
+3. Enter a description
+4. Select permissions
+5. Click **Create**
+6. **Copy the key immediately** - it won't be shown again
+
+### Rotating API Keys
+
+1. Create a new key
+2. Update your applications
+3. Delete the old key
+
+### Deleting API Keys
+
+1. Go to **Settings** → **API Keys**
+2. Find the key
+3. Click **Delete**
+4. Confirm the action
+
+## Danger Zone
+
+### Deleting Your Project
+
+1. Go to **Settings** → **Danger Zone**
+2. Click **Delete Project**
+3. Type the project name to confirm
+4. Enter your password
+5. Click **Delete Permanently**
+
+**Warning:** This action is irreversible. All data will be permanently deleted:
+- All users
+- All organizations
+- All audit logs
+- All settings
+
+### Exporting Data
+
+Before deletion, export your data:
+
+1. Go to **Settings** → **Danger Zone**
+2. Click **Export All Data**
+3. Wait for export to complete
+4. Download the archive

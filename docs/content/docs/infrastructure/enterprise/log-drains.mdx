@@ -1,0 +1,446 @@
+---
+title: Log Drains
+description: Log Drains enable real-time streaming of authentication events to external systems. Send your audit logs to SIEM tools, data warehouses, or custom endpoints for analysis, compliance, and monitoring.
+---
+
+## Overview
+
+Log Drains provide:
+
+- **Real-time streaming** - Events sent as they occur
+- **Multiple destinations** - Support for various endpoints
+- **Filtered events** - Send only events you need
+- **Reliable delivery** - Retry logic for failed deliveries
+
+## Plan Requirements
+
+| Feature | Starter | Pro | Business | Enterprise |
+|---------|---------|-----|----------|------------|
+| Log Drains | - | - | Yes | Yes |
+
+Log Drains are available on Business and Enterprise plans.
+
+## How Log Drains Work
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│   Your App      │     │  Better Auth    │     │   Destination   │
+│  (Better Auth)  │────>│  Infrastructure │────>│  (Datadog,      │
+│                 │     │                 │     │   Splunk, etc.) │
+│  Auth Event     │     │  Process &      │     │                 │
+│  Triggers       │     │  Route Event    │     │  Receive &      │
+│                 │     │                 │     │  Store          │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+## Creating a Log Drain
+
+### From the Dashboard
+
+1. Navigate to the organization
+2. Go to **Settings** → **Log Drains**
+3. Click **Create Log Drain**
+4. Configure the drain:
+   - **Name** - Descriptive name
+   - **Destination Type** - HTTP, Datadog, etc.
+   - **URL** - Endpoint to receive events
+   - **Authentication** - Headers, tokens
+   - **Event Types** - Filter which events to send
+5. Click **Create**
+
+### Destination Types
+
+#### HTTP Webhook
+
+Send events to any HTTP endpoint:
+
+```
+Destination URL: https://your-endpoint.com/logs
+Method: POST
+Headers:
+  Authorization: Bearer your-token
+  Content-Type: application/json
+```
+
+#### Datadog
+
+Send directly to Datadog Logs:
+
+```
+API Key: your-datadog-api-key
+Site: datadoghq.com (or datadoghq.eu)
+Service: your-app-name
+Source: better-auth
+```
+
+#### Splunk
+
+Send to Splunk HTTP Event Collector:
+
+```
+HEC URL: https://your-splunk:8088/services/collector
+HEC Token: your-hec-token
+Index: your-index
+Source Type: better-auth
+```
+
+#### AWS CloudWatch
+
+Send to CloudWatch Logs:
+
+```
+Log Group: /better-auth/your-app
+Log Stream: auth-events
+Region: us-east-1
+Access Key ID: your-access-key
+Secret Access Key: your-secret-key
+```
+
+#### Custom Endpoint
+
+Any endpoint that accepts JSON POST:
+
+```
+URL: https://your-system.com/ingest
+Headers: (custom headers)
+Authentication: Bearer, Basic, or API Key
+```
+
+## Event Payload
+
+### Standard Format
+
+Events are sent as JSON:
+
+```json
+{
+  "id": "evt_abc123",
+  "type": "user_signed_in",
+  "timestamp": "2026-02-20T15:30:00.000Z",
+  "organizationId": "org_123",
+  "data": {
+    "userId": "user_456",
+    "email": "user@example.com",
+    "sessionId": "sess_789",
+    "ipAddress": "192.168.1.1",
+    "userAgent": "Mozilla/5.0...",
+    "location": {
+      "city": "New York",
+      "country": "United States",
+      "countryCode": "US"
+    }
+  },
+  "metadata": {
+    "source": "better-auth",
+    "version": "1.0",
+    "drainId": "drain_xyz"
+  }
+}
+```
+
+### Batch Format
+
+For high-volume drains, events may be batched:
+
+```json
+{
+  "events": [
+    { "id": "evt_1", "type": "...", ... },
+    { "id": "evt_2", "type": "...", ... },
+    { "id": "evt_3", "type": "...", ... }
+  ],
+  "metadata": {
+    "batchId": "batch_abc",
+    "count": 3,
+    "timestamp": "2026-02-20T15:30:00.000Z"
+  }
+}
+```
+
+## Event Types
+
+### User Events
+
+| Event Type | Description |
+|------------|-------------|
+| `user_signed_up` | New user registered |
+| `user_signed_in` | User logged in |
+| `user_signed_out` | User logged out |
+| `user_profile_updated` | Profile changed |
+| `user_email_verified` | Email verified |
+| `user_banned` | User banned |
+| `user_unbanned` | User unbanned |
+| `user_deleted` | User deleted |
+
+### Session Events
+
+| Event Type | Description |
+|------------|-------------|
+| `session_created` | New session started |
+| `session_revoked` | Session terminated |
+| `sessions_revoked_all` | All sessions terminated |
+
+### Organization Events
+
+| Event Type | Description |
+|------------|-------------|
+| `organization_created` | Org created |
+| `organization_updated` | Org updated |
+| `member_added` | Member added |
+| `member_removed` | Member removed |
+| `member_role_updated` | Role changed |
+
+### Security Events
+
+| Event Type | Description |
+|------------|-------------|
+| `security_blocked` | Request blocked |
+| `security_challenged` | Challenge issued |
+| `security_credential_stuffing` | Attack detected |
+| `security_impossible_travel` | Anomaly detected |
+
+## Filtering Events
+
+### By Event Type
+
+Select specific events to stream:
+
+1. Go to log drain settings
+2. Click **Event Filters**
+3. Check event types to include
+4. Save changes
+
+### By Organization
+
+Drain events for specific organizations:
+
+- **All organizations** - Global drain
+- **Specific organizations** - Selected orgs only
+
+## Managing Log Drains
+
+### Testing a Drain
+
+Verify your drain is working:
+
+1. Go to log drain settings
+2. Click **Test Connection**
+3. A test event is sent
+4. Verify receipt at destination
+
+### Viewing Delivery Status
+
+Monitor drain health:
+
+- **Active** - Receiving events normally
+- **Degraded** - Some deliveries failing
+- **Failed** - All deliveries failing
+- **Paused** - Manually paused
+
+### Viewing Logs
+
+See recent delivery attempts:
+
+1. Go to log drain settings
+2. Click **Delivery Logs**
+3. View:
+   - Successful deliveries
+   - Failed attempts
+   - Retry status
+
+### Pausing a Drain
+
+Temporarily stop event delivery:
+
+1. Go to log drain settings
+2. Click **Pause**
+3. Events queue until resumed
+4. Click **Resume** to restart
+
+### Editing a Drain
+
+Update drain configuration:
+
+1. Go to log drain settings
+2. Click **Edit**
+3. Modify settings
+4. Click **Save**
+
+### Deleting a Drain
+
+Remove a log drain:
+
+1. Go to log drain settings
+2. Click **Delete**
+3. Confirm the action
+
+## Delivery Guarantees
+
+### At-Least-Once Delivery
+
+Events are delivered at least once:
+
+- Failed deliveries are retried
+- Some events may be delivered multiple times
+- Use event `id` for deduplication
+
+### Retry Policy
+
+Failed deliveries are retried:
+
+| Attempt | Delay |
+|---------|-------|
+| 1 | Immediate |
+| 2 | 30 seconds |
+| 3 | 2 minutes |
+| 4 | 10 minutes |
+| 5 | 1 hour |
+| 6+ | 4 hours |
+
+After 24 hours of failures, events are dropped.
+
+### Ordering
+
+Events are generally ordered but not guaranteed:
+
+- Events may arrive out of order
+- Use `timestamp` for ordering
+- Batch deliveries are ordered within batch
+
+## API Integration
+
+### Create Log Drain
+
+```ts
+await authClient.dash.createOrganizationLogDrain({
+  organizationId: "org_123",
+  name: "Datadog",
+  type: "datadog",
+  config: {
+    apiKey: "your-api-key",
+    site: "datadoghq.com",
+    service: "my-app",
+  },
+  eventTypes: ["user_signed_in", "user_signed_out"],
+});
+```
+
+### List Log Drains
+
+```ts
+const drains = await authClient.dash.listOrganizationLogDrains({
+  organizationId: "org_123",
+});
+```
+
+### Update Log Drain
+
+```ts
+await authClient.dash.updateOrganizationLogDrain({
+  organizationId: "org_123",
+  drainId: "drain_123",
+  name: "Datadog Production",
+  eventTypes: ["user_signed_in"],
+});
+```
+
+### Test Log Drain
+
+```ts
+const result = await authClient.dash.testOrganizationLogDrain({
+  organizationId: "org_123",
+  drainId: "drain_123",
+});
+```
+
+### Delete Log Drain
+
+```ts
+await authClient.dash.deleteOrganizationLogDrain({
+  organizationId: "org_123",
+  drainId: "drain_123",
+});
+```
+
+## Integration Examples
+
+### Datadog Dashboard
+
+Create a Datadog dashboard for auth events:
+
+1. Set up log drain to Datadog
+2. Create dashboard with:
+   - Sign-in count over time
+   - Failed login attempts
+   - Geographic distribution
+   - Top users by activity
+
+### Splunk Alerting
+
+Set up Splunk alerts:
+
+1. Set up log drain to Splunk
+2. Create alert for:
+   - Multiple failed logins
+   - Impossible travel events
+   - Banned user attempts
+
+### Custom Analytics
+
+Send to your data warehouse:
+
+1. Set up HTTP webhook drain
+2. Point to your ingestion endpoint
+3. Transform and load into warehouse
+4. Build custom analytics
+
+## Troubleshooting
+
+### Delivery Failures
+
+**"Connection refused"**
+- Verify destination URL is correct
+- Check firewall rules
+- Ensure endpoint is accessible
+
+**"Authentication failed"**
+- Verify API keys/tokens
+- Check header format
+- Ensure credentials not expired
+
+**"Timeout"**
+- Endpoint taking too long to respond
+- Increase timeout at destination
+- Check for bottlenecks
+
+### Missing Events
+
+**Check filters:**
+- Verify event types are selected
+- Check organization filter
+
+**Check status:**
+- Drain may be paused
+- Check for delivery failures
+
+## Best Practices
+
+1. **Use test mode first** - Verify integration before production
+
+2. **Handle duplicates** - Implement idempotency using event ID
+
+3. **Monitor drain health** - Set up alerts for failures
+
+4. **Secure endpoints** - Use HTTPS and authentication
+
+5. **Process asynchronously** - Return 200 quickly, process in background
+
+6. **Set up multiple drains** - Send to backup destination
+
+## Security Considerations
+
+1. **Use HTTPS** - Never send to HTTP endpoints
+2. **Rotate credentials** - Periodically update API keys
+3. **Limit access** - Restrict who can manage drains
+4. **Audit changes** - Monitor drain configuration changes
+5. **Encrypt at rest** - Ensure destination encrypts data

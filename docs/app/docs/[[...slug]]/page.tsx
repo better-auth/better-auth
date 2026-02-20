@@ -18,6 +18,7 @@ import { GenerateAppleJwt } from "@/components/generate-apple-jwt";
 import { GenerateSecret } from "@/components/generate-secret";
 import { AddToCursor } from "@/components/mdx/add-to-cursor";
 import DatabaseTable from "@/components/mdx/database-tables";
+import { Mermaid } from "@/components/mdx/mermaid";
 import { Callout } from "@/components/ui/callout";
 import { AnimatePresence } from "@/components/ui/fade-in";
 import { source } from "@/lib/source";
@@ -105,6 +106,7 @@ export default async function Page({
 						Accordions,
 						Endpoint,
 						APIMethod,
+						Mermaid,
 						Callout: ({
 							children,
 							type,

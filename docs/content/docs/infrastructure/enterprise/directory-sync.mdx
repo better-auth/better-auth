@@ -1,0 +1,369 @@
+---
+title: Directory Sync (SCIM)
+description: Directory Sync enables automatic user provisioning and deprovisioning from identity providers using the SCIM (System for Cross-domain Identity Management) protocol. Keep your user directory in sync with your customers' identity providers.
+---
+
+## Overview
+
+SCIM Directory Sync provides:
+
+- **Automatic user provisioning** - Create users when added in IdP
+- **Automatic deprovisioning** - Remove users when removed in IdP
+- **Profile sync** - Keep user attributes up to date
+- **Group sync** - Sync group memberships
+
+## Plan Requirements
+
+| Feature | Starter | Pro | Business | Enterprise |
+|---------|---------|-----|----------|------------|
+| Directory Sync | - | - | Yes | Yes |
+
+Directory Sync is available on Business and Enterprise plans.
+
+## How SCIM Works
+
+```
+┌─────────────────┐                    ┌─────────────────┐
+│    Identity     │                    │   Your App      │
+│    Provider     │                    │  (Better Auth)  │
+│  (Okta, Azure)  │                    │                 │
+│                 │                    │                 │
+│ ┌─────────────┐ │  SCIM API Calls   │ ┌─────────────┐ │
+│ │    User     │ │ ─────────────────>│ │    User     │ │
+│ │  Directory  │ │  POST /Users      │ │  Database   │ │
+│ │             │ │  PATCH /Users/:id │ │             │ │
+│ │             │ │  DELETE /Users/:id│ │             │ │
+│ └─────────────┘ │                    │ └─────────────┘ │
+└─────────────────┘                    └─────────────────┘
+```
+
+When a user is:
+- **Created** in IdP → User created in your app
+- **Updated** in IdP → User profile updated
+- **Deleted** in IdP → User removed from organization
+
+## Setting Up Directory Sync
+
+### Creating a Directory Connection
+
+1. Navigate to the organization
+2. Go to the **Directory Sync** tab
+3. Click **Create Directory**
+4. Enter a name for the connection (e.g., "Okta SCIM")
+5. Click **Create**
+
+### Copy Connection Details
+
+After creating, you'll see:
+
+| Setting | Value |
+|---------|-------|
+| SCIM Endpoint URL | `https://yourapp.com/api/auth/scim/{directory_id}` |
+| Bearer Token | `scim_abc123...` (copy immediately) |
+
+**Important:** The token is only shown once. Copy it now!
+
+### Configure Your Identity Provider
+
+Use the endpoint URL and token to configure SCIM in your IdP:
+
+#### Okta Setup
+
+1. Go to **Applications** → Your App → **Provisioning**
+2. Click **Configure API Integration**
+3. Enter:
+   - SCIM connector base URL: `{SCIM Endpoint URL}`
+   - Bearer Token: `{Bearer Token}`
+4. Test the connection
+5. Enable provisioning features:
+   - Create Users
+   - Update User Attributes
+   - Deactivate Users
+
+#### Azure AD Setup
+
+1. Go to **Enterprise Applications** → Your App → **Provisioning**
+2. Set Mode to **Automatic**
+3. Enter Admin Credentials:
+   - Tenant URL: `{SCIM Endpoint URL}`
+   - Secret Token: `{Bearer Token}`
+4. Test Connection
+5. Configure attribute mappings
+6. Enable provisioning
+
+#### Google Workspace Setup
+
+1. Go to **Apps** → **SAML apps** → Your App
+2. Enable **Auto-provisioning**
+3. Configure SCIM:
+   - Endpoint URL: `{SCIM Endpoint URL}`
+   - Authorization: Bearer `{Bearer Token}`
+
+## SCIM Endpoints
+
+Better Auth implements these SCIM 2.0 endpoints:
+
+### Users
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/scim/Users` | GET | List users |
+| `/scim/Users` | POST | Create user |
+| `/scim/Users/{id}` | GET | Get user |
+| `/scim/Users/{id}` | PUT | Replace user |
+| `/scim/Users/{id}` | PATCH | Update user |
+| `/scim/Users/{id}` | DELETE | Delete user |
+
+### Groups
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/scim/Groups` | GET | List groups |
+| `/scim/Groups` | POST | Create group |
+| `/scim/Groups/{id}` | GET | Get group |
+| `/scim/Groups/{id}` | PUT | Replace group |
+| `/scim/Groups/{id}` | PATCH | Update group |
+| `/scim/Groups/{id}` | DELETE | Delete group |
+
+### Service Provider Config
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/scim/ServiceProviderConfig` | GET | SCIM capabilities |
+| `/scim/Schemas` | GET | Available schemas |
+| `/scim/ResourceTypes` | GET | Resource types |
+
+## Attribute Mapping
+
+### User Attributes
+
+SCIM attributes map to user fields:
+
+| SCIM Attribute | User Field |
+|----------------|------------|
+| `userName` | email |
+| `name.givenName` | firstName |
+| `name.familyName` | lastName |
+| `displayName` | name |
+| `active` | (not banned) |
+| `externalId` | scimExternalId |
+
+### Custom Attributes
+
+Map custom SCIM attributes in the dashboard:
+
+1. Go to Directory settings
+2. Click **Attribute Mapping**
+3. Add custom mappings:
+   ```
+   urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:department → department
+   urn:ietf:params:scim:schemas:extension:enterprise:2.0:User:manager → manager
+   ```
+
+## Group to Role Mapping
+
+Map IdP groups to organization roles:
+
+1. Go to Directory settings
+2. Click **Group Mapping**
+3. Configure mappings:
+   ```
+   IdP Group → Organization Role
+   Administrators → admin
+   Developers → member
+   Support → member
+   ```
+
+## Provisioning Behavior
+
+### User Creation
+
+When a user is provisioned:
+
+1. Check if user exists (by email)
+2. If new, create user account
+3. Add user to organization with mapped role
+4. Set profile from SCIM attributes
+
+### User Updates
+
+When a user is updated:
+
+1. Find user by SCIM external ID
+2. Update mapped attributes
+3. Update role if group changed
+
+### User Deprovisioning
+
+When a user is deprovisioned (depends on settings):
+
+- **Remove from organization** - User removed but account kept
+- **Deactivate user** - User banned but account kept
+- **Delete user** - User account deleted entirely
+
+### Default Behavior
+
+| Action | Default Behavior |
+|--------|------------------|
+| Deprovision | Remove from organization |
+| Reactivate | Re-add to organization |
+
+## Managing Directory Connections
+
+### Viewing Status
+
+The directory shows:
+
+- Connection status (connected/disconnected)
+- Last sync time
+- Users synced count
+- Groups synced count
+- Recent errors
+
+### Regenerating Tokens
+
+If a token is compromised:
+
+1. Go to directory settings
+2. Click **Regenerate Token**
+3. Copy the new token
+4. Update your IdP configuration
+
+**Note:** The old token is immediately invalidated.
+
+### Viewing Sync Logs
+
+1. Go to directory settings
+2. Click **Sync Logs**
+3. View recent operations:
+   - User created
+   - User updated
+   - User removed
+   - Errors
+
+### Testing the Connection
+
+1. Go to directory settings
+2. Click **Test Connection**
+3. Better Auth sends a test request
+4. View results
+
+## API Integration
+
+### Create Directory
+
+```ts
+await authClient.dash.createOrganizationDirectory({
+  organizationId: "org_123",
+  name: "Okta SCIM",
+});
+```
+
+### List Directories
+
+```ts
+const directories = await authClient.dash.listOrganizationDirectories({
+  organizationId: "org_123",
+});
+```
+
+### Get Directory Details
+
+```ts
+const directory = await authClient.dash.getDirectoryDetails({
+  organizationId: "org_123",
+  directoryId: "dir_123",
+});
+```
+
+### Regenerate Token
+
+```ts
+const newToken = await authClient.dash.regenerateDirectoryToken({
+  organizationId: "org_123",
+  directoryId: "dir_123",
+});
+```
+
+### Delete Directory
+
+```ts
+await authClient.dash.deleteOrganizationDirectory({
+  organizationId: "org_123",
+  directoryId: "dir_123",
+});
+```
+
+## Troubleshooting
+
+### Common Issues
+
+**"Authentication failed"**
+- Verify the Bearer token is correct
+- Check token hasn't been regenerated
+- Ensure token is included as `Authorization: Bearer {token}`
+
+**"User not found"**
+- Check the external ID matches
+- Verify attribute mapping is correct
+
+**"Schema validation error"**
+- Verify required attributes are provided
+- Check attribute formats (email valid, etc.)
+
+**"Duplicate user"**
+- User with email already exists
+- Check external ID mapping
+
+### Debug Logging
+
+Enable verbose logging:
+
+1. Go to directory settings
+2. Enable **Debug Mode**
+3. View detailed request/response logs
+
+### Sync Errors
+
+Common error codes:
+
+| Code | Description | Resolution |
+|------|-------------|------------|
+| 400 | Invalid request | Check attribute formats |
+| 401 | Authentication failed | Verify Bearer token |
+| 404 | Resource not found | Check user/group ID |
+| 409 | Conflict | User already exists |
+| 500 | Server error | Check logs, contact support |
+
+## Best Practices
+
+1. **Test before production** - Use test users first
+
+2. **Monitor sync logs** - Regularly check for errors
+
+3. **Secure tokens** - Store Bearer tokens securely
+
+4. **Map roles carefully** - Verify group-to-role mappings
+
+5. **Plan deprovisioning** - Decide behavior before enabling
+
+6. **Document mappings** - Keep record of attribute mappings
+
+## Supported Identity Providers
+
+Directory Sync works with any SCIM 2.0 compliant provider:
+
+- **Okta** - Full SCIM 2.0 support
+- **Azure Active Directory** - Via enterprise app provisioning
+- **Google Workspace** - Auto-provisioning feature
+- **OneLogin** - SCIM provisioning
+- **JumpCloud** - Directory integration
+- **Ping Identity** - SCIM connector
+
+## Security Considerations
+
+1. **Rotate tokens** - Periodically regenerate tokens
+2. **Use HTTPS** - Always use secure connections
+3. **Limit access** - Restrict who can manage directories
+4. **Audit logs** - Monitor directory operations
+5. **Test changes** - Verify mappings before deploying
