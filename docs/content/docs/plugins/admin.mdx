@@ -210,6 +210,38 @@ const totalUsers = users.total;
 const totalPages = Math.ceil(totalUsers / pageSize)
 ```
 
+### Get User
+
+Fetches a user's information using an id.
+
+<APIMethod
+  path="/admin/get-user"
+  method="GET"
+  requireSession
+>
+```ts
+type getUser = {
+  /**
+  * The id of the user you want to fetch.
+  */
+  id: string = "user-id"
+}
+```
+</APIMethod>
+
+#### Returns
+On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
+```ts
+type GetUserResponse = {
+  data: User | null;
+  error: null | {
+    message: string;
+    status: number; //HTTP status code
+    statusText: string;
+    code: string;
+}
+```
+
 ### Set User Role
 
 Changes the role of a user.
