@@ -379,3 +379,60 @@ describe("sign-in with form data", async () => {
 		expect(response.status).toBe(200);
 	});
 });
+
+describe("timing attack protection", async () => {
+	const { auth } = await getTestInstance();
+
+	it("should take similar time for non-existent user and wrong password", async () => {
+		const timings: number[] = [];
+
+		// Test non-existent user
+		for (let i = 0; i < 3; i++) {
+			const start = performance.now();
+			await auth.api
+				.signInEmail({
+					body: {
+						email: "nonexistent@test.com",
+						password: "wrongpassword",
+					},
+				})
+				.catch(() => {});
+			const end = performance.now();
+			timings.push(end - start);
+		}
+
+		// Test existing user with wrong password
+		const testUser = await auth.api.signUpEmail({
+			body: {
+				email: "timing-test@test.com",
+				password: "correctpassword",
+				name: "Test",
+			},
+		});
+
+		for (let i = 0; i < 3; i++) {
+			const start = performance.now();
+			await auth.api
+				.signInEmail({
+					body: {
+						email: testUser.user.email,
+						password: "wrongpassword",
+					},
+				})
+				.catch(() => {});
+			const end = performance.now();
+			timings.push(end - start);
+		}
+
+		// Calculate average and standard deviation
+		const avg = timings.reduce((a, b) => a + b, 0) / timings.length;
+		const variance =
+			timings.reduce((sum, t) => sum + Math.pow(t - avg, 2), 0) /
+			timings.length;
+		const stdDev = Math.sqrt(variance);
+
+		// Timing should be consistent (low standard deviation relative to mean)
+		// Allow up to 50% variance which is reasonable for crypto operations
+		expect(stdDev / avg).toBeLessThan(0.5);
+	});
+});
