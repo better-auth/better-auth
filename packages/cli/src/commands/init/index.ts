@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import chalk from "chalk";
 import { Command } from "commander";
+import open from "open";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
 import z from "zod";
@@ -1502,8 +1503,26 @@ export const auth = betterAuth({
 			"Would you like to connect your app to Better Auth infrastructure?",
 		initial: true,
 	});
+	// If the user cancels the prompt, `connect` will be undefined.
+	// Treat this as a cancellation of the remaining init flow.
+	if (connectResponse.connect === undefined) {
+		console.log(
+			chalk.yellow("\n✖ ") +
+				"Setup cancelled before connecting to Better Auth infrastructure.\n",
+		);
+		return;
+	}
+	// If the user cancels the prompt, `connect` will be undefined.
+	// Treat this as a cancellation of the remaining init flow.
+	if (connectResponse.connect === undefined) {
+		console.log(
+			chalk.yellow("\n✖ ") +
+				"Setup cancelled before connecting to Better Auth infrastructure.\n",
+		);
+		return;
+	}
 	if (connectResponse.connect) {
-		await open("https://www.better-auth.com/onboarding");
+		await open("https://beta.better-auth.com/onboarding");
 		console.log(
 			chalk.cyan("\n→ ") +
 				"Opening Better Auth onboarding in your browser...\n",
