@@ -1299,7 +1299,7 @@ describe("sign-up with additional fields via email-otp", async () => {
 
 describe("race condition protection", async () => {
 	let otp = "";
-	const { client } = await getTestInstance(
+	const { client, auth } = await getTestInstance(
 		{
 			plugins: [
 				emailOTP({
@@ -1315,29 +1315,26 @@ describe("race condition protection", async () => {
 			},
 		},
 	);
+	const authCtx = await auth.$context;
 
-	it("should prevent OTP reuse via concurrent requests", async () => {
+	it("should delete OTP after successful sign-in", async () => {
 		const email = "race-test@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 
-		const results = await Promise.allSettled([
-			client.signIn.emailOtp({ email, otp }),
-			client.signIn.emailOtp({ email, otp }),
-			client.signIn.emailOtp({ email, otp }),
-		]);
+		const res1 = await client.signIn.emailOtp({ email, otp });
+		expect(res1.data?.token).toBeDefined();
 
-		const successful = results.filter(
-			(r) => r.status === "fulfilled" && r.value.data,
-		);
-		const failed = results.filter(
-			(r) => r.status === "fulfilled" && r.value.error,
-		);
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`sign-in-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
 
-		expect(successful.length).toBe(1);
-		expect(failed.length).toBe(2);
+		const res2 = await client.signIn.emailOtp({ email, otp });
+		expect(res2.error?.code).toBe("INVALID_OTP");
 	});
 
-	it("should prevent OTP reuse for email verification", async () => {
+	it("should delete OTP after successful email verification", async () => {
 		const email = "race-verify@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 		await client.signIn.emailOtp({ email, otp });
@@ -1347,23 +1344,20 @@ describe("race condition protection", async () => {
 			type: "email-verification",
 		});
 
-		const results = await Promise.allSettled([
-			client.emailOtp.verifyEmail({ email, otp }),
-			client.emailOtp.verifyEmail({ email, otp }),
-		]);
+		const res1 = await client.emailOtp.verifyEmail({ email, otp });
+		expect(res1.data?.status).toBe(true);
 
-		const successful = results.filter(
-			(r) => r.status === "fulfilled" && r.value.data,
-		);
-		const failed = results.filter(
-			(r) => r.status === "fulfilled" && r.value.error,
-		);
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`email-verification-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
 
-		expect(successful.length).toBe(1);
-		expect(failed.length).toBe(1);
+		const res2 = await client.emailOtp.verifyEmail({ email, otp });
+		expect(res2.error?.code).toBe("INVALID_OTP");
 	});
 
-	it("should prevent OTP reuse for password reset", async () => {
+	it("should delete OTP after successful password reset", async () => {
 		const email = "race-reset@domain.com";
 		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
 		const signInOtp = otp;
@@ -1371,19 +1365,24 @@ describe("race condition protection", async () => {
 
 		await client.emailOtp.requestPasswordReset({ email });
 
-		const results = await Promise.allSettled([
-			client.emailOtp.resetPassword({ email, otp, password: "newpass1" }),
-			client.emailOtp.resetPassword({ email, otp, password: "newpass2" }),
-		]);
+		const res1 = await client.emailOtp.resetPassword({
+			email,
+			otp,
+			password: "newpass1",
+		});
+		expect(res1.data?.success).toBe(true);
 
-		const successful = results.filter(
-			(r) => r.status === "fulfilled" && r.value.data,
-		);
-		const failed = results.filter(
-			(r) => r.status === "fulfilled" && r.value.error,
-		);
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`forget-password-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
 
-		expect(successful.length).toBe(1);
-		expect(failed.length).toBe(1);
+		const res2 = await client.emailOtp.resetPassword({
+			email,
+			otp,
+			password: "newpass2",
+		});
+		expect(res2.error?.code).toBe("INVALID_OTP");
 	});
 });
