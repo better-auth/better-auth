@@ -8,7 +8,6 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { BetterAuthError } from "@better-auth/core/error";
 import { loadConfig } from "c12";
 import type { JitiOptions } from "jiti";
-import { loadConfigFromFile } from "vite";
 import { addCloudflareModules } from "./add-cloudflare-modules";
 import { addSvelteKitEnvModules } from "./add-svelte-kit-env-modules";
 import { getTsconfigInfo } from "./get-tsconfig-info";
@@ -141,48 +140,8 @@ function getPathAliases(cwd: string): Record<string, string> | null {
 /**
  * .tsx files are not supported by Jiti.
  */
-const getJitiOptions = async (cwd: string): Promise<JitiOptions> => {
+const jitiOptions = (cwd: string): JitiOptions => {
 	const alias = getPathAliases(cwd) || {};
-
-	try {
-		const viteConfigPath = ["vite.config.ts", "vite.config.js", "vite.config.mjs", "vite.config.cjs"]
-			.map((p) => path.join(cwd, p))
-			.find((p) => fs.existsSync(p));
-
-		if (viteConfigPath) {
-			const viteConfig = await loadConfigFromFile(
-				{ command: "serve", mode: "development" },
-				viteConfigPath,
-			);
-			if (viteConfig?.config.resolve?.alias) {
-				const viteAliases = viteConfig.config.resolve.alias;
-                let rawAliases: Record<string, string> = {};
-
-				if (Array.isArray(viteAliases)) {
-                    for(const a of viteAliases) {
-                        if(typeof a.find === 'string') {
-                            rawAliases[a.find] = a.replacement;
-                        }
-                    }
-				} else if (viteAliases) {
-                    rawAliases = viteAliases as Record<string, string>;
-                }
-                
-                const finalViteAliases: Record<string, string> = {};
-                for (const [key, value] of Object.entries(rawAliases)) {
-                    const finalKey = key.endsWith("*") ? key.slice(0, -1) : key;
-                    const finalValue = value.endsWith("*") ? value.slice(0, -1) : value;
-                    finalViteAliases[finalKey] = finalValue;
-                }
-
-				Object.assign(alias, finalViteAliases);
-			}
-		}
-	} catch (e) {
-		// Could not load vite config, that's fine, we'll just ignore it.
-	}
-
-
 	return {
 		transformOptions: {
 			babel: {
@@ -224,7 +183,6 @@ export async function getConfig({
 	shouldThrowOnError?: boolean;
 }) {
 	try {
-		const jitiOptions = await getJitiOptions(cwd);
 		let configFile: BetterAuthOptions | null = null;
 		if (configPath) {
 			let resolvedPath: string = path.join(cwd, configPath);
@@ -243,7 +201,7 @@ export async function getConfig({
 				dotenv: {
 					fileName: [".env", ".env.local"],
 				},
-				jitiOptions: jitiOptions,
+				jitiOptions: jitiOptions(cwd),
 				cwd,
 			});
 			if (!("auth" in config) && !isDefaultExport(config)) {
@@ -275,7 +233,7 @@ export async function getConfig({
 						dotenv: {
 							fileName: [".env", ".env.local"],
 						},
-						jitiOptions: jitiOptions,
+						jitiOptions: jitiOptions(cwd),
 						cwd,
 					});
 					const hasConfig = Object.keys(config).length > 0;
