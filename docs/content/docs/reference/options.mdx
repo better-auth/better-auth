@@ -244,7 +244,10 @@ export const auth = betterAuth({
 - `maxPasswordLength`: Maximum password length (default: `128`)
 - `autoSignIn`: Automatically sign in the user after sign up
 - `sendResetPassword`: Function to send reset password email
+- `onPasswordReset`: Callback triggered when a user's password is changed successfully
+- `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
+- `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
 - `password`: Custom password hashing and verification functions
 
 ## `socialProviders`
