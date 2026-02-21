@@ -199,6 +199,178 @@ describe("sign-up with custom fields", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7972
+ */
+describe("sign-up user enumeration protection", async () => {
+	it("should return success for existing email when email verification is required", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-email@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+
+	it("should call onExistingUserSignUp when requireEmailVerification is true", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-rev@test.com",
+			password: "password123",
+			name: "Callback User",
+		};
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+		expect(onExistingUserSignUp).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: body.email }),
+			}),
+			undefined,
+		);
+	});
+
+	it("should call onExistingUserSignUp when autoSignIn is false", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-autosignin@test.com",
+			password: "password123",
+			name: "Callback AutoSignIn",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await auth.api.signUpEmail({ body });
+
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("should not call onExistingUserSignUp when enumeration protection is inactive", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-noenum@test.com",
+			password: "password123",
+			name: "No Enum",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should not call onExistingUserSignUp for new user sign-ups", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "brand-new-user@test.com",
+				password: "password123",
+				name: "Brand New",
+			},
+		});
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should return success for existing email when autoSignIn is disabled", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-auto-signin@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+});
+
 describe("sign-up CSRF protection", async () => {
 	const { auth } = await getTestInstance(
 		{
