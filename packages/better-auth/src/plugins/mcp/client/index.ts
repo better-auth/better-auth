@@ -1,52 +1,7 @@
-/**
- * Better Auth MCP Client
- *
- * Framework-agnostic authentication client for MCP servers.
- * Works with any HTTP framework (Express, Hono, Fastify, etc.)
- * and any MCP server implementation.
- *
- * This is the "remote" counterpart to `withMcpAuth` — instead of
- * requiring a local Better Auth instance, it talks to a Better Auth
- * server over HTTP.
- *
- * @example
- * ```typescript
- * import { createMcpAuthClient } from 'better-auth/plugins/mcp/client'
- *
- * const mcpAuth = createMcpAuthClient({
- *   authURL: 'http://localhost:3000/api/auth'
- * })
- *
- * // Protect any request handler
- * const handler = mcpAuth.handler(async (req, session) => {
- *   // session.userId, session.scopes, etc.
- *   return new Response('ok')
- * })
- * ```
- */
-
 export interface McpAuthClientOptions {
-	/**
-	 * Full URL to Better Auth endpoints (baseURL + basePath).
-	 *
-	 * @example "http://localhost:3000/api/auth"
-	 * @example "https://myapp.com/api/auth"
-	 */
 	authURL: string;
-	/**
-	 * The resource identifier for this MCP server.
-	 * Used in the protected resource metadata.
-	 * Defaults to the origin of the MCP server's URL.
-	 */
 	resource?: string;
-	/**
-	 * Allowed CORS origin(s). Defaults to the authURL origin.
-	 * Set to `"*"` to allow all origins (not recommended for production).
-	 */
 	allowedOrigins?: string | string[];
-	/**
-	 * Custom fetch implementation. Defaults to global fetch.
-	 */
 	fetch?: typeof globalThis.fetch;
 }
 
@@ -92,53 +47,19 @@ interface NodeLikeResponse {
 }
 
 export interface McpAuthClient {
-	/**
-	 * Verify a Bearer token against Better Auth.
-	 * Returns the session if valid, null otherwise.
-	 */
 	verifyToken: (token: string) => Promise<McpSession | null>;
-
-	/**
-	 * Wrap a request handler with MCP authentication.
-	 * Returns 401 with proper WWW-Authenticate header if unauthorized.
-	 *
-	 * Works with any framework that uses Web Standard Request/Response.
-	 */
 	handler: (
 		fn: (req: Request, session: McpSession) => Response | Promise<Response>,
 	) => (req: Request) => Promise<Response>;
-
-	/**
-	 * Get the OAuth discovery metadata handler.
-	 * Proxies from Better Auth's `/.well-known/oauth-authorization-server`.
-	 *
-	 * Mount at: `GET /.well-known/oauth-authorization-server`
-	 */
 	discoveryHandler: () => (req: Request) => Promise<Response>;
-
-	/**
-	 * Get the protected resource metadata handler.
-	 * Returns RFC 9728 metadata pointing to Better Auth.
-	 *
-	 * Mount at: `GET /.well-known/oauth-protected-resource`
-	 */
 	protectedResourceHandler: (
 		serverURL: string,
 	) => (req: Request) => Promise<Response>;
-
-	/**
-	 * Express/Connect-style middleware.
-	 * Sets `req.mcpSession` on success, sends 401 on failure.
-	 */
 	middleware: () => (
 		req: NodeLikeRequest,
 		res: NodeLikeResponse,
 		next: () => void,
 	) => Promise<void>;
-
-	/**
-	 * The configured auth URL.
-	 */
 	authURL: string;
 }
 
@@ -277,7 +198,7 @@ export function createMcpAuthClient(
 	const discoveryHandler: McpAuthClient["discoveryHandler"] = () => {
 		let cachedMetadata: OAuthDiscoveryMetadata | null = null;
 		let cacheTime = 0;
-		const CACHE_TTL = 60_000; // 1 minute
+		const CACHE_TTL = 60_000;
 
 		return async (_req: Request) => {
 			const now = Date.now();

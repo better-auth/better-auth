@@ -1,20 +1,9 @@
-/**
- * Framework-specific adapters for Better Auth MCP Client
- *
- * These adapters wrap `createMcpAuthClient` for specific frameworks
- * and MCP server implementations, providing idiomatic integration.
- */
-
 import type {
 	McpAuthClient,
 	McpAuthClientOptions,
 	McpSession,
 } from "./index.js";
 import { createMcpAuthClient } from "./index.js";
-
-// ─────────────────────────────────────────────────────────────
-// Hono adapter
-// ─────────────────────────────────────────────────────────────
 
 interface HonoContext {
 	req: { header: (name: string) => string | undefined; raw: Request };
@@ -36,31 +25,6 @@ interface HonoApp {
 	get: (path: string, handler: (c: HonoContext) => Promise<Response>) => void;
 }
 
-/**
- * Hono middleware that validates MCP Bearer tokens.
- * Sets `c.get('mcpSession')` on success.
- *
- * @example
- * ```typescript
- * import { Hono } from 'hono'
- * import { mcpAuthHono } from 'better-auth/plugins/mcp/client/adapters'
- *
- * const app = new Hono()
- * const { middleware, discoveryRoutes } = mcpAuthHono({
- *   authURL: 'http://localhost:3000/api/auth'
- * })
- *
- * // Mount well-known routes
- * discoveryRoutes(app, 'http://localhost:4000')
- *
- * // Protect MCP routes
- * app.use('/mcp/*', middleware)
- * app.post('/mcp', (c) => {
- *   const session = c.get('mcpSession')
- *   // ...
- * })
- * ```
- */
 export function mcpAuthHono(options: McpAuthClientOptions): {
 	client: McpAuthClient;
 	middleware: HonoMiddleware;
@@ -136,38 +100,6 @@ export function mcpAuthHono(options: McpAuthClientOptions): {
 	return { client, middleware, discoveryRoutes };
 }
 
-// ─────────────────────────────────────────────────────────────
-// Official MCP SDK adapter (@modelcontextprotocol/sdk)
-// ─────────────────────────────────────────────────────────────
-
-/**
- * Creates an auth object compatible with the official MCP SDK's
- * `StreamableHTTPServerTransport` / `SSEServerTransport`.
- *
- * The official MCP SDK expects a `verifyToken` function that is
- * called on every request. This adapter bridges that.
- *
- * @example
- * ```typescript
- * import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
- * import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
- * import { mcpAuthOfficial } from 'better-auth/plugins/mcp/client/adapters'
- *
- * const auth = mcpAuthOfficial({
- *   authURL: 'http://localhost:3000/api/auth'
- * })
- *
- * const transport = new StreamableHTTPServerTransport({
- *   sessionIdGenerator: () => randomUUID(),
- * })
- *
- * // Protect the /mcp endpoint
- * app.post('/mcp', auth.handler(async (req, session) => {
- *   await server.connect(transport)
- *   return transport.handleRequest(req)
- * }))
- * ```
- */
 export function mcpAuthOfficial(options: McpAuthClientOptions): {
 	client: McpAuthClient;
 	handler: McpAuthClient["handler"];
@@ -180,10 +112,6 @@ export function mcpAuthOfficial(options: McpAuthClientOptions): {
 		verifyToken: client.verifyToken,
 	};
 }
-
-// ─────────────────────────────────────────────────────────────
-// mcp-use adapter
-// ─────────────────────────────────────────────────────────────
 
 type OAuthMode = "direct" | "proxy";
 
@@ -209,38 +137,10 @@ interface OAuthProvider {
 }
 
 export interface McpUseBetterAuthConfig {
-	/**
-	 * Full URL to Better Auth endpoints.
-	 */
 	authURL: string;
-	/**
-	 * Custom user info extraction from token payload.
-	 */
 	getUserInfo?: (payload: Record<string, unknown>) => McpUseUserInfo;
 }
 
-/**
- * mcp-use OAuth provider backed by Better Auth.
- * Drop-in replacement for `oauthWorkOSProvider`, `oauthSupabaseProvider`, etc.
- *
- * Uses "direct" mode: MCP clients register with and authenticate
- * against Better Auth directly. The mcp-use server only validates
- * bearer tokens.
- *
- * @example
- * ```typescript
- * import { MCPServer } from 'mcp-use/server'
- * import { mcpAuthMcpUse } from 'better-auth/plugins/mcp/client/adapters'
- *
- * const server = new MCPServer({
- *   name: 'my-server',
- *   version: '1.0.0',
- *   oauth: mcpAuthMcpUse({
- *     authURL: 'http://localhost:3000/api/auth'
- *   })
- * })
- * ```
- */
 export function mcpAuthMcpUse(config: McpUseBetterAuthConfig): OAuthProvider {
 	const authURL = normalizeURL(config.authURL);
 
