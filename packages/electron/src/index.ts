@@ -1,14 +1,22 @@
 /// <reference types="electron" />
 
-import type { HookEndpointContext } from "@better-auth/core";
+import type {
+	GenericEndpointContext,
+	HookEndpointContext,
+} from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { base64Url } from "@better-auth/utils/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { safeJSONParse } from "better-auth";
 import { generateRandomString } from "better-auth/crypto";
 import * as z from "zod";
 import { ELECTRON_ERROR_CODES } from "./error-codes";
-import { electronInitOAuthProxy, electronToken } from "./routes";
+import {
+	electronInitOAuthProxy,
+	electronToken,
+	electronTransferUser,
+} from "./routes";
 import type { ElectronOptions } from "./types";
 
 declare module "@better-auth/core" {
@@ -41,6 +49,62 @@ export const electron = (options?: ElectronOptions | undefined) => {
 			ctx.path?.startsWith("/passkey/verify-authentication") ||
 			ctx.path?.startsWith("/phone-number/verify")
 		);
+	};
+
+	const handleTransfer = async (
+		ctx: GenericEndpointContext,
+		payload: {
+			client_id: string;
+			state: string;
+			code_challenge: string;
+			code_challenge_method?: string | undefined;
+		},
+	) => {
+		const {
+			client_id,
+			state,
+			code_challenge,
+			code_challenge_method = "plain",
+		} = payload;
+		const userId =
+			ctx.context.session?.user.id || ctx.context.newSession?.user.id;
+		if (!userId || client_id !== opts.clientID) {
+			return null;
+		}
+		if (!state) {
+			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_STATE);
+		}
+		if (!code_challenge) {
+			throw APIError.from("BAD_REQUEST", ELECTRON_ERROR_CODES.MISSING_PKCE);
+		}
+
+		const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
+
+		const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
+		const codeExpiresInMs = opts.codeExpiresIn * 1000;
+		const expiresAt = new Date(Date.now() + codeExpiresInMs);
+		await ctx.context.internalAdapter.createVerificationValue({
+			identifier: `electron:${identifier}`,
+			value: JSON.stringify({
+				userId,
+				codeChallenge: code_challenge,
+				codeChallengeMethod: code_challenge_method.toLowerCase(),
+				state,
+			}),
+			expiresAt,
+		});
+
+		const redirectToken = base64Url.encode(
+			new TextEncoder().encode(JSON.stringify({ identifier, state })),
+		);
+
+		ctx.setCookie(redirectCookieName, redirectToken, {
+			...ctx.context.authCookies.sessionToken.attributes,
+			maxAge: opts.redirectCookieExpiresIn,
+			httpOnly: false,
+		});
+
+		return identifier;
 	};
 
 	return {
@@ -133,7 +197,7 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							transferPayload = safeJSONParse(transferCookie);
 						} else {
 							const query = querySchema.safeParse(ctx.query);
-							if (query.success) {
+							if (query.success && query.data.client_id === opts.clientID) {
 								transferPayload = query.data;
 							}
 						}
@@ -141,47 +205,15 @@ export const electron = (options?: ElectronOptions | undefined) => {
 							return;
 						}
 
-						const { client_id, code_challenge, code_challenge_method, state } =
-							transferPayload;
-						if (client_id !== opts.clientID) {
-							return;
-						}
-						if (!state) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								ELECTRON_ERROR_CODES.MISSING_STATE,
-							);
-						}
-						if (!code_challenge) {
-							throw APIError.from(
-								"BAD_REQUEST",
-								ELECTRON_ERROR_CODES.MISSING_PKCE,
-							);
+						const identifier = await handleTransfer(ctx, transferPayload);
+						if (identifier === null) {
+							return ctx;
 						}
 
-						const redirectCookieName = `${opts.cookiePrefix}.${opts.clientID}`;
-
-						const identifier = generateRandomString(32, "a-z", "A-Z", "0-9");
-						const codeExpiresInMs = opts.codeExpiresIn * 1000;
-						const expiresAt = new Date(Date.now() + codeExpiresInMs);
-						await ctx.context.internalAdapter.createVerificationValue({
-							identifier: `electron:${identifier}`,
-							value: JSON.stringify({
-								userId: ctx.context.newSession.user.id,
-								codeChallenge: code_challenge,
-								codeChallengeMethod: code_challenge_method.toLowerCase(),
-								state,
-							}),
-							expiresAt,
+						return ctx.json({
+							...(ctx.context.returned ?? {}),
+							electron_authorization_code: identifier,
 						});
-
-						ctx.setCookie(redirectCookieName, identifier, {
-							...ctx.context.authCookies.sessionToken.attributes,
-							maxAge: opts.redirectCookieExpiresIn,
-							httpOnly: false,
-						});
-
-						return ctx;
 					}),
 				},
 			],
@@ -189,6 +221,9 @@ export const electron = (options?: ElectronOptions | undefined) => {
 		endpoints: {
 			electronToken: electronToken(opts),
 			electronInitOAuthProxy: electronInitOAuthProxy(opts),
+			electronTransferUser: electronTransferUser(opts, {
+				handleTransfer,
+			}),
 		},
 		options: opts,
 		$ERROR_CODES: ELECTRON_ERROR_CODES,

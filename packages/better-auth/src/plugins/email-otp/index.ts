@@ -53,13 +53,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						async sendVerificationEmail(data, request) {
 							await ctx.runInBackgroundOrAwait(
 								sendVerificationOTPAction({
-									//@ts-expect-error - we need to pass the context
 									context: ctx,
 									request: request,
 									body: {
 										email: data.user.email,
 										type: "email-verification",
 									},
+									//@ts-expect-error
 									ctx,
 								}),
 							);

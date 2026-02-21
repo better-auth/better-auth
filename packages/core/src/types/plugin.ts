@@ -45,7 +45,8 @@ export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	init?:
 		| ((ctx: AuthContext) =>
 				| Awaitable<{
-						context?: DeepPartial<Omit<AuthContext, "options">>;
+						context?: DeepPartial<Omit<AuthContext, "options">> &
+							Record<string, unknown>;
 						options?: Partial<BetterAuthOptions>;
 				  }>
 				| void

@@ -1,7 +1,8 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import * as saml from "samlify";
+import saml from "samlify";
+import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -17,8 +18,11 @@ import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
+	callbackSSOShared,
+	initiateSLO,
 	registerSSOProvider,
 	signInSSO,
+	sloEndpoint,
 	spMetadata,
 } from "./routes/sso";
 
@@ -96,8 +100,11 @@ type SSOEndpoints<O extends SSOOptions> = {
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	sloEndpoint: ReturnType<typeof sloEndpoint>;
+	initiateSLO: ReturnType<typeof initiateSLO>;
 	listSSOProviders: ReturnType<typeof listSSOProviders>;
 	getSSOProvider: ReturnType<typeof getSSOProvider>;
 	updateSSOProvider: ReturnType<typeof updateSSOProvider>;
@@ -120,6 +127,7 @@ export type SSOPlugin<O extends SSOOptions> = {
 const SAML_SKIP_ORIGIN_CHECK_PATHS = [
 	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
 	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
+	"/sso/saml2/sp/slo", // IdP-initiated SLO (prefix matches /sp/slo/:providerId)
 ];
 
 export function sso<
@@ -139,6 +147,7 @@ export function sso<O extends SSOOptions>(
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
+	options: O;
 };
 
 export function sso<O extends SSOOptions>(
@@ -147,12 +156,15 @@ export function sso<O extends SSOOptions>(
 	const optionsWithStore = options as O;
 
 	let endpoints = {
-		spMetadata: spMetadata(),
+		spMetadata: spMetadata(optionsWithStore),
 		registerSSOProvider: registerSSOProvider(optionsWithStore),
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOShared: callbackSSOShared(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		sloEndpoint: sloEndpoint(optionsWithStore),
+		initiateSLO: initiateSLO(optionsWithStore),
 		listSSOProviders: listSSOProviders(),
 		getSSOProvider: getSSOProvider(),
 		updateSSOProvider: updateSSOProvider(optionsWithStore),
@@ -187,6 +199,35 @@ export function sso<O extends SSOOptions>(
 		},
 		endpoints,
 		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return context.path === "/sign-out";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!options?.saml?.enableSingleLogout) {
+							return;
+						}
+						const session = await getSessionFromCtx(ctx);
+						if (!session?.session?.id) {
+							return;
+						}
+						const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
+						const sessionLookup =
+							await ctx.context.internalAdapter.findVerificationValue(
+								sessionLookupKey,
+							);
+						if (sessionLookup?.value) {
+							await ctx.context.internalAdapter
+								.deleteVerificationValue(sessionLookup.value)
+								.catch(() => {});
+							await ctx.context.internalAdapter
+								.deleteVerificationValue(sessionLookupKey)
+								.catch(() => {});
+						}
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(context) {
