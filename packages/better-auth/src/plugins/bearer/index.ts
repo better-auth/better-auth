@@ -78,9 +78,14 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						headers.append(
+						// Use headers.set() with "; " separator per RFC 6265.
+						// headers.append("cookie") joins with ", " in some runtimes
+						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
+						const existingCookie = headers.get("cookie");
+						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
+						headers.set(
 							"cookie",
-							`${c.context.authCookies.sessionToken.name}=${signedToken}`,
+							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
 						);
 						return {
 							context: {
