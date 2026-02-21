@@ -359,6 +359,7 @@ The examples above use `withMcpAuth` which requires the Better Auth instance to 
         }) // [!code highlight]
 
         const mcpServer = new McpServer({ name: "my-server", version: "1.0.0" })
+        const app = express() // your HTTP framework
 
         app.post("/mcp", auth.handler(async (req, session) => { // [!code highlight]
             const transport = new StreamableHTTPServerTransport({
@@ -402,9 +403,9 @@ The examples above use `withMcpAuth` which requires the Better Auth instance to 
         type: "string",
         required: false
     },
-    allowedOrigins: {
-        description: "Allowed CORS origin(s). Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
-        type: "string | string[]",
+    allowedOrigin: {
+        description: "Allowed CORS origin. Defaults to the authURL origin. Set to '*' to allow all origins (not recommended for production).",
+        type: "string",
         required: false
     },
     fetch: {

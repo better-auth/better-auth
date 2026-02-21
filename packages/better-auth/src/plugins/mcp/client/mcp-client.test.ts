@@ -145,7 +145,7 @@ describe("mcp-client", async () => {
 		it("should allow custom CORS origins", async () => {
 			const client = createMcpAuthClient({
 				authURL,
-				allowedOrigins: "https://myapp.com",
+				allowedOrigin: "https://myapp.com",
 			});
 
 			const protectedHandler = client.handler(async () => {
@@ -175,7 +175,7 @@ describe("mcp-client", async () => {
 			scopes: "openid profile email",
 		};
 
-		const mockFetch: typeof fetch = async (input) => {
+		const mockFetch = (async (input: RequestInfo | URL) => {
 			const url = typeof input === "string" ? input : (input as Request).url;
 			if (url.includes("/mcp/get-session")) {
 				return new Response(JSON.stringify(mockSession), {
@@ -184,7 +184,7 @@ describe("mcp-client", async () => {
 				});
 			}
 			return new Response("Not Found", { status: 404 });
-		};
+		}) as typeof fetch;
 
 		it("should return session for a valid token", async () => {
 			const client = createMcpAuthClient({
@@ -401,7 +401,7 @@ describe("mcp-client", async () => {
 
 			const mockReq = {
 				headers: { authorization: "Bearer invalid-token-for-test" },
-				mcpSession: undefined as unknown,
+				mcpSession: undefined as McpSession | undefined,
 			};
 			const mockRes = {
 				set: (_key: string, _value: string) => {},

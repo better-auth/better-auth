@@ -32,14 +32,18 @@ export function mcpAuthHono(options: McpAuthClientOptions): {
 } {
 	const client = createMcpAuthClient(options);
 
+	const resourceBase = options.resource ?? client.authURL;
+
 	const middleware: HonoMiddleware = async (c, next) => {
-		const token = c.req.header("Authorization")?.replace("Bearer ", "");
+		const authHeader = c.req.header("Authorization");
+		const token = authHeader?.startsWith("Bearer ")
+			? authHeader.slice(7)
+			: undefined;
 		if (!token) {
 			c.header(
 				"WWW-Authenticate",
-				`Bearer resource_metadata="${client.authURL}/.well-known/oauth-protected-resource"`,
+				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
 			);
-			c.header("Access-Control-Expose-Headers", "WWW-Authenticate");
 			return c.json(
 				{
 					jsonrpc: "2.0",
@@ -57,7 +61,7 @@ export function mcpAuthHono(options: McpAuthClientOptions): {
 		if (!session) {
 			c.header(
 				"WWW-Authenticate",
-				`Bearer resource_metadata="${client.authURL}/.well-known/oauth-protected-resource"`,
+				`Bearer resource_metadata="${resourceBase}/.well-known/oauth-protected-resource"`,
 			);
 			return c.json(
 				{

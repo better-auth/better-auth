@@ -1,7 +1,7 @@
 export interface McpAuthClientOptions {
 	authURL: string;
 	resource?: string;
-	allowedOrigins?: string | string[];
+	allowedOrigin?: string;
 	fetch?: typeof globalThis.fetch;
 }
 
@@ -65,13 +65,11 @@ export interface McpAuthClient {
 
 function buildCorsHeaders(
 	authURL: string,
-	allowedOrigins?: string | string[],
+	allowedOrigin?: string,
 ): Record<string, string> {
 	let origin: string;
-	if (allowedOrigins) {
-		origin = Array.isArray(allowedOrigins)
-			? allowedOrigins.join(", ")
-			: allowedOrigins;
+	if (allowedOrigin) {
+		origin = allowedOrigin;
 	} else {
 		try {
 			origin = new URL(authURL).origin;
@@ -110,7 +108,6 @@ function make401Response(authURL: string, resource?: string): Response {
 			status: 401,
 			headers: {
 				"WWW-Authenticate": wwwAuth,
-				"Access-Control-Expose-Headers": "WWW-Authenticate",
 			},
 		},
 	);
@@ -129,13 +126,11 @@ function send401Node(
 
 	if (typeof res.set === "function") {
 		res.set("WWW-Authenticate", wwwAuth);
-		res.set("Access-Control-Expose-Headers", "WWW-Authenticate");
 		res.status?.(401).json(JSON.parse(body));
 	} else if (typeof res.writeHead === "function") {
 		res.writeHead(401, {
 			"Content-Type": "application/json",
 			"WWW-Authenticate": wwwAuth,
-			"Access-Control-Expose-Headers": "WWW-Authenticate",
 		});
 		res.end?.(body);
 	}
@@ -148,7 +143,7 @@ export function createMcpAuthClient(
 		? options.authURL.slice(0, -1)
 		: options.authURL;
 	const fetchFn = options.fetch ?? globalThis.fetch;
-	const corsHeaders = buildCorsHeaders(authURL, options.allowedOrigins);
+	const corsHeaders = buildCorsHeaders(authURL, options.allowedOrigin);
 
 	const verifyToken = async (token: string): Promise<McpSession | null> => {
 		try {
