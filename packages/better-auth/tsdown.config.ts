@@ -61,6 +61,8 @@ export default defineConfig({
 		"./src/plugins/haveibeenpwned/index.ts",
 		"./src/plugins/one-time-token/index.ts",
 		"./src/plugins/siwe/index.ts",
+		"./src/plugins/mcp/client/index.ts",
+		"./src/plugins/mcp/client/adapters.ts",
 		"./src/test-utils/index.ts",
 	],
 	sourcemap: true,
