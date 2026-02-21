@@ -71,31 +71,29 @@ interface StoredCookie {
 
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
-	let toSetCookie: Record<string, StoredCookie> = {};
+	const toSetCookie =
+		safeJSONParse<Record<string, StoredCookie>>(prevCookie) ?? {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
+		if (maxAge !== undefined && Number(maxAge) <= 0) {
+			delete toSetCookie[key];
+			return;
+		}
 		const expires = maxAge
 			? new Date(Date.now() + Number(maxAge) * 1000)
 			: expiresAt
 				? new Date(String(expiresAt))
 				: null;
+		if (expires && expires.getTime() <= Date.now()) {
+			delete toSetCookie[key];
+			return;
+		}
 		toSetCookie[key] = {
 			value: cookie["value"],
 			expires: expires ? expires.toISOString() : null,
 		};
 	});
-	if (prevCookie) {
-		try {
-			const prevCookieParsed = JSON.parse(prevCookie);
-			toSetCookie = {
-				...prevCookieParsed,
-				...toSetCookie,
-			};
-		} catch {
-			//
-		}
-	}
 	return JSON.stringify(toSetCookie);
 }
 
@@ -418,7 +416,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 					options.credentials = "omit";
 					options.headers = {
 						...options.headers,
-						cookie,
+						...(cookie ? { cookie } : {}),
 						"expo-origin": getOrigin(scheme!),
 						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
 					};
