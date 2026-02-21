@@ -1816,25 +1816,25 @@ describe("updateSession", async () => {
 		});
 	});
 
-	it("should reject updates to core session fields", async () => {
+	it("should ignore core session fields", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
 			const res = await client.updateSession({
 				token: "malicious-token",
 			} as any);
 			expect(res.error?.status).toBe(400);
-			expect(res.error?.message).toContain("Cannot update core session field");
+			expect(res.error?.message).toContain("No fields to update");
 		});
 	});
 
-	it("should reject updates to core field userId", async () => {
+	it("should ignore core field userId", async () => {
 		const { runWithUser } = await signInWithTestUser();
 		await runWithUser(async () => {
 			const res = await client.updateSession({
 				userId: "another-user",
 			} as any);
 			expect(res.error?.status).toBe(400);
-			expect(res.error?.message).toContain("Cannot update core session field");
+			expect(res.error?.message).toContain("No fields to update");
 		});
 	});
 

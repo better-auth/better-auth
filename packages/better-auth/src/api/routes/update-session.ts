@@ -7,17 +7,6 @@ import { parseSessionInput, parseSessionOutput } from "../../db/schema";
 import type { AdditionalSessionFieldsInput } from "../../types";
 import { sessionMiddleware } from "./session";
 
-const CORE_SESSION_FIELDS = new Set([
-	"id",
-	"token",
-	"userId",
-	"expiresAt",
-	"createdAt",
-	"updatedAt",
-	"ipAddress",
-	"userAgent",
-]);
-
 const updateSessionBodySchema = z.record(
 	z.string().meta({
 		description: "Field name must be a string",
@@ -69,15 +58,6 @@ export const updateSession = <O extends BetterAuthOptions>() =>
 					"BAD_REQUEST",
 					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
 				);
-			}
-
-			const coreFieldsInBody = Object.keys(body).filter((key) =>
-				CORE_SESSION_FIELDS.has(key),
-			);
-			if (coreFieldsInBody.length > 0) {
-				throw APIError.fromStatus("BAD_REQUEST", {
-					message: `Cannot update core session field(s): ${coreFieldsInBody.join(", ")}`,
-				});
 			}
 
 			const session = ctx.context.session;
