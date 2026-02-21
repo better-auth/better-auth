@@ -309,6 +309,16 @@
       "dev-source": "./src/plugins/device-authorization/index.ts",
       "types": "./dist/plugins/device-authorization/index.d.mts",
       "default": "./dist/plugins/device-authorization/index.mjs"
+    },
+    "./plugins/mcp/client": {
+      "dev-source": "./src/plugins/mcp/client/index.ts",
+      "types": "./dist/plugins/mcp/client/index.d.mts",
+      "default": "./dist/plugins/mcp/client/index.mjs"
+    },
+    "./plugins/mcp/client/adapters": {
+      "dev-source": "./src/plugins/mcp/client/adapters.ts",
+      "types": "./dist/plugins/mcp/client/adapters.d.mts",
+      "default": "./dist/plugins/mcp/client/adapters.mjs"
     }
   },
   "typesVersions": {
@@ -468,6 +478,12 @@
       ],
       "plugins/device-authorization": [
         "./dist/plugins/device-authorization/index.d.mts"
+      ],
+      "plugins/mcp/client": [
+        "./dist/plugins/mcp/client/index.d.mts"
+      ],
+      "plugins/mcp/client/adapters": [
+        "./dist/plugins/mcp/client/adapters.d.mts"
       ]
     }
   },
