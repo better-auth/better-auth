@@ -387,6 +387,29 @@ export const createInternalAdapter = (
 						}
 					: undefined,
 			);
+			if (secondaryStorage && res) {
+				const id = res.id || ctx.generateId({ model: "session" });
+				if (id && id !== res.id) {
+					res.id = id;
+				}
+				if (id) {
+					const cached = await secondaryStorage.get(data.token);
+					if (cached) {
+						const parsed = safeJSONParse<{
+							session: Record<string, any>;
+							user: User;
+						}>(cached);
+						if (parsed?.session && !parsed.session.id) {
+							parsed.session.id = id;
+							await secondaryStorage.set(
+								data.token,
+								JSON.stringify(parsed),
+								getTTLSeconds(data.expiresAt),
+							);
+						}
+					}
+				}
+			}
 			return res as Session;
 		},
 		findSession: async (
