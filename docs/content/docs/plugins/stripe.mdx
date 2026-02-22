@@ -302,6 +302,49 @@ if(error) {
 }
 ```
 
+#### Managed Payments (Preview)
+
+You can enable Stripe Managed Payments for subscription checkout sessions:
+
+```ts title="auth.ts"
+stripe({
+    // ... other options
+    subscription: {
+        enabled: true,
+        plans: [...],
+        managedPayments: {
+            enabled: true,
+            apiVersion: "2025-11-17.clover", // optional override
+            preview: "managed_payments_preview=v1", // optional, default shown
+        }
+    }
+})
+```
+
+<Callout type="warning">
+Managed Payments is a Stripe preview feature. Your account must be eligible and the feature must be activated in your Stripe Dashboard before using it in production.
+
+When enabling Managed Payments, make sure your Checkout requests use a Stripe API version that supports the preview and include the managed payments preview token.
+</Callout>
+
+You can also selectively enable it per request with `isEnabled`:
+
+```ts title="auth.ts"
+managedPayments: {
+    enabled: false, // default off
+    isEnabled: async ({ plan, referenceId, customerType }, req) => {
+        // Example: only enable for org enterprise checkouts
+        return customerType === "organization" && plan.name === "enterprise" && referenceId.startsWith("org_");
+    }
+}
+```
+
+<Callout type="info">
+When Managed Payments is enabled, the plugin does not force `customer_update` fields and rejects known unsupported Checkout parameters (for example: `customer_update`, `automatic_tax`, `tax_id_collection`, and some `subscription_data` fields such as `default_tax_rates`).
+
+If your integration needs custom Checkout params, keep them compatible with Stripe Managed Payments requirements from the Stripe docs.
+</Callout>
+
 #### Switching Plans
 
 To switch a subscription to a different plan, use the `subscription.upgrade` method:
@@ -568,6 +611,8 @@ The plugin automatically handles common webhook events:
 - `customer.subscription.updated`: Updates subscription details when changed
 - `customer.subscription.deleted`: Marks subscription as canceled
 
+For Managed Payments integrations, Stripe can also send asynchronous checkout settlement events (for example `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`). Handle these in your application-level webhook logic as needed.
+
 You can also handle custom events:
 
 ```ts title="auth.ts"
@@ -818,11 +863,23 @@ stripe({
 | `requireEmailVerification` | `boolean`                    | Whether to require email verification before allowing subscription upgrades. Default: `false`.                         |
 | `authorizeReference`       | `function`                   | Authorize reference IDs. Receives `{ user, session, referenceId, action }` and context.                                |
 | `getCheckoutSessionParams` | `function`                   | Customize Stripe Checkout session parameters. Receives `{ user, session, plan, subscription }`, request, and context.  |
+| `managedPayments`          | `object`                     | Configure Stripe Managed Payments preview for checkout sessions. See [Managed Payments options](#managed-payments-options). |
 | `onSubscriptionComplete`   | `function`                   | Called when a subscription is created via checkout. Receives `{ event, stripeSubscription, subscription, plan }` and context. |
 | `onSubscriptionCreated`    | `function`                   | Called when a subscription is created outside checkout. Receives `{ event, stripeSubscription, subscription, plan }`.  |
 | `onSubscriptionUpdate`     | `function`                   | Called when a subscription is updated. Receives `{ event, subscription }`.                                             |
 | `onSubscriptionCancel`     | `function`                   | Called when a subscription is canceled. Receives `{ event, subscription, stripeSubscription, cancellationDetails }`.   |
 | `onSubscriptionDeleted`    | `function`                   | Called when a subscription is deleted. Receives `{ event, stripeSubscription, subscription }`.                         |
+
+#### Managed Payments Options
+
+| Option      | Type       | Description |
+| ----------- | ---------- | ----------- |
+| `enabled`   | `boolean`  | Base toggle for Stripe Managed Payments checkout behavior. |
+| `apiVersion` | `string`   | Optional API version override used to build the preview `Stripe-Version` request option (strongly recommended). If omitted, the plugin falls back to request options `apiVersion`, then Stripe client API version via private SDK internals. |
+| `preview`   | `string`   | Preview token appended to the `Stripe-Version` request option. Default: `managed_payments_preview=v1`. |
+| `isEnabled` | `function` | Optional per-request predicate. Receives `{ user, session, plan, subscription, referenceId, customerType }`, `request`, and context. Returns `boolean` or `Promise<boolean>`. |
+
+If `managedPayments.apiVersion` and `getCheckoutSessionParams().options.apiVersion` are both provided with different values, the plugin throws a `BAD_REQUEST` to avoid ambiguous versioning.
 
 #### Plan Configuration
 

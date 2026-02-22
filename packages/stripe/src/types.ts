@@ -209,6 +209,15 @@ export interface Subscription {
 	seats?: number | undefined;
 }
 
+export type ManagedPaymentsIsEnabledData = {
+	user: User & Record<string, any>;
+	session: Session & Record<string, any>;
+	plan: StripePlan;
+	subscription: Subscription;
+	referenceId: string;
+	customerType: CustomerType;
+};
+
 export type SubscriptionOptions = {
 	/**
 	 * Subscription Configuration
@@ -331,6 +340,42 @@ export type SubscriptionOptions = {
 						params?: Stripe.Checkout.SessionCreateParams;
 						options?: Stripe.RequestOptions;
 				  })
+		| undefined;
+	/**
+	 * Configure Stripe Managed Payments preview for subscription checkout sessions.
+	 */
+	managedPayments?:
+		| {
+				/**
+				 * Whether managed payments should be enabled.
+				 */
+				enabled: boolean;
+				/**
+				 * API version override used when constructing preview request options.
+				 * Strongly recommended when managed payments are enabled.
+				 *
+				 * If omitted, the plugin falls back to request option version and then
+				 * the Stripe client version using a private Stripe SDK helper.
+				 */
+				apiVersion?: string | undefined;
+				/**
+				 * Preview token appended to apiVersion when managed payments is enabled.
+				 *
+				 * @default "managed_payments_preview=v1"
+				 */
+				preview?: string | undefined;
+				/**
+				 * Optional predicate to enable or disable managed payments per request.
+				 * When provided, this takes precedence over `enabled`.
+				 */
+				isEnabled?:
+					| ((
+							data: ManagedPaymentsIsEnabledData,
+							req: GenericEndpointContext["request"],
+							ctx: GenericEndpointContext,
+					  ) => boolean | Promise<boolean>)
+					| undefined;
+		  }
 		| undefined;
 };
 
