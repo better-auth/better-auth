@@ -1296,3 +1296,93 @@ describe("sign-up with additional fields via email-otp", async () => {
 		expect(session.user.isAdmin).toBe(false);
 	});
 });
+
+describe("race condition protection", async () => {
+	let otp = "";
+	const { client, auth } = await getTestInstance(
+		{
+			plugins: [
+				emailOTP({
+					async sendVerificationOTP({ otp: _otp }) {
+						otp = _otp;
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [emailOTPClient()],
+			},
+		},
+	);
+	const authCtx = await auth.$context;
+
+	it("should delete OTP after successful sign-in", async () => {
+		const email = "race-test@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+
+		const res1 = await client.signIn.emailOtp({ email, otp });
+		expect(res1.data?.token).toBeDefined();
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`sign-in-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
+
+		const res2 = await client.signIn.emailOtp({ email, otp });
+		expect(res2.error?.code).toBe("INVALID_OTP");
+	});
+
+	it("should delete OTP after successful email verification", async () => {
+		const email = "race-verify@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		await client.signIn.emailOtp({ email, otp });
+
+		await client.emailOtp.sendVerificationOtp({
+			email,
+			type: "email-verification",
+		});
+
+		const res1 = await client.emailOtp.verifyEmail({ email, otp });
+		expect(res1.data?.status).toBe(true);
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`email-verification-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
+
+		const res2 = await client.emailOtp.verifyEmail({ email, otp });
+		expect(res2.error?.code).toBe("INVALID_OTP");
+	});
+
+	it("should delete OTP after successful password reset", async () => {
+		const email = "race-reset@domain.com";
+		await client.emailOtp.sendVerificationOtp({ email, type: "sign-in" });
+		const signInOtp = otp;
+		await client.signIn.emailOtp({ email, otp: signInOtp });
+
+		await client.emailOtp.requestPasswordReset({ email });
+
+		const res1 = await client.emailOtp.resetPassword({
+			email,
+			otp,
+			password: "newpass1",
+		});
+		expect(res1.data?.success).toBe(true);
+
+		const verificationValue =
+			await authCtx.internalAdapter.findVerificationValue(
+				`forget-password-otp-${email}`,
+			);
+		expect(verificationValue).toBeNull();
+
+		const res2 = await client.emailOtp.resetPassword({
+			email,
+			otp,
+			password: "newpass2",
+		});
+		expect(res2.error?.code).toBe("INVALID_OTP");
+	});
+});
