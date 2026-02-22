@@ -1,31 +1,44 @@
 {
   "name": "@better-auth/test-utils",
-  "version": "1.5.0-beta.16",
+  "version": "1.5.0-beta.17",
   "type": "module",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/better-auth/better-auth.git"
-  },
-  "exports": {
-    "./adapter": {
-      "dev-source": "./src/adapter.ts",
-      "default": "./dist/adapter.mjs",
-      "types": "./dist/adapter.d.mts"
-    }
+  "description": "Test utilities for Better Auth",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch"
   },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "default": "./dist/index.mjs"
+    }
+  },
   "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "tsdown": "catalog:",
-    "vitest": "catalog:vitest"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "vitest": "catalog:vitest"
-  }
+    "better-auth": "workspace:*"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/test-utils"
+  },
+  "keywords": [
+    "auth",
+    "test",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
 }

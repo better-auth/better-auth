@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/core",
-  "version": "1.5.0-beta.16",
+  "version": "1.5.0-beta.17",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "repository": {
@@ -96,56 +96,4 @@
         "dist/env/index.d.mts"
       ],
       "error": [
-        "dist/error/index.d.mts"
-      ],
-      "utils": [
-        "dist/utils/index.d.mts"
-      ],
-      "utils/*": [
-        "dist/utils/*.d.mts"
-      ],
-      "social-providers": [
-        "dist/social-providers/index.d.mts"
-      ],
-      "db": [
-        "dist/db/index.d.mts"
-      ],
-      "db/adapter": [
-        "dist/db/adapter/index.d.mts"
-      ],
-      "oauth2": [
-        "dist/oauth2/index.d.mts"
-      ]
-    }
-  },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --project tsconfig.json",
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul"
-  },
-  "devDependencies": {
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:",
-    "jose": "^6.1.0",
-    "kysely": "^0.28.10",
-    "nanostores": "^1.1.0",
-    "tsdown": "catalog:"
-  },
-  "dependencies": {
-    "@standard-schema/spec": "^1.0.0",
-    "zod": "^4.3.6"
-  },
-  "peerDependencies": {
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:",
-    "better-call": "catalog:",
-    "jose": "^6.1.0",
-    "kysely": "^0.28.5",
-    "nanostores": "^1.0.1"
-  }
-}
+        "dist/error/index.d.mts"}]}<|tool_call_end|><|tool_call_begin|>functions.sandboxReadFile:37<|tool_call_argument_begin|>{

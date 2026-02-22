@@ -1,24 +1,14 @@
 {
   "name": "@better-auth/stripe",
-  "author": "Bereket Engida",
-  "version": "1.5.0-beta.16",
+  "version": "1.5.0-beta.17",
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
-  "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/better-auth/better-auth.git",
-    "directory": "packages/stripe"
-  },
-  "keywords": [
-    "stripe",
-    "auth",
-    "stripe"
-  ],
-  "module": "dist/index.mjs",
   "description": "Stripe plugin for Better Auth",
+  "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.mts",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
@@ -27,9 +17,6 @@
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "exports": {
     ".": {
@@ -53,21 +40,34 @@
       ]
     }
   },
-  "dependencies": {
-    "defu": "^6.1.4",
-    "zod": "^4.3.6"
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "stripe": "^17.7.0",
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^18 || ^19 || ^20"
+    "stripe": "^17.7.0"
   },
-  "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^20.2.0",
-    "tsdown": "catalog:"
-  }
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/stripe"
+  },
+  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
+  "keywords": [
+    "auth",
+    "stripe",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
 }

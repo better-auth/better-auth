@@ -1,34 +1,14 @@
 {
   "name": "@better-auth/sso",
-  "author": "Bereket Engida",
-  "version": "1.5.0-beta.16",
+  "version": "1.5.0-beta.17",
   "type": "module",
+  "description": "SSO plugin for Better Auth",
   "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.mts",
-  "homepage": "https://www.better-auth.com/docs/plugins/sso",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/better-auth/better-auth.git",
-    "directory": "packages/sso"
-  },
-  "license": "MIT",
-  "keywords": [
-    "sso",
-    "auth",
-    "sso",
-    "saml",
-    "oauth",
-    "oidc",
-    "openid",
-    "openid connect",
-    "openid connect",
-    "single sign on"
-  ],
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/index.mjs",
-  "description": "SSO plugin for Better Auth",
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
@@ -43,46 +23,35 @@
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
       "default": "./dist/index.mjs"
-    },
-    "./client": {
-      "dev-source": "./src/client.ts",
-      "types": "./dist/client.d.mts",
-      "default": "./dist/client.mjs"
     }
-  },
-  "typesVersions": {
-    "*": {
-      "*": [
-        "./dist/index.d.mts"
-      ],
-      "client": [
-        "./dist/client.d.mts"
-      ]
-    }
-  },
-  "dependencies": {
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:",
-    "fast-xml-parser": "^5.3.6",
-    "jose": "^6.1.0",
-    "samlify": "^2.10.2",
-    "zod": "^4.3.6"
-  },
-  "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@types/body-parser": "^1.19.6",
-    "@types/express": "^5.0.6",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "body-parser": "^2.2.2",
-    "express": "^5.2.1",
-    "oauth2-mock-server": "^8.2.1",
-    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "catalog:",
-    "better-call": "catalog:",
-    "better-auth": "workspace:*"
-  }
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:"
+  },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "zod": "^4.3.6",
+    "xml2js": "^0.6.2"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/sso"
+  },
+  "homepage": "https://www.better-auth.com/docs/plugins/sso",
+  "keywords": [
+    "auth",
+    "sso",
+    "saml",
+    "typescript",
+    "better-auth"
+  ],
+  "license": "MIT"
 }
