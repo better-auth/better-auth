@@ -176,6 +176,32 @@ describe("expo", async () => {
 		const c = client.getCookie();
 		expect(c).includes("better-auth.session_token");
 	});
+
+	it("should remove expired cookies from store when Max-Age=0", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+			"better-auth.session_data": { value: "xyz789", expires: null },
+		});
+		// Server sends Max-Age=0 to delete the cookies
+		const header =
+			"better-auth.session_token=; Max-Age=0, better-auth.session_data=; Max-Age=0";
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+		expect(result["better-auth.session_data"]).toBeUndefined();
+	});
+
+	it("should remove cookies with past Expires from store", async () => {
+		const { getSetCookie } = await import("../src/client");
+		const prevCookie = JSON.stringify({
+			"better-auth.session_token": { value: "abc123", expires: null },
+		});
+		const pastDate = new Date(Date.now() - 1000).toUTCString();
+		const header = `better-auth.session_token=; Expires=${pastDate}`;
+		const result = JSON.parse(getSetCookie(header, prevCookie));
+		expect(result["better-auth.session_token"]).toBeUndefined();
+	});
+
 	it("should correctly parse multiple Set-Cookie headers with Expires commas", async () => {
 		const header =
 			"better-auth.session_token=abc; Expires=Wed, 21 Oct 2015 07:28:00 GMT; Path=/, better-auth.session_data=xyz; Expires=Thu, 22 Oct 2015 07:28:00 GMT; Path=/";
