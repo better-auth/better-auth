@@ -89,6 +89,9 @@ describe.runIf(isPostgresAvailable)(
 			expect(userTableCreated?.fields).toHaveProperty("emailVerified");
 		});
 
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/7926
+		 */
 		it("should detect custom schema with CamelCasePlugin enabled", async () => {
 			// Create a user table in the custom schema so it should be detected as existing
 			await customSchemaPool.query(`
