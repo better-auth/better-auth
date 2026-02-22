@@ -7,7 +7,6 @@ import { STRIPE_ERROR_CODES } from "./error-codes";
 import { customerMetadata } from "./metadata";
 import {
 	cancelSubscription,
-	cancelSubscriptionCallback,
 	createBillingPortal,
 	listActiveSubscriptions,
 	restoreSubscription,
@@ -37,7 +36,6 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 
 	const subscriptionEndpoints = {
 		upgradeSubscription: upgradeSubscription(options),
-		cancelSubscriptionCallback: cancelSubscriptionCallback(options),
 		cancelSubscription: cancelSubscription(options),
 		restoreSubscription: restoreSubscription(options),
 		listActiveSubscriptions: listActiveSubscriptions(options),

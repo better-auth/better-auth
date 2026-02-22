@@ -53,7 +53,6 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["subscriptionSuccess"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["listActiveSubscriptions"]>().toBeFunction();
-		expectTypeOf<MyAuth["api"]["cancelSubscriptionCallback"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["cancelSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["restoreSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["upgradeSubscription"]>().toBeFunction();
@@ -7298,6 +7297,250 @@ describe("stripe", () => {
 				(i: { price: string }) => i.price === "price_premium_security",
 			);
 			expect(securityItems).toHaveLength(1);
+		});
+	});
+
+	describe("subscriptionSuccess - checkoutSessionId flow", () => {
+		it("should update subscription via checkoutSessionId and redirect", async () => {
+			const testSubscriptionId = "sub_success_test";
+			const testCheckoutSessionId = "cs_test_123";
+			const testCustomerId = "cus_success_test";
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn(),
+					},
+				},
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: testSubscriptionId,
+								status: "active",
+								cancel_at_period_end: false,
+								cancel_at: null,
+								canceled_at: null,
+								trial_start: null,
+								trial_end: null,
+								items: {
+									data: [
+										{
+											price: {
+												id: process.env.STRIPE_PRICE_ID_1,
+												recurring: { interval: "month" },
+											},
+											quantity: 1,
+											current_period_start: Math.floor(Date.now() / 1000),
+											current_period_end:
+												Math.floor(Date.now() / 1000) + 30 * 86400,
+										},
+									],
+								},
+							},
+						],
+					}),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const testCtx = await testAuth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "success-flow@test.com",
+					password: "password",
+					name: "Success Test",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "success-flow@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// Create incomplete subscription in DB
+			const sub = await testCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: testCustomerId,
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			// Mock checkout session to return correct subscriptionId
+			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+				id: testCheckoutSessionId,
+				metadata: {
+					userId: userRes.user.id,
+					subscriptionId: sub.id,
+					referenceId: userRes.user.id,
+				},
+			});
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${testCheckoutSessionId}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
+
+			// Verify checkout session was retrieved
+			expect(stripeForTest.checkout.sessions.retrieve).toHaveBeenCalledWith(
+				testCheckoutSessionId,
+			);
+
+			// Verify subscription was updated in DB
+			const updated = await testCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: sub.id }],
+			});
+			expect(updated?.status).toBe("active");
+			expect(updated?.stripeSubscriptionId).toBe(testSubscriptionId);
+			expect(updated?.periodStart).toBeInstanceOf(Date);
+			expect(updated?.periodEnd).toBeInstanceOf(Date);
+		});
+
+		it("should redirect without update when checkoutSessionId is missing", async () => {
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "no-session-id@test.com",
+					password: "password",
+					name: "No Session",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "no-session-id@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect without any Stripe calls
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
+		});
+
+		it("should redirect when checkout session retrieval fails", async () => {
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn().mockRejectedValue(new Error("Invalid session")),
+					},
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "bad-session@test.com",
+					password: "password",
+					name: "Bad Session",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "bad-session@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=cs_invalid`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect gracefully
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
 		});
 	});
 });
