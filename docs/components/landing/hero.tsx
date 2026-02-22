@@ -334,7 +334,7 @@ function CodePreview() {
 										href="https://demo.better-auth.com"
 										target="_blank"
 										rel="noopener noreferrer"
-										className="shadow-md  border shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
+										className="shadow-primary-foreground mb-4 ml-auto mr-4 mt-auto flex cursor-pointer items-center gap-2 px-3 py-1 transition-all ease-in-out hover:opacity-70"
 										aria-label="View Better Auth demo"
 									>
 										<svg

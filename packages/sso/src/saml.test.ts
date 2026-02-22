@@ -5,7 +5,7 @@ import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { APIError } from "better-auth/api";
 import { createAuthClient } from "better-auth/client";
-import { setCookieToHeader } from "better-auth/cookies";
+import { parseSetCookieHeader, setCookieToHeader } from "better-auth/cookies";
 import { bearer } from "better-auth/plugins";
 import { getTestInstance } from "better-auth/test";
 import bodyParser from "body-parser";
@@ -399,7 +399,14 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/post",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const emailValue =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -413,7 +420,14 @@ const createMockSAMLIdP = (port: number) => {
 	app.get(
 		"/api/sso/saml2/idp/redirect",
 		async (req: ExpressRequest, res: ExpressResponse) => {
-			const user = { emailAddress: "test@email.com", famName: "hello world" };
+			const emailCase = req.query.emailCase as string;
+			const emailValue =
+				emailCase === "mixed" ? "TestUser@Example.com" : "test@email.com";
+			const user = {
+				email: emailValue,
+				emailAddress: emailValue,
+				famName: "hello world",
+			};
 			const { context, entityEndpoint } = await idp.createLoginResponse(
 				sp,
 				{} as any,
@@ -574,6 +588,244 @@ describe("SAML SSO with defaultSSO array", async () => {
 	});
 });
 
+describe("SAML SSO with signed AuthnRequests", async () => {
+	// IdP metadata with WantAuthnRequestsSigned="true" for testing signed requests
+	const idpMetadataWithSignedRequests = `
+    <md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
+    <md:IDPSSODescriptor WantAuthnRequestsSigned="true" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+        <md:KeyDescriptor use="signing">
+        <ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+            <ds:X509Data>
+            <ds:X509Certificate>MIIFOjCCAyICCQCqP5DN+xQZDjANBgkqhkiG9w0BAQsFADBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wHhcNMjMxMTE5MTIzNzE3WhcNMzMxMTE2MTIzNzE3WjBfMQswCQYDVQQGEwJVUzEQMA4GA1UECAwHRmxvcmlkYTEQMA4GA1UEBwwHT3JsYW5kbzENMAsGA1UECgwEVGVzdDEdMBsGCSqGSIb3DQEJARYOdGVzdEBnbWFpbC5jb20wggIiMA0GCSqGSIb3DQEBAQUAA4ICDwAwggIKAoICAQD5giLoLyED41IHt0RxB/k6x4K0vzAKiGecPyedRNR1oyiv3OYkuG5jgTE2wcPZc7kD1Eg5d6th0BWHy/ovaNS5mkgnOV6jKkMaWW4sCMSnLnaWy0seftPK3O4mNeZpM5e9amj2gXnZvKrK8cqnJ/bsUUQvXxttXNVVmOHWg/t3c2vJ4XuUfph6wIKbrj297ILzuAFRNvAVxeS0tElwepvZ5Wbf7Hc1MORAqTpw/mp8cRjHRzYCA9y6OM4hgVs1gvTJS8WGoMmsdAZHaOnv9vLJvW3jDLQQecOheYIJncWgcESzJFIkmXadorYCEfWhwwBdVphknmeLr4BMpJBclAYaFjYDLIKpMcXYO5k/2r3BgSPlw4oqbxbR5geD05myKYtZ/wNUtku118NjhIfJFulU/kfDcp1rYYkvzgBfqr80wgNps4oQzVr1mnpgHsSTAhXMuZbaTByJRmPqecyvyQqRQcRIN0oTLJNGyzoUf0RkH6DKJ4+7qDhlq4Zhlfso9OFMv9xeONfIrJo5HtTfFZfidkXZqir2ZqwqNlNOMfK5DsYq37x2Gkgqig4nqLpITXyxfnQpL2HsaoFrlctt/OL+Zqba7NT4heYk9GX8qlAS+Ipsv6T2HSANbah55oSS3uvcrDOug2Zq7+GYMLKS1IKUKhwX+wLMxmMwSJQ9ZgFwfQIDAQABMA0GCSqGSIb3DQEBCwUAA4ICAQCkGPZdflocTSXIe5bbehsBn/IPdyb38eH2HaAvWqO2XNcDcq+6/uLc8BVK4JMa3AFS9xtBza7MOXN/lw/Ccb8uJGVNUE31+rTvsJaDtMCQkp+9aG04I1BonEHfSB0ANcTy/Gp+4hKyFCd6x35uyPO7CWX5Z8I87q9LF6Dte3/v1j7VZgDjAi9yHpBJv9Xje33AK1vF+WmEfDUOi8y2B8htVeoyS3owln3ZUbnmJdCmMp2BMRq63ymINwklEaYaNrp1L201bSqNdKZF2sNwROWyDX+WFYgufrnzPYb6HS8gYb4oEZmaG5cBM7Hs730/3BlbHKhxNTy1Io2TVCYcMQD+ieiVg5e5eGTwaPYGuVvY3NVhO8FaYBG7K2NT2hqutdCMaQpGyHEzbbbTY1afhbeMmWWqivRnVJNDv4kgBc2SE8JO82qHikIW9Om0cghC5xwTT+1JTtxxD1KeC1M1IwLzzuuMmwJSKAsv4duDqN+YRIP78J2SlrssqlsmoF8+48e7Vzr7JRT/Ya274P8RpUPNtxTR7WDmZ4tunqXjiBpz6l0uTtVXnj5UBo4HCyRjWJOGf15OCuQX03qz8tKn1IbZUf723qrmSF+cxBwHqpAywqhTSsaLjIXKnQ0UlMov7QWb0a5N07JZMdMSerbHvbXd/z9S1Ssea2+EGuTYuQur3A==</ds:X509Certificate>
+            </ds:X509Data>
+        </ds:KeyInfo>
+        </md:KeyDescriptor>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/redirect"/>
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+        </md:IDPSSODescriptor>
+    </md:EntityDescriptor>
+    `;
+
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8081",
+				providerId: "signed-saml",
+				samlConfig: {
+					issuer: "http://localhost:8081",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8081/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: true,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					privateKey: idPk,
+					spMetadata: {
+						privateKey: idPk,
+					},
+					idpMetadata: {
+						metadata: idpMetadataWithSignedRequests,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should generate signed AuthnRequest when authnRequestsSigned is true", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "signed-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+		// When authnRequestsSigned is true and privateKey is provided,
+		// samlify adds Signature and SigAlg parameters to the redirect URL
+		expect(signInResponse.url).toContain("Signature=");
+		expect(signInResponse.url).toContain("SigAlg=");
+	});
+});
+
+describe("SAML SSO without signed AuthnRequests", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8082",
+				providerId: "unsigned-saml",
+				samlConfig: {
+					issuer: "http://localhost:8082",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:8082/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should NOT include Signature in URL when authnRequestsSigned is false", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "unsigned-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+		// When authnRequestsSigned is false (default), no Signature should be in the URL
+		expect(signInResponse.url).not.toContain("Signature=");
+		expect(signInResponse.url).not.toContain("SigAlg=");
+	});
+});
+
+describe("SAML SSO with idpMetadata but without metadata XML (fallback to top-level config)", async () => {
+	const data = {
+		user: [],
+		session: [],
+		verification: [],
+		account: [],
+		ssoProvider: [],
+	};
+
+	const memory = memoryAdapter(data);
+
+	// This tests the fix for signInSSO where IdentityProvider was incorrectly constructed
+	// when idpMetadata is provided but without a full metadata XML.
+	// The bug was:
+	// 1. Using encryptCert instead of signingCert (samlify expects signingCert)
+	// 2. Not falling back to parsedSamlConfig.issuer when entityID is missing
+	// 3. Not falling back to parsedSamlConfig.entryPoint when singleSignOnService is missing
+	const ssoOptions = {
+		defaultSSO: [
+			{
+				domain: "localhost:8083",
+				providerId: "partial-idp-metadata-saml",
+				samlConfig: {
+					issuer: "http://localhost:8083/issuer",
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/redirect",
+					cert: certificate,
+					callbackUrl: "http://localhost:8083/dashboard",
+					wantAssertionsSigned: false,
+					authnRequestsSigned: false,
+					spMetadata: {},
+					// idpMetadata is provided but WITHOUT metadata XML - this triggers the fallback path
+					// The fix ensures signingCert is used (not encryptCert) and entryPoint/issuer fallbacks work
+					idpMetadata: {
+						// No metadata XML provided
+						// cert could be provided here, but we test fallback to top-level cert
+						entityID: "http://localhost:8081/custom-entity-id",
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+		],
+	};
+
+	const auth = betterAuth({
+		database: memory,
+		baseURL: "http://localhost:3000",
+		emailAndPassword: {
+			enabled: true,
+		},
+		plugins: [sso(ssoOptions)],
+	});
+
+	it("should initiate SAML login using fallback entryPoint when idpMetadata has no metadata XML", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The URL should point to the entryPoint from top-level config (fallback)
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining(
+				"http://localhost:8081/api/sso/saml2/idp/redirect",
+			),
+			redirect: true,
+		});
+		// The URL should contain a SAMLRequest parameter, proving the IdP was constructed correctly
+		// with signingCert (not encryptCert) - if encryptCert was used, samlify would fail
+		expect(signInResponse.url).toContain("SAMLRequest=");
+	});
+
+	it("should use idpMetadata.entityID when provided (not fall back to issuer)", async () => {
+		const signInResponse = await auth.api.signInSSO({
+			body: {
+				providerId: "partial-idp-metadata-saml",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+		});
+
+		// The fact that we get a valid SAMLRequest proves the IdentityProvider
+		// was constructed correctly. The entityID from idpMetadata should be used.
+		const url = new URL(signInResponse.url);
+		const samlRequest = url.searchParams.get("SAMLRequest");
+		expect(samlRequest).toBeTruthy();
+	});
+});
+
 describe("SAML SSO", async () => {
 	const data = {
 		user: [],
@@ -637,8 +889,6 @@ describe("SAML SSO", async () => {
 		data.verification = [];
 		data.account = [];
 		data.ssoProvider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {
@@ -1859,6 +2109,160 @@ describe("SAML SSO", async () => {
 		const redirectLocation = response.headers.get("location") || "";
 		expect(redirectLocation).toContain("error=unsolicited_response");
 	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7777
+	 */
+	it("should correctly parse verification-ID-based RelayState on ACS route (SP-initiated)", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-acs-relay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		// SP-initiated: signInSSO returns a URL with a RelayState verification ID
+		const signInRes = await auth.api.signInSSO({
+			body: {
+				providerId: "saml-acs-relay-provider",
+				callbackURL: "http://localhost:3000/dashboard",
+			},
+			returnHeaders: true,
+		});
+
+		const signInResponse = signInRes.response;
+		expect(signInResponse).toEqual({
+			url: expect.stringContaining("http://localhost:8081"),
+			redirect: true,
+		});
+
+		const samlRedirectUrl = new URL(signInResponse?.url);
+		const relayStateParam = samlRedirectUrl.searchParams.get("RelayState");
+		// RelayState should be a verification ID, not a raw URL
+		expect(relayStateParam).toBeTruthy();
+		expect(relayStateParam).not.toContain("http");
+
+		let samlResponse: any;
+		await betterFetch(signInResponse?.url, {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// POST to the ACS endpoint with the verification-ID-based RelayState
+		const acsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-relay-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+						Cookie: signInRes.headers.get("set-cookie") ?? "",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: relayStateParam!,
+					}),
+				},
+			),
+		);
+
+		expect(acsResponse.status).toBe(302);
+		const acsRedirectLocation = acsResponse.headers.get("location") || "";
+		// Must redirect to the callbackURL from the relay state, not to the verification ID
+		expect(acsRedirectLocation).toContain("dashboard");
+		expect(acsRedirectLocation).not.toContain("error");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7777
+	 */
+	it("should fallback to provider callbackUrl on ACS route when RelayState is invalid", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "saml-acs-bad-relay-provider",
+				issuer: "http://localhost:8081",
+				domain: "http://localhost:8081",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+				},
+			},
+			headers,
+		});
+
+		let samlResponse: any;
+		await betterFetch("http://localhost:8081/api/sso/saml2/idp/post", {
+			onSuccess: async (context) => {
+				samlResponse = await context.data;
+			},
+		});
+
+		// POST with a garbage RelayState - should fallback to provider callbackUrl
+		const acsResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/sp/acs/saml-acs-bad-relay-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse.samlResponse,
+						RelayState: "not-a-valid-relay-state",
+					}),
+				},
+			),
+		);
+
+		expect(acsResponse.status).toBe(302);
+		const location = acsResponse.headers.get("location") || "";
+		// Should redirect to the provider's callbackUrl, not the garbage RelayState
+		expect(location).toContain("dashboard");
+		expect(location).not.toContain("not-a-valid-relay-state");
+	});
 });
 
 describe("SAML SSO with custom fields", () => {
@@ -1924,8 +2328,6 @@ describe("SAML SSO with custom fields", () => {
 		data.verification = [];
 		data.account = [];
 		data.sso_provider = [];
-
-		vi.clearAllMocks();
 	});
 
 	async function getAuthHeaders() {
@@ -3999,5 +4401,740 @@ describe("SAML SSO - Single Assertion Validation", () => {
 
 		expect(response.status).toBe(302);
 		expect(response.headers.get("location")).not.toContain("error");
+	});
+
+	it("should normalize email to lowercase in SAML authentication to prevent duplicate creation", async () => {
+		const { auth, client, signInWithTestUser, db } = await getTestInstance({
+			plugins: [sso()],
+		});
+
+		const { headers } = await signInWithTestUser();
+
+		await auth.api.registerSSOProvider({
+			body: {
+				providerId: "email-case-provider",
+				issuer: "http://localhost:8081",
+				domain: "example.com",
+				samlConfig: {
+					entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+					cert: certificate,
+					callbackUrl: "http://localhost:3000/dashboard",
+					wantAssertionsSigned: false,
+					signatureAlgorithm: "sha256",
+					digestAlgorithm: "sha256",
+					idpMetadata: {
+						metadata: idpMetadata,
+					},
+					spMetadata: {
+						metadata: spMetadata,
+					},
+					identifierFormat:
+						"urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+					mapping: {
+						id: "nameID",
+						email: "nameID",
+						name: "displayName",
+					},
+				},
+			},
+			headers,
+		});
+
+		let samlResponse1: { samlResponse: string } | undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse1 = context.data as { samlResponse: string };
+				},
+			},
+		);
+
+		expect(samlResponse1?.samlResponse).toBeDefined();
+
+		const firstCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse1!.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(firstCallbackResponse.status).toBe(302);
+		expect(firstCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(firstCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		const firstCookies = parseSetCookieHeader(
+			firstCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const firstSessionToken = firstCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(firstSessionToken).toBeDefined();
+
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${firstSessionToken}`,
+				},
+			},
+		});
+
+		expect(firstSession.data?.user.email).toBe("testuser@example.com");
+		const firstUserId = firstSession.data?.user.id;
+		expect(firstUserId).toBeDefined();
+
+		let samlResponse2: { samlResponse: string } | undefined;
+		await betterFetch(
+			"http://localhost:8081/api/sso/saml2/idp/post?emailCase=mixed",
+			{
+				onSuccess: async (context) => {
+					samlResponse2 = context.data as { samlResponse: string };
+				},
+			},
+		);
+
+		const secondCallbackResponse = await auth.handler(
+			new Request(
+				"http://localhost:3000/api/auth/sso/saml2/callback/email-case-provider",
+				{
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						SAMLResponse: samlResponse2!.samlResponse,
+						RelayState: "http://localhost:3000/dashboard",
+					}),
+				},
+			),
+		);
+
+		expect(secondCallbackResponse.status).toBe(302);
+		expect(secondCallbackResponse.headers.get("location")).toContain(
+			"dashboard",
+		);
+		expect(secondCallbackResponse.headers.get("location")).not.toContain(
+			"error",
+		);
+
+		const secondCookies = parseSetCookieHeader(
+			secondCallbackResponse.headers.get("set-cookie") ?? "",
+		);
+		const secondSessionToken = secondCookies.get(
+			"better-auth.session_token",
+		)?.value;
+		expect(secondSessionToken).toBeDefined();
+
+		const secondSession = await client.getSession({
+			fetchOptions: {
+				headers: {
+					Cookie: `better-auth.session_token=${secondSessionToken}`,
+				},
+			},
+		});
+
+		expect(secondSession.data?.user.id).toBe(firstUserId);
+		expect(secondSession.data?.user.email).toBe("testuser@example.com");
+
+		const users = (await db.findMany({ model: "user" })) as {
+			email: string;
+		}[];
+		const samlUsers = users.filter((u) => u.email === "testuser@example.com");
+		expect(samlUsers).toHaveLength(1);
+	});
+});
+
+describe("SAML Single Logout (SLO)", () => {
+	const sloIdpMetadata = `
+		<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://localhost:8081/api/sso/saml2/idp/metadata">
+		<md:IDPSSODescriptor WantAuthnRequestsSigned="false" protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
+			<md:KeyDescriptor use="signing">
+			<ds:KeyInfo xmlns:ds="http://www.w3.org/2000/09/xmldsig#">
+				<ds:X509Data>
+				<ds:X509Certificate>${certificate}</ds:X509Certificate>
+				</ds:X509Data>
+			</ds:KeyInfo>
+			</md:KeyDescriptor>
+			<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
+			<md:SingleLogoutService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="http://localhost:8081/api/sso/saml2/idp/slo"/>
+			<md:NameIDFormat>urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress</md:NameIDFormat>
+			<md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="http://localhost:8081/api/sso/saml2/idp/post"/>
+		</md:IDPSSODescriptor>
+		</md:EntityDescriptor>
+	`;
+
+	describe("SLO disabled", () => {
+		it("should return error when enableSingleLogout is not enabled", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-disabled-test",
+					issuer: "http://localhost:8081",
+					domain: "slo-disabled.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/slo-disabled-test",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(400);
+			const body = await sloRes.json();
+			expect(body.message).toContain("Single Logout is not enabled");
+		});
+	});
+
+	describe("SLO enabled - error cases", () => {
+		it("should return error when provider not found", async () => {
+			const { auth } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/nonexistent-provider",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(404);
+			const body = await sloRes.json();
+			expect(body.message).toContain("SAML provider not found");
+		});
+
+		it("should allow SLO POST from external IdP origin (CSRF bypass)", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-origin-bypass",
+					issuer: "http://localhost:8081",
+					domain: "slo-origin.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const sloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/sp/slo/slo-origin-bypass",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/x-www-form-urlencoded",
+							Origin: "http://external-idp.example.com",
+							Cookie: headers.get("cookie") || "",
+						},
+						body: new URLSearchParams({
+							SAMLRequest: Buffer.from("<LogoutRequest/>").toString("base64"),
+						}).toString(),
+					},
+				),
+			);
+
+			expect(sloRes.status).not.toBe(403);
+		});
+	});
+
+	describe("SP Metadata - SingleLogoutService", () => {
+		it("should include SingleLogoutService when SLO is enabled", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-metadata-test",
+					issuer: "http://localhost:8081",
+					domain: "slo-metadata.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							entityID: "http://localhost:8081/sp",
+						},
+					},
+				},
+				headers,
+			});
+
+			const metadataRes = await auth.api.spMetadata({
+				query: { providerId: "slo-metadata-test" },
+			});
+
+			const metadataXml = await metadataRes.text();
+			expect(metadataXml).toContain("SingleLogoutService");
+			expect(metadataXml).toContain(
+				"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+			);
+			expect(metadataXml).toContain(
+				"urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+			);
+			expect(metadataXml).toContain("/sso/saml2/sp/slo/slo-metadata-test");
+		});
+
+		it("should NOT include SingleLogoutService when SLO is disabled", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [sso()],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "slo-metadata-disabled",
+					issuer: "http://localhost:8081",
+					domain: "slo-metadata-disabled.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							entityID: "http://localhost:8081/sp",
+						},
+					},
+				},
+				headers,
+			});
+
+			const metadataRes = await auth.api.spMetadata({
+				query: { providerId: "slo-metadata-disabled" },
+			});
+
+			const metadataXml = await metadataRes.text();
+			expect(metadataXml).not.toContain("SingleLogoutService");
+		});
+	});
+
+	describe("SP-initiated SLO (initiateSLO)", () => {
+		it("should return error when IdP has no SLO service configured", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "sp-slo-no-idp-slo",
+					issuer: "http://localhost:8081",
+					domain: "sp-slo-no-idp.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const initSloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/logout/sp-slo-no-idp-slo",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Cookie: headers.get("cookie") || "",
+						},
+						body: JSON.stringify({
+							callbackURL: "http://localhost:8081/logged-out",
+						}),
+					},
+				),
+			);
+
+			expect(initSloRes.status).toBe(400);
+			const body = await initSloRes.json();
+			expect(body.message).toContain(
+				"IdP does not support Single Logout Service",
+			);
+		});
+
+		it("should generate LogoutRequest and redirect to IdP", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "sp-slo-initiate",
+					issuer: "http://localhost:8081",
+					domain: "sp-slo-initiate.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/sso",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const initSloRes = await auth.handler(
+				new Request(
+					"http://localhost:8081/api/auth/sso/saml2/logout/sp-slo-initiate",
+					{
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Cookie: headers.get("cookie") || "",
+						},
+						body: JSON.stringify({
+							callbackURL: "http://localhost:8081/logged-out",
+						}),
+					},
+				),
+			);
+
+			expect(initSloRes.status).toBe(302);
+			const location = initSloRes.headers.get("location");
+			expect(location).toContain("http://localhost:8081/api/sso/saml2/idp/slo");
+			expect(location).toContain("SAMLRequest=");
+		});
+	});
+
+	describe("IdP-initiated SLO (LogoutRequest)", () => {
+		it("should process valid LogoutRequest and return LogoutResponse", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const sloServiceLocation =
+				"http://localhost:8081/api/auth/sso/saml2/sp/slo/idp-slo-test";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "idp-slo-test",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "idp-slo.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const idp = saml.IdentityProvider({
+				metadata: sloIdpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const sp = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				assertionConsumerService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+						Location: "http://localhost:8081/callback",
+					},
+				],
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloServiceLocation,
+					},
+				],
+			});
+
+			const logoutRequest = idp.createLogoutRequest(
+				sp,
+				saml.Constants.wording.binding.redirect,
+				{ nameID: "test@email.com" },
+				"http://localhost:8081/after-logout",
+			) as { context: string };
+
+			const url = new URL(logoutRequest.context);
+			const samlRequest = url.searchParams.get("SAMLRequest");
+			const relayState = url.searchParams.get("RelayState");
+
+			const sloRes = await auth.handler(
+				new Request(
+					`${sloServiceLocation}?SAMLRequest=${encodeURIComponent(samlRequest!)}&RelayState=${encodeURIComponent(relayState || "")}`,
+					{
+						method: "GET",
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toContain("SAMLResponse=");
+		});
+	});
+
+	describe("LogoutResponse handling (SP-initiated flow completion)", () => {
+		it("should process LogoutResponse and redirect to relayState", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const sloServiceLocation =
+				"http://localhost:3000/api/auth/sso/saml2/sp/slo/logout-response-test";
+			const callbackUrl = "http://localhost:3000/logged-out";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "logout-response-test",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "logout-response-test.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const idp = saml.IdentityProvider({
+				metadata: sloIdpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const sp = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				assertionConsumerService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+						Location: "http://localhost:8081/callback",
+					},
+				],
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloServiceLocation,
+					},
+				],
+			});
+
+			const logoutResponse = idp.createLogoutResponse(
+				sp,
+				null,
+				saml.Constants.wording.binding.redirect,
+				callbackUrl,
+			) as { context: string };
+
+			const url = new URL(logoutResponse.context);
+			const samlResponse = url.searchParams.get("SAMLResponse");
+			const relayState = url.searchParams.get("RelayState");
+
+			const sloRes = await auth.handler(
+				new Request(
+					`${sloServiceLocation}?SAMLResponse=${encodeURIComponent(samlResponse!)}&RelayState=${encodeURIComponent(relayState || "")}`,
+					{
+						method: "GET",
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toBe(callbackUrl);
+
+			const setCookie = sloRes.headers.get("set-cookie");
+			expect(setCookie).toContain("better-auth.session_token=;");
+		});
+
+		it("should redirect to baseURL when relayState is missing", async () => {
+			const { auth, signInWithTestUser } = await getTestInstance({
+				plugins: [
+					sso({
+						saml: {
+							enableSingleLogout: true,
+						},
+					}),
+				],
+			});
+			const { headers } = await signInWithTestUser();
+
+			const sloServiceLocation =
+				"http://localhost:3000/api/auth/sso/saml2/sp/slo/logout-no-relay";
+
+			await auth.api.registerSSOProvider({
+				body: {
+					providerId: "logout-no-relay",
+					issuer: "http://localhost:8081/api/sso/saml2/idp/metadata",
+					domain: "logout-no-relay.com",
+					samlConfig: {
+						entryPoint: "http://localhost:8081/api/sso/saml2/idp/post",
+						cert: certificate,
+						callbackUrl: "http://localhost:8081/callback",
+						spMetadata: {
+							metadata: spMetadata,
+						},
+						idpMetadata: {
+							metadata: sloIdpMetadata,
+						},
+					},
+				},
+				headers,
+			});
+
+			const idp = saml.IdentityProvider({
+				metadata: sloIdpMetadata,
+				privateKey: idPk,
+				privateKeyPass: "jXmKf9By6ruLnUdRo90G",
+			});
+			const sp = saml.ServiceProvider({
+				entityID: "http://localhost:8081",
+				assertionConsumerService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+						Location: "http://localhost:8081/callback",
+					},
+				],
+				singleLogoutService: [
+					{
+						Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+						Location: sloServiceLocation,
+					},
+				],
+			});
+
+			const logoutResponse = idp.createLogoutResponse(
+				sp,
+				null,
+				saml.Constants.wording.binding.redirect,
+				"",
+			) as { context: string };
+
+			const url = new URL(logoutResponse.context);
+			const samlResponse = url.searchParams.get("SAMLResponse");
+
+			const sloRes = await auth.handler(
+				new Request(
+					`${sloServiceLocation}?SAMLResponse=${encodeURIComponent(samlResponse!)}`,
+					{
+						method: "GET",
+					},
+				),
+			);
+
+			expect(sloRes.status).toBe(302);
+			const location = sloRes.headers.get("location");
+			expect(location).toBe("http://localhost:3000");
+		});
 	});
 });

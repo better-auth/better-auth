@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import { setOAuthState } from "../api/middlewares/oauth";
+import { setOAuthState } from "../api/state/oauth";
 import { generateRandomString } from "../crypto";
 import type { StateData } from "../state";
 import { generateGenericState, parseGenericState, StateError } from "../state";

@@ -100,38 +100,86 @@ export default function SignIn() {
 							Sign-in with Passkey
 						</Button>
 					)}
-					<div
-						className={cn(
-							"w-full gap-2 flex items-center justify-between",
-							options.socialProviders.length > 3
-								? "flex-row flex-wrap"
-								: "flex-col",
-						)}
-					>
-						{Object.keys(socialProviders).map((provider) => {
-							if (options.socialProviders.includes(provider)) {
+					<div className="w-full gap-2 flex flex-wrap">
+						{(() => {
+							const selectedProviders = options.socialProviders;
+							const count = selectedProviders.length;
+
+							// Layout rules:
+							// - 1-3 providers: full width, show "Sign in with [Provider]"
+							// - 4+ providers: wrap in rows with provider names (top) and icons (bottom)
+							//   - namedCount = count % 4 (or 4 if evenly divisible)
+							//   - named providers show just the provider name, 2 per row (1/2 width each)
+							//   - icon-only providers show just icon, 4 per row (1/4 width each)
+
+							if (count <= 3) {
+								// 1-3 providers: full width with "Sign in with [Provider]"
+								return selectedProviders.map((provider) => {
+									const { Icon } =
+										socialProviders[provider as keyof typeof socialProviders];
+									const providerName =
+										provider.charAt(0).toUpperCase() + provider.slice(1);
+
+									return (
+										<Button
+											key={provider}
+											variant="outline"
+											className="w-full gap-2"
+										>
+											<Icon className="size-4 shrink-0" />
+											Sign in with {providerName}
+										</Button>
+									);
+								});
+							}
+
+							// 4+ providers: use wrapping layout
+							const remainder = count % 4;
+							const namedCount = remainder === 0 ? 4 : remainder;
+
+							return selectedProviders.map((provider, index) => {
 								const { Icon } =
 									socialProviders[provider as keyof typeof socialProviders];
+								const isNamed = index < namedCount;
+								const providerName =
+									provider.charAt(0).toUpperCase() + provider.slice(1);
+
+								// Determine width class and if full width (for text display)
+								let widthClass: string;
+								let isFullWidth = false;
+								if (isNamed) {
+									// Named providers: 2 per row (1/2 width each)
+									// If odd number of named providers, first one takes full width
+									if (namedCount === 1) {
+										widthClass = "w-full";
+										isFullWidth = true;
+									} else if (namedCount % 2 === 1 && index === 0) {
+										// Odd number of named providers, first one takes full width
+										widthClass = "w-full";
+										isFullWidth = true;
+									} else {
+										widthClass = "w-[calc(50%-0.25rem)]";
+									}
+								} else {
+									// Icon-only providers: 1/4 width (4 per row)
+									widthClass = "w-[calc(25%-0.375rem)]";
+								}
+
 								return (
 									<Button
 										key={provider}
 										variant="outline"
-										className={cn(
-											options.socialProviders.length > 3
-												? "flex-grow"
-												: "w-full gap-2",
-										)}
+										className={cn(widthClass, "gap-2")}
 									>
-										<Icon width="1.2em" height="1.2em" />
-										{options.socialProviders.length <= 3 &&
-											"Sign in with " +
-												provider.charAt(0).toUpperCase() +
-												provider.slice(1)}
+										<Icon className="size-4 shrink-0" />
+										{isNamed &&
+											(isFullWidth
+												? `Sign in with ${providerName}`
+												: providerName)}
 									</Button>
 								);
-							}
-							return null;
-						})}
+							});
+						})()}
 					</div>
 				</div>
 			</CardContent>

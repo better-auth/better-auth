@@ -112,6 +112,11 @@ describe("Admin plugin", async () => {
 	});
 
 	const { headers: adminHeaders } = await signInWithTestUser();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	let newUser: UserWithRole | undefined;
 	const testNonAdminUser = {
 		id: "123",
@@ -171,6 +176,39 @@ describe("Admin plugin", async () => {
 		);
 		newUser = res.data?.user;
 		expect(newUser?.role).toBe("user");
+	});
+
+	it("should allow admin to create users without password", async () => {
+		const res = await client.admin.createUser(
+			{
+				name: "Passwordless User",
+				email: "passwordless@email.com",
+				role: "user",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
+		expect(res.data?.user?.email).toBe("passwordless@email.com");
+		expect(res.data?.user?.name).toBe("Passwordless User");
+		expect(res.data?.user?.role).toBe("user");
+
+		// User should not be able to sign in with password since no credential account exists
+		const signInRes = await client.signIn.email({
+			email: "passwordless@email.com",
+			password: "anypassword",
+		});
+		expect(signInRes.error).toBeDefined();
+
+		// Clean up
+		await client.admin.removeUser(
+			{
+				userId: res.data?.user?.id || "",
+			},
+			{
+				headers: adminHeaders,
+			},
+		);
 	});
 
 	it("should allow admin to create user with multiple roles", async () => {
@@ -335,6 +373,52 @@ describe("Admin plugin", async () => {
 			fetchOptions: {
 				headers: adminHeaders,
 			},
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7837
+	 */
+	it("should apply filter when filterValue is defined", async () => {
+		// Create a dedicated user for this test to avoid invalidating shared sessions
+		const { data: tempUser } = await client.signUp.email({
+			email: "falsy-filter-test@test.com",
+			password: "password",
+			name: "Falsy Filter Test",
+		});
+		const tempUserId = tempUser!.user.id;
+
+		const allUsers = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {},
+		});
+		const totalBefore = allUsers.total;
+		expect(totalBefore).toBeGreaterThanOrEqual(2);
+
+		// Ban the temp user so the dataset has both banned=true and banned=false
+		await auth.api.banUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
+		});
+
+		// Filter by banned = false should exclude the banned user
+		const res = await auth.api.listUsers({
+			headers: adminHeaders,
+			query: {
+				filterField: "banned",
+				filterOperator: "eq",
+				filterValue: false,
+			},
+		});
+
+		expect(res.users.length).toBe(totalBefore - 1);
+		expect(res.users.every((u) => u.banned === false)).toBe(true);
+		expect(res.users.every((u) => u.id !== tempUserId)).toBe(true);
+
+		// Cleanup: unban the user
+		await auth.api.unbanUser({
+			headers: adminHeaders,
+			body: { userId: tempUserId },
 		});
 	});
 
@@ -935,7 +1019,7 @@ describe("Admin plugin", async () => {
 	});
 });
 
-describe("access control", async (it) => {
+describe("access control", async () => {
 	const ac = createAccessControl({
 		user: [
 			"create",
@@ -1136,7 +1220,7 @@ describe("access control", async (it) => {
 		// To be removed when `permission` will be removed entirely
 		const canCreateOrderLegacy = client.admin.checkRolePermission({
 			role: "admin",
-			permission: {
+			permissions: {
 				order: ["create"],
 				user: ["read"],
 			},
@@ -1271,7 +1355,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1282,7 +1366,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: userId, // non-admin user ID
 				role: "user", // user role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1312,7 +1396,7 @@ describe("access control", async (it) => {
 			body: {
 				userId: bannedUserId, // banned user ID
 				role: "admin", // admin role
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1322,7 +1406,7 @@ describe("access control", async (it) => {
 		const checkWithoutRole = await auth.api.userHasPermission({
 			body: {
 				userId: bannedUserId, // banned user ID only
-				permission: {
+				permissions: {
 					user: ["create"],
 				},
 			},
@@ -1470,7 +1554,7 @@ describe("edge cases: userId validation", async () => {
 		{
 			advanced: {
 				database: {
-					useNumberId: true,
+					generateId: "serial",
 				},
 			},
 			plugins: [

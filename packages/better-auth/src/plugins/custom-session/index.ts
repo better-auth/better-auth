@@ -7,14 +7,14 @@ import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
 import * as z from "zod";
 import { getSession } from "../../api";
-import type { InferSession, InferUser } from "../../types";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
 import { getEndpointResponse } from "../../utils/plugin-helper";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"custom-session": {
 			creator: typeof customSession;
 		};
@@ -58,8 +58,8 @@ export const customSession = <
 >(
 	fn: (
 		session: {
-			user: InferUser<O>;
-			session: InferSession<O>;
+			user: User<O["user"], O["plugins"]>;
+			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
@@ -129,11 +129,21 @@ export const customSession = <
 					}
 					const fnResult = await fn(session.response as any, ctx);
 
-					const setCookie = session.headers.get("set-cookie");
-					if (setCookie) {
-						ctx.setHeader("set-cookie", setCookie);
-						session.headers.delete("set-cookie");
+					for (const cookieStr of session.headers.getSetCookie()) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						parsed.forEach((attrs, name) => {
+							ctx.setCookie(name, attrs.value, {
+								maxAge: attrs["max-age"],
+								expires: attrs.expires,
+								domain: attrs.domain,
+								path: attrs.path,
+								secure: attrs.secure,
+								httpOnly: attrs.httponly,
+								sameSite: attrs.samesite,
+							});
+						});
 					}
+					session.headers.delete("set-cookie");
 
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);

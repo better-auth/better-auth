@@ -301,25 +301,27 @@ export interface DBAdapterFactoryConfig<
 	disableTransformJoin?: boolean | undefined;
 }
 
+export const whereOperators = [
+	"eq",
+	"ne",
+	"lt",
+	"lte",
+	"gt",
+	"gte",
+	"in",
+	"not_in",
+	"contains",
+	"starts_with",
+	"ends_with",
+] as const;
+
+export type WhereOperator = (typeof whereOperators)[number];
+
 export type Where = {
 	/**
 	 * @default eq
 	 */
-	operator?:
-		| (
-				| "eq"
-				| "ne"
-				| "lt"
-				| "lte"
-				| "gt"
-				| "gte"
-				| "in"
-				| "not_in"
-				| "contains"
-				| "starts_with"
-				| "ends_with"
-		  )
-		| undefined;
+	operator?: WhereOperator | undefined;
 	value: string | number | boolean | string[] | number[] | Date | null;
 	field: string;
 	/**
@@ -405,6 +407,7 @@ export type DBAdapter<Options extends BetterAuthOptions = BetterAuthOptions> = {
 		model: string;
 		where?: Where[] | undefined;
 		limit?: number | undefined;
+		select?: string[] | undefined;
 		sortBy?:
 			| {
 					field: string;
@@ -493,6 +496,7 @@ export interface CustomAdapter {
 		model,
 		where,
 		limit,
+		select,
 		sortBy,
 		offset,
 		join,
@@ -500,6 +504,7 @@ export interface CustomAdapter {
 		model: string;
 		where?: CleanedWhere[] | undefined;
 		limit: number;
+		select?: string[] | undefined;
 		sortBy?: { field: string; direction: "asc" | "desc" } | undefined;
 		offset?: number | undefined;
 		join?: JoinConfig | undefined;

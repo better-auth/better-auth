@@ -1,9 +1,13 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { afterEach, describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe("sign-up with custom fields", async (it) => {
+describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();
+
+	afterEach(() => {
+		mockFn.mockReset();
+	});
 	const { auth, db } = await getTestInstance(
 		{
 			account: {
@@ -44,10 +48,6 @@ describe("sign-up with custom fields", async (it) => {
 		},
 	);
 
-	afterEach(() => {
-		mockFn.mockReset();
-	});
-
 	it("should work with custom fields on account table", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -78,6 +78,23 @@ describe("sign-up with custom fields", async (it) => {
 			}),
 			undefined,
 		);
+	});
+
+	it("should succeed when passing empty name", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "noname@test.com",
+				password: "password",
+				name: "",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBe("");
 	});
 
 	it("should get the ipAddress and userAgent from headers", async () => {
@@ -147,6 +164,23 @@ describe("sign-up with custom fields", async (it) => {
 		).rejects.toThrow("role is not allowed to be set");
 	});
 
+	it("should return additionalFields in signUpEmail response", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "additional-fields@test.com",
+				password: "password",
+				name: "Additional Fields Test",
+				newField: "custom-value",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("custom-value");
+		// defaultValue should also be applied and returned
+		expect(res.user.isAdmin).toBe(true);
+	});
+
 	it("should throw status code 400 when passing invalid body", async () => {
 		await expect(
 			auth.api.signUpEmail({
@@ -165,7 +199,179 @@ describe("sign-up with custom fields", async (it) => {
 	});
 });
 
-describe("sign-up CSRF protection", async (it) => {
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7972
+ */
+describe("sign-up user enumeration protection", async () => {
+	it("should return success for existing email when email verification is required", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-email@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+
+	it("should call onExistingUserSignUp when requireEmailVerification is true", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-rev@test.com",
+			password: "password123",
+			name: "Callback User",
+		};
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+		expect(onExistingUserSignUp).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: body.email }),
+			}),
+			undefined,
+		);
+	});
+
+	it("should call onExistingUserSignUp when autoSignIn is false", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-autosignin@test.com",
+			password: "password123",
+			name: "Callback AutoSignIn",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await auth.api.signUpEmail({ body });
+
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("should not call onExistingUserSignUp when enumeration protection is inactive", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-noenum@test.com",
+			password: "password123",
+			name: "No Enum",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should not call onExistingUserSignUp for new user sign-ups", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "brand-new-user@test.com",
+				password: "password123",
+				name: "Brand New",
+			},
+		});
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should return success for existing email when autoSignIn is disabled", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-auto-signin@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+});
+
+describe("sign-up CSRF protection", async () => {
 	const { auth } = await getTestInstance(
 		{
 			trustedOrigins: ["http://localhost:3000"],
@@ -283,7 +489,7 @@ describe("sign-up CSRF protection", async (it) => {
 	});
 });
 
-describe("sign-up with form data", async (it) => {
+describe("sign-up with form data", async () => {
 	const { auth } = await getTestInstance(
 		{
 			trustedOrigins: ["http://localhost:3000"],
@@ -376,5 +582,93 @@ describe("sign-up with form data", async (it) => {
 
 		const response = await auth.handler(formRequest);
 		expect(response.status).toBe(200);
+	});
+});
+
+describe("sign-up sendOnSignUp option behavior", async () => {
+	it("should not send verification email when sendOnSignUp is false, even with requireEmailVerification", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "no-verification@test.com",
+				password: "password123",
+				name: "No Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should send verification email when sendOnSignUp is true", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "with-verification@test.com",
+				password: "password123",
+				name: "With Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("should send verification email when sendOnSignUp is not set but requireEmailVerification is true (default)", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "default-verification@test.com",
+				password: "password123",
+				name: "Default Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
 	});
 });
