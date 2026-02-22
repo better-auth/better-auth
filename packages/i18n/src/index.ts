@@ -151,7 +151,6 @@ export const i18n = <Locales extends string[]>(
 
 	return {
 		id: "i18n",
-
 		hooks: {
 			after: [
 				{
@@ -189,3 +188,5 @@ export const i18n = <Locales extends string[]>(
 		options: opts,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";
