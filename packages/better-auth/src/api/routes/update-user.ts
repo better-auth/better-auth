@@ -709,21 +709,6 @@ export const changeEmail = createAuthEndpoint(
 							},
 						},
 					},
-					"422": {
-						description: "Unprocessable Entity. Email already exists",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -747,11 +732,17 @@ export const changeEmail = createAuthEndpoint(
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
-			ctx.context.logger.error("Email already exists");
-			throw APIError.from(
-				"UNPROCESSABLE_ENTITY",
-				BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
+			// Simulate token generation to prevent timing attacks
+			await createEmailVerificationToken(
+				ctx.context.secret,
+				ctx.context.session.user.email,
+				newEmail,
+				ctx.context.options.emailVerification?.expiresIn,
 			);
+
+			ctx.context.logger.info("Change email attempt for existing email");
+
+			return ctx.json({ status: true });
 		}
 
 		/**

@@ -635,3 +635,48 @@ describe("delete user", async () => {
 		expect(sessionAfterPasswordChange.data).toBeNull();
 	});
 });
+
+describe("change-email enumeration protection", async () => {
+	const { client, signInWithTestUser, testUser, sessionSetter } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail() {},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+	it("should return 200 when target email already exists", async () => {
+		// Create a second user to be the "existing" target
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Other User",
+			email: "other-user@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		// Sign in as test user and try to change email to the existing one
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "other-user@test.com",
+			});
+			// Should return success, not throw
+			expect(res.data?.status).toBe(true);
+		});
+	});
+
+	it("should not change the user's email", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+});

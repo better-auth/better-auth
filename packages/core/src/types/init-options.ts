@@ -703,6 +703,45 @@ export type BetterAuthOptions = {
 					data: { user: User },
 					request?: Request,
 				) => Promise<void>;
+				/**
+				 * Build a custom synthetic user for email enumeration
+				 * protection. When a sign-up attempt is made with an
+				 * email that already exists, this function is called
+				 * to build the fake user response.
+				 *
+				 * Use this when plugins add fields to the user table
+				 * (e.g. admin plugin adds `role`, `banned`, etc.)
+				 * to ensure the fake response is indistinguishable
+				 * from a real sign-up.
+				 *
+				 * @example
+				 * ```ts
+				 * customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+				 *   ...coreFields,
+				 *   role: "user",
+				 *   banned: false,
+				 *   banReason: null,
+				 *   banExpires: null,
+				 *   ...additionalFields,
+				 *   id,
+				 * })
+				 * ```
+				 */
+				customSyntheticUser?: (params: {
+					/** Core user fields: name, email, emailVerified, image, createdAt, updatedAt */
+					coreFields: {
+						name: string;
+						email: string;
+						emailVerified: boolean;
+						image: string | null;
+						createdAt: Date;
+						updatedAt: Date;
+					};
+					/** Processed additional fields from options.user.additionalFields (with defaults applied) */
+					additionalFields: Record<string, unknown>;
+					/** Generated user ID */
+					id: string;
+				}) => Record<string, unknown>;
 		  }
 		| undefined;
 	/**

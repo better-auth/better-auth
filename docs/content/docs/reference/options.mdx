@@ -248,6 +248,7 @@ export const auth = betterAuth({
 - `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 - `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
+- `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
 - `password`: Custom password hashing and verification functions
 
 ## `socialProviders`
