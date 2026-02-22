@@ -229,6 +229,11 @@ export interface Subscription {
 	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
 	 */
 	billingInterval?: "day" | "week" | "month" | "year" | undefined;
+	/**
+	 * Stripe Subscription Schedule ID, present when a scheduled
+	 * plan change is pending for this subscription.
+	 */
+	stripeScheduleId?: string | undefined;
 }
 
 export type SubscriptionOptions = {

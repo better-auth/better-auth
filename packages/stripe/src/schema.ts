@@ -66,6 +66,10 @@ export const subscriptions = {
 				type: "string",
 				required: false,
 			},
+			stripeScheduleId: {
+				type: "string",
+				required: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
