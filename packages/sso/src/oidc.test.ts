@@ -985,3 +985,197 @@ describe("SSO shared redirectURI", async () => {
 		expect(session.data?.user.email).toBe("shared-redirect@test.com");
 	});
 });
+
+describe("OIDC SSO with defaultSSO array", async () => {
+	const { customFetchImpl, cookieSetter } = await getTestInstance({
+		trustedOrigins: ["http://localhost:8080"],
+		plugins: [
+			sso({
+				defaultSSO: [
+					{
+						domain: "default-oidc.com",
+						providerId: "default-oidc-provider",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "default-client",
+							clientSecret: "default-secret",
+							pkce: false,
+							// No explicit authorizationEndpoint / tokenEndpoint / jwksEndpoint
+							// All resolved via OIDC discovery
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
+					{
+						domain: "default-oidc-explicit.com",
+						providerId: "default-oidc-provider-explicit",
+						oidcConfig: {
+							issuer: "http://localhost:8080",
+							clientId: "explicit-client",
+							clientSecret: "explicit-secret",
+							pkce: false,
+							// All endpoints set explicitly – discovery should be skipped
+							authorizationEndpoint: "http://localhost:8080/authorize",
+							tokenEndpoint: "http://localhost:8080/token",
+							jwksEndpoint: "http://localhost:8080/jwks",
+							discoveryEndpoint:
+								"http://localhost:8080/.well-known/openid-configuration",
+						},
+					},
+				],
+			}),
+			organization(),
+		],
+	});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	// Shared state set during token signing so the userinfo handler knows which client is active
+	let currentEmail = "default-sso-user@default-oidc.com";
+	let currentSub = "default-sso-sub";
+
+	const userinfoHandler = (userInfoResponse: any) => {
+		userInfoResponse.body = {
+			email: currentEmail,
+			name: "Default SSO User",
+			sub: currentSub,
+			picture: "https://test.com/default.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	const tokenHandler = (token: any) => {
+		const isExplicit = token.payload.aud === "explicit-client";
+		currentEmail = isExplicit
+			? "default-sso-user@default-oidc-explicit.com"
+			: "default-sso-user@default-oidc.com";
+		currentSub = isExplicit ? "explicit-sso-sub" : "default-sso-sub";
+		token.payload.email = currentEmail;
+		token.payload.email_verified = true;
+		token.payload.name = "Default SSO User";
+		token.payload.picture = "https://test.com/default.png";
+		token.payload.sub = currentSub;
+	};
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", userinfoHandler);
+		server.service.on("beforeTokenSigning", tokenHandler);
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		server.service.removeListener("beforeUserinfo", userinfoHandler);
+		server.service.removeListener("beforeTokenSigning", tokenHandler);
+		await server.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should sign in via defaultSSO OIDC using providerId (discovery resolves endpoints)", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "default-oidc-provider",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		// Authorization URL must point to the mock IdP resolved via discovery
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("default-sso-user@default-oidc.com");
+	});
+
+	it("should sign in via defaultSSO OIDC using email domain matching", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "someone@default-oidc.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+
+		const { callbackURL } = await simulateOAuthFlow(res.url, headers);
+		expect(callbackURL).toContain("/dashboard");
+	});
+
+	it("should sign in via defaultSSO OIDC with all endpoints explicit (no discovery needed)", async () => {
+		const headers = new Headers();
+		const res = await authClient.signIn.sso({
+			providerId: "default-oidc-provider-explicit",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(res.url).toContain("http://localhost:8080/authorize");
+		expect(res.url).toContain(
+			"redirect_uri=http%3A%2F%2Flocalhost%3A3000%2Fapi%2Fauth%2Fsso%2Fcallback%2Fdefault-oidc-provider-explicit",
+		);
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			headers,
+		);
+		expect(callbackURL).toContain("/dashboard");
+
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe(
+			"default-sso-user@default-oidc-explicit.com",
+		);
+	});
+});
