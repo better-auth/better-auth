@@ -37,7 +37,23 @@ export const initGetDefaultFieldName = ({
 		if (field === "id" || field === "_id") {
 			return "id";
 		}
-		const model = getDefaultModelName(unsafeModel); // Just to make sure the model name is correct.
+		const hasField = (modelName: string) =>
+			schema[modelName]?.fields?.[field] ||
+			Object.entries(schema[modelName]?.fields ?? {}).some(
+				([_, candidateField]) => candidateField.fieldName === field,
+			);
+		const explicitModel = schema[unsafeModel] ? unsafeModel : undefined;
+		const mappedModel = Object.entries(schema).find(
+			([_, candidate]) => candidate.modelName === unsafeModel,
+		)?.[0];
+		let model = explicitModel;
+		if (!model || !hasField(model)) {
+			if (mappedModel && hasField(mappedModel)) {
+				model = mappedModel;
+			} else {
+				model = getDefaultModelName(unsafeModel); // Just to make sure the model name is correct.
+			}
+		}
 
 		let f = schema[model]?.fields[field];
 		if (!f) {

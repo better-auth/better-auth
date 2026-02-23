@@ -20,15 +20,18 @@ export const initGetDefaultModelName = ({
 	 * 3. Using this function helps us get the actual model name based on the user's defined custom modelName.
 	 */
 	const getDefaultModelName = (model: string) => {
+		if (schema[model]) {
+			return model;
+		}
 		// It's possible this `model` could had applied `usePlural`.
 		// Thus we'll try the search but without the trailing `s`.
 		if (usePlural && model.charAt(model.length - 1) === "s") {
 			const pluralessModel = model.slice(0, -1);
-			let m = schema[pluralessModel] ? pluralessModel : undefined;
+			let m = Object.entries(schema).find(
+				([_, f]) => f.modelName === pluralessModel,
+			)?.[0];
 			if (!m) {
-				m = Object.entries(schema).find(
-					([_, f]) => f.modelName === pluralessModel,
-				)?.[0];
+				m = schema[pluralessModel] ? pluralessModel : undefined;
 			}
 
 			if (m) {
@@ -36,9 +39,9 @@ export const initGetDefaultModelName = ({
 			}
 		}
 
-		let m = schema[model] ? model : undefined;
+		let m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
 		if (!m) {
-			m = Object.entries(schema).find(([_, f]) => f.modelName === model)?.[0];
+			m = schema[model] ? model : undefined;
 		}
 
 		if (!m) {

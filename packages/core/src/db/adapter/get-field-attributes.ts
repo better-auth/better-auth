@@ -43,11 +43,21 @@ export const initGetFieldAttributes = ({
 		model: string;
 		field: string;
 	}) => {
-		const defaultModelName = getDefaultModelName(model);
+		const hasField = (modelName: string, fieldName: string) =>
+			Boolean(schema[modelName]?.fields?.[fieldName]);
+		let defaultModelName = schema[model] ? model : getDefaultModelName(model);
 		const defaultFieldName = getDefaultFieldName({
 			field: field,
 			model: defaultModelName,
 		});
+		if (!hasField(defaultModelName, defaultFieldName)) {
+			const mappedModel = Object.entries(schema).find(
+				([_, candidate]) => candidate.modelName === model,
+			)?.[0];
+			if (mappedModel && hasField(mappedModel, defaultFieldName)) {
+				defaultModelName = mappedModel;
+			}
+		}
 
 		const fields = schema[defaultModelName]!.fields;
 		fields.id = idField({ customModelName: defaultModelName });

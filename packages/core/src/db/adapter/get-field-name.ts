@@ -33,7 +33,16 @@ export const initGetFieldName = ({
 		model: string;
 		field: string;
 	}) {
-		const model = getDefaultModelName(modelName);
+		const explicitModel = schema[modelName] ? modelName : undefined;
+		const explicitHasField =
+			explicitModel &&
+			(schema[explicitModel]?.fields?.[fieldName] ||
+				Object.entries(schema[explicitModel].fields).some(
+					([_, field]) => field.fieldName === fieldName,
+				));
+		const model = explicitHasField
+			? explicitModel
+			: getDefaultModelName(modelName);
 		const field = getDefaultFieldName({ model, field: fieldName });
 
 		return schema[model]?.fields[field]?.fieldName || field;

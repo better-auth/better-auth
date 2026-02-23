@@ -150,6 +150,8 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 			schema,
 		});
+		const resolveSchemaModelKey = (model: string) =>
+			schema[model] ? model : getDefaultModelName(model);
 
 		const getModelName = initGetModelName({
 			usePlural: config.usePlural,
@@ -500,7 +502,7 @@ export const createAdapterFactory =
 
 				let newValue = value;
 
-				const defaultModelName = getDefaultModelName(model);
+				const defaultModelName = resolveSchemaModelKey(model);
 				const defaultFieldName = getDefaultFieldName({
 					field: unsafe_field,
 					model,
@@ -615,8 +617,8 @@ export const createAdapterFactory =
 			const transformedJoin: JoinConfig = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
 				if (!join) continue;
-				const defaultModelName = getDefaultModelName(model);
-				const defaultBaseModelName = getDefaultModelName(baseModel);
+				const defaultModelName = resolveSchemaModelKey(model);
+				const defaultBaseModelName = resolveSchemaModelKey(baseModel);
 
 				// First, check if the joined model has FKs to the base model (forward join)
 				let foreignKeys = Object.entries(
@@ -624,7 +626,7 @@ export const createAdapterFactory =
 				).filter(
 					([field, fieldAttributes]) =>
 						fieldAttributes.references &&
-						getDefaultModelName(fieldAttributes.references.model) ===
+						resolveSchemaModelKey(fieldAttributes.references.model) ===
 							defaultBaseModelName,
 				);
 
@@ -637,7 +639,7 @@ export const createAdapterFactory =
 					).filter(
 						([field, fieldAttributes]) =>
 							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
+							resolveSchemaModelKey(fieldAttributes.references.model) ===
 								defaultModelName,
 					);
 					isForwardJoin = false;
