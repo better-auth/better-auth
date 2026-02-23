@@ -5,7 +5,7 @@
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.11.6"
+    "hono": "^4.11.10"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.7",

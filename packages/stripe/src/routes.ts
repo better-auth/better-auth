@@ -31,7 +31,6 @@ import {
 	getPlans,
 	isActiveOrTrialing,
 	isPendingCancel,
-	isStripePendingCancel,
 	resolvePlanItem,
 	resolveQuantity,
 } from "./utils";
@@ -671,6 +670,21 @@ export const upgradeSubscription = (options: StripeOptions) => {
 						existingSchedule.metadata?.source === "@better-auth/stripe"
 					) {
 						await client.subscriptionSchedules.release(existingSchedule.id);
+						if (dbSubscription) {
+							await ctx.context.adapter.update({
+								model: "subscription",
+								update: {
+									stripeScheduleId: null,
+									updatedAt: new Date(),
+								},
+								where: [
+									{
+										field: "id",
+										value: dbSubscription.id,
+									},
+								],
+							});
+						}
 					}
 				}
 
@@ -721,7 +735,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 					const schedule = await client.subscriptionSchedules
 						.create({
 							from_subscription: activeSubscription.id,
-							metadata: { source: "@better-auth/stripe" },
 						})
 						.catch(async (e) => {
 							throw ctx.error("BAD_REQUEST", {
@@ -797,6 +810,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 
 					await client.subscriptionSchedules
 						.update(schedule.id, {
+							metadata: { source: "@better-auth/stripe" },
 							end_behavior: "release",
 							phases: [
 								{
@@ -824,8 +838,23 @@ export const upgradeSubscription = (options: StripeOptions) => {
 							});
 						});
 
-					// DB is NOT updated now
-					// the webhook handles it at period end
+					// Store schedule ID so clients can detect pending plan changes
+					if (dbSubscription) {
+						await ctx.context.adapter.update({
+							model: "subscription",
+							update: {
+								stripeScheduleId: schedule.id,
+								updatedAt: new Date(),
+							},
+							where: [
+								{
+									field: "id",
+									value: dbSubscription.id,
+								},
+							],
+						});
+					}
+
 					upgradeUrl = getUrl(ctx, ctx.body.returnUrl || "/");
 				} else if (priceMap.size > 0 || lineItemDelta.size > 0) {
 					// Immediate change with multi-item updates: use direct API.
@@ -1035,7 +1064,10 @@ export const upgradeSubscription = (options: StripeOptions) => {
 								ctx.context.baseURL
 							}/subscription/success?callbackURL=${encodeURIComponent(
 								ctx.body.successUrl,
-							)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
+								// {CHECKOUT_SESSION_ID} is a string literal; do not change it!
+								// the actual Session ID is returned in the query parameter when your customer
+								// is redirected to the success page.
+							)}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
 						),
 						cancel_url: getUrl(ctx, ctx.body.cancelUrl),
 						line_items: [
@@ -1093,111 +1125,6 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				...checkoutSession,
 				redirect: !ctx.body.disableRedirect,
 			});
-		},
-	);
-};
-
-const cancelSubscriptionCallbackQuerySchema = z
-	.record(z.string(), z.any())
-	.optional();
-
-export const cancelSubscriptionCallback = (options: StripeOptions) => {
-	const client = options.stripeClient;
-	const subscriptionOptions = options.subscription as SubscriptionOptions;
-	return createAuthEndpoint(
-		"/subscription/cancel/callback",
-		{
-			method: "GET",
-			query: cancelSubscriptionCallbackQuerySchema,
-			metadata: {
-				openapi: {
-					operationId: "cancelSubscriptionCallback",
-				},
-			},
-			use: [originCheck((ctx) => ctx.query.callbackURL)],
-		},
-		async (ctx) => {
-			if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
-				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
-			}
-			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
-			if (!session) {
-				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
-			}
-			const { callbackURL, subscriptionId } = ctx.query;
-
-			try {
-				const subscription = await ctx.context.adapter.findOne<Subscription>({
-					model: "subscription",
-					where: [
-						{
-							field: "id",
-							value: subscriptionId,
-						},
-					],
-				});
-				if (
-					!subscription ||
-					subscription.status === "canceled" ||
-					isPendingCancel(subscription)
-				) {
-					throw ctx.redirect(getUrl(ctx, callbackURL));
-				}
-
-				// Use the subscription's own stripeCustomerId so this works
-				// for both user and organization subscriptions.
-				const customerId = subscription.stripeCustomerId;
-				if (!customerId) {
-					throw ctx.redirect(getUrl(ctx, callbackURL));
-				}
-
-				const stripeSubscription = await client.subscriptions.list({
-					customer: customerId,
-					status: "active",
-				});
-				const currentSubscription = stripeSubscription.data.find(
-					(sub) => sub.id === subscription.stripeSubscriptionId,
-				);
-
-				const isNewCancellation =
-					currentSubscription &&
-					isStripePendingCancel(currentSubscription) &&
-					!isPendingCancel(subscription);
-				if (isNewCancellation) {
-					await ctx.context.adapter.update({
-						model: "subscription",
-						update: {
-							status: currentSubscription?.status,
-							cancelAtPeriodEnd:
-								currentSubscription?.cancel_at_period_end || false,
-							cancelAt: currentSubscription?.cancel_at
-								? new Date(currentSubscription.cancel_at * 1000)
-								: null,
-							canceledAt: currentSubscription?.canceled_at
-								? new Date(currentSubscription.canceled_at * 1000)
-								: null,
-						},
-						where: [
-							{
-								field: "id",
-								value: subscription.id,
-							},
-						],
-					});
-					await subscriptionOptions.onSubscriptionCancel?.({
-						subscription,
-						cancellationDetails: currentSubscription.cancellation_details,
-						stripeSubscription: currentSubscription,
-						event: undefined,
-					});
-				}
-			} catch (error) {
-				ctx.context.logger.error(
-					"Error checking subscription status from Stripe",
-					error,
-				);
-			}
-			throw ctx.redirect(getUrl(ctx, callbackURL));
 		},
 	);
 };
@@ -1350,14 +1277,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 			const { url } = await client.billingPortal.sessions
 				.create({
 					customer: subscription.stripeCustomerId,
-					return_url: getUrl(
-						ctx,
-						`${
-							ctx.context.baseURL
-						}/subscription/cancel/callback?callbackURL=${encodeURIComponent(
-							ctx.body?.returnUrl || "/",
-						)}&subscriptionId=${encodeURIComponent(subscription.id)}`,
-					),
+					return_url: getUrl(ctx, ctx.body?.returnUrl || "/"),
 					flow_data: {
 						type: "subscription_cancel",
 						subscription_cancel: {
@@ -1500,13 +1420,65 @@ export const restoreSubscription = (options: StripeOptions) => {
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_ACTIVE,
 				);
 			}
-			if (!isPendingCancel(subscription)) {
+			const hasPendingCancel = isPendingCancel(subscription);
+			const { stripeScheduleId } = subscription;
+
+			if (!hasPendingCancel && !stripeScheduleId) {
 				throw APIError.from(
 					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_SCHEDULED_FOR_CANCELLATION,
+					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_PENDING_CHANGE,
 				);
 			}
 
+			// Pending cancel and pending schedule are mutually exclusive in Stripe.
+			if (stripeScheduleId) {
+				if (!subscription.stripeSubscriptionId) {
+					throw APIError.from(
+						"BAD_REQUEST",
+						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
+					);
+				}
+
+				const schedule = await client.subscriptionSchedules
+					.retrieve(stripeScheduleId)
+					.catch((e) => {
+						throw ctx.error("BAD_REQUEST", {
+							message: e.message,
+							code: e.code,
+						});
+					});
+
+				if (schedule.status === "active") {
+					await client.subscriptionSchedules
+						.release(stripeScheduleId)
+						.catch((e) => {
+							throw ctx.error("BAD_REQUEST", {
+								message: e.message,
+								code: e.code,
+							});
+						});
+				}
+
+				await ctx.context.adapter.update({
+					model: "subscription",
+					update: {
+						stripeScheduleId: null,
+						updatedAt: new Date(),
+					},
+					where: [
+						{
+							field: "id",
+							value: subscription.id,
+						},
+					],
+				});
+				const releasedSub = await client.subscriptions.retrieve(
+					subscription.stripeSubscriptionId,
+				);
+				return ctx.json(releasedSub);
+			}
+
+			// Handle pending cancellation
 			const activeSubscription = await client.subscriptions
 				.list({
 					customer: subscription.stripeCustomerId,
@@ -1668,14 +1640,43 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 			use: [originCheck((ctx) => ctx.query.callbackURL)],
 		},
 		async (ctx) => {
-			if (!ctx.query || !ctx.query.callbackURL || !ctx.query.subscriptionId) {
-				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
-			}
-			const { callbackURL, subscriptionId } = ctx.query;
+			const callbackURL = ctx.query?.callbackURL || "/";
 
 			const session = await getSessionFromCtx<User & WithStripeCustomerId>(ctx);
 			if (!session) {
-				throw ctx.redirect(getUrl(ctx, ctx.query?.callbackURL || "/"));
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			// checkoutSessionId is substituted by Stripe from the {CHECKOUT_SESSION_ID}
+			// template variable in success_url when redirecting after checkout.
+			if (!ctx.query?.checkoutSessionId) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			// Resolve subscriptionId from Stripe checkout session metadata.
+			// The metadata is set server-side when creating the checkout session,
+			// so it cannot be tampered with — no ownership check needed.
+			const checkoutSession = await client.checkout.sessions
+				.retrieve(ctx.query.checkoutSessionId)
+				.catch((error) => {
+					ctx.context.logger.error(
+						"Error retrieving checkout session from Stripe",
+						error,
+					);
+					return null;
+				});
+			if (!checkoutSession) {
+				throw ctx.redirect(getUrl(ctx, callbackURL));
+			}
+
+			const { subscriptionId } = subscriptionMetadata.get(
+				checkoutSession.metadata,
+			);
+			if (!subscriptionId) {
+				ctx.context.logger.warn(
+					`No subscriptionId in checkout session metadata: ${checkoutSession.id}`,
+				);
+				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
 			const subscription = await ctx.context.adapter.findOne<Subscription>({

@@ -148,9 +148,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
+					const baseURLStr =
+						typeof ctx.context.options.baseURL === "string"
+							? ctx.context.options.baseURL
+							: getOrigin(ctx.context.baseURL) || "";
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
 
 					const encryptedProfile = ctx.query.profile;
 					if (!encryptedProfile) {
@@ -557,7 +561,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const productionURL =
 							opts?.productionURL ||
-							ctx.context.options.baseURL ||
+							(typeof ctx.context.options.baseURL === "string"
+								? ctx.context.options.baseURL
+								: undefined) ||
 							ctx.context.baseURL;
 						const productionOrigin = getOrigin(productionURL);
 

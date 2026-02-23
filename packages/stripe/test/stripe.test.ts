@@ -53,7 +53,6 @@ describe("stripe type", () => {
 		expectTypeOf<MyAuth["api"]["stripeWebhook"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["subscriptionSuccess"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["listActiveSubscriptions"]>().toBeFunction();
-		expectTypeOf<MyAuth["api"]["cancelSubscriptionCallback"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["cancelSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["restoreSubscription"]>().toBeFunction();
 		expectTypeOf<MyAuth["api"]["upgradeSubscription"]>().toBeFunction();
@@ -195,6 +194,9 @@ describe("stripe", () => {
 					},
 				],
 			}),
+			retrieve: vi
+				.fn()
+				.mockResolvedValue({ id: "sub_sched_mock", status: "active" }),
 			update: vi.fn().mockResolvedValue({}),
 			release: vi.fn().mockResolvedValue({}),
 		},
@@ -1972,6 +1974,238 @@ describe("stripe", () => {
 			where: [{ field: "id", value: testSubscriptionId }],
 		});
 		expect(updatedSub?.seats).toBe(5);
+	});
+
+	it("should sync stripeScheduleId from webhook when schedule is present", async () => {
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_schedule_sync",
+					customer: "cus_schedule_sync",
+					status: "active",
+					schedule: "sub_schedule_from_stripe",
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "schedule-sync@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_schedule_sync",
+				stripeSubscriptionId: "sub_schedule_sync",
+				status: "active",
+				plan: "starter",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_sync" }],
+		});
+		expect(sub?.stripeScheduleId).toBe("sub_schedule_from_stripe");
+	});
+
+	it("should clear stripeScheduleId from webhook when schedule is removed", async () => {
+		const updateEvent = {
+			type: "customer.subscription.updated",
+			data: {
+				object: {
+					id: "sub_schedule_clear",
+					customer: "cus_schedule_clear",
+					status: "active",
+					schedule: null,
+					items: {
+						data: [
+							{
+								price: { id: process.env.STRIPE_PRICE_ID_1 },
+								quantity: 1,
+								current_period_start: Math.floor(Date.now() / 1000),
+								current_period_end:
+									Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+							},
+						],
+					},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(updateEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "schedule-clear@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_schedule_clear",
+				stripeSubscriptionId: "sub_schedule_clear",
+				status: "active",
+				plan: "starter",
+				stripeScheduleId: "sub_schedule_old",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(updateEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_schedule_clear" }],
+		});
+		expect(sub?.stripeScheduleId).toBeNull();
+	});
+
+	it("should clear stripeScheduleId on subscription deleted webhook", async () => {
+		const deleteEvent = {
+			type: "customer.subscription.deleted",
+			data: {
+				object: {
+					id: "sub_delete_schedule",
+					customer: "cus_delete_schedule",
+					status: "canceled",
+					metadata: {},
+				},
+			},
+		};
+
+		const stripeForTest = {
+			...stripeOptions.stripeClient,
+			webhooks: {
+				constructEventAsync: vi.fn().mockResolvedValue(deleteEvent),
+			},
+		};
+
+		const testOptions = {
+			...stripeOptions,
+			stripeClient: stripeForTest as unknown as Stripe,
+			stripeWebhookSecret: "test_secret",
+		} as unknown as StripeOptions;
+
+		const { auth: testAuth } = await getTestInstance(
+			{
+				database: memory,
+				plugins: [stripe(testOptions)],
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const ctx = await testAuth.$context;
+
+		const { id: userId } = await ctx.adapter.create({
+			model: "user",
+			data: { email: "delete-schedule@email.com" },
+		});
+
+		await ctx.adapter.create({
+			model: "subscription",
+			data: {
+				referenceId: userId,
+				stripeCustomerId: "cus_delete_schedule",
+				stripeSubscriptionId: "sub_delete_schedule",
+				status: "active",
+				plan: "starter",
+				stripeScheduleId: "sub_schedule_will_be_cleared",
+			},
+		});
+
+		await testAuth.handler(
+			new Request("http://localhost:3000/api/auth/stripe/webhook", {
+				method: "POST",
+				headers: { "stripe-signature": "test_signature" },
+				body: JSON.stringify(deleteEvent),
+			}),
+		);
+
+		const sub = await ctx.adapter.findOne<Subscription>({
+			model: "subscription",
+			where: [{ field: "stripeSubscriptionId", value: "sub_delete_schedule" }],
+		});
+		expect(sub?.stripeScheduleId).toBeNull();
+		expect(sub?.status).toBe("canceled");
 	});
 
 	it("should allow seat upgrades for the same plan", async () => {
@@ -5277,6 +5511,127 @@ describe("stripe", () => {
 				canceledAt: null,
 			});
 		});
+
+		it("should release schedule and clear stripeScheduleId when restoring a pending schedule", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-schedule@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-schedule@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_schedule",
+					stripeSubscriptionId: "sub_restore_schedule",
+					status: "active",
+					plan: "premium",
+					stripeScheduleId: "sub_schedule_pending",
+				},
+			});
+
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_schedule",
+				status: "active",
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.data).toBeDefined();
+
+			// Should release the schedule
+			expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
+				"sub_schedule_pending",
+			);
+
+			// Should NOT call subscriptions.update (that's for cancel restore)
+			expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
+
+			// DB should have stripeScheduleId cleared
+			const updatedSub = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "referenceId", value: userRes.user.id }],
+			});
+			expect(updatedSub?.stripeScheduleId).toBeNull();
+		});
+
+		it("should reject restore when no pending cancel and no pending schedule", async () => {
+			vi.clearAllMocks();
+
+			const { client, auth, sessionSetter } = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await auth.$context;
+
+			const userRes = await client.signUp.email(
+				{
+					email: "restore-noop@test.com",
+					password: "password",
+					name: "Test",
+				},
+				{ throw: true },
+			);
+
+			const headers = new Headers();
+			await client.signIn.email(
+				{ email: "restore-noop@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: "cus_restore_noop",
+					stripeSubscriptionId: "sub_restore_noop",
+					status: "active",
+					plan: "starter",
+				},
+			});
+
+			const restoreRes = await client.subscription.restore({
+				fetchOptions: { headers },
+			});
+
+			expect(restoreRes.error?.status).toBe(400);
+		});
 	});
 
 	describe("cancel subscription fallback (missed webhook)", () => {
@@ -5921,11 +6276,11 @@ describe("stripe", () => {
 		// Should use Subscription Schedules, not billing portal or checkout
 		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_schedule_test",
-			metadata: { source: "@better-auth/stripe" },
 		});
 		expect(mockStripe.subscriptionSchedules.update).toHaveBeenCalledWith(
 			"sub_sched_mock",
 			expect.objectContaining({
+				metadata: { source: "@better-auth/stripe" },
 				end_behavior: "release",
 				phases: expect.arrayContaining([
 					expect.objectContaining({
@@ -5938,12 +6293,14 @@ describe("stripe", () => {
 		expect(mockStripe.checkout.sessions.create).not.toHaveBeenCalled();
 		expect(mockStripe.subscriptions.update).not.toHaveBeenCalled();
 
-		// DB subscription should NOT be updated (webhook handles it at period end)
+		// Plan should remain unchanged (webhook handles it at period end),
+		// but stripeScheduleId should be stored so clients can detect pending changes
 		const sub = await ctx.adapter.findOne<Subscription>({
 			model: "subscription",
 			where: [{ field: "referenceId", value: userRes.user.id }],
 		});
 		expect(sub?.plan).toBe("premium"); // Still on premium, not starter
+		expect(sub?.stripeScheduleId).toBe("sub_sched_mock");
 
 		expect(res.data?.url).toBeDefined();
 		expect(res.data?.redirect).toBe(true);
@@ -6041,7 +6398,6 @@ describe("stripe", () => {
 		// Then create a new one
 		expect(mockStripe.subscriptionSchedules.create).toHaveBeenCalledWith({
 			from_subscription: "sub_with_schedule",
-			metadata: { source: "@better-auth/stripe" },
 		});
 	});
 
@@ -6095,7 +6451,7 @@ describe("stripe", () => {
 				{
 					id: "sub_scheduled_then_upgrade",
 					status: "active",
-					schedule: "sub_sched_old",
+					schedule: "sub_schedule_old",
 					items: {
 						data: [
 							{
@@ -6115,7 +6471,7 @@ describe("stripe", () => {
 		mockStripe.subscriptionSchedules.list.mockResolvedValueOnce({
 			data: [
 				{
-					id: "sub_sched_old",
+					id: "sub_schedule_old",
 					subscription: "sub_scheduled_then_upgrade",
 					status: "active",
 					metadata: { source: "@better-auth/stripe" },
@@ -6131,7 +6487,7 @@ describe("stripe", () => {
 
 		// Should release the existing schedule
 		expect(mockStripe.subscriptionSchedules.release).toHaveBeenCalledWith(
-			"sub_sched_old",
+			"sub_schedule_old",
 		);
 
 		// Should use billing portal for immediate upgrade, not schedules
@@ -6941,6 +7297,250 @@ describe("stripe", () => {
 				(i: { price: string }) => i.price === "price_premium_security",
 			);
 			expect(securityItems).toHaveLength(1);
+		});
+	});
+
+	describe("subscriptionSuccess - checkoutSessionId flow", () => {
+		it("should update subscription via checkoutSessionId and redirect", async () => {
+			const testSubscriptionId = "sub_success_test";
+			const testCheckoutSessionId = "cs_test_123";
+			const testCustomerId = "cus_success_test";
+
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn(),
+					},
+				},
+				subscriptions: {
+					...stripeOptions.stripeClient.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: testSubscriptionId,
+								status: "active",
+								cancel_at_period_end: false,
+								cancel_at: null,
+								canceled_at: null,
+								trial_start: null,
+								trial_end: null,
+								items: {
+									data: [
+										{
+											price: {
+												id: process.env.STRIPE_PRICE_ID_1,
+												recurring: { interval: "month" },
+											},
+											quantity: 1,
+											current_period_start: Math.floor(Date.now() / 1000),
+											current_period_end:
+												Math.floor(Date.now() / 1000) + 30 * 86400,
+										},
+									],
+								},
+							},
+						],
+					}),
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const testCtx = await testAuth.$context;
+
+			const headers = new Headers();
+			const userRes = await client.signUp.email(
+				{
+					email: "success-flow@test.com",
+					password: "password",
+					name: "Success Test",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "success-flow@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			// Create incomplete subscription in DB
+			const sub = await testCtx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					stripeCustomerId: testCustomerId,
+					status: "incomplete",
+					plan: "starter",
+				},
+			});
+
+			// Mock checkout session to return correct subscriptionId
+			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+				id: testCheckoutSessionId,
+				metadata: {
+					userId: userRes.user.id,
+					subscriptionId: sub.id,
+					referenceId: userRes.user.id,
+				},
+			});
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=${testCheckoutSessionId}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
+
+			// Verify checkout session was retrieved
+			expect(stripeForTest.checkout.sessions.retrieve).toHaveBeenCalledWith(
+				testCheckoutSessionId,
+			);
+
+			// Verify subscription was updated in DB
+			const updated = await testCtx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: sub.id }],
+			});
+			expect(updated?.status).toBe("active");
+			expect(updated?.stripeSubscriptionId).toBe(testSubscriptionId);
+			expect(updated?.periodStart).toBeInstanceOf(Date);
+			expect(updated?.periodEnd).toBeInstanceOf(Date);
+		});
+
+		it("should redirect without update when checkoutSessionId is missing", async () => {
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(stripeOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "no-session-id@test.com",
+					password: "password",
+					name: "No Session",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "no-session-id@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect without any Stripe calls
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
+		});
+
+		it("should redirect when checkout session retrieval fails", async () => {
+			const stripeForTest = {
+				...stripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...stripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn().mockRejectedValue(new Error("Invalid session")),
+					},
+				},
+			};
+
+			const testOptions = {
+				...stripeOptions,
+				stripeClient: stripeForTest as unknown as Stripe,
+			};
+
+			const {
+				client,
+				auth: testAuth,
+				sessionSetter,
+			} = await getTestInstance(
+				{
+					database: memory,
+					plugins: [stripe(testOptions)],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+
+			const headers = new Headers();
+			await client.signUp.email(
+				{
+					email: "bad-session@test.com",
+					password: "password",
+					name: "Bad Session",
+				},
+				{ throw: true },
+			);
+			await client.signIn.email(
+				{ email: "bad-session@test.com", password: "password" },
+				{ throw: true, onSuccess: sessionSetter(headers) },
+			);
+
+			const callbackURL = "/dashboard";
+			const url = `http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent(callbackURL)}&checkoutSessionId=cs_invalid`;
+			const response = await testAuth.handler(
+				new Request(url, {
+					method: "GET",
+					headers,
+					redirect: "manual",
+				}),
+			);
+
+			// Should redirect gracefully
+			expect(response.status).toBe(302);
+			expect(response.headers.get("location")).toContain(callbackURL);
 		});
 	});
 });
