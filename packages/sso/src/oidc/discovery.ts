@@ -9,6 +9,7 @@
  */
 
 import { betterFetch } from "@better-fetch/fetch";
+import type { OIDCConfig } from "../types";
 import type {
 	DiscoverOIDCConfigParams,
 	HydratedOIDCConfig,
@@ -491,4 +492,32 @@ export function needsRuntimeDiscovery(
 	}
 
 	return !config.tokenEndpoint || !config.jwksEndpoint;
+}
+
+/**
+ * Runs runtime OIDC discovery when the stored config is missing required
+ * endpoints, and merges the hydrated fields back into the config.
+ * Throws if discovery fails.
+ */
+export async function ensureRuntimeDiscovery(
+	config: OIDCConfig,
+	issuer: string,
+	isTrustedOrigin: (url: string) => boolean,
+): Promise<OIDCConfig> {
+	if (!needsRuntimeDiscovery(config)) {
+		return config;
+	}
+	const hydrated = await discoverOIDCConfig({
+		issuer,
+		existingConfig: config,
+		isTrustedOrigin,
+	});
+	return {
+		...config,
+		authorizationEndpoint: hydrated.authorizationEndpoint,
+		tokenEndpoint: hydrated.tokenEndpoint,
+		tokenEndpointAuthentication: hydrated.tokenEndpointAuthentication,
+		userInfoEndpoint: hydrated.userInfoEndpoint,
+		jwksEndpoint: hydrated.jwksEndpoint,
+	};
 }
