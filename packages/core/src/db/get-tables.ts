@@ -1,6 +1,8 @@
 import type { BetterAuthOptions } from "../types";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "./type";
 
+const USER_MODEL_KEY = "user";
+
 export const getAuthTables = (
 	options: BetterAuthOptions,
 ): BetterAuthDBSchema => {
@@ -136,7 +138,7 @@ export const getAuthTables = (
 					type: "string",
 					fieldName: options.session?.fields?.userId || "userId",
 					references: {
-						model: options.user?.modelName || "user",
+						model: USER_MODEL_KEY,
 						field: "id",
 						onDelete: "cascade",
 					},
@@ -217,7 +219,7 @@ export const getAuthTables = (
 				userId: {
 					type: "string",
 					references: {
-						model: options.user?.modelName || "user",
+						model: USER_MODEL_KEY,
 						field: "id",
 						onDelete: "cascade",
 					},

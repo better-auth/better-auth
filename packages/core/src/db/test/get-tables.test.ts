@@ -113,4 +113,20 @@ describe("getAuthTables", () => {
 
 		expect(tables.verification).toBeDefined();
 	});
+
+	it("should keep user references on the base user model key when user modelName is account", () => {
+		const tables = getAuthTables({
+			user: {
+				modelName: "account",
+			},
+			account: {
+				modelName: "identity",
+			},
+		});
+
+		expect(tables.user?.modelName).toBe("account");
+		expect(tables.account?.modelName).toBe("identity");
+		expect(tables.session?.fields.userId?.references?.model).toBe("user");
+		expect(tables.account?.fields.userId?.references?.model).toBe("user");
+	});
 });
