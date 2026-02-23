@@ -152,6 +152,12 @@ export const createAdapterFactory =
 		});
 		const resolveSchemaModelKey = (model: string) =>
 			schema[model] ? model : getDefaultModelName(model);
+		const referencesModelMatches = (
+			referenceModel: string,
+			targetModelKey: string,
+		) =>
+			referenceModel === targetModelKey ||
+			schema[targetModelKey]?.modelName === referenceModel;
 
 		const getModelName = initGetModelName({
 			usePlural: config.usePlural,
@@ -626,8 +632,10 @@ export const createAdapterFactory =
 				).filter(
 					([field, fieldAttributes]) =>
 						fieldAttributes.references &&
-						resolveSchemaModelKey(fieldAttributes.references.model) ===
+						referencesModelMatches(
+							fieldAttributes.references.model,
 							defaultBaseModelName,
+						),
 				);
 
 				let isForwardJoin = true;
@@ -639,8 +647,10 @@ export const createAdapterFactory =
 					).filter(
 						([field, fieldAttributes]) =>
 							fieldAttributes.references &&
-							resolveSchemaModelKey(fieldAttributes.references.model) ===
+							referencesModelMatches(
+								fieldAttributes.references.model,
 								defaultModelName,
+							),
 					);
 					isForwardJoin = false;
 				}
