@@ -154,7 +154,7 @@ export const getAuthTables = (
 
 	return {
 		user: {
-			modelName: options.user?.modelName || "user",
+			modelName: options.user?.modelName || USER_MODEL_KEY,
 			fields: {
 				name: {
 					type: "string",
