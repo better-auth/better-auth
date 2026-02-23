@@ -60,7 +60,7 @@ export function resolveConfiguration(
 			const error = API_KEY_ERROR_CODES.NO_DEFAULT_API_KEY_CONFIGURATION_FOUND;
 			throw APIError.from("BAD_REQUEST", error);
 		}
-		return defaultConfig;
+		return { ...defaultConfig, configId: "default" };
 	};
 	if (!configId) return getDefaultConfig();
 	return (

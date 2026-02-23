@@ -152,6 +152,51 @@ const secretKey = await auth.api.createApiKey({
 });
 // Result: sk_...
 ```
+<Callout type="warn">
+  Note that when creating a key under a specific configId,
+  the `get`, `update`, `delete` and `verify` operations must also specify the `configId` parameter.
+</Callout>
+
+### Using configId for API Key Operations
+
+All API key operations support the `configId` parameter to specify which configuration to use for the lookup. This is important when different configurations have different storage backends (e.g., database vs Redis):
+
+```ts title="api-key-operations.ts"
+// Get an API key using a specific config
+const key = await auth.api.getApiKey({
+  query: { 
+    id: keyId,
+    configId: "secret" 
+  },
+  headers,
+});
+
+// Update an API key using a specific config
+await auth.api.updateApiKey({
+  body: {
+    keyId: keyId,
+    configId: "secret",
+    name: "Updated Name",
+  },
+});
+
+// Delete an API key using a specific config
+await auth.api.deleteApiKey({
+  body: {
+    keyId: keyId,
+    configId: "secret",
+  },
+  headers,
+});
+
+// Verify an API key using a specific config
+const result = await auth.api.verifyApiKey({
+  body: {
+    key: apiKeyValue,
+    configId: "secret",
+  },
+});
+```
 
 ### Filtering Keys by Configuration
 

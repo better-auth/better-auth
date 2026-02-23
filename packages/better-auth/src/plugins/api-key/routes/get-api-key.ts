@@ -12,6 +12,13 @@ import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
 
 const getApiKeyQuerySchema = z.object({
+	configId: z
+		.string()
+		.meta({
+			description:
+				"The configuration ID to use for the API key lookup. If not provided, the default configuration will be used.",
+		})
+		.optional(),
 	id: z.string().meta({
 		description: "The id of the Api Key",
 	}),
@@ -173,17 +180,25 @@ export function getApiKey({
 			},
 		},
 		async (ctx) => {
-			const { id } = ctx.query;
+			const { configId, id } = ctx.query;
 
 			const session = ctx.context.session;
 
-			// Use default config for initial lookup
-			const defaultOpts = configurations[0]!;
+			// Use provided configId or fall back to default config for initial lookup
+			const lookupOpts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				configId,
+			);
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, id, defaultOpts);
+			apiKey = await getApiKeyById(ctx, id, lookupOpts);
 
 			if (!apiKey) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			if (apiKey.configId !== lookupOpts.configId) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 

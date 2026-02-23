@@ -219,6 +219,13 @@ export async function validateApiKey({
 }
 
 const verifyApiKeyBodySchema = z.object({
+	configId: z
+		.string()
+		.meta({
+			description:
+				"The configuration ID to use for verification. If not provided, the default configuration will be used.",
+		})
+		.optional(),
 	key: z.string().meta({
 		description: "The key to verify",
 	}),
@@ -242,17 +249,23 @@ export function verifyApiKey({
 		byPassLastCheckTime?: boolean | undefined,
 	): Promise<void>;
 }) {
-	const defaultOpts = configurations[0]!;
 	return createAuthEndpoint(
 		{
 			method: "POST",
 			body: verifyApiKeyBodySchema,
 		},
 		async (ctx) => {
-			const { key } = ctx.body;
+			const { configId, key } = ctx.body;
 
-			if (defaultOpts.customAPIKeyValidator) {
-				const isValid = await defaultOpts.customAPIKeyValidator({ ctx, key });
+			// Use provided configId or fall back to default config
+			const lookupOpts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				configId,
+			);
+
+			if (lookupOpts.customAPIKeyValidator) {
+				const isValid = await lookupOpts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
 					return ctx.json({
 						valid: false,
@@ -265,7 +278,7 @@ export function verifyApiKey({
 				}
 			}
 
-			const hashed = defaultOpts.disableKeyHashing
+			const hashed = lookupOpts.disableKeyHashing
 				? key
 				: await defaultKeyHasher(key);
 
@@ -276,14 +289,14 @@ export function verifyApiKey({
 					hashedKey: hashed,
 					permissions: ctx.body.permissions,
 					ctx,
-					opts: defaultOpts,
+					opts: lookupOpts,
 					schema,
 				});
 
 				// Resolve the correct config based on the API key's configId
 				const opts = apiKey
 					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
-					: defaultOpts;
+					: lookupOpts;
 
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
@@ -327,7 +340,7 @@ export function verifyApiKey({
 			// Resolve the correct config for metadata migration
 			const opts = apiKey
 				? resolveConfiguration(ctx.context, configurations, apiKey.configId)
-				: defaultOpts;
+				: lookupOpts;
 
 			// Migrate legacy double-stringified metadata if needed
 			let migratedMetadata: Record<string, any> | null = null;

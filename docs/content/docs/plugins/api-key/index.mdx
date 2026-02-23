@@ -177,6 +177,10 @@ const permissions = { // Permissions to check are optional.
 
 type verifyApiKey = {
     /**
+     * The configuration ID to use for verification. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
      * The key to verify.
      */
     key: string = "your_api_key_here"
@@ -211,6 +215,10 @@ type Result = {
 ```ts
 type getApiKey = {
     /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
      * The id of the Api Key.
      */
     id: string = "some-api-key-id"
@@ -234,6 +242,10 @@ type Result = Omit<ApiKey, "key">;
 <APIMethod path="/api-key/update" method="POST">
 ```ts
 type updateApiKey = {
+    /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
     /**
      * The id of the Api Key to update.
      */
@@ -318,6 +330,10 @@ Otherwise, you'll receive the API Key details, except for the `key` value itself
 >
 ```ts
 type deleteApiKey = {
+    /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
     /**
      * The id of the Api Key to delete.
      */

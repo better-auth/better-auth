@@ -1591,7 +1591,7 @@ describe("api-key", async () => {
 		expect(verified.valid).toBe(true);
 
 		const updated = await auth.api.getApiKey({
-			query: { id: key.id },
+			query: { id: key.id, configId: "default" },
 			headers,
 		});
 		expect(updated.lastRequest).not.toBeNull();
@@ -1611,7 +1611,7 @@ describe("api-key", async () => {
 		});
 
 		const updated = await auth.api.getApiKey({
-			query: { id: key.id },
+			query: { id: key.id, configId: "default" },
 			headers,
 		});
 		expect(updated.remaining).toBe(99);
@@ -3809,7 +3809,7 @@ describe("api-key", async () => {
 			});
 
 			const retrievedKey = await auth.api.getApiKey({
-				query: { id: internalKey.id },
+				query: { id: internalKey.id, configId: "internal-api" },
 				headers,
 			});
 
@@ -3832,6 +3832,7 @@ describe("api-key", async () => {
 				body: {
 					keyId: key.id,
 					name: "updated-name",
+					configId: "public-api",
 				},
 				headers,
 			});
@@ -3851,7 +3852,7 @@ describe("api-key", async () => {
 			});
 
 			const deleteResult = await auth.api.deleteApiKey({
-				body: { keyId: key.id },
+				body: { keyId: key.id, configId: "internal-api" },
 				headers,
 			});
 
@@ -3860,7 +3861,7 @@ describe("api-key", async () => {
 			// Verify key is deleted
 			try {
 				await auth.api.getApiKey({
-					query: { id: key.id },
+					query: { id: key.id, configId: "internal-api" },
 					headers,
 				});
 				expect.fail("Should have thrown an error");
@@ -3996,7 +3997,7 @@ describe("api-key", async () => {
 			});
 
 			const result = await auth.api.verifyApiKey({
-				body: { key: orgKey.key },
+				body: { key: orgKey.key, configId: "org-keys" },
 			});
 
 			expect(result.valid).toBe(true);
@@ -4270,13 +4271,13 @@ describe("api-key", async () => {
 
 			// Verify both keys work
 			const userResult = await auth.api.verifyApiKey({
-				body: { key: userKey.key },
+				body: { key: userKey.key, configId: "user-keys" },
 			});
 			expect(userResult.valid).toBe(true);
 			expect(userResult.key?.referenceId).toBe(user.id);
 
 			const orgResult = await auth.api.verifyApiKey({
-				body: { key: orgKey.key },
+				body: { key: orgKey.key, configId: "org-keys" },
 			});
 			expect(orgResult.valid).toBe(true);
 			expect(orgResult.key?.referenceId).toBe(org.id);
@@ -4301,7 +4302,7 @@ describe("api-key", async () => {
 
 			// Get key by ID (server-side)
 			const retrievedKey = await auth.api.getApiKey({
-				query: { id: orgKey.id },
+				query: { id: orgKey.id, configId: "org-keys" },
 				headers,
 			});
 
@@ -4330,7 +4331,7 @@ describe("api-key", async () => {
 
 			// Delete the key
 			const deleteResult = await auth.api.deleteApiKey({
-				body: { keyId: orgKey.id },
+				body: { keyId: orgKey.id, configId: "org-keys" },
 				headers,
 			});
 
@@ -4338,7 +4339,7 @@ describe("api-key", async () => {
 
 			// Verify key is deleted
 			const verifyResult = await auth.api.verifyApiKey({
-				body: { key: orgKey.key },
+				body: { key: orgKey.key, configId: "org-keys" },
 			});
 
 			expect(verifyResult.valid).toBe(false);
@@ -4367,6 +4368,7 @@ describe("api-key", async () => {
 					keyId: orgKey.id,
 					name: "updated-name",
 					enabled: false,
+					configId: "org-keys",
 				},
 				headers,
 			});
