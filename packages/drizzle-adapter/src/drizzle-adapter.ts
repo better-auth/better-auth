@@ -630,6 +630,9 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				// not all providers support dates
 				// one such example case is https://github.com/better-auth/better-auth/issues/7819
 				if (fieldAttributes.type === "date") {
+					if (data === null || data === undefined) {
+						return data;
+					}
 					return new Date(data);
 				}
 				return data;
