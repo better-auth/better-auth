@@ -9,6 +9,10 @@ export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
 	InferDBFieldsFromPluginsInput<"user", Options["plugins"]> &
 		InferDBFieldsFromOptionsInput<Options["user"]>;
 
+export type AdditionalSessionFieldsInput<Options extends BetterAuthOptions> =
+	InferDBFieldsFromPluginsInput<"session", Options["plugins"]> &
+		InferDBFieldsFromOptionsInput<Options["session"]>;
+
 export type InferPluginTypes<O extends BetterAuthOptions> =
 	O["plugins"] extends Array<infer P>
 		? UnionToIntersection<
