@@ -18,19 +18,9 @@ export const initGetModelName = ({
 	 * then we should return the model name ending with an `s`.
 	 */
 	const getModelName = (model: string) => {
-		const defaultModelKey = getDefaultModelName(model);
-		const useCustomModelName =
-			schema &&
-			schema[defaultModelKey] &&
-			schema[defaultModelKey].modelName !== model;
-
-		if (useCustomModelName) {
-			return usePlural
-				? `${schema[defaultModelKey]!.modelName}s`
-				: schema[defaultModelKey]!.modelName;
-		}
-
-		return usePlural ? `${model}s` : model;
+		const defaultModelKey = schema[model] ? model : getDefaultModelName(model);
+		const resolvedModelName = schema[defaultModelKey]?.modelName || model;
+		return usePlural ? `${resolvedModelName}s` : resolvedModelName;
 	};
 	return getModelName;
 };

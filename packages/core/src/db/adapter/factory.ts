@@ -152,6 +152,8 @@ export const createAdapterFactory =
 			usePlural: config.usePlural,
 			schema,
 		});
+		const resolveSchemaModelKey = (model: string) =>
+			schema[model] ? model : getDefaultModelName(model);
 
 		const getModelName = initGetModelName({
 			usePlural: config.usePlural,
@@ -603,18 +605,18 @@ export const createAdapterFactory =
 			const transformedJoin: JoinConfig = {};
 			for (const [model, join] of Object.entries(unsanitizedJoin)) {
 				if (!join) continue;
-				const defaultModelName = getDefaultModelName(model);
-				const defaultBaseModelName = getDefaultModelName(baseModel);
+				const defaultModelName = resolveSchemaModelKey(model);
+				const defaultBaseModelName = resolveSchemaModelKey(baseModel);
 
 				// First, check if the joined model has FKs to the base model (forward join)
 				let foreignKeys = Object.entries(
 					schema[defaultModelName]!.fields,
-				).filter(
-					([field, fieldAttributes]) =>
-						fieldAttributes.references &&
-						getDefaultModelName(fieldAttributes.references.model) ===
-							defaultBaseModelName,
-				);
+					).filter(
+						([field, fieldAttributes]) =>
+							fieldAttributes.references &&
+							resolveSchemaModelKey(fieldAttributes.references.model) ===
+								defaultBaseModelName,
+					);
 
 				let isForwardJoin = true;
 
@@ -625,7 +627,7 @@ export const createAdapterFactory =
 					).filter(
 						([field, fieldAttributes]) =>
 							fieldAttributes.references &&
-							getDefaultModelName(fieldAttributes.references.model) ===
+							resolveSchemaModelKey(fieldAttributes.references.model) ===
 								defaultModelName,
 					);
 					isForwardJoin = false;
@@ -659,12 +661,12 @@ export const createAdapterFactory =
 					// The field we need in select is the referenced field in the base model
 					requiredSelectField = foreignKeyAttributes.references.field;
 					from = getFieldName({
-						model: baseModel,
+						model: defaultBaseModelName,
 						field: requiredSelectField,
 					});
 
 					to = getFieldName({
-						model,
+						model: defaultModelName,
 						field: foreignKey,
 					});
 				} else {
@@ -672,12 +674,12 @@ export const createAdapterFactory =
 					// The field we need in select is the foreign key field in the base model
 					requiredSelectField = foreignKey;
 					from = getFieldName({
-						model: baseModel,
+						model: defaultBaseModelName,
 						field: requiredSelectField,
 					});
 
 					to = getFieldName({
-						model,
+						model: defaultModelName,
 						field: foreignKeyAttributes.references.field,
 					});
 				}

@@ -33,7 +33,7 @@ export const initGetFieldName = ({
 		model: string;
 		field: string;
 	}) {
-		const model = getDefaultModelName(modelName);
+		const model = schema[modelName] ? modelName : getDefaultModelName(modelName);
 		const field = getDefaultFieldName({ model, field: fieldName });
 
 		return schema[model]?.fields[field]?.fieldName || field;

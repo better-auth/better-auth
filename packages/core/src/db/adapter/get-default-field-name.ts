@@ -37,7 +37,9 @@ export const initGetDefaultFieldName = ({
 		if (field === "id" || field === "_id") {
 			return "id";
 		}
-		const model = getDefaultModelName(unsafeModel); // Just to make sure the model name is correct.
+		const model = schema[unsafeModel]
+			? unsafeModel
+			: getDefaultModelName(unsafeModel); // Just to make sure the model name is correct.
 
 		let f = schema[model]?.fields[field];
 		if (!f) {
