@@ -1,7 +1,3 @@
-import type { BetterAuthPlugin } from "@better-auth/core";
-import { getTestInstance } from "../../../../../test-utils";
-import { organizationClient } from "../../../../organization/client";
-
 export const getTeamData = async (options: {
 	organizationId: string;
 	name?: string;
@@ -14,24 +10,4 @@ export const getTeamData = async (options: {
 		slug: options?.slug || undefined,
 		organizationId: options.organizationId,
 	};
-};
-
-export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
-	plugins: Plugins,
-) => {
-	const instance = await getTestInstance(
-		{
-			plugins: plugins,
-			logger: {
-				level: "error",
-			},
-		},
-		{
-			clientOptions: {
-				plugins: [organizationClient({ teams: { enabled: true } })],
-			},
-		},
-	);
-
-	return instance;
 };

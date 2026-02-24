@@ -1,8 +1,35 @@
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, expectTypeOf } from "vitest";
 import { teams } from "../../addons";
+import { organizationClient } from "../../client";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { organization } from "../../organization";
-import { defineInstance, getOrganizationData } from "../../test/utils";
+import { getOrganizationData } from "../../test/utils";
+
+/**
+ * Helper to define `getTestInstance` as a shorter alias, specific to the organization plugin.
+ * @internal
+ */
+async function defineInstance<Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient()],
+			},
+		},
+	);
+	const adapter = (await instance.auth.$context).adapter;
+	return { ...instance, adapter };
+}
 
 describe("add member", async (it) => {
 	const plugin = organization({

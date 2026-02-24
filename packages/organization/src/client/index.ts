@@ -1,9 +1,13 @@
-import type { BetterAuthClientPlugin } from "@better-auth/core";
 import type { organization } from "../organization";
+import type { OrganizationClientOptions } from "./types";
 
-export const organizationNewClient = () => {
+export const organizationClient = <CO extends OrganizationClientOptions>(
+	options?: CO | undefined,
+) => {
 	return {
 		id: "organization",
-		$InferServerPlugin: {} as ReturnType<typeof organization>,
-	} satisfies BetterAuthClientPlugin;
+		$InferServerPlugin: {} as ReturnType<
+			typeof organization<{ use: CO["use"][number]["serverAddon"][] }>
+		>,
+	};
 };

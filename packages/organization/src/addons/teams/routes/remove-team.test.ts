@@ -1,9 +1,33 @@
 import type { User } from "@better-auth/core/db";
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect } from "vitest";
+import { organizationClient } from "../../../client";
 import { organization } from "../../../organization";
 import { getOrganizationData } from "../../../test/utils";
 import { teams } from "..";
-import { defineInstance, getTeamData } from "../tests/utils";
+import { teamsClient } from "../client";
+import { getTeamData } from "../tests/utils";
+
+export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) => {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient({ use: [teamsClient()] })],
+			},
+		},
+	);
+
+	return instance;
+};
 
 describe("removeTeam", async (it) => {
 	const { signInWithTestUser, auth, client, cookieSetter } =
