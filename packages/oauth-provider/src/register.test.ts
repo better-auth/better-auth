@@ -1,3 +1,5 @@
+import type { Organization } from "@better-auth/organization";
+import { organization } from "@better-auth/organization";
 import { createAuthClient } from "better-auth/client";
 import { organizationClient } from "better-auth/client/plugins";
 import { generateRandomString } from "better-auth/crypto";
@@ -6,8 +8,6 @@ import {
 	createAuthorizationURL,
 } from "better-auth/oauth2";
 import { jwt } from "better-auth/plugins/jwt";
-import type { Organization } from "better-auth/plugins/organization";
-import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it, onTestFinished, vi } from "vitest";
 import { oauthProviderClient } from "./client";
@@ -581,7 +581,7 @@ describe("oauth register - organization", async () => {
 		},
 	});
 
-	let org: Organization;
+	let org: Organization & { slug: string };
 	beforeAll(async () => {
 		const _org = await auth.api.createOrganization({
 			body: {
