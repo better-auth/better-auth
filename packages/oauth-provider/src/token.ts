@@ -127,14 +127,13 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 	sessionId?: string,
+	authTime?: number,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
-	const authTime = Math.floor(
-		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
-			1000,
-	);
+	// Convert ms to seconds if provided, otherwise omit
+	const authTimeSec = authTime ? Math.floor(authTime / 1000) : undefined;
 	// TODO: this should be validated against the login process
 	// - bronze : password only
 	// - silver : mfa
@@ -155,7 +154,7 @@ async function createIdToken(
 	const payload: JWTPayload = {
 		...customClaims,
 		...userClaims,
-		auth_time: authTime,
+		auth_time: authTimeSec,
 		acr,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user.id,
@@ -272,6 +271,7 @@ async function createRefreshToken(
 	scopes: string[],
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
+	authTime?: number,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -304,6 +304,7 @@ async function createRefreshToken(
 			sessionId,
 			userId: user.id,
 			referenceId,
+			authTime,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -371,6 +372,7 @@ async function createUserTokens(
 	additional?: {
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
+	authTime?: number,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -410,6 +412,7 @@ async function createUserTokens(
 						sid: sessionId,
 					},
 					additional?.refreshToken,
+					authTime,
 				)
 			: undefined;
 
@@ -460,10 +463,20 @@ async function createUserTokens(
 							sid: sessionId,
 						},
 						additional?.refreshToken,
+						authTime,
 					)
 				: undefined,
 		isIdToken
-			? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId)
+			? createIdToken(
+					ctx,
+					opts,
+					user,
+					client,
+					scopes,
+					nonce,
+					sessionId,
+					authTime,
+				)
 			: undefined,
 	]);
 
@@ -742,6 +755,9 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	const authTime =
+		verificationValue.authTime ?? new Date(session.createdAt).getTime();
+
 	return createUserTokens(
 		ctx,
 		opts,
@@ -751,6 +767,8 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.referenceId,
 		session.id,
 		verificationValue.query?.nonce,
+		undefined,
+		authTime,
 	);
 }
 
@@ -1053,5 +1071,6 @@ async function handleRefreshTokenGrant(
 		{
 			refreshToken,
 		},
+		refreshToken.authTime,
 	);
 }

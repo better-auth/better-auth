@@ -789,6 +789,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
+	authTime: number;
 }
 
 /**
@@ -981,6 +982,11 @@ export interface OAuthRefreshToken<
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
+	/**
+	 * The time (ms since epoch) the user originally authenticated.
+	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
+	 */
+	authTime?: number;
 	/**
 	 * Scopes granted for this refresh token.
 	 *
