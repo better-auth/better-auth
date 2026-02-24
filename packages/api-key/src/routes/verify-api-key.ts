@@ -2,9 +2,8 @@ import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { role } from "better-auth/plugins/access";
 import * as z from "zod";
-import { isAPIError } from "../../../utils/is-api-error";
-import { role } from "../../access";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import {
@@ -16,7 +15,9 @@ import {
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
+import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
+import { resolveConfiguration } from ".";
 
 export async function validateApiKey({
 	hashedKey,
@@ -218,6 +219,13 @@ export async function validateApiKey({
 }
 
 const verifyApiKeyBodySchema = z.object({
+	configId: z
+		.string()
+		.meta({
+			description:
+				"The configuration ID to use for verification. If not provided, the default configuration will be used.",
+		})
+		.optional(),
 	key: z.string().meta({
 		description: "The key to verify",
 	}),
@@ -230,11 +238,11 @@ const verifyApiKeyBodySchema = z.object({
 });
 
 export function verifyApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -247,10 +255,17 @@ export function verifyApiKey({
 			body: verifyApiKeyBodySchema,
 		},
 		async (ctx) => {
-			const { key } = ctx.body;
+			const { configId, key } = ctx.body;
 
-			if (opts.customAPIKeyValidator) {
-				const isValid = await opts.customAPIKeyValidator({ ctx, key });
+			// Use provided configId or fall back to default config
+			const lookupOpts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				configId,
+			);
+
+			if (lookupOpts.customAPIKeyValidator) {
+				const isValid = await lookupOpts.customAPIKeyValidator({ ctx, key });
 				if (!isValid) {
 					return ctx.json({
 						valid: false,
@@ -263,7 +278,9 @@ export function verifyApiKey({
 				}
 			}
 
-			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
+			const hashed = lookupOpts.disableKeyHashing
+				? key
+				: await defaultKeyHasher(key);
 
 			let apiKey: ApiKey | null = null;
 
@@ -272,9 +289,14 @@ export function verifyApiKey({
 					hashedKey: hashed,
 					permissions: ctx.body.permissions,
 					ctx,
-					opts,
+					opts: lookupOpts,
 					schema,
 				});
+
+				// Resolve the correct config based on the API key's configId
+				const opts = apiKey
+					? resolveConfiguration(ctx.context, configurations, apiKey.configId)
+					: lookupOpts;
 
 				if (opts.deferUpdates) {
 					ctx.context.runInBackground(
@@ -314,6 +336,11 @@ export function verifyApiKey({
 				key: 1,
 				permissions: undefined,
 			};
+
+			// Resolve the correct config for metadata migration
+			const opts = apiKey
+				? resolveConfiguration(ctx.context, configurations, apiKey.configId)
+				: lookupOpts;
 
 			// Migrate legacy double-stringified metadata if needed
 			let migratedMetadata: Record<string, any> | null = null;

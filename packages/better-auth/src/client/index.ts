@@ -15,6 +15,7 @@ export {
 	type OnlineListener,
 	type OnlineManager,
 } from "./online-manager";
+export * from "./parser";
 export * from "./query";
 export * from "./session-refresh";
 export * from "./types";

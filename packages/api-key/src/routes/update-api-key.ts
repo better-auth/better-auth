@@ -2,20 +2,29 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api";
-import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	getApiKeyById,
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
+import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
+import { configIdMatches, resolveConfiguration } from ".";
 
 const updateApiKeyBodySchema = z.object({
+	configId: z
+		.string()
+		.meta({
+			description:
+				"The configuration ID to use for the API key lookup. If not provided, the default configuration will be used.",
+		})
+		.optional(),
 	keyId: z.string().meta({
 		description: "The id of the Api Key",
 	}),
@@ -96,11 +105,11 @@ const updateApiKeyBodySchema = z.object({
 });
 
 export function updateApiKey({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -251,6 +260,7 @@ export function updateApiKey({
 		},
 		async (ctx) => {
 			const {
+				configId,
 				keyId,
 				expiresIn,
 				enabled,
@@ -296,16 +306,42 @@ export function updateApiKey({
 				}
 			}
 
+			// Use provided configId or fall back to default config for initial lookup
+			const lookupOpts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				configId,
+			);
 			let apiKey: ApiKey | null = null;
 
-			apiKey = await getApiKeyById(ctx, keyId, opts);
-
-			// Verify ownership
-			if (apiKey && apiKey.userId !== user.id) {
-				apiKey = null;
-			}
+			apiKey = await getApiKeyById(ctx, keyId, lookupOpts);
 
 			if (!apiKey) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			if (!configIdMatches(apiKey.configId, lookupOpts.configId)) {
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
+			}
+
+			// Resolve the correct config based on the API key's configId
+			const opts = resolveConfiguration(
+				ctx.context,
+				configurations,
+				apiKey.configId,
+			);
+
+			// Verify ownership based on config's references type
+			const referencesType = opts.references ?? "user";
+			if (referencesType === "organization") {
+				// For organization-owned keys, verify membership and permission
+				await checkOrgApiKeyPermission(
+					ctx,
+					user.id,
+					apiKey.referenceId,
+					"update",
+				);
+			} else if (apiKey.referenceId !== user.id) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 

@@ -1,16 +1,23 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { parseJSON } from "../../client/parser";
+import { parseJSON } from "better-auth/client";
 
 export const apiKeySchema = ({
-	timeWindow,
-	rateLimitMax,
+	defaultRateLimitMax,
+	defaultTimeWindow,
 }: {
-	timeWindow: number;
-	rateLimitMax: number;
+	defaultTimeWindow: number;
+	defaultRateLimitMax: number;
 }) =>
 	({
 		apikey: {
 			fields: {
+				configId: {
+					type: "string",
+					required: true,
+					defaultValue: "default",
+					input: false,
+					index: true,
+				},
 				/**
 				 * The name of the key.
 				 */
@@ -29,6 +36,15 @@ export const apiKeySchema = ({
 					input: false,
 				},
 				/**
+				 * The ID of the entity that owns this key (userId or organizationId based on config's `references` setting).
+				 */
+				referenceId: {
+					type: "string",
+					required: true,
+					input: false,
+					index: true,
+				},
+				/**
 				 * The prefix of the key.
 				 */
 				prefix: {
@@ -41,16 +57,6 @@ export const apiKeySchema = ({
 				 */
 				key: {
 					type: "string",
-					required: true,
-					input: false,
-					index: true,
-				},
-				/**
-				 * The user id of the user who created the key.
-				 */
-				userId: {
-					type: "string",
-					references: { model: "user", field: "id", onDelete: "cascade" },
 					required: true,
 					input: false,
 					index: true,
@@ -104,7 +110,7 @@ export const apiKeySchema = ({
 					type: "number",
 					required: false,
 					input: false,
-					defaultValue: timeWindow,
+					defaultValue: defaultTimeWindow,
 				},
 				/**
 				 * The maximum number of requests allowed within the `rateLimitTimeWindow`.
@@ -113,7 +119,7 @@ export const apiKeySchema = ({
 					type: "number",
 					required: false,
 					input: false,
-					defaultValue: rateLimitMax,
+					defaultValue: defaultRateLimitMax,
 				},
 				/**
 				 * The number of requests made within the rate limit time window

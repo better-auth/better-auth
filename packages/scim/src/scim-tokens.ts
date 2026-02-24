@@ -1,7 +1,15 @@
+import { base64Url } from "@better-auth/utils/base64";
+import { createHash } from "@better-auth/utils/hash";
 import type { GenericEndpointContext } from "better-auth";
 import { symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
-import { defaultKeyHasher } from "better-auth/plugins";
 import type { SCIMOptions } from "./types";
+
+const defaultKeyHasher = async (token: string) => {
+	const hash = await createHash("SHA-256").digest(
+		new TextEncoder().encode(token),
+	);
+	return base64Url.encode(new Uint8Array(hash), { padding: false });
+};
 
 export async function storeSCIMToken(
 	ctx: GenericEndpointContext,
