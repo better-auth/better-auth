@@ -184,7 +184,7 @@ export const schema = {
 				required: false,
 			},
 			authTime: {
-				type: "number",
+				type: "date",
 				required: false,
 			},
 			// Immutable

@@ -789,7 +789,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
-	authTime: number;
+	authTime?: number;
 }
 
 /**
@@ -983,10 +983,10 @@ export interface OAuthRefreshToken<
 	 */
 	revoked?: Date;
 	/**
-	 * The time (ms since epoch) the user originally authenticated.
+	 * The time the user originally authenticated.
 	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
 	 */
-	authTime?: number;
+	authTime?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *

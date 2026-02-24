@@ -1770,8 +1770,8 @@ Table Name: `oauthRefreshToken`
     },
     {
       name: "authTime",
-      type: "number",
-      description: "Original authentication time (ms since epoch). Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
+      type: "Date",
+      description: "Original authentication time. Preserved across token rotation so refreshed ID tokens include a correct auth_time claim per OIDC Core 1.0 Section 12.2.",
       isOptional: true,
     },
     {

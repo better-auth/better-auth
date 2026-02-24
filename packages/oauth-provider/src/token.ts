@@ -127,13 +127,13 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 	sessionId?: string,
-	authTime?: number,
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
-	// Convert ms to seconds if provided, otherwise omit
-	const authTimeSec = authTime ? Math.floor(authTime / 1000) : undefined;
+	const authTimeSec =
+		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
 	// - bronze : password only
 	// - silver : mfa
@@ -271,7 +271,7 @@ async function createRefreshToken(
 	scopes: string[],
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
-	authTime?: number,
+	authTime?: Date,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -372,7 +372,7 @@ async function createUserTokens(
 	additional?: {
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
-	authTime?: number,
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -756,7 +756,9 @@ async function handleAuthorizationCodeGrant(
 	}
 
 	const authTime =
-		verificationValue.authTime ?? new Date(session.createdAt).getTime();
+		verificationValue.authTime != null
+			? new Date(verificationValue.authTime)
+			: new Date(session.createdAt);
 
 	return createUserTokens(
 		ctx,
@@ -1058,6 +1060,11 @@ async function handleRefreshTokenGrant(
 		});
 	}
 
+	const authTime =
+		refreshToken.authTime != null
+			? new Date(refreshToken.authTime)
+			: undefined;
+
 	// Generate new tokens
 	return createUserTokens(
 		ctx,
@@ -1071,6 +1078,6 @@ async function handleRefreshTokenGrant(
 		{
 			refreshToken,
 		},
-		refreshToken.authTime,
+		authTime,
 	);
 }
