@@ -2,7 +2,6 @@ import type { GenericEndpointContext, Prettify } from "@better-auth/core";
 import type { DBFieldAttribute, User } from "@better-auth/core/db";
 import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import type { Organization } from "../../schema";
-import type { FindAddonFromOrgOptions, OrganizationOptions } from "../../types";
 import type { OrganizationRole } from "./schema";
 
 export interface DynamicAccessControlOptions {
