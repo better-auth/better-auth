@@ -1,4 +1,4 @@
-import type { OrgnaizationClientAddon } from "../../client/types";
+import type { OrganizationClientAddon } from "../../client/types";
 import type { teams } from "../index";
 
 export const teamsClient = () => {
@@ -6,5 +6,5 @@ export const teamsClient = () => {
 	return {
 		id: "teams",
 		serverAddon: {} as TeamAddon,
-	} satisfies OrgnaizationClientAddon;
+	} satisfies OrganizationClientAddon;
 };

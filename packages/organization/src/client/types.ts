@@ -1,10 +1,10 @@
 import type { Addon } from "../types";
 
-export interface OrgnaizationClientAddon {
+export interface OrganizationClientAddon {
 	id: string;
 	serverAddon: Addon;
 }
 
 export interface OrganizationClientOptions {
-	use: readonly OrgnaizationClientAddon[];
+	use: readonly OrganizationClientAddon[];
 }
