@@ -360,18 +360,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								undefined;
 							try {
 								Browser = await import("expo-web-browser");
-							} catch (error) {
-								throw new Error(
-									'"expo-web-browser" is not installed as a dependency!',
-									{
-										cause: error,
-									},
-								);
+							} catch {
+								try {
+									Browser = require("expo-web-browser");
+								} catch (error) {
+									throw new Error(
+										'"expo-web-browser" is not installed as a dependency!',
+										{
+											cause: error,
+										},
+									);
+								}
 							}
 
 							if (Platform.OS === "android") {
 								try {
-									Browser.dismissAuthSession();
+									Browser!.dismissAuthSession();
 								} catch {}
 							}
 
@@ -387,7 +391,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								params.append("oauthState", oauthStateValue);
 							}
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
-							const result = await Browser.openAuthSessionAsync(
+							const result = await Browser!.openAuthSessionAsync(
 								proxyURL,
 								to,
 								opts?.webBrowserOptions,
