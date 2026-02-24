@@ -8,6 +8,7 @@ export default defineConfig({
 		client: "./src/client/index.ts",
 		access: "./src/access/index.ts",
 	},
-	external: ["better-auth", "better-call", "@better-auth/core"],
+	external: ["better-auth", "better-call", "@better-auth/core", "defu"],
 	sourcemap: true,
+	treeshake: true,
 });
