@@ -971,7 +971,7 @@ async function handleRefreshTokenGrant(
 	if (!refreshToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session not found",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	if (refreshToken.clientId !== client_id) {
@@ -983,7 +983,7 @@ async function handleRefreshTokenGrant(
 	if (refreshToken.expiresAt < new Date()) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	// Replay revoke (delete all tokens for that user-client)
@@ -1003,7 +1003,7 @@ async function handleRefreshTokenGrant(
 		});
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 
