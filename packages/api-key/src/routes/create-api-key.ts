@@ -3,17 +3,17 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api";
-import { getDate } from "../../../utils/date";
+import { resolveConfiguration } from ".";
+import type { PredefinedApiKeyOptions } from ".";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
-import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+import { getDate } from "../utils";
 
 const createApiKeyBodySchema = z.object({
 	configId: z

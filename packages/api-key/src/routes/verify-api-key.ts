@@ -2,9 +2,8 @@ import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { role } from "better-auth/plugins/access";
 import * as z from "zod";
-import { isAPIError } from "../../../utils/is-api-error";
-import { role } from "../../access";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import {
@@ -16,6 +15,7 @@ import {
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
+import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
 

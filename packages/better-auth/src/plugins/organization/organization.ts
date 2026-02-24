@@ -76,6 +76,9 @@ declare module "@better-auth/core" {
 	}
 }
 
+export type { OrganizationOptions } from "./types";
+export { hasPermission } from "./has-permission";
+
 export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	id: "organization";
 	endpoints: OrganizationEndpoints<Options>;

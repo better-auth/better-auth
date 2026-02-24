@@ -4,8 +4,8 @@ import type {
 	HookEndpointContext,
 	LiteralString,
 } from "@better-auth/core";
-import type { InferOptionSchema } from "../../types";
-import type { Statements } from "../access";
+import type { Statements } from "better-auth/plugins/access";
+import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 
 export interface ApiKeyOptions {

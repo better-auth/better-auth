@@ -2,9 +2,8 @@ import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { getSessionFromCtx } from "better-auth/api";
 import * as z from "zod";
-import { getSessionFromCtx } from "../../../api";
-import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	getApiKeyById,
@@ -14,6 +13,7 @@ import {
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
+import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
 

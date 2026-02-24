@@ -1,10 +1,10 @@
 import type { APIError } from "@better-auth/core/error";
+import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTestInstance } from "../../test-utils/test-instance";
-import { isAPIError } from "../../utils/is-api-error";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
+import { isAPIError } from "./utils";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
@@ -3891,8 +3891,12 @@ describe("api-key", async () => {
 	// =========================================================================
 
 	describe("organization-owned API keys", async () => {
-		const { organization } = await import("../organization");
-		const { organizationClient } = await import("../organization/client");
+		const { organization } = await import(
+			"../../better-auth/src/plugins/organization"
+		);
+		const { organizationClient } = await import(
+			"../../better-auth/src/plugins/organization/client"
+		);
 
 		const { auth, signInWithTestUser, client } = await getTestInstance(
 			{

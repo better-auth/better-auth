@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import type { OrganizationOptions } from "../organization/types";
+import type { OrganizationOptions } from "better-auth/plugins/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 
 /**
@@ -120,7 +120,7 @@ async function checkPermission(
 	orgOptions: OrganizationOptions,
 ): Promise<boolean> {
 	// Import hasPermission dynamically to avoid circular dependencies
-	const { hasPermission } = await import("../organization/has-permission");
+	const { hasPermission } = await import("better-auth/plugins/organization");
 
 	try {
 		const result = await hasPermission(

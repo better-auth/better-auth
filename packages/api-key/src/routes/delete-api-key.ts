@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
-import { sessionMiddleware } from "../../../api";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
 	deleteApiKey as deleteApiKeyFromStorage,

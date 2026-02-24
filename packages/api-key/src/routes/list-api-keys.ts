@@ -1,8 +1,8 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod/v4";
-import { sessionMiddleware } from "../../../api";
 import {
 	batchMigrateLegacyMetadata,
 	listApiKeys as listApiKeysFromStorage,

@@ -2,18 +2,17 @@ import type { BetterAuthPlugin, HookEndpointContext } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
-import { BetterAuthError } from "../..";
-import { APIError } from "../../api";
-import { generateRandomString } from "../../crypto/random";
-import { mergeSchema } from "../../db";
-import { getDate } from "../../utils/date";
-import { getIp } from "../../utils/get-request-ip";
+import { BetterAuthError } from "better-auth";
+import { APIError } from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
+import { mergeSchema } from "better-auth/db";
 import { API_KEY_ERROR_CODES } from "./error-codes";
 import type { PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
+import { getDate, getIp } from "./utils";
 
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
