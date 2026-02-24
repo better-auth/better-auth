@@ -2,7 +2,6 @@
   "name": "@better-auth/organization",
   "version": "1.5.0-beta.13",
   "type": "module",
-  "types": "dist/index.d.mts",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -29,6 +28,10 @@
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
   },
+  "files": [
+    "dist"
+  ],
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": "./dist/index.mjs",
     "./access": "./dist/access.mjs",
