@@ -37,7 +37,7 @@ Extend base functionality with additional addons.
 
     ```ts title="auth.ts"
     import { betterAuth } from "better-auth"
-    import { organization } from "better-auth/plugins"
+    import { organization } from "@better-auth/organization"
 
     export const auth = betterAuth({
         plugins: [
@@ -69,7 +69,7 @@ Extend base functionality with additional addons.
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { organizationClient } from "better-auth/client/plugins"
+    import { organizationClient } from "@better-auth/organization/client"
 
     export const authClient = createAuthClient({
         plugins: [

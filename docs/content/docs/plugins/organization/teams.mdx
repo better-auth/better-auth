@@ -13,7 +13,7 @@ Teams are a way to group members within an organization.
        To add the teams addon, simply add the `teams()` addon into the `organization()` plugin.
 
         ```ts title="auth.ts"
-        import { organization } from "better-auth/plugins";
+        import { organization } from "@better-auth/organization";
         import { teams } from "@better-auth/organization/addons"; // [!code highlight]
 
         export const auth = betterAuth({
