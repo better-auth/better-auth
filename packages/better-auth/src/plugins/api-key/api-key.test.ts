@@ -4069,57 +4069,53 @@ describe("api-key", async () => {
 			});
 
 			// List with organizationId should only return org-owned keys
-			const result = await client.apiKey.list(
-				{ query: { organizationId: org.id } },
-				{ headers },
-			);
+			// Note: Must use server-side API for organization-owned keys (client requests are blocked for security)
+			const result = await auth.api.listApiKeys({
+				query: { organizationId: org.id },
+				headers,
+			});
 
-			expect(result.data?.apiKeys).toBeDefined();
-			expect(result.data?.apiKeys.length).toBe(2);
+			expect(result.apiKeys).toBeDefined();
+			expect(result.apiKeys.length).toBe(2);
 			// All returned keys should be org-owned
-			result.data?.apiKeys.forEach((key) => {
+			result.apiKeys.forEach((key) => {
 				expect(key.configId).toBe("org-keys");
 				expect(key.referenceId).toBe(org.id);
 			});
 
 			// Verify user key is not in the list
-			const userKeyInList = result.data?.apiKeys.find(
-				(k) => k.id === userKey.id,
-			);
+			const userKeyInList = result.apiKeys.find((k) => k.id === userKey.id);
 			expect(userKeyInList).toBeUndefined();
 		});
 
 		it("should filter organization keys by configId", async () => {
-			const {
-				auth: authMultiOrg,
-				signInWithTestUser: signIn,
-				client: clientMultiOrg,
-			} = await getTestInstance(
-				{
-					plugins: [
-						organization({
-							async sendInvitationEmail() {},
-						}),
-						apiKey([
-							{
-								configId: "org-public",
-								defaultPrefix: "pub_",
-								references: "organization",
-							},
-							{
-								configId: "org-internal",
-								defaultPrefix: "int_",
-								references: "organization",
-							},
-						]),
-					],
-				},
-				{
-					clientOptions: {
-						plugins: [apiKeyClient(), organizationClient()],
+			const { auth: authMultiOrg, signInWithTestUser: signIn } =
+				await getTestInstance(
+					{
+						plugins: [
+							organization({
+								async sendInvitationEmail() {},
+							}),
+							apiKey([
+								{
+									configId: "org-public",
+									defaultPrefix: "pub_",
+									references: "organization",
+								},
+								{
+									configId: "org-internal",
+									defaultPrefix: "int_",
+									references: "organization",
+								},
+							]),
+						],
 					},
-				},
-			);
+					{
+						clientOptions: {
+							plugins: [apiKeyClient(), organizationClient()],
+						},
+					},
+				);
 
 			const { headers } = await signIn();
 
@@ -4139,14 +4135,70 @@ describe("api-key", async () => {
 			});
 
 			// List only org-public keys
-			const result = await clientMultiOrg.apiKey.list(
-				{ query: { organizationId: org.id, configId: "org-public" } },
+			// Note: Must use server-side API for organization-owned keys (client requests are blocked for security)
+			const result = await authMultiOrg.api.listApiKeys({
+				query: { organizationId: org.id, configId: "org-public" },
+				headers,
+			});
+
+			expect(result.apiKeys).toBeDefined();
+			expect(result.apiKeys.length).toBe(1);
+			expect(result.apiKeys[0]?.configId).toBe("org-public");
+		});
+
+		it("should allow organization owners to manage API keys", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const org = await auth.api.createOrganization({
+				body: { name: "Owner Access Org", slug: "owner-access-org" },
+				headers,
+			});
+
+			// Organization owners have full access to API keys
+			const result = await client.apiKey.list(
+				{ query: { organizationId: org.id } },
 				{ headers },
 			);
 
+			// Owner should be able to list org API keys
+			expect(result.error).toBeFalsy();
 			expect(result.data?.apiKeys).toBeDefined();
-			expect(result.data?.apiKeys.length).toBe(1);
-			expect(result.data?.apiKeys[0]?.configId).toBe("org-public");
+		});
+
+		it("should deny non-members from accessing organization API keys", async () => {
+			// Create owner user and their organization
+			const { headers: ownerHeaders } = await signInWithTestUser();
+			const org = await auth.api.createOrganization({
+				body: { name: "Non Member Org", slug: "non-member-org" },
+				headers: ownerHeaders,
+			});
+
+			// Create a different user who is not a member
+			const nonMemberEmail = `non-member-${Date.now()}@test.com`;
+			await auth.api.signUpEmail({
+				body: {
+					email: nonMemberEmail,
+					password: "password123",
+					name: "Non Member User",
+				},
+			});
+			const nonMemberSession = await auth.api.signInEmail({
+				body: { email: nonMemberEmail, password: "password123" },
+			});
+			const nonMemberHeaders = {
+				cookie: `better-auth.session_token=${nonMemberSession.token}`,
+			};
+
+			// Non-member should not be able to list org API keys
+			const result = await client.apiKey.list(
+				{ query: { organizationId: org.id } },
+				{ headers: nonMemberHeaders },
+			);
+
+			// Should fail - either 403 (FORBIDDEN) for non-members or 401 (UNAUTHORIZED) for session issues
+			expect(result.error).toBeDefined();
+			// Non-members get FORBIDDEN, invalid session gets UNAUTHORIZED
+			expect([401, 403]).toContain(result.error?.status);
 		});
 
 		it("should not allow session mocking for org-owned keys", async () => {

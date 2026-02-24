@@ -36,6 +36,12 @@ export const API_KEY_ERROR_CODES = defineErrorCodes({
 	NAME_REQUIRED: "API Key name is required.",
 	ORGANIZATION_ID_REQUIRED:
 		"Organization ID is required for organization-owned API keys.",
+	USER_NOT_MEMBER_OF_ORGANIZATION:
+		"You are not a member of the organization that owns this API key.",
+	INSUFFICIENT_API_KEY_PERMISSIONS:
+		"You do not have permission to perform this action on organization API keys.",
 	NO_DEFAULT_API_KEY_CONFIGURATION_FOUND:
 		"No default api-key configuration found.",
+	ORGANIZATION_PLUGIN_REQUIRED:
+		"Organization plugin is required for organization-owned API keys. Please install and configure the organization plugin.",
 });

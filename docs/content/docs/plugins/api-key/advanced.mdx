@@ -5,7 +5,7 @@ description: Advanced API Key features including sessions, multiple configuratio
 
 ## Sessions from API keys
 
-Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `sessionForAPIKeys` option.
+Any time an endpoint in Better Auth is called that has a valid API key in the headers, you can automatically create a mock session to represent the user by enabling `enableSessionForAPIKeys` option.
 
 <Callout type="warn">
  This is generally not recommended, as it can lead to security issues if not used carefully. A leaked api key can be used to impersonate a user.
@@ -63,7 +63,7 @@ export const auth = betterAuth({
 });
 ```
 
-Or optionally, you can pass an `apiKeyGetter` function to the plugin options, which will be called with the `GenericEndpointContext`, and from there, you should return the API key, or `null` if the request is invalid.
+Or optionally, you can pass a `customAPIKeyGetter` function to the plugin options, which will be called with the `HookEndpointContext`, and from there, you should return the API key, or `null` if the request is invalid.
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
@@ -72,7 +72,7 @@ import { apiKey } from "better-auth/plugins"
 export const auth = betterAuth({
   plugins: [
     apiKey({
-      apiKeyGetter: (ctx) => {
+      customAPIKeyGetter: (ctx) => {
         const has = ctx.request.headers.has("x-api-key");
         if (!has) return null;
         return ctx.request.headers.get("x-api-key");
@@ -287,6 +287,113 @@ const orgKey = await auth.api.createApiKey({
 <Callout type="warn">
   **Session Mocking Limitation**: The `enableSessionForAPIKeys` feature only works with user-owned API keys. Organization-owned keys cannot mock user sessions, as there's no single user associated with the key.
 </Callout>
+
+### Access Control & Permissions
+
+Organization-owned API keys use the organization plugin's role-based access control system. To manage organization API keys, users must:
+
+1. Be a member of the organization
+2. Have the appropriate `apiKey` permission for the action they're performing
+
+#### API Key Permissions
+
+The API key plugin uses the following permissions:
+
+| Action | Permission | Description |
+|--------|------------|-------------|
+| Create | `apiKey: ["create"]` | Create new organization API keys |
+| Read/List | `apiKey: ["read"]` | View and list organization API keys |
+| Update | `apiKey: ["update"]` | Modify organization API keys |
+| Delete | `apiKey: ["delete"]` | Delete organization API keys |
+
+#### Configuring Organization Roles
+
+By default, **organization owners have full access** to all API key operations. For other roles (like `admin` or `member`), you need to explicitly configure `apiKey` permissions in your organization plugin setup.
+
+Here's how to configure roles with API key permissions:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { organization } from "better-auth/plugins"
+import { apiKey } from "better-auth/plugins"
+import { createAccessControl } from "better-auth/plugins/access"
+
+// Define your access control statements including apiKey
+const statements = {
+  // ... other statements
+  // Add apiKey permissions
+  apiKey: ["create", "read", "update", "delete"], // [!code highlight]
+} as const;
+
+const ac = createAccessControl(statements);
+
+// Define roles with specific apiKey permissions
+const adminRole = ac.newRole({
+  // ... other statements
+  // Admins can manage API keys
+  apiKey: ["create", "read", "update", "delete"], // [!code highlight]
+});
+
+const memberRole = ac.newRole({
+  // ... other statements
+  // Members can only view API keys
+  apiKey: ["read"], // [!code highlight]
+});
+
+export const auth = betterAuth({
+  plugins: [
+    organization({
+      ac,
+      roles: {
+        admin: adminRole,
+        member: memberRole,
+      },
+      async sendInvitationEmail() {},
+    }),
+    apiKey([
+      {
+        configId: "org-keys",
+        defaultPrefix: "org_",
+        references: "organization",
+      },
+    ]),
+  ],
+});
+```
+
+<Callout type="info">
+  **Owner Access**: Organization owners (the `creatorRole`, default `"owner"`) automatically have full access to all API key operations, regardless of explicit permission configuration.
+</Callout>
+
+#### Permission Examples
+
+```ts
+// Admin can create, read, update, delete org API keys
+const key = await auth.api.createApiKey({
+  body: { configId: "org-keys", organizationId: "org_123" },
+  headers: adminHeaders,
+});
+
+// Member with only "read" permission can list keys
+const keys = await client.apiKey.list(
+  { query: { organizationId: "org_123" } },
+  { headers: memberHeaders },
+);
+
+// Member trying to create a key will get FORBIDDEN error
+const result = await client.apiKey.create(
+  { configId: "org-keys", organizationId: "org_123" },
+  { headers: memberHeaders },
+);
+// Error: INSUFFICIENT_API_KEY_PERMISSIONS
+```
+
+#### Error Codes
+
+When access is denied, the following error codes are returned:
+
+- `USER_NOT_MEMBER_OF_ORGANIZATION`: The user is not a member of the organization
+- `INSUFFICIENT_API_KEY_PERMISSIONS`: The user doesn't have the required `apiKey` permission for the action
 
 ### API Key Object Structure
 

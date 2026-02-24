@@ -68,6 +68,33 @@ export function resolveConfiguration(
 	);
 }
 
+/**
+ * Checks if a configId value represents the default configuration.
+ * Treats null, undefined, and "default" as equivalent (all are default).
+ * This handles backward compatibility for keys created before the configId field existed.
+ */
+export function isDefaultConfigId(
+	configId: string | null | undefined,
+): boolean {
+	return !configId || configId === "default";
+}
+
+/**
+ * Checks if two configId values match, treating null/undefined as "default".
+ * This handles backward compatibility for keys created before the configId field existed.
+ */
+export function configIdMatches(
+	keyConfigId: string | null | undefined,
+	expectedConfigId: string | null | undefined,
+): boolean {
+	// Both are default (null, undefined, or "default")
+	if (isDefaultConfigId(keyConfigId) && isDefaultConfigId(expectedConfigId)) {
+		return true;
+	}
+	// Direct match
+	return keyConfigId === expectedConfigId;
+}
+
 let lastChecked: Date | null = null;
 
 export async function deleteAllExpiredApiKeys(

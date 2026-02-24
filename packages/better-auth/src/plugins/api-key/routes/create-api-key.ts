@@ -9,6 +9,7 @@ import { getDate } from "../../../utils/date";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
@@ -257,7 +258,7 @@ export function createApiKey({
 											"updatedAt",
 											"key",
 											"enabled",
-											"userId",
+											"referenceId",
 											"rateLimitEnabled",
 											"requestCount",
 										],
@@ -323,37 +324,39 @@ export function createApiKey({
 				// Organization-owned API keys
 				const orgId = ctx.body.organizationId;
 				if (!orgId) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ERROR_CODES.ORGANIZATION_ID_REQUIRED,
-					);
+					const msg = ERROR_CODES.ORGANIZATION_ID_REQUIRED;
+					throw APIError.from("BAD_REQUEST", msg);
 				}
+
+				// Get user ID from session or body
+				const userId = session?.user.id || ctx.body.userId;
+				if (!userId) {
+					throw APIError.from("UNAUTHORIZED", ERROR_CODES.UNAUTHORIZED_SESSION);
+				}
+
+				// Verify membership and permission
+				await checkOrgApiKeyPermission(ctx, userId, orgId, "create");
+
 				referenceId = orgId;
 			} else {
 				// User-owned API keys (default)
 				if (isClientRequest) {
 					if (!session?.user.id) {
-						throw APIError.from(
-							"UNAUTHORIZED",
-							ERROR_CODES.UNAUTHORIZED_SESSION,
-						);
+						const msg = ERROR_CODES.UNAUTHORIZED_SESSION;
+						throw APIError.from("UNAUTHORIZED", msg);
 					}
 					referenceId = session.user.id;
 				} else {
 					const ctxUserId = ctx.body.userId;
 					const sessionUserId = session?.user.id;
 					if (!sessionUserId && !ctxUserId) {
-						throw APIError.from(
-							"UNAUTHORIZED",
-							ERROR_CODES.UNAUTHORIZED_SESSION,
-						);
+						const msg = ERROR_CODES.UNAUTHORIZED_SESSION;
+						throw APIError.from("UNAUTHORIZED", msg);
 					}
 					// ensures no mismatching user IDs between session headers and request body
 					if (session && ctxUserId && sessionUserId !== ctxUserId) {
-						throw APIError.from(
-							"UNAUTHORIZED",
-							ERROR_CODES.UNAUTHORIZED_SESSION,
-						);
+						const msg = ERROR_CODES.UNAUTHORIZED_SESSION;
+						throw APIError.from("UNAUTHORIZED", msg);
 					}
 					referenceId = (sessionUserId || ctxUserId) as string;
 				}
@@ -371,39 +374,29 @@ export function createApiKey({
 
 			// make sure that if they pass a refill amount, they also pass a refill interval
 			if (refillAmount && !refillInterval) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED,
-				);
+				const msg = ERROR_CODES.REFILL_AMOUNT_AND_INTERVAL_REQUIRED;
+				throw APIError.from("BAD_REQUEST", msg);
 			}
 			// make sure that if they pass a refill interval, they also pass a refill amount
 			if (refillInterval && !refillAmount) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED,
-				);
+				const msg = ERROR_CODES.REFILL_INTERVAL_AND_AMOUNT_REQUIRED;
+				throw APIError.from("BAD_REQUEST", msg);
 			}
 
 			if (expiresIn) {
 				if (opts.keyExpiration.disableCustomExpiresTime === true) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ERROR_CODES.KEY_DISABLED_EXPIRATION,
-					);
+					const msg = ERROR_CODES.KEY_DISABLED_EXPIRATION;
+					throw APIError.from("BAD_REQUEST", msg);
 				}
 
 				const expiresIn_in_days = expiresIn / (60 * 60 * 24);
 
 				if (opts.keyExpiration.minExpiresIn > expiresIn_in_days) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL,
-					);
+					const msg = ERROR_CODES.EXPIRES_IN_IS_TOO_SMALL;
+					throw APIError.from("BAD_REQUEST", msg);
 				} else if (opts.keyExpiration.maxExpiresIn < expiresIn_in_days) {
-					throw APIError.from(
-						"BAD_REQUEST",
-						ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE,
-					);
+					const msg = ERROR_CODES.EXPIRES_IN_IS_TOO_LARGE;
+					throw APIError.from("BAD_REQUEST", msg);
 				}
 			}
 			if (prefix) {

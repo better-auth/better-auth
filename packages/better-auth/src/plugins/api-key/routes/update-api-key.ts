@@ -11,10 +11,11 @@ import {
 	migrateDoubleStringifiedMetadata,
 	setApiKey,
 } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+import { configIdMatches, resolveConfiguration } from ".";
 
 const updateApiKeyBodySchema = z.object({
 	configId: z
@@ -319,7 +320,7 @@ export function updateApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			if (apiKey.configId !== lookupOpts.configId) {
+			if (!configIdMatches(apiKey.configId, lookupOpts.configId)) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
@@ -332,7 +333,15 @@ export function updateApiKey({
 
 			// Verify ownership based on config's references type
 			const referencesType = opts.references ?? "user";
-			if (referencesType === "user" && apiKey.referenceId !== user.id) {
+			if (referencesType === "organization") {
+				// For organization-owned keys, verify membership and permission
+				await checkOrgApiKeyPermission(
+					ctx,
+					user.id,
+					apiKey.referenceId,
+					"update",
+				);
+			} else if (apiKey.referenceId !== user.id) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 

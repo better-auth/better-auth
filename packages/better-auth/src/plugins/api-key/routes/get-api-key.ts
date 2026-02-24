@@ -6,10 +6,11 @@ import * as z from "zod";
 import { sessionMiddleware } from "../../../api";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+import { configIdMatches, resolveConfiguration } from ".";
 
 const getApiKeyQuerySchema = z.object({
 	configId: z
@@ -198,7 +199,7 @@ export function getApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			if (apiKey.configId !== lookupOpts.configId) {
+			if (!configIdMatches(apiKey.configId, lookupOpts.configId)) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
@@ -212,13 +213,16 @@ export function getApiKey({
 			// Verify ownership based on config's references type
 			const referencesType = opts.references ?? "user";
 			if (referencesType === "organization") {
-				// For org keys, client can't directly access - would need org membership check
-				// For now, we don't verify org membership in the plugin itself
-			} else {
+				// For organization-owned keys, verify membership and permission
+				await checkOrgApiKeyPermission(
+					ctx,
+					session.user.id,
+					apiKey.referenceId,
+					"read",
+				);
+			} else if (apiKey.referenceId !== session.user.id) {
 				// User-owned keys - verify user owns the key
-				if (apiKey.referenceId !== session.user.id) {
-					throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
-				}
+				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
 			deleteAllExpiredApiKeys(ctx.context);

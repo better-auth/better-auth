@@ -8,10 +8,11 @@ import {
 	deleteApiKey as deleteApiKeyFromStorage,
 	getApiKeyById,
 } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
 import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
-import { resolveConfiguration } from ".";
+import { configIdMatches, resolveConfiguration } from ".";
 
 const deleteApiKeyBodySchema = z.object({
 	configId: z
@@ -107,7 +108,7 @@ export function deleteApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			if (apiKey.configId !== lookupOpts.configId) {
+			if (!configIdMatches(apiKey.configId, lookupOpts.configId)) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
@@ -120,7 +121,15 @@ export function deleteApiKey({
 
 			// Verify ownership - user can only delete their own user-owned keys
 			const referencesType = opts.references ?? "user";
-			if (referencesType === "user" && apiKey.referenceId !== session.user.id) {
+			if (referencesType === "organization") {
+				// For organization-owned keys, verify membership and permission
+				await checkOrgApiKeyPermission(
+					ctx,
+					session.user.id,
+					apiKey.referenceId,
+					"delete",
+				);
+			} else if (apiKey.referenceId !== session.user.id) {
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
