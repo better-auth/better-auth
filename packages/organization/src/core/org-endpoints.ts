@@ -1,7 +1,6 @@
 import type { AuthContext, Prettify } from "@better-auth/core";
 import { getSessionFromCtx } from "better-auth/api";
 import type { Endpoint, UnionToIntersection } from "better-call";
-import { shimContext } from "../../../better-auth/src/utils/shim";
 import type { AcceptInvitation } from "../routes/invitations/accept-invitation";
 import { acceptInvitation } from "../routes/invitations/accept-invitation";
 import type { AcceptInvitationCallback } from "../routes/invitations/accept-invitation-callback";
@@ -51,6 +50,29 @@ import { setActiveOrganization } from "../routes/organization/set-active-organiz
 import type { UpdateOrganization } from "../routes/organization/update-organization";
 import { updateOrganization } from "../routes/organization/update-organization";
 import type { Addon, OrganizationOptions } from "../types";
+
+const shimContext = <T extends Record<string, any>>(
+	originalObject: T,
+	newContext: Record<string, any>,
+) => {
+	const shimmedObj: Record<string, any> = {};
+	for (const [key, value] of Object.entries(originalObject)) {
+		shimmedObj[key] = (ctx: Record<string, any>) => {
+			return value({
+				...ctx,
+				context: {
+					...newContext,
+					...ctx.context,
+				},
+			});
+		};
+		shimmedObj[key].path = value.path;
+		shimmedObj[key].method = value.method;
+		shimmedObj[key].options = value.options;
+		shimmedObj[key].headers = value.headers;
+	}
+	return shimmedObj as T;
+};
 
 type BaseEndpoints<O extends OrganizationOptions> = {
 	createOrganization: CreateOrganization<O>;
