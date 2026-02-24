@@ -1061,9 +1061,7 @@ async function handleRefreshTokenGrant(
 	}
 
 	const authTime =
-		refreshToken.authTime != null
-			? new Date(refreshToken.authTime)
-			: undefined;
+		refreshToken.authTime != null ? new Date(refreshToken.authTime) : undefined;
 
 	// Generate new tokens
 	return createUserTokens(
