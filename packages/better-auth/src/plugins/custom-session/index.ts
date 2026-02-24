@@ -132,7 +132,11 @@ export const customSession = <
 					for (const cookieStr of session.headers.getSetCookie()) {
 						const parsed = parseSetCookieHeader(cookieStr);
 						parsed.forEach((attrs, name) => {
-							ctx.setCookie(name, attrs.value, {
+							let decodedValue = attrs.value;
+							try {
+								decodedValue = decodeURIComponent(attrs.value);
+							} catch {}
+							ctx.setCookie(name, decodedValue, {
 								maxAge: attrs["max-age"],
 								expires: attrs.expires,
 								domain: attrs.domain,
