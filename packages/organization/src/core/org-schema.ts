@@ -325,12 +325,22 @@ export const getSchema = <O extends OrganizationOptions>(
 		},
 	} satisfies BetterAuthPluginDBSchema["session"];
 
+	const {
+		organization: _,
+		member: __,
+		invitation: ___,
+		session: ____,
+		...rest
+	} = addonSchemas || {};
+
+	// Note: Order of tables are important for migrations to be generated in the correct order.
+	// This matters because relations need to reference tables that already exist.
 	const schema = {
-		...(addonSchemas || {}),
 		organization,
 		member,
 		invitation,
 		session,
+		...rest,
 	};
 	return schema as InferOrganizationSchema<O>;
 };

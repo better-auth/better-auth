@@ -2529,9 +2529,7 @@ export const getNormalTestSuiteTests = (
 		"findOne - multiple joins should return result even when some joined tables have no matching rows":
 			async () => {
 				await modifyBetterAuthOptions(
-					{
-						plugins: [organization({ use: [teams()] })],
-					},
+					{ plugins: [organization({ use: [teams()] })] },
 					true,
 				);
 
