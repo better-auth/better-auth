@@ -1002,6 +1002,9 @@ importers:
         specifier: ^0.28.10
         version: 0.28.10
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../packages/organization
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
