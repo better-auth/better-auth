@@ -1320,9 +1320,6 @@ importers:
       '@better-auth/utils':
         specifier: 'catalog:'
         version: 0.3.1
-      '@better-fetch/fetch':
-        specifier: 'catalog:'
-        version: 1.1.21
       zod:
         specifier: ^4.3.6
         version: 4.3.6
