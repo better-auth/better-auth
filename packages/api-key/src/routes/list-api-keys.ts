@@ -1,18 +1,51 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { safeJSONParse } from "@better-auth/core/utils/json";
+import { sessionMiddleware } from "better-auth/api";
 import * as z from "zod/v4";
-import { sessionMiddleware } from "../../../api";
 import {
 	batchMigrateLegacyMetadata,
 	listApiKeys as listApiKeysFromStorage,
 	parseDoubleStringifiedMetadata,
 } from "../adapter";
+import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
+import type { ApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
+import { configIdMatches, isDefaultConfigId, resolveConfiguration } from ".";
+
+/**
+ * Generate a unique identifier for a configuration's storage backend.
+ * Used to group configurations that share the same storage and avoid duplicate queries.
+ */
+function getStorageIdentifier(config: PredefinedApiKeyOptions): string {
+	if (config.storage === "database") {
+		return "database";
+	}
+	if (config.customStorage) {
+		return `custom:${config.configId ?? "default"}`;
+	}
+	return config.fallbackToDatabase
+		? "secondary-storage-with-fallback"
+		: "secondary-storage";
+}
 
 const listApiKeysQuerySchema = z
 	.object({
+		configId: z
+			.string()
+			.meta({
+				description:
+					"Filter by configuration ID. If not provided, returns keys from all configurations.",
+			})
+			.optional(),
+		organizationId: z
+			.string()
+			.meta({
+				description:
+					"Organization ID to list keys for. If provided, returns organization-owned keys. If not provided, returns user-owned keys.",
+			})
+			.optional(),
 		limit: z.coerce
 			.number()
 			.int()
@@ -45,11 +78,11 @@ const listApiKeysQuerySchema = z
 	.optional();
 
 export function listApiKeys({
-	opts,
+	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
 }: {
-	opts: PredefinedApiKeyOptions;
+	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
@@ -64,7 +97,8 @@ export function listApiKeys({
 			query: listApiKeysQuerySchema,
 			metadata: {
 				openapi: {
-					description: "List all API keys for the authenticated user",
+					description:
+						"List all API keys for the authenticated user or for a specific organization",
 					responses: {
 						"200": {
 							description: "API keys retrieved successfully",
@@ -224,27 +258,118 @@ export function listApiKeys({
 		},
 		async (ctx) => {
 			const session = ctx.context.session;
+			const configId = ctx.query?.configId;
+			const organizationId = ctx.query?.organizationId;
 			const limit =
 				ctx.query?.limit != null ? Number(ctx.query.limit) : undefined;
 			const offset =
 				ctx.query?.offset != null ? Number(ctx.query.offset) : undefined;
 
-			const { apiKeys, total } = await listApiKeysFromStorage(
-				ctx,
-				session.user.id,
-				opts,
-				{
-					limit,
-					offset,
-					sortBy: ctx.query?.sortBy,
-					sortDirection: ctx.query?.sortDirection,
-				},
-			);
+			// For organization-owned keys, verify membership and permission
+			if (organizationId) {
+				await checkOrgApiKeyPermission(
+					ctx,
+					session.user.id,
+					organizationId,
+					"read",
+				);
+			}
+
+			const referenceId = organizationId ?? session.user.id;
+			const expectedReferencesType = organizationId ? "organization" : "user";
+
+			let allApiKeys: ApiKey[] = [];
+
+			if (configId) {
+				const resolvedConfig = resolveConfiguration(
+					ctx.context,
+					configurations,
+					configId,
+				);
+
+				const { apiKeys } = await listApiKeysFromStorage(
+					ctx,
+					referenceId,
+					resolvedConfig,
+					{
+						limit: undefined,
+						offset: undefined,
+						sortBy: ctx.query?.sortBy,
+						sortDirection: ctx.query?.sortDirection,
+					},
+				);
+				allApiKeys = apiKeys;
+			} else {
+				// When no configId specified, query each unique storage backend
+				// Group configurations by their effective storage to avoid duplicate queries
+				const storageGroups = new Map<string, PredefinedApiKeyOptions>();
+				for (const config of configurations) {
+					const storageKey = getStorageIdentifier(config);
+					if (!storageGroups.has(storageKey)) {
+						storageGroups.set(storageKey, config);
+					}
+				}
+
+				// Query each unique storage backend and merge results
+				const seenIds = new Set<string>();
+				for (const opts of storageGroups.values()) {
+					const { apiKeys } = await listApiKeysFromStorage(
+						ctx,
+						referenceId,
+						opts,
+						{
+							limit: undefined,
+							offset: undefined,
+							sortBy: ctx.query?.sortBy,
+							sortDirection: ctx.query?.sortDirection,
+						},
+					);
+					for (const key of apiKeys) {
+						if (!seenIds.has(key.id)) {
+							seenIds.add(key.id);
+							allApiKeys.push(key);
+						}
+					}
+				}
+			}
+
+			// Filter by ownership type (user or organization) based on config's references setting
+			let filteredApiKeys = allApiKeys.filter((key) => {
+				const keyConfig = configurations.find((c) => {
+					// Keys with configId null, undefined, or "default" all match the default config
+					if (isDefaultConfigId(key.configId)) {
+						return isDefaultConfigId(c.configId);
+					}
+					return c.configId === key.configId;
+				});
+				const referencesType = keyConfig?.references ?? "user";
+				return (
+					referencesType === expectedReferencesType &&
+					key.referenceId === referenceId
+				);
+			});
+
+			if (configId) {
+				filteredApiKeys = filteredApiKeys.filter((key) =>
+					configIdMatches(key.configId, configId),
+				);
+			}
+
+			const total = filteredApiKeys.length;
+
+			// Apply pagination after filtering
+			let paginatedApiKeys = filteredApiKeys;
+			if (offset !== undefined) {
+				paginatedApiKeys = paginatedApiKeys.slice(offset);
+			}
+			if (limit !== undefined) {
+				paginatedApiKeys = paginatedApiKeys.slice(0, limit);
+			}
 
 			deleteAllExpiredApiKeys(ctx.context);
 
 			// Build response with parsed metadata (synchronous, no DB calls)
-			const returningApiKeys = apiKeys.map((apiKey) => {
+			const returningApiKeys = paginatedApiKeys.map((apiKey) => {
 				const { key: _key, ...rest } = apiKey;
 				return {
 					...rest,
@@ -257,10 +382,15 @@ export function listApiKeys({
 				};
 			});
 
-			// Batch migrate legacy metadata (parallel DB updates)
-			await ctx.context.runInBackgroundOrAwait(
-				batchMigrateLegacyMetadata(ctx, apiKeys, opts),
+			// Batch migrate legacy metadata - use first config with database storage
+			const dbConfig = configurations.find(
+				(c) => c.storage === "database" || c.fallbackToDatabase,
 			);
+			if (dbConfig) {
+				await ctx.context.runInBackgroundOrAwait(
+					batchMigrateLegacyMetadata(ctx, paginatedApiKeys, dbConfig),
+				);
+			}
 
 			return ctx.json({
 				apiKeys: returningApiKeys,

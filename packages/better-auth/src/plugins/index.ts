@@ -3,7 +3,6 @@ export * from "../utils/hide-metadata";
 export * from "./access";
 export * from "./admin";
 export * from "./anonymous";
-export * from "./api-key";
 export * from "./bearer";
 export * from "./captcha";
 export * from "./custom-session";
