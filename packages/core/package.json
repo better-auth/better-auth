@@ -3,10 +3,30 @@
   "version": "1.5.0-beta.18",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/core"
+  },
+  "keywords": [
+    "auth",
+    "core",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
   "files": [
     "dist",
@@ -118,14 +138,9 @@
       ]
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
-    "typecheck": "tsc --project tsconfig.json",
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  "dependencies": {
+    "@standard-schema/spec": "^1.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/utils": "catalog:",
@@ -135,10 +150,6 @@
     "kysely": "^0.28.10",
     "nanostores": "^1.1.0",
     "tsdown": "catalog:"
-  },
-  "dependencies": {
-    "@standard-schema/spec": "^1.0.0",
-    "zod": "^4.3.6"
   },
   "peerDependencies": {
     "@better-auth/utils": "catalog:",
