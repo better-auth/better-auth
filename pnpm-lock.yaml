@@ -1383,7 +1383,7 @@ importers:
         version: 0.31.8
       drizzle-orm:
         specifier: '>=0.41.0'
-        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0)
+        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0)
       jose:
         specifier: ^6.1.0
         version: 6.1.3
@@ -1813,6 +1813,28 @@ importers:
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.20.3(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.18.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+
+  packages/organization:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      better-call:
+        specifier: 'catalog:'
+        version: 1.3.2(zod@4.3.6)
+      defu:
+        specifier: ^6.1.4
+        version: 6.1.4
       tsdown:
         specifier: 'catalog:'
         version: 0.20.3(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.18.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -7988,9 +8010,6 @@ packages:
   '@types/node@22.19.11':
     resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
-  '@types/node@25.2.3':
-    resolution: {integrity: sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==}
-
   '@types/node@25.3.0':
     resolution: {integrity: sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A==}
 
@@ -8832,9 +8851,6 @@ packages:
     resolution: {integrity: sha512-X/bwWs5Gbb/D7rN4aHLB7zdjiA6nGdjckM1sTHhI9oovIbEw2L5pw5S4xzk8ZTeOZ8EnwU/Ze4SoZ6/Vr3pM2Q==}
     engines: {node: '>=18'}
     hasBin: true
-
-  bun-types@1.3.8:
-    resolution: {integrity: sha512-fL99nxdOWvV4LqjmC+8Q9kW3M4QTtTR1eePs94v5ctGqU8OeceWrSUaRw3JYb7tU3FkMIAjkueehrHPPPGKi5Q==}
 
   bun-types@1.3.9:
     resolution: {integrity: sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg==}
@@ -15767,9 +15783,6 @@ packages:
 
   undici-types@6.21.0:
     resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
-
-  undici-types@7.16.0:
-    resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
@@ -23584,11 +23597,6 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@25.2.3':
-    dependencies:
-      undici-types: 7.16.0
-    optional: true
-
   '@types/node@25.3.0':
     dependencies:
       undici-types: 7.18.2
@@ -24720,11 +24728,6 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  bun-types@1.3.8:
-    dependencies:
-      '@types/node': 25.2.3
-    optional: true
-
   bun-types@1.3.9:
     dependencies:
       '@types/node': 25.3.0
@@ -25797,7 +25800,7 @@ snapshots:
       postgres: 3.4.8
       prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
-  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0):
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260127.0
       '@electric-sql/pglite': 0.3.14
@@ -25807,7 +25810,7 @@ snapshots:
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.16.0
       better-sqlite3: 12.6.2
-      bun-types: 1.3.8
+      bun-types: 1.3.9
       gel: 2.2.0
       kysely: 0.28.10
       mysql2: 3.16.2
@@ -33786,9 +33789,6 @@ snapshots:
   undici-types@5.28.4: {}
 
   undici-types@6.21.0: {}
-
-  undici-types@7.16.0:
-    optional: true
 
   undici-types@7.18.2: {}
 
