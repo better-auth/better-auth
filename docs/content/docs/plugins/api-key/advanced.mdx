@@ -22,7 +22,7 @@ Any time an endpoint in Better Auth is called that has a valid API key in the he
 
 ```ts
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -52,7 +52,7 @@ The default header key is `x-api-key`, but this can be changed by setting the `a
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -97,7 +97,7 @@ Pass an array of configuration objects to the `apiKey` plugin:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -220,7 +220,7 @@ You can also pass global options (like `schema`) as a second argument:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -249,7 +249,7 @@ Set `references: "organization"` in your configuration:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -315,7 +315,7 @@ Here's how to configure roles with API key permissions:
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
 import { organization } from "better-auth/plugins"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 import { createAccessControl } from "better-auth/plugins/access"
 
 // Define your access control statements including apiKey
@@ -433,7 +433,7 @@ Store API keys only in the database adapter. This is the default mode and requir
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -452,7 +452,7 @@ No fallback to database. Best for high-performance scenarios where all keys are 
 ```ts title="auth.ts"
 import { createClient } from "redis";
 import { betterAuth } from "better-auth";
-import { apiKey } from "better-auth/plugins";
+import { apiKey } from "@better-auth/api-key";
 
 const redis = createClient();
 await redis.connect();
@@ -519,7 +519,7 @@ You can provide custom storage methods specifically for API keys, overriding the
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -565,7 +565,7 @@ An example default value:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -656,7 +656,7 @@ Here's an example:
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -685,7 +685,7 @@ If you're **not** using the `length` property provided by `customKeyGenerator`, 
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [
@@ -713,7 +713,7 @@ To store metadata, make sure you haven't disabled the metadata feature in the pl
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { apiKey } from "better-auth/plugins"
+import { apiKey } from "@better-auth/api-key"
 
 export const auth = betterAuth({
   plugins: [

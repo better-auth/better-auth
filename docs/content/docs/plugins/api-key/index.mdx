@@ -21,11 +21,18 @@ The API Key plugin allows you to create and manage API keys for your application
 
 <Steps>
     <Step>
+        ### Install the plugin
+
+        ```package-install
+        @better-auth/api-key
+        ```
+    </Step>
+    <Step>
         ### Add Plugin to the server
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { apiKey } from "better-auth/plugins" // [!code highlight]
+        import { apiKey } from "@better-auth/api-key" // [!code highlight]
 
         export const auth = betterAuth({
             plugins: [
@@ -58,7 +65,7 @@ The API Key plugin allows you to create and manage API keys for your application
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { apiKeyClient } from "better-auth/client/plugins"  // [!code highlight]
+        import { apiKeyClient } from "@better-auth/api-key/client"  // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [
