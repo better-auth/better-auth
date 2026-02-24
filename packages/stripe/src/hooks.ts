@@ -300,6 +300,12 @@ export async function onSubscriptionUpdated(
 				model: "subscription",
 				where: [{ field: "stripeCustomerId", value: customerId }],
 			});
+			if (subs.length === 0) {
+				ctx.context.logger.warn(
+					`Stripe webhook warning: No subscription found for customerId: ${customerId}, ignoring event`,
+				);
+				return;
+			}
 			if (subs.length > 1) {
 				const activeSub = subs.find((sub: Subscription) =>
 					isActiveOrTrialing(sub),
