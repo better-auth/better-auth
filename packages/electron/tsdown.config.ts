@@ -18,7 +18,9 @@ export default defineConfig([
 		format: ["esm"],
 		entry: ["./src/preload.ts"],
 		external: (id) =>
-			!id.startsWith(".") && id !== "better-call" && id !== "@better-auth/core",
+			!id.startsWith(".") &&
+			!id.startsWith("better-call") &&
+			!id.startsWith("@better-auth/core"),
 		noExternal: [/^@better-auth\/core/, /^better-call/],
 		inlineOnly: ["better-call", "@standard-schema/spec"],
 		treeshake: true,
