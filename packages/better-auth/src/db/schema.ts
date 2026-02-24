@@ -189,9 +189,10 @@ export function parseAccountInput(
 export function parseSessionInput(
 	options: BetterAuthOptions,
 	session: Partial<Session>,
+	action?: "create" | "update",
 ) {
 	const schema = getFields(options, "session", "input");
-	return parseInputData(session, { fields: schema });
+	return parseInputData(session, { fields: schema, action });
 }
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(

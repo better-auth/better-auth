@@ -1,35 +1,25 @@
 {
-  "name": "@better-auth/stripe",
-  "author": "Bereket Engida",
+  "name": "@better-auth/api-key",
   "version": "1.5.0-beta.18",
   "type": "module",
+  "description": "API Key plugin for Better Auth.",
   "main": "dist/index.mjs",
+  "module": "dist/index.mjs",
   "types": "dist/index.d.mts",
-  "license": "MIT",
-  "homepage": "https://www.better-auth.com/docs/plugins/stripe",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
-    "directory": "packages/stripe"
+    "directory": "packages/api-key"
   },
-  "keywords": [
-    "stripe",
-    "auth",
-    "stripe"
-  ],
-  "module": "dist/index.mjs",
-  "description": "Stripe plugin for Better Auth",
+  "homepage": "https://www.better-auth.com/docs/plugins/api-key",
   "scripts": {
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "lint:package": "publint run --strict",
     "lint:types": "attw --profile esm-only --pack .",
+    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
     "typecheck": "tsc --project tsconfig.json"
-  },
-  "publishConfig": {
-    "access": "public"
   },
   "exports": {
     ".": {
@@ -41,6 +31,11 @@
       "dev-source": "./src/client.ts",
       "types": "./dist/client.d.mts",
       "default": "./dist/client.mjs"
+    },
+    "./types": {
+      "dev-source": "./src/types.ts",
+      "types": "./dist/types.d.mts",
+      "default": "./dist/types.mjs"
     }
   },
   "typesVersions": {
@@ -50,24 +45,36 @@
       ],
       "client": [
         "./dist/client.d.mts"
+      ],
+      "types": [
+        "./dist/types.d.mts"
       ]
     }
   },
-  "dependencies": {
-    "defu": "^6.1.4",
-    "zod": "^4.3.6"
+  "keywords": [
+    "auth",
+    "api-key",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "better-auth": "workspace:*",
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^18 || ^19 || ^20"
+    "@better-auth/utils": "catalog:"
   },
-  "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "stripe": "^20.2.0",
-    "tsdown": "catalog:"
-  }
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "files": [
+    "dist"
+  ]
 }
