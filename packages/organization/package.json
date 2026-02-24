@@ -46,6 +46,26 @@
       "dev-source": "./src/access/index.ts",
       "types": "./dist/access.d.mts",
       "default": "./dist/access.mjs"
+    },
+    "./teams/client": {
+      "dev-source": "./src/addons/teams/client.ts",
+      "types": "./dist/teams/client.d.mts",
+      "default": "./dist/teams/client.mjs"
+    },
+    "./teams": {
+      "dev-source": "./src/addons/teams/index.ts",
+      "types": "./dist/teams.d.mts",
+      "default": "./dist/teams.mjs"
+    },
+    "./dynamic-access-control/client": {
+      "dev-source": "./src/addons/dynamic-access-control/client.ts",
+      "types": "./dist/dynamic-access-control/client.d.mts",
+      "default": "./dist/dynamic-access-control/client.mjs"
+    },
+    "./dynamic-access-control": {
+      "dev-source": "./src/addons/dynamic-access-control/index.ts",
+      "types": "./dist/dynamic-access-control.d.mts",
+      "default": "./dist/dynamic-access-control.mjs"
     }
   },
   "typesVersions": {
@@ -58,6 +78,18 @@
       ],
       "access": [
         "./dist/access.d.mts"
+      ],
+      "teams/client": [
+        "./dist/teams/client.d.mts"
+      ],
+      "teams": [
+        "./dist/teams.d.mts"
+      ],
+      "dynamic-access-control/client": [
+        "./dist/dynamic-access-control/client.d.mts"
+      ],
+      "dynamic-access-control": [
+        "./dist/dynamic-access-control.d.mts"
       ]
     }
   },

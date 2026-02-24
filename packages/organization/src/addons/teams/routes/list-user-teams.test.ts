@@ -1,7 +1,31 @@
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect } from "vitest";
+import { organizationClient } from "../../../client";
 import { organization } from "../../../organization";
-import { defineInstance, getOrganizationData } from "../../../test/utils";
+import { getOrganizationData } from "../../../test/utils";
 import { teams } from "..";
+import { teamsClient } from "../client";
+
+export const defineInstance = async <Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) => {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient({ use: [teamsClient()] })],
+			},
+		},
+	);
+
+	return instance;
+};
 
 describe("listUserTeams", async (it) => {
 	// Use defaultTeam enabled so users are automatically added to teams when orgs are created

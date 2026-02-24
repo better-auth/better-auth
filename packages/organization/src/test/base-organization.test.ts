@@ -1,8 +1,36 @@
 import type { RawError } from "@better-auth/core/utils/error-codes";
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, expectTypeOf } from "vitest";
 import { teams } from "../addons";
+import { organizationClient } from "../client";
 import { organization } from "../organization";
-import { defineInstance } from "./utils";
+
+/**
+ * Helper to define `getTestInstance` as a shorter alias, specific to the organization plugin.
+ * @internal
+ */
+async function defineInstance<Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient()],
+			},
+		},
+	);
+
+	const adapter = (await instance.auth.$context).adapter;
+
+	return { ...instance, adapter };
+}
 
 describe("organization plugin", async (it) => {
 	it("should throw an error when using slug as the default organization id field when slugs are disabled", async () => {
