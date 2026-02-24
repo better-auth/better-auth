@@ -62,13 +62,13 @@
     }
   },
   "dependencies": {
+    "defu": "^6.1.4",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-call": "catalog:",
-    "tsdown": "catalog:",
-    "defu": "^6.1.4"
+    "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
