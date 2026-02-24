@@ -85,8 +85,9 @@ describe("Custom Session Plugin Tests", async () => {
 	it("should not double-encode session cookie during get-session refresh", async () => {
 		const { headers } = await signInWithTestUser();
 		const signedInCookie = headers.get("cookie");
-		const signedInSessionToken =
-			signedInCookie?.match(/better-auth\.session_token=([^;]+)/)?.[1];
+		const signedInSessionToken = signedInCookie?.match(
+			/better-auth\.session_token=([^;]+)/,
+		)?.[1];
 		expect(signedInSessionToken).toBeDefined();
 
 		let refreshedSessionToken: string | undefined;
