@@ -49,9 +49,13 @@ export async function verifyJWT<T extends JWTPayload = JWTPayload>(
 		const alg = key.alg ?? options?.jwks?.keyPairConfig?.alg ?? "EdDSA";
 		const cryptoKey = await importJWK(publicKey, alg);
 
+		const baseURLOrigin =
+			typeof ctx.context.options.baseURL === "string"
+				? ctx.context.options.baseURL
+				: undefined;
 		const { payload } = await jwtVerify(token, cryptoKey, {
-			issuer: options?.jwt?.issuer ?? ctx.context.options.baseURL,
-			audience: options?.jwt?.audience ?? ctx.context.options.baseURL,
+			issuer: options?.jwt?.issuer ?? baseURLOrigin,
+			audience: options?.jwt?.audience ?? baseURLOrigin,
 		});
 
 		if (!payload.sub || !payload.aud) {

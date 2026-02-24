@@ -1776,3 +1776,99 @@ describe("date field type consistency", async () => {
 		);
 	});
 });
+
+describe("updateSession", async () => {
+	const { client, signInWithTestUser } = await getTestInstance({
+		session: {
+			additionalFields: {
+				theme: {
+					type: "string",
+					defaultValue: "light",
+				},
+				language: {
+					type: "string",
+					required: false,
+				},
+				internalNote: {
+					type: "string",
+					input: false,
+					required: false,
+				},
+			},
+		},
+	});
+
+	it("should update a custom additional field on a session", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data).not.toBeNull();
+
+			const res = await client.updateSession({
+				theme: "dark",
+			} as any);
+			expect(res.data?.session).toBeDefined();
+			expect((res.data?.session as any).theme).toBe("dark");
+
+			// Verify the session is updated when fetching again
+			const updatedSession = await client.getSession();
+			expect((updatedSession.data?.session as any).theme).toBe("dark");
+		});
+	});
+
+	it("should ignore core session fields", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				token: "malicious-token",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should ignore core field userId", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				userId: "another-user",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should reject input: false fields", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				internalNote: "should-fail",
+			} as any);
+			expect(res.error?.status).toBe(400);
+		});
+	});
+
+	it("should return error when no fields to update", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				unknownField: "value",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should update session cookie after mutation", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.updateSession({
+				theme: "blue",
+			} as any);
+
+			// Verify the session cookie is updated by getting the session again
+			const session = await client.getSession();
+			expect((session.data?.session as any).theme).toBe("blue");
+		});
+	});
+});

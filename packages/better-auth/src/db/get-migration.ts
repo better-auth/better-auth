@@ -98,18 +98,23 @@ export function matchType(
  */
 async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
-		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
-			db,
-		);
-		if (result.rows[0]?.search_path) {
+		const result = await sql<{
+			search_path?: string;
+			searchPath?: string;
+		}>`SHOW search_path`.execute(db);
+		const searchPath =
+			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
+		if (searchPath) {
 			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
+			// Supabase may return escaped format like '"\$user", public'
 			// We want the first non-variable schema
-			const schemas = result.rows[0].search_path
+			const schemas = searchPath
 				.split(",")
 				.map((s) => s.trim())
 				// Remove quotes and filter out variables like $user
 				.map((s) => s.replace(/^["']|["']$/g, ""))
-				.filter((s) => !s.startsWith("$"));
+				// Filter out variable references like $user, \$user (escaped)
+				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
 			return schemas[0] || "public";
 		}
 	} catch {
@@ -148,13 +153,18 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 		// Verify the schema exists
 		try {
-			const schemaCheck = await sql<{ schema_name: string }>`
-				SELECT schema_name 
-				FROM information_schema.schemata 
+			const schemaCheck = await sql<{
+				schema_name?: string;
+				schemaName?: string;
+			}>`
+				SELECT schema_name
+				FROM information_schema.schemata
 				WHERE schema_name = ${currentSchema}
 			`.execute(db);
 
-			if (!schemaCheck.rows[0]) {
+			const schemaExists =
+				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
+			if (!schemaExists) {
 				logger.warn(
 					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
 				);
@@ -174,16 +184,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 		// Get tables with their schema information
 		try {
 			const tablesInSchema = await sql<{
-				table_name: string;
+				table_name?: string;
+				tableName?: string;
 			}>`
-				SELECT table_name 
-				FROM information_schema.tables 
+				SELECT table_name
+				FROM information_schema.tables
 				WHERE table_schema = ${currentSchema}
 				AND table_type = 'BASE TABLE'
 			`.execute(db);
 
 			const tableNamesInSchema = new Set(
-				tablesInSchema.rows.map((row) => row.table_name),
+				tablesInSchema.rows.map((row) => row.table_name ?? row.tableName),
 			);
 
 			// Filter to only tables that exist in the target schema

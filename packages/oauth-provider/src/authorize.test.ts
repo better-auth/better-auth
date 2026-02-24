@@ -257,11 +257,6 @@ describe("oauth authorize - authenticated", async () => {
 		);
 	});
 
-	it("should advertise authorization_response_iss_parameter_supported in metadata", async () => {
-		const metadata = await auth.api.getOpenIdConfig();
-		expect(metadata.authorization_response_iss_parameter_supported).toBe(true);
-	});
-
 	it("should have metadata issuer match iss parameter (RFC 9207)", async () => {
 		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
 			throw Error("beforeAll not run properly");

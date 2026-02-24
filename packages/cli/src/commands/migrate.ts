@@ -53,7 +53,7 @@ export async function migrateAction(opts: any) {
 	if (db.id !== "kysely") {
 		if (db.id === "prisma") {
 			console.error(
-				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx @better-auth/cli generate` to create the schema, then use Prisma's migrate or push to apply it.",
+				"The migrate command only works with the built-in Kysely adapter. For Prisma, run `npx auth generate` to create the schema, then use Prisma's migrate or push to apply it.",
 			);
 			try {
 				const telemetry = await createTelemetry(config);
@@ -70,7 +70,7 @@ export async function migrateAction(opts: any) {
 		}
 		if (db.id === "drizzle") {
 			console.error(
-				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx @better-auth/cli generate` to create the schema, then use Drizzle's migrate or push to apply it.",
+				"The migrate command only works with the built-in Kysely adapter. For Drizzle, run `npx auth generate` to create the schema, then use Drizzle's migrate or push to apply it.",
 			);
 			try {
 				const telemetry = await createTelemetry(config);

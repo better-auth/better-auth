@@ -1031,7 +1031,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer:
 										jwtPlugin.options?.jwt?.issuer ??
-										ctx.context.options.baseURL,
+										(typeof ctx.context.options.baseURL === "string"
+											? ctx.context.options.baseURL
+											: undefined),
 									expirationTime,
 									definePayload: () => payload,
 								},

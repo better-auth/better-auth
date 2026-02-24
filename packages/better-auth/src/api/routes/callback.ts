@@ -175,9 +175,9 @@ export const callbackOAuth = createAuthEndpoint(
 		}
 
 		if (link) {
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			const isTrustedProvider = c.context.trustedProviders.includes(
+				provider.id,
+			);
 			if (
 				(!isTrustedProvider && !userInfo.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -187,7 +187,7 @@ export const callbackOAuth = createAuthEndpoint(
 			}
 
 			if (
-				userInfo.email !== link.email &&
+				userInfo.email?.toLowerCase() !== link.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				return redirectOnError("email_doesn't_match");

@@ -1,15 +1,19 @@
 import { randomBytes } from "node:crypto";
 import { createAuthMiddleware } from "@better-auth/core/api";
+import { BetterAuthError } from "@better-auth/core/error";
 import { base64Url } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
+import { createAuthClient } from "better-auth/client";
 import { parseSetCookieHeader } from "better-auth/cookies";
 import { generateRandomString } from "better-auth/crypto";
 import { getMigrations } from "better-auth/db/migration";
-import { describe, expect, vi } from "vitest";
-import { authenticate, kCodeVerifier, kState } from "../src/authenticate";
+import { beforeEach, describe, expect, vi } from "vitest";
+import { authenticate, kElectron } from "../src/authenticate";
+import { electronClient } from "../src/client";
 import { ELECTRON_ERROR_CODES } from "../src/error-codes";
 import { electron } from "../src/index";
-import { it, testUtils } from "./utils";
+import { fetchUserImage, normalizeUserOutput } from "../src/user";
+import { encodeRedirectToken, it, testUtils } from "./utils";
 
 const mockElectron = vi.hoisted(() => {
 	const BrowserWindow = {
@@ -54,8 +58,12 @@ const mockElectron = vi.hoisted(() => {
 				},
 			},
 		},
+		net: {
+			fetch: vi.fn(),
+		},
 		protocol: {
 			registerSchemesAsPrivileged: vi.fn(),
+			handle: vi.fn(),
 		},
 		BrowserWindow,
 	};
@@ -88,8 +96,7 @@ describe("Electron", () => {
 
 		await client.requestAuth();
 
-		(globalThis as any)[kCodeVerifier] = undefined;
-		(globalThis as any)[kState] = undefined;
+		(globalThis as any)[kElectron] = undefined;
 
 		expect(mockElectron.shell.openExternal).toHaveBeenCalledWith(
 			expect.stringContaining(options.signInURL),
@@ -100,8 +107,9 @@ describe("Electron", () => {
 	});
 
 	it("should set redirect cookie after signing in", async () => {
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const { error } = await proxyClient.signUp.email(
 			{
@@ -133,6 +141,33 @@ describe("Electron", () => {
 			},
 		);
 		expect(error).toBeNull();
+	});
+
+	it("should include `electron_authorization_code` in sign-up response", async () => {
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
+
+		const { data } = await proxyClient.signUp.email(
+			{
+				email: "electron-code-test@test.com",
+				password: "password",
+				name: "Electron Code Test",
+			},
+			{
+				query: {
+					client_id: "electron",
+					code_challenge: "test-challenge",
+					code_challenge_method: "plain",
+					state: "abc",
+				},
+			},
+		);
+
+		expect(data).not.toBeNull();
+		expect(data).toHaveProperty("electron_authorization_code");
+		// @ts-expect-error
+		expect(data!.electron_authorization_code).toBeTypeOf("string");
 	});
 
 	it("should exchange token", async ({ setProcessType }) => {
@@ -199,8 +234,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -218,16 +254,14 @@ describe("Electron", () => {
 		});
 
 		await expect(
-			authenticate(
-				client.$fetch,
+			authenticate({
+				$fetch: client.$fetch,
 				options,
-				{
-					token: identifier,
-				},
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
-				() => mockElectron.BrowserWindow,
-			),
-		).resolves.toBeUndefined();
+				getWindow: () => mockElectron.BrowserWindow,
+			}),
+		).resolves.toBeDefined();
 
 		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
 			"better-auth:authenticated",
@@ -254,6 +288,9 @@ describe("Electron", () => {
 			},
 		});
 
+		// flush
+		await Promise.resolve();
+
 		expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
 			"better-auth:user-updated",
 			mockUser,
@@ -269,8 +306,9 @@ describe("Electron", () => {
 			},
 		});
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 		await (await auth.$context).adapter.create({
@@ -290,15 +328,14 @@ describe("Electron", () => {
 		vi.advanceTimersByTime(1000);
 
 		await expect(
-			authenticate(
-				client.$fetch,
+			authenticate({
+				$fetch: client.$fetch,
 				options,
-				{
-					token: identifier,
-				},
+				token: encodeRedirectToken(identifier, "abc"),
 				// @ts-expect-error
-				() => mockElectron.BrowserWindow,
-			).catch((err: any) => {
+				getWindow: () => mockElectron.BrowserWindow,
+				fetchOptions: { throw: true },
+			}).catch((err: any) => {
 				expect(err.error.message).toBe("Invalid or expired token.");
 				throw err;
 			}),
@@ -310,19 +347,19 @@ describe("Electron", () => {
 	}) => {
 		setProcessType("browser");
 
-		(globalThis as any)[kCodeVerifier] = "test-challenge";
-		(globalThis as any)[kState] = "abc";
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
 
 		await expect(
-			authenticate(
-				client.$fetch,
+			authenticate({
+				$fetch: client.$fetch,
 				options,
-				{
-					token: "non-existent",
-				},
+				token: encodeRedirectToken("non-existent", "abc"),
 				// @ts-expect-error
-				() => mockElectron.BrowserWindow,
-			).catch((err: any) => {
+				getWindow: () => mockElectron.BrowserWindow,
+				fetchOptions: { throw: true },
+			}).catch((err: any) => {
 				expect(err.error.message).toBe("Invalid or expired token.");
 				throw err;
 			}),
@@ -444,6 +481,129 @@ describe("Electron", () => {
 		);
 	});
 
+	it("authenticate should throw error if called outside browser process", async ({
+		setProcessType,
+	}) => {
+		setProcessType("renderer");
+		await expect(
+			authenticate({
+				$fetch: client.$fetch,
+				options,
+				token: "any",
+				getWindow: () => null,
+			}),
+		).rejects.toThrow(BetterAuthError);
+		await expect(
+			authenticate({
+				$fetch: client.$fetch,
+				options,
+				token: "any",
+				getWindow: () => null,
+			}),
+		).rejects.toThrowError(
+			"`authenticate` can only be called in the main process.",
+		);
+	});
+
+	it("authenticate should exchange token and return user", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		client.setupMain({
+			// @ts-expect-error
+			getWindow: () => mockElectron.BrowserWindow,
+		});
+
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		const result = await client.authenticate({
+			token: encodeRedirectToken(identifier, "abc"),
+		});
+
+		expect(result.data?.user?.id).toBe(user.id);
+		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+			"better-auth:authenticated",
+			expect.objectContaining({ id: user.id }),
+		);
+	});
+
+	it("IPC authenticate bridge should exchange token via invoke", async ({
+		setProcessType,
+	}) => {
+		setProcessType("browser");
+		mockElectron.ipcMain.handle.mockClear();
+
+		client.setupMain({
+			bridges: true,
+			getWindow: () => mockElectron.BrowserWindow as any,
+		});
+
+		const authenticateHandler = mockElectron.ipcMain.handle.mock.calls.find(
+			(call) => call[0] === "better-auth:authenticate",
+		)?.[1] as (evt: unknown, data: { token: string }) => Promise<void>;
+
+		expect(authenticateHandler).toBeDefined();
+
+		const { user } = await auth.api.signInEmail({
+			body: {
+				email: "test@test.com",
+				password: "password",
+			},
+		});
+
+		(globalThis as any)[kElectron] = new Map<string, string>([
+			["abc", "test-challenge"],
+		]);
+
+		const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+		await (await auth.$context).adapter.create({
+			model: "verification",
+			data: {
+				identifier: `electron:${identifier}`,
+				value: JSON.stringify({
+					userId: user.id,
+					codeChallenge: "test-challenge",
+					codeChallengeMethod: "plain",
+					state: "abc",
+				}),
+				expiresAt: new Date(Date.now() + 300 * 1000),
+			},
+		});
+
+		await authenticateHandler(null, {
+			token: encodeRedirectToken(identifier, "abc"),
+		});
+
+		expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+			"better-auth:authenticated",
+			expect.objectContaining({ id: user.id }),
+		);
+	});
+
 	it("should delete verification entry after successful token exchange", async ({
 		setProcessType,
 	}) => {
@@ -552,9 +712,10 @@ describe("Electron", () => {
 			});
 			expect(res.status).toBe(200);
 			const data = await res.json();
-			expect(data).toEqual({
+			expect(data).toMatchObject({
 				url: "https://app.example.com/callback",
 				redirect: true,
+				electron_authorization_code: expect.any(String),
 			});
 		});
 
@@ -563,7 +724,11 @@ describe("Electron", () => {
 			const res = await post(cookie);
 			expect(res.status).toBe(200);
 			const data = await res.json();
-			expect(data).toEqual({ url: null, redirect: false });
+			expect(data).toMatchObject({
+				url: null,
+				redirect: false,
+				electron_authorization_code: expect.any(String),
+			});
 		});
 
 		it("should throw INVALID_CLIENT_ID when client_id does not match", async () => {
@@ -678,15 +843,13 @@ describe("Electron", () => {
 			});
 
 			await expect(
-				authenticate(
-					client.$fetch,
+				authenticate({
+					$fetch: client.$fetch,
 					options,
-					{
-						token: identifier,
-					},
+					token: encodeRedirectToken(identifier, "no-match"),
 					// @ts-expect-error
-					() => mockElectron.BrowserWindow,
-				),
+					getWindow: () => mockElectron.BrowserWindow,
+				}),
 			).rejects.toThrowError("Code verifier not found.");
 		});
 
@@ -700,7 +863,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -717,16 +882,15 @@ describe("Electron", () => {
 			});
 
 			await expect(
-				authenticate(
-					client.$fetch,
+				authenticate({
+					$fetch: client.$fetch,
 					options,
-					{
-						token: identifier,
-					},
+					token: encodeRedirectToken(identifier, "abc"),
 					// @ts-expect-error
-					() => mockElectron.BrowserWindow,
-				),
-			).rejects.toThrowError("State not found.");
+					getWindow: () => mockElectron.BrowserWindow,
+					fetchOptions: { throw: true },
+				}),
+			).rejects.toThrowError("BAD_REQUEST");
 		});
 
 		it("should verify that state parameter matches", async ({
@@ -741,8 +905,9 @@ describe("Electron", () => {
 				},
 			});
 
-			(globalThis as any)[kCodeVerifier] = "test-challenge";
-			(globalThis as any)[kState] = "abc";
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
 
 			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
 			await (await auth.$context).adapter.create({
@@ -760,15 +925,14 @@ describe("Electron", () => {
 			});
 
 			await expect(
-				authenticate(
-					client.$fetch,
+				authenticate({
+					$fetch: client.$fetch,
 					options,
-					{
-						token: identifier,
-					},
+					token: encodeRedirectToken(identifier, "abc"),
 					// @ts-expect-error
-					() => mockElectron.BrowserWindow,
-				).catch((err: any) => {
+					getWindow: () => mockElectron.BrowserWindow,
+					fetchOptions: { throw: true },
+				}).catch((err: any) => {
 					expect(err.error.message).toBe("state mismatch");
 					throw err;
 				}),
@@ -1309,5 +1473,607 @@ describe("Electron", () => {
 		);
 
 		await expect(client.requestAuth()).rejects.toThrow();
+	});
+
+	describe("sanitizeUser", () => {
+		it("should strip fields from user sent in authenticated event", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-strip@test.com",
+					password: "password",
+					name: "Sanitize Strip",
+				},
+			});
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: (u) => {
+						const { email, ...rest } = u;
+						return rest as typeof u;
+					},
+				},
+				token: encodeRedirectToken(identifier, "abc"),
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.not.objectContaining({ email: expect.any(String) }),
+			);
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id }),
+			);
+		});
+
+		it("should not emit authenticated event when sanitizeUser throws", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-throw@test.com",
+					password: "password",
+					name: "Sanitize Throw",
+				},
+			});
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+			const consoleSpy = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: () => {
+						throw new Error("sanitize failed");
+					},
+				},
+				token: encodeRedirectToken(identifier, "abc"),
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Error while sanitizing user",
+				expect.any(Error),
+			);
+			expect(
+				mockElectron.BrowserWindow.webContents.send,
+			).not.toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.anything(),
+			);
+
+			consoleSpy.mockRestore();
+		});
+
+		it("should apply sanitizeUser to user-updated event", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const sanitizeUser = vi.fn((u: any) => {
+				const { email, ...rest } = u;
+				return rest;
+			});
+
+			const { client: sanitizedClient } = (() => {
+				const sanitizedOptions = { ...options, sanitizeUser };
+				const sanitizedClient = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: {
+						customFetchImpl: (url, init) => {
+							const req = new Request(url.toString(), init);
+							return auth.handler(req);
+						},
+					},
+					plugins: [electronClient(sanitizedOptions)],
+				});
+				return { client: sanitizedClient };
+			})();
+
+			sanitizedClient.setupMain({
+				bridges: true,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			mockElectron.BrowserWindow.send.mockClear();
+
+			sanitizedClient.$store.atoms.session!.set({
+				data: {
+					user: {
+						id: "user-123",
+						email: "secret@test.com",
+						name: "Test",
+					},
+				},
+			});
+
+			// Flush
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(sanitizeUser).toHaveBeenCalled();
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				expect.objectContaining({ id: "user-123" }),
+			);
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				expect.not.objectContaining({ email: expect.any(String) }),
+			);
+		});
+
+		it("should send null user-updated event when sanitizeUser throws", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const { client: sanitizedClient } = (() => {
+				const sanitizedOptions = {
+					...options,
+					sanitizeUser: () => {
+						throw new Error("sanitize boom");
+					},
+				};
+				const sanitizedClient = createAuthClient({
+					baseURL: "http://localhost:3000",
+					fetchOptions: {
+						customFetchImpl: (url, init) => {
+							const req = new Request(url.toString(), init);
+							return auth.handler(req);
+						},
+					},
+					plugins: [electronClient(sanitizedOptions)],
+				});
+				return { client: sanitizedClient };
+			})();
+
+			sanitizedClient.setupMain({
+				bridges: true,
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			mockElectron.BrowserWindow.send.mockClear();
+			const consoleSpy = vi
+				.spyOn(console, "error")
+				.mockImplementation(() => {});
+
+			sanitizedClient.$store.atoms.session!.set({
+				data: {
+					user: {
+						id: "user-456",
+						email: "test@test.com",
+						name: "Test",
+					},
+				},
+			});
+
+			// Flush
+			await Promise.resolve();
+			await Promise.resolve();
+			await Promise.resolve();
+
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"Error while sanitizing user",
+				expect.any(Error),
+			);
+			expect(mockElectron.BrowserWindow.send).toHaveBeenCalledWith(
+				"better-auth:user-updated",
+				null,
+			);
+
+			consoleSpy.mockRestore();
+		});
+
+		it("should apply async sanitizeUser", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const { user } = await auth.api.signUpEmail({
+				body: {
+					email: "sanitize-async@test.com",
+					password: "password",
+					name: "Sanitize Async",
+				},
+			});
+
+			(globalThis as any)[kElectron] = new Map<string, string>([
+				["abc", "test-challenge"],
+			]);
+
+			const identifier = generateRandomString(16, "A-Z", "a-z", "0-9");
+			await (await auth.$context).adapter.create({
+				model: "verification",
+				data: {
+					identifier: `electron:${identifier}`,
+					value: JSON.stringify({
+						userId: user.id,
+						codeChallenge: "test-challenge",
+						codeChallengeMethod: "plain",
+						state: "abc",
+					}),
+					expiresAt: new Date(Date.now() + 300 * 1000),
+				},
+			});
+
+			mockElectron.BrowserWindow.webContents.send.mockClear();
+
+			await authenticate({
+				$fetch: client.$fetch,
+				options: {
+					...options,
+					sanitizeUser: async (u) => {
+						await Promise.resolve();
+						return { ...u, name: "Sanitized" };
+					},
+				},
+				token: encodeRedirectToken(identifier, "abc"),
+				// @ts-expect-error
+				getWindow: () => mockElectron.BrowserWindow,
+			});
+
+			expect(mockElectron.BrowserWindow.webContents.send).toHaveBeenCalledWith(
+				"better-auth:authenticated",
+				expect.objectContaining({ id: user.id, name: "Sanitized" }),
+			);
+		});
+	});
+
+	describe("user normalization", () => {
+		const MINIMAL_PNG_BASE64 =
+			"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+
+		const makeImageBytes = (magic: number[]) =>
+			new Uint8Array([...magic, ...new Array(20).fill(0)]);
+
+		async function streamToBytes(
+			stream: ReadableStream<Uint8Array>,
+		): Promise<Uint8Array> {
+			const reader = stream.getReader();
+			const chunks: Uint8Array[] = [];
+			while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				chunks.push(value);
+			}
+			if (chunks.length === 1) return chunks[0]!;
+			let total = 0;
+			for (const c of chunks) total += c.byteLength;
+			const result = new Uint8Array(total);
+			let offset = 0;
+			for (const c of chunks) {
+				result.set(c, offset);
+				offset += c.byteLength;
+			}
+			return result;
+		}
+
+		const customFetchImpl = vi.fn(async (input: string | URL | Request) => {
+			const url = input.toString();
+			if (url.endsWith(".jpg")) {
+				return new Response(makeImageBytes([0xff, 0xd8, 0xff, 0xe0]).buffer, {
+					headers: new Headers({ "content-type": "image/jpeg" }),
+				});
+			} else if (url.endsWith(".png") && !url.endsWith("avatar-fail.png")) {
+				return new Response(
+					makeImageBytes([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+						.buffer,
+					{
+						headers: new Headers({ "content-type": "image/png" }),
+					},
+				);
+			} else if (url.endsWith(".gif")) {
+				return new Response(
+					makeImageBytes([0x47, 0x49, 0x46, 0x38, 0x39, 0x61]).buffer,
+					{
+						headers: new Headers({ "content-type": "image/gif" }),
+					},
+				);
+			} else if (url.endsWith(".webp")) {
+				return new Response(
+					makeImageBytes([
+						0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42,
+						0x50,
+					]).buffer,
+					{
+						headers: new Headers({ "content-type": "image/webp" }),
+					},
+				);
+			} else if (url.endsWith(".bmp")) {
+				return new Response(makeImageBytes([0x42, 0x4d]).buffer, {
+					headers: new Headers({ "content-type": "image/bmp" }),
+				});
+			} else if (url.endsWith(".ico")) {
+				return new Response(makeImageBytes([0x00, 0x00, 0x01, 0x00]).buffer, {
+					headers: new Headers({ "content-type": "image/x-icon" }),
+				});
+			}
+			return new Response(null, { status: 404 });
+		});
+
+		beforeEach(() => {
+			vi.clearAllMocks();
+			mockElectron.net.fetch.mockImplementation(customFetchImpl as any);
+		});
+
+		it("normalizeUserOutput should replace image with protocol URL", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const user = normalizeUserOutput({
+				id: "abc123",
+				name: "Test",
+				email: "test@test.com",
+				image: "https://example.com/avatar.png",
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+
+			expect(user.image).toBe("user-image://abc123");
+		});
+
+		it("normalizeUserOutput should leave null image as null", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const user = normalizeUserOutput({
+				id: "abc123",
+				name: "Test",
+				email: "test@test.com",
+				image: null,
+				emailVerified: false,
+				createdAt: new Date(),
+				updatedAt: new Date(),
+			});
+
+			expect(user.image).toBeNull();
+		});
+
+		it("should decode valid data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const dataUrl = `data:image/png;base64,${MINIMAL_PNG_BASE64}`;
+			const result = await fetchUserImage(undefined, dataUrl);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/png");
+			const bytes = await streamToBytes(result!.stream);
+			expect(bytes.length).toBeGreaterThan(0);
+		});
+
+		it("should reject SVG data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==",
+			);
+
+			expect(result).toBeNull();
+		});
+
+		it("should reject invalid base64 data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"data:image/png;base64,!!!invalid!!!",
+			);
+
+			expect(result).toBeNull();
+		});
+
+		it("should fetch http URL and return stream", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar.png",
+			);
+
+			expect(mockElectron.net.fetch).toHaveBeenCalledWith(
+				"https://example.com/avatar.png",
+				expect.objectContaining({
+					method: "GET",
+					headers: { accept: "image/*" },
+				}),
+			);
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/png");
+		});
+
+		it("should return null when fetch fails", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar-fail.png",
+			);
+
+			expect(result).toBeNull();
+		});
+
+		it("should return null when fetched content is not a valid image", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/page.html",
+			);
+
+			expect(result).toBeNull();
+		});
+
+		it("should fetch JPEG and return correct mimeType", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar.jpg",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/jpeg");
+		});
+
+		it("should fetch GIF and return correct mimeType", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar.gif",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/gif");
+		});
+
+		it("should fetch WebP and return correct mimeType", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar.webp",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/webp");
+		});
+
+		it("should fetch BMP and return correct mimeType", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/avatar.bmp",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/bmp");
+		});
+
+		it("should fetch ICO and return correct mimeType", async ({
+			setProcessType,
+		}) => {
+			setProcessType("browser");
+
+			const result = await fetchUserImage(
+				undefined,
+				"https://example.com/favicon.ico",
+			);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/x-icon");
+		});
+
+		it("should decode valid GIF87a data URL", async ({ setProcessType }) => {
+			setProcessType("browser");
+
+			const gif87aBytes = makeImageBytes([0x47, 0x49, 0x46, 0x38, 0x37, 0x61]);
+			const dataUrl = `data:image/gif;base64,${Buffer.from(gif87aBytes).toString("base64")}`;
+
+			const result = await fetchUserImage(undefined, dataUrl);
+
+			expect(result).not.toBeNull();
+			expect(result!.mimeType).toBe("image/gif");
+		});
+
+		describe("isLocalOrigin (SSRF mitigation)", () => {
+			it.each([
+				["http://localhost/avatar.png"],
+				["http://127.0.0.1/avatar.png"],
+				["http://10.0.0.1/avatar.png"],
+				["http://172.16.0.1/avatar.png"],
+				["http://192.168.1.1/avatar.png"],
+				["http://169.254.169.254/avatar.png"],
+				["http://[::1]/avatar.png"],
+				["http://[fe80::1]/avatar.png"],
+			])("should reject local origin %s", async (imageUrl) => {
+				const result = await fetchUserImage(undefined, imageUrl);
+
+				expect(result).toBeNull();
+				expect(mockElectron.net.fetch).not.toHaveBeenCalled();
+			});
+
+			it.each([
+				["https://example.com/avatar/abc.png"],
+				["https://gravatar.com/avatar/abc.png"],
+				["https://8.8.8.8/avatar.png"],
+			])("should allow public origin %s", async (imageUrl) => {
+				const result = await fetchUserImage(undefined, imageUrl);
+
+				expect(mockElectron.net.fetch).toHaveBeenCalled();
+				expect(result).not.toBeNull();
+			});
+		});
 	});
 });

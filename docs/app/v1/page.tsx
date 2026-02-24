@@ -150,7 +150,7 @@ function ReleaseRelated() {
 						<h3 className="text-xl font-semibold mb-4">Adopt the new Schema</h3>
 						<div className="dark:bg-white/5 bg-black/10 rounded-lg p-4 mb-2">
 							<code className="text-sm font-mono ">
-								pnpx @better-auth/cli migrate
+								pnpx auth migrate
 								<br />
 							</code>
 						</div>
