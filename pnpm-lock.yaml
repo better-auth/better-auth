@@ -507,6 +507,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
