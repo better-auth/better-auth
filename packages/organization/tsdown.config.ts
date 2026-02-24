@@ -16,4 +16,5 @@ export default defineConfig({
 	external: ["better-auth", "better-call", "@better-auth/core", "defu"],
 	sourcemap: true,
 	treeshake: true,
+	exports: true,
 });
