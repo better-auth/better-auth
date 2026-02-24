@@ -7,6 +7,7 @@
   },
   "devDependencies": {
     "@better-auth/kysely-adapter": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "better-auth": "workspace:*"
   }

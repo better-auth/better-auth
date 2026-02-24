@@ -1059,6 +1059,9 @@ importers:
       '@better-auth/drizzle-adapter':
         specifier: workspace:*
         version: link:../../../../packages/drizzle-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -1071,6 +1074,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -1086,6 +1092,9 @@ importers:
       '@better-auth/memory-adapter':
         specifier: workspace:*
         version: link:../../../../packages/memory-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -1101,6 +1110,9 @@ importers:
       '@better-auth/mongo-adapter':
         specifier: workspace:*
         version: link:../../../../packages/mongo-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -1116,6 +1128,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../../../packages/prisma-adapter

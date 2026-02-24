@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
     "@prisma/client": "5.22.0",
