@@ -30,16 +30,17 @@ export interface ResolvedDynamicAccessControlOptions
 	hooks?: DynamicAccessControlHooks;
 }
 
-export type InferOrganizationRoleFromOrgOptions<
-	O extends OrganizationOptions,
-	isClientSide extends boolean = false,
-> =
-	FindAddonFromOrgOptions<O, "dynamic-access-control"> extends infer T extends
-		Record<string, any>
-		? T["options"] extends DynamicAccessControlOptions
-			? InferOrganizationRole<T["options"], isClientSide>
-			: undefined
-		: undefined;
+// todo: Could be used in the future.
+// export type InferOrganizationRoleFromOrgOptions<
+// 	O extends OrganizationOptions,
+// 	isClientSide extends boolean = false,
+// > =
+// 	FindAddonFromOrgOptions<O, "dynamic-access-control"> extends infer T extends
+// 		Record<string, any>
+// 		? T["options"] extends DynamicAccessControlOptions
+// 			? InferOrganizationRole<T["options"], isClientSide>
+// 			: undefined
+// 		: undefined;
 
 export type InferOrganizationRole<
 	TO extends DynamicAccessControlOptions,
