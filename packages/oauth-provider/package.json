@@ -51,7 +51,8 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "@better-auth/organization": "workspace:*"
   },
   "dependencies": {
     "jose": "^6.1.0",
