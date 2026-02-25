@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
+import { createAccessControl } from "better-auth/plugins/access";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { createAccessControl } from "../../access";
 import { dynamicAccessControl } from "../addons/dynamic-access-control";
 import type { RealOrganizationId } from "../helpers/get-org-adapter";
 import type { OrganizationOptions } from "../types";
