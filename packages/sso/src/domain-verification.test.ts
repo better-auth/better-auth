@@ -88,21 +88,26 @@ describe("Domain verification", async () => {
 				name: user.name,
 			});
 
-			if (response.data && organizationId) {
-				await auth.api.addMember({
-					body: {
-						userId: response.data.user.id,
-						role: "member",
-						organizationId,
-					},
-					headers,
-				});
-			}
-
 			await authClient.signIn.email(user, {
 				throw: true,
 				onSuccess: setCookieToHeader(headers),
 			});
+
+			if (response.data && organizationId) {
+				try {
+					await auth.api.addMember({
+						body: {
+							userId: response.data.user.id,
+							role: "member",
+							organizationId,
+						},
+						headers,
+					});
+				} catch (err) {
+					console.error(`Failed to add member to organization:`, err);
+					throw err;
+				}
+			}
 
 			return headers;
 		}
