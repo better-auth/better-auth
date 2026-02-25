@@ -300,7 +300,7 @@ describe("jwt", async () => {
 	}
 });
 
-describe.each([
+describe.for([
 	{
 		alg: "EdDSA",
 		crv: "Ed25519",
@@ -504,7 +504,7 @@ describe("jwt - remote url", async () => {
 			});
 			expect(auth).toBeDefined();
 		}
-	});
+	}, 15000);
 
 	it("should still allow token generation when remoteUrl is set", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({

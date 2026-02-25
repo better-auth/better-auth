@@ -1,12 +1,13 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import { setSessionCookie } from "../../cookies";
 import { parseUserOutput } from "../../db/schema";
 import { handleOAuthUserInfo } from "../../oauth2/link-account";
-import type { InferUser } from "../../types";
 import { generateState } from "../../utils";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
@@ -166,7 +167,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 						redirect: boolean;
 						token?: string | undefined;
 						url?: string | undefined;
-						user?: InferUser<O> | undefined;
+						user?: User<O["user"], O["plugins"]> | undefined;
 					},
 				},
 				openapi: {
@@ -211,11 +212,16 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 			c,
 		): Promise<
 			| { redirect: boolean; url: string }
-			| { redirect: boolean; token: string; url: undefined; user: InferUser<O> }
+			| {
+					redirect: boolean;
+					token: string;
+					url: undefined;
+					user: User<O["user"], O["plugins"]>;
+			  }
 		> => {
-			const provider = c.context.socialProviders.find(
-				(p) => p.id === c.body.provider,
-			);
+			const provider = await getAwaitableValue(c.context.socialProviders, {
+				value: c.body.provider,
+			});
 			if (!provider) {
 				c.context.logger.error(
 					"Provider not found. Make sure to add the provider in your auth config",
@@ -300,10 +306,10 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					redirect: false,
 					token: data.data!.session.token,
 					url: undefined,
-					user: parseUserOutput(
-						c.context.options,
-						data.data!.user,
-					) as InferUser<O>,
+					user: parseUserOutput(c.context.options, data.data!.user) as User<
+						O["user"],
+						O["plugins"]
+					>,
 				});
 			}
 
@@ -391,7 +397,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 						redirect: boolean;
 						token: string;
 						url?: string | undefined;
-						user: InferUser<O>;
+						user: User<O["user"], O["plugins"]>;
 					},
 				},
 				openapi: {
@@ -440,7 +446,7 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 			redirect: boolean;
 			token: string;
 			url?: string | undefined;
-			user: InferUser<O>;
+			user: User<O["user"], O["plugins"]>;
 		}> => {
 			if (!ctx.context.options?.emailAndPassword?.enabled) {
 				ctx.context.logger.error(
@@ -567,7 +573,10 @@ export const signInEmail = <O extends BetterAuthOptions>() =>
 				redirect: !!ctx.body.callbackURL,
 				token: session.token,
 				url: ctx.body.callbackURL,
-				user: parseUserOutput(ctx.context.options, user.user) as InferUser<O>,
+				user: parseUserOutput(ctx.context.options, user.user) as User<
+					O["user"],
+					O["plugins"]
+				>,
 			});
 		},
 	);

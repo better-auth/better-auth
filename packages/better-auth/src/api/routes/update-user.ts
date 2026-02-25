@@ -88,9 +88,10 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 			};
 
 			if (typeof body !== "object" || Array.isArray(body)) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Body must be an object",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
+				);
 			}
 
 			if (body.email) {
@@ -359,10 +360,7 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw APIError.from("BAD_REQUEST", {
-			message: "user already has a password",
-			code: "USER_ALREADY_HAS_PASSWORD",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );
 
@@ -519,9 +517,9 @@ export const deleteUser = createAuthEndpoint(
 			});
 			const url = `${
 				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
+			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
 			await ctx.context.runInBackgroundOrAwait(
 				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
 					{
@@ -813,8 +811,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		const sendConfirmationToOldEmail =
 			ctx.context.session.user.emailVerified &&
-			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 
 		if (sendConfirmationToOldEmail) {
 			const token = await createEmailVerificationToken(
@@ -830,8 +827,7 @@ export const changeEmail = createAuthEndpoint(
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
+				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
 			if (sendFn) {
 				await ctx.context.runInBackgroundOrAwait(
 					sendFn(

@@ -157,17 +157,23 @@ function getRateLimitStorage(
 	return createDatabaseStorageWrapper(ctx);
 }
 
-export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
-	if (!ctx.rateLimit.enabled) {
-		return;
-	}
+let ipWarningLogged = false;
+
+async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const basePath = new URL(ctx.baseURL).pathname;
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
-		return;
+		if (!ipWarningLogged) {
+			ctx.logger.warn(
+				"Rate limiting skipped: could not determine client IP address. " +
+					"If you're behind a reverse proxy, make sure to configure `trustedProxies` in your auth config.",
+			);
+			ipWarningLogged = true;
+		}
+		return null;
 	}
 	const key = createRateLimitKey(ip, path);
 	const specialRules = getDefaultSpecialRules();
@@ -214,10 +220,44 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 			}
 
 			if (resolved === false) {
-				return;
+				return null;
 			}
 		}
 	}
+
+	return { key, currentWindow, currentMax };
+}
+
+export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
+	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	const config = await resolveRateLimitConfig(req, ctx);
+	if (!config) {
+		return;
+	}
+	const { key, currentWindow, currentMax } = config;
+
+	const storage = getRateLimitStorage(ctx, {
+		window: currentWindow,
+	});
+	const data = await storage.get(key);
+
+	if (data && shouldRateLimit(currentMax, currentWindow, data)) {
+		const retryAfter = getRetryAfter(data.lastRequest, currentWindow);
+		return rateLimitResponse(retryAfter);
+	}
+}
+
+export async function onResponseRateLimit(req: Request, ctx: AuthContext) {
+	if (!ctx.rateLimit.enabled) {
+		return;
+	}
+	const config = await resolveRateLimitConfig(req, ctx);
+	if (!config) {
+		return;
+	}
+	const { key, currentWindow } = config;
 
 	const storage = getRateLimitStorage(ctx, {
 		window: currentWindow,
@@ -234,10 +274,7 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	} else {
 		const timeSinceLastRequest = now - data.lastRequest;
 
-		if (shouldRateLimit(currentMax, currentWindow, data)) {
-			const retryAfter = getRetryAfter(data.lastRequest, currentWindow);
-			return rateLimitResponse(retryAfter);
-		} else if (timeSinceLastRequest > currentWindow * 1000) {
+		if (timeSinceLastRequest > currentWindow * 1000) {
 			// Reset the count if the window has passed since the last request
 			await storage.set(
 				key,
@@ -274,6 +311,19 @@ function getDefaultSpecialRules() {
 				);
 			},
 			window: 10,
+			max: 3,
+		},
+		{
+			pathMatcher(path: string) {
+				return (
+					path === "/request-password-reset" ||
+					path === "/send-verification-email" ||
+					path.startsWith("/forget-password") ||
+					path === "/email-otp/send-verification-otp" ||
+					path === "/email-otp/request-password-reset"
+				);
+			},
+			window: 60,
 			max: 3,
 		},
 	];

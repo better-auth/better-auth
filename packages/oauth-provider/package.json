@@ -1,20 +1,39 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.5.0-beta.9",
-  "type": "module",
+  "version": "1.5.0-beta.18",
   "description": "An oauth provider plugin for Better Auth",
-  "main": "dist/index.mjs",
-  "module": "dist/index.mjs",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/oauth-provider",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/oauth-provider"
+  },
+  "keywords": [
+    "auth",
+    "oauth",
+    "typescript",
+    "better-auth"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "test": "vitest",
-    "lint:package": "publint run --strict",
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -45,16 +64,16 @@
       ]
     }
   },
+  "dependencies": {
+    "jose": "^6.1.0",
+    "zod": "^4.3.6"
+  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.25.2",
+    "@modelcontextprotocol/sdk": "^1.26.0",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"
-  },
-  "dependencies": {
-    "jose": "^6.1.0",
-    "zod": "^4.3.5"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
@@ -62,21 +81,5 @@
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
     "better-call": "catalog:"
-  },
-  "files": [
-    "dist"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
-    "directory": "packages/oauth-provider"
-  },
-  "homepage": "https://www.better-auth.com/docs/plugins/oauth-provider",
-  "keywords": [
-    "auth",
-    "oauth",
-    "typescript",
-    "better-auth"
-  ],
-  "license": "MIT"
+  }
 }

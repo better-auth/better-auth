@@ -5,8 +5,7 @@ import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		bearer: {
 			creator: typeof bearer;
 		};
@@ -79,9 +78,14 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						headers.append(
+						// Use headers.set() with "; " separator per RFC 6265.
+						// headers.append("cookie") joins with ", " in some runtimes
+						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
+						const existingCookie = headers.get("cookie");
+						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
+						headers.set(
 							"cookie",
-							`${c.context.authCookies.sessionToken.name}=${signedToken}`,
+							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
 						);
 						return {
 							context: {

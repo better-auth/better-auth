@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "outDir": "${configDir}/node_modules/.cache/ts/test-out",
+    "tsBuildInfoFile": "${configDir}/node_modules/.cache/ts/test-tsbuildinfo"
+  },
+  "include": ["./test", "./src"],
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    }
+  ]
+}
