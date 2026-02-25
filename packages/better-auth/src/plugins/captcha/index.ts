@@ -20,6 +20,7 @@ export type * from "./types";
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
+		$ERROR_CODES: EXTERNAL_ERROR_CODES,
 		onRequest: async (request, ctx) => {
 			try {
 				const endpoints = options.endpoints?.length
