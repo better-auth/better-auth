@@ -52,6 +52,11 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 			requireHeaders: true,
 			use: [orgMiddleware, orgSessionMiddleware],
 			metadata: {
+				$Infer: {
+					body: {} as {
+						invitationId?: string;
+					},
+				},
 				openapi: {
 					description:
 						"Accept an invitation to an organization. The invitation ID can be provided via query parameter or request body.",
