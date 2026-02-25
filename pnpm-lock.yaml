@@ -1979,6 +1979,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../sso

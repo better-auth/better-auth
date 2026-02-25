@@ -65,10 +65,12 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/sso": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "better-auth": "workspace:*"
   }
 }
