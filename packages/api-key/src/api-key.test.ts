@@ -1,12 +1,12 @@
 import type { APIError } from "@better-auth/core/error";
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { getTestInstance } from "better-auth/test";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
 import { isAPIError } from "./utils";
-import { organization } from "@better-auth/organization";
-import { organizationClient } from "@better-auth/organization/client";
 
 describe("api-key", async () => {
 	const { client, auth, signInWithTestUser } = await getTestInstance(
