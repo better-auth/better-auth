@@ -699,6 +699,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			const expiresAt = getDate(options.invitationExpiresIn, "sec");
 			const teamId =
 				invitation.teamIds.length > 0 ? invitation.teamIds.join(",") : null;
+			const { teamIds: _teamIds, ...invitationData } = invitation;
 			const invite = await adapter.create<
 				Omit<InvitationInput, "id">,
 				InferInvitation<O, false>
@@ -709,7 +710,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 					expiresAt,
 					createdAt: new Date(),
 					inviterId: user.id,
-					...invitation,
+					...invitationData,
 					teamId,
 				},
 			});
