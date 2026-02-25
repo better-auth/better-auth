@@ -223,7 +223,6 @@ export const electronInitOAuthProxy = (opts: ElectronOptions) =>
 					method: "POST",
 					body: {
 						provider: ctx.query.provider,
-						disableRedirect: true,
 					},
 					onResponse: (ctx) => {
 						const headers = ctx.response.headers;
