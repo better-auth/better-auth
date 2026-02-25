@@ -39,11 +39,7 @@ export const getAddonSchema = <Options extends DynamicAccessControlOptions>(
 						},
 						output: (value: DBPrimitive) => {
 							if (typeof value === "string") {
-								try {
-									return JSON.parse(value) as Record<string, string[]>;
-								} catch {
-									return {};
-								}
+								return JSON.parse(value) as Record<string, string[]>;
 							}
 							return value;
 						},
