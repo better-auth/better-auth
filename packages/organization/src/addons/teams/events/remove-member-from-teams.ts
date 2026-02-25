@@ -29,7 +29,7 @@ export const removeMemberFromTeams = async (
 	const teamAdapter = getTeamAdapter(context, options);
 	const teams = await teamAdapter.getTeams(realOrgId);
 
-	await Promise.all(
+	const results = await Promise.allSettled(
 		teams.map((team) =>
 			teamAdapter.removeTeamMember({
 				teamId: team.id as RealTeamId,
@@ -37,4 +37,14 @@ export const removeMemberFromTeams = async (
 			}),
 		),
 	);
+
+	const failures = results.filter(
+		(r): r is PromiseRejectedResult => r.status === "rejected",
+	);
+	if (failures.length > 0) {
+		context.logger.error(
+			`Failed to remove user ${userId} from ${failures.length}/${teams.length} teams in org ${realOrgId}`,
+			{ reasons: failures.map((f) => f.reason) },
+		);
+	}
 };
