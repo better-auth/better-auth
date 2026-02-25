@@ -63,18 +63,21 @@ export function createCookieGetter(options: BetterAuthOptions) {
 		const attributes =
 			options.advanced?.cookies?.[cookieName as "session_token"]?.attributes;
 
+		const resolvedAttributes: CookieOptions = {
+			secure: !!secureCookiePrefix,
+			sameSite: "lax",
+			path: "/",
+			httpOnly: true,
+			...(crossSubdomainEnabled ? { domain } : {}),
+			...options.advanced?.defaultCookieAttributes,
+			...overrideAttributes,
+			...attributes,
+		};
+
 		return {
 			name: `${secureCookiePrefix}${name}`,
-			attributes: {
-				secure: !!secureCookiePrefix,
-				sameSite: "lax",
-				path: "/",
-				httpOnly: true,
-				...(crossSubdomainEnabled ? { domain } : {}),
-				...options.advanced?.defaultCookieAttributes,
-				...overrideAttributes,
-				...attributes,
-			},
+			attributes: resolvedAttributes,
+			options: resolvedAttributes,
 		} satisfies BetterAuthCookie;
 	}
 	return createCookie;
@@ -97,6 +100,7 @@ export function getCookies(options: BetterAuthOptions) {
 		sessionToken: {
 			name: sessionToken.name,
 			attributes: sessionToken.attributes,
+			options: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -105,14 +109,17 @@ export function getCookies(options: BetterAuthOptions) {
 		sessionData: {
 			name: sessionData.name,
 			attributes: sessionData.attributes,
+			options: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			attributes: dontRememberToken.attributes,
+			options: dontRememberToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
 			attributes: accountData.attributes,
+			options: accountData.attributes,
 		},
 	};
 }
@@ -283,7 +290,7 @@ export async function setSessionCookie(
  */
 export function expireCookie(
 	ctx: GenericEndpointContext,
-	cookie: BetterAuthCookie,
+	cookie: Pick<BetterAuthCookie, "name" | "attributes">,
 ) {
 	ctx.setCookie(cookie.name, "", {
 		...cookie.attributes,
