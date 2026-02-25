@@ -23,7 +23,7 @@ export type CancelInvitation<O extends OrganizationOptions> = ReturnType<
 export const cancelInvitation = <O extends OrganizationOptions>(
 	_options: O,
 ) => {
-	const options = resolveOrgOptions(_options);
+	const _options = resolveOrgOptions(_options);
 	return createAuthEndpoint(
 		"/organization/cancel-invitation",
 		{

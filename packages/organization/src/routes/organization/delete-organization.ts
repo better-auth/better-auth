@@ -7,7 +7,6 @@ import { getHook } from "../../helpers/get-hook";
 import type { RealOrganizationId } from "../../helpers/get-org-adapter";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
 import { getOrganizationId } from "../../helpers/get-organization-id";
-import { resolveOrgOptions } from "../../helpers/resolve-org-options";
 import { orgMiddleware } from "../../middleware";
 import type { OrganizationOptions } from "../../types";
 
