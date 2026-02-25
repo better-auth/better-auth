@@ -131,13 +131,28 @@ describe("lastLoginMethod", async () => {
 		const { client, auth } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],
 		});
+		const headers = new Headers();
 		const data = await client.signIn.email(
 			{
 				email: testUser.email,
 				password: testUser.password,
 			},
-			{ throw: true },
+			{
+				throw: true,
+				onSuccess(context) {
+					// Extract headers to test if cookies were set
+					context.response.headers.forEach((value, key) => {
+						if (key.toLowerCase() === "set-cookie") {
+							headers.append("set-cookie", value);
+						}
+					});
+				}
+			},
 		);
+
+		const cookies = parseSetCookieHeader(headers.get("set-cookie") || "");
+		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
+
 		const session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${data.token}`,
