@@ -5,7 +5,6 @@ import { hasPermission } from "../../access";
 import { ORGANIZATION_ERROR_CODES } from "../../helpers/error-codes";
 import { getHook } from "../../helpers/get-hook";
 import { getOrgAdapter } from "../../helpers/get-org-adapter";
-import { resolveOrgOptions } from "../../helpers/resolve-org-options";
 import { orgMiddleware, orgSessionMiddleware } from "../../middleware";
 import type { Invitation } from "../../schema";
 import type { OrganizationOptions } from "../../types";
@@ -23,7 +22,6 @@ export type CancelInvitation<O extends OrganizationOptions> = ReturnType<
 export const cancelInvitation = <O extends OrganizationOptions>(
 	_options: O,
 ) => {
-	const _options = resolveOrgOptions(_options);
 	return createAuthEndpoint(
 		"/organization/cancel-invitation",
 		{
