@@ -647,6 +647,21 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 				}
 				return data;
 			},
+			customTransformOutput: ({ data, fieldAttributes }) => {
+				// same as the customTransformInput, but for output.
+				if (
+					config.provider === "postgresql" &&
+					fieldAttributes.type === "json" &&
+					typeof data === "string"
+				) {
+					try {
+						return JSON.parse(data);
+					} catch {
+						return data;
+					}
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
