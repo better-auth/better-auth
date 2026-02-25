@@ -23,6 +23,7 @@ import type { Session, User } from "../types";
 import { getDate } from "../utils/date";
 import { isPromise } from "../utils/is-promise";
 import { sec } from "../utils/time";
+import { isDynamicBaseURLConfig } from "../utils/url";
 import { SECURE_COOKIE_PREFIX } from "./cookie-utils";
 import {
 	createAccountStore,
@@ -32,24 +33,50 @@ import {
 } from "./session-store";
 
 export function createCookieGetter(options: BetterAuthOptions) {
+	const baseURLString =
+		typeof options.baseURL === "string" ? options.baseURL : undefined;
+	const dynamicProtocol =
+		typeof options.baseURL === "object" && options.baseURL !== null
+			? options.baseURL.protocol
+			: undefined;
+
+	/**
+	 * Determines whether cookies should use the `Secure` flag.
+	 *
+	 * Resolution order:
+	 * 1. `advanced.useSecureCookies` — explicit user override, always wins.
+	 * 2. Dynamic config `protocol: "https"` / `"http"` — honour the explicit setting.
+	 * 3. Static `baseURL` string — check if it starts with `https://`.
+	 * 4. Fallback — `isProduction` (i.e. `NODE_ENV === "production"`).
+	 *
+	 * For dynamic configs with `protocol: "auto"` or unset, the actual
+	 * protocol depends on each incoming request and is unknown at init time,
+	 * so we fall back to step 4.
+	 */
 	const secure =
 		options.advanced?.useSecureCookies !== undefined
 			? options.advanced?.useSecureCookies
-			: options.baseURL
-				? options.baseURL.startsWith("https://")
-					? true
-					: false
-				: isProduction;
+			: dynamicProtocol === "https"
+				? true
+				: dynamicProtocol === "http"
+					? false
+					: baseURLString
+						? baseURLString.startsWith("https://")
+						: isProduction;
 	const secureCookiePrefix = secure ? SECURE_COOKIE_PREFIX : "";
 	const crossSubdomainEnabled =
 		!!options.advanced?.crossSubDomainCookies?.enabled;
 	const domain = crossSubdomainEnabled
 		? options.advanced?.crossSubDomainCookies?.domain ||
-			(options.baseURL ? new URL(options.baseURL).hostname : undefined)
+			(baseURLString ? new URL(baseURLString).hostname : undefined)
 		: undefined;
-	if (crossSubdomainEnabled && !domain) {
+	if (
+		crossSubdomainEnabled &&
+		!domain &&
+		!isDynamicBaseURLConfig(options.baseURL)
+	) {
 		throw new BetterAuthError(
-			"baseURL is required when crossSubdomainCookies are enabled",
+			"baseURL is required when crossSubdomainCookies are enabled.",
 		);
 	}
 	function createCookie(
@@ -352,13 +379,6 @@ export const getSessionCookie = (
 		  }
 		| undefined,
 ) => {
-	if (config?.cookiePrefix) {
-		if (config.cookieName) {
-			config.cookiePrefix = `${config.cookiePrefix}-`;
-		} else {
-			config.cookiePrefix = `${config.cookiePrefix}.`;
-		}
-	}
 	const headers =
 		request instanceof Headers || !("headers" in request)
 			? request
@@ -367,13 +387,16 @@ export const getSessionCookie = (
 	if (!cookies) {
 		return null;
 	}
-	const { cookieName = "session_token", cookiePrefix = "better-auth." } =
+	const { cookieName = "session_token", cookiePrefix = "better-auth" } =
 		config || {};
-	const name = `${cookiePrefix}${cookieName}`;
-	const secureCookieName = `${SECURE_COOKIE_PREFIX}${name}`;
 	const parsedCookie = parseCookies(cookies);
+	const getCookie = (name: string) =>
+		parsedCookie.get(name) ||
+		parsedCookie.get(`${SECURE_COOKIE_PREFIX}${name}`);
+
 	const sessionToken =
-		parsedCookie.get(name) || parsedCookie.get(secureCookieName);
+		getCookie(`${cookiePrefix}.${cookieName}`) ||
+		getCookie(`${cookiePrefix}-${cookieName}`);
 	if (sessionToken) {
 		return sessionToken;
 	}

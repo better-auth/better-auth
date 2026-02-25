@@ -39,12 +39,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```package-install
-            npx @better-auth/cli migrate
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
             ```package-install
-            npx @better-auth/cli generate
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -73,6 +73,10 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Callout type="info">
+If you need all providers to share a single callback URL (e.g., when migrating from another auth provider), see [Shared Redirect URI](#shared-redirect-uri).
+</Callout>
 
 <Callout type="info">
 When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
@@ -1190,6 +1194,47 @@ sso({
 For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
 </Callout>
 
+## Shared Redirect URI
+
+By default, each OIDC provider gets its own callback URL (`/sso/callback/:providerId`). You can configure all providers to share a single redirect URI instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            redirectURI: "/sso/callback" // [!code highlight]
+        })
+    ]
+});
+```
+
+The value can be a relative path or a full URL:
+
+```ts
+// Relative path (appended to your baseURL)
+sso({ redirectURI: "/sso/callback" })
+
+// Full URL
+sso({ redirectURI: "https://login.example.com/callback" })
+```
+
+The provider ID is stored in the OAuth state so the callback can identify which provider initiated the flow.
+
+<Callout type="info">
+When using a full URL, make sure it routes to your Better Auth instance.
+</Callout>
+
+<Callout type="info">
+This option only affects OIDC providers. SAML providers already support custom callback URLs via `callbackUrl` in `samlConfig`.
+</Callout>
+
+<Callout type="info">
+Both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) are always registered for backward compatibility, so existing integrations continue to work regardless of this setting.
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1235,12 +1280,12 @@ Once enabled, make sure you migrate the database schema (again).
 <Tabs items={["migrate", "generate"]}>
     <Tab value="migrate">
     ```bash
-    npx @better-auth/cli migrate
+    npx auth migrate
     ```
     </Tab>
     <Tab value="generate">
     ```bash
-    npx @better-auth/cli generate
+    npx auth generate
     ```
     </Tab>
 </Tabs>
@@ -1264,7 +1309,7 @@ You can use this token to prove ownership over the domain.
 #### Create `TXT` DNS record
 To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
 
 **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
@@ -1444,6 +1489,11 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "number | function",
         default: 10,
     },
+    redirectURI: {
+        description: "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+        type: "string",
+        required: false,
+    },
     domainVerification: {
         description: "Configure the domain verification feature",
         type: "object",
@@ -1454,10 +1504,10 @@ If you want to allow account linking for specific trusted providers, enable the 
                 required: false
             },
             tokenPrefix: {
-                description: "Prefix to append to the verification token identifier",
+                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
                 type: "string",
                 required: false,
-                default: "better-auth-token-"
+                default: "better-auth-token"
             },
         },
     },

@@ -15,6 +15,40 @@ import type {
 	InferUserFromClient,
 } from "./types";
 
+type KeepNullishFromOriginal<Original, Replaced> =
+	| Replaced
+	| (undefined extends Original ? undefined : never)
+	| (null extends Original ? null : never);
+
+type ReplaceTopLevelField<
+	Data,
+	Field extends "user" | "session",
+	Replaced,
+> = Data extends object
+	? Field extends keyof Data
+		? Omit<Data, Field> & {
+				[K in Field]: KeepNullishFromOriginal<Data[K], Replaced>;
+			}
+		: Data
+	: Data;
+
+type ReplaceAuthUserAndSession<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = ReplaceTopLevelField<
+	ReplaceTopLevelField<Data, "user", InferUserFromClient<ClientOpts>>,
+	"session",
+	InferSessionFromClient<ClientOpts>
+>;
+
+type RefineAuthResponse<
+	Data,
+	ClientOpts extends BetterAuthClientOptions,
+> = Data extends { token: unknown } | { redirect: unknown }
+	? // Only auth-like responses should get client-side user/session type refinement.
+		ReplaceAuthUserAndSession<Data, ClientOpts>
+	: Data;
+
 export type CamelCase<S extends string> =
 	S extends `${infer P1}-${infer P2}${infer P3}`
 		? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
@@ -134,7 +168,7 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 															user: InferUserFromClient<COpts>;
 															session: InferSessionFromClient<COpts>;
 														} | null
-													: NonNullable<Awaited<R>>,
+													: RefineAuthResponse<NonNullable<Awaited<R>>, COpts>,
 											T["options"]["error"] extends StandardSchemaV1
 												? // InferOutput
 													NonNullable<

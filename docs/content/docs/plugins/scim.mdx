@@ -63,12 +63,12 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```package-install
-            npx @better-auth/cli migrate
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
             ```package-install
-            npx @better-auth/cli generate
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -162,6 +162,44 @@ const auth = betterAuth({
 
 In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
 </Callout>
+
+### SCIM provider connection ownership
+
+SCIM provider connection ownership allows your application to track and restrict access to the SCIM management endpoints
+by linking each connection to the user who generated the token.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { scim } from "@better-auth/scim";
+
+const auth = betterAuth({
+    plugins: [
+        scim({ // [!code highlight]
+            providerOwnership: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
+    ]
+});
+```
+
+Once enabled, make sure you migrate the database schema (again).
+
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```bash
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```bash
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
+
+See the [Schema](#if-you-have-provider-ownership-enabled-via-providerownershipenabled) section to add the fields manually.
+
 
 ### Managing SCIM provider connections
 
@@ -425,10 +463,28 @@ The plugin requires additional fields in the `scimProvider` table to store the p
     ]}
 />
 
+### If you have provider ownership enabled via `providerOwnership.enabled`:
+
+The `scimProvider` schema is extended as follows:
+
+<DatabaseTable
+    fields={[
+        { name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isRequired: false },
+    ]}
+/>
+
 
 ## Options
 
 ### Server
+
+- `providerOwnership`: `{ enabled: boolean }` — When enabled, links each provider connection to the user who generated its token. See [Connection ownership](#scim-provider-connection-ownership) for details. Default is `{ enabled: false }`.
+
+```ts title="Enable connection ownership (requires migration)"
+scim({
+    providerOwnership: { enabled: true },
+})
+```
 
 - `defaultSCIM`: Default list of SCIM tokens for testing.
 - `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
