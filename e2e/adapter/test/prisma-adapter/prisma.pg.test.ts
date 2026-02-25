@@ -17,6 +17,7 @@ import {
 	getPrismaClient,
 	incrementMigrationCount,
 } from "./get-prisma-client";
+import { prismaPgJsonFieldTestSuite } from "./prisma-pg-json-field.test-suite";
 import { pushPrismaSchema } from "./push-prisma-schema";
 
 const dialect = "postgresql";
@@ -48,6 +49,7 @@ const { execute } = await testAdapter({
 		numberIdTestSuite(),
 		joinsTestSuite(),
 		uuidTestSuite({}),
+		prismaPgJsonFieldTestSuite(),
 	],
 	onFinish: async () => {},
 	prefixTests: "pg",
