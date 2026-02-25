@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
+import { organization } from "@better-auth/organization";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { twoFactor, username } from "better-auth/plugins";
@@ -13,7 +14,6 @@ import { generateDrizzleSchema } from "../src/generators/drizzle";
 import { generateKyselySchema } from "../src/generators/kysely";
 import { generatePrismaSchema } from "../src/generators/prisma";
 import { getPrismaVersion } from "../src/utils/get-package-info";
-import { organization } from "@better-auth/organization";
 
 describe("generate", async () => {
 	it("should generate prisma schema", async () => {
