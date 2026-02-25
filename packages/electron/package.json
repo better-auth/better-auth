@@ -1,36 +1,39 @@
 {
   "name": "@better-auth/electron",
   "version": "1.5.0-beta.18",
-  "type": "module",
   "description": "Better Auth integration for Electron applications.",
-  "main": "dist/index.mjs",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.mts",
-  "publishConfig": {
-    "access": "public"
-  },
+  "type": "module",
   "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/integrations/electron",
   "repository": {
     "type": "git",
-    "url": "https://github.com/better-auth/better-auth",
+    "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/electron"
   },
-  "homepage": "https://www.better-auth.com/docs/integrations/electron",
   "keywords": [
     "electron",
     "auth",
     "better-auth",
     "typescript"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -77,6 +80,26 @@
       ]
     }
   },
+  "dependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-auth": "workspace:*",
+    "better-sqlite3": "^12.6.2",
+    "electron": "^38.8.0",
+    "tsdown": "catalog:"
+  },
+  "peerDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/utils": "catalog:",
+    "@better-fetch/fetch": "catalog:",
+    "better-auth": "workspace:*",
+    "better-call": "catalog:",
+    "conf": "^15.0.2",
+    "electron": ">=36.0.0"
+  },
   "peerDependenciesMeta": {
     "electron": {
       "optional": true
@@ -85,30 +108,7 @@
       "optional": true
     }
   },
-  "peerDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "catalog:",
-    "@better-fetch/fetch": "catalog:",
-    "better-auth": "workspace:*",
-    "better-call": "catalog:",
-    "electron": ">=36.0.0",
-    "conf": "^15.0.2"
-  },
-  "dependencies": {
-    "zod": "^4.3.5"
-  },
-  "devDependencies": {
-    "@better-auth/core": "workspace:*",
-    "@types/better-sqlite3": "^7.6.13",
-    "electron": "^38.8.0",
-    "better-auth": "workspace:*",
-    "better-sqlite3": "^12.6.2",
-    "tsdown": "catalog:"
-  },
   "engines": {
     "node": ">=22.0.0"
-  },
-  "files": [
-    "dist"
-  ]
+  }
 }

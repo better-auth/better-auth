@@ -1,39 +1,42 @@
 {
   "name": "auth",
   "version": "1.5.0-beta.18",
-  "type": "module",
   "description": "The CLI for Better Auth",
-  "module": "dist/index.mjs",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/concepts/cli",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/cli"
   },
-  "homepage": "https://www.better-auth.com/docs/concepts/cli",
-  "main": "./dist/index.mjs",
-  "scripts": {
-    "build": "tsdown",
-    "start": "node ./dist/index.mjs",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
-    "dev": "tsx ./src/index.ts",
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "typecheck": "tsc --project tsconfig.json"
-  },
-  "publishConfig": {
-    "access": "public",
-    "executableFiles": [
-      "./dist/index.mjs"
-    ]
-  },
-  "license": "MIT",
   "keywords": [
     "auth",
     "cli",
     "typescript",
     "better-auth"
   ],
+  "publishConfig": {
+    "access": "public",
+    "executableFiles": [
+      "./dist/index.mjs"
+    ]
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx ./src/index.ts",
+    "start": "node ./dist/index.mjs",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
   "exports": {
     ".": "./dist/index.mjs",
     "./api": {
@@ -50,19 +53,6 @@
   },
   "bin": {
     "better-auth": "./dist/index.mjs"
-  },
-  "devDependencies": {
-    "@better-auth/passkey": "workspace:*",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/prompts": "^2.4.9",
-    "@types/semver": "^7.7.1",
-    "better-sqlite3": "^12.6.2",
-    "jiti": "^2.6.0",
-    "memfs": "^4.56.10",
-    "tsdown": "catalog:",
-    "tsx": "^4.20.6",
-    "type-fest": "^5.4.4",
-    "typescript": "catalog:"
   },
   "dependencies": {
     "@babel/core": "^7.28.4",
@@ -89,7 +79,17 @@
     "yocto-spinner": "^0.2.3",
     "zod": "^4.3.6"
   },
-  "files": [
-    "dist"
-  ]
+  "devDependencies": {
+    "@better-auth/passkey": "workspace:*",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/prompts": "^2.4.9",
+    "@types/semver": "^7.7.1",
+    "better-sqlite3": "^12.6.2",
+    "jiti": "^2.6.0",
+    "memfs": "^4.56.10",
+    "tsdown": "catalog:",
+    "tsx": "^4.20.6",
+    "type-fest": "^5.4.4",
+    "typescript": "catalog:"
+  }
 }
