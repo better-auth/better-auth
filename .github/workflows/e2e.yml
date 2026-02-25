@@ -99,8 +99,7 @@ jobs:
 
       - name: Install Playwright Browsers
         if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
+        uses: ./.github/actions/setup-playwright
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
@@ -120,7 +119,6 @@ jobs:
       fail-fast: false
       matrix:
         packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
-        node-version: [ 22.x ]
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -153,11 +151,6 @@ jobs:
       - name: Install
         if: github.event_name != 'merge_group'
         run: pnpm install
-
-      - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
