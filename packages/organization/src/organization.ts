@@ -33,7 +33,7 @@ export function organization<O extends OrganizationOptions>(
 		endpoints,
 		schema,
 		$ERROR_CODES,
-		options: opts as NoInfer<O>,
+		options: options as unknown as NoInfer<O>,
 		$Infer: {} as InferAllAddons<O>,
 	} satisfies BetterAuthPlugin;
 }

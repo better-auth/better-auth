@@ -1,7 +1,7 @@
 import { runWithEndpointContext } from "@better-auth/core/context";
+import { organization } from "@better-auth/organization";
 import type { Auth, User } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import {

@@ -1,6 +1,6 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
-import type { OrganizationOptions } from "better-auth/plugins/organization";
+import type { OrganizationOptions } from "@better-auth/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 
 /**

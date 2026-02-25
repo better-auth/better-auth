@@ -1,9 +1,9 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import type { Organization } from "@better-auth/organization";
 import type { GenericEndpointContext, User } from "better-auth";
 import { HIDE_METADATA } from "better-auth";
 import { getSessionFromCtx, originCheck } from "better-auth/api";
-import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import type { Stripe as StripeType } from "stripe";
@@ -322,7 +322,7 @@ export const upgradeSubscription = (options: StripeOptions) => {
 				customerId = subscriptionToUpdate?.stripeCustomerId;
 				if (!customerId) {
 					const org = await ctx.context.adapter.findOne<
-						Organization & WithStripeCustomerId
+						Organization & { slug?: string } & WithStripeCustomerId
 					>({
 						model: "organization",
 						where: [

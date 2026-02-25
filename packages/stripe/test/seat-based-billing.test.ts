@@ -1,5 +1,5 @@
-import { organizationClient } from "better-auth/client/plugins";
-import { organization } from "better-auth/plugins/organization";
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -861,11 +861,13 @@ describe("seat-based billing", () => {
 			const invitations = await client.organization.listInvitations({
 				fetchOptions: { headers },
 			});
-			const invitationId = invitations.data?.[0]?.id;
+			const invitationId = invitations.data?.invitations[0]?.id;
 			expect(invitationId).toBeDefined();
 
 			await client.organization.acceptInvitation({
-				invitationId: invitationId!,
+				query: {
+					invitationId: invitationId!,
+				},
 				fetchOptions: { headers: newMemberHeaders },
 			});
 

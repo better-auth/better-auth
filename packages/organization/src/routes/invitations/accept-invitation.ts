@@ -142,7 +142,7 @@ export const acceptInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-			const acceptInvitationHooks = getHook("AcceptInvitation", options);
+			const acceptInvitationHooks = getHook("AcceptInvitation");
 
 			await acceptInvitationHooks.before(
 				{

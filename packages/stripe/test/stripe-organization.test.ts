@@ -1,5 +1,5 @@
-import { organizationClient } from "better-auth/client/plugins";
-import { organization } from "better-auth/plugins/organization";
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { getTestInstance } from "better-auth/test";
 import type Stripe from "stripe";
 import { beforeEach, describe, expect, it, vi } from "vitest";

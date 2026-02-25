@@ -185,7 +185,7 @@ export const removeMember = <O extends OrganizationOptions>(_options: O) => {
 				});
 			}
 
-			const removeMemberHook = getHook("RemoveMember", options);
+			const removeMemberHook = getHook("RemoveMember");
 
 			await removeMemberHook.before(
 				{

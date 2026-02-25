@@ -122,8 +122,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 			if (organization.id === session.session.activeOrganizationId) {
 				await adapter.setActiveOrganization(session.session.token, null);
 			}
-			const resolvedOptions = resolveOrgOptions(options);
-			const orgHook = getHook("DeleteOrganization", resolvedOptions);
+			const orgHook = getHook("DeleteOrganization");
 
 			await orgHook.before(
 				{
@@ -140,6 +139,7 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 				},
 				ctx,
 			);
+
 			return ctx.json(organization);
 		},
 	);

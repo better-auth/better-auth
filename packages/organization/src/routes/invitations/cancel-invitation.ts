@@ -103,7 +103,7 @@ export const cancelInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const cancelInvitationHooks = getHook("CancelInvitation", options);
+			const cancelInvitationHooks = getHook("CancelInvitation");
 
 			await cancelInvitationHooks.before(
 				{

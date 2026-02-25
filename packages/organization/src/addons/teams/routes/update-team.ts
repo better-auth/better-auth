@@ -164,7 +164,7 @@ export const updateTeam = <O extends TeamsOptions>(_options?: O) => {
 				name,
 				...additionalFields,
 			};
-			const updateTeamHook = getHook("UpdateTeam", options);
+			const updateTeamHook = getHook("UpdateTeam");
 
 			const modify = await updateTeamHook.before(
 				{

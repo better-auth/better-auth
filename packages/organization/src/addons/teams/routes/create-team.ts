@@ -179,7 +179,7 @@ export const createTeam = <O extends TeamsOptions>(
 				}
 			}
 
-			const teamHook = getHook("CreateTeam", options);
+			const teamHook = getHook("CreateTeam");
 
 			const teamData = await (async () => {
 				const team = {

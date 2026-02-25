@@ -165,7 +165,7 @@ export const updateOrganization = <O extends OrganizationOptions>(
 				}
 			}
 
-			const orgHooks = getHook("UpdateOrganization", resolvedOptions);
+			const orgHooks = getHook("UpdateOrganization");
 
 			const updateData = await (async () => {
 				const organization = ctx.body.data;

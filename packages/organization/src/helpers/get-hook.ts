@@ -29,10 +29,7 @@ type InferHookResponse<T> =
 /**
  * Helper function to provide before and after hook functions based on the hook name.
  */
-export const getHook = <H extends HookOptions>(
-	hook: H,
-	options: ResolvedOrganizationOptions,
-) => {
+export const getHook = <H extends HookOptions>(hook: H) => {
 	type Before = NonNullable<Hooks[`before${H}`]>;
 	type After = NonNullable<Hooks[`after${H}`]>;
 
@@ -48,6 +45,8 @@ export const getHook = <H extends HookOptions>(
 			data: Parameters<Before>[0],
 			ctx: GenericEndpointContext,
 		) => {
+			const options = ctx.context.getPlugin("organization")
+				?.options as ResolvedOrganizationOptions;
 			const hookFn = options.hooks?.[`before${hook}`] as Before | undefined;
 			if (!hookFn) return null;
 			//@ts-expect-error - intentional
@@ -58,6 +57,8 @@ export const getHook = <H extends HookOptions>(
 			return null;
 		},
 		after: async (data: Parameters<After>[0], ctx: GenericEndpointContext) => {
+			const options = ctx.context.getPlugin("organization")
+				?.options as ResolvedOrganizationOptions;
 			const hookFn = options.hooks?.[`after${hook}`] as After | undefined;
 			if (!hookFn) return null;
 			//@ts-expect-error - intentional

@@ -1,10 +1,10 @@
+import type { Organization } from "@better-auth/organization";
 import type {
 	GenericEndpointContext,
 	InferOptionSchema,
 	Session,
 	User,
 } from "better-auth";
-import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
 import type { organization, subscriptions, user } from "./schema";
 

@@ -207,7 +207,7 @@ export const updateMemberRole = <O extends OrganizationOptions>(
 			const previousRole = toBeUpdatedMember.role;
 			const newRole = parseRoles(ctx.body.role as string | string[]);
 
-			const updateMemberRoleHook = getHook("UpdateMemberRole", options);
+			const updateMemberRoleHook = getHook("UpdateMemberRole");
 
 			const modify = await updateMemberRoleHook.before(
 				{

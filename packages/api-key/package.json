@@ -70,11 +70,13 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "tsdown": "catalog:"
+    "tsdown": "catalog:",
+    "@better-auth/organization": "workspace:*"
   },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
-    "@better-auth/utils": "catalog:"
+    "@better-auth/utils": "catalog:",
+    "@better-auth/organization": "workspace:*"
   }
 }
