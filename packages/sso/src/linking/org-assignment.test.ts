@@ -1,7 +1,7 @@
+import { organization } from "@better-auth/organization";
 import type { GenericEndpointContext, User } from "better-auth";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
-import { organization } from "better-auth/plugins";
 import { describe, expect, it } from "vitest";
 import { sso } from "..";
 import { assignOrganizationByDomain } from "./org-assignment";

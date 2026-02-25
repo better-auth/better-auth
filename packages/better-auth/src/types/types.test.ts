@@ -1,7 +1,7 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthEndpoint } from "../api";
-import { organization, twoFactor } from "../plugins";
+import { twoFactor } from "../plugins";
 import { getTestInstance } from "../test-utils/test-instance";
 
 type TestTypeOptions = {
@@ -153,7 +153,7 @@ describe("general types", async () => {
 
 	it("should infer additional fields from plugins", async () => {
 		const { auth } = await getTestInstance({
-			plugins: [twoFactor(), organization()],
+			plugins: [twoFactor()],
 		});
 		expectTypeOf<typeof auth.$Infer.Session.user>().toEqualTypeOf<{
 			id: string;
@@ -175,7 +175,6 @@ describe("general types", async () => {
 			token: string;
 			ipAddress?: string | undefined | null;
 			userAgent?: string | undefined | null;
-			activeOrganizationId?: string | undefined | null;
 		}>();
 	});
 
