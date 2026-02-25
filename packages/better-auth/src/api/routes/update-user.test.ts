@@ -680,3 +680,41 @@ describe("change-email enumeration protection", async () => {
 		});
 	});
 });
+
+describe("change-email without sendVerificationEmail", async () => {
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("should return the same error for existing and non-existing emails", async () => {
+		// Create a second user
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Existing User",
+			email: "existing-no-verif@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const resExisting = await client.changeEmail({
+				newEmail: "existing-no-verif@test.com",
+			});
+			const resNonExisting = await client.changeEmail({
+				newEmail: "does-not-exist@test.com",
+			});
+
+			// Both should fail with the same error
+			expect(resExisting.error?.status).toBe(400);
+			expect(resNonExisting.error?.status).toBe(400);
+			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
+	});
+});

@@ -729,6 +729,33 @@ export const changeEmail = createAuthEndpoint(
 				message: "Email is the same",
 			});
 		}
+
+		/**
+		 * Early config check: ensure at least one email-change flow is
+		 * available for the current session state. Without this, an
+		 * existing-email lookup would return 200 while a non-existing
+		 * email would later throw 400, leaking email existence.
+		 */
+		const canUpdateWithoutVerification =
+			ctx.context.session.user.emailVerified !== true &&
+			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
+		const canSendConfirmation =
+			ctx.context.session.user.emailVerified &&
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
+		const canSendVerification =
+			ctx.context.options.emailVerification?.sendVerificationEmail;
+
+		if (
+			!canUpdateWithoutVerification &&
+			!canSendConfirmation &&
+			!canSendVerification
+		) {
+			ctx.context.logger.error("Verification email isn't enabled.");
+			throw APIError.fromStatus("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
+			});
+		}
+
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
@@ -748,10 +775,7 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is not verified, we can update the email if the option is enabled
 		 */
-		if (
-			ctx.context.session.user.emailVerified !== true &&
-			ctx.context.options.user.changeEmail.updateEmailWithoutVerification
-		) {
+		if (canUpdateWithoutVerification) {
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
@@ -765,7 +789,7 @@ export const changeEmail = createAuthEndpoint(
 					email: newEmail,
 				},
 			});
-			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+			if (canSendVerification) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					newEmail,
@@ -778,7 +802,7 @@ export const changeEmail = createAuthEndpoint(
 					ctx.body.callbackURL || "/"
 				}`;
 				await ctx.context.runInBackgroundOrAwait(
-					ctx.context.options.emailVerification.sendVerificationEmail(
+					canSendVerification(
 						{
 							user: {
 								...ctx.context.session.user,
@@ -800,11 +824,7 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		const sendConfirmationToOldEmail =
-			ctx.context.session.user.emailVerified &&
-			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
-
-		if (sendConfirmationToOldEmail) {
+		if (canSendConfirmation) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				ctx.context.session.user.email,
@@ -817,27 +837,23 @@ export const changeEmail = createAuthEndpoint(
 			const url = `${
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
-			if (sendFn) {
-				await ctx.context.runInBackgroundOrAwait(
-					sendFn(
-						{
-							user: ctx.context.session.user,
-							newEmail: newEmail,
-							url,
-							token,
-						},
-						ctx.request,
-					),
-				);
-			}
+			await ctx.context.runInBackgroundOrAwait(
+				canSendConfirmation(
+					{
+						user: ctx.context.session.user,
+						newEmail: newEmail,
+						url,
+						token,
+					},
+					ctx.request,
+				),
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
 
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		if (!canSendVerification) {
 			ctx.context.logger.error("Verification email isn't enabled.");
 			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
@@ -857,7 +873,7 @@ export const changeEmail = createAuthEndpoint(
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
 		await ctx.context.runInBackgroundOrAwait(
-			ctx.context.options.emailVerification.sendVerificationEmail(
+			canSendVerification(
 				{
 					user: {
 						...ctx.context.session.user,
