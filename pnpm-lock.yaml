@@ -1304,6 +1304,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
@@ -1313,6 +1316,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
