@@ -128,7 +128,7 @@ export const removeTeamMember = <O extends TeamsOptions>(_options?: O) => {
 			}
 
 			// Use the org-scoped team.id to ensure we operate on the correct team
-			const realTeamId = team.id as RealTeamId;
+			const realTeamId = team.id as unknown as RealTeamId;
 
 			const organization = await orgAdapter.findOrganizationById(realOrgId);
 			if (!organization) {
@@ -156,7 +156,7 @@ export const removeTeamMember = <O extends TeamsOptions>(_options?: O) => {
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const removeTeamMemberHook = getHook("RemoveTeamMember", options);
+			const removeTeamMemberHook = getHook("RemoveTeamMember");
 
 			await removeTeamMemberHook.before(
 				{

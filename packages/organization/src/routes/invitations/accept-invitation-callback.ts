@@ -139,7 +139,7 @@ export const acceptInvitationCallback = <O extends OrganizationOptions>(
 				return redirectOnError(msg);
 			}
 
-			const acceptInvitationHooks = getHook("AcceptInvitation", options);
+			const acceptInvitationHooks = getHook("AcceptInvitation");
 
 			await acceptInvitationHooks.before(
 				{

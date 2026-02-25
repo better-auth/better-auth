@@ -128,7 +128,7 @@ export const removeTeam = <O extends TeamsOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const deleteTeamHook = getHook("DeleteTeam", options);
+			const deleteTeamHook = getHook("DeleteTeam");
 
 			const user = session?.user;
 			const hookProps = { team, user, organization: org };

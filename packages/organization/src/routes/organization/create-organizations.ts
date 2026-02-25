@@ -139,8 +139,8 @@ export const createOrganization = <O extends OrganizationOptions>(
 			}
 
 			// Prepare hooks
-			const createOrgHook = getHook("CreateOrganization", options);
-			const addMemberHook = getHook("AddMember", options);
+			const createOrgHook = getHook("CreateOrganization");
+			const addMemberHook = getHook("AddMember");
 
 			// Prepare organization data
 			const organizationData = await (async () => {

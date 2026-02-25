@@ -92,7 +92,7 @@ export const rejectInvitation = <O extends OrganizationOptions>(
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const rejectInvitationHooks = getHook("RejectInvitation", options);
+			const rejectInvitationHooks = getHook("RejectInvitation");
 
 			await rejectInvitationHooks.before(
 				{

@@ -143,7 +143,7 @@ export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
 			}
 
 			// Use the org-scoped team.id to ensure we operate on the correct team
-			const realTeamId = team.id as RealTeamId;
+			const realTeamId = team.id as unknown as RealTeamId;
 
 			const organization = await orgAdapter.findOrganizationById(realOrgId);
 			if (!organization) {
@@ -188,7 +188,7 @@ export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
 				throw APIError.from("FORBIDDEN", msg);
 			}
 
-			const addTeamMemberHook = getHook("AddTeamMember", options);
+			const addTeamMemberHook = getHook("AddTeamMember");
 
 			let teamMemberData = {
 				teamId: realTeamId,

@@ -391,7 +391,7 @@ export const createInvitationURL = <O extends OrganizationOptions>(
 				...(additionalFields ? additionalFields : {}),
 			};
 
-			const invitationHooks = getHook("CreateInvitation", options);
+			const invitationHooks = getHook("CreateInvitation");
 			const mutatedInvitationData = await invitationHooks.before(
 				{
 					invitation: {

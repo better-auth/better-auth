@@ -158,7 +158,7 @@ export const addMember = <O extends OrganizationOptions>(_options: O) => {
 				...(additionalFields ? additionalFields : {}),
 			};
 
-			const addMemberHook = getHook("AddMember", options);
+			const addMemberHook = getHook("AddMember");
 
 			const modify = await addMemberHook.before(
 				{
