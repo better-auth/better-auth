@@ -59,7 +59,6 @@ export const isDevelopment = () =>
 /** Detect if we are currently building a SvelteKit project */
 let _isSvelteKitBuilding = false;
 try {
-	/** @lintignore */
 	// @ts-expect-error Will only work if we are in SvelteKit
 	const svelteKitEnv = await import("$app/environment");
 	_isSvelteKitBuilding = svelteKitEnv.building;
