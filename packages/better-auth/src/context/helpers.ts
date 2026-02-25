@@ -8,12 +8,15 @@ import { env } from "@better-auth/core/env";
 import { defu } from "defu";
 import { createInternalAdapter } from "../db";
 import { isPromise } from "../utils/is-promise";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];
 	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
+	const pluginTrustedOrigins: NonNullable<
+		BetterAuthOptions["trustedOrigins"]
+	>[] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			const initPromise = plugin.init(context);
@@ -25,9 +28,12 @@ export async function runPluginInit(context: AuthContext) {
 			}
 			if (typeof result === "object") {
 				if (result.options) {
-					const { databaseHooks, ...restOpts } = result.options;
+					const { databaseHooks, trustedOrigins, ...restOpts } = result.options;
 					if (databaseHooks) {
 						dbHooks.push(databaseHooks);
+					}
+					if (trustedOrigins) {
+						pluginTrustedOrigins.push(trustedOrigins);
 					}
 					options = defu(options, restOpts);
 				}
@@ -36,6 +42,28 @@ export async function runPluginInit(context: AuthContext) {
 					Object.assign(context, result.context);
 				}
 			}
+		}
+	}
+	if (pluginTrustedOrigins.length > 0) {
+		const allSources = [
+			...(options.trustedOrigins ? [options.trustedOrigins] : []),
+			...pluginTrustedOrigins,
+		];
+		const staticOrigins = allSources.filter(Array.isArray).flat();
+		const dynamicOrigins = allSources.filter(
+			(s): s is Exclude<typeof s, string[]> => typeof s === "function",
+		);
+		if (dynamicOrigins.length > 0) {
+			options.trustedOrigins = async (request) => {
+				const resolved = await Promise.all(
+					dynamicOrigins.map((fn) => fn(request)),
+				);
+				return [...staticOrigins, ...resolved.flat()].filter(
+					(v): v is string => typeof v === "string" && v !== "",
+				);
+			};
+		} else {
+			options.trustedOrigins = staticOrigins;
 		}
 	}
 	// Add the global database hooks last
@@ -61,10 +89,37 @@ export async function getTrustedOrigins(
 	options: BetterAuthOptions,
 	request?: Request,
 ): Promise<string[]> {
-	const baseURL = getBaseURL(options.baseURL, options.basePath, request);
-	const trustedOrigins: (string | undefined | null)[] = baseURL
-		? [new URL(baseURL).origin]
-		: [];
+	const trustedOrigins: (string | undefined | null)[] = [];
+
+	if (isDynamicBaseURLConfig(options.baseURL)) {
+		const allowedHosts = options.baseURL.allowedHosts;
+		for (const host of allowedHosts) {
+			if (!host.includes("://")) {
+				trustedOrigins.push(`https://${host}`);
+				if (host.includes("localhost") || host.includes("127.0.0.1")) {
+					trustedOrigins.push(`http://${host}`);
+				}
+			} else {
+				trustedOrigins.push(host);
+			}
+		}
+
+		if (options.baseURL.fallback) {
+			try {
+				trustedOrigins.push(new URL(options.baseURL.fallback).origin);
+			} catch {}
+		}
+	} else {
+		const baseURL = getBaseURL(
+			typeof options.baseURL === "string" ? options.baseURL : undefined,
+			options.basePath,
+			request,
+		);
+		if (baseURL) {
+			trustedOrigins.push(new URL(baseURL).origin);
+		}
+	}
+
 	if (options.trustedOrigins) {
 		if (Array.isArray(options.trustedOrigins)) {
 			trustedOrigins.push(...options.trustedOrigins);
@@ -80,6 +135,7 @@ export async function getTrustedOrigins(
 	}
 	return trustedOrigins.filter((v): v is string => Boolean(v));
 }
+
 export async function getAwaitableValue<T extends Record<string, any>>(
 	arr: AwaitableFunction<T>[] | undefined,
 	item: { field?: string; value: string },
@@ -92,4 +148,19 @@ export async function getAwaitableValue<T extends Record<string, any>>(
 		}
 	}
 	return undefined;
+}
+
+export async function getTrustedProviders(
+	options: BetterAuthOptions,
+	request?: Request,
+): Promise<string[]> {
+	const trustedProviders = options.account?.accountLinking?.trustedProviders;
+	if (!trustedProviders) {
+		return [];
+	}
+	if (Array.isArray(trustedProviders)) {
+		return trustedProviders.filter((v): v is string => Boolean(v));
+	}
+	const resolved = await trustedProviders(request);
+	return (resolved ?? []).filter((v): v is string => Boolean(v));
 }

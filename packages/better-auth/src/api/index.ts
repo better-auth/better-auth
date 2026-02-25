@@ -12,7 +12,7 @@ import { createRouter } from "better-call";
 import type { UnionToIntersection } from "../types";
 import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit } from "./rate-limiter";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -41,6 +41,7 @@ import {
 	signOut,
 	signUpEmail,
 	unlinkAccount,
+	updateSession,
 	updateUser,
 	verifyEmail,
 	verifyPassword,
@@ -224,6 +225,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		changeEmail,
 		changePassword,
 		setPassword,
+		updateSession: updateSession<Option>(),
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		requestPasswordReset,
@@ -302,7 +304,8 @@ export const router = <Option extends BetterAuthOptions>(
 
 			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
+			await onResponseRateLimit(req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await plugin.onResponse(res, ctx);

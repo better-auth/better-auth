@@ -52,6 +52,59 @@ For maintaining older versions (e.g., v1.3.x while v1.4.x is latest):
 1. Create a version branch named `v1.3.x-latest`
 2. Tags pushed from this branch will also receive the `latest` npm tag
 
+## Cherry-picking Guidelines
+
+When cherry-picking from `canary` to a stable release branch:
+
+### API Compatibility
+
+* **Check for new APIs**: Commits may use APIs that do not exist in the
+  target branch
+* **Fix imports**: Some imports may need adjustment
+
+### Handling Conflicts
+
+* When resolving merge conflicts, keep **both** versions if they add
+  different tests/features (e.g., two separate `describe` blocks)
+* For type conflicts, check if new type properties need to be added
+  to existing interfaces
+
+### Skip Incompatible Commits
+
+Skip commits that depend on features not in the target branch
+
+### Squashing Fixes
+
+**Never create separate compatibility fix commits.**
+Always squash fixes into the original cherry-picked commit:
+
+```bash
+# Create fixup commit
+git add <files>
+git commit --fixup <original-commit-hash> --no-verify
+
+# Squash with autosquash (repeat for all fixup commits first)
+GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <earliest-commit>^ --no-verify
+```
+
+### Revert Chains
+
+When cherry-picking a sequence like: fix → revert → revert-of-revert,
+just cherry-pick the original fix and skip both reverts (net effect
+is the same).
+
+### Test Verification
+
+After cherry-picking, always run:
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm vitest <affected-test-files> --run
+```
+
+Remove tests that test features are not available in the target branch.
+
 ## Notes
 
 * **Do not merge breaking changes to `main` branch** unless upgrading

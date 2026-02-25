@@ -60,6 +60,10 @@ export interface SAMLConfig {
 					Binding: string;
 					Location: string;
 				}>;
+				singleLogoutService?: Array<{
+					Binding: string;
+					Location: string;
+				}>;
 		  }
 		| undefined;
 	spMetadata: {
@@ -81,6 +85,25 @@ export interface SAMLConfig {
 	decryptionPvk?: string | undefined;
 	additionalParams?: Record<string, any> | undefined;
 	mapping?: SAMLMapping | undefined;
+}
+
+/** Session data stored during SAML login for Single Logout */
+export interface SAMLSessionRecord {
+	sessionId: string;
+	providerId: string;
+	nameID: string;
+	sessionIndex?: string;
+}
+
+/** Parsed SAML assertion extract from samlify */
+export interface SAMLAssertionExtract {
+	nameID?: string;
+	sessionIndex?: string;
+	inResponseTo?: string;
+	conditions?: {
+		notBefore?: string;
+		notOnOrAfter?: string;
+	};
 }
 
 type BaseSSOProvider = {
@@ -253,12 +276,20 @@ export interface SSOOptions {
 		 */
 		enabled?: boolean;
 		/**
-		 * Prefix used to generate the domain verification token
+		 * Prefix used to generate the domain verification token.
+		 * An underscore is automatically prepended to follow DNS
+		 * infrastructure subdomain conventions (RFC 8552), so do
+		 * not include a leading underscore.
 		 *
-		 * @default "better-auth-token-"
+		 * @default "better-auth-token"
 		 */
 		tokenPrefix?: string;
 	};
+	/**
+	 * A shared redirect URI used by all OIDC providers instead of
+	 * per-provider callback URLs. Can be a path or a full URL.
+	 */
+	redirectURI?: string;
 	/**
 	 * SAML security options for AuthnRequest/InResponseTo validation.
 	 * This prevents unsolicited responses, replay attacks, and cross-provider injection.
@@ -354,6 +385,26 @@ export interface SSOOptions {
 		 * @default 102400 (100KB)
 		 */
 		maxMetadataSize?: number;
+		/**
+		 * Enable SAML Single Logout
+		 * @default false
+		 */
+		enableSingleLogout?: boolean;
+		/**
+		 * TTL for LogoutRequest records in milliseconds
+		 * @default 300000 (5 minutes)
+		 */
+		logoutRequestTTL?: number;
+		/**
+		 * Require signed LogoutRequests from IdP
+		 * @default false
+		 */
+		wantLogoutRequestSigned?: boolean;
+		/**
+		 * Require signed LogoutResponses from IdP
+		 * @default false
+		 */
+		wantLogoutResponseSigned?: boolean;
 	};
 }
 

@@ -36,8 +36,10 @@ export const svelteKitHandler = async ({
 
 export function isAuthPath(url: string, options: BetterAuthOptions) {
 	const _url = new URL(url);
+	const baseURLStr =
+		typeof options.baseURL === "string" ? options.baseURL : undefined;
 	const baseURL = new URL(
-		`${options.baseURL || _url.origin}${options.basePath || "/api/auth"}`,
+		`${baseURLStr || _url.origin}${options.basePath || "/api/auth"}`,
 	);
 	if (_url.origin !== baseURL.origin) return false;
 	if (
