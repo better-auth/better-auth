@@ -986,9 +986,7 @@ describe("seat-based billing", () => {
 			expect(invitationId).toBeDefined();
 
 			await client.organization.acceptInvitation({
-				query: {
-					invitationId: invitationId!,
-				},
+				invitationId: invitationId!,
 				fetchOptions: { headers: newMemberHeaders },
 			});
 
