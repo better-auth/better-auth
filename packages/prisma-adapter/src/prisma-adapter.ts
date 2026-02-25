@@ -623,10 +623,30 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 			usePlural: config.usePlural ?? false,
 			debugLogs: config.debugLogs ?? false,
 			supportsUUIDs: config.provider === "postgresql" ? true : false,
+			supportsJSON: config.provider === "postgresql" ? true : false,
 			supportsArrays:
 				config.provider === "postgresql" || config.provider === "mongodb"
 					? true
 					: false,
+			customTransformInput: ({ data, fieldAttributes }) => {
+				// If it's a json field but with pure string value,
+				// it's likely this was due to the past not having support for json.
+				// we would instead store a stringified json value.
+				// This code is here as a backwards compatibility measure to
+				// parse it back to a json object.
+				if (
+					config.provider === "postgresql" &&
+					fieldAttributes.type === "json" &&
+					typeof data === "string"
+				) {
+					try {
+						return JSON.parse(data);
+					} catch {
+						return data;
+					}
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
