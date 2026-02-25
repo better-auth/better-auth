@@ -1,8 +1,37 @@
+import type { BetterAuthPlugin } from "better-auth";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, expectTypeOf } from "vitest";
+import { organizationClient } from "../../../client";
 import { organization } from "../../../organization";
 import { getOrganizationData } from "../../../test/utils";
 import { dynamicAccessControl } from "..";
-import { defineInstance, getRoleData } from "../tests/utils";
+import { getRoleData } from "../tests/utils";
+
+/**
+ * Helper to define `getTestInstance` as a shorter alias, specific to the organization plugin.
+ * @internal
+ */
+async function defineInstance<Plugins extends BetterAuthPlugin[]>(
+	plugins: Plugins,
+) {
+	const instance = await getTestInstance(
+		{
+			plugins: plugins,
+			logger: {
+				level: "error",
+			},
+		},
+		{
+			clientOptions: {
+				plugins: [organizationClient()],
+			},
+		},
+	);
+
+	const adapter = (await instance.auth.$context).adapter;
+
+	return { ...instance, adapter };
+}
 
 describe("dynamic-access-control", async (it) => {
 	const { signInWithTestUser, auth } = await defineInstance([
