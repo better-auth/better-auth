@@ -1,25 +1,30 @@
 {
-	"compilerOptions": {
-		"esModuleInterop": true,
-		"skipLibCheck": true,
-		"target": "es2022",
-		"allowJs": true,
-		"resolveJsonModule": true,
-		"module": "ESNext",
-		"noEmit": true,
-		"moduleResolution": "Bundler",
-		"moduleDetection": "force",
-		"isolatedModules": true,
-		"verbatimModuleSyntax": true,
-		"composite": false,
-		"incremental": true,
-		"tsBuildInfoFile": ".tsbuildinfo",
-		"strict": true,
-		"noImplicitOverride": true,
-		"noFallthroughCasesInSwitch": true,
-		"downlevelIteration": true
-	},
-	"exclude": ["**/dist", "node_modules"],
-	"references": [],
-	"include": ["src"]
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "types": ["node", "bun"]
+  },
+  "references": [
+    {
+      "path": "../core/tsconfig.json"
+    },
+    {
+      "path": "../telemetry/tsconfig.json"
+    },
+    {
+      "path": "../drizzle-adapter/tsconfig.json"
+    },
+    {
+      "path": "../kysely-adapter/tsconfig.json"
+    },
+    {
+      "path": "../memory-adapter/tsconfig.json"
+    },
+    {
+      "path": "../mongo-adapter/tsconfig.json"
+    },
+    {
+      "path": "../prisma-adapter/tsconfig.json"
+    }
+  ]
 }

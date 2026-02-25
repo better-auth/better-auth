@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { haveIBeenPwned } from "./index";
+
 describe("have-i-been-pwned", async () => {
 	const { client, auth } = await getTestInstance(
 		{

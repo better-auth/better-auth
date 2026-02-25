@@ -1,7 +1,7 @@
+import fs from "node:fs";
+import path from "node:path";
 import type { createAuthEndpoint as BAcreateAuthEndpoint } from "better-auth/api";
-import { z } from "zod";
-import fs from "fs";
-import path from "path";
+import * as z from "zod/v3";
 
 playSound("Hero");
 
@@ -59,7 +59,7 @@ async function generateMDX() {
 	const functionName = Object.keys(exports)[0]! as string;
 
 	const [path, options]: [string, Options] =
-		//@ts-ignore
+		//@ts-expect-error
 		await exports[Object.keys(exports)[0]!];
 	if (!path || !options) return console.error(`No path or options.`);
 
@@ -69,14 +69,14 @@ async function generateMDX() {
 
 	console.log(`function name:`, functionName);
 
-	let jsdoc = generateJSDoc({
+	const jsdoc = generateJSDoc({
 		path,
 		functionName,
 		options,
 		isServerOnly: options.metadata?.SERVER_ONLY ?? false,
 	});
 
-	let mdx = `<APIMethod${parseParams(path, options)}>\n\`\`\`ts\n${parseType(
+	const mdx = `<APIMethod${parseParams(path, options)}>\n\`\`\`ts\n${parseType(
 		functionName,
 		options,
 	)}\n\`\`\`\n</APIMethod>`;
@@ -128,7 +128,7 @@ function parseType(functionName: string, options: Options) {
 
 	// console.log(parsedBody);
 
-	let strBody: string = convertBodyToString(parsedBody);
+	const strBody: string = convertBodyToString(parsedBody);
 
 	return `type ${functionName} = {\n${strBody}}`;
 }
@@ -168,7 +168,7 @@ function convertBodyToString(parsedBody: Body[]) {
 			!parsedBody[i + 1] ||
 			parsedBody[i + 1].path.length < body.path.length
 		) {
-			let diff = body.path.length - (parsedBody[i + 1]?.path?.length || 0);
+			const diff = body.path.length - (parsedBody[i + 1]?.path?.length || 0);
 			for (const index of Array(diff)
 				.fill(0)
 				.map((_, i) => i)
@@ -194,31 +194,31 @@ function parseZodShape(zod: z.ZodAny, path: string[]) {
 		{ description: "some descriptiom" },
 	).shape;
 
-	//@ts-ignore
+	//@ts-expect-error
 	if (zod._def.typeName === "ZodOptional") {
 		isRootOptional = true;
 		const eg = z.optional(z.object({}));
 		const x = zod as never as typeof eg;
-		//@ts-ignore
+		//@ts-expect-error
 		shape = x._def.innerType.shape;
 	} else {
 		const eg = z.object({});
 		const x = zod as never as typeof eg;
-		//@ts-ignore
+		//@ts-expect-error
 		shape = x.shape;
 	}
 
 	for (const [key, value] of Object.entries(shape)) {
 		if (!value) continue;
 		let description = value.description;
-		let { type, isOptional, defaultValue } = getType(value as any, {
+		const { type, isOptional, defaultValue } = getType(value as any, {
 			forceOptional: isRootOptional,
 		});
 
-		let example = description ? description.split(" Eg: ")[1] : undefined;
+		const example = description ? description.split(" Eg: ")[1] : undefined;
 		if (example) description = description?.replace(" Eg: " + example, "");
 
-		let isServerOnly = description
+		const isServerOnly = description
 			? description.includes("server-only.")
 			: false;
 		if (isServerOnly) description = description?.replace(" server-only. ", "");
@@ -403,7 +403,7 @@ function getType(
 }
 
 function parseParams(path: string, options: Options): string {
-	let params: string[] = [];
+	const params: string[] = [];
 	params.push(`path="${path}"`);
 	params.push(`method="${options.method}"`);
 
@@ -444,7 +444,7 @@ function generateJSDoc({
 	 * @see [Read our docs to learn more.](https://better-auth.com/docs/plugins/organization#api-method-organization-set-active)
 	 */
 
-	let jsdoc: string[] = [];
+	const jsdoc: string[] = [];
 	jsdoc.push(`### Endpoint`);
 	jsdoc.push(``);
 	jsdoc.push(`${options.method} \`${path}\``);
@@ -485,7 +485,7 @@ function pathToDotNotation(input: string): string {
 		.join(".");
 }
 
-async function playSound(name: string = "Ping") {
+function playSound(name: string = "Ping") {
 	const path = `/System/Library/Sounds/${name}.aiff`;
-	await Bun.$`afplay ${path}`;
+	void Bun.$`afplay ${path}`;
 }

@@ -1,6 +1,6 @@
 "use client";
-import React from "react";
 import { motion } from "framer-motion";
+import React from "react";
 import { cn } from "@/lib/utils";
 
 export const BackgroundBeams = React.memo(
@@ -65,7 +65,7 @@ export const BackgroundBeams = React.memo(
 				)}
 			>
 				<svg
-					className=" z-0 h-full w-full pointer-events-none absolute "
+					className="z-0 h-full w-full pointer-events-none absolute"
 					width="100%"
 					height="100%"
 					viewBox="0 0 696 316"

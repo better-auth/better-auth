@@ -1,5 +1,9 @@
-import type { BetterAuthOptions } from "../types";
-import { isTest } from "../utils/env";
+import type { BetterAuthOptions } from "@better-auth/core";
+import { isDevelopment, isTest } from "@better-auth/core/env";
+import { isValidIP, normalizeIP } from "@better-auth/core/utils/ip";
+
+// Localhost IP used for test and development environments
+const LOCALHOST_IP = "127.0.0.1";
 
 export function getIp(
 	req: Request | Headers,
@@ -7,10 +11,6 @@ export function getIp(
 ): string | null {
 	if (options.advanced?.ipAddress?.disableIpTracking) {
 		return null;
-	}
-
-	if (isTest) {
-		return "127.0.0.1"; // Use a fixed IP for test environments
 	}
 
 	const headers = "headers" in req ? req.headers : req;
@@ -23,22 +23,19 @@ export function getIp(
 	for (const key of ipHeaders) {
 		const value = "get" in headers ? headers.get(key) : headers[key];
 		if (typeof value === "string") {
-			const ip = value.split(",")[0].trim();
+			const ip = value.split(",")[0]!.trim();
 			if (isValidIP(ip)) {
-				return ip;
+				return normalizeIP(ip, {
+					ipv6Subnet: options.advanced?.ipAddress?.ipv6Subnet,
+				});
 			}
 		}
 	}
-	return null;
-}
 
-function isValidIP(ip: string): boolean {
-	const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
-	if (ipv4Regex.test(ip)) {
-		const parts = ip.split(".").map(Number);
-		return parts.every((part) => part >= 0 && part <= 255);
+	// Fallback to localhost IP in development/test environments when no IP found in headers
+	if (isTest() || isDevelopment()) {
+		return LOCALHOST_IP;
 	}
 
-	const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
-	return ipv6Regex.test(ip);
+	return null;
 }

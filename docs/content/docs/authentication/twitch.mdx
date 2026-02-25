@@ -30,7 +30,9 @@ description: Twitch provider setup and usage.
     </Step>
        <Step>
         ### Sign In with Twitch 
-        To sign in with Twitch, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        To sign in with Twitch, you can use the `signIn.social` function provided by the client.
+        The `signIn` function takes an object with the following properties:
+
         - `provider`: The provider to use. It should be set to `twitch`.
 
         ```ts title="auth-client.ts"  
@@ -43,5 +45,9 @@ description: Twitch provider setup and usage.
             })
         }
         ```
+
+        <Callout type="warn">
+            Twitch users who do not have an email address will not be able to sign in.
+        </Callout>
     </Step>
 </Steps>

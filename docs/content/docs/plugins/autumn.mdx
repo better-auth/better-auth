@@ -8,6 +8,11 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 
 [Autumn](https://useautumn.com) is open source infrastructure to run SaaS pricing plans. It sits between your app and Stripe, and acts as the database for your customers' subscription status, usage metering and feature permissions.
 
+<Callout>
+  This plugin is maintained by the Autumn team. For bugs, issues or feature requests,
+  please visit the [Autumn GitHub repo](https://github.com/useautumn/autumn).
+</Callout>
+
 <Card href="https://discord.gg/STqxY92zuS" title="Get help on Autumn's Discord">
   We're online to help you with any questions you have.
 </Card>
@@ -50,6 +55,9 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
   <Step>
     ### Add the Autumn plugin to your `auth` config
 
+    <Tabs items={["User", "Organization", "User & Organization", "Custom"]}>
+    <Tab value="User">
+
     ```ts title="auth.ts"
     import { autumn } from "autumn-js/better-auth";
 
@@ -58,9 +66,68 @@ import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
       plugins: [autumn()],
     });
     ```
+
+    </Tab>
+    <Tab value="Organization">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [organization(), autumn({ customerScope: "organization" })],
+    });
+    ```
+
+    </Tab>
+    <Tab value="User & Organization">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [
+        organization(),
+        autumn({ customerScope: "user_and_organization" })
+      ],
+    });
+    ```
+
+    </Tab>
+    <Tab value="Custom">
+
+    ```ts title="auth.ts"
+    import { autumn } from "autumn-js/better-auth";
+    import { organization } from "better-auth/plugins";
+
+    export const auth = betterAuth({
+      // ...
+      plugins: [
+        organization(),
+        autumn({
+          identify: async ({ session, organization }) => {
+            return {
+              customerId: "your_customer_id",
+              customerData: {
+                name: "Customer Name",
+                email: "customer@gmail.com",
+              },
+            };
+          },
+        }),
+      ],
+    });
+    ```
+
+    </Tab>
+    </Tabs>
+
   <Callout>
     Autumn will auto-create your customers when they sign up, and assign them any
-    default plans you created (eg your Free plan)
+    default plans you created (eg your Free plan). You can choose who becomes a customer: individual users, organizations, both, or something custom like workspaces.
   </Callout>
   </Step>
 
@@ -182,7 +249,7 @@ import { auth } from "@/lib/auth";
 const { allowed } = await auth.api.check({
   headers: await headers(), // pass the request headers
   body: {
-    feature_id: "messages",
+    featureId: "messages",
   },
 });
 
@@ -192,7 +259,7 @@ const { allowed } = await auth.api.check({
 await auth.api.track({
   headers: await headers(),
   body: {
-    feature_id: "messages",
+    featureId: "messages",
     value: 2,
   },
 });

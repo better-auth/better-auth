@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { getTestInstance } from "../../../test-utils/test-instance";
-import { organization } from "../organization";
+import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
+import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
+import { organization } from "../organization";
 
 describe("get-full-organization", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
@@ -112,8 +112,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(403);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.code,
 		);
 	});
 
@@ -127,8 +127,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
 		);
 	});
 
@@ -250,5 +250,226 @@ describe("get-full-organization", async () => {
 
 		expect(fullOrg.data?.members.length).toBeGreaterThan(3);
 		expect(fullOrg.data?.members.length).toBeLessThanOrEqual(6);
+	});
+});
+
+describe("organization hooks", async () => {
+	it("should apply beforeCreateOrganization hook", async () => {
+		const beforeCreateOrganization = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					organization({
+						organizationHooks: {
+							beforeCreateOrganization: async (data) => {
+								beforeCreateOrganization();
+								return {
+									data: {
+										...data.organization,
+										metadata: {
+											hookCalled: true,
+										},
+										name: "changed-name",
+									},
+								};
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [organizationClient()],
+				},
+			},
+		);
+		const { headers } = await signInWithTestUser();
+		const result = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(beforeCreateOrganization).toHaveBeenCalled();
+		expect(result?.name).toBe("changed-name");
+		expect(result?.metadata).toEqual({
+			hookCalled: true,
+		});
+	});
+
+	it("should apply afterCreateOrganization hook", async () => {
+		const afterCreateOrganization = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						afterCreateOrganization: async (data) => {
+							afterCreateOrganization();
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(afterCreateOrganization).toHaveBeenCalled();
+	});
+
+	it("should apply beforeAddMember hook", async () => {
+		const beforeAddMember = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						beforeAddMember: async (data) => {
+							beforeAddMember();
+							return {
+								data: {
+									role: "changed-role",
+								},
+							};
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(beforeAddMember).toHaveBeenCalled();
+		const member = await auth.api.getActiveMember({
+			headers,
+		});
+		expect(member?.role).toBe("changed-role");
+	});
+
+	it("should apply afterAddMember hook", async () => {
+		const afterAddMember = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					organizationHooks: {
+						afterAddMember: async (data) => {
+							afterAddMember();
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(afterAddMember).toHaveBeenCalled();
+	});
+
+	it("should apply beforeCreateTeam hook", async () => {
+		const beforeCreateTeam = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+					},
+					organizationHooks: {
+						beforeCreateTeam: async (data) => {
+							beforeCreateTeam();
+							return {
+								data: {
+									name: "changed-name",
+								},
+							};
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		const result = await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(beforeCreateTeam).toHaveBeenCalled();
+		const team = await auth.api.listOrganizationTeams({
+			headers,
+			query: {
+				organizationId: result?.id,
+			},
+		});
+		expect(team[0]?.name).toBe("changed-name");
+	});
+
+	it("should apply afterCreateTeam hook", async () => {
+		const afterCreateTeam = vi.fn();
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				organization({
+					teams: {
+						enabled: true,
+					},
+					organizationHooks: {
+						afterCreateTeam: async (data) => {
+							afterCreateTeam();
+						},
+					},
+				}),
+			],
+		});
+		const { headers } = await signInWithTestUser();
+		await auth.api.createOrganization({
+			body: {
+				name: "test",
+				slug: "test",
+			},
+			headers,
+		});
+		expect(afterCreateTeam).toHaveBeenCalled();
+	});
+
+	it("should allow internal organization creation when disabled for users", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					allowUserToCreateOrganization: false,
+				}),
+			],
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "internal@test.com",
+				password: "password",
+				name: "Internal User",
+			},
+		});
+
+		const internalOrg = await auth.api.createOrganization({
+			body: {
+				name: "Internal Org",
+				slug: "internal-org",
+				userId: newUser.user.id,
+			},
+		});
+		expect(internalOrg).toBeDefined();
+		expect(internalOrg?.name).toBe("Internal Org");
 	});
 });

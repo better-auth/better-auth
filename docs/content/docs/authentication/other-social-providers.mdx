@@ -3,9 +3,7 @@ title: Other Social Providers
 description: Other social providers setup and usage.
 ---
 
-Better Auth providers out of the box support for the [Generic Oauth Plugin](/docs/plugins/generic-oauth) which allows you to use any social provider that implements the OAuth2 protocol or OpenID Connect (OIDC) flows.
-
-To use a provider that is not supported out of the box, you can use the [Generic Oauth Plugin](/docs/plugins/generic-oauth).
+Better Auth provides support for any social provider that implements the OAuth2 protocol or OpenID Connect (OIDC) flows through the [Generic OAuth Plugin](/docs/plugins/generic-oauth). You can use pre-configured helper functions for popular providers like Auth0, Keycloak, Okta, Microsoft Entra ID, and Slack, or manually configure any OAuth provider.
 
 ## Installation
 
@@ -64,7 +62,64 @@ To use a provider that is not supported out of the box, you can use the [Generic
   [here](/docs/plugins/generic-oauth#usage).
 </Callout>
 
-## Example usage
+## Example Usage
+
+Here's a basic example of configuring a generic OAuth provider:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { genericOAuth } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        {
+          providerId: "provider-id",
+          clientId: process.env.CLIENT_ID,
+          clientSecret: process.env.CLIENT_SECRET,
+          discoveryUrl: "https://auth.example.com/.well-known/openid-configuration",
+        },
+      ],
+    }),
+  ],
+})
+```
+
+## Using Pre-configured Providers
+
+Better Auth provides pre-configured helper functions for popular OAuth providers. Here's an example using Slack:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { genericOAuth, slack } from "better-auth/plugins"
+
+export const auth = betterAuth({
+  plugins: [
+    genericOAuth({
+      config: [
+        slack({
+          clientId: process.env.SLACK_CLIENT_ID,
+          clientSecret: process.env.SLACK_CLIENT_SECRET,
+        }),
+      ],
+    }),
+  ],
+})
+```
+
+```ts title="sign-in.ts"
+const response = await authClient.signIn.oauth2({
+  providerId: "slack",
+  callbackURL: "/dashboard",
+})
+```
+
+For more pre-configured providers (Auth0, Keycloak, Okta, Microsoft Entra ID) and their configuration options, see the [Generic OAuth Plugin documentation](/docs/plugins/generic-oauth#pre-configured-provider-helpers).
+
+## Manual Configuration Examples
+
+If you need to configure a provider that doesn't have a pre-configured helper, you can manually configure it:
 
 ### Instagram Example
 

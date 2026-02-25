@@ -1,8 +1,29 @@
-import type { BetterAuthClientPlugin } from "better-auth";
-import { sso } from "./index";
-export const ssoClient = () => {
+import type { BetterAuthClientPlugin } from "better-auth/client";
+import type { SSOPlugin } from "./index";
+
+interface SSOClientOptions {
+	domainVerification?:
+		| {
+				enabled: boolean;
+		  }
+		| undefined;
+}
+
+export const ssoClient = <CO extends SSOClientOptions>(
+	options?: CO | undefined,
+) => {
 	return {
 		id: "sso-client",
-		$InferServerPlugin: {} as ReturnType<typeof sso>,
+		$InferServerPlugin: {} as SSOPlugin<{
+			domainVerification: {
+				enabled: CO["domainVerification"] extends { enabled: true }
+					? true
+					: false;
+			};
+		}>,
+		pathMethods: {
+			"/sso/providers": "GET",
+			"/sso/get-provider": "GET",
+		},
 	} satisfies BetterAuthClientPlugin;
 };

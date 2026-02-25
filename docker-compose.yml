@@ -1,4 +1,24 @@
-version: '3.8'
+# cspell:ignore isready uuser ppassword
+x-postgres-healthcheck: &postgres-healthcheck
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U user -d better_auth"]
+    interval: 1s
+    timeout: 5s
+    retries: 10
+
+x-mysql-healthcheck: &mysql-healthcheck
+  healthcheck:
+    # Use 127.0.0.1 (not localhost) to force TCP. localhost resolves to a Unix
+    # socket on Linux, which can falsely succeed against the temporary init
+    # server that runs with --skip-networking.
+    test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uuser", "-ppassword"]
+    interval: 1s
+    timeout: 5s
+    retries: 10
+    # MySQL cold-start (data dir init, system tables, user/db creation) takes
+    # 10-20s in CI. Without start_period, docker compose --wait fails immediately
+    # once retries are exhausted — it does NOT wait for --wait-timeout.
+    start_period: 30s
 
 services:
   mongodb:
@@ -8,8 +28,28 @@ services:
       - "27017:27017"
     volumes:
       - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
 
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 5s
+      retries: 10
+
+  # drizzle
   postgres:
+    <<: *postgres-healthcheck
     image: postgres:latest
     container_name: postgres
     environment:
@@ -19,9 +59,50 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
 
+  postgres-kysely:
+    <<: *postgres-healthcheck
+    image: postgres:latest
+    container_name: postgres-kysely
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-kysely_data:/var/lib/postgresql
+
+  postgres-kysely2:
+    <<: *postgres-healthcheck
+    image: postgres:latest
+    container_name: postgres-kysely2
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-kysely2_data:/var/lib/postgresql
+
+  postgres-prisma:
+    <<: *postgres-healthcheck
+    image: postgres:latest
+    container_name: postgres-prisma
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: better_auth
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres-prisma_data:/var/lib/postgresql
+
+  # Drizzle tests
   mysql:
+    <<: *mysql-healthcheck
     image: mysql:latest
     container_name: mysql
     environment:
@@ -34,6 +115,34 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
 
+  mysql-kysely:
+    <<: *mysql-healthcheck
+    image: mysql:latest
+    container_name: mysql-kysely
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-kysely_data:/var/lib/mysql
+
+  mysql-prisma:
+    <<: *mysql-healthcheck
+    image: mysql:latest
+    container_name: mysql-prisma
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: better_auth
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3308:3306"
+    volumes:
+      - mysql-prisma_data:/var/lib/mysql
+
   mssql:
     image: mcr.microsoft.com/mssql/server:latest
     container_name: mssql
@@ -44,9 +153,21 @@ services:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U SA -P 'Password123!' -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 1s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
 
 volumes:
   mongodb_data:
+  redis_data:
   postgres_data:
+  postgres-kysely_data:
+  postgres-prisma_data:
   mysql_data:
   mssql_data:
+  mysql-kysely_data:
+  mysql-prisma_data:
+  postgres-kysely2_data:

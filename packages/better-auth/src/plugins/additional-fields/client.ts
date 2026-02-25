@@ -1,19 +1,26 @@
-import type { FieldAttribute } from "../../db";
-import type { BetterAuthClientPlugin, BetterAuthOptions } from "../../types";
-import type { BetterAuthPlugin } from "../../types";
+import type {
+	BetterAuthClientPlugin,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 
 export const inferAdditionalFields = <
 	T,
 	S extends {
-		user?: {
-			[key: string]: FieldAttribute;
-		};
-		session?: {
-			[key: string]: FieldAttribute;
-		};
+		user?:
+			| {
+					[key: string]: DBFieldAttribute;
+			  }
+			| undefined;
+		session?:
+			| {
+					[key: string]: DBFieldAttribute;
+			  }
+			| undefined;
 	} = {},
 >(
-	schema?: S,
+	schema?: S | undefined,
 ) => {
 	type Opts = T extends BetterAuthOptions
 		? T
@@ -25,12 +32,16 @@ export const inferAdditionalFields = <
 
 	type Plugin = Opts extends never
 		? S extends {
-				user?: {
-					[key: string]: FieldAttribute;
-				};
-				session?: {
-					[key: string]: FieldAttribute;
-				};
+				user?:
+					| {
+							[key: string]: DBFieldAttribute;
+					  }
+					| undefined;
+				session?:
+					| {
+							[key: string]: DBFieldAttribute;
+					  }
+					| undefined;
 			}
 			? {
 					id: "additional-fields-client";

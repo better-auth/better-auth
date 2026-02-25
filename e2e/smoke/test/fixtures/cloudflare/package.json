@@ -1,0 +1,22 @@
+{
+  "name": "@better-auth-test/fixtures-cloudflare",
+  "private": true,
+  "dependencies": {
+    "@better-auth/sso": "workspace:*",
+    "better-auth": "workspace:*",
+    "drizzle-orm": "^0.45.1",
+    "hono": "^4.11.10"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.12.7",
+    "@cloudflare/workers-types": "^4.20260127.0",
+    "drizzle-kit": "^0.31.8",
+    "wrangler": "4.61.0"
+  },
+  "scripts": {
+    "check": "tsc && wrangler build",
+    "dev": "wrangler dev",
+    "migrate:local": "wrangler d1 migrations apply db --local",
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@better-auth-test/fixtures-solid-vinxi",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vinxi dev",
+    "build": "vinxi build",
+    "start": "vinxi start"
+  },
+  "dependencies": {
+    "@solidjs/router": "^0.15.4",
+    "@solidjs/start": "^1.2.1",
+    "better-auth": "workspace:*",
+    "solid-js": "^1.9.11",
+    "vinxi": "^0.5.11"
+  },
+  "devDependencies": {
+    "@better-auth-test/test-utils": "workspace:*"
+  }
+}

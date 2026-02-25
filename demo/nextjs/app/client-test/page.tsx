@@ -1,32 +1,33 @@
 "use client";
 
+import { Loader2 } from "lucide-react";
 import { useState, useTransition } from "react";
-import { signIn, client } from "@/lib/auth-client";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
 	Card,
 	CardContent,
 	CardDescription,
+	CardFooter,
 	CardHeader,
 	CardTitle,
-	CardFooter,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { useSessionQuery } from "@/data/user/session-query";
+import { useSignOutMutation } from "@/data/user/sign-out-mutation";
+import { authClient } from "@/lib/auth-client";
 
-export default function ClientTest() {
+export default function Page() {
 	const [email, setEmail] = useState("");
 	const [password, setPassword] = useState("");
 	const [loading, startTransition] = useTransition();
-
-	// Get the session data using the useSession hook
-	const { data: session, isPending, error } = client.useSession();
+	const { data: session, isPending, error } = useSessionQuery();
+	const signOutMutation = useSignOutMutation();
 
 	const handleLogin = async () => {
 		startTransition(async () => {
-			await signIn.email(
+			await authClient.signIn.email(
 				{
 					email,
 					password,
@@ -163,17 +164,14 @@ export default function ClientTest() {
 							<Button
 								variant="outline"
 								className="w-full"
-								onClick={() =>
-									client.signOut({
-										fetchOptions: {
-											onSuccess: () => {
-												toast.success("Successfully signed out!");
-											},
-										},
-									})
-								}
+								onClick={() => signOutMutation.mutate()}
+								disabled={signOutMutation.isPending}
 							>
-								Sign Out
+								{signOutMutation.isPending ? (
+									<Loader2 className="animate-spin" size={16} />
+								) : (
+									"Sign Out"
+								)}
 							</Button>
 						</CardFooter>
 					)}

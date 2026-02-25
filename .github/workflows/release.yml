@@ -7,32 +7,40 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  TURBO_CACHE: remote:rw
+  TURBO_FORCE: true
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-          node-version: 20.x
+          node-version-file: '.nvmrc'
 
       - run: npx changelogithub
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
-          
-      - uses: pnpm/action-setup@v4
 
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
         with:
-            node-version: 20.x
-            registry-url: 'https://registry.npmjs.org'
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
 
       - run: pnpm install
-      
+
       - name: Build
         run: pnpm build
 
@@ -45,13 +53,18 @@ jobs:
             # Extract pre-release tag (e.g., beta, rc)
             NPM_TAG=${BASH_REMATCH[1]}
           else
-            # Check if the commit is on the main branch
+            # Check if the commit is on the main branch or a version branch
             git fetch origin main
-            if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            CURRENT_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -E 'origin/(main|v[0-9]+\.[0-9]+\.x-latest)' | head -1 | sed 's/.*origin\///')
+
+            if [[ "$CURRENT_BRANCH" == "main" ]]; then
+              NPM_TAG="latest"
+            elif [[ "$CURRENT_BRANCH" =~ ^v[0-9]+\.[0-9]+\.x-latest$ ]]; then
+              # For version branches like v1.3.x-latest, v1.4.x-latest, use "latest" tag
               NPM_TAG="latest"
             else
-              echo "The tagged commit is not on the main branch."
-              echo "::error ::Releases with the 'latest' npm tag must be on the main branch."
+              echo "The tagged commit is not on the main branch or a version branch (v*.*.x-latest)."
+              echo "::error ::Releases with the 'latest' npm tag must be on the main branch or a version branch."
               exit 1
             fi
           fi
@@ -62,3 +75,4 @@ jobs:
         run: pnpm -r publish --access public --no-git-checks --tag ${{ steps.determine_npm_tag.outputs.npm_tag }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true

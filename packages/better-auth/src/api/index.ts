@@ -1,59 +1,179 @@
-import { APIError, type Middleware, createRouter } from "better-call";
-import type { AuthContext } from "../init";
-import type { BetterAuthOptions } from "../types";
-import type { UnionToIntersection } from "../types/helper";
-import { originCheckMiddleware } from "./middlewares/origin-check";
+import type {
+	AuthContext,
+	Awaitable,
+	BetterAuthOptions,
+	BetterAuthPlugin,
+} from "@better-auth/core";
+import type { InternalLogger } from "@better-auth/core/env";
+import { logger } from "@better-auth/core/env";
+import { normalizePathname } from "@better-auth/core/utils/url";
+import type { Endpoint, Middleware } from "better-call";
+import { createRouter } from "better-call";
+import type { UnionToIntersection } from "../types";
+import { isAPIError } from "../utils/is-api-error";
+import { originCheckMiddleware } from "./middlewares";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
+	accountInfo,
 	callbackOAuth,
-	forgetPassword,
-	forgetPasswordCallback,
+	changeEmail,
+	changePassword,
+	deleteUser,
+	deleteUserCallback,
+	error,
+	getAccessToken,
 	getSession,
+	linkSocialAccount,
 	listSessions,
+	listUserAccounts,
+	ok,
+	refreshToken,
+	requestPasswordReset,
+	requestPasswordResetCallback,
 	resetPassword,
+	revokeOtherSessions,
 	revokeSession,
 	revokeSessions,
 	sendVerificationEmail,
-	changeEmail,
+	setPassword,
 	signInEmail,
 	signInSocial,
 	signOut,
-	verifyEmail,
-	linkSocialAccount,
-	revokeOtherSessions,
-	listUserAccounts,
-	changePassword,
-	deleteUser,
-	setPassword,
-	updateUser,
-	deleteUserCallback,
+	signUpEmail,
 	unlinkAccount,
-	refreshToken,
-	getAccessToken,
-	accountInfo,
-	requestPasswordReset,
-	requestPasswordResetCallback,
+	updateSession,
+	updateUser,
+	verifyEmail,
+	verifyPassword,
 } from "./routes";
-import { ok } from "./routes/ok";
-import { signUpEmail } from "./routes/sign-up";
-import { error } from "./routes/error";
-import { logger } from "../utils/logger";
-import type { BetterAuthPlugin } from "../plugins";
-import { onRequestRateLimit } from "./rate-limiter";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
-export function getEndpoints<
-	C extends AuthContext,
-	Option extends BetterAuthOptions,
->(ctx: Promise<C> | C, options: Option) {
-	const pluginEndpoints = options.plugins?.reduce(
-		(acc, plugin) => {
+export function checkEndpointConflicts(
+	options: BetterAuthOptions,
+	logger: InternalLogger,
+) {
+	const endpointRegistry = new Map<
+		string,
+		{ pluginId: string; endpointKey: string; methods: string[] }[]
+	>();
+
+	options.plugins?.forEach((plugin) => {
+		if (plugin.endpoints) {
+			for (const [key, endpoint] of Object.entries(plugin.endpoints)) {
+				if (
+					endpoint &&
+					"path" in endpoint &&
+					typeof endpoint.path === "string"
+				) {
+					const path = endpoint.path;
+					let methods: string[] = [];
+					if (endpoint.options && "method" in endpoint.options) {
+						if (Array.isArray(endpoint.options.method)) {
+							methods = endpoint.options.method;
+						} else if (typeof endpoint.options.method === "string") {
+							methods = [endpoint.options.method];
+						}
+					}
+					if (methods.length === 0) {
+						methods = ["*"];
+					}
+
+					if (!endpointRegistry.has(path)) {
+						endpointRegistry.set(path, []);
+					}
+					endpointRegistry.get(path)!.push({
+						pluginId: plugin.id,
+						endpointKey: key,
+						methods,
+					});
+				}
+			}
+		}
+	});
+
+	const conflicts: {
+		path: string;
+		plugins: string[];
+		conflictingMethods: string[];
+	}[] = [];
+	for (const [path, entries] of endpointRegistry.entries()) {
+		if (entries.length > 1) {
+			const methodMap = new Map<string, string[]>();
+			let hasConflict = false;
+
+			for (const entry of entries) {
+				for (const method of entry.methods) {
+					if (!methodMap.has(method)) {
+						methodMap.set(method, []);
+					}
+					methodMap.get(method)!.push(entry.pluginId);
+
+					if (methodMap.get(method)!.length > 1) {
+						hasConflict = true;
+					}
+
+					if (method === "*" && entries.length > 1) {
+						hasConflict = true;
+					} else if (method !== "*" && methodMap.has("*")) {
+						hasConflict = true;
+					}
+				}
+			}
+
+			if (hasConflict) {
+				const uniquePlugins = [...new Set(entries.map((e) => e.pluginId))];
+				const conflictingMethods: string[] = [];
+
+				for (const [method, plugins] of methodMap.entries()) {
+					if (
+						plugins.length > 1 ||
+						(method === "*" && entries.length > 1) ||
+						(method !== "*" && methodMap.has("*"))
+					) {
+						conflictingMethods.push(method);
+					}
+				}
+
+				conflicts.push({
+					path,
+					plugins: uniquePlugins,
+					conflictingMethods,
+				});
+			}
+		}
+	}
+
+	if (conflicts.length > 0) {
+		const conflictMessages = conflicts
+			.map(
+				(conflict) =>
+					`  - "${conflict.path}" [${conflict.conflictingMethods.join(", ")}] used by plugins: ${conflict.plugins.join(", ")}`,
+			)
+			.join("\n");
+		logger.error(
+			`Endpoint path conflicts detected! Multiple plugins are trying to use the same endpoint paths with conflicting HTTP methods:
+${conflictMessages}
+
+To resolve this, you can:
+	1. Use only one of the conflicting plugins
+	2. Configure the plugins to use different paths (if supported)
+	3. Ensure plugins use different HTTP methods for the same path
+`,
+		);
+	}
+}
+
+export function getEndpoints<Option extends BetterAuthOptions>(
+	ctx: Awaitable<AuthContext>,
+	options: Option,
+) {
+	const pluginEndpoints =
+		options.plugins?.reduce<Record<string, Endpoint>>((acc, plugin) => {
 			return {
 				...acc,
 				...plugin.endpoints,
 			};
-		},
-		{} as Record<string, any>,
-	);
+		}, {}) ?? {};
 
 	type PluginEndpoint = UnionToIntersection<
 		Option["plugins"] extends Array<infer T>
@@ -92,22 +212,22 @@ export function getEndpoints<
 			.flat() || [];
 
 	const baseEndpoints = {
-		signInSocial,
+		signInSocial: signInSocial<Option>(),
 		callbackOAuth,
 		getSession: getSession<Option>(),
 		signOut,
 		signUpEmail: signUpEmail<Option>(),
-		signInEmail,
-		forgetPassword,
+		signInEmail: signInEmail<Option>(),
 		resetPassword,
+		verifyPassword,
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
 		changePassword,
 		setPassword,
+		updateSession: updateSession<Option>(),
 		updateUser: updateUser<Option>(),
 		deleteUser,
-		forgetPasswordCallback,
 		requestPasswordReset,
 		requestPasswordResetCallback,
 		listSessions: listSessions<Option>(),
@@ -127,15 +247,15 @@ export function getEndpoints<
 		...pluginEndpoints,
 		ok,
 		error,
-	};
+	} as const;
 	const api = toAuthEndpoints(endpoints, ctx);
 	return {
 		api: api as typeof endpoints & PluginEndpoint,
 		middlewares,
 	};
 }
-export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
-	ctx: C,
+export const router = <Option extends BetterAuthOptions>(
+	ctx: AuthContext,
 	options: Option,
 ) => {
 	const { api, middlewares } = getEndpoints(ctx, options);
@@ -154,24 +274,38 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			},
 			...middlewares,
 		],
+		allowedMediaTypes: ["application/json"],
+		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const path = new URL(req.url).pathname.replace(basePath, "");
-			if (disabledPaths.includes(path)) {
+			const normalizedPath = normalizePathname(req.url, basePath);
+			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
+
+			let currentRequest = req;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(req, ctx);
+					const response = await plugin.onRequest(currentRequest, ctx);
 					if (response && "response" in response) {
 						return response.response;
 					}
+					if (response && "request" in response) {
+						currentRequest = response.request;
+					}
 				}
 			}
-			return onRequestRateLimit(req, ctx);
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
+			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
+			await onResponseRateLimit(req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await plugin.onResponse(res, ctx);
@@ -183,7 +317,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "FOUND") {
+			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
@@ -220,7 +354,7 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 					}
 				}
 
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
 						ctx.logger.error(e.status, e);
 					}
@@ -236,7 +370,20 @@ export const router = <C extends AuthContext, Option extends BetterAuthOptions>(
 	});
 };
 
-export * from "./routes";
+export {
+	type AuthEndpoint,
+	type AuthMiddleware,
+	createAuthEndpoint,
+	createAuthMiddleware,
+	optionsMiddleware,
+} from "@better-auth/core/api";
+export { APIError } from "@better-auth/core/error";
+export { getIp } from "../utils/get-request-ip";
+export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
-export * from "./call";
-export { APIError } from "better-call";
+export * from "./routes";
+export { getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";

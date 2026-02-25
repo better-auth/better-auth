@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword } from "./password";
 
 describe("Password hashing and verification", () => {
@@ -54,6 +54,7 @@ describe("Password hashing and verification", () => {
 	});
 
 	it("should handle Unicode characters", async () => {
+		/* cspell:disable-next-line */
 		const password = "пароль123!";
 		const hash = await hashPassword(password);
 		const isValid = await verifyPassword({ hash, password });

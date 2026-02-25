@@ -1,22 +1,25 @@
-import { formatBlogDate } from "@/lib/blog";
+import { DiscordLogoIcon } from "@radix-ui/react-icons";
+import { RssIcon } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
+import { formatBlogDate } from "@/lib/blog";
 import { blogs } from "@/lib/source";
 import { IconLink } from "./changelog-layout";
-import { GitHubIcon, BookIcon, XIcon } from "./icons";
 import { Glow } from "./default-changelog";
+import { BookIcon, GitHubIcon, XIcon } from "./icons";
 import { StarField } from "./stat-field";
-import { DiscordLogoIcon } from "@radix-ui/react-icons";
-import Image from "next/image";
 
 export async function BlogPage() {
-	const posts = blogs.getPages();
+	const posts = blogs.getPages().sort((a, b) => {
+		return new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
+	});
 	return (
 		<div className="md:grid md:grid-cols-2 items-start">
 			<div className="bg-gradient-to-tr hidden md:block overflow-hidden px-12 py-24 md:py-0 -mt-[100px] md:h-dvh relative md:sticky top-0 from-transparent dark:via-stone-950/5 via-stone-100/30 to-stone-200/20 dark:to-transparent/10">
 				<StarField className="top-1/2 -translate-y-1/2 left-1/2 -translate-x-1/2" />
 				<Glow />
 
-				<div className="flex flex-col md:justify-center max-w-xl mx-auto h-full">
+				<div className="relative flex flex-col md:justify-center max-w-xl mx-auto h-full">
 					<h1 className="mt-14 font-sans font-semibold tracking-tighter text-5xl">
 						Blogs
 					</h1>
@@ -53,6 +56,11 @@ export async function BlogPage() {
 							BETTER-AUTH.
 						</IconLink>
 					</p>
+					<p className="flex right-0 items-baseline absolute bottom-4 max-md:left-1/2 max-md:-translate-x-1/2 gap-x-2 text-[0.8125rem]/6 text-gray-500">
+						<IconLink href="/blog/rss.xml" icon={RssIcon} compact>
+							RSS
+						</IconLink>
+					</p>
 				</div>
 			</div>
 			<div className="py-6 lg:py-10 px-3">
@@ -75,8 +83,8 @@ export async function BlogPage() {
 									<Image
 										src={post.data.image}
 										alt={post.data.title}
-										width={402}
-										height={252}
+										width={1206}
+										height={756}
 										className="rounded-md w-full bg-muted transition-colors"
 									/>
 								)}

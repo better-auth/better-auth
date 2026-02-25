@@ -1,0 +1,85 @@
+import type { GenericEndpointContext } from "@better-auth/core";
+import { env } from "@better-auth/core/env";
+import { getOrigin } from "../../utils/url";
+import type { OAuthProxyOptions } from "./index";
+
+/**
+ * Strip trailing slashes from URL to prevent double slashes
+ */
+export function stripTrailingSlash(url: string | undefined): string {
+	if (!url) return "";
+	return url.replace(/\/+$/, "");
+}
+
+/**
+ * Get base URL from vendor-specific environment variables
+ */
+function getVendorBaseURL() {
+	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
+	const netlify = env.NETLIFY_URL;
+	const render = env.RENDER_URL;
+	const aws = env.AWS_LAMBDA_FUNCTION_NAME;
+	const google = env.GOOGLE_CLOUD_FUNCTION_NAME;
+	const azure = env.AZURE_FUNCTION_NAME;
+
+	return vercel || netlify || render || aws || google || azure;
+}
+
+/**
+ * Resolve the current URL from various sources
+ */
+export function resolveCurrentURL(
+	ctx: GenericEndpointContext,
+	opts?: OAuthProxyOptions,
+) {
+	return new URL(
+		opts?.currentURL ||
+			ctx.request?.url ||
+			getVendorBaseURL() ||
+			ctx.context.baseURL,
+	);
+}
+
+/**
+ * Check if the proxy should be skipped for this request
+ */
+export function checkSkipProxy(
+	ctx: GenericEndpointContext,
+	opts?: OAuthProxyOptions,
+) {
+	// If skip proxy header is set, we don't need to proxy
+	const skipProxyHeader = ctx.request?.headers.get("x-skip-oauth-proxy");
+	if (skipProxyHeader) {
+		return true;
+	}
+
+	// Determine production URL (fallback to baseURL if not set)
+	const productionURL =
+		opts?.productionURL || env.BETTER_AUTH_URL || ctx.context.baseURL;
+	if (!productionURL) {
+		return false;
+	}
+
+	// Determine current URL from request or vendor env vars
+	const currentURL = opts?.currentURL || ctx.request?.url || getVendorBaseURL();
+	if (!currentURL) {
+		return false;
+	}
+
+	const productionOrigin = getOrigin(productionURL);
+	const currentOrigin = getOrigin(currentURL);
+
+	return productionOrigin === currentOrigin;
+}
+
+/**
+ * Redirect to error URL with error code
+ */
+export function redirectOnError(
+	ctx: GenericEndpointContext,
+	errorURL: string,
+	error: string,
+): never {
+	const sep = errorURL.includes("?") ? "&" : "?";
+	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
+}

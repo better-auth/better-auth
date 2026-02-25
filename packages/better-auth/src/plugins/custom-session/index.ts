@@ -1,12 +1,56 @@
-import * as z from "zod/v4";
-import { createAuthEndpoint, getSession } from "../../api";
 import type {
 	BetterAuthOptions,
 	BetterAuthPlugin,
 	GenericEndpointContext,
-	InferSession,
-	InferUser,
-} from "../../types";
+} from "@better-auth/core";
+import {
+	createAuthEndpoint,
+	createAuthMiddleware,
+} from "@better-auth/core/api";
+import type { Session, User } from "@better-auth/core/db";
+import * as z from "zod";
+import { getSession } from "../../api";
+import { parseSetCookieHeader } from "../../cookies/cookie-utils";
+import { getEndpointResponse } from "../../utils/plugin-helper";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"custom-session": {
+			creator: typeof customSession;
+		};
+	}
+}
+
+const getSessionQuerySchema = z.optional(
+	z.object({
+		/**
+		 * If cookie cache is enabled, it will disable the cache
+		 * and fetch the session from the database
+		 */
+		disableCookieCache: z
+			.boolean()
+			.meta({
+				description: "Disable cookie cache and fetch session from database",
+			})
+			.or(z.string().transform((v) => v === "true"))
+			.optional(),
+		disableRefresh: z
+			.boolean()
+			.meta({
+				description:
+					"Disable session refresh. Useful for checking session status, without updating the session",
+			})
+			.optional(),
+	}),
+);
+
+export type CustomSessionPluginOptions = {
+	/**
+	 * This option is used to determine if the list-device-sessions endpoint should be mutated to the custom session data.
+	 * @default false
+	 */
+	shouldMutateListDeviceSessionsEndpoint?: boolean | undefined;
+};
 
 export const customSession = <
 	Returns extends Record<string, any>,
@@ -14,43 +58,39 @@ export const customSession = <
 >(
 	fn: (
 		session: {
-			user: InferUser<O>;
-			session: InferSession<O>;
+			user: User<O["user"], O["plugins"]>;
+			session: Session<O["session"], O["plugins"]>;
 		},
 		ctx: GenericEndpointContext,
 	) => Promise<Returns>,
-	options?: O,
+	options?: O | undefined,
+	pluginOptions?: CustomSessionPluginOptions | undefined,
 ) => {
 	return {
 		id: "custom-session",
+		hooks: {
+			after: [
+				{
+					matcher: (ctx) =>
+						ctx.path === "/multi-session/list-device-sessions" &&
+						(pluginOptions?.shouldMutateListDeviceSessionsEndpoint ?? false),
+					handler: createAuthMiddleware(async (ctx) => {
+						const response = await getEndpointResponse<[]>(ctx);
+						if (!response) return;
+						const newResponse = await Promise.all(
+							response.map(async (v) => await fn(v, ctx)),
+						);
+						return ctx.json(newResponse);
+					}),
+				},
+			],
+		},
 		endpoints: {
 			getSession: createAuthEndpoint(
 				"/get-session",
 				{
 					method: "GET",
-					query: z.optional(
-						z.object({
-							/**
-							 * If cookie cache is enabled, it will disable the cache
-							 * and fetch the session from the database
-							 */
-							disableCookieCache: z
-								.boolean()
-								.meta({
-									description:
-										"Disable cookie cache and fetch session from database",
-								})
-								.or(z.string().transform((v) => v === "true"))
-								.optional(),
-							disableRefresh: z
-								.boolean()
-								.meta({
-									description:
-										"Disable session refresh. Useful for checking session status, without updating the session",
-								})
-								.optional(),
-						}),
-					),
+					query: getSessionQuerySchema,
 					metadata: {
 						CUSTOM_SESSION: true,
 						openapi: {
@@ -75,7 +115,7 @@ export const customSession = <
 					},
 					requireHeaders: true,
 				},
-				async (ctx) => {
+				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
 						asResponse: false,
@@ -88,6 +128,23 @@ export const customSession = <
 						return ctx.json(null);
 					}
 					const fnResult = await fn(session.response as any, ctx);
+
+					for (const cookieStr of session.headers.getSetCookie()) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						parsed.forEach((attrs, name) => {
+							ctx.setCookie(name, attrs.value, {
+								maxAge: attrs["max-age"],
+								expires: attrs.expires,
+								domain: attrs.domain,
+								path: attrs.path,
+								secure: attrs.secure,
+								httpOnly: attrs.httponly,
+								sameSite: attrs.samesite,
+							});
+						});
+					}
+					session.headers.delete("set-cookie");
+
 					session.headers.forEach((value, key) => {
 						ctx.setHeader(key, value);
 					});
@@ -95,5 +152,9 @@ export const customSession = <
 				},
 			),
 		},
+		$Infer: {
+			Session: {} as Awaited<ReturnType<typeof fn>>,
+		},
+		options: pluginOptions,
 	} satisfies BetterAuthPlugin;
 };

@@ -1,18 +1,27 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe("sign-out", async (it) => {
-	const { signInWithTestUser, client } = await getTestInstance();
+describe("sign-out", async () => {
+	const afterSessionDeleted = vi.fn();
+	const { signInWithTestUser, client } = await getTestInstance({
+		databaseHooks: {
+			session: {
+				delete: {
+					after: afterSessionDeleted,
+				},
+			},
+		},
+	});
 
 	it("should sign out", async () => {
-		const { headers } = await signInWithTestUser();
-		const res = await client.signOut({
-			fetchOptions: {
-				headers,
-			},
-		});
-		expect(res.data).toMatchObject({
-			success: true,
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.signOut();
+			expect(res.data).toMatchObject({
+				success: true,
+			});
+
+			expect(afterSessionDeleted).toHaveBeenCalled();
 		});
 	});
 });

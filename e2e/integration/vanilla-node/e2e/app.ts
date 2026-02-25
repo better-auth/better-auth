@@ -1,0 +1,60 @@
+import { createServer } from "node:http";
+import { DatabaseSync } from "node:sqlite";
+import { betterAuth } from "better-auth";
+import { getMigrations } from "better-auth/db/migration";
+import { toNodeHandler } from "better-auth/node";
+
+export async function createAuthServer(
+	baseURL: string = "http://localhost:3000",
+) {
+	const database = new DatabaseSync(":memory:");
+
+	const auth = betterAuth({
+		database,
+		baseURL,
+		emailAndPassword: {
+			enabled: true,
+		},
+		trustedOrigins: [
+			baseURL,
+			"http://localhost:*", // Dynamic frontend port
+			"http://test.com:*", // Cross-domain test
+		],
+	});
+
+	const { runMigrations } = await getMigrations(auth.options);
+
+	await runMigrations();
+	// Create an example user
+	await auth.api.signUpEmail({
+		body: {
+			name: "Test User",
+			email: "test@test.com",
+			password: "password123",
+		},
+	});
+
+	const authHandler = toNodeHandler(auth);
+
+	return createServer(async (req, res) => {
+		res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+		res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+		res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+		res.setHeader("Access-Control-Allow-Credentials", "true");
+
+		if (req.method === "OPTIONS") {
+			res.statusCode = 200;
+			res.end();
+			return;
+		}
+
+		const isAuthRoute = req.url?.startsWith("/api/auth");
+
+		if (isAuthRoute) {
+			return authHandler(req, res);
+		}
+
+		res.statusCode = 404;
+		res.end(JSON.stringify({ error: "Not found" }));
+	});
+}

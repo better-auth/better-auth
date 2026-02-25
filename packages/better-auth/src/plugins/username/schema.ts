@@ -1,6 +1,9 @@
-import type { AuthPluginSchema } from "../../types";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 
-export const getSchema = (normalizer: (username: string) => string) => {
+export const getSchema = (normalizer: {
+	username: (username: string) => string;
+	displayUsername: (displayUsername: string) => string;
+}) => {
 	return {
 		user: {
 			fields: {
@@ -10,19 +13,28 @@ export const getSchema = (normalizer: (username: string) => string) => {
 					sortable: true,
 					unique: true,
 					returned: true,
+					transform: {
+						input(value) {
+							return typeof value !== "string"
+								? value
+								: normalizer.username(value as string);
+						},
+					},
 				},
 				displayUsername: {
 					type: "string",
 					required: false,
 					transform: {
 						input(value) {
-							return value == null ? value : normalizer(value as string);
+							return typeof value !== "string"
+								? value
+								: normalizer.displayUsername(value as string);
 						},
 					},
 				},
 			},
 		},
-	} satisfies AuthPluginSchema;
+	} satisfies BetterAuthPluginDBSchema;
 };
 
 export type UsernameSchema = ReturnType<typeof getSchema>;

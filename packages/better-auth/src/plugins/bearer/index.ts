@@ -1,10 +1,18 @@
-import { serializeSignedCookie } from "better-call";
-import type { BetterAuthPlugin } from "../../types/plugins";
-import { parseSetCookieHeader } from "../../cookies";
-import { createAuthMiddleware } from "../../api";
+import type { BetterAuthPlugin } from "@better-auth/core";
+import { createAuthMiddleware } from "@better-auth/core/api";
 import { createHMAC } from "@better-auth/utils/hmac";
+import { serializeSignedCookie } from "better-call";
+import { parseSetCookieHeader } from "../../cookies";
 
-interface BearerOptions {
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		bearer: {
+			creator: typeof bearer;
+		};
+	}
+}
+
+export interface BearerOptions {
 	/**
 	 * If true, only signed tokens
 	 * will be converted to session
@@ -12,13 +20,13 @@ interface BearerOptions {
 	 *
 	 * @default false
 	 */
-	requireSignature?: boolean;
+	requireSignature?: boolean | undefined;
 }
 
 /**
  * Converts bearer token to session cookie
  */
-export const bearer = (options?: BearerOptions) => {
+export const bearer = (options?: BearerOptions | undefined) => {
 	return {
 		id: "bearer",
 		hooks: {
@@ -56,13 +64,13 @@ export const bearer = (options?: BearerOptions) => {
 								"base64urlnopad",
 							).verify(
 								c.context.secret,
-								decodedToken.split(".")[0],
-								decodedToken.split(".")[1],
+								decodedToken.split(".")[0]!,
+								decodedToken.split(".")[1]!,
 							);
 							if (!isValid) {
 								return;
 							}
-						} catch (e) {
+						} catch {
 							return;
 						}
 						const existingHeaders = (c.request?.headers ||
@@ -70,9 +78,14 @@ export const bearer = (options?: BearerOptions) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						headers.append(
+						// Use headers.set() with "; " separator per RFC 6265.
+						// headers.append("cookie") joins with ", " in some runtimes
+						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
+						const existingCookie = headers.get("cookie");
+						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
+						headers.set(
 							"cookie",
-							`${c.context.authCookies.sessionToken.name}=${signedToken}`,
+							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
 						);
 						return {
 							context: {
@@ -123,5 +136,6 @@ export const bearer = (options?: BearerOptions) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

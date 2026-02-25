@@ -1,0 +1,128 @@
+import { relations } from "drizzle-orm";
+import {
+  mysqlTable,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  int,
+  index,
+} from "drizzle-orm/mysql-core";
+
+export const custom_user = mysqlTable("custom_user", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 255 }).notNull(),
+  email: varchar("email", { length: 255 }).notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { fsp: 3 })
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false),
+  username: varchar("username", { length: 255 }).unique(),
+  displayUsername: text("display_username"),
+});
+
+export const custom_session = mysqlTable(
+  "custom_session",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
+    token: varchar("token", { length: 255 }).notNull().unique(),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("custom_session_userId_idx").on(table.userId)],
+);
+
+export const custom_account = mysqlTable(
+  "custom_account",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", { fsp: 3 }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", { fsp: 3 }),
+    scope: text("scope"),
+    password: text("password"),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_account_userId_idx").on(table.userId)],
+);
+
+export const custom_verification = mysqlTable(
+  "custom_verification",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    identifier: varchar("identifier", { length: 255 }).notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at", { fsp: 3 }).notNull(),
+    createdAt: timestamp("created_at", { fsp: 3 }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { fsp: 3 })
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("custom_verification_identifier_idx").on(table.identifier)],
+);
+
+export const twoFactor = mysqlTable(
+  "two_factor",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    secret: varchar("secret", { length: 255 }).notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: int("user_id")
+      .notNull()
+      .references(() => custom_user.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    index("twoFactor_secret_idx").on(table.secret),
+    index("twoFactor_userId_idx").on(table.userId),
+  ],
+);
+
+export const custom_userRelations = relations(custom_user, ({ many }) => ({
+  custom_sessions: many(custom_session),
+  custom_accounts: many(custom_account),
+  twoFactors: many(twoFactor),
+}));
+
+export const custom_sessionRelations = relations(custom_session, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_session.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const custom_accountRelations = relations(custom_account, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [custom_account.userId],
+    references: [custom_user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  custom_user: one(custom_user, {
+    fields: [twoFactor.userId],
+    references: [custom_user.id],
+  }),
+}));

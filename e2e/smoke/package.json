@@ -1,0 +1,15 @@
+{
+  "name": "@better-auth-test/smoke",
+  "type": "module",
+  "devDependencies": {
+    "@better-auth/core": "workspace:*",
+    "@better-auth/redis-storage": "workspace:*",
+    "@better-auth/sso": "workspace:*",
+    "better-auth": "workspace:*",
+    "ioredis": "^5.9.2",
+    "msw": "^2.12.9"
+  },
+  "scripts": {
+    "e2e:smoke": "node --test ./test/*.spec.ts"
+  }
+}

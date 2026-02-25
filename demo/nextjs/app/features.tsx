@@ -1,14 +1,14 @@
 "use client";
-import React from "react";
 
 import { AnimatePresence, motion } from "framer-motion";
+import React from "react";
 import { Logo } from "@/components/logo";
 
 export function Features() {
 	return (
 		<>
 			<div className="flex flex-col lg:flex-row bg-white dark:bg-black w-full gap-4 mx-auto px-8">
-				<Card title="Better Auth" icon={<Logo className=" w-44" />}></Card>
+				<Card title="Better Auth" icon={<Logo className="w-44" />}></Card>
 			</div>
 		</>
 	);
@@ -28,7 +28,7 @@ const Card = ({
 		<div
 			onMouseEnter={() => setHovered(true)}
 			onMouseLeave={() => setHovered(false)}
-			className="border border-black/[0.2] group/canvas-card flex items-center justify-center dark:border-white/[0.2]  max-w-sm w-full mx-auto p-4 relative h-[18rem]"
+			className="border border-black/20 group/canvas-card flex items-center justify-center dark:border-white/20  max-w-sm w-full mx-auto p-4 relative h-72"
 		>
 			<Icon className="absolute h-6 w-6 -top-3 -left-3 dark:text-white text-black" />
 			<Icon className="absolute h-6 w-6 -bottom-3 -left-3 dark:text-white text-black" />

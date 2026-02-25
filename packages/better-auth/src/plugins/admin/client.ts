@@ -1,21 +1,28 @@
-import type { BetterAuthClientPlugin } from "../../types";
-import { type AccessControl, type Role } from "../access";
-import { adminAc, defaultStatements, userAc } from "./access";
+import type { BetterAuthClientPlugin } from "@better-auth/core";
+import type { AccessControl, Role } from "../access";
+import type { defaultStatements } from "./access";
+import { adminAc, userAc } from "./access";
 import type { admin } from "./admin";
+import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
 
+export * from "./error-codes";
+
 interface AdminClientOptions {
-	ac?: AccessControl;
-	roles?: {
-		[key in string]: Role;
-	};
+	ac?: AccessControl | undefined;
+	roles?:
+		| {
+				[key in string]: Role;
+		  }
+		| undefined;
 }
 
-export const adminClient = <O extends AdminClientOptions>(options?: O) => {
+export const adminClient = <O extends AdminClientOptions>(
+	options?: O | undefined,
+) => {
 	type DefaultStatements = typeof defaultStatements;
-	type Statements = O["ac"] extends AccessControl<infer S>
-		? S
-		: DefaultStatements;
+	type Statements =
+		O["ac"] extends AccessControl<infer S> ? S : DefaultStatements;
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
@@ -23,18 +30,9 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -74,7 +72,7 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},
@@ -84,5 +82,8 @@ export const adminClient = <O extends AdminClientOptions>(options?: O) => {
 			"/admin/list-users": "GET",
 			"/admin/stop-impersonating": "POST",
 		},
+		$ERROR_CODES: ADMIN_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./types";
