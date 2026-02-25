@@ -372,15 +372,7 @@ describe("Social Providers", async (c) => {
 				callbackURL: "https://evil.com/callback",
 			},
 			{
-				onSuccess(context) {
-					const cookies = parseSetCookieHeader(
-						context.response.headers.get("set-cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${cookies.get("better-auth.state")?.value}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 

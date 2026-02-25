@@ -253,19 +253,7 @@ describe("oauth2", async () => {
 				newUserCallbackURL: "http://localhost:3000/new_user",
 			},
 			{
-				onSuccess(context) {
-					const parsedSetCookie = parseSetCookieHeader(
-						context.response.headers.get("Set-Cookie") || "",
-					);
-					headers.set(
-						"cookie",
-						`better-auth.state=${
-							parsedSetCookie.get("better-auth.state")?.value
-						}; better-auth.pk_code_verifier=${
-							parsedSetCookie.get("better-auth.pk_code_verifier")?.value
-						}`,
-					);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		);
 

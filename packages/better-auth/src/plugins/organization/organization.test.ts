@@ -7,7 +7,6 @@ import type {
 	PreinitializedWritableAtom,
 } from "../../client";
 import { createAuthClient } from "../../client";
-import { parseSetCookieHeader } from "../../cookies";
 import { nextCookies } from "../../integrations/next-js";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { User } from "../../types";
@@ -2162,7 +2161,7 @@ describe("Additional Fields", async () => {
 		teams: { enabled: true },
 	});
 
-	const { auth, signInWithTestUser } = await getTestInstance({
+	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		database: memoryAdapter(db, {
 			debugLogs: false,
 		}),
@@ -2688,15 +2687,7 @@ describe("Additional Fields", async () => {
 		password: "password",
 		name: "new member for org",
 		fetchOptions: {
-			onSuccess(context) {
-				const header = context.response.headers.get("set-cookie");
-				const cookies = parseSetCookieHeader(header || "");
-				const signedCookie = cookies.get("better-auth.session_token")?.value;
-				addedMemberHeaders.set(
-					"cookie",
-					`better-auth.session_token=${signedCookie}`,
-				);
-			},
+			onSuccess: cookieSetter(addedMemberHeaders),
 		},
 	});
 	if (!addedMember) throw error;
@@ -2867,12 +2858,7 @@ describe("Additional Fields", async () => {
 			password: testUser.password,
 			name: testUser.name,
 			fetchOptions: {
-				onSuccess(context) {
-					const header = context.response.headers.get("set-cookie");
-					const cookies = parseSetCookieHeader(header || "");
-					const signedCookie = cookies.get("better-auth.session_token")?.value;
-					headers.set("cookie", `better-auth.session_token=${signedCookie}`);
-				},
+				onSuccess: cookieSetter(headers),
 			},
 		});
 		const session = await client.getSession({ fetchOptions: { headers } });
