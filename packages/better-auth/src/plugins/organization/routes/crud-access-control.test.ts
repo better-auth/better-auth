@@ -1,5 +1,5 @@
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import { describe, expect, expectTypeOf } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../../client";
 import { parseSetCookieHeader } from "../../../cookies";
 import { getTestInstance } from "../../../test-utils/test-instance";
@@ -9,7 +9,7 @@ import { inferOrgAdditionalFields, organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
 
-describe("dynamic access control", async (it) => {
+describe("dynamic access control", async () => {
 	const ac = createAccessControl({
 		project: ["create", "read", "update", "delete"],
 		sales: ["create", "read", "update", "delete"],
@@ -59,7 +59,11 @@ describe("dynamic access control", async (it) => {
 						enabled: true,
 					},
 					schema: {
+						organization: {
+							modelName: "organization",
+						},
 						organizationRole: {
+							modelName: "organizationRole",
 							additionalFields,
 						},
 					},
@@ -88,10 +92,10 @@ describe("dynamic access control", async (it) => {
 		},
 	});
 	const {
-		organization: { checkRolePermission, hasPermission, create },
+		organization: { create },
 	} = authClient;
 
-	const { headers, user, session } = await signInWithTestUser();
+	const { headers } = await signInWithTestUser();
 
 	async function createUser({ role }: { role: "admin" | "member" | "owner" }) {
 		const normalUserDetails = {
@@ -109,7 +113,7 @@ describe("dynamic access control", async (it) => {
 			headers,
 		});
 		if (!member) throw new Error("Member not found");
-		let userHeaders = new Headers();
+		const userHeaders = new Headers();
 		await authClient.signIn.email({
 			email: normalUserDetails.email,
 			password: normalUserDetails.password,
@@ -153,20 +157,12 @@ describe("dynamic access control", async (it) => {
 	if (!memberInfo) throw new Error("Member info not found");
 
 	// Create an admin user in the org.
-	const {
-		headers: adminHeaders,
-		user: adminUser,
-		member: adminMember,
-	} = await createUser({
+	const { headers: adminHeaders } = await createUser({
 		role: "admin",
 	});
 
 	// Create normal users in the org.
-	const {
-		headers: normalHeaders,
-		user: normalUser,
-		member: normalMember,
-	} = await createUser({
+	const { headers: normalHeaders, member: normalMember } = await createUser({
 		role: "member",
 	});
 
@@ -258,7 +254,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole.data).toBeNull();
 		if (!testRole.error) throw new Error("Test role error not found");
 		expect(testRole.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.message,
 		);
 	});
 
@@ -281,7 +277,7 @@ describe("dynamic access control", async (it) => {
 		if (testRole.data) throw new Error("Test role created");
 		expect(
 			testRole.error.message?.startsWith(
-				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE,
+				ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_CREATE_A_ROLE.message,
 			),
 		).toBe(true);
 		expect("missingPermissions" in testRole.error).toBe(true);
@@ -310,7 +306,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole.data).toBeNull();
 		if (!testRole.error) throw new Error("Test role error not found");
 		expect(testRole.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.message,
 		);
 
 		const testRole2 = await authClient.organization.createRole(
@@ -330,7 +326,7 @@ describe("dynamic access control", async (it) => {
 		expect(testRole2.data).toBeNull();
 		if (!testRole2.error) throw new Error("Test role error not found");
 		expect(testRole2.error.message).toEqual(
-			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN,
+			ORGANIZATION_ERROR_CODES.ROLE_NAME_IS_ALREADY_TAKEN.message,
 		);
 	});
 
@@ -384,7 +380,137 @@ describe("dynamic access control", async (it) => {
 		expect(res).not.toBeNull();
 	});
 
-	it("should not be allowed to delete a role without nessesary permissions", async () => {
+	it("should not be allowed to delete a role that is assigned to members", async () => {
+		// Create a new dynamic role
+		const testRole = await authClient.organization.createRole(
+			{
+				role: "assigned-role",
+				permission: {
+					project: ["read"],
+				},
+				additionalFields: {
+					color: "#000000",
+				},
+			},
+			{ headers },
+		);
+		if (!testRole.data) throw testRole.error;
+
+		// Create a member with the role
+		const memberDetails = {
+			email: `delete-role-test-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: "assigned-role",
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Try to delete the role - should fail
+		await expect(
+			auth.api.deleteOrgRole({
+				body: { roleName: "assigned-role" },
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS.message,
+		);
+
+		// Clean up: change member's role and then delete the dynamic role
+		await auth.api.updateMemberRole({
+			body: {
+				memberId: (
+					await auth.api.listMembers({
+						query: { organizationId: org.data?.id },
+						headers,
+					})
+				).members?.find((m) => m.userId === memberUser.user.id)?.id!,
+				role: "member",
+			},
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "assigned-role" },
+			headers,
+		});
+	});
+
+	it("should not be allowed to delete a role when member has multiple roles including that role", async () => {
+		// Create two dynamic roles
+		const role1 = await authClient.organization.createRole(
+			{
+				role: "multi-role-1",
+				permission: { project: ["read"] },
+				additionalFields: { color: "#000000" },
+			},
+			{ headers },
+		);
+		const role2 = await authClient.organization.createRole(
+			{
+				role: "multi-role-2",
+				permission: { project: ["create"] },
+				additionalFields: { color: "#111111" },
+			},
+			{ headers },
+		);
+		if (!role1.data || !role2.data) throw new Error("Roles not created");
+
+		// Create a member with multiple roles (comma-separated)
+		const memberDetails = {
+			email: `multi-role-test-${crypto.randomUUID()}@email.com`,
+			name: "test-member",
+			password: `password-${crypto.randomUUID()}`,
+		};
+		const memberUser = await auth.api.signUpEmail({ body: memberDetails });
+		await auth.api.addMember({
+			body: {
+				// @ts-expect-error - for testing purposes
+				role: ["multi-role-1", "multi-role-2"],
+				userId: memberUser.user.id,
+				organizationId: org.data?.id,
+			},
+			headers,
+		});
+
+		// Try to delete one of the roles - should fail
+		await expect(
+			auth.api.deleteOrgRole({
+				body: { roleName: "multi-role-1" },
+				headers,
+			}),
+		).rejects.toThrow(
+			ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS.message,
+		);
+
+		// Clean up
+		const memberId = (
+			await auth.api.listMembers({
+				query: { organizationId: org.data?.id },
+				headers,
+			})
+		).members?.find((m) => m.userId === memberUser.user.id)?.id!;
+		await auth.api.updateMemberRole({
+			body: { memberId, role: "member" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "multi-role-1" },
+			headers,
+		});
+		await auth.api.deleteOrgRole({
+			body: { roleName: "multi-role-2" },
+			headers,
+		});
+	});
+
+	it("should not be allowed to delete a role without necessary permissions", async () => {
 		const testRole = await authClient.organization.createRole(
 			{
 				role: `test-${crypto.randomUUID()}`,
@@ -406,7 +532,7 @@ describe("dynamic access control", async (it) => {
 				headers: normalHeaders,
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_DELETE_A_ROLE.message,
 		);
 	});
 
@@ -420,7 +546,7 @@ describe("dynamic access control", async (it) => {
 		} catch (error: any) {
 			if ("body" in error && "message" in error.body) {
 				expect(error.body.message).toBe(
-					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND,
+					ORGANIZATION_ERROR_CODES.ROLE_NOT_FOUND.message,
 				);
 			} else {
 				throw error;
@@ -460,9 +586,9 @@ describe("dynamic access control", async (it) => {
 		>();
 	});
 
-	it("should not be allowed to list roles without nessesary permissions", async () => {
+	it("should not be allowed to list roles without necessary permissions", async () => {
 		expect(auth.api.listOrgRoles({ headers: normalHeaders })).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_LIST_A_ROLE.message,
 		);
 	});
 
@@ -654,11 +780,7 @@ describe("dynamic access control", async (it) => {
 	 */
 	it("should not allow member to list roles using another member's permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -692,11 +814,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow member to get role details using another member's permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -733,11 +851,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow member to update roles without proper permissions (privilege escalation test)", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -791,11 +905,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should properly identify the correct member when checking permissions", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 
@@ -829,7 +939,7 @@ describe("dynamic access control", async (it) => {
 				headers: freshMemberHeaders,
 			}),
 		).rejects.toThrow(
-			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE,
+			ORGANIZATION_ERROR_CODES.YOU_ARE_NOT_ALLOWED_TO_UPDATE_A_ROLE.message,
 		);
 
 		// Admin should be able to update (has ac:update)
@@ -848,11 +958,7 @@ describe("dynamic access control", async (it) => {
 
 	it("should not allow cross-organization privilege escalation", async () => {
 		// Create a fresh member for this test to avoid role contamination
-		const {
-			headers: freshMemberHeaders,
-			user: freshMemberUser,
-			member: freshMember,
-		} = await createUser({
+		const { headers: freshMemberHeaders } = await createUser({
 			role: "member",
 		});
 

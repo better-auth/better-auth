@@ -1,92 +1,59 @@
-import type {
-	AuthContext,
-	BetterAuthPlugin,
-	GenericEndpointContext,
-} from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
 } from "@better-auth/core/api";
-import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
-import { defineErrorCodes } from "@better-auth/core/utils";
-import type { EndpointContext } from "better-call";
-import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader, setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
-import type { InferOptionSchema, Session, User } from "../../types";
-import { generateId } from "../../utils/id";
-import { getOrigin } from "../../utils/url";
+import { generateId } from "@better-auth/core/utils/id";
+import * as z from "zod";
+import {
+	APIError,
+	getSessionFromCtx,
+	sensitiveSessionMiddleware,
+} from "../../api";
+import {
+	deleteSessionCookie,
+	parseSetCookieHeader,
+	setSessionCookie,
+} from "../../cookies";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
+import { ANONYMOUS_ERROR_CODES } from "./error-codes";
+import { schema } from "./schema";
+import type {
+	AnonymousOptions,
+	AnonymousSession,
+	UserWithAnonymous,
+} from "./types";
 
-export interface UserWithAnonymous extends User {
-	isAnonymous: boolean;
-}
-export interface AnonymousOptions {
-	/**
-	 * Configure the domain name of the temporary email
-	 * address for anonymous users in the database.
-	 * @default "baseURL"
-	 */
-	emailDomainName?: string | undefined;
-	/**
-	 * A useful hook to run after an anonymous user
-	 * is about to link their account.
-	 */
-	onLinkAccount?:
-		| ((data: {
-				anonymousUser: {
-					user: UserWithAnonymous & Record<string, any>;
-					session: Session & Record<string, any>;
-				};
-				newUser: {
-					user: User & Record<string, any>;
-					session: Session & Record<string, any>;
-				};
-				ctx: GenericEndpointContext;
-		  }) => Promise<void> | void)
-		| undefined;
-	/**
-	 * Disable deleting the anonymous user after linking
-	 */
-	disableDeleteAnonymousUser?: boolean | undefined;
-	/**
-	 * A hook to generate a name for the anonymous user.
-	 * Useful if you want to have random names for anonymous users, or if `name` is unique in your database.
-	 * @returns The name for the anonymous user.
-	 */
-	generateName?:
-		| ((
-				ctx: EndpointContext<
-					"/sign-in/anonymous",
-					{
-						method: "POST";
-					},
-					AuthContext
-				>,
-		  ) => Promise<string> | string)
-		| undefined;
-	/**
-	 * Custom schema for the anonymous plugin
-	 */
-	schema?: InferOptionSchema<typeof schema> | undefined;
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		anonymous: {
+			creator: typeof anonymous;
+		};
+	}
 }
 
-const schema = {
-	user: {
-		fields: {
-			isAnonymous: {
-				type: "boolean",
-				required: false,
-			},
-		},
-	},
-} satisfies BetterAuthPluginDBSchema;
+async function getAnonUserEmail(
+	options: AnonymousOptions | undefined,
+): Promise<string> {
+	const customEmail = await options?.generateRandomEmail?.();
+	if (customEmail) {
+		const validation = z.email().safeParse(customEmail);
+		if (!validation.success) {
+			throw APIError.from(
+				"BAD_REQUEST",
+				ANONYMOUS_ERROR_CODES.INVALID_EMAIL_FORMAT,
+			);
+		}
+		return customEmail;
+	}
 
-const ERROR_CODES = defineErrorCodes({
-	FAILED_TO_CREATE_USER: "Failed to create user",
-	COULD_NOT_CREATE_SESSION: "Could not create session",
-	ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY:
-		"Anonymous users cannot sign in again anonymously",
-});
+	const id = generateId();
+	if (options?.emailDomainName) {
+		return `temp-${id}@${options.emailDomainName}`;
+	}
+
+	return `temp@${id}.com`;
+}
 
 export const anonymous = (options?: AnonymousOptions | undefined) => {
 	return {
@@ -128,19 +95,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					// prevents an anonymous user from signing in anonymously again while they
 					// are already authenticated.
 					const existingSession = await getSessionFromCtx<{
-						isAnonymous: boolean;
+						isAnonymous: boolean | null;
 					}>(ctx, { disableRefresh: true });
 					if (existingSession?.user.isAnonymous) {
-						throw new APIError("BAD_REQUEST", {
-							message:
-								ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+						);
 					}
 
-					const { emailDomainName = getOrigin(ctx.context.baseURL) } =
-						options || {};
-					const id = generateId();
-					const email = `temp-${id}@${emailDomainName}`;
+					const email = await getAnonUserEmail(options);
 					const name = (await options?.generateName?.(ctx)) || "Anonymous";
 					const newUser = await ctx.context.internalAdapter.createUser({
 						email,
@@ -151,20 +115,19 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						updatedAt: new Date(),
 					});
 					if (!newUser) {
-						throw ctx.error("INTERNAL_SERVER_ERROR", {
-							message: ERROR_CODES.FAILED_TO_CREATE_USER,
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_CREATE_USER,
+						);
 					}
 					const session = await ctx.context.internalAdapter.createSession(
 						newUser.id,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 400,
-							body: {
-								message: ERROR_CODES.COULD_NOT_CREATE_SESSION,
-							},
-						});
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.COULD_NOT_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(ctx, {
 						session,
@@ -172,15 +135,98 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 					});
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: newUser.id,
-							email: newUser.email,
-							emailVerified: newUser.emailVerified,
-							name: newUser.name,
-							createdAt: newUser.createdAt,
-							updatedAt: newUser.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, newUser),
 					});
+				},
+			),
+			deleteAnonymousUser: createAuthEndpoint(
+				"/delete-anonymous-user",
+				{
+					method: "POST",
+					use: [sensitiveSessionMiddleware],
+					metadata: {
+						openapi: {
+							description: "Delete an anonymous user",
+							responses: {
+								200: {
+									description: "Anonymous user deleted",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													success: {
+														type: "boolean",
+													},
+												},
+											},
+										},
+									},
+								},
+								"400": {
+									description: "Anonymous user deletion is disabled",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+											},
+											required: ["message"],
+										},
+									},
+								},
+								"500": {
+									description: "Internal server error",
+									content: {
+										"application/json": {
+											schema: {
+												type: "object",
+												properties: {
+													message: {
+														type: "string",
+													},
+												},
+												required: ["message"],
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				async (ctx) => {
+					const session = ctx.context.session as AnonymousSession;
+
+					if (options?.disableDeleteAnonymousUser) {
+						throw APIError.from(
+							"BAD_REQUEST",
+							ANONYMOUS_ERROR_CODES.DELETE_ANONYMOUS_USER_DISABLED,
+						);
+					}
+
+					if (!session.user.isAnonymous) {
+						throw APIError.from(
+							"FORBIDDEN",
+							ANONYMOUS_ERROR_CODES.USER_IS_NOT_ANONYMOUS,
+						);
+					}
+
+					try {
+						await ctx.context.internalAdapter.deleteUser(session.user.id);
+					} catch (error) {
+						ctx.context.logger.error("Failed to delete anonymous user", error);
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							ANONYMOUS_ERROR_CODES.FAILED_TO_DELETE_ANONYMOUS_USER,
+						);
+					}
+					deleteSessionCookie(ctx);
+					return ctx.json({ success: true });
 				},
 			),
 		},
@@ -189,15 +235,16 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 				{
 					matcher(ctx) {
 						return (
-							ctx.path.startsWith("/sign-in") ||
-							ctx.path.startsWith("/sign-up") ||
-							ctx.path.startsWith("/callback") ||
-							ctx.path.startsWith("/oauth2/callback") ||
-							ctx.path.startsWith("/magic-link/verify") ||
-							ctx.path.startsWith("/email-otp/verify-email") ||
-							ctx.path.startsWith("/one-tap/callback") ||
-							ctx.path.startsWith("/passkey/verify-authentication") ||
-							ctx.path.startsWith("/phone-number/verify")
+							ctx.path?.startsWith("/sign-in") ||
+							ctx.path?.startsWith("/sign-up") ||
+							ctx.path?.startsWith("/callback") ||
+							ctx.path?.startsWith("/oauth2/callback") ||
+							ctx.path?.startsWith("/magic-link/verify") ||
+							ctx.path?.startsWith("/email-otp/verify-email") ||
+							ctx.path?.startsWith("/one-tap/callback") ||
+							ctx.path?.startsWith("/passkey/verify-authentication") ||
+							ctx.path?.startsWith("/phone-number/verify") ||
+							false
 						);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
@@ -221,46 +268,67 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 						/**
 						 * Make sure the user had an anonymous session.
 						 */
-						const session = await getSessionFromCtx<{ isAnonymous: boolean }>(
-							ctx,
-							{
-								disableRefresh: true,
-							},
-						);
+						const session = await getSessionFromCtx<{
+							isAnonymous: boolean | null;
+						}>(ctx, {
+							disableRefresh: true,
+						});
 
 						if (!session || !session.user.isAnonymous) {
 							return;
 						}
 
 						if (ctx.path === "/sign-in/anonymous" && !ctx.context.newSession) {
-							throw new APIError("BAD_REQUEST", {
-								message:
-									ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
-							});
+							throw APIError.from(
+								"BAD_REQUEST",
+								ANONYMOUS_ERROR_CODES.ANONYMOUS_USERS_CANNOT_SIGN_IN_AGAIN_ANONYMOUSLY,
+							);
 						}
 						const newSession = ctx.context.newSession;
 						if (!newSession) {
 							return;
 						}
+
+						const user = {
+							...session.user,
+							// Type hack to ensure `isAnonymous` is correctly inferred as true.
+							// Without this, `isAnonymous` is inferred as `boolean | null` despite
+							// the conditional checks above suggesting otherwise.
+							isAnonymous: session.user.isAnonymous,
+						};
+
 						// At this point the user is linking their previous anonymous account with a
 						// new credential (email / social). Invoke the provided callback so that the
 						// integrator can perform any additional logic such as transferring data
 						// from the anonymous user to the new user.
 						if (options?.onLinkAccount) {
 							await options?.onLinkAccount?.({
-								anonymousUser: session,
+								anonymousUser: { session: session.session, user },
 								newUser: newSession,
 								ctx,
 							});
 						}
-						if (!options?.disableDeleteAnonymousUser) {
-							await ctx.context.internalAdapter.deleteUser(session.user.id);
+						const newSessionUser = newSession.user as
+							| (UserWithAnonymous & Record<string, any>)
+							| undefined;
+						const isSameUser = newSessionUser?.id === session.user.id;
+						const newSessionIsAnonymous = Boolean(newSessionUser?.isAnonymous);
+						if (
+							options?.disableDeleteAnonymousUser ||
+							isSameUser ||
+							newSessionIsAnonymous
+						) {
+							return;
 						}
+						await ctx.context.internalAdapter.deleteUser(session.user.id);
 					}),
 				},
 			],
 		},
+		options,
 		schema: mergeSchema(schema, options?.schema),
-		$ERROR_CODES: ERROR_CODES,
+		$ERROR_CODES: ANONYMOUS_ERROR_CODES,
 	} satisfies BetterAuthPlugin;
 };
+
+export type * from "./types";

@@ -2,12 +2,11 @@ import assert from "node:assert/strict";
 import { DatabaseSync } from "node:sqlite";
 import { describe, test } from "node:test";
 import { betterAuth } from "better-auth";
-import { type AuthClient, createAuthClient } from "better-auth/client";
-import {
-	type ApiKeyClientPlugin,
-	apiKeyClient,
-} from "better-auth/client/plugins";
-import { getMigrations } from "better-auth/db";
+import type { AuthClient } from "better-auth/client";
+import { createAuthClient } from "better-auth/client";
+import type { ApiKeyClientPlugin } from "better-auth/client/plugins";
+import { apiKeyClient } from "better-auth/client/plugins";
+import { getMigrations } from "better-auth/db/migration";
 import { apiKey } from "better-auth/plugins";
 
 describe("server side client", () => {

@@ -3,13 +3,13 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { Atom } from "nanostores";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import { capitalizeFirstLetter } from "../../utils/misc";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -50,7 +51,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		atomListeners,
 		$store,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[`use${capitalizeFirstLetter(key)}`] = () => value;
 	}
@@ -85,6 +86,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 				error: BetterFetchError | null;
 				isPending: boolean;
 				isRefetching: boolean;
+				refetch: (
+					queryParams?: { query?: SessionQueryParams } | undefined,
+				) => Promise<void>;
 			}>;
 			$fetch: typeof $fetch;
 			$store: typeof $store;
@@ -99,3 +103,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
+export type * from "../../types/helper";
+export type { UnionToIntersection } from "../../types/helper";

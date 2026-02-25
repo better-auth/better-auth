@@ -1,4 +1,4 @@
-import { type BetterFetchPlugin } from "@better-fetch/fetch";
+import type { BetterFetchPlugin } from "@better-fetch/fetch";
 
 export const redirectPlugin = {
 	id: "redirect",
@@ -14,16 +14,6 @@ export const redirectPlugin = {
 					}
 				}
 			}
-		},
-	},
-} satisfies BetterFetchPlugin;
-
-export const userAgentPlugin = {
-	id: "user-agent",
-	name: "UserAgent",
-	hooks: {
-		onRequest(context) {
-			context.headers.append("user-agent", "better-auth");
 		},
 	},
 } satisfies BetterFetchPlugin;

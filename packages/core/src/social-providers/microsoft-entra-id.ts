@@ -1,7 +1,8 @@
 import { base64 } from "@better-auth/utils/base64";
 import { betterFetch } from "@better-fetch/fetch";
-import { decodeJwt } from "jose";
+import { decodeJwt, decodeProtectedHeader, importJWK, jwtVerify } from "jose";
 import { logger } from "../env";
+import { APIError } from "../error";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import {
 	createAuthorizationURL,
@@ -81,6 +82,8 @@ export interface MicrosoftEntraIDProfile extends Record<string, any> {
 	verified_primary_email: string[];
 	/** User's verified secondary email addresses */
 	verified_secondary_email: string[];
+	/** Whether the user's email is verified (optional claim, must be configured in app registration) */
+	email_verified?: boolean | undefined;
 	/** VNET specifier information */
 	vnet: string;
 	/** Client Capabilities */
@@ -172,6 +175,56 @@ export const microsoft = (options: MicrosoftOptions) => {
 				tokenEndpoint,
 			});
 		},
+		async verifyIdToken(token, nonce) {
+			if (options.disableIdTokenSignIn) {
+				return false;
+			}
+			if (options.verifyIdToken) {
+				return options.verifyIdToken(token, nonce);
+			}
+
+			try {
+				const { kid, alg: jwtAlg } = decodeProtectedHeader(token);
+				if (!kid || !jwtAlg) return false;
+
+				const publicKey = await getMicrosoftPublicKey(kid, tenant, authority);
+				const verifyOptions: {
+					algorithms: [string];
+					audience: string;
+					maxTokenAge: string;
+					issuer?: string;
+				} = {
+					algorithms: [jwtAlg],
+					audience: options.clientId,
+					maxTokenAge: "1h",
+				};
+				/**
+				 * Issuer varies per user's tenant for multi-tenant endpoints, so only validate for specific tenants.
+				 * @see https://learn.microsoft.com/en-us/entra/identity-platform/v2-protocols#endpoints
+				 */
+				if (
+					tenant !== "common" &&
+					tenant !== "organizations" &&
+					tenant !== "consumers"
+				) {
+					verifyOptions.issuer = `${authority}/${tenant}/v2.0`;
+				}
+				const { payload: jwtClaims } = await jwtVerify(
+					token,
+					publicKey,
+					verifyOptions,
+				);
+
+				if (nonce && jwtClaims.nonce !== nonce) {
+					return false;
+				}
+
+				return true;
+			} catch (error) {
+				logger.error("Failed to verify ID token:", error);
+				return false;
+			}
+		},
 		async getUserInfo(token) {
 			if (options.getUserInfo) {
 				return options.getUserInfo(token);
@@ -208,13 +261,25 @@ export const microsoft = (options: MicrosoftOptions) => {
 				},
 			);
 			const userMap = await options.mapProfileToUser?.(user);
+			// Microsoft Entra ID does NOT include email_verified claim by default.
+			// It must be configured as an optional claim in the app registration.
+			// We default to false when not provided for security consistency.
+			// We can also check verified_primary_email/verified_secondary_email arrays as fallback.
+			const emailVerified =
+				user.email_verified !== undefined
+					? user.email_verified
+					: user.email &&
+							(user.verified_primary_email?.includes(user.email) ||
+								user.verified_secondary_email?.includes(user.email))
+						? true
+						: false;
 			return {
 				user: {
 					id: user.sub,
 					name: user.name,
 					email: user.email,
 					image: user.picture,
-					emailVerified: true,
+					emailVerified,
 					...userMap,
 				},
 				data: user,
@@ -242,4 +307,36 @@ export const microsoft = (options: MicrosoftOptions) => {
 				},
 		options,
 	} satisfies OAuthProvider;
+};
+
+export const getMicrosoftPublicKey = async (
+	kid: string,
+	tenant: string,
+	authority: string,
+) => {
+	const { data } = await betterFetch<{
+		keys: Array<{
+			kid: string;
+			alg: string;
+			kty: string;
+			use: string;
+			n: string;
+			e: string;
+			x5c?: string[];
+			x5t?: string;
+		}>;
+	}>(`${authority}/${tenant}/discovery/v2.0/keys`);
+
+	if (!data?.keys) {
+		throw new APIError("BAD_REQUEST", {
+			message: "Keys not found",
+		});
+	}
+
+	const jwk = data.keys.find((key) => key.kid === kid);
+	if (!jwk) {
+		throw new Error(`JWK with kid ${kid} not found`);
+	}
+
+	return await importJWK(jwk, jwk.alg);
 };

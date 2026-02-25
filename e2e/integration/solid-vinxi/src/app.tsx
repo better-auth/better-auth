@@ -1,5 +1,6 @@
 // @refresh reload
-import { type RouteDefinition, Router } from "@solidjs/router";
+import type { RouteDefinition } from "@solidjs/router";
+import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
 import { Suspense } from "solid-js";
 

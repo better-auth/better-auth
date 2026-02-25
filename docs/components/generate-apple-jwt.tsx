@@ -1,6 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
+import { standardSchemaResolver } from "@hookform/resolvers/standard-schema";
+
 import { KJUR } from "jsrsasign";
 import { useState, useTransition } from "react";
 import { useForm } from "react-hook-form";
@@ -47,7 +48,7 @@ export const GenerateAppleJwt = () => {
 	const [isLoading, startTransition] = useTransition();
 
 	const form = useForm<AppleJwtFormValues>({
-		resolver: zodResolver(appleJwtSchema),
+		resolver: standardSchemaResolver(appleJwtSchema),
 		defaultValues: {
 			teamId: "",
 			clientId: "",
@@ -61,7 +62,7 @@ export const GenerateAppleJwt = () => {
 		setError(null);
 		startTransition(() => {
 			try {
-				//normalize the private key by replacing \r\n with \n and trimming whitespace just incase lol
+				//normalize the private key by replacing \r\n with \n and trimming whitespace just in-case lol
 				const normalizedKey = data.privateKey.replace(/\r\n/g, "\n").trim();
 
 				//since jose is not working with safari, we are using jsrsasign

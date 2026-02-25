@@ -1,5 +1,8 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { twoFactor as twoFa } from "../../plugins/two-factor";
+import type { twoFactor as twoFa } from ".";
+import { TWO_FACTOR_ERROR_CODES } from "./error-code";
+
+export * from "./error-code";
 
 export const twoFactorClient = (
 	options?:
@@ -26,6 +29,10 @@ export const twoFactorClient = (
 			"/two-factor/enable": "POST",
 			"/two-factor/send-otp": "POST",
 			"/two-factor/generate-backup-codes": "POST",
+			"/two-factor/get-totp-uri": "POST",
+			"/two-factor/verify-totp": "POST",
+			"/two-factor/verify-otp": "POST",
+			"/two-factor/verify-backup-code": "POST",
 		},
 		fetchPlugins: [
 			{
@@ -42,5 +49,11 @@ export const twoFactorClient = (
 				},
 			},
 		],
+		$ERROR_CODES: TWO_FACTOR_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
+
+export type * from "./backup-codes";
+export type * from "./otp";
+export type * from "./totp";
+export type * from "./types";

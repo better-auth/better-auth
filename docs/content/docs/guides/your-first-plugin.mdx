@@ -20,7 +20,7 @@ In this guide, we’ll create a **birthday plugin** to keep track of user birth 
 
 <Step>
 ## Server plugin first
-Better Auth plugins operate as a pair: a <Link href="/docs/concepts/plugins#create-a-server-plugin">server plugin</Link> and a <Link href="/docs/concepts/plugins#create-a-client-plugin">client plugin</Link>.
+Better Auth plugins operate as a pair: a <Link href="/docs/concepts/plugins#create-a-server-plugin">server plugin</Link> and a <Link href="/docs/concepts/plugins#creating-a-client-plugin">client plugin</Link>.
 The server plugin forms the foundation of your authentication system, while the client plugin provides convenient frontend APIs to interact with your server implementation.
 
 
@@ -74,7 +74,6 @@ export const birthdayPlugin = () =>
             type: "date", // string, number, boolean, date // [!code highlight]
             required: true, // if the field should be required on a new record. (default: false) // [!code highlight]
             unique: false, // if the field should be unique. (default: false) // [!code highlight]
-            references: null // if the field is a reference to another table. (default: null) // [!code highlight]
           },// [!code highlight]
         },// [!code highlight]
       },// [!code highlight]
@@ -165,7 +164,7 @@ First, let’s create our `client.ts` file first:
 </Files>
 Then, add the following code:
 ```ts title="client.ts"
-import { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { birthdayPlugin } from "./index"; // make sure to import the server plugin as a type // [!code highlight]
 
 type BirthdayPlugin = typeof birthdayPlugin;
@@ -216,7 +215,7 @@ Don’t forget to add your `birthday` field to your `user` table model!
 
 Or, use the `generate` <Link href="/docs/concepts/cli#generate">CLI command</Link>:
 ```bash
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 </Step>

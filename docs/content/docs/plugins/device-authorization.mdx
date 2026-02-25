@@ -11,8 +11,8 @@ The Device Authorization plugin implements the OAuth 2.0 Device Authorization Gr
 
 You can test the device authorization flow right now using the Better Auth CLI:
 
-```bash
-npx @better-auth/cli login
+```package-install
+npx auth login
 ```
 
 This will demonstrate the complete device authorization flow by:
@@ -39,13 +39,11 @@ This will demonstrate the complete device authorization flow by:
 
         export const auth = betterAuth({
           // ... other config
-          plugins: [ // [!code highlight]
+          plugins: [
             deviceAuthorization({ // [!code highlight]
-              // Optional configuration
-              expiresIn: "30m", // Device code expiration time // [!code highlight]
-              interval: "5s",    // Minimum polling interval // [!code highlight]
+              verificationUri: "/device", // [!code highlight]
             }), // [!code highlight]
-          ], // [!code highlight]
+          ],
         });
         ```
     </Step>
@@ -57,13 +55,13 @@ This will demonstrate the complete device authorization flow by:
         
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
-            npx @better-auth/cli migrate
+            ```package-install
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
-            npx @better-auth/cli generate
+            ```package-install
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -80,9 +78,9 @@ This will demonstrate the complete device authorization flow by:
         import { deviceAuthorizationClient } from "better-auth/client/plugins"; // [!code highlight]
 
         export const authClient = createAuthClient({
-          plugins: [ // [!code highlight]
+          plugins: [
             deviceAuthorizationClient(), // [!code highlight]
-          ], // [!code highlight]
+          ],
         });
         ```
     </Step>
@@ -123,14 +121,17 @@ type deviceCode = {
 
 Example usage:
 ```ts
+import { authClient } from "@/lib/auth-client"
+
 const { data } = await authClient.device.code({
   client_id: "your-client-id",
   scope: "openid profile email",
 });
 
 if (data) {
-  console.log(`Please visit: ${data.verification_uri}`);
-  console.log(`And enter code: ${data.user_code}`);
+  console.log(`User code: ${data.user_code}`);
+  console.log(`Verification URL: ${data.verification_uri}`);
+  console.log(`Complete verification URL: ${data.verification_uri_complete}`);
 }
 ```
 
@@ -417,7 +418,11 @@ The device flow defines specific error codes:
 
 Here's a complete example for a CLI application based on the actual demo:
 
-```ts title="cli-auth.ts"
+<Callout type="info">
+  To use the access token for API requests, ensure you have added the [Bearer plugin](/docs/plugins/bearer) to your auth instance.
+</Callout>
+
+```ts title="auth-client.ts"
 import { createAuthClient } from "better-auth/client";
 import { deviceAuthorizationClient } from "better-auth/client/plugins";
 import open from "open";
@@ -455,12 +460,10 @@ async function authenticateCLI() {
     console.log(`Please visit: ${verification_uri}`);
     console.log(`Enter code: ${user_code}\n`);
     
-    // Open browser with the complete URL
+    // Open browser to verification page
     const urlToOpen = verification_uri_complete || verification_uri;
-    if (urlToOpen) {
-      console.log("🌐 Opening browser...");
-      await open(urlToOpen);
-    }
+    console.log("🌐 Opening browser...");
+    await open(urlToOpen);
     
     console.log(`⏳ Waiting for authorization... (polling every ${interval}s)`);
     
@@ -555,6 +558,8 @@ authenticateCLI().catch((err) => {
 ## Options
 
 ### Server
+
+**verificationUri**: The URL of the verification page where users can enter their device code. Match this to the route of your verification page. Returned as `verification_uri` in the response. Can be an absolute URL (e.g., `https://example.com/device`) or relative path (e.g., `/device`). Default: `/device`.
 
 **expiresIn**: The expiration time for device codes. Default: `"30m"` (30 minutes).
 

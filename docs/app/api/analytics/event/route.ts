@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 import { logEventToAnalytics } from "@/lib/inkeep-analytics";
 
 export const runtime = "edge";
@@ -29,7 +30,7 @@ export async function POST(req: NextRequest) {
 		});
 
 		return NextResponse.json(result);
-	} catch (error) {
+	} catch {
 		return NextResponse.json({ error: "Failed to log event" }, { status: 500 });
 	}
 }

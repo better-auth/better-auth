@@ -10,6 +10,7 @@ export const schema = {
 					field: "id",
 				},
 				required: true,
+				index: true,
 			},
 			address: {
 				type: "string",
@@ -30,3 +31,5 @@ export const schema = {
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
+
+export type WalletAddressSchema = typeof schema;

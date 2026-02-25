@@ -30,7 +30,7 @@ export async function verifyJWT<T = any>(
 	try {
 		const verified = await jwtVerify(token, new TextEncoder().encode(secret));
 		return verified.payload as T;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }
@@ -108,7 +108,7 @@ export async function symmetricDecodeJWT<T = any>(
 			},
 		);
 		return payload as T;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }

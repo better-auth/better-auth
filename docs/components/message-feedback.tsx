@@ -56,7 +56,7 @@ export function MessageFeedback({
 			setTimeout(() => {
 				setShowSuccessCheckmark(null);
 			}, 1000);
-		} catch (error) {
+		} catch {
 		} finally {
 			setIsSubmittingFeedback(false);
 		}
@@ -74,7 +74,7 @@ export function MessageFeedback({
 			await logEventToInkeep("message:copied", "message", eventMessageId);
 
 			setTimeout(() => setCopied(false), 2000);
-		} catch (error) {
+		} catch {
 			// Silently handle error
 		}
 	};

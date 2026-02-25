@@ -1,8 +1,11 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
+import { generateId } from "@better-auth/core/utils/id";
 import type { Prettify } from "better-call";
 import * as z from "zod";
-import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
-import { generateId } from "../../utils";
+import type {
+	FieldAttributeToObject,
+	RemoveFieldsWithReturnedFalse,
+} from "../../db";
 import type { OrganizationOptions } from "./types";
 
 type InferSchema<
@@ -200,79 +203,88 @@ interface SessionDefaultFields {
 }
 
 export type OrganizationSchema<O extends OrganizationOptions> =
-	O["dynamicAccessControl"] extends { enabled: true }
+	(O["dynamicAccessControl"] extends { enabled: true }
 		? {
 				organizationRole: InferSchema<
 					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
 					"organizationRole",
 					OrganizationRoleDefaultFields
 				>;
+			} & {
+				session: {
+					fields: InferSchema<
+						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+						"session",
+						SessionDefaultFields
+					>["fields"];
+				};
 			}
-		: {} & (O["teams"] extends { enabled: true }
-				? {
-						team: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"team",
-							TeamDefaultFields
-						>;
-						teamMember: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"teamMember",
-							TeamMemberDefaultFields
-						>;
-					}
-				: {}) & {
-					organization: InferSchema<
+		: {}) &
+		(O["teams"] extends { enabled: true }
+			? {
+					team: InferSchema<
 						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-						"organization",
-						OrganizationDefaultFields
+						"team",
+						TeamDefaultFields
 					>;
-					member: InferSchema<
+					teamMember: InferSchema<
 						O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-						"member",
-						MemberDefaultFields
+						"teamMember",
+						TeamMemberDefaultFields
 					>;
-					invitation: {
-						modelName: O["schema"] extends BetterAuthPluginDBSchema
-							? InferSchema<
-									O["schema"],
-									"invitation",
-									InvitationDefaultFields
-								>["modelName"]
-							: string;
-						fields: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				}
+			: {}) & {
+			organization: InferSchema<
+				O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				"organization",
+				OrganizationDefaultFields
+			>;
+			member: InferSchema<
+				O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+				"member",
+				MemberDefaultFields
+			>;
+			invitation: {
+				modelName: O["schema"] extends BetterAuthPluginDBSchema
+					? InferSchema<
+							O["schema"],
 							"invitation",
 							InvitationDefaultFields
-						>["fields"] &
-							(O extends { teams: { enabled: true } }
-								? {
-										teamId: {
-											type: "string";
-											required: false;
-											sortable: true;
-										};
-									}
-								: {});
-					};
-					session: {
-						fields: InferSchema<
-							O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
-							"session",
-							SessionDefaultFields
-						>["fields"] &
-							(O["teams"] extends { enabled: true }
-								? {
-										activeTeamId: {
-											type: "string";
-											required: false;
-										};
-									}
-								: {});
-					};
-				};
+						>["modelName"]
+					: string;
+				fields: InferSchema<
+					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+					"invitation",
+					InvitationDefaultFields
+				>["fields"] &
+					(O extends { teams: { enabled: true } }
+						? {
+								teamId: {
+									type: "string";
+									required: false;
+									sortable: true;
+								};
+							}
+						: {});
+			};
+			session: {
+				fields: InferSchema<
+					O["schema"] extends BetterAuthPluginDBSchema ? O["schema"] : {},
+					"session",
+					SessionDefaultFields
+				>["fields"] &
+					(O["teams"] extends { enabled: true }
+						? {
+								activeTeamId: {
+									type: "string";
+									required: false;
+								};
+							}
+						: {});
+			};
+		};
 
-export const role = z.string();
+export const roleSchema = z.string();
 export const invitationStatus = z
 	.enum(["pending", "accepted", "rejected", "canceled"])
 	.default("pending");
@@ -293,7 +305,7 @@ export const memberSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	userId: z.coerce.string(),
-	role,
+	role: roleSchema,
 	createdAt: z.date().default(() => new Date()),
 });
 
@@ -301,7 +313,7 @@ export const invitationSchema = z.object({
 	id: z.string().default(generateId),
 	organizationId: z.string(),
 	email: z.string(),
-	role,
+	role: roleSchema,
 	status: invitationStatus,
 	teamId: z.string().nullish(),
 	inviterId: z.string(),
@@ -361,52 +373,83 @@ export type InferOrganizationZodRolesFromOption<
 
 export type InferOrganizationRolesFromOption<
 	O extends OrganizationOptions | undefined,
-> = O extends { roles: any } ? keyof O["roles"] : "admin" | "member" | "owner";
+> = O extends { roles: any }
+	? keyof O["roles"] extends infer K extends string
+		? K
+		: "admin" | "member" | "owner"
+	: "admin" | "member" | "owner";
 
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "canceled";
 
-export type InferMember<O extends OrganizationOptions> = O["teams"] extends {
-	enabled: true;
+import type { DBFieldAttribute } from "@better-auth/core/db";
+
+type InferAdditionalFieldsOutput<
+	SchemaName extends string,
+	Options extends OrganizationOptions,
+	isClientSide extends boolean,
+> = Options["schema"] extends {
+	[key in SchemaName]?: {
+		additionalFields: infer Field extends Record<string, DBFieldAttribute>;
+	};
 }
-	? {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			teamId?: string | undefined;
-			user: {
-				email: string;
-				name: string;
-				image?: string | undefined;
-			};
-		}
-	: {
-			id: string;
-			organizationId: string;
-			role: InferOrganizationRolesFromOption<O>;
-			createdAt: Date;
-			userId: string;
-			user: {
-				email: string;
-				name: string;
-				image?: string | undefined;
-			};
-		};
+	? isClientSide extends true
+		? FieldAttributeToObject<RemoveFieldsWithReturnedFalse<Field>>
+		: FieldAttributeToObject<Field>
+	: {};
+
+export type InferMember<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
+	(O["teams"] extends {
+		enabled: true;
+	}
+		? {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				teamId?: string | undefined;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
+			}
+		: {
+				id: string;
+				organizationId: string;
+				role: InferOrganizationRolesFromOption<O>;
+				createdAt: Date;
+				userId: string;
+				user: {
+					id: string;
+					email: string;
+					name: string;
+					image?: string | undefined;
+				};
+			}) &
+		InferAdditionalFieldsOutput<"member", O, isClientSide>
+>;
 
 export type InferOrganization<
 	O extends OrganizationOptions,
 	isClientSide extends boolean = true,
 > = Prettify<
-	Organization &
-		InferAdditionalFieldsFromPluginOptions<"organization", O, isClientSide>
+	Organization & InferAdditionalFieldsOutput<"organization", O, isClientSide>
 >;
 
-export type InferTeam<O extends OrganizationOptions> = Prettify<
-	Team & InferAdditionalFieldsFromPluginOptions<"team", O>
->;
+export type InferTeam<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<Team & InferAdditionalFieldsOutput<"team", O, isClientSide>>;
 
-export type InferInvitation<O extends OrganizationOptions> =
+export type InferInvitation<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = true,
+> = Prettify<
 	(O["teams"] extends {
 		enabled: true;
 	}
@@ -431,4 +474,5 @@ export type InferInvitation<O extends OrganizationOptions> =
 				expiresAt: Date;
 				createdAt: Date;
 			}) &
-		InferAdditionalFieldsFromPluginOptions<"invitation", O, false>;
+		InferAdditionalFieldsOutput<"invitation", O, isClientSide>
+>;

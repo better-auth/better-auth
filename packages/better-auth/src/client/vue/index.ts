@@ -3,13 +3,13 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
 import type { DeepReadonly, Ref } from "vue";
 import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
-import { capitalizeFirstLetter } from "../../utils/misc";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -17,6 +17,7 @@ import type {
 	InferClientAPI,
 	InferErrorCodes,
 	IsSignal,
+	SessionQueryParams,
 } from "../types";
 import { useStore } from "./vue-store";
 
@@ -58,7 +59,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$store,
 		atomListeners,
 	} = getClientConfig(options, false);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
@@ -80,6 +81,9 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			isPending: boolean;
 			isRefetching: boolean;
 			error: BetterFetchError | null;
+			refetch: (
+				queryParams?: { query?: SessionQueryParams } | undefined,
+			) => Promise<void>;
 		}>
 	>;
 	function useSession<F extends (...args: any) => any>(
@@ -93,7 +97,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			statusText: string;
 		}>;
 	}>;
-	function useSession<UseFetch extends <T>(...args: any) => any>(
+	function useSession<UseFetch extends <_T>(...args: any) => any>(
 		useFetch?: UseFetch | undefined,
 	) {
 		if (useFetch) {
@@ -144,3 +148,5 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 
 export type * from "@better-fetch/fetch";
 export type * from "nanostores";
+export type * from "../../types/helper";
+export type { UnionToIntersection } from "../../types/helper";

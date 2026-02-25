@@ -44,7 +44,7 @@ export const schema = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
-export const deviceCode = z.object({
+const deviceCode = z.object({
 	id: z.string(),
 	deviceCode: z.string(),
 	userCode: z.string(),

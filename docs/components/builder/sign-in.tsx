@@ -22,7 +22,7 @@ import { optionsAtom } from "./store";
 export default function SignIn() {
 	const [options] = useAtom(optionsAtom);
 	return (
-		<Card className="z-50 rounded-none max-w-full">
+		<Card className="z-50 rounded-md rounded-t-none">
 			<CardHeader>
 				<CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
 				<CardDescription className="text-xs md:text-sm">
@@ -66,8 +66,8 @@ export default function SignIn() {
 
 							{options.rememberMe && (
 								<div className="flex items-center gap-2">
-									<Checkbox />
-									<Label>Remember me</Label>
+									<Checkbox id="remember-me" />
+									<Label htmlFor="remember-me">Remember me</Label>
 								</div>
 							)}
 						</>
@@ -100,38 +100,86 @@ export default function SignIn() {
 							Sign-in with Passkey
 						</Button>
 					)}
-					<div
-						className={cn(
-							"w-full gap-2 flex items-center justify-between",
-							options.socialProviders.length > 3
-								? "flex-row flex-wrap"
-								: "flex-col",
-						)}
-					>
-						{Object.keys(socialProviders).map((provider) => {
-							if (options.socialProviders.includes(provider)) {
+					<div className="w-full gap-2 flex flex-wrap">
+						{(() => {
+							const selectedProviders = options.socialProviders;
+							const count = selectedProviders.length;
+
+							// Layout rules:
+							// - 1-3 providers: full width, show "Sign in with [Provider]"
+							// - 4+ providers: wrap in rows with provider names (top) and icons (bottom)
+							//   - namedCount = count % 4 (or 4 if evenly divisible)
+							//   - named providers show just the provider name, 2 per row (1/2 width each)
+							//   - icon-only providers show just icon, 4 per row (1/4 width each)
+
+							if (count <= 3) {
+								// 1-3 providers: full width with "Sign in with [Provider]"
+								return selectedProviders.map((provider) => {
+									const { Icon } =
+										socialProviders[provider as keyof typeof socialProviders];
+									const providerName =
+										provider.charAt(0).toUpperCase() + provider.slice(1);
+
+									return (
+										<Button
+											key={provider}
+											variant="outline"
+											className="w-full gap-2"
+										>
+											<Icon className="size-4 shrink-0" />
+											Sign in with {providerName}
+										</Button>
+									);
+								});
+							}
+
+							// 4+ providers: use wrapping layout
+							const remainder = count % 4;
+							const namedCount = remainder === 0 ? 4 : remainder;
+
+							return selectedProviders.map((provider, index) => {
 								const { Icon } =
 									socialProviders[provider as keyof typeof socialProviders];
+								const isNamed = index < namedCount;
+								const providerName =
+									provider.charAt(0).toUpperCase() + provider.slice(1);
+
+								// Determine width class and if full width (for text display)
+								let widthClass: string;
+								let isFullWidth = false;
+								if (isNamed) {
+									// Named providers: 2 per row (1/2 width each)
+									// If odd number of named providers, first one takes full width
+									if (namedCount === 1) {
+										widthClass = "w-full";
+										isFullWidth = true;
+									} else if (namedCount % 2 === 1 && index === 0) {
+										// Odd number of named providers, first one takes full width
+										widthClass = "w-full";
+										isFullWidth = true;
+									} else {
+										widthClass = "w-[calc(50%-0.25rem)]";
+									}
+								} else {
+									// Icon-only providers: 1/4 width (4 per row)
+									widthClass = "w-[calc(25%-0.375rem)]";
+								}
+
 								return (
 									<Button
 										key={provider}
 										variant="outline"
-										className={cn(
-											options.socialProviders.length > 3
-												? "flex-grow"
-												: "w-full gap-2",
-										)}
+										className={cn(widthClass, "gap-2")}
 									>
-										<Icon width="1.2em" height="1.2em" />
-										{options.socialProviders.length <= 3 &&
-											"Sign in with " +
-												provider.charAt(0).toUpperCase() +
-												provider.slice(1)}
+										<Icon className="size-4 shrink-0" />
+										{isNamed &&
+											(isFullWidth
+												? `Sign in with ${providerName}`
+												: providerName)}
 									</Button>
 								);
-							}
-							return null;
-						})}
+							});
+						})()}
 					</div>
 				</div>
 			</CardContent>
@@ -156,274 +204,3 @@ export default function SignIn() {
 		</Card>
 	);
 }
-
-export const signInString = (options: any) => `"use client"
-
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useState } from "react";
-import { Loader2, Key } from "lucide-react";
-import { signIn } from "@/lib/auth-client";
-import Link from "next/link";
-import { cn } from "@/lib/utils";
-
-export default function SignIn() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  ${
-		options.rememberMe
-			? "const [rememberMe, setRememberMe] = useState(false);"
-			: ""
-	}
-
-  return (
-    <Card className="max-w-md">
-      <CardHeader>
-        <CardTitle className="text-lg md:text-xl">Sign In</CardTitle>
-        <CardDescription className="text-xs md:text-sm">
-          Enter your email below to login to your account
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="grid gap-4">
-          ${
-						options.email
-							? `<div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                }}
-                value={email}
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
-                ${
-									options.requestPasswordReset
-										? `<Link
-                    href="#"
-                    className="ml-auto inline-block text-sm underline"
-                  >
-                    Forgot your password?
-                  </Link>`
-										: ""
-								}
-              </div>
-
-              <Input
-                id="password"
-                type="password"
-                placeholder="password"
-                autoComplete="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-
-            ${
-							options.rememberMe
-								? `<div className="flex items-center gap-2">
-                <Checkbox
-                  id="remember"
-                  onClick={() => {
-                    setRememberMe(!rememberMe);
-                  }}
-                />
-                <Label htmlFor="remember">Remember me</Label>
-              </div>`
-								: ""
-						}`
-							: ""
-					}
-
-          ${
-						options.magicLink
-							? `<div className="grid gap-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                required
-                onChange={(e) => {
-                  setEmail(e.target.value);
-                }}
-                value={email}
-              />
-              <Button
-                disabled={loading}
-                className="gap-2"
-                onClick={async () => {
-                  await signIn.magicLink(
-                  {
-                    email
-                  },
-                  {
-                     onRequest: (ctx) => {
-                        setLoading(true);
-                      },
-                     onResponse: (ctx) => {
-                         setLoading(false);
-                     },
-                   },
-                  );
-                 }}>
-                  {loading ? (
-                     <Loader2 size={16} className="animate-spin" />
-                     ):(
-                         Sign-in with Magic Link
-                   )}
-              </Button>
-            </div>`
-							: ""
-					}
-
-          ${
-						options.email
-							? `<Button
-              type="submit"
-              className="w-full"
-              disabled={loading}
-              onClick={async () => {
-                await signIn.email(
-                {
-                    email,
-                    password
-                },
-                {
-                  onRequest: (ctx) => {
-                    setLoading(true);
-                  },
-                  onResponse: (ctx) => {
-                    setLoading(false);
-                  },
-                },
-                );
-              }}
-            >
-              {loading ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <p> Login </p>
-              )}
-              </Button>`
-							: ""
-					}
-
-          ${
-						options.passkey
-							? `<Button
-              variant="secondary"
-              disabled={loading}
-              className="gap-2"
-              onClick={async () => {
-              await signIn.passkey(
-                {
-                  onRequest: (ctx) => {
-                    setLoading(true);
-                  },
-                  onResponse: (ctx) => {
-                    setLoading(false);
-                  },
-                },
-                )
-              }}
-            >
-              <Key size={16} />
-              Sign-in with Passkey
-            </Button>`
-							: ""
-					}
-
-          ${
-						options.socialProviders?.length > 0
-							? `<div className={cn(
-              "w-full gap-2 flex items-center",
-              ${
-								options.socialProviders.length > 3
-									? '"justify-between flex-wrap"'
-									: '"justify-between flex-col"'
-							}
-            )}>
-              ${options.socialProviders
-								.map((provider: string) => {
-									const icon =
-										socialProviders[provider as keyof typeof socialProviders]
-											?.stringIcon || "";
-									return `\n\t\t\t\t<Button
-                  variant="outline"
-                  className={cn(
-                    ${
-											options.socialProviders.length > 3
-												? '"flex-grow"'
-												: '"w-full gap-2"'
-										}
-                  )}
-                  disabled={loading}
-                  onClick={async () => {
-                    await signIn.social(
-                    {
-                      provider: "${provider}",
-                      callbackURL: "/dashboard"
-                    },
-                    {
-                      onRequest: (ctx) => {
-                         setLoading(true);
-                      },
-                      onResponse: (ctx) => {
-                         setLoading(false);
-                      },
-                     },
-                    );
-                  }}
-                >
-                  ${icon}
-                  ${
-										options.socialProviders.length <= 3
-											? `Sign in with ${
-													provider.charAt(0).toUpperCase() + provider.slice(1)
-												}`
-											: ""
-									}
-                </Button>`;
-								})
-								.join("")}
-            </div>`
-							: ""
-					}
-        </div>
-      </CardContent>
-      ${
-				options.label
-					? `<CardFooter>
-          <div className="flex justify-center w-full border-t py-4">
-            <p className="text-center text-xs text-neutral-500">
-             built with{" "}
-              <Link
-                href="https://better-auth.com"
-                className="underline"
-                target="_blank"
-              >
-                <span className="dark:text-white/70 cursor-pointer">
-									better-auth.
-								</span>
-              </Link>
-            </p>
-          </div>
-        </CardFooter>`
-					: ""
-			}
-    </Card>
-  );
-}`;

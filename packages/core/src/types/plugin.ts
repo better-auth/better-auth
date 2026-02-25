@@ -7,11 +7,11 @@ import type {
 import type { Migration } from "kysely";
 import type { AuthMiddleware } from "../api";
 import type { BetterAuthPluginDBSchema } from "../db";
+import type { RawError } from "../utils/error-codes";
 import type { AuthContext } from "./context";
-import type { LiteralString } from "./helper";
+import type { Awaitable, LiteralString } from "./helper";
 import type { BetterAuthOptions } from "./init-options";
 
-type Awaitable<T> = T | Promise<T>;
 type DeepPartial<T> = T extends Function
 	? T
 	: T extends object
@@ -21,7 +21,7 @@ type DeepPartial<T> = T extends Function
 export type HookEndpointContext = Partial<
 	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
 > & {
-	path: string;
+	path?: string;
 	context: AuthContext & {
 		returned?: unknown | undefined;
 		responseHeaders?: Headers | undefined;
@@ -29,7 +29,14 @@ export type HookEndpointContext = Partial<
 	headers?: Headers | undefined;
 };
 
-export type BetterAuthPlugin = {
+export type BetterAuthPluginErrorCodePart = {
+	/**
+	 * The error codes returned by the plugin
+	 */
+	$ERROR_CODES?: Record<string, RawError>;
+};
+
+export type BetterAuthPlugin = BetterAuthPluginErrorCodePart & {
 	id: LiteralString;
 	/**
 	 * The init function is called when the plugin is initialized.
@@ -38,7 +45,8 @@ export type BetterAuthPlugin = {
 	init?:
 		| ((ctx: AuthContext) =>
 				| Awaitable<{
-						context?: DeepPartial<Omit<AuthContext, "options">>;
+						context?: DeepPartial<Omit<AuthContext, "options">> &
+							Record<string, unknown>;
 						options?: Partial<BetterAuthOptions>;
 				  }>
 				| void
@@ -144,15 +152,11 @@ export type BetterAuthPlugin = {
 		  }[]
 		| undefined;
 	/**
-	 * The error codes returned by the plugin
-	 */
-	$ERROR_CODES?: Record<string, string> | undefined;
-	/**
 	 * All database operations that are performed by the plugin
 	 *
 	 * This will override the default database operations
 	 */
 	adapter?: {
-		[key: string]: (...args: any[]) => Promise<any> | any;
+		[key: string]: (...args: any[]) => Awaitable<any>;
 	};
 };

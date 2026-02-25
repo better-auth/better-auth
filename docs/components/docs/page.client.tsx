@@ -1,26 +1,20 @@
 "use client";
 
 import { cva } from "class-variance-authority";
-import {
-	type BreadcrumbOptions,
-	getBreadcrumbItemsFromPath,
-} from "fumadocs-core/breadcrumb";
-import type { PageTree } from "fumadocs-core/server";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
-import {
-	useI18n,
-	usePageStyles,
-	useSidebar,
-	useTreeContext,
-	useTreePath,
-} from "fumadocs-ui/provider";
+import type { BreadcrumbOptions } from "fumadocs-core/breadcrumb";
+import { getBreadcrumbItemsFromPath } from "fumadocs-core/breadcrumb";
+import type { Item, Node, Root } from "fumadocs-core/page-tree";
+import { useSidebar } from "fumadocs-ui/components/sidebar/base";
+import { useI18n } from "fumadocs-ui/contexts/i18n";
+import { useTreeContext, useTreePath } from "fumadocs-ui/contexts/tree";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { HTMLAttributes } from "react";
 import {
 	Fragment,
-	type HTMLAttributes,
 	useEffect,
+	useEffectEvent,
 	useMemo,
 	useRef,
 	useState,
@@ -34,7 +28,6 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 	const ref = useRef<HTMLElement>(null);
 	const [open, setOpen] = useState(false);
 	const sidebar = useSidebar();
-	const { tocNav } = usePageStyles();
 	const { isTransparent } = useNav();
 
 	const onClick = useEffectEvent((e: Event) => {
@@ -54,7 +47,7 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 
 	return (
 		<div
-			className={cn("sticky overflow-visible z-10", tocNav, props.className)}
+			className={cn("sticky overflow-visible z-10 xl:hidden", props.className)}
 			style={{
 				top: "calc(var(--fd-banner-height) + var(--fd-nav-height))",
 			}}
@@ -79,13 +72,11 @@ export function TocPopoverHeader(props: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function PageBody(props: HTMLAttributes<HTMLDivElement>) {
-	const { page } = usePageStyles();
-
 	return (
 		<div
 			id="nd-page"
 			{...props}
-			className={cn("flex w-full min-w-0 flex-col", page, props.className)}
+			className={cn("flex w-full min-w-0 flex-col", props.className)}
 		>
 			{props.children}
 		</div>
@@ -93,14 +84,11 @@ export function PageBody(props: HTMLAttributes<HTMLDivElement>) {
 }
 
 export function PageArticle(props: HTMLAttributes<HTMLElement>) {
-	const { article } = usePageStyles();
-
 	return (
 		<article
 			{...props}
 			className={cn(
 				"flex w-full flex-1 flex-col gap-6 px-4 pt-8 md:px-6 md:pt-12 xl:px-12 xl:mx-auto",
-				article,
 				props.className,
 			)}
 		>
@@ -143,8 +131,8 @@ const itemLabel = cva(
 	"inline-flex items-center gap-0.5 text-fd-muted-foreground",
 );
 
-function scanNavigationList(tree: PageTree.Node[]) {
-	const list: PageTree.Item[] = [];
+function scanNavigationList(tree: Node[]) {
+	const list: Item[] = [];
 
 	tree.forEach((node) => {
 		if (node.type === "folder") {
@@ -164,7 +152,7 @@ function scanNavigationList(tree: PageTree.Node[]) {
 	return list;
 }
 
-const listCache = new WeakMap<PageTree.Root, PageTree.Item[]>();
+const listCache = new WeakMap<Root, Item[]>();
 
 export function Footer({ items }: FooterProps) {
 	const { root } = useTreeContext();

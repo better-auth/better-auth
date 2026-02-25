@@ -1,4 +1,8 @@
-import type { AuthContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
 import type { AccessControl, Role } from "../access";
@@ -26,18 +30,25 @@ export interface OrganizationOptions {
 	 * @default true
 	 */
 	allowUserToCreateOrganization?:
-		| (
-				| boolean
-				| ((user: User & Record<string, any>) => Promise<boolean> | boolean)
-		  )
+		| (boolean | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
-	 * You can also pass a function that returns a boolean
+	 * You can also pass a function that returns a boolean. The function should return `true` if the user has reached their organization limit, and `false` otherwise.
+	 *
+	 * @default unlimited
+	 * @example
+	 * ```ts
+	 * organizationLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   // Return true if the user has reached their organization limit, false otherwise
+	 *   return plan.name === "pro";
+	 * }
+	 * ```
 	 */
 	organizationLimit?:
-		| (number | ((user: User) => Promise<boolean> | boolean))
+		| (number | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The role that is assigned to the creator of the
@@ -49,9 +60,14 @@ export interface OrganizationOptions {
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
+	 * You can also pass a function that returns the limit number
+	 *
 	 * @default 100
 	 */
-	membershipLimit?: number | undefined;
+	membershipLimit?:
+		| number
+		| ((user: User, organization: Organization) => Promise<number> | number)
+		| undefined;
 	/**
 	 * Configure the roles and permissions for the
 	 * organization plugin.
@@ -83,7 +99,7 @@ export interface OrganizationOptions {
 				 */
 				maximumRolesPerOrganization?:
 					| number
-					| ((organizationId: string) => Promise<number> | number);
+					| ((organizationId: string) => Awaitable<number>);
 		  }
 		| undefined;
 	/**
@@ -109,7 +125,7 @@ export interface OrganizationOptions {
 			 */
 			customCreateDefaultTeam?: (
 				organization: Organization & Record<string, any>,
-				request?: Request,
+				ctx?: GenericEndpointContext,
 			) => Promise<Team & Record<string, any>>;
 		};
 		/**
@@ -132,8 +148,8 @@ export interface OrganizationOptions {
 							session: Session;
 						} | null;
 					},
-					request?: Request,
-			  ) => number | Promise<number>)
+					ctx?: GenericEndpointContext,
+			  ) => Awaitable<number>)
 			| number;
 
 		/**
@@ -149,7 +165,7 @@ export interface OrganizationOptions {
 					teamId: string;
 					session: { user: User; session: Session };
 					organizationId: string;
-			  }) => Promise<number> | number)
+			  }) => Awaitable<number>)
 			| undefined;
 		/**
 		 * By default, if an organization does only have one team, they'll not be able to remove it.
@@ -172,17 +188,15 @@ export interface OrganizationOptions {
 	 * @default 100
 	 */
 	invitationLimit?:
-		| (
-				| number
-				| ((
-						data: {
-							user: User;
-							organization: Organization;
-							member: Member;
-						},
-						ctx: AuthContext,
-				  ) => Promise<number> | number)
-		  )
+		| number
+		| ((
+				data: {
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+					member: Member & Record<string, any>;
+				},
+				ctx: AuthContext,
+		  ) => Awaitable<number>)
 		| undefined;
 	/**
 	 * Cancel pending invitations on re-invite.
@@ -214,7 +228,7 @@ export interface OrganizationOptions {
 	 * sendInvitationEmail: async (data) => {
 	 * 	const url = `https://yourapp.com/organization/
 	 * accept-invitation?id=${data.id}`;
-	 * 	await sendEmail(data.email, "Invitation to join
+	 * 	 sendEmail(data.email, "Invitation to join
 	 * organization", `Click the link to join the
 	 * organization: ${url}`);
 	 * }
@@ -326,78 +340,6 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
-	/**
-	 * Configure how organization deletion is handled
-	 *
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationDeletion?:
-		| {
-				/**
-				 * disable deleting organization
-				 *
-				 * @deprecated Use `disableOrganizationDeletion` instead
-				 */
-				disabled?: boolean;
-				/**
-				 * A callback that runs before the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				beforeDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-				/**
-				 * A callback that runs after the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				afterDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
-	/**
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationCreation?:
-		| {
-				disabled?: boolean;
-				beforeCreate?: (
-					data: {
-						organization: Omit<Organization, "id"> & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void | {
-					data: Record<string, any>;
-				}>;
-				afterCreate?: (
-					data: {
-						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
 	/**
 	 * Hooks for organization
 	 */

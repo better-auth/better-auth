@@ -1,6 +1,6 @@
-import { readdir, readFile } from "fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import matter from "gray-matter";
-import { join } from "path";
 import { cache } from "react";
 
 export interface BlogPost {
@@ -39,7 +39,7 @@ export const getBlogPost = cache(
 				author: data.author,
 				tags: data.tags,
 			};
-		} catch (error) {
+		} catch {
 			return null;
 		}
 	},
@@ -61,13 +61,13 @@ export const getAllBlogPosts = cache(async (): Promise<BlogPost[]> => {
 		return posts
 			.filter((post): post is BlogPost => post !== null)
 			.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-	} catch (error) {
+	} catch {
 		return [];
 	}
 });
 
 export function formatBlogDate(date: Date) {
-	let d = new Date(date);
+	const d = new Date(date);
 	return d.toLocaleDateString("en-US", {
 		month: "short",
 		day: "numeric",

@@ -1,18 +1,27 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBFieldAttribute, DBFieldType } from "@better-auth/core/db";
+import { getAuthTables } from "@better-auth/core/db";
+import {
+	initGetFieldName,
+	initGetModelName,
+} from "@better-auth/core/db/adapter";
 import { createLogger } from "@better-auth/core/env";
+import type { KyselyDatabaseType } from "@better-auth/kysely-adapter";
+import { createKyselyAdapter } from "@better-auth/kysely-adapter";
 import type {
+	AlterTableBuilder,
 	AlterTableColumnAlteringBuilder,
+	ColumnDataType,
+	CreateIndexBuilder,
 	CreateTableBuilder,
 	Kysely,
+	RawBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { createKyselyAdapter } from "../adapters/kysely-adapter/dialect";
-import type { KyselyDatabaseType } from "../adapters/kysely-adapter/types";
 import { getSchema } from "./get-schema";
 
 const postgresMap = {
-	string: ["character varying", "varchar", "text"],
+	string: ["character varying", "varchar", "text", "uuid"],
 	number: [
 		"int4",
 		"integer",
@@ -27,7 +36,7 @@ const postgresMap = {
 	json: ["json", "jsonb"],
 };
 const mysqlMap = {
-	string: ["varchar", "text"],
+	string: ["varchar", "text", "uuid"],
 	number: [
 		"integer",
 		"int",
@@ -51,7 +60,7 @@ const sqliteMap = {
 };
 
 const mssqlMap = {
-	string: ["varchar", "nvarchar"],
+	string: ["varchar", "nvarchar", "uniqueidentifier"],
 	number: ["int", "bigint", "smallint", "decimal", "float", "double"],
 	boolean: ["bit", "smallint"],
 	date: ["datetime2", "date", "datetime"],
@@ -89,21 +98,26 @@ export function matchType(
  */
 async function getPostgresSchema(db: Kysely<unknown>): Promise<string> {
 	try {
-		const result = await sql<{ search_path: string }>`SHOW search_path`.execute(
-			db,
-		);
-		if (result.rows[0]?.search_path) {
+		const result = await sql<{
+			search_path?: string;
+			searchPath?: string;
+		}>`SHOW search_path`.execute(db);
+		const searchPath =
+			result.rows[0]?.search_path ?? result.rows[0]?.searchPath;
+		if (searchPath) {
 			// search_path can be a comma-separated list like "$user, public" or '"$user", public'
+			// Supabase may return escaped format like '"\$user", public'
 			// We want the first non-variable schema
-			const schemas = result.rows[0].search_path
+			const schemas = searchPath
 				.split(",")
 				.map((s) => s.trim())
 				// Remove quotes and filter out variables like $user
 				.map((s) => s.replace(/^["']|["']$/g, ""))
-				.filter((s) => !s.startsWith("$"));
+				// Filter out variable references like $user, \$user (escaped)
+				.filter((s) => !s.startsWith("$") && !s.startsWith("\\$"));
 			return schemas[0] || "public";
 		}
-	} catch (error) {
+	} catch {
 		// If query fails, fall back to public schema
 	}
 	return "public";
@@ -139,13 +153,18 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 		// Verify the schema exists
 		try {
-			const schemaCheck = await sql<{ schema_name: string }>`
-				SELECT schema_name 
-				FROM information_schema.schemata 
+			const schemaCheck = await sql<{
+				schema_name?: string;
+				schemaName?: string;
+			}>`
+				SELECT schema_name
+				FROM information_schema.schemata
 				WHERE schema_name = ${currentSchema}
 			`.execute(db);
 
-			if (!schemaCheck.rows[0]) {
+			const schemaExists =
+				schemaCheck.rows[0]?.schema_name ?? schemaCheck.rows[0]?.schemaName;
+			if (!schemaExists) {
 				logger.warn(
 					`Schema '${currentSchema}' does not exist. Tables will be inspected from available schemas. Consider creating the schema first or checking your database configuration.`,
 				);
@@ -165,16 +184,17 @@ export async function getMigrations(config: BetterAuthOptions) {
 		// Get tables with their schema information
 		try {
 			const tablesInSchema = await sql<{
-				table_name: string;
+				table_name?: string;
+				tableName?: string;
 			}>`
-				SELECT table_name 
-				FROM information_schema.tables 
+				SELECT table_name
+				FROM information_schema.tables
 				WHERE table_schema = ${currentSchema}
 				AND table_type = 'BASE TABLE'
 			`.execute(db);
 
 			const tableNamesInSchema = new Set(
-				tablesInSchema.rows.map((row) => row.table_name),
+				tablesInSchema.rows.map((row) => row.table_name ?? row.tableName),
 			);
 
 			// Filter to only tables that exist in the target schema
@@ -232,7 +252,7 @@ export async function getMigrations(config: BetterAuthOptions) {
 			}
 			continue;
 		}
-		let toBeAddedFields: Record<string, DBFieldAttribute> = {};
+		const toBeAddedFields: Record<string, DBFieldAttribute> = {};
 		for (const [fieldName, field] of Object.entries(value.fields)) {
 			const column = table.columns.find((c) => c.name === fieldName);
 			if (!column) {
@@ -259,14 +279,22 @@ export async function getMigrations(config: BetterAuthOptions) {
 
 	const migrations: (
 		| AlterTableColumnAlteringBuilder
+		| ReturnType<AlterTableBuilder["addIndex"]>
 		| CreateTableBuilder<string, string>
+		| CreateIndexBuilder
 	)[] = [];
 
 	const useUUIDs = config.advanced?.database?.generateId === "uuid";
+	const useNumberId = config.advanced?.database?.generateId === "serial";
 
 	function getType(field: DBFieldAttribute, fieldName: string) {
 		const type = field.type;
-		const typeMap = {
+		const provider = dbType || "sqlite";
+		type StringOnlyUnion<T> = T extends string ? T : never;
+		const typeMap: Record<
+			StringOnlyUnion<DBFieldType> | "id" | "foreignKeyId",
+			Record<KyselyDatabaseType, ColumnDataType | RawBuilder<unknown>>
+		> = {
 			string: {
 				sqlite: "text",
 				postgres: "text",
@@ -274,7 +302,11 @@ export async function getMigrations(config: BetterAuthOptions) {
 					? "varchar(255)"
 					: field.references
 						? "varchar(36)"
-						: "text",
+						: field.sortable
+							? "varchar(255)"
+							: field.index
+								? "varchar(255)"
+								: "text",
 				mssql:
 					field.unique || field.sortable
 						? "varchar(255)"
@@ -310,102 +342,147 @@ export async function getMigrations(config: BetterAuthOptions) {
 				mssql: "varchar(8000)",
 			},
 			id: {
-				postgres: useNumberId ? "serial" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-
+				postgres: useNumberId
+					? sql`integer GENERATED BY DEFAULT AS IDENTITY`
+					: useUUIDs
+						? "uuid"
+						: "text",
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
 			},
 			foreignKeyId: {
 				postgres: useNumberId ? "integer" : useUUIDs ? "uuid" : "text",
-				mysql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
-				mssql: useNumberId ? "integer" : useUUIDs ? "uuid" : "varchar(36)",
+				mysql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)"
+						: "varchar(36)",
+				mssql: useNumberId
+					? "integer"
+					: useUUIDs
+						? "varchar(36)" /* Should be using `UNIQUEIDENTIFIER` but Kysely doesn't support it */
+						: "varchar(36)",
 				sqlite: useNumberId ? "integer" : "text",
+			},
+			"string[]": {
+				sqlite: "text",
+				postgres: "jsonb",
+				mysql: "json",
+				mssql: "varchar(8000)",
+			},
+			"number[]": {
+				sqlite: "text",
+				postgres: "jsonb",
+				mysql: "json",
+				mssql: "varchar(8000)",
 			},
 		} as const;
 		if (fieldName === "id" || field.references?.field === "id") {
 			if (fieldName === "id") {
-				return typeMap.id[dbType!];
+				return typeMap.id[provider];
 			}
-			return typeMap.foreignKeyId[dbType!];
-		}
-		if (dbType === "sqlite" && (type === "string[]" || type === "number[]")) {
-			return "text";
-		}
-		if (type === "string[]" || type === "number[]") {
-			return "jsonb";
+			return typeMap.foreignKeyId[provider];
 		}
 		if (Array.isArray(type)) {
 			return "text";
 		}
-		return typeMap[type]![dbType || "sqlite"];
+		if (!(type in typeMap)) {
+			throw new Error(
+				`Unsupported field type '${String(type)}' for field '${fieldName}'. Allowed types are: string, number, boolean, date, string[], number[]. If you need to store structured data, store it as a JSON string (type: "string") or split it into primitive fields. See https://better-auth.com/docs/advanced/schema#additional-fields`,
+			);
+		}
+		return typeMap[type][provider];
 	}
+	const getModelName = initGetModelName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+	const getFieldName = initGetFieldName({
+		schema: getAuthTables(config),
+		usePlural: false,
+	});
+
+	// Helper function to safely resolve model and field names, falling back to
+	// user-supplied strings for external tables not in the BetterAuth schema
+	function getReferencePath(model: string, field: string): string {
+		try {
+			const modelName = getModelName(model);
+			const fieldName = getFieldName({ model, field });
+			return `${modelName}.${fieldName}`;
+		} catch {
+			// If resolution fails (external table), fall back to user-supplied references
+			return `${model}.${field}`;
+		}
+	}
+
 	if (toBeAdded.length) {
 		for (const table of toBeAdded) {
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
-				const exec = db.schema
-					.alterTable(table.table)
-					.addColumn(fieldName, type, (col) => {
-						col = field.required !== false ? col.notNull() : col;
-						if (field.references) {
-							col = col
-								.references(
-									`${field.references.model}.${field.references.field}`,
-								)
-								.onDelete(field.references.onDelete || "cascade");
+				const builder = db.schema.alterTable(table.table);
+
+				if (field.index) {
+					const index = db.schema
+						.alterTable(table.table)
+						.addIndex(`${table.table}_${fieldName}_idx`);
+					migrations.push(index);
+				}
+
+				const built = builder.addColumn(fieldName, type, (col) => {
+					col = field.required !== false ? col.notNull() : col;
+					if (field.references) {
+						col = col
+							.references(
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
+							)
+							.onDelete(field.references.onDelete || "cascade");
+					}
+					if (field.unique) {
+						col = col.unique();
+					}
+					if (
+						field.type === "date" &&
+						typeof field.defaultValue === "function" &&
+						(dbType === "postgres" || dbType === "mysql" || dbType === "mssql")
+					) {
+						if (dbType === "mysql") {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
+						} else {
+							col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
 						}
-						if (field.unique) {
-							col = col.unique();
-						}
-						if (
-							field.type === "date" &&
-							typeof field.defaultValue === "function" &&
-							(dbType === "postgres" ||
-								dbType === "mysql" ||
-								dbType === "mssql")
-						) {
-							if (dbType === "mysql") {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP(3)`);
-							} else {
-								col = col.defaultTo(sql`CURRENT_TIMESTAMP`);
-							}
-						}
-						return col;
-					});
-				migrations.push(exec);
+					}
+					return col;
+				});
+				migrations.push(built);
 			}
 		}
 	}
-	const useNumberId =
-		config.advanced?.database?.useNumberId ||
-		config.advanced?.database?.generateId === "serial";
 
-	if (config.advanced?.database?.useNumberId) {
-		logger.warn(
-			"`useNumberId` is deprecated. Please use `generateId` with `serial` instead.",
-		);
-	}
+	const toBeIndexed: CreateIndexBuilder[] = [];
 
 	if (toBeCreated.length) {
 		for (const table of toBeCreated) {
-			let dbT = db.schema.createTable(table.table).addColumn(
-				"id",
-				useNumberId
-					? dbType === "postgres"
-						? "serial"
-						: "integer"
-					: useUUIDs
-						? dbType === "postgres" || dbType === "mysql" || dbType === "mssql"
-							? "uuid"
-							: "text"
-						: dbType === "mysql" || dbType === "mssql"
-							? "varchar(36)"
-							: "text",
-
-				(col) => {
+			const idType = getType({ type: useNumberId ? "number" : "string" }, "id");
+			let dbT = db.schema
+				.createTable(table.table)
+				.addColumn("id", idType, (col) => {
 					if (useNumberId) {
-						if (dbType === "postgres" || dbType === "sqlite") {
+						if (dbType === "postgres") {
+							// Identity column is already specified in the type via sql template tag
+							return col.primaryKey().notNull();
+						} else if (dbType === "sqlite") {
 							return col.primaryKey().notNull();
 						} else if (dbType === "mssql") {
 							return col.identity().primaryKey().notNull();
@@ -416,16 +493,13 @@ export async function getMigrations(config: BetterAuthOptions) {
 						if (dbType === "postgres") {
 							return col
 								.primaryKey()
-								.defaultTo(sql`gen_random_uuid()`)
+								.defaultTo(sql`pg_catalog.gen_random_uuid()`)
 								.notNull();
-						} else if (dbType === "mysql" || dbType === "mssql") {
-							return col.primaryKey().defaultTo(sql`uuid()`).notNull();
 						}
 						return col.primaryKey().notNull();
 					}
 					return col.primaryKey().notNull();
-				},
-			);
+				});
 
 			for (const [fieldName, field] of Object.entries(table.fields)) {
 				const type = getType(field, fieldName);
@@ -433,7 +507,12 @@ export async function getMigrations(config: BetterAuthOptions) {
 					col = field.required !== false ? col.notNull() : col;
 					if (field.references) {
 						col = col
-							.references(`${field.references.model}.${field.references.field}`)
+							.references(
+								getReferencePath(
+									field.references.model,
+									field.references.field,
+								),
+							)
 							.onDelete(field.references.onDelete || "cascade");
 					}
 
@@ -453,10 +532,29 @@ export async function getMigrations(config: BetterAuthOptions) {
 					}
 					return col;
 				});
+
+				if (field.index) {
+					const builder = db.schema
+						.createIndex(
+							`${table.table}_${fieldName}_${field.unique ? "uidx" : "idx"}`,
+						)
+						.on(table.table)
+						.columns([fieldName]);
+					toBeIndexed.push(field.unique ? builder.unique() : builder);
+				}
 			}
 			migrations.push(dbT);
 		}
 	}
+
+	// instead of adding the index straight to `migrations`,
+	// we do this at the end so that indexes are created after the table is created
+	if (toBeIndexed.length) {
+		for (const index of toBeIndexed) {
+			migrations.push(index);
+		}
+	}
+
 	async function runMigrations() {
 		for (const migration of migrations) {
 			await migration.execute();

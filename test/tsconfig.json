@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "types": ["node"]
+  },
+  "include": ["./unit"],
+  "references": [
+    {
+      "path": "../packages/better-auth/tsconfig.json"
+    }
+  ]
+}

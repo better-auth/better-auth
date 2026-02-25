@@ -34,13 +34,13 @@ The Admin plugin provides a set of administrative functions for user management 
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
-            npx @better-auth/cli migrate
+            ```package-install
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
-            npx @better-auth/cli generate
+            ```package-install
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -54,11 +54,11 @@ The Admin plugin provides a set of administrative functions for user management 
 
     ```ts title="auth-client.ts"
     import { createAuthClient } from "better-auth/client"
-    import { adminClient } from "better-auth/client/plugins"
+    import { adminClient } from "better-auth/client/plugins"  // [!code highlight]
 
     export const authClient = createAuthClient({
         plugins: [
-            adminClient()
+            adminClient()  // [!code highlight]
         ]
     })
     ```
@@ -153,11 +153,11 @@ type listUsers = {
   /**
    * The value to filter by. 
    */
-  filterValue?: string | number | boolean = "hello@example.com"
+  filterValue?: string | number | boolean | string[] | number[] = "hello@example.com"
   /**
-   * The operator to use for the filter. 
+   * The operator to use for the filter.
    */
-  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" = "eq"
+  filterOperator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "in" | "not_in" | "contains" | "starts_with" | "ends_with" = "eq"
 }
 ```
 </APIMethod>
@@ -193,7 +193,9 @@ To paginate results, use the `total`, `limit`, and `offset` values to calculate:
 
 Fetching the second page with 10 users per page:
 
-```ts title="admin.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const pageSize = 10;
 const currentPage = 2;
 
@@ -206,6 +208,38 @@ const users = await authClient.admin.listUsers({
 
 const totalUsers = users.total;
 const totalPages = Math.ceil(totalUsers / pageSize)
+```
+
+### Get User
+
+Fetches a user's information using an id.
+
+<APIMethod
+  path="/admin/get-user"
+  method="GET"
+  requireSession
+>
+```ts
+type getUser = {
+  /**
+  * The id of the user you want to fetch.
+  */
+  id: string = "user-id"
+}
+```
+</APIMethod>
+
+#### Returns
+On success, `data` contains the user object. On failure, `error` is populated by `code`, `message`, `status`, and `statusText`.
+```ts
+type GetUserResponse = {
+  data: User | null;
+  error: null | {
+    message: string;
+    status: number; //HTTP status code
+    statusText: string;
+    code: string;
+}
 ```
 
 ### Set User Role
@@ -483,6 +517,10 @@ The plugin provides an easy way to define your own set of permissions for each r
 
     const ac = createAccessControl(statement); // [!code highlight]
     ```
+    
+    <Callout type="warning">
+      To keep bundle sizes small, make sure to import from `better-auth/plugins/access` instead of `better-auth/plugins`.
+    </Callout>
     </Step>
 
     <Step>
@@ -497,7 +535,7 @@ The plugin provides an easy way to define your own set of permissions for each r
         project: ["create", "share", "update", "delete"], // <-- Permissions available for created roles
     } as const;
 
-    const ac = createAccessControl(statement);
+    export const ac = createAccessControl(statement);
 
     export const user = ac.newRole({ // [!code highlight]
         project: ["create"], // [!code highlight]
@@ -615,7 +653,9 @@ type userHasPermission = {
 
 Example usage:
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const canCreateProject = await authClient.admin.hasPermission({
   permissions: {
     project: ["create"],
@@ -635,8 +675,8 @@ If you want to check a user's permissions server-side, you can use the `userHasP
 
 
 
-```ts title="api.ts"
-import { auth } from "@/auth";
+```ts title="permission.ts"
+import { auth } from "@/lib/auth"
 
 await auth.api.userHasPermission({
   body: {
@@ -676,7 +716,9 @@ Use the `checkRolePermission` function on the client side to verify whether a gi
 
 Note that this function does **not** check the permissions of the currently logged-in user directly. Instead, it checks what permissions are assigned to a specified role. The function is synchronous, so you don't need to use `await` when calling it.
 
-```ts title="auth-client.ts"
+```ts
+import { authClient } from "@/lib/auth-client";
+
 const canCreateProject = authClient.admin.checkRolePermission({
   permissions: {
     user: ["delete"],
@@ -754,10 +796,11 @@ admin({
 ```
 ### Admin Roles
 
-The roles that are considered admin roles when **not** using custom access control. Defaults to `["admin"]`.
+Specifies which roles are considered admin roles. Defaults to `["admin"]`. Custom roles (for example, `superadmin`) must be defined in custom access control.
 
 ```ts title="auth.ts"
 admin({
+  // Requires custom access control with `superadmin` defined in `roles`
   adminRoles: ["admin", "superadmin"],
 });
 ```
@@ -765,8 +808,9 @@ admin({
 <Callout type="warning">
   **Note:** The `adminRoles` option is **not required** when using custom access control (via `ac` and `roles`). When you define custom roles with specific permissions, those roles will have exactly the permissions you grant them through the access control system.  
   
-  **Warning:** When **not** using custom access control, any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
   
+  **Warning:** When **not** using custom access control, only `admin` and `user` exist as valid roles. Any role that isn't in the `adminRoles` list will **not** be able to perform admin operations.
+
 </Callout>
 
 ### Admin userIds
@@ -818,5 +862,15 @@ The message to show when a banned user tries to sign in. Defaults to "You have b
 ```ts title="auth.ts"
 admin({
   bannedUserMessage: "Custom banned user message",
+});
+```
+
+### allowImpersonatingAdmins
+
+Whether to allow impersonating other admin users. Defaults to `false`.
+
+```ts title="auth.ts"
+admin({
+  allowImpersonatingAdmins: true,
 });
 ```

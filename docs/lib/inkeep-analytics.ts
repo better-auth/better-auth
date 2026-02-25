@@ -98,7 +98,7 @@ export async function logConversationToInkeep(messages: InkeepMessage[]) {
 		}
 
 		return data;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }
@@ -152,7 +152,7 @@ export async function logEventToInkeep(
 		}
 
 		return data;
-	} catch (error) {
+	} catch {
 		return null;
 	}
 }
