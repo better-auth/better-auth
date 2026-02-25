@@ -119,7 +119,6 @@ jobs:
       fail-fast: false
       matrix:
         packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
-        node-version: [ 22.x ]
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
