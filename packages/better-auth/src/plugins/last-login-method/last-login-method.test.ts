@@ -146,7 +146,7 @@ describe("lastLoginMethod", async () => {
 							headers.append("set-cookie", value);
 						}
 					});
-				}
+				},
 			},
 		);
 
@@ -241,52 +241,131 @@ describe("lastLoginMethod", async () => {
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBeUndefined();
 	});
-	it("should update the last login method in the database on subsequent logins", async () => {
+	it("should update the last login method in the database on subsequent logins if storeInDatabase is true", async () => {
+		const headers = new Headers();
 		const { client, auth } = await getTestInstance({
 			plugins: [lastLoginMethod({ storeInDatabase: true })],
 		});
 
-		await client.signUp.email(
+		const signUpRes = await client.signUp.email(
 			{
 				email: "test@example.com",
 				password: "password123",
 				name: "Test User",
 			},
-			{ throw: true },
+			{
+				throw: true,
+				onSuccess(context) {
+					context.response.headers.forEach((value, key) => {
+						if (key.toLowerCase() === "set-cookie") {
+							headers.append("set-cookie", value);
+						}
+					});
+				},
+			},
 		);
 
+		const cookiesSignUp = parseSetCookieHeader(headers.get("set-cookie") || "");
+		// When storeInDatabase is true, it should NOT set a cookie
+		expect(
+			cookiesSignUp.get("better-auth.last_used_login_method"),
+		).toBeUndefined();
+
+		// Check session right after sign up to confirm it was set on user creation
+		let session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${signUpRes.token}`,
+			}),
+		});
+
+		// Expected to be defined as user field from the DB
+		expect((session?.user as any).lastLoginMethod).toBe("email");
+
+		await client.signOut();
+
+		// Also check subsequent login sets it correctly and no cookie
 		const emailSignInData = await client.signIn.email(
 			{
 				email: "test@example.com",
 				password: "password123",
 			},
-			{ throw: true },
+			{
+				throw: true,
+				onSuccess(context) {
+					context.response.headers.forEach((value, key) => {
+						if (key.toLowerCase() === "set-cookie") {
+							headers.append("set-cookie", value);
+						}
+					});
+				},
+			},
 		);
 
-		let session = await auth.api.getSession({
+		const cookiesSignIn = parseSetCookieHeader(headers.get("set-cookie") || "");
+		// Ensure that even on subsequent sign-ins, the cookie is not created if storeInDatabase is true
+		expect(
+			cookiesSignIn.get("better-auth.last_used_login_method"),
+		).toBeUndefined();
+
+		// Fetch session again to verify the DB field remains intact or updated
+		session = await auth.api.getSession({
 			headers: new Headers({
 				authorization: `Bearer ${emailSignInData.token}`,
 			}),
 		});
+		// Ensure the method is still correctly stored/updated in the DB
 		expect((session?.user as any).lastLoginMethod).toBe("email");
+	});
+
+	it("should set the last login method cookie on subsequent logins (when not storing in DB)", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			plugins: [lastLoginMethod()],
+		});
+
+		const headers = new Headers();
+		// Test cookie behavior on sign up
+		await client.signUp.email(
+			{
+				email: "test2@example.com",
+				password: "password123",
+				name: "Test User 2",
+			},
+			{
+				throw: true,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+				},
+			},
+		);
+
+		const cookiesSignUp = parseCookies(headers.get("cookie") || "");
+		// Ensure the cookie is set correctly during sign up when using the default behavior
+		expect(cookiesSignUp.get("better-auth.last_used_login_method")).toBe(
+			"email",
+		);
 
 		await client.signOut();
 
-		const emailSignInData2 = await client.signIn.email(
+		const signinHeaders = new Headers();
+		// Test cookie behavior on subsequent sign in
+		await client.signIn.email(
 			{
-				email: "test@example.com",
+				email: "test2@example.com",
 				password: "password123",
 			},
-			{ throw: true },
+			{
+				throw: true,
+				onSuccess(context) {
+					cookieSetter(signinHeaders)(context);
+				},
+			},
 		);
 
-		session = await auth.api.getSession({
-			headers: new Headers({
-				authorization: `Bearer ${emailSignInData2.token}`,
-			}),
-		});
-
-		expect((session?.user as any).lastLoginMethod).toBe("email");
+		const cookiesSignIn = parseCookies(signinHeaders.get("cookie") || "");
+		// Ensure the cookie is correctly set/updated during subsequent logins
+		expect(cookiesSignIn.get("better-auth.last_used_login_method")).toBe(
+			"email",
+		);
 	});
 
 	it("should update the last login method in the database on subsequent logins with email and OAuth", async () => {
@@ -361,10 +440,9 @@ describe("lastLoginMethod", async () => {
 				);
 				const lastLoginMethod = cookies.get(
 					"better-auth.last_used_login_method",
-				)?.value;
-				if (lastLoginMethod) {
-					expect(lastLoginMethod).toBe("google");
-				}
+				);
+				// When storeInDatabase is true, it should NOT set a cookie
+				expect(lastLoginMethod).toBeUndefined();
 			},
 		});
 
