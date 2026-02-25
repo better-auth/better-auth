@@ -1283,6 +1283,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../../../packages/oauth-provider
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
