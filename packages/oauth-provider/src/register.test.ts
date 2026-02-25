@@ -1,7 +1,7 @@
 import type { Organization } from "@better-auth/organization";
 import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { createAuthClient } from "better-auth/client";
-import { organizationClient } from "better-auth/client/plugins";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -345,7 +345,6 @@ describe("oauth register - organization", async () => {
 		org = _org!;
 		await serverClient.organization.setActive({
 			organizationId: org.id,
-			organizationSlug: org.slug,
 		});
 		const session = await serverClient.getSession({
 			fetchOptions: {

@@ -1,10 +1,10 @@
 import type { Organization } from "@better-auth/organization";
 import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { createAuthClient } from "better-auth/client";
 import {
 	genericOAuthClient,
 	multiSessionClient,
-	organizationClient,
 } from "better-auth/client/plugins";
 import { toNodeHandler } from "better-auth/node";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
@@ -1316,7 +1316,6 @@ describe("oauth - prompt", async () => {
 		await serverClient.organization.setActive(
 			{
 				organizationId: org.id,
-				organizationSlug: org.slug,
 			},
 			{
 				headers,
