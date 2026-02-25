@@ -280,15 +280,15 @@ export const communityPlugins: CommunityPlugin[] = [
 		},
 	},
 	{
-	    name: "better-auth-razorpay",
-	    url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
-	    description:
-	        "Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
-	    author: {
-	        name: "iamjasonkendrick",
-	        github: "iamjasonkendrick",
-	        avatar: "https://github.com/iamjasonkendrick.png",
-	    },
+		name: "better-auth-razorpay",
+		url: "https://github.com/iamjasonkendrick/better-auth-razorpay",
+		description:
+			"Razorpay payment plugin for Better Auth — integrates Razorpay payments, webhooks, and subscription flows.",
+		author: {
+			name: "iamjasonkendrick",
+			github: "iamjasonkendrick",
+			avatar: "https://github.com/iamjasonkendrick.png",
+		},
 	},
 	{
 		name: "better-auth-payu",
