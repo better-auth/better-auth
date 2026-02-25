@@ -173,6 +173,31 @@ describe("cookie configuration", () => {
 		expect(cookies.sessionData.attributes.sameSite).toBe("lax");
 		expect(cookies.sessionData.attributes.domain).toBe("example.com");
 	});
+
+	it("should provide options as a deprecated alias for attributes (backward compatibility)", async () => {
+		const options = {
+			baseURL: "https://example.com",
+			database: {} as BetterAuthOptions["database"],
+			advanced: {
+				useSecureCookies: true,
+				cookiePrefix: "test-prefix",
+			},
+		} satisfies BetterAuthOptions;
+
+		const cookies = getCookies(options);
+
+		// Both .attributes and .options should point to the same value
+		expect(cookies.sessionToken.options).toBe(cookies.sessionToken.attributes);
+		expect(cookies.sessionData.options).toBe(cookies.sessionData.attributes);
+		expect(cookies.accountData.options).toBe(cookies.accountData.attributes);
+		expect(cookies.dontRememberToken.options).toBe(
+			cookies.dontRememberToken.attributes,
+		);
+
+		// The actual values should still be correct
+		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionData.options.sameSite).toBe("lax");
+	});
 });
 
 describe("cookie-utils parseSetCookieHeader", () => {
@@ -284,7 +309,9 @@ describe("getSessionCookie", async () => {
 				email: testUser.email,
 				password: testUser.password,
 			},
-			{ onSuccess: cookieSetter(headers) },
+			{
+				onSuccess: cookieSetter(headers),
+			},
 		);
 		const request = new Request("https://example.com/api/auth/session", {
 			headers,
