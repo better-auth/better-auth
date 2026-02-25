@@ -27,30 +27,37 @@ type InferHookResponse<T> =
 /**
  * Helper function to provide before and after hook functions based on the hook name.
  */
-export const getHook = <H extends HookOptions>(hook: H) => {
+export const getHook = <H extends HookOptions>(
+	hook: H,
+	overwriteOptions?: ResolvedTeamsOptions,
+) => {
 	type Before = NonNullable<Hooks[`before${H}`]>;
 	type After = NonNullable<Hooks[`after${H}`]>;
 
 	type ReturnT = {
 		before: (
 			data: Parameters<Before>[0],
-			ctx: GenericEndpointContext,
+			ctx?: GenericEndpointContext,
 		) => Promise<InferHookResponse<ReturnType<Before>> | null>;
 		after: (
 			data: Parameters<After>[0],
-			ctx: GenericEndpointContext,
+			ctx?: GenericEndpointContext,
 		) => Promise<void>;
 	};
 
 	return {
 		before: async (
 			data: Parameters<Before>[0],
-			ctx: GenericEndpointContext,
+			ctx?: GenericEndpointContext,
 		) => {
-			const orgOptions = ctx.context.getPlugin("organization")
-				?.options as ResolvedOrganizationOptions;
-			const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
-			const options = addon?.options as ResolvedTeamsOptions;
+			const options = (() => {
+				if (overwriteOptions) return overwriteOptions;
+				const orgOptions = ctx.context.getPlugin("organization")
+					?.options as ResolvedOrganizationOptions;
+				const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
+				const options = addon?.options as ResolvedTeamsOptions;
+				return options;
+			})();
 			if (!options) return null;
 			const hookFn = options.hooks?.[`before${hook}`] as Before | undefined;
 			if (!hookFn) return null;
@@ -61,11 +68,16 @@ export const getHook = <H extends HookOptions>(hook: H) => {
 			}
 			return null;
 		},
-		after: async (data: Parameters<After>[0], ctx: GenericEndpointContext) => {
-			const orgOptions = ctx.context.getPlugin("organization")
-				?.options as ResolvedOrganizationOptions;
-			const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
-			const options = addon?.options as ResolvedTeamsOptions;
+		after: async (data: Parameters<After>[0], ctx?: GenericEndpointContext) => {
+			const options = (() => {
+				if (overwriteOptions) return overwriteOptions;
+				const orgOptions = ctx.context.getPlugin("organization")
+					?.options as ResolvedOrganizationOptions;
+				const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
+				const options = addon?.options as ResolvedTeamsOptions;
+				return options;
+			})();
+
 			if (!options) return null;
 			const hookFn = options.hooks?.[`after${hook}`] as After | undefined;
 			if (!hookFn) return null;

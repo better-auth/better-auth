@@ -38,14 +38,11 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 				const result = await customCreateDefaultTeam(organization);
 				return result as unknown as Result;
 			}
-			const mutate = await teamHook.before(
-				{
-					team: teamData,
-					user,
-					organization,
-				},
-				null,
-			);
+			const mutate = await teamHook.before({
+				team: teamData,
+				user,
+				organization,
+			});
 			const result = await adapter.createTeam({
 				...teamData,
 				...(mutate ?? {}),
@@ -58,7 +55,7 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 	}
 
-	await teamHook.after({ organization, team, user }, null);
+	await teamHook.after({ organization, team, user });
 
 	try {
 		await adapter.createTeamMember({
