@@ -48,6 +48,13 @@ export const hasPermissionFn = (
 				missingRoles,
 			};
 		}
+
+		// Some roles are missing, but at least one role was found and checked.
+		// Surface the missing roles to aid debugging, even though we don't set a specific error message.
+		return {
+			success: false,
+			missingRoles,
+		};
 	}
 
 	return { success: false };
