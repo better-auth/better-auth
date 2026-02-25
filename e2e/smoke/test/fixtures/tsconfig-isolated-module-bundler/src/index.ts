@@ -2,7 +2,6 @@
 import { organization } from "@better-auth/organization";
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
-import { emailHarmony } from "better-auth-harmony";
 import { createAuthMiddleware } from "better-auth/api";
 import {
 	anonymous,
@@ -10,6 +9,7 @@ import {
 	lastLoginMethod,
 	twoFactor,
 } from "better-auth/plugins";
+import { emailHarmony } from "better-auth-harmony";
 
 /**
  * Plugin to prevent setting the "set-cookie" header in responses.
