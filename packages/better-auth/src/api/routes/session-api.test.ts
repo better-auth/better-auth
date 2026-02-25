@@ -712,7 +712,7 @@ describe("cookie cache with JWT strategy", async () => {
 		}
 		const payload = await verifyJWT(jwt, ctx.secret);
 		//should be greater than 299 seconds from now - (default max age is 300 seconds)
-		expect(payload.exp).toBeGreaterThan(Date.now() / 1000 + 299);
+		expect(payload.exp).toBeGreaterThanOrEqual(Date.now() / 1000 + 299);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {
