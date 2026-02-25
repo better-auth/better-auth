@@ -6,7 +6,6 @@ import type {
 	DatabaseMetadataOptions,
 	Dialect,
 	DialectAdapter,
-	DialectAdapterBase,
 	Driver,
 	Kysely,
 	QueryCompiler,
@@ -18,38 +17,11 @@ import {
 	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
-	DefaultQueryCompiler,
+	SqliteAdapter,
+	SqliteQueryCompiler,
 } from "kysely";
 
-class D1SqliteAdapter implements DialectAdapterBase {
-	get supportsCreateIfNotExists(): boolean {
-		return true;
-	}
-
-	get supportsTransactionalDdl(): boolean {
-		return false;
-	}
-
-	get supportsReturning(): boolean {
-		return true;
-	}
-
-	async acquireMigrationLock(): Promise<void> {
-		// SQLite only has one connection that's reserved by the migration system
-		// for the whole time between acquireMigrationLock and releaseMigrationLock.
-		// We don't need to do anything here.
-	}
-
-	async releaseMigrationLock(): Promise<void> {
-		// SQLite only has one connection that's reserved by the migration system
-		// for the whole time between acquireMigrationLock and releaseMigrationLock.
-		// We don't need to do anything here.
-	}
-
-	get supportsOutput(): boolean {
-		return true;
-	}
-}
+class D1SqliteAdapter extends SqliteAdapter {}
 
 /**
  * Config for the D1 SQLite dialect.
@@ -198,12 +170,22 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 			}>;
 
 			// Find the column that has `autoincrement` from CREATE SQL
-			const autoIncrementCol = table.sql
+			let autoIncrementCol = table.sql
 				?.split(/[(),]/)
 				?.find((it) => it.toLowerCase().includes("autoincrement"))
 				?.split(/\s+/)
 				?.filter(Boolean)?.[0]
 				?.replace(/["`]/g, "");
+
+			// In SQLite, `INTEGER PRIMARY KEY` is always an alias for rowid
+			// and auto-increments even without the explicit AUTOINCREMENT keyword.
+			if (!autoIncrementCol) {
+				const pkCols = columnInfo.filter((r) => r.pk > 0);
+				const singlePk = pkCols.length === 1 ? pkCols[0] : undefined;
+				if (singlePk && singlePk.type.toLowerCase() === "integer") {
+					autoIncrementCol = singlePk.name;
+				}
+			}
 
 			return {
 				name: table.name,
@@ -228,23 +210,7 @@ class D1SqliteIntrospector implements DatabaseIntrospector {
 	}
 }
 
-class D1SqliteQueryCompiler extends DefaultQueryCompiler {
-	protected override getCurrentParameterPlaceholder() {
-		return "?";
-	}
-
-	protected override getLeftIdentifierWrapper(): string {
-		return '"';
-	}
-
-	protected override getRightIdentifierWrapper(): string {
-		return '"';
-	}
-
-	protected override getAutoIncrement() {
-		return "autoincrement";
-	}
-}
+class D1SqliteQueryCompiler extends SqliteQueryCompiler {}
 
 export class D1SqliteDialect implements Dialect {
 	readonly #config: D1SqliteDialectConfig;
