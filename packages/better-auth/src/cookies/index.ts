@@ -91,6 +91,7 @@ export function getCookies(options: BetterAuthOptions) {
 		sessionToken: {
 			name: sessionToken.name,
 			attributes: sessionToken.attributes,
+			options: sessionToken.attributes,
 		},
 		/**
 		 * This cookie is used to store the session data in the cookie
@@ -99,14 +100,17 @@ export function getCookies(options: BetterAuthOptions) {
 		sessionData: {
 			name: sessionData.name,
 			attributes: sessionData.attributes,
+			options: sessionData.attributes,
 		},
 		dontRememberToken: {
 			name: dontRememberToken.name,
 			attributes: dontRememberToken.attributes,
+			options: dontRememberToken.attributes,
 		},
 		accountData: {
 			name: accountData.name,
 			attributes: accountData.attributes,
+			options: accountData.attributes,
 		},
 	};
 }
