@@ -73,6 +73,7 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
+    "@better-auth/organization": "workspace:*",
     "@types/body-parser": "^1.19.6",
     "@types/express": "^5.0.6",
     "better-auth": "workspace:*",
