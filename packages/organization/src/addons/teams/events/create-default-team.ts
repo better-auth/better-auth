@@ -34,17 +34,20 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 	try {
 		team = await (async () => {
 			type Result = InferTeam<O> & Record<string, any>;
+			let customResult: Record<string, any> = {};
 			if (customCreateDefaultTeam) {
-				const result = await customCreateDefaultTeam(organization);
-				return result as unknown as Result;
+				customResult = await customCreateDefaultTeam(organization);
 			}
+
+			const teamResultData = { ...teamData, ...customResult };
+
 			const mutate = await teamHook.before({
-				team: teamData,
+				team: teamResultData,
 				user,
 				organization,
 			});
 			const result = await adapter.createTeam({
-				...teamData,
+				...teamResultData,
 				...(mutate ?? {}),
 			});
 			return result as unknown as Result;
