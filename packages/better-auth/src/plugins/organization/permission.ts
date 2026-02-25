@@ -17,7 +17,10 @@ export const hasPermissionFn = (
 		return { success: false, error: "No permissions provided" };
 	}
 
-	const roles = input.role.split(",");
+	const roles = input.role
+		.split(",")
+		.map((r) => r.trim())
+		.filter((r) => r.length > 0);
 	const creatorRole = input.options.creatorRole || "owner";
 	const isCreator = roles.includes(creatorRole);
 
@@ -57,7 +60,7 @@ export const hasPermissionFn = (
 		};
 	}
 
-	return { success: false };
+	return { success: false, missingRoles: [] };
 };
 
 export type PermissionExclusive = {
