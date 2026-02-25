@@ -1200,8 +1200,9 @@ describe("cookie cache refreshCache", async () => {
 					const parsed = parseSetCookieHeader(
 						context.response.headers.get("set-cookie") || "",
 					);
-					sessionTokenMaxAge =
-						parsed.get("better-auth.session_token")?.["max-age"];
+					sessionTokenMaxAge = parsed.get("better-auth.session_token")?.[
+						"max-age"
+					];
 				},
 			},
 		});
