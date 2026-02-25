@@ -1331,6 +1331,9 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
