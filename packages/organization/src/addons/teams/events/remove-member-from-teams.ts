@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { RealOrganizationId } from "../../../helpers/get-org-adapter";
 import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
@@ -29,22 +30,12 @@ export const removeMemberFromTeams = async (
 	const teamAdapter = getTeamAdapter(context, options);
 	const teams = await teamAdapter.getTeams(realOrgId);
 
-	const results = await Promise.allSettled(
-		teams.map((team) =>
-			teamAdapter.removeTeamMember({
+	await runWithTransaction(context.adapter, async () => {
+		for (const team of teams) {
+			await teamAdapter.removeTeamMember({
 				teamId: team.id as RealTeamId,
 				userId,
-			}),
-		),
-	);
-
-	const failures = results.filter(
-		(r): r is PromiseRejectedResult => r.status === "rejected",
-	);
-	if (failures.length > 0) {
-		context.logger.error(
-			`Failed to remove user ${userId} from ${failures.length}/${teams.length} teams in org ${realOrgId}`,
-			{ reasons: failures.map((f) => f.reason) },
-		);
-	}
+			});
+		}
+	});
 };
