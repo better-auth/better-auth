@@ -36,9 +36,13 @@ export async function generatePrismaSchema(
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
 
-	// Inject the output path for the generated Prisma client
+	// The CLI may not detect Prisma v7 if process.cwd() doesn't have prisma
+	// in its package.json (e.g. monorepo root). Ensure the schema uses the v7
+	// format: "prisma-client" provider, no url in datasource, and custom output.
 	code = code
-		?.split("\n")
+		?.replace('provider = "prisma-client-js"', 'provider = "prisma-client"')
+		.replace(/\s*url\s*=\s*(?:env\([^)]*\)|"[^"]*")\n?/g, "\n")
+		.split("\n")
 		.map((line, index) => {
 			if (index === 2) {
 				return (
