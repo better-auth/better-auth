@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getGlobalOnlineManager } from "./online-manager";
 import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
 
 describe("session-refresh", () => {
 	beforeEach(() => {
@@ -15,6 +16,8 @@ describe("session-refresh", () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
+		vi.restoreAllMocks(); 
+		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
 	});
 
 	it("should trigger network fetch and update session when refetchInterval fires", async () => {
@@ -617,5 +620,63 @@ describe("session-refresh", () => {
 
 		manager.cleanup();
 		vi.useRealTimers();
+	});
+
+	it("should broadcast session update when broadcastSessionUpdate is called with signout", () => {
+		const channel = getGlobalBroadcastChannel();
+		const postSpy = vi.spyOn(channel, "post");
+
+		const sessionAtom: SessionAtom = atom({
+			data: { user: { id: "1", email: "test@test.com" }, session: { id: "session-1" } },
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+		const mockFetch = vi.fn(async () => ({ data: null, error: null }));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {},
+		});
+
+		manager.init();
+		manager.broadcastSessionUpdate("signout");
+
+		expect(postSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { trigger: "signout" } }),
+		);
+
+		manager.cleanup();
+	});
+
+	it("should broadcast session update when broadcastSessionUpdate is called with updateUser", () => {
+		const channel = getGlobalBroadcastChannel();
+		const postSpy = vi.spyOn(channel, "post");
+
+		const sessionAtom: SessionAtom = atom({
+			data: { user: { id: "1", email: "test@test.com" }, session: { id: "session-1" } },
+			error: null,
+			isPending: false,
+		});
+		const sessionSignal = atom(false);
+		const mockFetch = vi.fn(async () => ({ data: null, error: null }));
+
+		const manager = createSessionRefreshManager({
+			sessionAtom,
+			sessionSignal,
+			$fetch: mockFetch as any,
+			options: {},
+		});
+
+		manager.init();
+		manager.broadcastSessionUpdate("updateUser");
+
+		expect(postSpy).toHaveBeenCalledWith(
+			expect.objectContaining({ data: { trigger: "updateUser" } }),
+		);
+
+		manager.cleanup();
 	});
 });

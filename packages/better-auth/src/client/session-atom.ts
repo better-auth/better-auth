@@ -22,6 +22,8 @@ export function getSessionAtom(
 	}>($signal, "/get-session", $fetch, {
 		method: "GET",
 	});
+	
+	let broadcastSessionUpdate: ((trigger: "signout" | "getSession" | "updateUser") => void) = () => {};
 
 	onMount(session, () => {
 		const refreshManager = createSessionRefreshManager({
@@ -32,14 +34,18 @@ export function getSessionAtom(
 		});
 
 		refreshManager.init();
+		broadcastSessionUpdate = refreshManager.broadcastSessionUpdate;
 
 		return () => {
-			refreshManager.cleanup();
-		};
+            refreshManager.cleanup();
+        };
 	});
-
+		
 	return {
-		session,
-		$sessionSignal: $signal,
-	};
+        session,
+        $sessionSignal: $signal,
+        broadcastSessionUpdate: (
+			trigger: "signout" | "getSession" | "updateUser"
+		) => broadcastSessionUpdate(trigger),
+    };
 }
