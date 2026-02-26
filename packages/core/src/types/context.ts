@@ -85,8 +85,14 @@ export type GenericEndpointContext<
 	 * write to during handler execution. Provided by better-call's
 	 * `createInternalContext` at runtime but not yet exposed on the
 	 * public `EndpointContext` type.
+	 *
+	 * Declared optional because `EndpointContext` (from better-call) does not
+	 * include this field in its type, so making it required would break every
+	 * assignment of a concrete `EndpointContext` to `GenericEndpointContext`.
+	 * At runtime the property is always present when called through better-call's
+	 * handler machinery.
 	 */
-	responseHeaders: Headers;
+	responseHeaders?: Headers;
 };
 
 export interface InternalAdapter<

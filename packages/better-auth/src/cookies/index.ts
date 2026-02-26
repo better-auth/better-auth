@@ -257,10 +257,14 @@ export async function setCookieCache(
 	// handleOAuthUserInfo during an OAuth callback), skip the refresh. Reading
 	// from the incoming request would return stale data and overwrite the fresh
 	// cookie that was just set.
+	//
+	// Note: we use ctx.responseHeaders (better-call's internal accumulator) rather
+	// than ctx.context.responseHeaders. The latter is populated by to-auth-endpoints.ts
+	// only after the handler returns, so it is undefined during handler execution.
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const setCookieHeader = ctx.responseHeaders?.get("set-cookie") || "";
 		const accountCookieName = ctx.context.authCookies.accountData.name;
-		const alreadySetInResponse = setCookieHeader.includes(accountCookieName);
+		const alreadySetInResponse = setCookieHeader.includes(`${accountCookieName}=`);
 
 		if (!alreadySetInResponse) {
 			const accountData = await getAccountCookie(ctx);
