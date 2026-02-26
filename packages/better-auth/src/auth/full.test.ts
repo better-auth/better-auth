@@ -1,3 +1,4 @@
+import type { AuthContext } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -8,7 +9,6 @@ import { createAuthClient } from "../client";
 import { getTestInstance } from "../test-utils";
 import type { Auth } from "../types";
 import { betterAuth } from "./full";
-import type { AuthContext } from "@better-auth/core";
 
 describe("auth type", () => {
 	test("default auth type should be okay", () => {
