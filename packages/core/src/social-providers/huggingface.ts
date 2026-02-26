@@ -104,7 +104,7 @@ export const huggingface = (options: HuggingFaceOptions) => {
 			return {
 				user: {
 					id: profile.sub,
-					name: profile.name || profile.preferred_username,
+					name: profile.name || profile.preferred_username || "",
 					email: profile.email,
 					image: profile.picture,
 					emailVerified: profile.email_verified ?? false,

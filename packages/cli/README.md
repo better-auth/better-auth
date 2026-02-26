@@ -8,7 +8,7 @@ needed for both core functionality and plugins.
 The CLI includes an `init` command to add Better Auth to your project.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest init
+npx auth@latest init
 ```
 
 ### **Generate**
@@ -20,7 +20,7 @@ If you’re using the built-in Kysely adapter, it will generate an SQL file you
 can run directly on your database.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 ### **Migrate**
@@ -31,7 +31,7 @@ For other adapters, you’ll need to apply the schema using your ORM’s migrati
 tool.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest migrate
+npx auth@latest migrate
 ```
 
 ### **Secret**
@@ -40,7 +40,7 @@ The CLI also provides a way to generate a secret key for your Better Auth
 instance.
 
 ```bash title="terminal"
-npx @better-auth/cli@latest secret
+npx auth@latest secret
 ```
 
 ## License

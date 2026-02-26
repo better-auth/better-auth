@@ -46,7 +46,6 @@ vi.mock("./detectors/detect-project-info", () => ({
 
 beforeEach(() => {
 	vi.resetModules();
-	vi.clearAllMocks();
 	process.env.BETTER_AUTH_TELEMETRY = "";
 	process.env.BETTER_AUTH_TELEMETRY_DEBUG = "";
 });

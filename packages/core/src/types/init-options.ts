@@ -46,6 +46,53 @@ export type GenerateIdFn = (options: {
 	size?: number | undefined;
 }) => string | false;
 
+/**
+ * Configuration for dynamic base URL resolution.
+ * Allows Better Auth to work with multiple domains (e.g., Vercel preview deployments).
+ */
+export type DynamicBaseURLConfig = {
+	/**
+	 * List of allowed hostnames. Supports wildcard patterns.
+	 *
+	 * The derived host from the request will be validated against this list.
+	 * Uses the same wildcard matching as `trustedOrigins`.
+	 *
+	 * @example
+	 * ```ts
+	 * allowedHosts: [
+	 *   "myapp.com",           // Exact match
+	 *   "*.vercel.app",        // Any Vercel preview
+	 *   "preview-*.myapp.com"  // Pattern match
+	 * ]
+	 * ```
+	 */
+	allowedHosts: string[];
+
+	/**
+	 * Fallback URL to use if the derived host doesn't match any allowed host.
+	 * If not set, Better Auth will throw an error when the host doesn't match.
+	 *
+	 * @example "https://myapp.com"
+	 */
+	fallback?: string | undefined;
+
+	/**
+	 * Protocol to use when constructing the URL.
+	 * - `"https"`: Always use HTTPS (recommended for production)
+	 * - `"http"`: Always use HTTP (for local development)
+	 * - `"auto"`: Derive from `x-forwarded-proto` header or default to HTTPS
+	 *
+	 * @default "auto"
+	 */
+	protocol?: "http" | "https" | "auto" | undefined;
+};
+
+/**
+ * Base URL configuration.
+ * Can be a static string or a dynamic config for multi-domain deployments.
+ */
+export type BaseURLConfig = string | DynamicBaseURLConfig;
+
 export interface BetterAuthRateLimitStorage {
 	get: (key: string) => Promise<RateLimit | null | undefined>;
 	set: (
@@ -346,12 +393,27 @@ export type BetterAuthOptions = {
 	/**
 	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
-	 * If not explicitly set,
-	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL
+	 * Can be configured as:
+	 * - A static string: `"https://myapp.com"`
+	 * - A dynamic config with allowed hosts for multi-domain deployments
+	 *
+	 * If not explicitly set, the system will check environment variables:
+	 * `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.
+	 *
+	 * @example
+	 * ```ts
+	 * // Static URL
+	 * baseURL: "https://myapp.com"
+	 *
+	 * // Dynamic with allowed hosts (for Vercel, multi-domain, etc.)
+	 * baseURL: {
+	 *   allowedHosts: ["myapp.com", "*.vercel.app", "preview-*.myapp.com"],
+	 *   fallback: "https://myapp.com"
+	 * }
+	 * ```
 	 */
-	baseURL?: string | undefined;
+	baseURL?: BaseURLConfig | undefined;
 	/**
 	 * Base path for the Better Auth. This is typically
 	 * the path where the
@@ -627,6 +689,20 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
+				/**
+				 * A callback function that is triggered when a user tries to sign up
+				 * with an email that already exists. Useful for notifying the existing user
+				 * that someone attempted to register with their email.
+				 *
+				 * This is only called when `requireEmailVerification: true` or `autoSignIn: false`.
+				 */
+				onExistingUserSignUp?: (
+					/**
+					 * @param user the existing user from the database
+					 */
+					data: { user: User },
+					request?: Request,
+				) => Promise<void>;
 		  }
 		| undefined;
 	/**
@@ -887,11 +963,43 @@ export type BetterAuthOptions = {
 					 */
 					disableImplicitLinking?: boolean;
 					/**
-					 * List of trusted providers
+					 * List of trusted providers. Can be a static array or a function
+					 * that returns providers dynamically. The function is called
+					 * during context init (with `request` undefined) and again
+					 * on each request (with the incoming Request). It must be
+					 * resilient to `request` being undefined.
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: ["google", "github"]
+					 * ```
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: async (request) => {
+					 *   if (!request) return [];
+					 *   const providers = await getTrustedProvidersForTenant(request);
+					 *   return providers;
+					 * }
+					 * ```
 					 */
-					trustedProviders?: Array<
-						LiteralUnion<SocialProviderList[number] | "email-password", string>
-					>;
+					trustedProviders?:
+						| Array<
+								LiteralUnion<
+									SocialProviderList[number] | "email-password",
+									string
+								>
+						  >
+						| ((
+								request?: Request | undefined,
+						  ) => Awaitable<
+								Array<
+									LiteralUnion<
+										SocialProviderList[number] | "email-password",
+										string
+									>
+								>
+						  >);
 					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
 					 *

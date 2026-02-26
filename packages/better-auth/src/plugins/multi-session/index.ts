@@ -140,7 +140,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					method: "POST",
 					body: setActiveSessionBodySchema,
 					requireHeaders: true,
-					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
 							description: "Set the active session",

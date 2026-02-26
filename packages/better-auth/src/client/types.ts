@@ -4,12 +4,12 @@ import type {
 	ClientAtomListener,
 	ClientStore,
 } from "@better-auth/core";
-import type { RawError } from "@better-auth/core/utils/error-codes";
 import type {
 	BetterAuthPluginDBSchema,
 	InferDBFieldsOutput,
-	InferFieldsInputClient,
-} from "../db";
+} from "@better-auth/core/db";
+import type { RawError } from "@better-auth/core/utils/error-codes";
+import type { InferFieldsInputClient } from "../db/field";
 import type { Auth, Session, User } from "../types";
 import type { StripEmptyObjects, UnionToIntersection } from "../types/helper";
 import type { InferRoutes } from "./path-to-object";
@@ -100,17 +100,18 @@ export type InferAdditionalFromClient<
 	Options extends BetterAuthClientOptions,
 	Key extends string,
 	Format extends "input" | "output" = "output",
-> = Options["plugins"] extends Array<infer Plugin>
-	? Plugin extends BetterAuthClientPlugin
-		? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
-			? Schema extends BetterAuthPluginDBSchema
-				? Format extends "input"
-					? InferFieldsInputClient<Schema[Key]["fields"]>
-					: InferDBFieldsOutput<Schema[Key]["fields"]>
+> =
+	Options["plugins"] extends Array<infer Plugin>
+		? Plugin extends BetterAuthClientPlugin
+			? Plugin["$InferServerPlugin"] extends { schema: infer Schema }
+				? Schema extends BetterAuthPluginDBSchema
+					? Format extends "input"
+						? InferFieldsInputClient<Schema[Key]["fields"]>
+						: InferDBFieldsOutput<Schema[Key]["fields"]>
+					: {}
 				: {}
 			: {}
-		: {}
-	: {};
+		: {};
 
 export type SessionQueryParams = {
 	disableCookieCache?: boolean | undefined;

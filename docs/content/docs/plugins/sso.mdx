@@ -13,8 +13,8 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
     <Step>
         ### Install the plugin
 
-        ```bash
-        npm install @better-auth/sso
+        ```package-install
+        @better-auth/sso
         ```
     </Step>
     <Step>
@@ -22,12 +22,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth.ts"
         import { betterAuth } from "better-auth"
-        import { sso } from "@better-auth/sso";
+        import { sso } from "@better-auth/sso"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 sso() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -39,12 +39,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
             ```package-install
-            npx @better-auth/cli migrate
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
             ```package-install
-            npx @better-auth/cli generate
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -55,12 +55,12 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { ssoClient } from "@better-auth/sso/client"
+        import { ssoClient } from "@better-auth/sso/client" // [!code highlight]
 
         const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 ssoClient() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -73,6 +73,10 @@ Single Sign-On (SSO) allows users to authenticate with multiple applications usi
 To register an OIDC provider, use the `registerSSOProvider` endpoint and provide the necessary configuration details for the provider.
 
 A redirect URL will be automatically generated using the provider ID. For instance, if the provider ID is `hydra`, the redirect URL would be `{baseURL}/api/auth/sso/callback/hydra`. Note that `/api/auth` may vary depending on your base path configuration.
+
+<Callout type="info">
+If you need all providers to share a single callback URL (e.g., when migrating from another auth provider), see [Shared Redirect URI](#shared-redirect-uri).
+</Callout>
 
 <Callout type="info">
 When you register an OIDC provider, Better Auth automatically fetches and validates the IdP's [OIDC discovery document](#oidc-discovery). Most endpoint fields are optional — see [OIDC Discovery](#oidc-discovery) for details on auto-discovered fields and possible registration errors.
@@ -477,6 +481,8 @@ To sign in with an SSO provider, you can call `signIn.sso`
 You can sign in using the email with domain matching:
 
 ```ts title="sign-in.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     email: "user@example.com",
     callbackURL: "/dashboard",
@@ -486,6 +492,8 @@ const res = await authClient.signIn.sso({
 or you can specify the domain:
 
 ```ts title="sign-in-domain.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     domain: "example.com",
     callbackURL: "/dashboard",
@@ -495,6 +503,8 @@ const res = await authClient.signIn.sso({
 You can also sign in using the organization slug if a provider is associated with an organization:
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     organizationSlug: "example-org",
     callbackURL: "/dashboard",
@@ -504,6 +514,8 @@ const res = await authClient.signIn.sso({
 Alternatively, you can sign in using the provider's ID:
 
 ```ts title="sign-in-provider-id.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     callbackURL: "/dashboard",
@@ -513,6 +525,8 @@ const res = await authClient.signIn.sso({
 Optionally, you can pass a login hint (for example, an email address or another identifier) to prefill or direct the identity provider:
 
 ```ts title="sign-in-with-login-hint.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await authClient.signIn.sso({
     providerId: "example-provider-id",
     loginHint: "user@example.com",
@@ -523,6 +537,8 @@ const res = await authClient.signIn.sso({
 To use the server API you can use `signInSSO`
 
 ```ts title="sign-in-org.ts"
+import { authClient } from "@/lib/auth-client"
+
 const res = await auth.api.signInSSO({
     body: {
         organizationSlug: "example-org",
@@ -585,6 +601,9 @@ Note: If email is provided and loginHint is not specified, email will be sent as
 When a user is authenticated, if the user does not exist, the user will be provisioned using the `provisionUser` function. If the organization provisioning is enabled and a provider is associated with an organization, the user will be added to the organization.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -618,6 +637,9 @@ User provisioning allows you to run custom logic whenever a user signs in throug
 - Updating user information from the SSO provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -669,6 +691,9 @@ Organization provisioning automatically manages user memberships in organization
 #### Basic Organization Provisioning
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -684,6 +709,9 @@ const auth = betterAuth({
 #### Advanced Organization Provisioning with Custom Roles
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -721,6 +749,8 @@ const auth = betterAuth({
 When registering an SSO provider, you can link it to a specific organization:
 
 ```ts title="register-org-provider.ts"
+import { auth } from "@/lib/auth"
+
 await auth.api.registerSSOProvider({
     body: {
         providerId: "acme-corp-saml",
@@ -731,7 +761,7 @@ await auth.api.registerSSOProvider({
             // SAML configuration...
         },
     },
-    headers,
+    headers: await headers() // headers containing the user's session token
 });
 ```
 
@@ -742,6 +772,8 @@ Now when users from `acmecorp.com` sign in through this provider, they'll automa
 You can set up multiple SSO providers for different organizations:
 
 ```ts title="multi-org-setup.ts"
+import { auth } from "@/lib/auth"
+
 // Acme Corp SAML provider
 await auth.api.registerSSOProvider({
     body: {
@@ -832,6 +864,9 @@ organizationProvisioning: {
 ### Default SSO Provider
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({
@@ -1159,6 +1194,47 @@ sso({
 For true early rejection of oversized payloads (before they reach your application), configure size limits at your infrastructure level (nginx `client_max_body_size`, CDN settings, load balancer).
 </Callout>
 
+## Shared Redirect URI
+
+By default, each OIDC provider gets its own callback URL (`/sso/callback/:providerId`). You can configure all providers to share a single redirect URI instead:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
+const auth = betterAuth({
+    plugins: [
+        sso({
+            redirectURI: "/sso/callback" // [!code highlight]
+        })
+    ]
+});
+```
+
+The value can be a relative path or a full URL:
+
+```ts
+// Relative path (appended to your baseURL)
+sso({ redirectURI: "/sso/callback" })
+
+// Full URL
+sso({ redirectURI: "https://login.example.com/callback" })
+```
+
+The provider ID is stored in the OAuth state so the callback can identify which provider initiated the flow.
+
+<Callout type="info">
+When using a full URL, make sure it routes to your Better Auth instance.
+</Callout>
+
+<Callout type="info">
+This option only affects OIDC providers. SAML providers already support custom callback URLs via `callbackUrl` in `samlConfig`.
+</Callout>
+
+<Callout type="info">
+Both the shared endpoint (`/sso/callback`) and the per-provider endpoints (`/sso/callback/:providerId`) are always registered for backward compatibility, so existing integrations continue to work regardless of this setting.
+</Callout>
+
 ## Domain verification
 
 Domain verification allows your application to automatically trust a new SSO provider
@@ -1183,6 +1259,9 @@ const authClient = createAuthClient({
 
     <Tab value="server">
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { sso } from "@better-auth/sso";
+
 const auth = betterAuth({
     plugins: [
         sso({ // [!code highlight]
@@ -1201,12 +1280,12 @@ Once enabled, make sure you migrate the database schema (again).
 <Tabs items={["migrate", "generate"]}>
     <Tab value="migrate">
     ```bash
-    npx @better-auth/cli migrate
+    npx auth migrate
     ```
     </Tab>
     <Tab value="generate">
     ```bash
-    npx @better-auth/cli generate
+    npx auth generate
     ```
     </Tab>
 </Tabs>
@@ -1230,7 +1309,7 @@ You can use this token to prove ownership over the domain.
 #### Create `TXT` DNS record
 To do this, you'll need to add a `TXT` record to your domain's DNS settings:
 
-    *   **Host:** `better-auth-token-{your-provider-id}` (**Note:** This assumes the default token prefix, which can be customized through the `domainVerification.tokenPrefix` option)
+    *   **Host:** `_better-auth-token-{your-provider-id}` (**Note:** An underscore is automatically prepended to follow DNS infrastructure subdomain conventions. The `better-auth-token` part can be customized through the `domainVerification.tokenPrefix` option)
     *   **Value:** The verification token you were given.
 
 **Save the record and wait for it to propagate.** This can take up to 48 hours, but it's usually much faster.
@@ -1410,6 +1489,11 @@ If you want to allow account linking for specific trusted providers, enable the 
         type: "number | function",
         default: 10,
     },
+    redirectURI: {
+        description: "Custom redirect URI for OIDC SSO callbacks. When set, all OIDC providers share this single callback URL instead of per-provider URLs. The provider ID is stored in the OAuth state. Can be a relative path (e.g., '/sso/callback') or a full URL.",
+        type: "string",
+        required: false,
+    },
     domainVerification: {
         description: "Configure the domain verification feature",
         type: "object",
@@ -1420,10 +1504,10 @@ If you want to allow account linking for specific trusted providers, enable the 
                 required: false
             },
             tokenPrefix: {
-                description: "Prefix to append to the verification token identifier",
+                description: "Prefix used to generate the domain verification identifier. An underscore is automatically prepended.",
                 type: "string",
                 required: false,
-                default: "better-auth-token-"
+                default: "better-auth-token"
             },
         },
     },
