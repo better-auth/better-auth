@@ -61,7 +61,10 @@ export const getClientConfig = (
 			...pluginsFetchPlugins,
 		],
 	});
-	const { $sessionSignal, session, broadcastSessionUpdate } = getSessionAtom($fetch, options);
+	const { $sessionSignal, session, broadcastSessionUpdate } = getSessionAtom(
+		$fetch,
+		options,
+	);
 	const plugins = options?.plugins || [];
 	let pluginsActions = {} as Record<string, any>;
 	const pluginsAtoms = {
@@ -98,7 +101,7 @@ export const getClientConfig = (
 				} else if (path === "/update-user" || path === "/update-session") {
 					broadcastSessionUpdate("updateUser");
 				}
-        	},
+			},
 		},
 	];
 

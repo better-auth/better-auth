@@ -2,10 +2,10 @@
 
 import { atom } from "nanostores";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { getGlobalBroadcastChannel } from "./broadcast-channel";
 import { getGlobalOnlineManager } from "./online-manager";
 import type { SessionAtom } from "./session-atom";
 import { createSessionRefreshManager } from "./session-refresh";
-import { getGlobalBroadcastChannel } from "./broadcast-channel";
 
 describe("session-refresh", () => {
 	beforeEach(() => {
@@ -16,7 +16,7 @@ describe("session-refresh", () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
-		vi.restoreAllMocks(); 
+		vi.restoreAllMocks();
 		delete (globalThis as any)[Symbol.for("better-auth:broadcast-channel")];
 	});
 
@@ -627,7 +627,10 @@ describe("session-refresh", () => {
 		const postSpy = vi.spyOn(channel, "post");
 
 		const sessionAtom: SessionAtom = atom({
-			data: { user: { id: "1", email: "test@test.com" }, session: { id: "session-1" } },
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
 			error: null,
 			isPending: false,
 		});
@@ -656,7 +659,10 @@ describe("session-refresh", () => {
 		const postSpy = vi.spyOn(channel, "post");
 
 		const sessionAtom: SessionAtom = atom({
-			data: { user: { id: "1", email: "test@test.com" }, session: { id: "session-1" } },
+			data: {
+				user: { id: "1", email: "test@test.com" },
+				session: { id: "session-1" },
+			},
 			error: null,
 			isPending: false,
 		});
