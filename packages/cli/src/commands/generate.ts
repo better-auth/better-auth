@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { DBAdapter } from "@better-auth/core/db/adapter";
 import {
 	createTelemetry,
 	getTelemetryAuthConfig,
@@ -13,6 +14,62 @@ import yoctoSpinner from "yocto-spinner";
 import * as z from "zod/v4";
 import { generateSchema } from "../generators";
 import { getConfig } from "../utils/get-config";
+
+/**
+ * Infer the database type from the config when the adapter can't be
+ * initialized (e.g., native driver unavailable in Deno).
+ */
+function inferDatabaseType(
+	database: NonNullable<
+		Exclude<NonNullable<Parameters<typeof getAdapter>[0]>["database"], Function>
+	>,
+): "sqlite" | "pg" | "mysql" | "mssql" | null {
+	if ("type" in database && typeof database.type === "string") {
+		const t = database.type;
+		if (t === "sqlite") return "sqlite";
+		if (t === "postgres") return "pg";
+		if (t === "mysql") return "mysql";
+		if (t === "mssql") return "mssql";
+	}
+	// Duck-type common database drivers
+	if ("aggregate" in database || "open" in database) return "sqlite";
+	if ("getConnection" in database) return "mysql";
+	if ("connect" in database) return "pg";
+	return null;
+}
+
+/**
+ * Create a stub adapter that provides just enough metadata for the
+ * schema generators (id, options.provider) without requiring a live
+ * database connection.
+ */
+function createFallbackAdapter(
+	databaseType: "sqlite" | "pg" | "mysql" | "mssql",
+): DBAdapter {
+	const fail = () => {
+		throw new Error(
+			"This is a fallback adapter for schema generation only. Database operations are not supported.",
+		);
+	};
+	return {
+		id: "kysely",
+		create: fail,
+		findOne: fail,
+		findMany: fail,
+		count: fail,
+		update: fail,
+		updateMany: fail,
+		delete: fail,
+		deleteMany: fail,
+		transaction: fail,
+		options: {
+			provider: databaseType,
+			adapterConfig: {
+				adapterId: "kysely",
+			},
+		},
+	};
+}
 
 async function generateAction(opts: any) {
 	const options = z
@@ -41,7 +98,18 @@ async function generateAction(opts: any) {
 		return;
 	}
 
+	let adapterInitFailed = false;
 	const adapter = await getAdapter(config).catch((e) => {
+		// When the database driver can't be loaded (e.g. native modules in Deno),
+		// try to create a fallback adapter from config metadata so that
+		// generators that don't need a live DB connection (Drizzle, Prisma) still work.
+		if (config.database && typeof config.database !== "function") {
+			const dbType = inferDatabaseType(config.database);
+			if (dbType) {
+				adapterInitFailed = true;
+				return createFallbackAdapter(dbType);
+			}
+		}
 		console.error(e.message);
 		process.exit(1);
 	});
@@ -52,6 +120,19 @@ async function generateAction(opts: any) {
 		adapter,
 		file: options.output,
 		options: config,
+	}).catch((e) => {
+		spinner.stop();
+		if (adapterInitFailed) {
+			console.error(
+				`Failed to generate schema: the database driver could not be initialized.\n` +
+					`If you're using Deno or an environment where native modules aren't available, ` +
+					`consider using a Drizzle or Prisma adapter instead of a direct database connection.\n` +
+					`Alternatively, use Node.js to run the CLI: npx @better-auth/cli generate`,
+			);
+		} else {
+			console.error(e.message);
+		}
+		process.exit(1);
 	});
 
 	spinner.stop();
