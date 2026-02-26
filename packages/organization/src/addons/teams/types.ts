@@ -173,6 +173,19 @@ export type InferTeamFromOrgOptions<
 			: undefined
 		: undefined;
 
+export type InferTeamMemberFromOrgOptions<
+	O extends OrganizationOptions,
+	isClientSide extends boolean = false,
+> =
+	FindAddonFromOrgOptions<O, "teams"> extends infer T extends Record<
+		string,
+		any
+	>
+		? T["options"] extends TeamsOptions
+			? InferTeamMember<T["options"], isClientSide>
+			: undefined
+		: undefined;
+
 export type InferTeam<
 	TO extends TeamsOptions,
 	isClientSide extends boolean = true,
@@ -305,6 +318,37 @@ export type TeamHooks =
 			afterAddTeamMember?: (
 				data: {
 					teamMember: TeamMember & Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void>;
+
+			/**
+			 * A callback that runs before a team member is updated
+			 *
+			 * You can return a `data` object to override the default data.
+			 */
+			beforeUpdateTeamMember?: (
+				data: {
+					teamMember: TeamMember & Record<string, any>;
+					updates: Record<string, any>;
+					team: Team & Record<string, any>;
+					user: User & Record<string, any>;
+					organization: Organization & Record<string, any>;
+				},
+				ctx: GenericEndpointContext,
+			) => Promise<void | {
+				data: Record<string, any>;
+			}>;
+
+			/**
+			 * A callback that runs after a team member is updated
+			 */
+			afterUpdateTeamMember?: (
+				data: {
+					teamMember: (TeamMember & Record<string, any>) | null;
 					team: Team & Record<string, any>;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;

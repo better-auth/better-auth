@@ -15,13 +15,13 @@ import { getHook } from "../helpers/get-team-hook";
 import { resolveTeamOptions } from "../helpers/resolve-team-options";
 import type { TeamsOptions } from "../types";
 
-const baseAddTeamMemberSchema = z.object({
+const baseUpdateTeamMemberSchema = z.object({
 	teamId: z.string().meta({
-		description: "The team the user should be a member of.",
+		description: 'The ID of the team the member belongs to. Eg: "team-id"',
 	}),
 	userId: z.coerce.string().meta({
 		description:
-			"The user Id which represents the user to be added as a member.",
+			'The ID of the user whose team membership should be updated. Eg: "user-id"',
 	}),
 	organizationId: z
 		.string()
@@ -30,19 +30,22 @@ const baseAddTeamMemberSchema = z.object({
 				'An optional organization ID. If not provided, will default to the user\'s active organization. Eg: "org-id"',
 		})
 		.optional(),
+	data: z.object({}),
 });
 
-export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
+export const updateTeamMember = <O extends TeamsOptions>(_options?: O) => {
 	const options = resolveTeamOptions(_options);
 
 	const { $Infer, schema, getBody } = buildEndpointSchema({
-		baseSchema: baseAddTeamMemberSchema,
+		baseSchema: baseUpdateTeamMemberSchema,
 		additionalFieldsSchema: options?.schema as O["schema"],
 		additionalFieldsModel: "teamMember",
+		additionalFieldsNestedAs: "data",
+		shouldBePartial: true,
 	});
 
 	return createAuthEndpoint(
-		"/organization/add-team-member",
+		"/organization/update-team-member",
 		{
 			method: "POST",
 			body: schema,
@@ -51,20 +54,20 @@ export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
 			metadata: {
 				$Infer,
 				openapi: {
-					operationId: "addTeamMember",
-					description: "Add a member to a team",
+					operationId: "updateTeamMember",
+					description: "Update an existing team member in a team",
 					responses: {
 						"200": {
-							description: "Team member created successfully",
+							description: "Team member updated successfully",
 							content: {
 								"application/json": {
 									schema: {
 										type: "object",
-										description: "The team member",
 										properties: {
 											id: {
 												type: "string",
-												description: "Unique identifier of the team member",
+												description:
+													"Unique identifier of the updated team member",
 											},
 											userId: {
 												type: "string",
@@ -125,20 +128,9 @@ export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
 			);
 
 			if (!canUpdateMember) {
-				const code = "YOU_ARE_NOT_ALLOWED_TO_CREATE_A_NEW_TEAM_MEMBER";
+				const code = "YOU_ARE_NOT_ALLOWED_TO_UPDATE_THIS_TEAM_MEMBER";
 				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("FORBIDDEN", msg);
-			}
-
-			const toBeAddedMember = await orgAdapter.findMemberByOrgId({
-				userId: body.userId,
-				organizationId: realOrgId,
-			});
-
-			if (!toBeAddedMember) {
-				const code = "USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
 			}
 
 			const team = await teamAdapter.findTeamById({
@@ -160,97 +152,71 @@ export const addTeamMember = <O extends TeamsOptions>(_options?: O) => {
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const userBeingAdded = await ctx.context.internalAdapter.findUserById(
-				body.userId,
-			);
-			if (!userBeingAdded) {
-				const code = "MEMBER_NOT_FOUND";
-				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("BAD_REQUEST", msg);
-			}
-
-			// Check if user is already a member of the team
 			const existingTeamMember = await teamAdapter.findTeamMember({
 				teamId: realTeamId,
 				userId: body.userId,
 			});
 
-			if (existingTeamMember) {
-				const code = "USER_IS_ALREADY_A_MEMBER_OF_THIS_TEAM";
-				const msg = TEAMS_ERROR_CODES[code];
+			if (!existingTeamMember) {
+				const code = "USER_IS_NOT_A_MEMBER_OF_THE_TEAM";
+				const msg = ORGANIZATION_ERROR_CODES[code];
 				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			// Check maximum members per team limit
-			const { total: memberCount } = await teamAdapter.listTeamMembers({
-				teamId: realTeamId,
-			});
-			const maxMembers = await options.maximumMembersPerTeam({
-				teamId: realTeamId,
-				session,
-				organizationId: realOrgId,
-			});
-
-			if (memberCount >= maxMembers) {
-				const code = "TEAM_MEMBER_LIMIT_REACHED";
+			const userBeingUpdated = await ctx.context.internalAdapter.findUserById(
+				body.userId,
+			);
+			if (!userBeingUpdated) {
+				const code = "MEMBER_NOT_FOUND";
 				const msg = ORGANIZATION_ERROR_CODES[code];
-				throw APIError.from("FORBIDDEN", msg);
+				throw APIError.from("BAD_REQUEST", msg);
 			}
 
-			const addTeamMemberHook = getHook("AddTeamMember");
+			const updateTeamMemberHook = getHook("UpdateTeamMember");
 
-			const {
-				teamId: _,
-				userId: __,
-				organizationId: ___,
-				...additionalFields
-			} = body;
+			let updates: Record<string, any> = { ...body.data };
 
-			let teamMemberData: { teamId: RealTeamId; userId: string } & Record<
-				string,
-				any
-			> = {
-				teamId: realTeamId,
-				userId: body.userId,
-				...additionalFields,
-			};
-
-			const modify = await addTeamMemberHook.before(
+			const modify = await updateTeamMemberHook.before(
 				{
-					teamMember: teamMemberData,
+					teamMember: existingTeamMember,
+					updates,
 					team,
-					user: userBeingAdded,
+					user: userBeingUpdated,
 					organization,
 				},
 				ctx,
 			);
 
 			if (modify) {
-				teamMemberData = {
-					...teamMemberData,
+				updates = {
+					...updates,
 					...modify,
 				};
 			}
 
-			const teamMember = await teamAdapter.createTeamMember(teamMemberData);
+			const updatedTeamMember = await teamAdapter.updateTeamMember({
+				teamId: realTeamId,
+				userId: body.userId,
+				data: updates,
+			});
 
-			if (!teamMember) {
-				ctx.context.logger.error("Failed to create team member");
-				const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM_MEMBER;
+			if (!updatedTeamMember) {
+				ctx.context.logger.error("Failed to update team member");
+				const msg = TEAMS_ERROR_CODES.FAILED_TO_UPDATE_TEAM_MEMBER;
 				throw APIError.from("INTERNAL_SERVER_ERROR", msg);
 			}
 
-			await addTeamMemberHook.after(
+			await updateTeamMemberHook.after(
 				{
-					teamMember,
+					teamMember: updatedTeamMember,
 					team,
-					user: userBeingAdded,
+					user: userBeingUpdated,
 					organization,
 				},
 				ctx,
 			);
 
-			return ctx.json(teamMember);
+			return ctx.json(updatedTeamMember);
 		},
 	);
 };

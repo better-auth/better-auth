@@ -1,6 +1,7 @@
 import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import type { UnionToIntersection } from "better-call";
 import type { InferOrganizationRolesFromOption } from "../access";
+import type { InferTeamMemberFromOrgOptions } from "../addons/teams/types";
 import type { Organization } from "../schema";
 import type { Addon } from "./addon";
 import type { OrganizationOptions } from "./organization-options";
@@ -26,6 +27,7 @@ export type InferAllAddons<O extends OrganizationOptions> =
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
+		TeamMember: InferTeamMemberFromOrgOptions<O>;
 	};
 
 export type InferMember<
