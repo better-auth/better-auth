@@ -20,9 +20,16 @@ async function createAdapter(dialect: "sqlite" | "postgresql" | "mysql") {
 		const { PrismaPg } = await import("@prisma/adapter-pg");
 		return new PrismaPg({ connectionString: DATABASE_URLS[dialect] });
 	}
-	// mysql
+	// mysql — use object config instead of URL string to avoid
+	// mariadb driver hanging on URL-based connection strings.
 	const { PrismaMariaDb } = await import("@prisma/adapter-mariadb");
-	return new PrismaMariaDb({ url: DATABASE_URLS[dialect] });
+	return new PrismaMariaDb({
+		host: "localhost",
+		port: 3308,
+		user: "user",
+		password: "password",
+		database: "better_auth",
+	});
 }
 
 let migrationCount = 0;
