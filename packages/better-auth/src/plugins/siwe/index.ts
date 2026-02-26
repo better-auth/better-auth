@@ -42,12 +42,7 @@ const walletAddressSchema = z
 	.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 	.length(42);
 
-const chainIdSchema = z
-	.number()
-	.int()
-	.positive()
-	.optional()
-	.default(1);
+const chainIdSchema = z.number().int().positive().optional().default(1);
 
 const getSiweNonceBodySchema = z.object({
 	walletAddress: walletAddressSchema,
@@ -205,38 +200,38 @@ export const siwe = (options: SIWEPluginOptions) =>
 						email,
 					} = ctx.body;
 
-						const walletAddress = toChecksumAddress(rawWalletAddress);
-						const isAnonymous = options.anonymous ?? true;
+					const walletAddress = toChecksumAddress(rawWalletAddress);
+					const isAnonymous = options.anonymous ?? true;
 
-						const verificationIdentifier = createWalletVerificationIdentifier(
-							walletAddress,
-							chainId,
-						);
+					const verificationIdentifier = createWalletVerificationIdentifier(
+						walletAddress,
+						chainId,
+					);
 
-						const verification =
-							await ctx.context.internalAdapter.findVerificationValue(
-								verificationIdentifier,
-							);
-
-						if (!verification || new Date() > verification.expiresAt) {
-							throw APIError.from(
-								"UNAUTHORIZED",
-								SIWE_ERROR_CODES.INVALID_OR_EXPIRED_NONCE,
-							);
-						}
-
-						await verifySiweMessageOrThrow(options, {
-							message,
-							signature,
-							address: walletAddress,
-							chainId,
-							nonce: verification.value,
-						});
-
-						// Nonce is single-use: delete it after successful verification.
-						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					const verification =
+						await ctx.context.internalAdapter.findVerificationValue(
 							verificationIdentifier,
 						);
+
+					if (!verification || new Date() > verification.expiresAt) {
+						throw APIError.from(
+							"UNAUTHORIZED",
+							SIWE_ERROR_CODES.INVALID_OR_EXPIRED_NONCE,
+						);
+					}
+
+					await verifySiweMessageOrThrow(options, {
+						message,
+						signature,
+						address: walletAddress,
+						chainId,
+						nonce: verification.value,
+					});
+
+					// Nonce is single-use: delete it after successful verification.
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						verificationIdentifier,
+					);
 
 					const walletAddressForChain =
 						await ctx.context.adapter.findOne<WalletAddress>({

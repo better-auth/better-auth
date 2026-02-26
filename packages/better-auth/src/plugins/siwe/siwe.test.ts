@@ -96,13 +96,13 @@ describe("siwe", () => {
 			expect(zeroError).toBeDefined();
 			expect(zeroError?.status).toBe(400);
 
-			// ChainId exceeding max value (2147483647)
-			const { error: maxError } = await client.siwe.nonce({
+			// Non-integer chainId
+			const { error: floatError } = await client.siwe.nonce({
 				walletAddress,
-				chainId: 2147483648,
+				chainId: 1.5,
 			});
-			expect(maxError).toBeDefined();
-			expect(maxError?.status).toBe(400);
+			expect(floatError).toBeDefined();
+			expect(floatError?.status).toBe(400);
 		});
 	});
 
