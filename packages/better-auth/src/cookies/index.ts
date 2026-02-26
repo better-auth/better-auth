@@ -264,7 +264,9 @@ export async function setCookieCache(
 	if (ctx.context.options.account?.storeAccountCookie) {
 		const setCookieHeader = ctx.responseHeaders?.get("set-cookie") || "";
 		const accountCookieName = ctx.context.authCookies.accountData.name;
-		const alreadySetInResponse = setCookieHeader.includes(`${accountCookieName}=`);
+		const alreadySetInResponse = setCookieHeader.includes(
+			`${accountCookieName}=`,
+		);
 
 		if (!alreadySetInResponse) {
 			const accountData = await getAccountCookie(ctx);
