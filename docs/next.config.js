@@ -32,6 +32,17 @@ const config = {
 				destination: "/docs/examples/next-js",
 				permanent: true,
 			},
+			// Legacy errors page
+			{
+				source: "/docs/errors",
+				destination: "/docs/reference/errors",
+				permanent: true,
+			},
+			{
+				source: "/docs/errors/:path*",
+				destination: "/docs/reference/errors/:path*",
+				permanent: true,
+			},
 		];
 	},
 	serverExternalPackages: [
