@@ -28,6 +28,10 @@ export interface AddMemberToTeamProps {
 	 * The endpoint context for hooks
 	 */
 	endpointContext: GenericEndpointContext;
+	/**
+	 * Additional fields to set on the team member
+	 */
+	additionalFields?: Record<string, any>;
 }
 
 export interface AddMemberToTeamResult {
@@ -46,15 +50,24 @@ export const addMemberToTeam = async (
 	context: AuthContext,
 	options: ResolvedTeamsOptions,
 ): Promise<AddMemberToTeamResult> => {
-	const { realTeamId, team, user, organization, endpointContext } = props;
+	const {
+		realTeamId,
+		team,
+		user,
+		organization,
+		endpointContext,
+		additionalFields,
+	} = props;
 
 	const teamAdapter = getTeamAdapter(context, options);
 	const addTeamMemberHook = getHook("AddTeamMember", options);
 
-	let teamMemberData = {
-		teamId: realTeamId,
-		userId: user.id,
-	};
+	let teamMemberData: { teamId: string; userId: string } & Record<string, any> =
+		{
+			teamId: realTeamId,
+			userId: user.id,
+			...(additionalFields || {}),
+		};
 
 	const teamModify = await addTeamMemberHook.before(
 		{

@@ -7,6 +7,7 @@ export const TEAMS_ERROR_CODES = defineErrorCodes({
 	SLUG_ALREADY_TAKEN: "That team slug already taken",
 	FAILED_TO_CREATE_TEAM_MEMBER: "Failed to create team member",
 	FAILED_TO_CREATE_TEAM: "Failed to create team",
+	FAILED_TO_UPDATE_TEAM_MEMBER: "Failed to update team member",
 	USER_IS_ALREADY_A_MEMBER_OF_THIS_TEAM:
 		"User is already a member of this team",
 });

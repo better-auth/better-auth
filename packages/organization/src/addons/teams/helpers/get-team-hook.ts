@@ -9,6 +9,7 @@ type HookOptions =
 	| "UpdateTeam"
 	| "DeleteTeam"
 	| "AddTeamMember"
+	| "UpdateTeamMember"
 	| "RemoveTeamMember";
 
 type Hooks = NonNullable<TeamHooks>;
@@ -52,7 +53,7 @@ export const getHook = <H extends HookOptions>(
 		) => {
 			const options = (() => {
 				if (overwriteOptions) return overwriteOptions;
-				const orgOptions = ctx.context.getPlugin("organization")
+				const orgOptions = ctx?.context.getPlugin("organization")
 					?.options as ResolvedOrganizationOptions;
 				const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
 				const options = addon?.options as ResolvedTeamsOptions;
@@ -71,7 +72,7 @@ export const getHook = <H extends HookOptions>(
 		after: async (data: Parameters<After>[0], ctx?: GenericEndpointContext) => {
 			const options = (() => {
 				if (overwriteOptions) return overwriteOptions;
-				const orgOptions = ctx.context.getPlugin("organization")
+				const orgOptions = ctx?.context.getPlugin("organization")
 					?.options as ResolvedOrganizationOptions;
 				const [addon] = getAddon(orgOptions, "teams", {} as TeamsAddon);
 				const options = addon?.options as ResolvedTeamsOptions;

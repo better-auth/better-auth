@@ -51,15 +51,26 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 			});
 			return filterTeamOutput(team) as InferTeam<O, false>;
 		},
-		createTeamMember: async (props: { teamId: RealTeamId; userId: string }) => {
+		createTeamMember: async (
+			props: {
+				teamId: RealTeamId;
+				userId: string;
+			} & Record<string, any>,
+		) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
 			type TeamMemberData = TeamMember & Record<string, any>;
-			const teamMember = await adapter.create<TeamMemberData>({
+			const teamMember = await adapter.create<
+				TeamMemberData,
+				InferTeamMember<O, false>
+			>({
 				model: "teamMember",
-				data: props,
+				data: {
+					...props,
+					createdAt: props.createdAt ?? new Date(),
+				},
 				forceAllowId: true,
 			});
-			return filterTeamMemberOutput(teamMember);
+			return filterTeamMemberOutput(teamMember) as InferTeamMember<O, false>;
 		},
 		getTeamCount: async (organizationId: RealOrganizationId) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
@@ -187,7 +198,10 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 					{ field: "userId", value: userId },
 				],
 			});
-			return filterTeamMemberOutput(teamMember);
+			return filterTeamMemberOutput(teamMember) as InferTeamMember<
+				O,
+				false
+			> | null;
 		},
 		listTeamsByUser: async ({
 			userId,
@@ -256,7 +270,10 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				where: [{ field: "teamId", value: teamId }],
 			});
 			return {
-				members: members.map(filterTeamMemberOutput),
+				members: members.map(filterTeamMemberOutput) as InferTeamMember<
+					O,
+					false
+				>[],
 				total,
 			};
 		},
@@ -276,12 +293,37 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				],
 			});
 		},
-		findOrCreateTeamMember: async (data: {
+		updateTeamMember: async ({
+			teamId,
+			userId,
+			data,
+		}: {
 			teamId: RealTeamId;
 			userId: string;
+			data: Record<string, any>;
 		}) => {
 			const adapter = await getCurrentAdapter(baseAdapter);
-			const member = await adapter.findOne<TeamMember>({
+			const teamMember = await adapter.update<InferTeamMember<O, false>>({
+				model: "teamMember",
+				where: [
+					{ field: "teamId", value: teamId },
+					{ field: "userId", value: userId },
+				],
+				update: data,
+			});
+			return filterTeamMemberOutput(teamMember) as InferTeamMember<
+				O,
+				false
+			> | null;
+		},
+		findOrCreateTeamMember: async (
+			data: {
+				teamId: RealTeamId;
+				userId: string;
+			} & Record<string, any>,
+		) => {
+			const adapter = await getCurrentAdapter(baseAdapter);
+			const member = await adapter.findOne<InferTeamMember<O, false>>({
 				model: "teamMember",
 				where: [
 					{
@@ -295,17 +337,23 @@ export const getTeamAdapter = <O extends TeamsOptions>(
 				],
 			});
 
-			if (member) return filterTeamMemberOutput(member);
+			if (member)
+				return filterTeamMemberOutput(member) as InferTeamMember<O, false>;
 
-			const result = await adapter.create<Omit<TeamMember, "id">>({
+			const { teamId, userId, ...additionalFields } = data;
+			const result = await adapter.create<
+				Omit<TeamMember, "id"> & Record<string, any>,
+				InferTeamMember<O, false>
+			>({
 				model: "teamMember",
 				data: {
-					teamId: data.teamId,
-					userId: data.userId,
+					teamId,
+					userId,
 					createdAt: new Date(),
+					...additionalFields,
 				},
 			});
-			return filterTeamMemberOutput(result);
+			return filterTeamMemberOutput(result) as InferTeamMember<O, false>;
 		},
 	};
 };

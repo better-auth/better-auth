@@ -26,9 +26,17 @@ import { removeTeam } from "./routes/remove-team";
 import { removeTeamMember } from "./routes/remove-team-member";
 import { setActiveTeam } from "./routes/set-active-team";
 import { updateTeam } from "./routes/update-team";
-import type { InferTeam, TeamsOptions } from "./types";
+import { updateTeamMember } from "./routes/update-team-member";
+import type { InferTeam, InferTeamMember, TeamsOptions } from "./types";
 
 export * from "./schema";
+export type {
+	InferTeam,
+	InferTeamFromOrgOptions,
+	InferTeamMember,
+	InferTeamMemberFromOrgOptions,
+	TeamsOptions,
+} from "./types";
 
 export type TeamsAddon = ReturnType<typeof teams<TeamsOptions>>;
 
@@ -75,6 +83,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 		},
 		Infer: {
 			Team: {} as InferTeam<O>,
+			TeamMember: {} as InferTeamMember<O>,
 		},
 		options,
 		endpoints: {
@@ -88,6 +97,7 @@ export const teams = <O extends TeamsOptions>(_options?: O | undefined) => {
 			removeTeamMember: removeTeamMember(_options),
 			setActiveTeam: setActiveTeam(_options),
 			updateTeam: updateTeam(_options),
+			updateTeamMember: updateTeamMember(_options),
 		},
 		schema: getTeamAddonSchema<O>(options),
 	} satisfies Addon<O>;

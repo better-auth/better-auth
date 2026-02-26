@@ -292,7 +292,8 @@ You can add an existing organization member to a team using the `organization.ad
 <APIMethod
     path="/organization/add-team-member"
     method="POST"
-    requireSession>
+    requireSession
+    note="Includes any additional fields from the teamMember schema.">
 ```ts
 type addTeamMember = {
     /**
@@ -330,6 +331,58 @@ type Result = {
 
 <Callout type="warn">
     You can limit the maximum number of members per team using the `maximumMembersPerTeam` option in the teams addon configuration.
+</Callout>
+
+## Updating a Team Member
+
+You can update a team member's additional fields using the `organization.updateTeamMember` method.
+
+This endpoint primarily exists to update additional fields from the teamMember schema.
+
+<APIMethod
+    path="/organization/update-team-member"
+    method="POST"
+    requireSession
+    note="Includes any additional fields from the teamMember schema.">
+```ts
+type updateTeamMember = {
+    /**
+     * The ID of the team the member belongs to.
+     */
+    teamId: string = "team-id"
+    /**
+     * The ID of the user whose team membership should be updated.
+     */
+    userId: string = "user-id"
+    /**
+     * The organization ID which the team falls under.
+     * If not provided, uses the active organization.
+     */
+    organizationId?: string = "org-id"
+    /**
+     * The data to update the team member with.
+     */
+    data: {
+        // Additional fields configured in schema
+    }
+}
+```
+</APIMethod>
+
+Returns the updated team member:
+
+```ts
+type Result = {
+    id: string;
+    userId: string;
+    teamId: string;
+    createdAt: Date;
+    // Additional fields if configured in schema
+}
+```
+
+<Callout type="info">
+    The user must have `member:update` permission to update team members. By default, this permission is granted to `owner` and `admin` roles.
 </Callout>
 
 ## Removing a Team Member
@@ -509,3 +562,230 @@ type Result = {
 <Callout type="info">
     The user must be a member of the team to set it as active. An active organization must also be set before setting an active team.
 </Callout>
+
+---
+
+## Teams Addon Options
+
+You can configure the teams addon with the following options:
+
+### `defaultTeam`
+
+Configure the default team that is automatically created when a new organization is created.
+
+```ts
+teams({
+    defaultTeam: {
+        enabled: true, // Enable/disable default team creation
+        customCreateDefaultTeam: async (organization) => {
+            return {
+                name: `${organization.name} Team`,
+                // Additional fields
+            };
+        }
+    }
+})
+```
+
+**Default:** `{ enabled: true }`
+
+### `maximumTeams`
+
+The maximum number of teams allowed per organization. Can be a number or a function.
+
+```ts
+teams({
+    maximumTeams: 10
+})
+
+// Or with a function
+teams({
+    maximumTeams: async ({ organizationId, session }) => {
+        // Return different limits based on organization or user
+        return 10;
+    }
+})
+```
+
+**Default:** `Infinity`
+
+### `maximumMembersPerTeam`
+
+The maximum number of members allowed per team. Can be a number or a function.
+
+```ts
+teams({
+    maximumMembersPerTeam: 50
+})
+
+// Or with a function
+teams({
+    maximumMembersPerTeam: async ({ teamId, organizationId, session }) => {
+        return 50;
+    }
+})
+```
+
+**Default:** `Infinity`
+
+### `allowRemovingAllTeams`
+
+By default, the last team in an organization cannot be removed. Set this to `true` to allow removing all teams.
+
+```ts
+teams({
+    allowRemovingAllTeams: true
+})
+```
+
+**Default:** `false`
+
+### `enableSlugs`
+
+Enable slugs for teams. When enabled, teams can be identified by their slug in addition to their ID.
+
+```ts
+teams({
+    enableSlugs: true
+})
+```
+
+**Default:** `false`
+
+### `defaultTeamIdField`
+
+Controls the input & output of team identifiers. If set to `slug`, endpoint parameters for `teamId` will accept the team's `slug` instead of its `id`.
+
+```ts
+teams({
+    defaultTeamIdField: "slug" // "slug" or "id"
+})
+```
+
+**Default:** `"id"`
+
+### `schema`
+
+Customize the database schema for team-related tables. You can rename fields, change model names, or add additional fields.
+
+```ts
+teams({
+    schema: {
+        team: {
+            modelName: "project", // Rename the table
+            fields: {
+                name: "projectName" // Rename fields
+            },
+            additionalFields: {
+                description: {
+                    type: "string",
+                    required: false
+                },
+                isArchived: {
+                    type: "boolean",
+                    required: false,
+                    defaultValue: false
+                }
+            }
+        },
+        teamMember: {
+            additionalFields: {
+                department: {
+                    type: "string",
+                    required: false
+                },
+                isLead: {
+                    type: "boolean",
+                    required: false
+                }
+            }
+        }
+    }
+})
+```
+
+Additional fields will be available in:
+- `createTeam` / `updateTeam` request body (for team fields)
+- `addTeamMember` / `updateTeamMember` request body (for teamMember fields)
+- All response types that return team or team member data
+
+<Callout type="warn">
+    Don't forget to re-run schema generation or migrations after changing schema options.
+</Callout>
+
+### `hooks`
+
+Hooks allow you to run custom logic at various points in the team lifecycle.
+
+```ts
+teams({
+    hooks: {
+        beforeCreateTeam: async ({ team, user, organization }, ctx) => {
+            // Runs before a team is created
+            // Return { data: {...} } to modify the team data
+        },
+        afterCreateTeam: async ({ team, user, organization }, ctx) => {
+            // Runs after a team is created
+        },
+        beforeUpdateTeam: async ({ team, updates, user, organization }, ctx) => {
+            // Runs before a team is updated
+            // Return { data: {...} } to modify the update data
+        },
+        afterUpdateTeam: async ({ team, user, organization }, ctx) => {
+            // Runs after a team is updated
+        },
+        beforeDeleteTeam: async ({ team, user, organization }, ctx) => {
+            // Runs before a team is deleted
+        },
+        afterDeleteTeam: async ({ team, user, organization }, ctx) => {
+            // Runs after a team is deleted
+        },
+        beforeAddTeamMember: async ({ teamMember, team, user, organization }, ctx) => {
+            // Runs before a member is added to a team
+            // Return { data: {...} } to modify the team member data
+        },
+        afterAddTeamMember: async ({ teamMember, team, user, organization }, ctx) => {
+            // Runs after a member is added to a team
+        },
+        beforeUpdateTeamMember: async ({ teamMember, updates, team, user, organization }, ctx) => {
+            // Runs before a team member is updated
+            // Return { data: {...} } to modify the update data
+        },
+        afterUpdateTeamMember: async ({ teamMember, team, user, organization }, ctx) => {
+            // Runs after a team member is updated
+        },
+        beforeRemoveTeamMember: async ({ teamMember, team, user, organization }, ctx) => {
+            // Runs before a member is removed from a team
+        },
+        afterRemoveTeamMember: async ({ teamMember, team, user, organization }, ctx) => {
+            // Runs after a member is removed from a team
+        }
+    }
+})
+```
+
+---
+
+## Team Schema
+
+The team table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `name` | `string` | Team name |
+| `organizationId` | `string` | Reference to the organization |
+| `slug` | `string?` | URL-friendly identifier (if `enableSlugs` is true) |
+| `createdAt` | `Date` | Creation timestamp |
+| `updatedAt` | `Date?` | Last update timestamp |
+
+## Team Member Schema
+
+The teamMember table includes the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | `string` | Unique identifier |
+| `teamId` | `string` | Reference to the team |
+| `userId` | `string` | Reference to the user |
+| `createdAt` | `Date?` | Creation timestamp |
