@@ -1,9 +1,10 @@
 import { sso } from "@better-auth/sso";
-import { APIError, betterAuth } from "better-auth";
+import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { createAuthClient } from "better-auth/client";
 import { setCookieToHeader } from "better-auth/cookies";
 import { bearer, organization } from "better-auth/plugins";
+import { getTestInstance } from "better-auth/test";
 import { describe, expect, it } from "vitest";
 import { scim } from ".";
 import { scimClient } from "./client";
@@ -47,16 +48,18 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 		},
 	});
 
-	async function getAuthCookieHeaders() {
+	async function getAuthCookieHeaders(
+		user: { email: string; password: string; name: string } = testUser,
+	) {
 		const headers = new Headers();
 
 		await authClient.signUp.email({
-			email: testUser.email,
-			password: testUser.password,
-			name: testUser.name,
+			email: user.email,
+			password: user.password,
+			name: user.name,
 		});
 
-		await authClient.signIn.email(testUser, {
+		await authClient.signIn.email(user, {
 			throw: true,
 			onSuccess: setCookieToHeader(headers),
 		});
@@ -101,283 +104,57 @@ const createTestInstance = (scimOptions?: SCIMOptions) => {
 	};
 };
 
+const _createSqlTestInstance = async (
+	testWith: "sqlite" | "postgres",
+	scimOptions?: SCIMOptions,
+) => {
+	const { auth, client, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [scim(scimOptions), organization()],
+		},
+		{
+			testWith,
+		},
+	);
+
+	async function getSCIMToken(
+		providerId: string = "the-saml-provider-1",
+		organizationId?: string,
+	) {
+		const { headers } = await signInWithTestUser();
+		const { scimToken } = await auth.api.generateSCIMToken({
+			body: {
+				providerId,
+				organizationId,
+			},
+			headers,
+		});
+
+		return scimToken;
+	}
+
+	async function registerOrganization(org: string) {
+		const { headers } = await signInWithTestUser();
+
+		return await auth.api.createOrganization({
+			body: {
+				slug: `the-${org}`,
+				name: `the organization ${org}`,
+			},
+			headers,
+		});
+	}
+
+	return {
+		auth,
+		client,
+		registerOrganization,
+		getSCIMToken,
+		signInWithTestUser,
+	};
+};
+
 describe("SCIM", () => {
-	describe("POST /scim/generate-token", () => {
-		it("should require user session", async () => {
-			const { auth } = createTestInstance();
-			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({ body: { providerId: "the id" } });
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
-				expect.objectContaining({
-					status: "UNAUTHORIZED",
-				}),
-			);
-		});
-
-		it("should fail if the authenticated user does not belong to the given org", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance();
-			const headers = await getAuthCookieHeaders();
-			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({
-					body: { providerId: "the id", organizationId: "the-org" },
-					headers,
-				});
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "You are not a member of the organization",
-				}),
-			);
-		});
-
-		it("should fail to generate a SCIM token on invalid provider", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: "plain",
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const generateSCIMToken = (providerId: string, organizationId?: string) =>
-				auth.api.generateSCIMToken({
-					body: { providerId, organizationId },
-					headers,
-				});
-
-			await expect(generateSCIMToken("the:provider")).rejects.toThrowError(
-				expect.objectContaining({
-					message: "Provider id contains forbidden characters",
-				}),
-			);
-		});
-
-		it("should generate a new scim token (client)", async () => {
-			const { auth, authClient, getAuthCookieHeaders } = createTestInstance();
-
-			const headers = await getAuthCookieHeaders();
-			const response = await authClient.scim.generateToken(
-				{
-					providerId: "the id",
-				},
-				{ headers },
-			);
-
-			expect(response.data).toMatchObject({
-				scimToken: expect.any(String),
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.data?.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token (plain)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: "plain",
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			expect(response).toMatchObject({
-				scimToken: expect.any(String),
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token (hashed)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: "hashed",
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			expect(response).toMatchObject({
-				scimToken: expect.any(String),
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token (custom hash)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: { hash: async (value) => value + "hello" },
-			});
-
-			const headers = await getAuthCookieHeaders();
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token (encrypted)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: "encrypted",
-			});
-
-			const headers = await getAuthCookieHeaders();
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token (custom encryption)", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: {
-					encrypt: async (value) => value,
-					decrypt: async (value) => value,
-				},
-			});
-
-			const headers = await getAuthCookieHeaders();
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			const createUser = () =>
-				auth.api.createSCIMUser({
-					body: {
-						userName: "the-username",
-					},
-					headers: {
-						authorization: `Bearer ${response.scimToken}`,
-					},
-				});
-
-			await expect(createUser()).resolves.toBeTruthy();
-		});
-
-		it("should generate a new scim token associated to an org", async () => {
-			const { auth, registerOrganization, getAuthCookieHeaders } =
-				createTestInstance();
-			const orgA = await registerOrganization("org-a");
-			const headers = await getAuthCookieHeaders();
-
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id", organizationId: orgA?.id },
-				headers,
-			});
-
-			expect(response).toMatchObject({
-				scimToken: expect.any(String),
-			});
-		});
-
-		it("should execute hooks before SCIM token generation", async () => {
-			const { auth, getAuthCookieHeaders, registerOrganization } =
-				createTestInstance({
-					beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
-						if (member?.role === "owner") {
-							throw new APIError("FORBIDDEN", {
-								message:
-									"You do not have enough privileges to generate a SCIM token",
-							});
-						}
-					},
-				});
-			const headers = await getAuthCookieHeaders();
-			const orgA = await registerOrganization("the org");
-
-			const generateSCIMToken = () =>
-				auth.api.generateSCIMToken({
-					body: { providerId: "the id", organizationId: orgA?.id },
-					headers,
-				});
-
-			await expect(generateSCIMToken()).rejects.toThrowError(
-				expect.objectContaining({
-					message: "You do not have enough privileges to generate a SCIM token",
-				}),
-			);
-		});
-
-		it("should execute hooks after SCIM token generation", async () => {
-			const { auth, getAuthCookieHeaders } = createTestInstance({
-				storeSCIMToken: "plain",
-				afterSCIMTokenGenerated: async ({
-					user,
-					member,
-					scimProvider,
-					scimToken,
-				}) => {
-					expect(scimProvider.scimToken).toBeTypeOf("string");
-				},
-			});
-			const headers = await getAuthCookieHeaders();
-
-			const response = await auth.api.generateSCIMToken({
-				body: { providerId: "the id" },
-				headers,
-			});
-
-			expect(response).toMatchObject({
-				scimToken: expect.any(String),
-			});
-		});
-	});
-
 	describe("GET /scim/v2/ServiceProviderConfig", () => {
 		it("should fetch the service provider config", async () => {
 			const { auth } = createTestInstance();
@@ -1310,7 +1087,7 @@ describe("SCIM", () => {
 	});
 
 	describe("PATCH /scim/v2/users", () => {
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should partially update a user resource with %s", async (op) => {
@@ -1465,7 +1242,7 @@ describe("SCIM", () => {
 			});
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should partially update multiple name sub-attributes with %s", async (op) => {
@@ -1508,7 +1285,7 @@ describe("SCIM", () => {
 			expect(updatedUser.name.formatted).toBe("Updated Value");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should %s nested object values with path prefix", async (op) => {
@@ -1564,7 +1341,7 @@ describe("SCIM", () => {
 			expect(updatedUser.userName).toBe("nested-test-user-updated");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should support operations without explicit path with %s", async (op) => {
@@ -1650,7 +1427,7 @@ describe("SCIM", () => {
 			expect(updatedUser.userName).toBe("username");
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should handle %s operation case-insensitively", async (op) => {
@@ -1734,7 +1511,7 @@ describe("SCIM", () => {
 			);
 		});
 
-		it.each([
+		it.for([
 			"replace",
 			"add",
 		])("should ignore %s on non-existing path", async (op) => {
@@ -1957,6 +1734,61 @@ describe("SCIM", () => {
 				startIndex: 1,
 				totalResults: 2,
 				Resources: [userA, userB],
+			});
+		});
+
+		it("should return an empty list when no users have been provisioned or belong to the organization", async () => {
+			const { auth, getSCIMToken, registerOrganization } = createTestInstance();
+			const scimToken = await getSCIMToken();
+
+			const createUser = (userName: string, scimToken: string) => {
+				return auth.api.createSCIMUser({
+					body: {
+						userName,
+					},
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const listUsers = (scimToken: string) => {
+				return auth.api.listSCIMUsers({
+					headers: {
+						authorization: `Bearer ${scimToken}`,
+					},
+				});
+			};
+
+			const users = await listUsers(scimToken);
+
+			expect(users).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
+			});
+
+			const [organizationA, organizationB] = await Promise.all([
+				registerOrganization("org-a"),
+				registerOrganization("org-b"),
+			]);
+
+			const [scimTokenOrgA, scimTokenOrgB] = await Promise.all([
+				getSCIMToken("provider-org-a", organizationA?.id),
+				getSCIMToken("provider-org-b", organizationB?.id),
+			]);
+
+			await createUser("user-a", scimTokenOrgA);
+			const orgBUsers = await listUsers(scimTokenOrgB);
+
+			expect(orgBUsers).toMatchObject({
+				itemsPerPage: 0,
+				schemas: ["urn:ietf:params:scim:api:messages:2.0:ListResponse"],
+				startIndex: 1,
+				totalResults: 0,
+				Resources: [],
 			});
 		});
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("Email Verification", async () => {
@@ -15,6 +15,10 @@ describe("Email Verification", async () => {
 				mockSendEmail(user.email, url);
 			},
 		},
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
 	});
 
 	it("should send a verification email when enabled", async () => {
@@ -302,6 +306,47 @@ describe("Email Verification", async () => {
 
 		expect(callbackURLParam).toBe(callbackURL);
 		expect(callbackURLParam).toContain("?redirect=/dashboard&tab=settings");
+	});
+
+	it("should not send verification email when a third party requests for an already verified user", async () => {
+		const mockSendEmailLocal = vi.fn();
+		let capturedToken = "";
+
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				async sendVerificationEmail({ token: _token }) {
+					capturedToken = _token;
+					mockSendEmailLocal();
+				},
+			},
+		});
+
+		// User requests verification email and verifies their email
+		await client.sendVerificationEmail({
+			email: testUser.email,
+		});
+		await client.verifyEmail({
+			query: {
+				token: capturedToken,
+			},
+		});
+
+		mockSendEmailLocal.mockClear();
+
+		// A third party (no session) tries to send verification emails
+		// to an already verified user. This should NOT send an email.
+		//
+		// Note: client doesn't maintain session state between requests.
+		const res = await client.sendVerificationEmail({
+			email: testUser.email,
+		});
+
+		expect(res.data?.status).toBe(true);
+		expect(mockSendEmailLocal).not.toHaveBeenCalled();
 	});
 });
 

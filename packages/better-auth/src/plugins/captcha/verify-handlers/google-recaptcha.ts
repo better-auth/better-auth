@@ -67,6 +67,7 @@ export const googleRecaptcha = async ({
 	) {
 		return middlewareResponse({
 			message: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.message,
+			code: EXTERNAL_ERROR_CODES.VERIFICATION_FAILED.code,
 			status: 403,
 		});
 	}

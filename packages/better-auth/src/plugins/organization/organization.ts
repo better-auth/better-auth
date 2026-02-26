@@ -76,6 +76,9 @@ declare module "@better-auth/core" {
 	}
 }
 
+export { hasPermission } from "./has-permission";
+export type { OrganizationOptions } from "./types";
+
 export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 	id: "organization";
 	endpoints: OrganizationEndpoints<Options>;
@@ -84,8 +87,8 @@ export type DefaultOrganizationPlugin<Options extends OrganizationOptions> = {
 		Organization: InferOrganization<Options>;
 		Invitation: InferInvitation<Options>;
 		Member: InferMember<Options>;
-		Team: Options["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: Options["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: Options["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: Options["teams"] extends { enabled: true }
 			? {
 					members: InferMember<Options, false>[];
@@ -299,8 +302,8 @@ export type OrganizationPlugin<O extends OrganizationOptions> = {
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -350,8 +353,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : unknown;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : unknown;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -383,8 +386,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -414,8 +417,8 @@ export function organization<
 		Organization: InferOrganization<O>;
 		Invitation: InferInvitation<O>;
 		Member: InferMember<O>;
-		Team: O["teams"] extends { enabled: true } ? Team : any;
-		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : any;
+		Team: O["teams"] extends { enabled: true } ? Team : never;
+		TeamMember: O["teams"] extends { enabled: true } ? TeamMember : never;
 		ActiveOrganization: O["teams"] extends { enabled: true }
 			? {
 					members: InferMember<O, false>[];
@@ -1248,8 +1251,8 @@ export function organization<O extends OrganizationOptions>(options?: O) {
 			Organization: {} as InferOrganization<O>,
 			Invitation: {} as InferInvitation<O>,
 			Member: {} as InferMember<O>,
-			Team: teamSupport ? ({} as Team) : ({} as any),
-			TeamMember: teamSupport ? ({} as TeamMember) : ({} as any),
+			Team: teamSupport ? ({} as Team) : ({} as never),
+			TeamMember: teamSupport ? ({} as TeamMember) : ({} as never),
 			ActiveOrganization: {} as O["teams"] extends { enabled: true }
 				? {
 						members: InferMember<O, false>[];

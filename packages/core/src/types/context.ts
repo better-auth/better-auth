@@ -35,15 +35,16 @@ type InferPluginID<O extends BetterAuthOptions> =
 type InferPluginOptions<
 	O extends BetterAuthOptions,
 	ID extends BetterAuthPluginRegistryIdentifier | LiteralString,
-> = O["plugins"] extends Array<infer P>
-	? P extends BetterAuthPlugin
-		? P["id"] extends ID
-			? P extends { options: infer O }
-				? O
+> =
+	O["plugins"] extends Array<infer P>
+		? P extends BetterAuthPlugin
+			? P["id"] extends ID
+				? P extends { options: infer O }
+					? O
+					: never
 				: never
 			: never
-		: never
-	: never;
+		: never;
 
 /**
  * Mutators are defined in each plugin
@@ -264,6 +265,11 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 		InfoContext & {
 			options: Options;
 			trustedOrigins: string[];
+			/**
+			 * Resolved list of trusted providers for account linking.
+			 * Populated from "account.accountLinking.trustedProviders" (supports static array or async function).
+			 */
+			trustedProviders: string[];
 			/**
 			 * Verifies whether url is a trusted origin according to the "trustedOrigins" configuration
 			 * @param url The url to verify against the "trustedOrigins" configuration

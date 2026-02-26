@@ -20,14 +20,18 @@ import type {
 	Verification,
 } from "../db";
 import type { DBAdapterDebugLogOption, DBAdapterInstance } from "../db/adapter";
+import type { BaseAccount } from "../db/schema/account";
+import type { BaseRateLimit } from "../db/schema/rate-limit";
+import type { BaseSession } from "../db/schema/session";
+import type { BaseUser } from "../db/schema/user";
+import type { BaseVerification } from "../db/schema/verification";
 import type { Logger } from "../env";
 import type { SocialProviderList, SocialProviders } from "../social-providers";
 import type { AuthContext, GenericEndpointContext } from "./context";
-import type { Awaitable, LiteralUnion } from "./helper";
+import type { Awaitable, LiteralString, LiteralUnion } from "./helper";
 import type { BetterAuthPlugin } from "./plugin";
 
 type KyselyDatabaseType = "postgres" | "mysql" | "sqlite" | "mssql";
-type OmitId<T extends { id: unknown }> = Omit<T, "id">;
 type Optional<T> = {
 	[P in keyof T]?: T[P] | undefined;
 };
@@ -41,6 +45,53 @@ export type GenerateIdFn = (options: {
 	model: ModelNames;
 	size?: number | undefined;
 }) => string | false;
+
+/**
+ * Configuration for dynamic base URL resolution.
+ * Allows Better Auth to work with multiple domains (e.g., Vercel preview deployments).
+ */
+export type DynamicBaseURLConfig = {
+	/**
+	 * List of allowed hostnames. Supports wildcard patterns.
+	 *
+	 * The derived host from the request will be validated against this list.
+	 * Uses the same wildcard matching as `trustedOrigins`.
+	 *
+	 * @example
+	 * ```ts
+	 * allowedHosts: [
+	 *   "myapp.com",           // Exact match
+	 *   "*.vercel.app",        // Any Vercel preview
+	 *   "preview-*.myapp.com"  // Pattern match
+	 * ]
+	 * ```
+	 */
+	allowedHosts: string[];
+
+	/**
+	 * Fallback URL to use if the derived host doesn't match any allowed host.
+	 * If not set, Better Auth will throw an error when the host doesn't match.
+	 *
+	 * @example "https://myapp.com"
+	 */
+	fallback?: string | undefined;
+
+	/**
+	 * Protocol to use when constructing the URL.
+	 * - `"https"`: Always use HTTPS (recommended for production)
+	 * - `"http"`: Always use HTTP (for local development)
+	 * - `"auto"`: Derive from `x-forwarded-proto` header or default to HTTPS
+	 *
+	 * @default "auto"
+	 */
+	protocol?: "http" | "https" | "auto" | undefined;
+};
+
+/**
+ * Base URL configuration.
+ * Can be a static string or a dynamic config for multi-domain deployments.
+ */
+export type BaseURLConfig = string | DynamicBaseURLConfig;
 
 export interface BetterAuthRateLimitStorage {
 	get: (key: string) => Promise<RateLimit | null | undefined>;
@@ -67,56 +118,69 @@ export type BetterAuthRateLimitRule = {
 	max: number;
 };
 
-export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> & {
+export type BetterAuthDBOptions<
+	ModelName extends string,
+	Keys extends string = string,
+> = {
 	/**
-	 * By default, rate limiting is only
-	 * enabled on production.
+	 * The name of the model. Defaults to the model name.
 	 */
-	enabled?: boolean | undefined;
+	modelName?: ModelName | LiteralString;
 	/**
-	 * Custom rate limit rules to apply to
-	 * specific paths.
+	 * Map fields to database columns
 	 */
-	customRules?:
-		| {
-				[key: string]:
-					| BetterAuthRateLimitRule
-					| false
-					| ((
-							request: Request,
-							currentRule: BetterAuthRateLimitRule,
-					  ) => Awaitable<false | BetterAuthRateLimitRule>);
-		  }
-		| undefined;
+	fields?: Partial<Record<Exclude<Keys, "id">, string>>;
 	/**
-	 * Storage configuration
-	 *
-	 * By default, rate limiting is stored in memory. If you passed a
-	 * secondary storage, rate limiting will be stored in the secondary
-	 * storage.
-	 *
-	 * @default "memory"
+	 * Additional fields for the model
 	 */
-	storage?: ("memory" | "database" | "secondary-storage") | undefined;
-	/**
-	 * If database is used as storage, the name of the table to
-	 * use for rate limiting.
-	 *
-	 * @default "rateLimit"
-	 */
-	modelName?: string | undefined;
-	/**
-	 * Custom field names for the rate limit table
-	 */
-	fields?: Partial<Record<keyof RateLimit, string>> | undefined;
-	/**
-	 * custom storage configuration.
-	 *
-	 * NOTE: If custom storage is used storage
-	 * is ignored
-	 */
-	customStorage?: BetterAuthRateLimitStorage;
+	additionalFields?: {
+		[Key in Exclude<string, Keys | "id">]: DBFieldAttribute;
+	};
 };
+
+export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
+	Omit<
+		BetterAuthDBOptions<"rateLimit", keyof BaseRateLimit>,
+		"additionalFields"
+	> & {
+		/**
+		 * By default, rate limiting is only
+		 * enabled on production.
+		 */
+		enabled?: boolean | undefined;
+		/**
+		 * Custom rate limit rules to apply to
+		 * specific paths.
+		 */
+		customRules?:
+			| {
+					[key: string]:
+						| BetterAuthRateLimitRule
+						| false
+						| ((
+								request: Request,
+								currentRule: BetterAuthRateLimitRule,
+						  ) => Awaitable<false | BetterAuthRateLimitRule>);
+			  }
+			| undefined;
+		/**
+		 * Storage configuration
+		 *
+		 * By default, rate limiting is stored in memory. If you passed a
+		 * secondary storage, rate limiting will be stored in the secondary
+		 * storage.
+		 *
+		 * @default "memory"
+		 */
+		storage?: ("memory" | "database" | "secondary-storage") | undefined;
+		/**
+		 * custom storage configuration.
+		 *
+		 * NOTE: If custom storage is used storage
+		 * is ignored
+		 */
+		customStorage?: BetterAuthRateLimitStorage;
+	};
 
 export type BetterAuthAdvancedOptions = {
 	/**
@@ -329,12 +393,27 @@ export type BetterAuthOptions = {
 	/**
 	 * Base URL for the Better Auth. This is typically the
 	 * root URL where your application server is hosted.
-	 * If not explicitly set,
-	 * the system will check the following environment variable:
 	 *
-	 * process.env.BETTER_AUTH_URL
+	 * Can be configured as:
+	 * - A static string: `"https://myapp.com"`
+	 * - A dynamic config with allowed hosts for multi-domain deployments
+	 *
+	 * If not explicitly set, the system will check environment variables:
+	 * `BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.
+	 *
+	 * @example
+	 * ```ts
+	 * // Static URL
+	 * baseURL: "https://myapp.com"
+	 *
+	 * // Dynamic with allowed hosts (for Vercel, multi-domain, etc.)
+	 * baseURL: {
+	 *   allowedHosts: ["myapp.com", "*.vercel.app", "preview-*.myapp.com"],
+	 *   fallback: "https://myapp.com"
+	 * }
+	 * ```
 	 */
-	baseURL?: string | undefined;
+	baseURL?: BaseURLConfig | undefined;
 	/**
 	 * Base path for the Better Auth. This is typically
 	 * the path where the
@@ -610,6 +689,20 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				revokeSessionsOnPasswordReset?: boolean;
+				/**
+				 * A callback function that is triggered when a user tries to sign up
+				 * with an email that already exists. Useful for notifying the existing user
+				 * that someone attempted to register with their email.
+				 *
+				 * This is only called when `requireEmailVerification: true` or `autoSignIn: false`.
+				 */
+				onExistingUserSignUp?: (
+					/**
+					 * @param user the existing user from the database
+					 */
+					data: { user: User },
+					request?: Request,
+				) => Promise<void>;
 		  }
 		| undefined;
 	/**
@@ -624,28 +717,7 @@ export type BetterAuthOptions = {
 	 * User configuration
 	 */
 	user?:
-		| {
-				/**
-				 * The model name for the user. Defaults to "user".
-				 */
-				modelName?: string;
-				/**
-				 * Map fields
-				 *
-				 * @example
-				 * ```ts
-				 * {
-				 *  userId: "user_id"
-				 * }
-				 * ```
-				 */
-				fields?: Partial<Record<keyof OmitId<User>, string>>;
-				/**
-				 * Additional fields for the user
-				 */
-				additionalFields?: {
-					[key: string]: DBFieldAttribute;
-				};
+		| (BetterAuthDBOptions<"user", keyof BaseUser> & {
 				/**
 				 * Changing email configuration
 				 */
@@ -717,26 +789,10 @@ export type BetterAuthOptions = {
 					 */
 					deleteTokenExpiresIn?: number;
 				};
-		  }
+		  })
 		| undefined;
 	session?:
-		| {
-				/**
-				 * The model name for the session.
-				 *
-				 * @default "session"
-				 */
-				modelName?: string;
-				/**
-				 * Map fields
-				 *
-				 * @example
-				 * ```ts
-				 * {
-				 *  userId: "user_id"
-				 * }
-				 */
-				fields?: Partial<Record<keyof OmitId<Session>, string>>;
+		| (BetterAuthDBOptions<"session", keyof BaseSession> & {
 				/**
 				 * Expiration time for the session token. The value
 				 * should be in seconds.
@@ -765,12 +821,6 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				deferSessionRefresh?: boolean;
-				/**
-				 * Additional fields for the session
-				 */
-				additionalFields?: {
-					[key: string]: DBFieldAttribute;
-				};
 				/**
 				 * By default if secondary storage is provided
 				 * the session is stored in the secondary storage.
@@ -880,24 +930,10 @@ export type BetterAuthOptions = {
 				 * @default 1 day (60 * 60 * 24)
 				 */
 				freshAge?: number;
-		  }
+		  })
 		| undefined;
 	account?:
-		| {
-				/**
-				 * The model name for the account. Defaults to "account".
-				 */
-				modelName?: string;
-				/**
-				 * Map fields
-				 */
-				fields?: Partial<Record<keyof OmitId<Account>, string>>;
-				/**
-				 * Additional fields for the account
-				 */
-				additionalFields?: {
-					[key: string]: DBFieldAttribute;
-				};
+		| (BetterAuthDBOptions<"account", keyof BaseAccount> & {
 				/**
 				 * When enabled (true), the user account data (accessToken, idToken, refreshToken, etc.)
 				 * will be updated on sign in with the latest data from the provider.
@@ -927,11 +963,43 @@ export type BetterAuthOptions = {
 					 */
 					disableImplicitLinking?: boolean;
 					/**
-					 * List of trusted providers
+					 * List of trusted providers. Can be a static array or a function
+					 * that returns providers dynamically. The function is called
+					 * during context init (with `request` undefined) and again
+					 * on each request (with the incoming Request). It must be
+					 * resilient to `request` being undefined.
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: ["google", "github"]
+					 * ```
+					 *
+					 * @example
+					 * ```ts
+					 * trustedProviders: async (request) => {
+					 *   if (!request) return [];
+					 *   const providers = await getTrustedProvidersForTenant(request);
+					 *   return providers;
+					 * }
+					 * ```
 					 */
-					trustedProviders?: Array<
-						LiteralUnion<SocialProviderList[number] | "email-password", string>
-					>;
+					trustedProviders?:
+						| Array<
+								LiteralUnion<
+									SocialProviderList[number] | "email-password",
+									string
+								>
+						  >
+						| ((
+								request?: Request | undefined,
+						  ) => Awaitable<
+								Array<
+									LiteralUnion<
+										SocialProviderList[number] | "email-password",
+										string
+									>
+								>
+						  >);
 					/**
 					 * If enabled (true), this will allow users to manually linking accounts with different email addresses than the main user.
 					 *
@@ -993,27 +1061,10 @@ export type BetterAuthOptions = {
 				 * @note This is automatically set to true if you haven't passed a database
 				 */
 				storeAccountCookie?: boolean;
-		  }
+		  })
 		| undefined;
-	/**
-	 * Verification configuration
-	 */
 	verification?:
-		| {
-				/**
-				 * Change the modelName of the verification table
-				 */
-				modelName?: string;
-				/**
-				 * Map verification fields
-				 */
-				fields?: Partial<Record<keyof OmitId<Verification>, string>>;
-				/**
-				 * Additional fields for the verification
-				 */
-				additionalFields?: {
-					[key: string]: DBFieldAttribute;
-				};
+		| (BetterAuthDBOptions<"verification", keyof BaseVerification> & {
 				/**
 				 * disable cleaning up expired values when a verification value is
 				 * fetched
@@ -1037,7 +1088,7 @@ export type BetterAuthOptions = {
 				 * @default false
 				 */
 				storeInDatabase?: boolean;
-		  }
+		  })
 		| undefined;
 	/**
 	 * List of trusted origins.

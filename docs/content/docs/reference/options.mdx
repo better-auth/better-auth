@@ -244,7 +244,10 @@ export const auth = betterAuth({
 - `maxPasswordLength`: Maximum password length (default: `128`)
 - `autoSignIn`: Automatically sign in the user after sign up
 - `sendResetPassword`: Function to send reset password email
+- `onPasswordReset`: Callback triggered when a user's password is changed successfully
+- `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
+- `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
 - `password`: Custom password hashing and verification functions
 
 ## `socialProviders`
@@ -408,7 +411,7 @@ export const auth = betterAuth({
 		storeAccountCookie: true, // Store account data after OAuth flow in a cookie (useful for database-less flows)
 		accountLinking: {
 			enabled: true,
-			trustedProviders: ["google", "github", "email-password"],
+			trustedProviders: ["google", "github", "email-password"], // or async (request) => ["google", "github"]
 			allowDifferentEmails: false
 		}
 	},
@@ -439,7 +442,7 @@ Store account data after OAuth flow in a cookie. This is useful for database-les
 Configuration for account linking.
 
 - `enabled`: Enable account linking (default: `true`)
-- `trustedProviders`: List of trusted providers
+- `trustedProviders`: List of trusted providers. Can be a static array or an async function that returns providers dynamically based on the request (similar to `trustedOrigins`)
 - `allowDifferentEmails`: Allow users to link accounts with different email addresses
 - `allowUnlinkingAll`: Allow users to unlink all accounts
 

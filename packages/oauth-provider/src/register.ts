@@ -128,6 +128,13 @@ export async function checkOAuthClient(
 			}
 		}
 	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
+	}
 }
 
 export async function createOAuthClientEndpoint(
@@ -188,7 +195,11 @@ export async function createOAuthClientEndpoint(
 	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
 	// Format the response according to RFC7591
 	return ctx.json(
@@ -251,6 +262,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
 		reference_id: referenceId,
 		metadata: inputMetadata,
 		// All other metadata
@@ -304,6 +316,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata,
 	};
@@ -350,16 +363,17 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(new Date(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(new Date(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
 	const _metadata = parseClientMetadata(metadata);
@@ -402,6 +416,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

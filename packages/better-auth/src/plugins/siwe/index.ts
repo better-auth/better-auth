@@ -8,6 +8,7 @@ import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { isAPIError } from "../../utils/is-api-error";
 import { getOrigin } from "../../utils/url";
+import type { WalletAddressSchema } from "./schema";
 import { schema } from "./schema";
 import type {
 	ENSLookupArgs,
@@ -39,13 +40,13 @@ const getSiweNonceBodySchema = z.object({
 		.string()
 		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 		.length(42),
-	chainId: z.number().int().positive().max(2147483647).optional().default(1),
+	chainId: z.number().int().positive().optional().default(1),
 });
 
 export const siwe = (options: SIWEPluginOptions) =>
 	({
 		id: "siwe",
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema, options?.schema) as WalletAddressSchema,
 		endpoints: {
 			getSiweNonce: createAuthEndpoint(
 				"/siwe/nonce",

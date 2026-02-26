@@ -1,34 +1,40 @@
 {
   "name": "@better-auth/scim",
-  "author": "Jonathan Samines",
-  "version": "1.5.0-beta.10",
+  "version": "1.5.0-beta.18",
+  "description": "SCIM plugin for Better Auth",
   "type": "module",
-  "main": "dist/index.mjs",
-  "types": "dist/index.d.mts",
   "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/scim",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/scim"
   },
+  "author": "Jonathan Samines",
   "keywords": [
     "auth",
-    "scim"
+    "scim",
+    "typescript",
+    "better-auth"
   ],
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/index.mjs",
-  "description": "SCIM plugin for Better Auth",
   "scripts": {
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",

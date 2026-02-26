@@ -1,13 +1,36 @@
 {
   "name": "@better-auth/drizzle-adapter",
-  "version": "1.5.0-beta.10",
+  "version": "1.5.0-beta.18",
   "description": "Drizzle adapter for Better Auth",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/adapters/drizzle",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/drizzle-adapter"
   },
+  "keywords": [
+    "auth",
+    "drizzle",
+    "adapter",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -18,21 +41,15 @@
       "default": "./dist/index.mjs"
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
-    "drizzle-orm": "^0.30.0"
+    "drizzle-orm": ">=0.41.0"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.1",
-    "drizzle-orm": "^0.30.0",
+    "drizzle-orm": ">=0.41.0",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }
