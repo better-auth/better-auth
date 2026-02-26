@@ -81,6 +81,7 @@ export const getClientConfig = (
 				const matchesCommonPaths =
 					path === "/sign-out" ||
 					path === "/update-user" ||
+					path === "/update-session" ||
 					path === "/sign-up/email" ||
 					path === "/sign-in/email" ||
 					path === "/delete-user" ||

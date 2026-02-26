@@ -2,11 +2,11 @@ import type {
 	Awaitable,
 	GenericEndpointContext,
 	HookEndpointContext,
+	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-
-import type { InferOptionSchema } from "../../types";
-import type { Statements } from "../access";
+import type { Statements } from "better-auth/plugins/access";
+import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 
 export type ApiKeySchema = InferOptionSchema<
@@ -18,6 +18,14 @@ export type ApiKeySchema = InferOptionSchema<
 };
 
 export interface ApiKeyOptions {
+	schema?: ApiKeySchema | undefined;
+}
+
+export interface ApiKeyConfigurationOptions {
+	/**
+	 * The name for this set of API key configurations. Must be unique across different configurations.
+	 */
+	configId?: LiteralString | undefined;
 	/**
 	 * The header name to check for API key
 	 * @default "x-api-key"
@@ -195,10 +203,6 @@ export interface ApiKeyOptions {
 		  }
 		| undefined;
 	/**
-	 * custom schema for the API key plugin
-	 */
-	schema?: ApiKeySchema | undefined;
-	/**
 	 * An API Key can represent a valid session, so we automatically mock a session for the user if we find a valid API key in the request headers.
 	 *
 	 * ⚠︎ This is not recommended for production use, as it can lead to security issues.
@@ -216,7 +220,7 @@ export interface ApiKeyOptions {
 				defaultPermissions?:
 					| Statements
 					| ((
-							userId: string,
+							referenceId: string,
 							ctx: GenericEndpointContext,
 					  ) => Awaitable<Statements>);
 		  }
@@ -281,6 +285,12 @@ export interface ApiKeyOptions {
 	 * @default false
 	 */
 	deferUpdates?: boolean | undefined;
+	/**
+	 * What the API key references. This determines ownership over the API key.
+	 *
+	 * @default "user"
+	 */
+	references?: "user" | "organization" | undefined;
 }
 
 export type ApiKey = {
@@ -288,6 +298,11 @@ export type ApiKey = {
 	 * ID
 	 */
 	id: string;
+	/**
+	 * The configuration ID this key belongs to.
+	 * Use this to look up the configuration to determine the reference type (user vs organization).
+	 */
+	configId: string;
 	/**
 	 * The name of the key
 	 */
@@ -306,9 +321,9 @@ export type ApiKey = {
 	 */
 	key: string;
 	/**
-	 * The owner of the user id
+	 * The ID of the entity that owns this key (userId or organizationId based on config's `references` setting)
 	 */
-	userId: string;
+	referenceId: string;
 	/**
 	 * The interval in milliseconds between refills of the `remaining` count
 	 *
