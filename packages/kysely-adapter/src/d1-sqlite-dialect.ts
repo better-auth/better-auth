@@ -1,5 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type {
+	CompiledQuery,
 	DatabaseConnection,
 	DatabaseIntrospector,
 	DatabaseMetadata,
@@ -14,7 +15,6 @@ import type {
 	TableMetadata,
 } from "kysely";
 import {
-	CompiledQuery,
 	DEFAULT_MIGRATION_LOCK_TABLE,
 	DEFAULT_MIGRATION_TABLE,
 	SqliteAdapter,
@@ -60,16 +60,22 @@ class D1SqliteDriver implements Driver {
 		return this.#connection!;
 	}
 
-	async beginTransaction(connection: DatabaseConnection): Promise<void> {
-		await connection.executeQuery(CompiledQuery.raw("begin"));
+	async beginTransaction(): Promise<void> {
+		throw new Error(
+			"D1 does not support interactive transactions. Use the D1 batch() API instead.",
+		);
 	}
 
-	async commitTransaction(connection: DatabaseConnection): Promise<void> {
-		await connection.executeQuery(CompiledQuery.raw("commit"));
+	async commitTransaction(): Promise<void> {
+		throw new Error(
+			"D1 does not support interactive transactions. Use the D1 batch() API instead.",
+		);
 	}
 
-	async rollbackTransaction(connection: DatabaseConnection): Promise<void> {
-		await connection.executeQuery(CompiledQuery.raw("rollback"));
+	async rollbackTransaction(): Promise<void> {
+		throw new Error(
+			"D1 does not support interactive transactions. Use the D1 batch() API instead.",
+		);
 	}
 
 	async releaseConnection(): Promise<void> {}
