@@ -33,13 +33,21 @@ export default defineConfig({
 
 	try {
 		execSync(`${node} ${cli} db push`, {
-			stdio: "inherit",
+			stdio: "pipe",
 			cwd,
 		});
 		execSync(`${node} ${cli} generate`, {
-			stdio: "inherit",
+			stdio: "pipe",
 			cwd,
 		});
+	} catch (error) {
+		const err = error as { stdout?: Buffer; stderr?: Buffer };
+		const stdout = err.stdout?.toString() || "";
+		const stderr = err.stderr?.toString() || "";
+		console.error(`[pushPrismaSchema] failed for ${dialect}:`);
+		if (stdout) console.error(`stdout: ${stdout}`);
+		if (stderr) console.error(`stderr: ${stderr}`);
+		throw error;
 	} finally {
 		// Restore the original prisma.config.ts for the base schema
 		const originalConfig = `import { defineConfig } from "prisma/config";

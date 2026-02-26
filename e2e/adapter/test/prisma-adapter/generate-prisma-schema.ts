@@ -36,13 +36,9 @@ export async function generatePrismaSchema(
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
 
-	// The CLI generates schemas with "prisma-client" provider for v7, but that
-	// produces .ts files which can't be dynamically imported by Node.js ESM.
-	// Switch to "prisma-client-js" which produces .js files with a proper index.js
-	// entry point, and inject the output path for the generated Prisma client.
+	// Inject the output path for the generated Prisma client
 	code = code
-		?.replace('provider = "prisma-client"', 'provider = "prisma-client-js"')
-		.split("\n")
+		?.split("\n")
 		.map((line, index) => {
 			if (index === 2) {
 				return (

@@ -38,7 +38,7 @@ export const getPrismaClient = async (
 			? "@prisma/client"
 			: fileURLToPath(
 					new URL(
-						`./.tmp/prisma-client-${dialect}-${migrationCount}`,
+						`./.tmp/prisma-client-${dialect}-${migrationCount}/client.ts`,
 						import.meta.url,
 					),
 				)
