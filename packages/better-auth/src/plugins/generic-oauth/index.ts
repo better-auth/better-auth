@@ -1,4 +1,9 @@
-import type { AuthContext, BetterAuthPlugin } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthPlugin,
+	GenericEndpointContext,
+} from "@better-auth/core";
+import { getCurrentAuthContext } from "@better-auth/core/context";
 import { APIError } from "@better-auth/core/error";
 import type { OAuth2Tokens, OAuthProvider } from "@better-auth/core/oauth2";
 import {
@@ -171,6 +176,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						const endpointContext = await getCurrentAuthContext().catch(
+							() => null,
+						);
+						const refreshTokenParams =
+							typeof c.refreshTokenParams === "function"
+								? endpointContext
+									? c.refreshTokenParams(
+											endpointContext as GenericEndpointContext,
+										)
+									: undefined
+								: c.refreshTokenParams;
 						return refreshAccessToken({
 							refreshToken,
 							options: {
@@ -179,7 +195,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
-							extraParams: c.refreshAccessTokenExtraParams,
+							extraParams: refreshTokenParams,
 						});
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {
