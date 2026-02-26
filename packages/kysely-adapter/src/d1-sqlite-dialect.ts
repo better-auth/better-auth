@@ -91,7 +91,7 @@ class D1SqliteConnection implements DatabaseConnection {
 			.all();
 
 		const numAffectedRows =
-			results.meta.changes > 0 ? BigInt(results.meta.changes) : undefined;
+			results.meta.changes != null ? BigInt(results.meta.changes) : undefined;
 
 		return {
 			insertId:
