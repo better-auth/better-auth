@@ -1,8 +1,7 @@
 import type { AuthContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { User } from "@better-auth/core/db";
-import { APIError } from "@better-auth/core/error";
 import type { Organization } from "../../../schema";
-import { TEAMS_ERROR_CODES } from "../helpers/errors";
 import type { RealTeamId } from "../helpers/get-team-adapter";
 import { getTeamAdapter } from "../helpers/get-team-adapter";
 import { getHook } from "../helpers/get-team-hook";
@@ -30,44 +29,32 @@ export const createDefaultTeam = async <O extends ResolvedTeamsOptions>(
 
 	const teamHook = getHook("CreateTeam", options);
 
-	let team: InferTeam<O> & Record<string, any>;
-	try {
-		team = await (async () => {
-			type Result = InferTeam<O> & Record<string, any>;
-			let customResult: Record<string, any> = {};
-			if (customCreateDefaultTeam) {
-				customResult = await customCreateDefaultTeam(organization);
-			}
+	const team = await runWithTransaction(authContext.adapter, async () => {
+		type Result = InferTeam<O> & Record<string, any>;
+		let customResult: Record<string, any> = {};
+		if (customCreateDefaultTeam) {
+			customResult = await customCreateDefaultTeam(organization);
+		}
 
-			const teamResultData = { ...teamData, ...customResult };
+		const teamResultData = { ...teamData, ...customResult };
 
-			const mutate = await teamHook.before({
-				team: teamResultData,
-				user,
-				organization,
-			});
-			const result = await adapter.createTeam({
-				...teamResultData,
-				...(mutate ?? {}),
-			});
-			return result as unknown as Result;
-		})();
-	} catch (error) {
-		authContext.logger.error("Failed to create default team:", error);
-		const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM;
-		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
-	}
+		const mutate = await teamHook.before({
+			team: teamResultData,
+			user,
+			organization,
+		});
+		const createdTeam = await adapter.createTeam({
+			...teamResultData,
+			...(mutate ?? {}),
+		});
 
-	await teamHook.after({ organization, team, user });
-
-	try {
 		await adapter.createTeamMember({
-			teamId: team.id as unknown as RealTeamId,
+			teamId: createdTeam.id as unknown as RealTeamId,
 			userId: user.id,
 		});
-	} catch (error) {
-		authContext.logger.error("Failed to create team member:", error);
-		const msg = TEAMS_ERROR_CODES.FAILED_TO_CREATE_TEAM_MEMBER;
-		throw APIError.from("INTERNAL_SERVER_ERROR", msg);
-	}
+
+		return createdTeam as unknown as Result;
+	});
+
+	await teamHook.after({ organization, team, user });
 };

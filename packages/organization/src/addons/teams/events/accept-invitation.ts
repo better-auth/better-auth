@@ -1,4 +1,5 @@
 import type { AuthContext } from "@better-auth/core";
+import { runWithTransaction } from "@better-auth/core/context";
 import type { Session, User } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { ORGANIZATION_ERROR_CODES } from "../../../helpers/error-codes";
@@ -59,26 +60,28 @@ export const acceptInvitationForTeams = async (
 	const teamIds = invitation.teamId.split(",") as RealTeamId[];
 	const onlyOne = teamIds.length === 1;
 
-	for (const teamId of teamIds) {
-		const maxMembers = await options.maximumMembersPerTeam({
-			teamId,
-			session: { session, user },
-			organizationId,
-		});
+	await runWithTransaction(context.adapter, async () => {
+		for (const teamId of teamIds) {
+			const maxMembers = await options.maximumMembersPerTeam({
+				teamId,
+				session: { session, user },
+				organizationId,
+			});
 
-		const members = await teamAdapter.countTeamMembers(teamId);
+			const members = await teamAdapter.countTeamMembers(teamId);
 
-		if (members >= maxMembers) {
-			const code = "TEAM_MEMBER_LIMIT_REACHED";
-			const msg = ORGANIZATION_ERROR_CODES[code];
-			throw APIError.from("FORBIDDEN", msg);
+			if (members >= maxMembers) {
+				const code = "TEAM_MEMBER_LIMIT_REACHED";
+				const msg = ORGANIZATION_ERROR_CODES[code];
+				throw APIError.from("FORBIDDEN", msg);
+			}
+
+			await teamAdapter.findOrCreateTeamMember({
+				teamId: teamId,
+				userId: user.id,
+			});
 		}
-
-		await teamAdapter.findOrCreateTeamMember({
-			teamId: teamId,
-			userId: user.id,
-		});
-	}
+	});
 
 	// If invited to only one team, set it as active
 	if (onlyOne) {
