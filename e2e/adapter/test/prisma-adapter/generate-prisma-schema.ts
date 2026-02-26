@@ -35,17 +35,8 @@ export async function generatePrismaSchema(
 		adapter: prismaDB({}),
 		options: { ...betterAuthOptions, database: prismaDB },
 	});
-	if (dialect === "postgresql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"postgres://user:password@localhost:5434/better_auth"',
-		);
-	} else if (dialect === "mysql") {
-		code = code?.replace(
-			`env("DATABASE_URL")`,
-			'"mysql://user:password@localhost:3308/better_auth"',
-		);
-	}
+
+	// Inject the output path for the generated Prisma client
 	code = code
 		?.split("\n")
 		.map((line, index) => {
