@@ -85,7 +85,6 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.number()
 								.int()
 								.positive()
-								.max(2147483647)
 								.optional()
 								.default(1),
 							email: z.email().optional(),
