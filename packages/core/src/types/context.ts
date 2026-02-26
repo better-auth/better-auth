@@ -80,6 +80,13 @@ export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
 > = EndpointContext<string, any> & {
 	context: AuthContext<Options>;
+	/**
+	 * The response headers accumulator that `setCookie` and `setHeader`
+	 * write to during handler execution. Provided by better-call's
+	 * `createInternalContext` at runtime but not yet exposed on the
+	 * public `EndpointContext` type.
+	 */
+	responseHeaders: Headers;
 };
 
 export interface InternalAdapter<
