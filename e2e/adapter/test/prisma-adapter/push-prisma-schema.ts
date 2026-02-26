@@ -1,7 +1,7 @@
 import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const DATABASE_URLS: Record<string, string> = {
 	sqlite: "file:./dev.db",
@@ -14,7 +14,10 @@ export async function pushPrismaSchema(
 ) {
 	const cwd = join(import.meta.dirname);
 	const node = process.execPath;
-	const cli = createRequire(import.meta.url).resolve("prisma");
+	// Resolve the prisma CLI binary (build/index.js inside the prisma package)
+	const require = createRequire(import.meta.url);
+	const prismaPackageJson = require.resolve("prisma/package.json");
+	const cli = join(dirname(prismaPackageJson), "build", "index.js");
 
 	// Write a temporary prisma.config.ts for this dialect
 	const configContent = `import { defineConfig } from "prisma/config";
