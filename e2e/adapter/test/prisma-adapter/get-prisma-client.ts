@@ -11,10 +11,10 @@ const DATABASE_URLS: Record<string, string> = {
 
 async function createAdapter(dialect: "sqlite" | "postgresql" | "mysql") {
 	if (dialect === "sqlite") {
-		const { PrismaBetterSQLite3 } = await import(
+		const { PrismaBetterSqlite3 } = await import(
 			"@prisma/adapter-better-sqlite3"
 		);
-		return new PrismaBetterSQLite3({ url: DATABASE_URLS[dialect] });
+		return new PrismaBetterSqlite3({ url: DATABASE_URLS[dialect] });
 	}
 	if (dialect === "postgresql") {
 		const { PrismaPg } = await import("@prisma/adapter-pg");
@@ -22,14 +22,7 @@ async function createAdapter(dialect: "sqlite" | "postgresql" | "mysql") {
 	}
 	// mysql
 	const { PrismaMariaDb } = await import("@prisma/adapter-mariadb");
-	const url = new URL(DATABASE_URLS[dialect]);
-	return new PrismaMariaDb({
-		host: url.hostname,
-		port: Number(url.port),
-		user: url.username,
-		password: url.password,
-		database: url.pathname.slice(1),
-	});
+	return new PrismaMariaDb({ url: DATABASE_URLS[dialect] });
 }
 
 let migrationCount = 0;
@@ -50,7 +43,13 @@ export const getPrismaClient = async (
 					),
 				)
 	);
-	const adapter = await createAdapter(dialect);
+	// For migrationCount === 0, @prisma/client is generated from base.prisma (sqlite).
+	// Use sqlite adapter regardless of dialect since this client is only used for
+	// schema generation, not actual database queries.
+	const adapter =
+		migrationCount === 0
+			? await createAdapter("sqlite")
+			: await createAdapter(dialect);
 	const db = new PrismaClient({ adapter });
 	clientMap.set(`${dialect}-${migrationCount}`, db);
 	return db as PC;
