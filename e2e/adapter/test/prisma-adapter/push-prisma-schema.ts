@@ -19,7 +19,8 @@ export async function pushPrismaSchema(
 	const prismaPackageJson = require.resolve("prisma/package.json");
 	const cli = join(dirname(prismaPackageJson), "build", "index.js");
 
-	// Write a temporary prisma.config.ts for this dialect
+	// Use a dialect-specific config file to avoid race conditions when
+	// multiple test files run in parallel
 	const configContent = `import { defineConfig } from "prisma/config";
 export default defineConfig({
 	schema: "./schema-${dialect}.prisma",
@@ -28,15 +29,15 @@ export default defineConfig({
 	},
 });
 `;
-	const configPath = join(cwd, "prisma.config.ts");
+	const configPath = join(cwd, `prisma-config-${dialect}.ts`);
 	fs.writeFileSync(configPath, configContent, "utf-8");
 
 	try {
-		execSync(`${node} ${cli} db push`, {
+		execSync(`${node} ${cli} db push --config ${configPath}`, {
 			stdio: "pipe",
 			cwd,
 		});
-		execSync(`${node} ${cli} generate`, {
+		execSync(`${node} ${cli} generate --config ${configPath}`, {
 			stdio: "pipe",
 			cwd,
 		});
@@ -49,16 +50,6 @@ export default defineConfig({
 		if (stderr) console.error(`stderr: ${stderr}`);
 		throw error;
 	} finally {
-		// Restore the original prisma.config.ts for the base schema
-		const originalConfig = `import { defineConfig } from "prisma/config";
-
-export default defineConfig({
-	schema: "./base.prisma",
-	datasource: {
-		url: "file:./dev.db",
-	},
-});
-`;
-		fs.writeFileSync(configPath, originalConfig, "utf-8");
+		fs.unlinkSync(configPath);
 	}
 }
