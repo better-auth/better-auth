@@ -5,7 +5,7 @@ import type { Account } from "@better-auth/core/db";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db/schema";
+import { mergeSchema, parseUserOutput } from "../../db/schema";
 import type { InferOptionSchema, User } from "../../types";
 import { toChecksumAddress } from "../../utils/hashing";
 import { getOrigin } from "../../utils/url";
@@ -257,13 +257,12 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 					const currentSession = await getSessionFromCtx(ctx);
 					const accountLinking = ctx.context.options.account?.accountLinking;
-					const trustedProviders = accountLinking?.trustedProviders;
+					const trustedProviders = ctx.context.trustedProviders;
 
 					const shouldLink =
 						currentSession !== null &&
 						accountLinking?.enabled !== false &&
-						(trustedProviders === undefined ||
-							trustedProviders.length === 0 ||
+						(trustedProviders.length === 0 ||
 							trustedProviders.includes("siwe"));
 
 					if (shouldLink) {
@@ -276,7 +275,9 @@ export const siwe = (options: SIWEPluginOptions) =>
 							return ctx.json({
 								token: currentSession.session.token,
 								success: true,
-								user: { id: sessionUser.id, walletAddress, chainId },
+								user: parseUserOutput(ctx.context.options, sessionUser),
+								walletAddress,
+								chainId,
 							});
 						}
 
@@ -309,7 +310,9 @@ export const siwe = (options: SIWEPluginOptions) =>
 						return ctx.json({
 							token: currentSession.session.token,
 							success: true,
-							user: { id: sessionUser.id, walletAddress, chainId },
+							user: parseUserOutput(ctx.context.options, sessionUser),
+							walletAddress,
+							chainId,
 						});
 					}
 
@@ -389,7 +392,9 @@ export const siwe = (options: SIWEPluginOptions) =>
 					return ctx.json({
 						token: session.token,
 						success: true,
-						user: { id: user.id, walletAddress, chainId },
+						user: parseUserOutput(ctx.context.options, user),
+						walletAddress,
+						chainId,
 					});
 				},
 			),

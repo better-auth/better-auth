@@ -244,7 +244,7 @@ describe("siwe", () => {
 			expect(error).toBeNull();
 			expect(data?.success).toBe(true);
 			expect(data?.token).toBeDefined();
-			expect(data?.user.walletAddress).toBe(walletAddress);
+			expect(data?.walletAddress).toBe(walletAddress);
 		});
 	});
 
