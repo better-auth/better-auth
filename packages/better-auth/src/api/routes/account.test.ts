@@ -924,8 +924,7 @@ describe("account", async () => {
 						email,
 						email_verified: true,
 						name: "First Last",
-						picture:
-							"https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+						picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
 						exp: 1234567890,
 						sub: "1234567890",
 						iat: 1234567890,
@@ -977,8 +976,7 @@ describe("account", async () => {
 				const cookies = parseSetCookieHeader(
 					context.response.headers.get("set-cookie") || "",
 				);
-				freshAccountCookieValue =
-					cookies.get(accountDataCookieName)?.value;
+				freshAccountCookieValue = cookies.get(accountDataCookieName)?.value;
 
 				cookieSetter(headers)({ response: context.response });
 			},

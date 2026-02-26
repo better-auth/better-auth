@@ -258,11 +258,9 @@ export async function setCookieCache(
 	// from the incoming request would return stale data and overwrite the fresh
 	// cookie that was just set.
 	if (ctx.context.options.account?.storeAccountCookie) {
-		const setCookieHeader =
-			ctx.responseHeaders?.get("set-cookie") || "";
+		const setCookieHeader = ctx.responseHeaders?.get("set-cookie") || "";
 		const accountCookieName = ctx.context.authCookies.accountData.name;
-		const alreadySetInResponse =
-			setCookieHeader.includes(accountCookieName);
+		const alreadySetInResponse = setCookieHeader.includes(accountCookieName);
 
 		if (!alreadySetInResponse) {
 			const accountData = await getAccountCookie(ctx);
