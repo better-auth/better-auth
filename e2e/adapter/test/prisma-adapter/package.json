@@ -10,12 +10,12 @@
     "@better-auth/core": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "@prisma/adapter-better-sqlite3": "^7.0.0",
-    "@prisma/adapter-mariadb": "^7.0.0",
-    "@prisma/adapter-pg": "^7.0.0",
-    "@prisma/client": "^7.0.0",
+    "@prisma/adapter-better-sqlite3": "^7.4.1",
+    "@prisma/adapter-mariadb": "^7.4.1",
+    "@prisma/adapter-pg": "^7.4.1",
+    "@prisma/client": "^7.4.1",
     "better-auth": "workspace:*",
-    "better-sqlite3": "*",
-    "prisma": "^7.0.0"
+    "better-sqlite3": "^12.6.2",
+    "prisma": "^7.4.1"
   }
 }
