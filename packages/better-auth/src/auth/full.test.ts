@@ -1,3 +1,4 @@
+import type { AuthContext } from "@better-auth/core";
 import {
 	createAuthEndpoint,
 	createAuthMiddleware,
@@ -417,5 +418,55 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 			},
 		});
 		expect(cookieDomain).toBe("auth.example2.com");
+	});
+
+	test("create a auth context per request which contains the internal adapter", async () => {
+		let baseURL: string | undefined;
+		let optionsBaseURL: string | undefined;
+		let internalAdapter: AuthContext["internalAdapter"] | undefined;
+		const endpoints = {
+			validateContext: createAuthEndpoint(
+				"/validate-context",
+				{ method: "GET" },
+				async (ctx) => {
+					internalAdapter = ctx.context.internalAdapter;
+					return ctx.json({
+						message: "Hello, World!",
+					});
+				},
+			),
+		};
+		const { customFetchImpl } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com", "*.vercel.app", "localhost:*"],
+			},
+			hooks: {
+				before: createAuthMiddleware(async (ctx) => {
+					baseURL = ctx.context.baseURL;
+					optionsBaseURL = ctx.context.options.baseURL as string;
+				}),
+			},
+			plugins: [
+				{
+					id: "custom-plugin",
+					endpoints,
+				},
+			],
+		});
+		const client = createAuthClient({
+			fetchOptions: {
+				customFetchImpl,
+			},
+			baseURL: "http://localhost:3000",
+		});
+		await client.$fetch("/validate-context", {
+			headers: {
+				"x-forwarded-host": "preview-123.vercel.app",
+				"x-forwarded-proto": "https",
+			},
+		});
+		expect(baseURL).toBe("https://preview-123.vercel.app/api/auth");
+		expect(optionsBaseURL).toBe("https://preview-123.vercel.app");
+		expect(internalAdapter).toBeDefined();
 	});
 });

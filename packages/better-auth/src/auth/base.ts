@@ -37,7 +37,10 @@ export const createBetterAuth = <Options extends BetterAuthOptions>(
 			if (isDynamicBaseURLConfig(options.baseURL)) {
 				// Create per-request context to avoid concurrent request race conditions.
 				// Each request may resolve to a different host, so we must not mutate the shared ctx.
-				handlerCtx = Object.create(ctx) as AuthContext;
+				handlerCtx = Object.create(
+					Object.getPrototypeOf(ctx),
+					Object.getOwnPropertyDescriptors(ctx),
+				) as AuthContext;
 				const baseURL = resolveBaseURL(options.baseURL, basePath, request);
 				if (baseURL) {
 					handlerCtx.baseURL = baseURL;
