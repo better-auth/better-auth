@@ -32,6 +32,7 @@ import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
+import { mezon } from "./mezon";
 import { vk } from "./vk";
 import { zoom } from "./zoom";
 
@@ -59,6 +60,7 @@ export const socialProviders = {
 	reddit,
 	roblox,
 	salesforce,
+	mezon,
 	vk,
 	zoom,
 	notion,
@@ -115,6 +117,7 @@ export * from "./notion";
 export * from "./paybin";
 export * from "./paypal";
 export * from "./polar";
+export * from "./mezon";
 export * from "./railway";
 export * from "./reddit";
 export * from "./roblox";
