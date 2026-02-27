@@ -19,18 +19,18 @@ fetch_branch() {
   rm -rf "$TEMP_DIR"
   git clone --depth 1 --filter=blob:none --sparse --branch "$branch" "$REPO" "$TEMP_DIR" 2>/dev/null
   cd "$TEMP_DIR"
-  git sparse-checkout set docs-content docs/components
+  git sparse-checkout set docs/content docs/components
   cd ..
 
   rm -rf "$docs_dest"
   mkdir -p "$docs_dest"
-  cp -r "$TEMP_DIR/docs-content/docs/." "$docs_dest/"
+  cp -r "$TEMP_DIR/docs/content/docs/." "$docs_dest/"
 
   # Copy blog content only from the main branch
   if [ "$branch" = "main" ]; then
     rm -rf "$CONTENT_DIR/blogs"
     mkdir -p "$CONTENT_DIR"
-    cp -r "$TEMP_DIR/docs-content/blogs" "$CONTENT_DIR/blogs"
+    cp -r "$TEMP_DIR/docs/content/blogs" "$CONTENT_DIR/blogs"
 
     # Copy doc-specific components referenced by MDX files
     DOC_COMPONENTS=(
