@@ -581,4 +581,8 @@ export const getCookieCache = async <
 };
 
 export * from "./cookie-utils";
-export { createSessionStore, getChunkedCookie } from "./session-store";
+export {
+	createSessionStore,
+	getAccountCookie,
+	getChunkedCookie,
+} from "./session-store";
