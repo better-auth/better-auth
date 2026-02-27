@@ -491,6 +491,53 @@ describe("delete user", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8173
+	 */
+	it("should require password when session is no longer fresh", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(Date.now() - 5_000),
+			},
+		});
+
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("SESSION_EXPIRED");
+	});
+
 	it("should delete every session from deleted user", async () => {
 		const store = new Map<string, string>();
 		const { client, signInWithTestUser } = await getTestInstance({
