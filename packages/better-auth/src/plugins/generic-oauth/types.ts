@@ -186,7 +186,7 @@ export interface GenericOAuthConfig {
 	/**
 	 * Additional params to include during refresh token requests.
 	 */
-	refreshTokenParams?:
+	refreshTokenUrlParams?:
 		| (
 				| Record<string, string>
 				| ((ctx: GenericEndpointContext) => Record<string, string>)

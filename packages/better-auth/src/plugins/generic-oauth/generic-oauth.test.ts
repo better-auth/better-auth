@@ -1030,7 +1030,7 @@ describe("oauth2", async () => {
 		expect(result?.user).toHaveProperty("customField", "async-custom-data");
 	});
 
-	it("should include refreshTokenParams when refreshing access tokens", async () => {
+	it("should include refreshTokenUrlParams when refreshing access tokens", async () => {
 		let capturedParams = new URLSearchParams();
 		server.service.once("beforeResponse", (_response, req) => {
 			const body = req.body;
@@ -1057,7 +1057,7 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							tokenUrl: `http://localhost:${port}/token`,
-							refreshTokenParams: {
+							refreshTokenUrlParams: {
 								audience: "my-audience",
 							},
 						},
@@ -1070,13 +1070,15 @@ describe("oauth2", async () => {
 		const provider = context.socialProviders.find(
 			(p) => p.id === "refresh-params-static",
 		);
+		expect(provider).toBeDefined();
+		expect(provider!.refreshAccessToken).toBeDefined();
 
 		await provider!.refreshAccessToken!("refresh-token");
 
 		expect(capturedParams.get("audience")).toBe("my-audience");
 	});
 
-	it("should support function refreshTokenParams with endpoint context", async () => {
+	it("should support function refreshTokenUrlParams with endpoint context", async () => {
 		let capturedParams = new URLSearchParams();
 		server.service.once("beforeResponse", (_response, req) => {
 			const body = req.body;
@@ -1103,7 +1105,7 @@ describe("oauth2", async () => {
 							clientId: clientId,
 							clientSecret: clientSecret,
 							tokenUrl: `http://localhost:${port}/token`,
-							refreshTokenParams: (ctx) => ({
+							refreshTokenUrlParams: (ctx) => ({
 								requestMethod: ctx.request?.method || "unknown",
 							}),
 						},
@@ -1123,6 +1125,8 @@ describe("oauth2", async () => {
 			const provider = endpointContext.context.socialProviders.find(
 				(p) => p.id === "refresh-params-function",
 			);
+			expect(provider).toBeDefined();
+			expect(provider!.refreshAccessToken).toBeDefined();
 			await provider!.refreshAccessToken!("refresh-token");
 		});
 
