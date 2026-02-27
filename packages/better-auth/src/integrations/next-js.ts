@@ -47,6 +47,8 @@ export const nextCookies = () => {
 						}
 						try {
 							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
+							// If cookie was set successfully, we should clean up.
+							cookieStore.delete("__better-auth-cookie-store");
 						} catch {
 							await setShouldSkipSessionRefresh(true);
 						}
