@@ -21,9 +21,7 @@ describe("drizzle-adapter", () => {
 				_: { fullSchema: schema },
 				insert: vi.fn().mockReturnValue({
 					values: vi.fn().mockReturnValue({
-						returning: vi
-							.fn()
-							.mockResolvedValue([{ id: "1", name: "test" }]),
+						returning: vi.fn().mockResolvedValue([{ id: "1", name: "test" }]),
 					}),
 				}),
 			} as any;
