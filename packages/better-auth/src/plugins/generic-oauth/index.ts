@@ -196,14 +196,20 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						const endpointContext = await getCurrentAuthContext().catch(
 							() => null,
 						);
-						const refreshTokenParams =
-							typeof c.refreshTokenParams === "function"
-								? endpointContext
-									? c.refreshTokenParams(
-											endpointContext as GenericEndpointContext,
-										)
-									: undefined
-								: c.refreshTokenParams;
+						let refreshTokenUrlParams: Record<string, string> | undefined;
+						if (typeof c.refreshTokenUrlParams === "function") {
+							if (endpointContext) {
+								refreshTokenUrlParams = c.refreshTokenUrlParams(
+									endpointContext as GenericEndpointContext,
+								);
+							} else {
+								ctx.logger.warn(
+									"refreshTokenUrlParams is a function but no endpoint context is available. The params will be skipped. This can happen when refreshAccessToken is called outside a request context (e.g., background jobs).",
+								);
+							}
+						} else {
+							refreshTokenUrlParams = c.refreshTokenUrlParams;
+						}
 						return refreshAccessToken({
 							refreshToken,
 							options: {
@@ -212,7 +218,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 							},
 							authentication: c.authentication,
 							tokenEndpoint: finalTokenUrl,
-							extraParams: refreshTokenParams,
+							extraParams: refreshTokenUrlParams,
 						});
 					},
 					async getUserInfo(tokens: OAuth2Tokens) {
