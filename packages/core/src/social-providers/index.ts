@@ -33,6 +33,7 @@ import { twitch } from "./twitch";
 import { twitter } from "./twitter";
 import { vercel } from "./vercel";
 import { vk } from "./vk";
+import { yandex } from "./yandex";
 import { zoom } from "./zoom";
 
 export const socialProviders = {
@@ -70,6 +71,7 @@ export const socialProviders = {
 	polar,
 	railway,
 	vercel,
+	yandex,
 };
 
 export const socialProviderList = Object.keys(socialProviders) as [
@@ -126,6 +128,7 @@ export * from "./twitch";
 export * from "./twitter";
 export * from "./vercel";
 export * from "./vk";
+export * from "./yandex";
 export * from "./zoom";
 
 export type SocialProviderList = typeof socialProviderList;
