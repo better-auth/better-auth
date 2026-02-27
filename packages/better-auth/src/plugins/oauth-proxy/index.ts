@@ -374,15 +374,20 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						// Exchange code for tokens
 						let tokens: OAuth2Tokens | null;
-						const callbackPath =
-							ctx.path === "/oauth2/callback/:providerId"
+						const fallbackCallbackPath =
+							ctx.params?.providerId != null
 								? `/oauth2/callback/${provider.id}`
 								: `/callback/${provider.id}`;
+						const callbackRedirectURI =
+							ctx.request?.url != null
+								? new URL(ctx.request.url).origin +
+									new URL(ctx.request.url).pathname
+								: `${ctx.context.baseURL}${fallbackCallbackPath}`;
 						try {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: `${ctx.context.baseURL}${callbackPath}`,
+								redirectURI: callbackRedirectURI,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
