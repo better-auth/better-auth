@@ -91,5 +91,6 @@ export const mezon = (options: MezonOptions) => {
 				data: profile,
 			};
 		},
+		options,
 	} satisfies OAuthProvider<MezonProfile>;
 };
