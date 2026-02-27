@@ -69,9 +69,11 @@ export async function getTestInstance<
 		const { Kysely, MysqlDialect } = await import("kysely");
 		const { createPool } = await import("mysql2/promise");
 		return new Kysely({
-			dialect: new MysqlDialect(
-				createPool("mysql://user:password@localhost:3306/better_auth"),
-			),
+			dialect: new MysqlDialect({
+				pool: createPool(
+					"mysql://user:password@localhost:3306/better_auth",
+				),
+			}),
 		});
 	}
 
