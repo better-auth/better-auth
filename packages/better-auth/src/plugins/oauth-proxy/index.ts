@@ -99,6 +99,10 @@ const oauthCallbackQuerySchema = z.object({
 	error: z.string().optional(),
 });
 
+function isOAuthCallbackPath(path: string | undefined) {
+	return path === "/callback/:id" || path === "/oauth2/callback/:providerId";
+}
+
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
@@ -148,9 +152,13 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					},
 				},
 				async (ctx) => {
+					const baseURLStr =
+						typeof ctx.context.options.baseURL === "string"
+							? ctx.context.options.baseURL
+							: getOrigin(ctx.context.baseURL) || "";
 					const defaultErrorURL =
 						ctx.context.options.onAPIError?.errorURL ||
-						`${stripTrailingSlash(ctx.context.options.baseURL)}/api/auth/error`;
+						`${stripTrailingSlash(baseURLStr)}/api/auth/error`;
 
 					const encryptedProfile = ctx.query.profile;
 					if (!encryptedProfile) {
@@ -282,10 +290,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				{
 					// Intercept OAuth callback on production to handle passthrough
 					matcher(context) {
-						return (
-							context.path === "/callback/:id" ||
-							context.path === "/oauth2/callback/:providerId"
-						);
+						return isOAuthCallbackPath(context.path);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const state = ctx.query?.state || ctx.body?.state;
@@ -357,8 +362,8 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "no_code");
 						}
 
-						const providerId = ctx.params?.id ?? ctx.params?.providerId;
-						// The generic OAuth provider is added to the socialProviders array
+						// Find the OAuth provider
+						const providerId = ctx.params?.id || ctx.params?.providerId;
 						const provider = ctx.context.socialProviders.find(
 							(p) => p.id === providerId,
 						);
@@ -367,37 +372,22 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							throw redirectOnError(ctx, errorURL, "oauth_provider_not_found");
 						}
 
-						// Use the actual callback URL from the request so redirect_uri matches
-						// exactly what the IdP used (avoids mismatch from baseURL/env differences).
-						const redirectURI =
-							ctx.request?.url != null
-								? new URL(ctx.request.url).origin +
-									new URL(ctx.request.url).pathname
-								: (() => {
-										const isGenericOAuthCallback =
-											"providerId" in (ctx.params ?? {});
-										return isGenericOAuthCallback
-											? `${ctx.context.baseURL}/oauth2/callback/${provider.id}`
-											: `${ctx.context.baseURL}/callback/${provider.id}`;
-									})();
-
 						// Exchange code for tokens
 						let tokens: OAuth2Tokens | null;
+						const callbackPath =
+							ctx.path === "/oauth2/callback/:providerId"
+								? `/oauth2/callback/${provider.id}`
+								: `/callback/${provider.id}`;
 						try {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI,
+								redirectURI: `${ctx.context.baseURL}${callbackPath}`,
 							});
 						} catch (e) {
-							const errMsg =
-								e && typeof e === "object" && e !== null && "message" in e
-									? String((e as { message?: unknown }).message)
-									: String(e);
 							ctx.context.logger.error(
 								"Failed to validate authorization code",
-								{ error: e, redirectURI },
-								errMsg,
+								e,
 							);
 							throw redirectOnError(ctx, errorURL, "invalid_code");
 						}
@@ -564,10 +554,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				},
 				{
 					matcher(context) {
-						return (
-							context.path === "/callback/:id" ||
-							context.path === "/oauth2/callback/:providerId"
-						);
+						return isOAuthCallbackPath(context.path);
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;
@@ -582,7 +569,9 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						const productionURL =
 							opts?.productionURL ||
-							ctx.context.options.baseURL ||
+							(typeof ctx.context.options.baseURL === "string"
+								? ctx.context.options.baseURL
+								: undefined) ||
 							ctx.context.baseURL;
 						const productionOrigin = getOrigin(productionURL);
 

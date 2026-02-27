@@ -7,11 +7,11 @@ import { signJWT, symmetricDecrypt, symmetricEncrypt } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuth } from "../generic-oauth";
-import { genericOAuthClient } from "../generic-oauth/client";
 import { oAuthProxy } from ".";
 
 let testIdToken: string;
 let handlers: ReturnType<typeof http.post>[];
+const GENERIC_PROVIDER_ID = "generic-test";
 
 const server = setupServer();
 
@@ -43,6 +43,13 @@ beforeAll(async () => {
 				id_token: testIdToken,
 			});
 		}),
+		http.post("https://oauth.example.com/token", () => {
+			return HttpResponse.json({
+				access_token: "test",
+				refresh_token: "test",
+				id_token: testIdToken,
+			});
+		}),
 	];
 
 	server.listen({ onUnhandledRequest: "bypass" });
@@ -57,6 +64,106 @@ afterEach(() => {
 afterAll(() => server.close());
 
 describe("oauth-proxy", async () => {
+	it("should redirect generic oauth callback to proxy url with profile data", async () => {
+		const { client } = await getTestInstance({
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: GENERIC_PROVIDER_ID,
+							authorizationUrl: "https://oauth.example.com/authorize",
+							tokenUrl: "https://oauth.example.com/token",
+							clientId: "test",
+							clientSecret: "test",
+						},
+					],
+				}),
+				oAuthProxy({
+					currentURL: "http://preview-localhost:3000",
+				}),
+			],
+		});
+
+		const signInRes = (await client.$fetch("/sign-in/oauth2", {
+			method: "POST",
+			body: {
+				providerId: GENERIC_PROVIDER_ID,
+				callbackURL: "/dashboard",
+			},
+		})) as { url: string };
+
+		const state = new URL(signInRes.url).searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		await client.$fetch(
+			`/oauth2/callback/${GENERIC_PROVIDER_ID}?code=test&state=${encodeURIComponent(state!)}`,
+			{
+				onError(context) {
+					const location = context.response.headers.get("location") ?? "";
+					if (!location) {
+						throw new Error("Location header not found");
+					}
+					expect(location).toContain(
+						"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
+					);
+					expect(location).toContain("callbackURL");
+					const profile = new URL(location).searchParams.get("profile");
+					expect(profile).toBeTruthy();
+				},
+			},
+		);
+	});
+
+	it("shouldn't redirect generic oauth callback to proxy on same origin", async () => {
+		const { client, cookieSetter } = await getTestInstance({
+			baseURL: "https://myapp.com",
+			plugins: [
+				genericOAuth({
+					config: [
+						{
+							providerId: GENERIC_PROVIDER_ID,
+							authorizationUrl: "https://oauth.example.com/authorize",
+							tokenUrl: "https://oauth.example.com/token",
+							clientId: "test",
+							clientSecret: "test",
+						},
+					],
+				}),
+				oAuthProxy({
+					productionURL: "https://myapp.com",
+				}),
+			],
+		});
+
+		const headers = new Headers();
+		const signInRes = (await client.$fetch("/sign-in/oauth2", {
+			method: "POST",
+			body: {
+				providerId: GENERIC_PROVIDER_ID,
+				callbackURL: "/dashboard",
+			},
+			onSuccess: cookieSetter(headers),
+		})) as { url: string };
+
+		const state = new URL(signInRes.url).searchParams.get("state");
+		expect(state).toBeTruthy();
+
+		await client.$fetch(
+			`/oauth2/callback/${GENERIC_PROVIDER_ID}?code=test&state=${encodeURIComponent(state!)}`,
+			{
+				headers,
+				onError(context) {
+					const location = context.response.headers.get("location");
+					if (!location) {
+						throw new Error("Location header not found");
+					}
+					expect(location).not.toContain("/oauth-proxy-callback");
+					expect(location).toContain("/dashboard");
+				},
+			},
+		);
+	});
+
 	it("should redirect to proxy url with profile data (passthrough)", async () => {
 		const { client } = await getTestInstance({
 			plugins: [
@@ -99,68 +206,6 @@ describe("oauth-proxy", async () => {
 				expect(profile).toBeTruthy();
 			},
 		});
-	});
-
-	it("should intercept generic OAuth callback and redirect to proxy with profile", async () => {
-		const tokenUrl = "https://generic-oauth-test.example.com/token";
-		server.use(
-			http.post(tokenUrl, () =>
-				HttpResponse.json({
-					access_token: "test",
-					refresh_token: "test",
-					id_token: testIdToken,
-				}),
-			),
-		);
-
-		const { client } = await getTestInstance(
-			{
-				plugins: [
-					oAuthProxy({
-						currentURL: "http://preview-localhost:3000",
-					}),
-					genericOAuth({
-						config: [
-							{
-								providerId: "test-oauth2",
-								authorizationUrl:
-									"https://generic-oauth-test.example.com/authorize",
-								tokenUrl,
-								clientId: "test",
-								clientSecret: "test",
-								pkce: true,
-							},
-						],
-					}),
-				],
-			},
-			{ clientOptions: { plugins: [genericOAuthClient()] } },
-		);
-
-		const res = await client.signIn.oauth2(
-			{
-				providerId: "test-oauth2",
-				callbackURL: "/dashboard",
-			},
-			{ throw: true },
-		);
-
-		const state = new URL(res.url!).searchParams.get("state");
-
-		await client.$fetch(
-			`/oauth2/callback/test-oauth2?code=test&state=${state}`,
-			{
-				onError(context) {
-					const location = context.response.headers.get("location") ?? "";
-					expect(location).toContain(
-						"http://preview-localhost:3000/api/auth/oauth-proxy-callback",
-					);
-					expect(location).toContain("callbackURL");
-					const profile = new URL(location).searchParams.get("profile");
-					expect(profile).toBeTruthy();
-				},
-			},
-		);
 	});
 
 	it("shouldn't redirect to proxy url on same origin", async () => {
@@ -781,14 +826,11 @@ describe("oauth-proxy", async () => {
 			);
 		});
 
-		/**
-		 * @see https://github.com/better-auth/better-auth/issues/7141
-		 */
 		it("should work with database mode + UUID", async () => {
 			// This tests the scenario where:
 			// - storeStateStrategy is "database" (not cookie)
 			// - generateId: "uuid" is configured
-			// Passthrough mode should work without any issues (delete by identifier, not id)
+			// Passthrough mode should work without any issues
 			const { client, auth } = await getTestInstance(
 				{
 					plugins: [
@@ -830,30 +872,17 @@ describe("oauth-proxy", async () => {
 
 			// Complete OAuth callback - this should work without UUID format errors
 			let encryptedProfile: string | null = null;
-			let callbackURL: string | null = null;
 			await client.$fetch(`/callback/google?code=test&state=${state}`, {
 				onError(context) {
 					const location = context.response.headers.get("location");
 					if (location && location.includes("profile=")) {
 						const url = new URL(location);
 						encryptedProfile = url.searchParams.get("profile");
-						callbackURL = url.searchParams.get("callbackURL");
 					}
 				},
 			});
 
 			expect(encryptedProfile).toBeTruthy();
-
-			// Call oauth-proxy-callback to exercise parseGenericState + deleteVerificationByIdentifier (fix #7141)
-			await client.$fetch(
-				`/oauth-proxy-callback?callbackURL=${encodeURIComponent(callbackURL ?? "/dashboard")}&profile=${encodeURIComponent(encryptedProfile!)}`,
-				{
-					onError(context) {
-						const location = context.response.headers.get("location");
-						expect(location).toContain("/dashboard");
-					},
-				},
-			);
 
 			// Verify profile data structure
 			const decrypted = await symmetricDecrypt({
