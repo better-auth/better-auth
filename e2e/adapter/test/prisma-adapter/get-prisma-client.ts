@@ -34,14 +34,14 @@ export const getPrismaClient = async (dialect: Dialect) => {
 		return clientMap.get(`${dialect}-${migrationCount}`) as PC;
 	}
 	const { PrismaClient } = await import(
-		migrationCount === 0
-			? "@prisma/client"
-			: fileURLToPath(
-					new URL(
-						`./.tmp/prisma-client-${dialect}-${migrationCount}/client.ts`,
-						import.meta.url,
-					),
-				)
+		fileURLToPath(
+			new URL(
+				migrationCount === 0
+					? "./.tmp/prisma-client-base/client.ts"
+					: `./.tmp/prisma-client-${dialect}-${migrationCount}/client.ts`,
+				import.meta.url,
+			),
+		)
 	);
 	// For migrationCount === 0, @prisma/client is generated from base.prisma (sqlite).
 	// Use sqlite adapter regardless of dialect since this client is only used for
