@@ -254,6 +254,88 @@ describe("SSO", async () => {
 		expect(callbackURL).toContain("/dashboard");
 	});
 
+	it("should hydrate authorizationEndpoint via discovery when missing from stored config", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Register a provider with skipDiscovery, providing tokenEndpoint +
+		// jwksEndpoint but deliberately omitting authorizationEndpoint.
+		// This simulates a legacy provider stored without the authorization URL.
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "no-auth-endpoint.com",
+				providerId: "no-auth-endpoint",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					skipDiscovery: true,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+					mapping: {
+						id: "sub",
+						email: "email",
+						emailVerified: "email_verified",
+						name: "name",
+						image: "picture",
+					},
+				},
+			},
+			headers,
+		});
+
+		// Use a unique identity so the callback doesn't collide with the
+		// "sso-user@localhost:8000.com" account already linked to "test" provider.
+		const originalUserinfoListeners =
+			server.service.listeners("beforeUserinfo");
+		const originalTokenListeners =
+			server.service.listeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.on("beforeUserinfo", (userInfoResponse: any) => {
+			userInfoResponse.body = {
+				email: "no-auth-endpoint-user@no-auth-endpoint.com",
+				name: "No Auth Endpoint User",
+				sub: "no-auth-endpoint-user",
+				email_verified: true,
+			};
+			userInfoResponse.statusCode = 200;
+		});
+		server.service.on("beforeTokenSigning", (token: any) => {
+			token.payload.email = "no-auth-endpoint-user@no-auth-endpoint.com";
+			token.payload.email_verified = true;
+			token.payload.name = "No Auth Endpoint User";
+			token.payload.sub = "no-auth-endpoint-user";
+		});
+
+		try {
+			const signInHeaders = new Headers();
+			const res = await authClient.signIn.sso({
+				providerId: "no-auth-endpoint",
+				callbackURL: "/dashboard",
+				fetchOptions: {
+					throw: true,
+					onSuccess: cookieSetter(signInHeaders),
+				},
+			});
+
+			// Discovery should have hydrated authorizationEndpoint — no error
+			expect(res.url).toContain("http://localhost:8080/authorize");
+
+			const { callbackURL } = await simulateOAuthFlow(res.url, signInHeaders);
+			expect(callbackURL).toContain("/dashboard");
+		} finally {
+			server.service.removeAllListeners("beforeUserinfo");
+			server.service.removeAllListeners("beforeTokenSigning");
+			for (const listener of originalUserinfoListeners) {
+				server.service.on("beforeUserinfo", listener as any);
+			}
+			for (const listener of originalTokenListeners) {
+				server.service.on("beforeTokenSigning", listener as any);
+			}
+		}
+	});
+
 	it("should normalize email to lowercase in OIDC authentication", async () => {
 		const { headers } = await signInWithTestUser();
 

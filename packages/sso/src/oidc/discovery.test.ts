@@ -629,13 +629,23 @@ describe("OIDC Discovery", () => {
 			).toBe(true);
 		});
 
-		it("should return false if both tokenEndpoint and jwksEndpoint are present", () => {
+		it("should return false if tokenEndpoint, jwksEndpoint and authorizationEndpoint are all present", () => {
+			expect(
+				needsRuntimeDiscovery({
+					tokenEndpoint: "https://idp.example.com/oauth2/token",
+					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
+					authorizationEndpoint: "https://idp.example.com/oauth2/authorize",
+				}),
+			).toBe(false);
+		});
+
+		it("should return true if authorizationEndpoint is missing", () => {
 			expect(
 				needsRuntimeDiscovery({
 					tokenEndpoint: "https://idp.example.com/oauth2/token",
 					jwksEndpoint: "https://idp.example.com/.well-known/jwks.json",
 				}),
-			).toBe(false);
+			).toBe(true);
 		});
 	});
 
@@ -1176,6 +1186,7 @@ describe("ensureRuntimeDiscovery", () => {
 	it("returns config unchanged when discovery is not needed", async () => {
 		const completeConfig = {
 			...baseConfig,
+			authorizationEndpoint: `${issuer}/oauth2/authorize`,
 			tokenEndpoint: `${issuer}/oauth2/token`,
 			jwksEndpoint: `${issuer}/.well-known/jwks.json`,
 		};
