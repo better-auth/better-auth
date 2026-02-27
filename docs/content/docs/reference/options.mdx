@@ -437,6 +437,17 @@ Store account data after OAuth flow in a cookie. This is useful for database-les
 - Default: `false`
 - Automatically set to `true` if no database is provided
 
+When this option is enabled, you can read the decrypted account cookie in hooks or middleware using `getAccountCookie` from `better-auth/cookies`:
+
+```ts
+import { createAuthMiddleware } from "better-auth/api";
+import { getAccountCookie } from "better-auth/cookies";
+
+const hook = createAuthMiddleware(async (ctx) => {
+	const account = await getAccountCookie(ctx);
+});
+```
+
 ### `accountLinking`
 
 Configuration for account linking.
