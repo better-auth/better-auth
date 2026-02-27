@@ -4,14 +4,18 @@
   "type": "module",
   "scripts": {
     "e2e:integration": "vitest run",
-    "prepare": "prisma generate --schema ./base.prisma"
+    "prepare": "prisma generate"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/test-utils": "workspace:*",
-    "@prisma/client": "5.22.0",
+    "@prisma/adapter-better-sqlite3": "^7.0.0",
+    "@prisma/adapter-mariadb": "^7.0.0",
+    "@prisma/adapter-pg": "^7.0.0",
+    "@prisma/client": "^7.0.0",
     "better-auth": "workspace:*",
-    "prisma": "^5.22.0"
+    "better-sqlite3": "*",
+    "prisma": "^7.0.0"
   }
 }
