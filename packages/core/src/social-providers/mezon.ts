@@ -4,32 +4,26 @@ import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 import { decodeJwt } from "jose";
 
 export interface MezonProfile extends Record<string, any> {
-  user_id: string;
-  email: string;
-  sub: string;
-  username: string;
-  mezon_id: string;
-  display_name?: string;
-  avatar?: string;
+	user_id: string;
+	email: string;
+	sub: string;
+	username: string;
+	mezon_id: string;
+	display_name?: string;
+	avatar?: string;
 }
 
 export interface MezonOptions extends ProviderOptions<MezonProfile> {
 	clientId: string;
-  clientSecret: string;
+	clientSecret: string;
 }
 
 export const mezon = (options: MezonOptions) => {
 	return {
 		id: "mezon",
 		name: "Mezon",
-		async createAuthorizationURL({
-			state,
-			scopes,
-			redirectURI,
-		}) {
-			const _scopes = options.disableDefaultScope
-				? []
-				: ["offline", "openid"];
+		async createAuthorizationURL({ state, scopes, redirectURI }) {
+			const _scopes = options.disableDefaultScope ? [] : ["offline", "openid"];
 			if (options.scope) _scopes.push(...options.scope);
 			if (scopes) _scopes.push(...scopes);
 			return createAuthorizationURL({
@@ -48,33 +42,33 @@ export const mezon = (options: MezonOptions) => {
 				redirectURI,
 				options,
 				tokenEndpoint: "https://oauth2.mezon.ai/oauth2/token",
-        authentication: "post",
+				authentication: "post",
 			});
 		},
 
 		async getUserInfo(token) {
-      if (token.idToken) {
-        const profile = decodeJwt<MezonProfile>(token.idToken);
+			if (token.idToken) {
+				const profile = decodeJwt<MezonProfile>(token.idToken);
 
-        if (!profile) {
-          return null;
-        }
+				if (!profile) {
+					return null;
+				}
 
-        return {
-          user: {
-            id: profile.user_id,
-            name: profile?.display_name ?? profile.username,
-            email: profile.email,
-            image: profile?.avatar,
-            emailVerified: true,
-          },
-          data: profile,
-        };
-      }
+				return {
+					user: {
+						id: profile.user_id,
+						name: profile?.display_name ?? profile.username,
+						email: profile.email,
+						image: profile?.avatar,
+						emailVerified: true,
+					},
+					data: profile,
+				};
+			}
 
 			const { data: profile, error } = await betterFetch<MezonProfile>(
 				"https://oauth2.mezon.ai/userinfo",
-        {
+				{
 					auth: {
 						type: "Bearer",
 						token: token.accessToken,
