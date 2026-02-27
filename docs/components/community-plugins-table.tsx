@@ -316,7 +316,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		name: "better-auth-speckle",
 		url: "https://github.com/XingxinHE/better-auth-speckle",
 		description:
-			"A plugin for Speckle System, supporting its non-standard oauth flow with sign-in and link account.",
+			"A plugin for Speckle System, supporting its non-standard Oauth flow with sign-in and link account.",
 		author: {
 			name: "XingxinHE",
 			github: "XingxinHE",
