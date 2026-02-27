@@ -183,7 +183,7 @@ function BlogList() {
 										{post.data.tags && post.data.tags.length > 0 && (
 											<>
 												<span>&middot;</span>
-												{post.data.tags.slice(0, 3).map((tag) => (
+												{post.data.tags.slice(0, 3).map((tag: string) => (
 													<span
 														key={tag}
 														className="text-neutral-400 dark:text-neutral-600"
