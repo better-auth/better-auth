@@ -28,8 +28,6 @@ const { execute } = await testAdapter({
 		});
 	},
 	runMigrations: async (options: BetterAuthOptions) => {
-		// No need to DROP/CREATE database — pushPrismaSchema uses
-		// --force-reset which drops and recreates all tables.
 		const db = await getPrismaClient(dialect);
 		const migrationCount = incrementMigrationCount();
 		await generateAuthConfigFile(options);

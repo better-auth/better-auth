@@ -4,12 +4,13 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { prismaAdapter } from "@better-auth/prisma-adapter";
 import type { PrismaClient } from "@prisma/client";
+import type { Dialect } from "./constants";
 
 export async function generatePrismaSchema(
 	betterAuthOptions: BetterAuthOptions,
 	db: PrismaClient,
 	iteration: number,
-	dialect: "sqlite" | "postgresql" | "mysql",
+	dialect: Dialect,
 ) {
 	const i = async (x: string) => await import(x);
 	const { generateSchema } = (await i(

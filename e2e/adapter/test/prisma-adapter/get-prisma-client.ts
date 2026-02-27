@@ -1,15 +1,10 @@
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
+import { DATABASE_URLS, type Dialect } from "./constants";
 
 type PC = InstanceType<typeof PrismaClient>;
 
-const DATABASE_URLS: Record<string, string> = {
-	sqlite: "file:./dev.db",
-	postgresql: "postgres://user:password@localhost:5434/better_auth",
-	mysql: "mysql://user:password@localhost:3308/better_auth",
-};
-
-async function createAdapter(dialect: "sqlite" | "postgresql" | "mysql") {
+async function createAdapter(dialect: Dialect) {
 	if (dialect === "sqlite") {
 		const { PrismaBetterSqlite3 } = await import(
 			"@prisma/adapter-better-sqlite3"
@@ -34,9 +29,7 @@ async function createAdapter(dialect: "sqlite" | "postgresql" | "mysql") {
 
 let migrationCount = 0;
 const clientMap = new Map<string, PC>();
-export const getPrismaClient = async (
-	dialect: "sqlite" | "postgresql" | "mysql",
-) => {
+export const getPrismaClient = async (dialect: Dialect) => {
 	if (clientMap.has(`${dialect}-${migrationCount}`)) {
 		return clientMap.get(`${dialect}-${migrationCount}`) as PC;
 	}
@@ -72,7 +65,7 @@ export const destroyPrismaClient = ({
 	dialect,
 }: {
 	migrationCount: number;
-	dialect: "sqlite" | "postgresql" | "mysql";
+	dialect: Dialect;
 }) => {
 	const db = clientMap.get(`${dialect}-${migrationCount}`);
 	if (db) {
