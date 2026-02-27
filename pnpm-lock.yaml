@@ -1116,15 +1116,27 @@ importers:
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
+      '@prisma/adapter-better-sqlite3':
+        specifier: ^7.0.0
+        version: 7.4.1
+      '@prisma/adapter-mariadb':
+        specifier: ^7.0.0
+        version: 7.4.1
+      '@prisma/adapter-pg':
+        specifier: ^7.0.0
+        version: 7.4.1
       '@prisma/client':
-        specifier: 5.22.0
-        version: 5.22.0(prisma@5.22.0)
+        specifier: ^7.0.0
+        version: 7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       better-auth:
         specifier: workspace:*
         version: link:../../../../packages/better-auth
+      better-sqlite3:
+        specifier: '*'
+        version: 12.6.2
       prisma:
-        specifier: ^5.22.0
-        version: 5.22.0
+        specifier: ^7.0.0
+        version: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
   e2e/integration:
     dependencies:
@@ -1383,7 +1395,7 @@ importers:
         version: 0.31.8
       drizzle-orm:
         specifier: '>=0.41.0'
-        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0)
+        version: 0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0)
       jose:
         specifier: ^6.1.0
         version: 6.1.3
@@ -1518,8 +1530,8 @@ importers:
         specifier: ^0.13.1
         version: 0.13.1
       '@prisma/client':
-        specifier: ^5.22.0
-        version: 5.22.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        specifier: ^7.0.0
+        version: 7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       '@types/pg':
         specifier: ^8.15.5
         version: 8.16.0
@@ -1540,7 +1552,7 @@ importers:
         version: 17.2.4
       drizzle-orm:
         specifier: ^0.41.0
-        version: 0.41.0(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+        version: 0.41.0(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
       open:
         specifier: ^10.2.0
         version: 10.2.0
@@ -1854,8 +1866,8 @@ importers:
   packages/prisma-adapter:
     dependencies:
       '@prisma/client':
-        specifier: ^5.0.0
-        version: 5.22.0(prisma@5.22.0)
+        specifier: ^7.0.0
+        version: 7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
     devDependencies:
       '@better-auth/core':
         specifier: workspace:*
@@ -1864,8 +1876,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.1
       prisma:
-        specifier: ^5.0.0
-        version: 5.22.0
+        specifier: ^7.0.0
+        version: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       tsdown:
         specifier: 'catalog:'
         version: 0.20.3(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.18.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -2957,8 +2969,8 @@ packages:
     resolution: {integrity: sha512-ubmJ6TShyaD69VE9DQrlXcdkvJbmwWPB8qYj0H2kaJi29O7vJT9ajSdBd2W8CG34pwL9pYA74fi7RHC1qbLoVQ==}
     engines: {node: ^20.19.0 || >=22.12.0}
 
-  '@better-auth/core@1.5.0-beta.18':
-    resolution: {integrity: sha512-bwR8uH10PiEK6lQhmF37VzUc+bmY79KKHd0UGuM4Bi5INEivYCZjpI2pKUB+aVgnxKjovpbUYjoB+NpuwTXK0A==}
+  '@better-auth/core@1.5.0-beta.19':
+    resolution: {integrity: sha512-xqWv0kuHq13gMcWyyjP0dhH4gE/yNcH5w63/i7BCoOVO4ODI8+55RAThRk1CNLDR6TMm2uSEVbeB5vdEBPIBFg==}
     peerDependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
@@ -2977,12 +2989,12 @@ packages:
     peerDependencies:
       better-auth: '>=1.4.15'
 
-  '@better-auth/sso@1.5.0-beta.18':
-    resolution: {integrity: sha512-b/RKKRPOfAUg9w3a9ssNC30P8WYNqcohMowsmE0+7lnUujC1sdW8FnGQvfvnMJGe8F4aXNatN+N61paF4QEHEg==}
+  '@better-auth/sso@1.5.0-beta.19':
+    resolution: {integrity: sha512-ghPh0dQgeWkDaKCFAO4noEww+offKzcm4ocd0eq5Du2F0tmDuBkvqLLWwJCqBKbFx4GH+E9zW1oZaxW5J8i+Dg==}
     peerDependencies:
-      '@better-auth/core': 1.5.0-beta.18
+      '@better-auth/core': 1.5.0-beta.19
       '@better-auth/utils': 0.3.1
-      better-auth: 1.5.0-beta.18
+      better-auth: 1.5.0-beta.19
       better-call: 1.3.2
 
   '@better-auth/utils@0.3.1':
@@ -5664,6 +5676,15 @@ packages:
   '@poppinss/exception@1.2.3':
     resolution: {integrity: sha512-dCED+QRChTVatE9ibtoaxc+WkdzOSjYTKi/+uacHWIsfodVfpsueo3+DKpgU5Px8qXjgmXkSvhXvSCz3fnP9lw==}
 
+  '@prisma/adapter-better-sqlite3@7.4.1':
+    resolution: {integrity: sha512-qYcbk5gSfKfedVzEJHFTpIr7kybEmoJ+eRE1/wzdcZozDyHlEfnqKbhx+IEPcG5n7qSj4Zvx+G1uT0VXs9nF/w==}
+
+  '@prisma/adapter-mariadb@7.4.1':
+    resolution: {integrity: sha512-IPZwtdrRGL3yQlqY74fx1fyG1d3sJpMRjMj63cTHXSv+Mh0Gs/EGLRnwwWglDxoesQPlLp/ESi5f8XLiIWn/AQ==}
+
+  '@prisma/adapter-pg@7.4.1':
+    resolution: {integrity: sha512-AH9XrqvSoBAaStn0Gm/sAnF97pDKz8uLpNmn51j1S9O9dhUva6LIxGdoDiiU9VXRIR89wAJXsvJSy+mK40m2xw==}
+
   '@prisma/client-runtime-utils@7.2.0':
     resolution: {integrity: sha512-dn7oB53v0tqkB0wBdMuTNFNPdEbfICEUe82Tn9FoKAhJCUkDH+fmyEp0ClciGh+9Hp2Tuu2K52kth2MTLstvmA==}
 
@@ -5700,8 +5721,14 @@ packages:
   '@prisma/debug@7.2.0':
     resolution: {integrity: sha512-YSGTiSlBAVJPzX4ONZmMotL+ozJwQjRmZweQNIq/ER0tQJKJynNkRB3kyvt37eOfsbMCXk3gnLF6J9OJ4QWftw==}
 
+  '@prisma/debug@7.4.1':
+    resolution: {integrity: sha512-qEtzO8oLouRv18JDQUC3G3Gnv+fGVscHZm/x1DBB/WT+kOvPDQLM2woX6IGgWnSMYYlrxjuALshT7G/blvY0bQ==}
+
   '@prisma/dev@0.17.0':
     resolution: {integrity: sha512-6sGebe5jxX+FEsQTpjHLzvOGPn6ypFQprcs3jcuIWv1Xp/5v6P/rjfdvAwTkP2iF6pDx2tCd8vGLNWcsWzImTA==}
+
+  '@prisma/driver-adapter-utils@7.4.1':
+    resolution: {integrity: sha512-gEZOC2tnlHaZNbHUdbK8YvQphq2tKq/Ovu1YixJ/hPSutDAvNzC3R+xUeBuJ4AJp236eELMzwxb7rgo3UbRkTg==}
 
   '@prisma/engines-version@5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2':
     resolution: {integrity: sha512-2PTmxFR2yHW/eB3uqWtcgRcgAbG1rwG9ZriSvQw+nnb7c4uCr3RAcGMb6/zfE88SKlC1Nj2ziUvc96Z379mHgQ==}
@@ -7925,6 +7952,9 @@ packages:
   '@types/fs-extra@9.0.13':
     resolution: {integrity: sha512-nEnwB++1u5lVDM2UI4c1+5R+FYaKfaAzS4OococimjVm3nQw3TuzH5UNsocrcTBbhnerblyHj4A49qXbIiZdpA==}
 
+  '@types/geojson@7946.0.16':
+    resolution: {integrity: sha512-6C8nqWur3j98U6+lXDfTUWIfgvZU+EumvpHKcYjujKH7woYyLj2sUmff0tRhrqM7BohUw7Pz3ZB1jj2gW9Fvmg==}
+
   '@types/google.accounts@0.0.18':
     resolution: {integrity: sha512-yHaPznll97ZnMJlPABHyeiIlLn3u6gQaUjA5k/O9lrrpgFB9VT10CKPLuKM0qTHMl50uXpW5sIcG+utm8jMOHw==}
 
@@ -7988,8 +8018,8 @@ packages:
   '@types/node@22.19.11':
     resolution: {integrity: sha512-BH7YwL6rA93ReqeQS1c4bsPpcfOmJasG+Fkr6Y59q83f9M1WcBRHR2vM+P9eOisYRcN3ujQoiZY8uk5W+1WL8w==}
 
-  '@types/node@25.2.3':
-    resolution: {integrity: sha512-m0jEgYlYz+mDJZ2+F4v8D1AyQb+QzsNqRuI7xg1VQX/KlKS0qT9r1Mo16yo5F/MtifXFgaofIFsdFMox2SxIbQ==}
+  '@types/node@24.10.14':
+    resolution: {integrity: sha512-OowOUbD1lBCOFIPOZ8xnMIhgqA4sCutMiYOmPHL1PTLt5+y1XA+g2+yC9OOyz8p+deMZqPZLxfMjYIfrKsPeFg==}
 
   '@types/node@25.3.0':
     resolution: {integrity: sha512-4K3bqJpXpqfg2XKGK9bpDTc6xO/xoUP/RBWS7AtRMug6zZFaRekiLzjVtAoZMquxoAbzBvy5nxQ7veS5eYzf8A==}
@@ -8832,9 +8862,6 @@ packages:
     resolution: {integrity: sha512-X/bwWs5Gbb/D7rN4aHLB7zdjiA6nGdjckM1sTHhI9oovIbEw2L5pw5S4xzk8ZTeOZ8EnwU/Ze4SoZ6/Vr3pM2Q==}
     engines: {node: '>=18'}
     hasBin: true
-
-  bun-types@1.3.8:
-    resolution: {integrity: sha512-fL99nxdOWvV4LqjmC+8Q9kW3M4QTtTR1eePs94v5ctGqU8OeceWrSUaRw3JYb7tU3FkMIAjkueehrHPPPGKi5Q==}
 
   bun-types@1.3.9:
     resolution: {integrity: sha512-+UBWWOakIP4Tswh0Bt0QD0alpTY8cb5hvgiYeWCMet9YukHbzuruIEeXC2D7nMJPB12kbh8C7XJykSexEqGKJg==}
@@ -12295,6 +12322,10 @@ packages:
   map-stream@0.1.0:
     resolution: {integrity: sha512-CkYQrPYZfWnu/DAmVCpTSX/xHpKZ80eKh2lAkyA6AJTef6bW+6JpbQZN5rofum7da+SyN1bi5ctTm+lTfcCW3g==}
 
+  mariadb@3.4.5:
+    resolution: {integrity: sha512-gThTYkhIS5rRqkVr+Y0cIdzr+GRqJ9sA2Q34e0yzmyhMCwyApf3OKAC1jnF23aSlIOqJuyaUFUcj7O1qZslmmQ==}
+    engines: {node: '>= 14'}
+
   markdown-extensions@2.0.0:
     resolution: {integrity: sha512-o5vL7aDWatOTX8LzaS1WMoaoxIiLRQJuIKKe2wAw6IeULDHaqbiqiggmx+pKvZDb1Sj+pE46Sn1T7lCqfFtg1Q==}
     engines: {node: '>=16'}
@@ -13666,6 +13697,10 @@ packages:
   postgres-array@2.0.0:
     resolution: {integrity: sha512-VpZrUqU5A69eQyW2c5CA1jtLecCsN2U/bD6VilrFDWq5+5UIEVO7nazS3TEcHf1zuPYO/sqGvUvW62g86RXZuA==}
     engines: {node: '>=4'}
+
+  postgres-array@3.0.4:
+    resolution: {integrity: sha512-nAUSGfSDGOaOAEGwqsRY27GPOea7CNipJPOA7lPbdEpx5Kg3qzdP0AaWC5MlhTWV9s4hFX39nomVZ+C4tnGOJQ==}
+    engines: {node: '>=12'}
 
   postgres-bytea@1.0.0:
     resolution: {integrity: sha512-xy3pmLuQqRBZBXDULy7KbaitYqLcmxigw14Q5sj8QBVLqEwXfeybIKVWiqAXTlcvdvb0+xkOtDbfQMOf4lST1w==}
@@ -17879,7 +17914,7 @@ snapshots:
       '@babel/helper-string-parser': 8.0.0-rc.2
       '@babel/helper-validator-identifier': 8.0.0-rc.1
 
-  '@better-auth/core@1.5.0-beta.18(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)':
+  '@better-auth/core@1.5.0-beta.19(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)':
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.19-beta.1
@@ -17904,8 +17939,8 @@ snapshots:
 
   '@better-auth/infra@0.1.7(@better-auth/utils@0.3.1)(better-auth@packages+better-auth)(kysely@0.28.10)(nanostores@1.1.0)':
     dependencies:
-      '@better-auth/core': 1.5.0-beta.18(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)
-      '@better-auth/sso': 1.5.0-beta.18(@better-auth/core@1.5.0-beta.18(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0))(@better-auth/utils@0.3.1)(better-auth@packages+better-auth)(better-call@1.1.0-beta.2)
+      '@better-auth/core': 1.5.0-beta.19(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)
+      '@better-auth/sso': 1.5.0-beta.19(@better-auth/core@1.5.0-beta.19(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0))(@better-auth/utils@0.3.1)(better-auth@packages+better-auth)(better-call@1.1.0-beta.2)
       '@better-fetch/fetch': 1.1.19-beta.1
       better-auth: link:packages/better-auth
       better-call: 1.1.0-beta.2
@@ -17917,9 +17952,9 @@ snapshots:
       - kysely
       - nanostores
 
-  '@better-auth/sso@1.5.0-beta.18(@better-auth/core@1.5.0-beta.18(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0))(@better-auth/utils@0.3.1)(better-auth@packages+better-auth)(better-call@1.1.0-beta.2)':
+  '@better-auth/sso@1.5.0-beta.19(@better-auth/core@1.5.0-beta.19(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0))(@better-auth/utils@0.3.1)(better-auth@packages+better-auth)(better-call@1.1.0-beta.2)':
     dependencies:
-      '@better-auth/core': 1.5.0-beta.18(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)
+      '@better-auth/core': 1.5.0-beta.19(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.19-beta.1)(better-call@1.1.0-beta.2)(jose@6.1.3)(kysely@0.28.10)(nanostores@1.1.0)
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
       better-auth: link:packages/better-auth
@@ -18302,18 +18337,15 @@ snapshots:
   '@electric-sql/pglite-socket@0.0.6(@electric-sql/pglite@0.3.2)':
     dependencies:
       '@electric-sql/pglite': 0.3.2
-    optional: true
 
   '@electric-sql/pglite-tools@0.2.7(@electric-sql/pglite@0.3.2)':
     dependencies:
       '@electric-sql/pglite': 0.3.2
-    optional: true
 
   '@electric-sql/pglite@0.3.14':
     optional: true
 
-  '@electric-sql/pglite@0.3.2':
-    optional: true
+  '@electric-sql/pglite@0.3.2': {}
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@25.3.0)':
     dependencies:
@@ -19349,7 +19381,6 @@ snapshots:
   '@hono/node-server@1.19.6(hono@4.10.6)':
     dependencies:
       hono: 4.10.6
-    optional: true
 
   '@hono/node-server@1.19.9(hono@4.11.10)':
     dependencies:
@@ -19950,7 +19981,6 @@ snapshots:
     dependencies:
       chevrotain: 10.5.0
       lilconfig: 2.1.0
-    optional: true
 
   '@mrleebo/prisma-ast@0.13.1':
     dependencies:
@@ -20597,8 +20627,25 @@ snapshots:
 
   '@poppinss/exception@1.2.3': {}
 
-  '@prisma/client-runtime-utils@7.2.0':
-    optional: true
+  '@prisma/adapter-better-sqlite3@7.4.1':
+    dependencies:
+      '@prisma/driver-adapter-utils': 7.4.1
+      better-sqlite3: 12.6.2
+
+  '@prisma/adapter-mariadb@7.4.1':
+    dependencies:
+      '@prisma/driver-adapter-utils': 7.4.1
+      mariadb: 3.4.5
+
+  '@prisma/adapter-pg@7.4.1':
+    dependencies:
+      '@prisma/driver-adapter-utils': 7.4.1
+      pg: 8.16.3
+      postgres-array: 3.0.4
+    transitivePeerDependencies:
+      - pg-native
+
+  '@prisma/client-runtime-utils@7.2.0': {}
 
   '@prisma/client@5.22.0(prisma@5.22.0)':
     optionalDependencies:
@@ -20608,17 +20655,19 @@ snapshots:
     optionalDependencies:
       prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
-  '@prisma/client@5.22.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))':
-    optionalDependencies:
-      prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
-
   '@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
     dependencies:
       '@prisma/client-runtime-utils': 7.2.0
     optionalDependencies:
       prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
       typescript: 5.9.3
-    optional: true
+
+  '@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)':
+    dependencies:
+      '@prisma/client-runtime-utils': 7.2.0
+    optionalDependencies:
+      prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
+      typescript: 5.9.3
 
   '@prisma/config@7.2.0(magicast@0.3.5)':
     dependencies:
@@ -20628,7 +20677,6 @@ snapshots:
       empathic: 2.0.0
     transitivePeerDependencies:
       - magicast
-    optional: true
 
   '@prisma/config@7.2.0(magicast@0.5.1)':
     dependencies:
@@ -20642,11 +20690,11 @@ snapshots:
 
   '@prisma/debug@5.22.0': {}
 
-  '@prisma/debug@6.8.2':
-    optional: true
+  '@prisma/debug@6.8.2': {}
 
-  '@prisma/debug@7.2.0':
-    optional: true
+  '@prisma/debug@7.2.0': {}
+
+  '@prisma/debug@7.4.1': {}
 
   '@prisma/dev@0.17.0(typescript@5.9.3)':
     dependencies:
@@ -20669,12 +20717,14 @@ snapshots:
       zeptomatch: 2.0.2
     transitivePeerDependencies:
       - typescript
-    optional: true
+
+  '@prisma/driver-adapter-utils@7.4.1':
+    dependencies:
+      '@prisma/debug': 7.4.1
 
   '@prisma/engines-version@5.22.0-44.605197351a3c8bdd595af2d2a9bc3025bca48ea2': {}
 
-  '@prisma/engines-version@7.2.0-4.0c8ef2ce45c83248ab3df073180d5eda9e8be7a3':
-    optional: true
+  '@prisma/engines-version@7.2.0-4.0c8ef2ce45c83248ab3df073180d5eda9e8be7a3': {}
 
   '@prisma/engines@5.22.0':
     dependencies:
@@ -20689,7 +20739,6 @@ snapshots:
       '@prisma/engines-version': 7.2.0-4.0c8ef2ce45c83248ab3df073180d5eda9e8be7a3
       '@prisma/fetch-engine': 7.2.0
       '@prisma/get-platform': 7.2.0
-    optional: true
 
   '@prisma/fetch-engine@5.22.0':
     dependencies:
@@ -20702,7 +20751,6 @@ snapshots:
       '@prisma/debug': 7.2.0
       '@prisma/engines-version': 7.2.0-4.0c8ef2ce45c83248ab3df073180d5eda9e8be7a3
       '@prisma/get-platform': 7.2.0
-    optional: true
 
   '@prisma/get-platform@5.22.0':
     dependencies:
@@ -20711,22 +20759,18 @@ snapshots:
   '@prisma/get-platform@6.8.2':
     dependencies:
       '@prisma/debug': 6.8.2
-    optional: true
 
   '@prisma/get-platform@7.2.0':
     dependencies:
       '@prisma/debug': 7.2.0
-    optional: true
 
-  '@prisma/query-plan-executor@6.18.0':
-    optional: true
+  '@prisma/query-plan-executor@6.18.0': {}
 
   '@prisma/studio-core@0.9.0(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
       '@types/react': 19.2.14
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
-    optional: true
 
   '@publint/pack@0.1.3': {}
 
@@ -23524,6 +23568,8 @@ snapshots:
     dependencies:
       '@types/node': 25.3.0
 
+  '@types/geojson@7946.0.16': {}
+
   '@types/google.accounts@0.0.18': {}
 
   '@types/graceful-fs@4.1.9':
@@ -23584,10 +23630,9 @@ snapshots:
     dependencies:
       undici-types: 6.21.0
 
-  '@types/node@25.2.3':
+  '@types/node@24.10.14':
     dependencies:
       undici-types: 7.16.0
-    optional: true
 
   '@types/node@25.3.0':
     dependencies:
@@ -23701,7 +23746,7 @@ snapshots:
 
   '@types/yauzl@2.10.3':
     dependencies:
-      '@types/node': 22.19.11
+      '@types/node': 25.3.0
     optional: true
 
   '@typescript-eslint/project-service@8.40.0(typescript@5.9.3)':
@@ -24720,11 +24765,6 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  bun-types@1.3.8:
-    dependencies:
-      '@types/node': 25.2.3
-    optional: true
-
   bun-types@1.3.9:
     dependencies:
       '@types/node': 25.3.0
@@ -24751,7 +24791,6 @@ snapshots:
       rc9: 2.1.2
     optionalDependencies:
       magicast: 0.3.5
-    optional: true
 
   c12@3.1.0(magicast@0.5.1):
     dependencies:
@@ -25556,8 +25595,7 @@ snapshots:
 
   deep-extend@0.6.0: {}
 
-  deepmerge-ts@7.1.5:
-    optional: true
+  deepmerge-ts@7.1.5: {}
 
   deepmerge@4.3.1: {}
 
@@ -25779,13 +25817,13 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  drizzle-orm@0.41.0(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
+  drizzle-orm@0.41.0(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260127.0
       '@electric-sql/pglite': 0.3.14
       '@libsql/client': 0.17.0(encoding@0.1.13)
       '@opentelemetry/api': 1.9.0
-      '@prisma/client': 5.22.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))
+      '@prisma/client': 7.2.0(prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.16.0
       better-sqlite3: 12.6.2
@@ -25797,7 +25835,7 @@ snapshots:
       postgres: 3.4.8
       prisma: 7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3)
 
-  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.8)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0):
+  drizzle-orm@0.45.1(@cloudflare/workers-types@4.20260127.0)(@electric-sql/pglite@0.3.14)(@libsql/client@0.17.0(encoding@0.1.13))(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(better-sqlite3@12.6.2)(bun-types@1.3.9)(gel@2.2.0)(kysely@0.28.10)(mysql2@3.16.2)(pg@8.16.3)(postgres@3.4.8)(prisma@5.22.0):
     optionalDependencies:
       '@cloudflare/workers-types': 4.20260127.0
       '@electric-sql/pglite': 0.3.14
@@ -25807,7 +25845,7 @@ snapshots:
       '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.16.0
       better-sqlite3: 12.6.2
-      bun-types: 1.3.8
+      bun-types: 1.3.9
       gel: 2.2.0
       kysely: 0.28.10
       mysql2: 3.16.2
@@ -25864,7 +25902,6 @@ snapshots:
     dependencies:
       '@standard-schema/spec': 1.1.0
       fast-check: 3.23.2
-    optional: true
 
   ejs@3.1.10:
     dependencies:
@@ -26785,7 +26822,6 @@ snapshots:
   fast-check@3.23.2:
     dependencies:
       pure-rand: 6.1.0
-    optional: true
 
   fast-deep-equal@3.1.3: {}
 
@@ -27349,8 +27385,7 @@ snapshots:
 
   graceful-fs@4.2.11: {}
 
-  grammex@3.1.12:
-    optional: true
+  grammex@3.1.12: {}
 
   graphql@16.12.0: {}
 
@@ -27540,8 +27575,7 @@ snapshots:
     dependencies:
       react-is: 16.13.1
 
-  hono@4.10.6:
-    optional: true
+  hono@4.10.6: {}
 
   hono@4.11.10: {}
 
@@ -27618,8 +27652,7 @@ snapshots:
 
   http-shutdown@1.2.2: {}
 
-  http-status-codes@2.3.0:
-    optional: true
+  http-status-codes@2.3.0: {}
 
   http2-wrapper@1.0.3:
     dependencies:
@@ -28618,6 +28651,14 @@ snapshots:
       tmpl: 1.0.5
 
   map-stream@0.1.0: {}
+
+  mariadb@3.4.5:
+    dependencies:
+      '@types/geojson': 7946.0.16
+      '@types/node': 24.10.14
+      denque: 2.1.0
+      iconv-lite: 0.6.3
+      lru-cache: 10.4.3
 
   markdown-extensions@2.0.0: {}
 
@@ -29756,7 +29797,6 @@ snapshots:
       named-placeholders: 1.1.6
       seq-queue: 0.0.5
       sqlstring: 2.3.3
-    optional: true
 
   mysql2@3.16.2:
     dependencies:
@@ -30687,6 +30727,8 @@ snapshots:
 
   postgres-array@2.0.0: {}
 
+  postgres-array@3.0.4: {}
+
   postgres-bytea@1.0.0: {}
 
   postgres-date@1.0.7: {}
@@ -30695,8 +30737,7 @@ snapshots:
     dependencies:
       xtend: 4.0.2
 
-  postgres@3.4.7:
-    optional: true
+  postgres@3.4.7: {}
 
   postgres@3.4.8: {}
 
@@ -30780,7 +30821,6 @@ snapshots:
       - magicast
       - react
       - react-dom
-    optional: true
 
   prisma@7.2.0(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3):
     dependencies:
@@ -30886,8 +30926,7 @@ snapshots:
 
   punycode@2.3.1: {}
 
-  pure-rand@6.1.0:
-    optional: true
+  pure-rand@6.1.0: {}
 
   pvtsutils@1.3.6:
     dependencies:
@@ -32429,7 +32468,6 @@ snapshots:
   remeda@2.21.3:
     dependencies:
       type-fest: 4.41.0
-    optional: true
 
   remove-trailing-separator@1.1.0: {}
 
@@ -33180,8 +33218,7 @@ snapshots:
 
   std-env@3.10.0: {}
 
-  std-env@3.9.0:
-    optional: true
+  std-env@3.9.0: {}
 
   stream-buffers@2.2.0: {}
 
@@ -33787,8 +33824,7 @@ snapshots:
 
   undici-types@6.21.0: {}
 
-  undici-types@7.16.0:
-    optional: true
+  undici-types@7.16.0: {}
 
   undici-types@7.18.2: {}
 
@@ -34133,7 +34169,6 @@ snapshots:
   valibot@1.2.0(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
-    optional: true
 
   validate-html-nesting@1.2.3: {}
 
@@ -34758,7 +34793,6 @@ snapshots:
   zeptomatch@2.0.2:
     dependencies:
       grammex: 3.1.12
-    optional: true
 
   zimmerframe@1.1.4: {}
 
