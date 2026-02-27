@@ -27,7 +27,7 @@ import {
 import type { StepperTOCItem } from "@/components/docs/stepper-toc";
 import { StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
-import { source } from "@/lib/source";
+import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
 
@@ -45,10 +45,14 @@ function groupTocItems(toc: TOCItemType[]): StepperTOCItem[] {
 
 export default async function Page({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ slug?: string[] }>;
+	searchParams: Promise<{ branch?: string }>;
 }) {
 	const { slug } = await params;
+	const { branch } = await searchParams;
+	const source = getSource(branch);
 	const page = source.getPage(slug);
 
 	if (!page) {
@@ -57,6 +61,7 @@ export default async function Page({
 
 	const MDX = page.data.body;
 	const groupedToc = groupTocItems(page.data.toc);
+	const gitBranch = branch === "canary" ? "canary" : "main";
 
 	return (
 		<DocsPage
@@ -68,7 +73,7 @@ export default async function Page({
 			editOnGithub={{
 				owner: "better-auth",
 				repo: "better-auth",
-				sha: "canary",
+				sha: gitBranch,
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
@@ -76,7 +81,7 @@ export default async function Page({
 				<LLMCopyButton />
 				<ViewOptions
 					markdownUrl={`${page.url}.mdx`}
-					githubUrl={`https://github.com/better-auth/better-auth/blob/canary/docs/content/docs/${page.path}`}
+					githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
 				/>
 			</StepperTOC>
 			<DocsTitle>{page.data.title}</DocsTitle>
@@ -146,15 +151,20 @@ export default async function Page({
 }
 
 export async function generateStaticParams() {
+	const source = getSource();
 	return source.generateParams();
 }
 
 export async function generateMetadata({
 	params,
+	searchParams,
 }: {
 	params: Promise<{ slug?: string[] }>;
+	searchParams: Promise<{ branch?: string }>;
 }) {
 	const { slug } = await params;
+	const { branch } = await searchParams;
+	const source = getSource(branch);
 	const page = source.getPage(slug);
 	if (!page) return notFound();
 
