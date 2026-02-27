@@ -118,6 +118,8 @@ export function createDynamicPathProxy<T extends Record<string, any>>(
 								//@ts-expect-error
 								signal.set(!val);
 							}, 10);
+							// we also call the callback if it exists
+							match.callback?.(routePath);
 						}
 					},
 				});

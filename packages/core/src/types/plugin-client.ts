@@ -17,6 +17,7 @@ export interface ClientStore {
 export type ClientAtomListener = {
 	matcher: (path: string) => boolean;
 	signal: "$sessionSignal" | Omit<string, "$sessionSignal">;
+	callback?: (path: string) => void;
 };
 
 /**
