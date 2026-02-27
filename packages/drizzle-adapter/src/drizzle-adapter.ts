@@ -343,7 +343,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 				}
 				for (const key in values) {
-					if (!schema[key]) {
+					let fieldName: string;
+					try {
+						fieldName = getFieldName({ model, field: key });
+					} catch {
+						fieldName = key;
+					}
+					if (!schema[fieldName]) {
 						throw new BetterAuthError(
 							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx auth@latest generate".`,
 						);

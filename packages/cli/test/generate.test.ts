@@ -845,6 +845,8 @@ describe("Prisma v7 compatibility", () => {
 
 			expect(schema.code).toContain('provider = "prisma-client"');
 			expect(schema.code).not.toContain('provider = "prisma-client-js"');
+			// Prisma v7+ should not include url in datasource (configured in prisma.config.ts)
+			expect(schema.code).not.toContain("url");
 		} finally {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });
