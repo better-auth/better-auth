@@ -182,9 +182,13 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
+			const baseURLString =
+				typeof ctx.context.options.baseURL === "string"
+					? ctx.context.options.baseURL
+					: undefined;
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: getRpID(opts, ctx.context.options.baseURL),
+				rpID: getRpID(opts, baseURLString),
 				userID,
 				userName: ctx.query?.name || session.user.email || session.user.id,
 				userDisplayName: session.user.email || session.user.id,
@@ -350,8 +354,12 @@ export const generatePasskeyAuthenticationOptions = (
 					],
 				});
 			}
+			const baseURLString =
+				typeof ctx.context.options.baseURL === "string"
+					? ctx.context.options.baseURL
+					: undefined;
 			const options = await generateAuthenticationOptions({
-				rpID: getRpID(opts, ctx.context.options.baseURL),
+				rpID: getRpID(opts, baseURLString),
 				userVerification: "preferred",
 				...(userPasskeys.length
 					? {
@@ -479,11 +487,15 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			}
 
 			try {
+				const verifyBaseURL =
+					typeof ctx.context.options.baseURL === "string"
+						? ctx.context.options.baseURL
+						: undefined;
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, ctx.context.options.baseURL),
+					expectedRPID: getRpID(options, verifyBaseURL),
 					requireUserVerification: false,
 				});
 				const { verified, registrationInfo } = verification;
@@ -624,11 +636,15 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 			try {
+				const authBaseURL =
+					typeof ctx.context.options.baseURL === "string"
+						? ctx.context.options.baseURL
+						: undefined;
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, ctx.context.options.baseURL),
+					expectedRPID: getRpID(options, authBaseURL),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),

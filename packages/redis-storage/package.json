@@ -1,13 +1,36 @@
 {
   "name": "@better-auth/redis-storage",
-  "version": "1.5.0-beta.16",
+  "version": "1.5.0-beta.19",
   "description": "Redis storage for Better Auth secondary storage",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/storage",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/redis-storage"
   },
+  "keywords": [
+    "auth",
+    "redis",
+    "storage",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -18,20 +41,14 @@
       "default": "./dist/index.mjs"
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "ioredis": "^5.0.0"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@types/node": "^25.2.2",
-    "ioredis": "^5.9.2",
+    "@types/node": "^25.3.2",
+    "ioredis": "^5.9.3",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"

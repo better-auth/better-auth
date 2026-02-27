@@ -16,14 +16,14 @@ catalog:
 
 catalogs:
   react19:
-    '@types/react': ^19.2.13
-    '@types/react-dom': ^19.2.0
+    '@types/react': ^19.2.14
+    '@types/react-dom': ^19.2.3
     react: ^19.2.4
     react-dom: ^19.2.4
   tailwind:
-    '@tailwindcss/postcss': ^4.1.18
-    '@tailwindcss/vite': ^4.1.18
-    tailwindcss: ^4.1.18
+    '@tailwindcss/postcss': ^4.2.1
+    '@tailwindcss/vite': ^4.2.1
+    tailwindcss: ^4.2.1
     tailwindcss-animate: ^1.0.7
   vitest:
     '@vitest/coverage-istanbul': ^4.0.18

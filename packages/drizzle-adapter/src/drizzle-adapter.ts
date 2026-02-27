@@ -343,7 +343,13 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					);
 				}
 				for (const key in values) {
-					if (!schema[key]) {
+					let fieldName: string;
+					try {
+						fieldName = getFieldName({ model, field: key });
+					} catch {
+						fieldName = key;
+					}
+					if (!schema[fieldName]) {
 						throw new BetterAuthError(
 							`The field "${key}" does not exist in the "${model}" Drizzle schema. Please update your drizzle schema or re-generate using "npx auth@latest generate".`,
 						);
@@ -626,6 +632,17 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					? true
 					: false,
 			supportsArrays: config.provider === "pg" ? true : false,
+			customTransformOutput: ({ data, fieldAttributes }) => {
+				// not all providers support dates
+				// one such example case is https://github.com/better-auth/better-auth/issues/7819
+				if (fieldAttributes.type === "date") {
+					if (data === null || data === undefined) {
+						return data;
+					}
+					return new Date(data);
+				}
+				return data;
+			},
 			transaction:
 				(config.transaction ?? false)
 					? (cb) =>
