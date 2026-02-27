@@ -1,0 +1,264 @@
+---
+title: Telegram
+description: Telegram plugin for Better Auth
+---
+
+The Telegram plugin allows users to authenticate using their Telegram accounts via the [Telegram Login Widget](https://core.telegram.org/widgets/login). This plugin provides a flexible way to configure Telegram login like a social provider even though Telegram does not follow the standard OAuth flow.
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Create your Telegram bot
+        1. Sign in to your Telegram account and search for `@BotFather`
+        2. Create a new bot
+        3. Note down your bot token
+        4. Configure the bot domain by going to `Bot Settings` > `Domain`
+
+        <Callout type="info">
+            - The Telegram Login Widget does not work with localhost bot domain. You need to use a public domain for the bot domain and HTTPS for local testing. You can use [NGROK](https://ngrok.com/) or another similar tool for this.
+        </Callout>
+    </Step>
+    <Step>
+        ### Add the Server Plugin
+
+        Add the Telegram plugin to your auth configuration:
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { telegram } from "better-auth/plugins";
+
+        export const auth = betterAuth({
+            plugins: [
+                telegram({
+                    botToken: "7592572304:AA...",
+                    mapProfileToUser: (profile: TelegramProfile) => {
+                        return {
+                          firstName: profile.first_name,
+                          lastName: profile.last_name,
+                          email: `telegram-${profile.id}@example.com`,
+                          image: profile.photo_url,
+                        }
+                    }
+                }),
+            ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### Add the Client Plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { telegramClient } from "better-auth/client/plugins";
+
+        export const authClient = createAuthClient({
+            plugins: [telegramClient()],
+        });
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+### Sign-In
+
+The Telegram Login Widget is loaded via a standard `<script>` tag pointing to `https://telegram.org/js/telegram-widget.js`, which exposes `window.Telegram.Login.auth()` on the global scope. Because you only need that global available at the moment the user clicks, you can lazy load the script either by dynamically injecting it or by using a framework loader like Next.js `<Script strategy="lazyOnload">` rather than blocking page load.
+
+Since this is triggered programmatically from any click handler, there's no obligation to use Telegram's own rendered widget button, giving you full control over styling, layout, and interaction states.
+
+`NEXT_PUBLIC_TELEGRAM_BOT_ID` is the first part of the bot token you obtain from `@Botfather`. If `botToken: "7592572304:AA..."`, then `NEXT_PUBLIC_TELEGRAM_BOT_ID=7592572304`
+
+```tsx title="app/sign-in.tsx"
+import Script from "next/script";
+
+import { Button } from "~/components/ui/button";
+
+export default function SignIn() {
+    const handleLogin = async (data: TelegramPayloadData) => {
+        await authClient.signIn.telegram(
+            {
+                ...data,
+                callbackURL: "/dashboard",
+            },
+            {
+                onSuccess(context) {
+                    toast.success("Successfully logged in!");
+                },
+                onError(context) {
+                    toast.error(context.error.message ?? context.error.code);
+                },
+            },
+        )
+    };
+
+    return (
+        <>
+            <Script
+                id="telegram"
+                type="text/javascript"
+                src="https://telegram.org/js/telegram-widget.js"
+            />
+            <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={async () => {
+                    try {
+                        // @ts-ignore
+                        await window.Telegram.Login.auth(
+                            {
+                                bot_id: env.NEXT_PUBLIC_TELEGRAM_BOT_ID,
+                                request_access: true,
+                            },
+                            async (data: TelegramPayload) => {
+                                if (!data) {
+                                    toast.error("Unable to sign in.");
+                                    return;
+                                }
+                                await handleLogin(data);
+                            },
+                        );
+                    } catch (error) {
+                        console.error("Telegram login error:", error);
+                    }
+                }}
+            >
+                <TelegramIcon className="size-5 object-contain" />
+            </Button>
+        </>
+    );
+}
+```
+
+### Link
+
+Once a user is signed in, you can link a Telegram account to their existing session by calling `authClient.telegram.link({ ...telegramData })`, passing the same payload data returned by the Telegram Login Widget callback.
+
+<APIMethod
+  path="/telegram/link"
+  method="POST"
+  requireSession
+>
+```ts
+type telegramLink = {
+    /**
+     * Telegram id. 
+     */
+    id: string
+    /**
+     * Telegram first_name. 
+     */
+    first_name: string
+    /**
+     * Telegram last_name. 
+     */
+    last_name?: string
+    /**
+     * Telegram username. 
+     */
+    username?: string
+    /**
+     * Telegram photo_url. 
+     */
+    photo_url?: string
+    /**
+     * Telegram auth_date. 
+     */
+    auth_date: number
+    /**
+     * Telegram hash. 
+     */
+    hash: string
+    /**
+     * URL to redirect after verification, if not provided will return the session. 
+     */
+    callbackURL?: string = "/dashboard"
+}
+```
+</APIMethod>
+
+### Unlink
+
+To remove the link, call `authClient.telegram.unlink()`. As with any unlink operation, it's worth ensuring the user has another sign-in method available before removing their Telegram connection.
+
+<APIMethod
+  path="/telegram/unlink"
+  method="POST"
+  requireSession
+>
+```ts
+type telegramUnlink = {
+}
+```
+</APIMethod>
+
+### Redirect
+
+Instead of using the callback-based approach, the Telegram Login Widget also supports a redirect mode. When using redirect mode, you have two options for handling the incoming Telegram auth data. You can point the redirect URL to `/api/auth/callback/telegram`, which lets the plugin handle the flow automatically server-side, similar to a standard OAuth callback. 
+
+Alternatively, you can redirect to any page in your app, read the Telegram auth parameters from the URL query string client-side, and manually call `authClient.signIn.telegram({ ...data, callbackURL })` to complete the sign-in yourself.
+
+```tsx title="app/sign-in.tsx"
+import Script from "next/script";
+
+import { Button } from "~/components/ui/button";
+
+export default function SignIn() {
+    const handleLogin = async (data: TelegramPayloadData) => {
+        await authClient.signIn.telegram(
+            {
+                ...data,
+                callbackURL: "/dashboard",
+            },
+            {
+                onSuccess(context) {
+                    toast.success("Successfully logged in!");
+                },
+                onError(context) {
+                    toast.error(context.error.message ?? context.error.code);
+                },
+            },
+        )
+    };
+
+    return (
+        <>
+            <Script
+                id="telegram"
+                type="text/javascript"
+                src="https://telegram.org/js/telegram-widget.js"
+            />
+            <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={async () => {
+                    try {
+                        // @ts-ignore
+                        await window.Telegram.Login.auth(
+                            {
+                                bot_id: env.NEXT_PUBLIC_TELEGRAM_BOT_ID,
+                                request_access: true,
+                            },
+                            async (data: TelegramPayload) => {
+                                if (!data) {
+                                    toast.error("Unable to sign in.");
+                                    return;
+                                }
+                                await handleLogin(data);
+                            },
+                        );
+                    } catch (error) {
+                        console.error("Telegram login error:", error);
+                    }
+                }}
+            >
+                <TelegramIcon className="size-5 object-contain" />
+            </Button>
+        </>
+    );
+}
+```
