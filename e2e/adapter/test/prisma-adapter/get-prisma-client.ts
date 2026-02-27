@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import type { PrismaClient } from "@prisma/client";
-import { DATABASE_URLS, type Dialect } from "./constants";
+import type { Dialect } from "./constants";
+import { DATABASE_URLS } from "./constants";
 
 type PC = InstanceType<typeof PrismaClient>;
 

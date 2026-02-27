@@ -2,7 +2,8 @@ import { execSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
-import { DATABASE_URLS, type Dialect } from "./constants";
+import type { Dialect } from "./constants";
+import { DATABASE_URLS } from "./constants";
 
 // Cache previously generated client directories per schema content,
 // so we can copy instead of running `prisma generate` again.
@@ -10,7 +11,11 @@ const lastGeneratedDir = new Map<string, string>();
 
 function resolvePrismaCli() {
 	const require = createRequire(import.meta.url);
-	return join(dirname(require.resolve("prisma/package.json")), "build", "index.js");
+	return join(
+		dirname(require.resolve("prisma/package.json")),
+		"build",
+		"index.js",
+	);
 }
 
 export async function pushPrismaSchema(dialect: Dialect) {
@@ -39,16 +44,19 @@ export default defineConfig({
 	const outputDir = outputMatch ? join(cwd, outputMatch[1]) : null;
 
 	try {
-		execSync(`${cli} db push --force-reset --accept-data-loss --config ${configPath}`, {
-			stdio: "pipe",
-			cwd,
-			env: {
-				...process.env,
-				// Prisma v7 blocks --force-reset when it detects an AI agent; this env var grants consent.
-				PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:
-					"I am running tests in a local development environment",
+		execSync(
+			`${cli} db push --force-reset --accept-data-loss --config ${configPath}`,
+			{
+				stdio: "pipe",
+				cwd,
+				env: {
+					...process.env,
+					// Prisma v7 blocks --force-reset when it detects an AI agent; this env var grants consent.
+					PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION:
+						"I am running tests in a local development environment",
+				},
 			},
-		});
+		);
 
 		if (outputDir) {
 			const prevDir = lastGeneratedDir.get(schemaKey);
