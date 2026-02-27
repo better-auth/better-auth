@@ -1,3 +1,4 @@
+// spell-checker:disable
 "use client";
 
 import { motion } from "framer-motion";

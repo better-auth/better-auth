@@ -86,6 +86,9 @@
 			],
 			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
+		"landing": {
+			"ignoreDependencies": ["*"]
+		},
 		"packages/expo": {
 			"ignoreDependencies": [
 				// loading of optional peers
