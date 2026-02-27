@@ -1,7 +1,7 @@
 packages:
   - packages/**
   - docs
-  - docs-new
+  - landing
   - demo/*
   - e2e/**
   - test
