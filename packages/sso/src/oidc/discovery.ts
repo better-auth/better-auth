@@ -477,9 +477,7 @@ export function selectTokenEndpointAuthMethod(
  * and validation. Specifically checks for:
  * - `tokenEndpoint` - required for exchanging authorization code for tokens
  * - `jwksEndpoint` - required for validating ID token signatures
- *
- * Note: `authorizationEndpoint` is handled separately in the sign-in flow,
- * so it's not checked here.
+ * - `authorizationEndpoint` - required for redirecting users to the IdP for login
  *
  * @param config - Partial OIDC config from the provider
  * @returns true if runtime discovery should be performed
@@ -491,7 +489,11 @@ export function needsRuntimeDiscovery(
 		return true;
 	}
 
-	return !config.tokenEndpoint || !config.jwksEndpoint;
+	return (
+		!config.tokenEndpoint ||
+		!config.jwksEndpoint ||
+		!config.authorizationEndpoint
+	);
 }
 
 /**
