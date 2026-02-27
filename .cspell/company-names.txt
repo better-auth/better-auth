@@ -10,6 +10,7 @@ orama
 hubspot
 kakao
 kakaotalk
+mezon
 paybin
 supabase
 kaltura
