@@ -11,7 +11,7 @@ import {
 	UserCircle,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Toaster, toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,10 +46,36 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { client } from "@/lib/auth-client";
+import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
-export default function AdminDashboard() {
+export default function Page() {
+	const { data: session, isPending: isSessionLoading } =
+		authClient.useSession();
+	const router = useRouter();
+
+	useEffect(() => {
+		if (!isSessionLoading && session?.user?.role !== "admin") {
+			router.push("/dashboard");
+		}
+	}, [session, isSessionLoading, router]);
+
+	if (isSessionLoading) {
+		return (
+			<div className="flex justify-center items-center h-screen">
+				<Loader2 className="h-8 w-8 animate-spin" />
+			</div>
+		);
+	}
+
+	if (session?.user?.role !== "admin") {
+		return null;
+	}
+
+	return <AdminDashboard />;
+}
+
+function AdminDashboard() {
 	const queryClient = useQueryClient();
 	const router = useRouter();
 	const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -70,7 +96,7 @@ export default function AdminDashboard() {
 	const { data: users, isLoading: isUsersLoading } = useQuery({
 		queryKey: ["users"],
 		queryFn: async () => {
-			const data = await client.admin.listUsers(
+			const data = await authClient.admin.listUsers(
 				{
 					query: {
 						limit: 10,
@@ -90,7 +116,7 @@ export default function AdminDashboard() {
 		e.preventDefault();
 		setIsLoading("create");
 		try {
-			await client.admin.createUser({
+			await authClient.admin.createUser({
 				email: newUser.email,
 				password: newUser.password,
 				name: newUser.name,
@@ -112,7 +138,7 @@ export default function AdminDashboard() {
 	const handleDeleteUser = async (id: string) => {
 		setIsLoading(`delete-${id}`);
 		try {
-			await client.admin.removeUser({ userId: id });
+			await authClient.admin.removeUser({ userId: id });
 			toast.success("User deleted successfully");
 			queryClient.invalidateQueries({
 				queryKey: ["users"],
@@ -127,7 +153,7 @@ export default function AdminDashboard() {
 	const handleRevokeSessions = async (id: string) => {
 		setIsLoading(`revoke-${id}`);
 		try {
-			await client.admin.revokeUserSessions({ userId: id });
+			await authClient.admin.revokeUserSessions({ userId: id });
 			toast.success("Sessions revoked for user");
 		} catch (error: any) {
 			toast.error(error.message || "Failed to revoke sessions");
@@ -139,7 +165,7 @@ export default function AdminDashboard() {
 	const handleImpersonateUser = async (id: string) => {
 		setIsLoading(`impersonate-${id}`);
 		try {
-			await client.admin.impersonateUser({ userId: id });
+			await authClient.admin.impersonateUser({ userId: id });
 			toast.success("Impersonated user");
 			router.push("/dashboard");
 		} catch (error: any) {
@@ -156,7 +182,7 @@ export default function AdminDashboard() {
 			if (!banForm.expirationDate) {
 				throw new Error("Expiration date is required");
 			}
-			await client.admin.banUser({
+			await authClient.admin.banUser({
 				userId: banForm.userId,
 				banReason: banForm.reason,
 				banExpiresIn: banForm.expirationDate.getTime() - Date.now(),
@@ -407,7 +433,7 @@ export default function AdminDashboard() {
 														});
 														if (user.banned) {
 															setIsLoading(`ban-${user.id}`);
-															await client.admin.unbanUser(
+															await authClient.admin.unbanUser(
 																{
 																	userId: user.id,
 																},

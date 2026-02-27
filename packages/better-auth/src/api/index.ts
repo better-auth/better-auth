@@ -6,11 +6,13 @@ import type {
 } from "@better-auth/core";
 import type { InternalLogger } from "@better-auth/core/env";
 import { logger } from "@better-auth/core/env";
+import { normalizePathname } from "@better-auth/core/utils/url";
 import type { Endpoint, Middleware } from "better-call";
-import { APIError, createRouter } from "better-call";
-import type { UnionToIntersection } from "../types/helper";
+import { createRouter } from "better-call";
+import type { UnionToIntersection } from "../types";
+import { isAPIError } from "../utils/is-api-error";
 import { originCheckMiddleware } from "./middlewares";
-import { onRequestRateLimit } from "./rate-limiter";
+import { onRequestRateLimit, onResponseRateLimit } from "./rate-limiter";
 import {
 	accountInfo,
 	callbackOAuth,
@@ -39,8 +41,10 @@ import {
 	signOut,
 	signUpEmail,
 	unlinkAccount,
+	updateSession,
 	updateUser,
 	verifyEmail,
+	verifyPassword,
 } from "./routes";
 import { toAuthEndpoints } from "./to-auth-endpoints";
 
@@ -215,11 +219,13 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		signUpEmail: signUpEmail<Option>(),
 		signInEmail: signInEmail<Option>(),
 		resetPassword,
+		verifyPassword,
 		verifyEmail,
 		sendVerificationEmail,
 		changeEmail,
 		changePassword,
 		setPassword,
+		updateSession: updateSession<Option>(),
 		updateUser: updateUser<Option>(),
 		deleteUser,
 		requestPasswordReset,
@@ -269,40 +275,37 @@ export const router = <Option extends BetterAuthOptions>(
 			...middlewares,
 		],
 		allowedMediaTypes: ["application/json"],
+		skipTrailingSlashes: options.advanced?.skipTrailingSlashes ?? false,
 		async onRequest(req) {
 			//handle disabled paths
 			const disabledPaths = ctx.options.disabledPaths || [];
-			const pathname = new URL(req.url).pathname.replace(/\/+$/, "") || "/";
-			const normalizedPath =
-				basePath === "/"
-					? pathname
-					: pathname.startsWith(basePath)
-						? pathname.slice(basePath.length).replace(/\/+$/, "") || "/"
-						: pathname;
+			const normalizedPath = normalizePathname(req.url, basePath);
 			if (disabledPaths.includes(normalizedPath)) {
 				return new Response("Not Found", { status: 404 });
 			}
+
+			let currentRequest = req;
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onRequest) {
-					const response = await plugin.onRequest(req, ctx);
+					const response = await plugin.onRequest(currentRequest, ctx);
 					if (response && "response" in response) {
 						return response.response;
 					}
 					if (response && "request" in response) {
-						const rateLimitResponse = await onRequestRateLimit(
-							response.request,
-							ctx,
-						);
-						if (rateLimitResponse) {
-							return rateLimitResponse;
-						}
-						return response.request;
+						currentRequest = response.request;
 					}
 				}
 			}
-			return onRequestRateLimit(req, ctx);
+
+			const rateLimitResponse = await onRequestRateLimit(currentRequest, ctx);
+			if (rateLimitResponse) {
+				return rateLimitResponse;
+			}
+
+			return currentRequest;
 		},
-		async onResponse(res) {
+		async onResponse(res, req) {
+			await onResponseRateLimit(req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await plugin.onResponse(res, ctx);
@@ -314,7 +317,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return res;
 		},
 		onError(e) {
-			if (e instanceof APIError && e.status === "FOUND") {
+			if (isAPIError(e) && e.status === "FOUND") {
 				return;
 			}
 			if (options.onAPIError?.throw) {
@@ -351,7 +354,7 @@ export const router = <Option extends BetterAuthOptions>(
 					}
 				}
 
-				if (e instanceof APIError) {
+				if (isAPIError(e)) {
 					if (e.status === "INTERNAL_SERVER_ERROR") {
 						ctx.logger.error(e.status, e);
 					}
@@ -374,7 +377,13 @@ export {
 	createAuthMiddleware,
 	optionsMiddleware,
 } from "@better-auth/core/api";
-export { APIError } from "better-call";
+export { APIError } from "@better-auth/core/error";
 export { getIp } from "../utils/get-request-ip";
+export { isAPIError } from "../utils/is-api-error";
 export * from "./middlewares";
 export * from "./routes";
+export { getOAuthState } from "./state/oauth";
+export {
+	getShouldSkipSessionRefresh,
+	setShouldSkipSessionRefresh,
+} from "./state/should-session-refresh";

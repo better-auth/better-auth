@@ -1,4 +1,4 @@
-import { Pricing } from "@/components/blocks/pricing";
+import { Pricing } from "@/components/pricing";
 
 const demoPlans = [
 	{

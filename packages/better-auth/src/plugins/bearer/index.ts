@@ -4,7 +4,15 @@ import { createHMAC } from "@better-auth/utils/hmac";
 import { serializeSignedCookie } from "better-call";
 import { parseSetCookieHeader } from "../../cookies";
 
-interface BearerOptions {
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		bearer: {
+			creator: typeof bearer;
+		};
+	}
+}
+
+export interface BearerOptions {
 	/**
 	 * If true, only signed tokens
 	 * will be converted to session
@@ -70,9 +78,14 @@ export const bearer = (options?: BearerOptions | undefined) => {
 						const headers = new Headers({
 							...Object.fromEntries(existingHeaders?.entries()),
 						});
-						headers.append(
+						// Use headers.set() with "; " separator per RFC 6265.
+						// headers.append("cookie") joins with ", " in some runtimes
+						// (e.g. Deno, Cloudflare Workers), which breaks cookie parsing.
+						const existingCookie = headers.get("cookie");
+						const newCookie = `${c.context.authCookies.sessionToken.name}=${signedToken}`;
+						headers.set(
 							"cookie",
-							`${c.context.authCookies.sessionToken.name}=${signedToken}`,
+							existingCookie ? `${existingCookie}; ${newCookie}` : newCookie,
 						);
 						return {
 							context: {
@@ -123,5 +136,6 @@ export const bearer = (options?: BearerOptions | undefined) => {
 				},
 			],
 		},
+		options,
 	} satisfies BetterAuthPlugin;
 };

@@ -1,9 +1,17 @@
+import { join } from "node:path";
 import { createMDX } from "fumadocs-mdx/next";
 
 const withMDX = createMDX();
 
 /** @type {import('next').NextConfig} */
 const config = {
+	...(process.env.NODE_ENV === "development"
+		? {
+				turbopack: {
+					root: join(import.meta.dirname, ".."),
+				},
+			}
+		: {}),
 	async rewrites() {
 		return [
 			{
@@ -22,6 +30,17 @@ const config = {
 			{
 				source: "/docs/examples",
 				destination: "/docs/examples/next-js",
+				permanent: true,
+			},
+			// Legacy errors page
+			{
+				source: "/docs/errors",
+				destination: "/docs/reference/errors",
+				permanent: true,
+			},
+			{
+				source: "/docs/errors/:path*",
+				destination: "/docs/reference/errors/:path*",
 				permanent: true,
 			},
 		];

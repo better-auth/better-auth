@@ -54,8 +54,6 @@ export const useAuth = () => {
 		const code_verifier = oauth.generateRandomCodeVerifier();
 		const code_challenge =
 			await oauth.calculatePKCECodeChallenge(code_verifier);
-		let state: string | undefined;
-		let nonce: string | undefined;
 
 		const authorizationUrl = new URL(as.authorization_endpoint!);
 		authorizationUrl.searchParams.set("client_id", client.client_id);
@@ -68,10 +66,10 @@ export const useAuth = () => {
 			code_challenge_method,
 		);
 
-		state = oauth.generateRandomState();
+		const state = oauth.generateRandomState();
 		authorizationUrl.searchParams.set("state", state);
 
-		nonce = oauth.generateRandomNonce();
+		const nonce = oauth.generateRandomNonce();
 		authorizationUrl.searchParams.set("nonce", nonce);
 
 		console.log("store code_verifier and nonce in the end-user session");
@@ -101,9 +99,6 @@ export const useAuth = () => {
 		}
 		sessionStorage.removeItem(webStorageKey);
 		const { code_verifier, state, nonce, redirectUri } = JSON.parse(storage);
-
-		let sub: string;
-		let accessToken: string;
 
 		// @ts-expect-error
 		const currentUrl: URL = new URL(window.location);
@@ -147,12 +142,12 @@ export const useAuth = () => {
 		}
 
 		console.log("Access Token Response", authorizationCodeResult);
-		accessToken = authorizationCodeResult.access_token;
+		const accessToken = authorizationCodeResult.access_token;
 		setAccessToken(accessToken);
 		setIdToken(authorizationCodeResult.id_token);
 		const claims = oauth.getValidatedIdTokenClaims(authorizationCodeResult);
 		console.log("ID Token Claims", claims);
-		sub = claims.sub;
+		const sub = claims.sub;
 
 		// UserInfo Request
 		const response = await oauth.userInfoRequest(as, client, accessToken);

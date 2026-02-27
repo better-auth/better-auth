@@ -13,4 +13,3 @@ prefs
 uncompromised
 myapp
 Neue
-user_01KBT4BMFF7ASGRDD0WZ6W63FF

@@ -232,9 +232,9 @@ export const auth = betterAuth({
 The Better-Auth CLI now supports indexing your database out of the box, which greatly improves the performance of your application.
 
 ```bash
-npx @better-auth/cli generate
+npx auth generate
 
-npx @better-auth/cli migrate
+npx auth migrate
 ```
 
 ---
@@ -503,7 +503,7 @@ In the next major release, we will assume AsyncLocalStorage support by default, 
 - **ESM Only**: Better-Auth is now 100% ESM.
 - **Session Refetching**: Support for polling & on-window-focus refetching.
 - **Cloudflare Workers**: CLI support for virtual module imports.
-- **Error Documentation**: Common OAuth flow errors are now [documented](/docs/errors).
+- **Error Documentation**: Common OAuth flow errors are now [documented](/docs/reference/errors).
 - **Last-Login-Method**: Support for tracking SIWE & Passkey.
 
 ---

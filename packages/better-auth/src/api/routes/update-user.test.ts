@@ -17,7 +17,7 @@ describe("updateUser", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
+					sendChangeEmailConfirmation: async ({
 						user,
 						newEmail,
 						url,
@@ -366,6 +366,58 @@ describe("updateUser", async () => {
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
 
+	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
+		const store = new Map<string, string>();
+		const writeLog: { key: string; timestamp: number }[] = [];
+
+		const { auth, signInWithTestUser: signIn } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					writeLog.push({ key, timestamp: Date.now() });
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Clear any previous state
+		store.clear();
+		writeLog.length = 0;
+
+		const { headers } = await signIn();
+
+		// Get the session token that was just created
+		const sessionTokens = Array.from(store.keys()).filter(
+			(k) => !k.startsWith("active-sessions-"),
+		);
+		expect(sessionTokens.length).toBe(1);
+		const sessionToken = sessionTokens[0];
+
+		// Clear the write log before updateUser call
+		writeLog.length = 0;
+
+		// Use auth.api.updateUser directly to reproduce the issue
+		await auth.api.updateUser({
+			body: {
+				name: "updatedName",
+			},
+			headers,
+		});
+
+		// Count how many times the same session token was written
+		const sessionTokenWrites = writeLog.filter(
+			(log) => log.key === sessionToken,
+		);
+
+		// Should only write once per session token, not multiple times
+		expect(sessionTokenWrites.length).toBe(1);
+	});
+
 	it("should not allow updating user with additional fields that are input: false", async () => {
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
@@ -437,6 +489,53 @@ describe("delete user", async () => {
 			const session = await client.getSession();
 			expect(session.data).toBeNull();
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8173
+	 */
+	it("should require password when session is no longer fresh", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(Date.now() - 5_000),
+			},
+		});
+
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("SESSION_EXPIRED");
 	});
 
 	it("should delete every session from deleted user", async () => {

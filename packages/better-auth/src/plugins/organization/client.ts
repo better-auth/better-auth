@@ -14,10 +14,13 @@ import type { Prettify } from "../../types/helper";
 import type { AccessControl, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, memberAc, ownerAc } from "./access";
+import { ORGANIZATION_ERROR_CODES } from "./error-codes";
 import type { OrganizationPlugin } from "./organization";
 import type { HasPermissionBaseInput } from "./permission";
 import { hasPermissionFn } from "./permission";
 import type { OrganizationOptions } from "./types";
+
+export * from "./error-codes";
 
 /**
  * Using the same `hasPermissionFn` function, but without the need for a `ctx` parameter or the `organizationId` parameter.
@@ -96,18 +99,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -118,14 +112,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 
 	type OrganizationReturn = CO["teams"] extends { enabled: true }
 		? {
-				members: InferMember<CO, false>[];
+				members: InferMember<CO>[];
 				invitations: InferInvitation<CO>[];
-				teams: InferTeam<CO, false>[];
-			} & InferOrganization<CO, false>
+				teams: InferTeam<CO>[];
+			} & InferOrganization<CO>
 		: {
-				members: InferMember<CO, false>[];
-				invitations: InferInvitation<CO, false>[];
-			} & InferOrganization<CO, false>;
+				members: InferMember<CO>[];
+				invitations: InferInvitation<CO>[];
+			} & InferOrganization<CO>;
 
 	type Schema = CO["schema"];
 	return {
@@ -154,10 +148,10 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 		getActions: ($fetch, _$store, co) => ({
 			$Infer: {
 				ActiveOrganization: {} as OrganizationReturn,
-				Organization: {} as InferOrganization<CO, false>,
-				Invitation: {} as InferInvitation<CO, false>,
-				Member: {} as InferMember<CO, false>,
-				Team: {} as InferTeam<CO, false>,
+				Organization: {} as InferOrganization<CO>,
+				Invitation: {} as InferInvitation<CO>,
+				Member: {} as InferMember<CO>,
+				Team: {} as InferTeam<CO>,
 			},
 			organization: {
 				checkRolePermission: <
@@ -175,14 +169,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},
 			},
 		}),
 		getAtoms: ($fetch) => {
-			const listOrganizations = useAuthQuery<InferOrganization<CO, false>[]>(
+			const listOrganizations = useAuthQuery<InferOrganization<CO>[]>(
 				$listOrg,
 				"/organization/list",
 				$fetch,
@@ -192,9 +186,9 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 			const activeOrganization = useAuthQuery<
 				Prettify<
-					InferOrganization<CO, false> & {
-						members: InferMember<CO, false>[];
-						invitations: InferInvitation<CO, false>[];
+					InferOrganization<CO> & {
+						members: InferMember<CO>[];
+						invitations: InferInvitation<CO>[];
 					}
 				>
 			>(
@@ -207,7 +201,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMember = useAuthQuery<Member>(
-				[$activeMemberSignal],
+				[$activeOrgSignal, $activeMemberSignal],
 				"/organization/get-active-member",
 				$fetch,
 				{
@@ -216,7 +210,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMemberRole = useAuthQuery<{ role: string }>(
-				[$activeMemberRoleSignal],
+				[$activeOrgSignal, $activeMemberRoleSignal],
 				"/organization/get-active-member-role",
 				$fetch,
 				{
@@ -258,23 +252,19 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization/set-active");
+					return (
+						path.startsWith("/organization/set-active") ||
+						path === "/organization/create" ||
+						path === "/organization/delete" ||
+						path === "/organization/remove-member" ||
+						path === "/organization/leave" ||
+						path === "/organization/accept-invitation"
+					);
 				},
 				signal: "$sessionSignal",
 			},
-			{
-				matcher(path) {
-					return path.includes("/organization/update-member-role");
-				},
-				signal: "$activeMemberSignal",
-			},
-			{
-				matcher(path) {
-					return path.includes("/organization/update-member-role");
-				},
-				signal: "$activeMemberRoleSignal",
-			},
 		],
+		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
 };
 
