@@ -127,9 +127,9 @@ export const sendVerificationOTP = (opts: RequiredEmailOTPOptions) =>
 
 			await ctx.context.runInBackgroundOrAwait(
 				opts.sendVerificationOTP(
-					((ctx.body.type === "email-verification" ||
+					(ctx.body.type === "email-verification" ||
 						ctx.body.type === "forget-password") &&
-						user)
+						user
 						? {
 								email,
 								otp,
