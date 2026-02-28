@@ -95,9 +95,6 @@ export function HeroTitle() {
 						<span className="absolute right-0 -top-[6px] -bottom-[6px] w-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
 						{/* Corner + marks */}
 
-						<span className="absolute -bottom-[6px] -right-[6px] font-mono text-[8px] text-foreground/40 dark:text-foreground/25 leading-none select-none translate-x-1/2 translate-y-1/2">
-							+
-						</span>
 						<span className="relative">Read Docs</span>
 					</Link>
 				</div>
