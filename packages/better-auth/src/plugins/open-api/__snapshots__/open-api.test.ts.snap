@@ -726,21 +726,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             },
             "description": "Not Found. The requested resource was not found.",
           },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                    },
-                  },
-                  "type": "object",
-                },
-              },
-            },
-            "description": "Unprocessable Entity. Email already exists",
-          },
           "429": {
             "content": {
               "application/json": {
