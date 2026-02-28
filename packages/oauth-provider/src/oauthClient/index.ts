@@ -452,7 +452,7 @@ export const getOAuthClientPublic = (opts: OAuthOptions<Scope[]>) =>
 			}),
 			metadata: {
 				openapi: {
-					description: "Gets publically available client fields",
+					description: "Gets publicly available client fields",
 				},
 			},
 		},
@@ -467,14 +467,14 @@ export const getOAuthClientPublicPrelogin = (opts: OAuthOptions<Scope[]>) =>
 		"/oauth2/public-client-prelogin",
 		{
 			method: "POST",
-			use: [publicSessionMiddleware],
+			use: [publicSessionMiddleware(opts)],
 			body: z.object({
 				client_id: z.string(),
+				oauth_query: z.string().optional(),
 			}),
 			metadata: {
 				openapi: {
-					description:
-						"Gets publically available client fields (prior to login)",
+					description: "Gets publicly available client fields (prior to login)",
 				},
 			},
 		},

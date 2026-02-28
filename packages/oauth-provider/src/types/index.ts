@@ -116,7 +116,7 @@ export interface OAuthOptions<
 		[K in Scopes[number]]?: number | string | Date;
 	};
 	/**
-	 * Allows /oauth2/public-client endpoint to be
+	 * Allows /oauth2/public-client-prelogin endpoint to be
 	 * requestable prior to login via a valid oauth_query.
 	 */
 	allowPublicClientPrelogin?: boolean;

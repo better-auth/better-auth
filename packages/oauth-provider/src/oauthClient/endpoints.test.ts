@@ -22,7 +22,7 @@ describe("oauthClient", async () => {
 					oauthAuthServerConfig: true,
 					openidConfig: true,
 				},
-				allowPreLoginPublicClient: true,
+				allowPublicClientPrelogin: true,
 			}),
 			jwt(),
 		],
@@ -118,7 +118,6 @@ describe("oauthClient", async () => {
 
 		const client = await authClient.oauth2.publicClientPrelogin({
 			client_id: oauthUiClient.client_id,
-			// @ts-expect-error oauth_query sent directly for test
 			oauth_query: signedParams.toString(),
 		});
 		expect(client.data).toMatchObject({
