@@ -8,6 +8,8 @@ export function groupTocItems(toc: TOCItemType[]): StepperTOCItem[] {
 			grouped.push({ ...item, subheadings: [] });
 		} else if (grouped.length > 0) {
 			grouped[grouped.length - 1].subheadings.push(item);
+		} else {
+			grouped.push({ ...item, subheadings: [] });
 		}
 	}
 	return grouped;
