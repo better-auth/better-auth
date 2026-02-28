@@ -767,6 +767,24 @@ await auth.api.registerSSOProvider({
 
 Now when users from `acmecorp.com` sign in through this provider, they'll automatically be added to the "Acme Corp" organization with the appropriate role.
 
+#### Self-Service SSO Dashboard
+
+If you're using [Better Auth Infrastructure](https://better-auth.com/sign-in), you get access to a self-service SSO dashboard that simplifies onboarding enterprise customers. Instead of manually exchanging SAML metadata and certificates, organization admins can generate a shareable onboarding link that guides enterprise IT teams through configuring their identity provider.
+
+The dashboard is available at:
+
+```
+https://better-auth.com/dashboard/[project]/organization/[orgId]/enterprise
+```
+
+From the dashboard you can:
+
+- **Generate onboarding links** for enterprise customers to self-configure their SAML provider
+- **Monitor SSO connection status** for each organization
+- **Manage provider configurations** without writing code
+
+This eliminates the back-and-forth typically required when setting up enterprise SSO, reducing onboarding time from days to minutes.
+
 #### Multiple Organizations Example
 
 You can set up multiple SSO providers for different organizations:
