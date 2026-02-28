@@ -152,8 +152,7 @@ describe("lastLoginMethod", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
-		const token =
-			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const token = new URL(magicLinkEmail.url).searchParams.get("token") || "";
 		const headers = new Headers();
 		await client.$fetch("/magic-link/verify", {
 			method: "GET",
@@ -197,8 +196,7 @@ describe("lastLoginMethod", async () => {
 		await client.signIn.magicLink({
 			email: testUser.email,
 		});
-		const token =
-			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const token = new URL(magicLinkEmail.url).searchParams.get("token") || "";
 		let sessionToken = "";
 		await client.magicLink.verify(
 			{
@@ -217,9 +215,7 @@ describe("lastLoginMethod", async () => {
 						const cookies = parseSetCookieHeader(
 							context.response.headers.get("set-cookie") || "",
 						);
-						const sessionCookie = cookies.get(
-							"better-auth.session_token",
-						);
+						const sessionCookie = cookies.get("better-auth.session_token");
 						if (sessionCookie?.value) {
 							sessionToken = sessionCookie.value;
 						}
