@@ -109,12 +109,11 @@ export function StaggeredNavFiles() {
 	};
 	const isActive = useCallback((href: string) => pathname === href, [pathname]);
 	const isDocs = pathname.startsWith("/docs");
-	const isBlogPost = pathname.startsWith("/blog/") && pathname !== "/blog";
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
 	});
-	const isNarrowLeft = isDocs || isBlogPost;
+	const isNarrowLeft = isDocs;
 	const leftPaneWidthClass = isNarrowLeft
 		? "w-[22vw]"
 		: pathname === "/pricing" || isResourcePage
