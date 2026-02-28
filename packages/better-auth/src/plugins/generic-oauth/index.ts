@@ -20,8 +20,7 @@ export * from "./providers";
 export type { GenericOAuthConfig, GenericOAuthOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"generic-oauth": {
 			creator: typeof genericOAuth;
 		};
@@ -54,6 +53,23 @@ export type BaseOAuthProviderOptions = Omit<
  * A generic OAuth plugin that can be used to add OAuth support to any provider
  */
 export const genericOAuth = (options: GenericOAuthOptions) => {
+	const seenIds = new Set<string>();
+	const nonUniqueIds = new Set<string>();
+
+	for (const config of options.config) {
+		const id = config.providerId;
+		if (seenIds.has(id)) {
+			nonUniqueIds.add(id);
+		}
+		seenIds.add(id);
+	}
+
+	if (nonUniqueIds.size > 0) {
+		console.warn(
+			`Duplicate provider IDs found: ${Array.from(nonUniqueIds).join(", ")}`,
+		);
+	}
+
 	return {
 		id: "generic-oauth",
 		init: (ctx: AuthContext) => {
@@ -111,9 +127,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier?: string | undefined;
 						deviceId?: string | undefined;
 					}) {
+						const codeVerifier = c.pkce ? data.codeVerifier : undefined;
 						// Use custom getToken if provided
 						if (c.getToken) {
-							return c.getToken(data);
+							return c.getToken({
+								...data,
+								codeVerifier,
+							});
 						}
 
 						// Standard token exchange flow
@@ -137,15 +157,17 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
+						// Use data.redirectURI for token exchange so it matches the redirect_uri
+						// from the authorization request (required by OAuth2; mismatch causes invalid_code).
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
-							codeVerifier: data.codeVerifier,
+							codeVerifier,
 							redirectURI: data.redirectURI,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
-								redirectURI: c.redirectURI,
+								redirectURI: data.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,

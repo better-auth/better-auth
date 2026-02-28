@@ -5,6 +5,11 @@ on:
   merge_group:
   pull_request:
 
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+  BETTER_AUTH_TELEMETRY_ENDPOINT: ${{ vars.BETTER_AUTH_TELEMETRY_ENDPOINT }}
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.merge_group.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -13,7 +18,7 @@ jobs:
   smoke:
     name: Smoke test
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
@@ -39,17 +44,10 @@ jobs:
         run: pnpm install
 
       - name: Build
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm build
 
       - name: Start Docker Containers
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - uses: oven-sh/setup-bun@v2
 
@@ -58,10 +56,6 @@ jobs:
           deno-version: 2.6.4
 
       - name: Smoke
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:smoke
 
       - name: Stop Docker Containers
@@ -69,7 +63,7 @@ jobs:
   integration:
     name: Integration test
     timeout-minutes: 60
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -105,22 +99,14 @@ jobs:
 
       - name: Install Playwright Browsers
         if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
+        uses: ./.github/actions/setup-playwright
 
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Integration
         if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration --filter=./e2e/integration
 
       - name: Stop Docker Containers
@@ -128,12 +114,11 @@ jobs:
         run: docker compose down
   adapter-integration:
     name: ${{ matrix.packages }} Integration Test
-    runs-on: ubuntu-latest
+    runs-on: starsling-ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         packages: [ "@better-auth-test/adapter-factory", "@better-auth-test/drizzle-adapter", "@better-auth-test/kysely-prisma-adapter", "@better-auth-test/memory-adapter", "@better-auth-test/mongo-adapter", "@better-auth-test/prisma-adapter" ]
-        node-version: [ 22.x ]
     steps:
       - name: Skip integration tests in merge queue
         if: github.event_name == 'merge_group'
@@ -167,24 +152,12 @@ jobs:
         if: github.event_name != 'merge_group'
         run: pnpm install
 
-      - name: Install Playwright Browsers
-        if: github.event_name != 'merge_group'
-        run: pnpm exec playwright install --with-deps
-        working-directory: e2e/integration
-
       - name: Start Docker Containers
         if: github.event_name != 'merge_group'
-        run: |
-          docker compose up -d
-          # Wait for services to be ready (optional)
-          sleep 10
+        run: docker compose up -d --wait --wait-timeout 60
 
       - name: Adapter Integration
         if: github.event_name != 'merge_group'
-        env:
-          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-          TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
-          TURBO_CACHE: remote:rw
         run: pnpm e2e:integration --filter=${{ matrix.packages }}
 
       - name: Stop Docker Containers

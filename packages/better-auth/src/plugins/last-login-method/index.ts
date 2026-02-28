@@ -5,8 +5,7 @@ import type {
 import { createAuthMiddleware } from "@better-auth/core/api";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"last-login-method": {
 			creator: typeof lastLoginMethod;
 		};
@@ -74,6 +73,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
 		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
+		if (ctx.path.startsWith("/magic-link/verify")) return "magic-link";
 		return null;
 	};
 

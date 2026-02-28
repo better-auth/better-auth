@@ -39,6 +39,14 @@ export interface TwoFactorOptions {
 	 * @default 600 (10 minutes)
 	 */
 	twoFactorCookieMaxAge?: number | undefined;
+	/**
+	 * Maximum age (in seconds) for the trusted device cookie.
+	 * When a user opts to trust a device, this controls how long
+	 * the device stays trusted before requiring 2FA again.
+	 *
+	 * @default 2592000 (30 days)
+	 */
+	trustDeviceMaxAge?: number | undefined;
 }
 
 export interface UserWithTwoFactor extends User {

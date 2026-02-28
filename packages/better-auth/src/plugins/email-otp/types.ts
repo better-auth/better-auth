@@ -89,4 +89,16 @@ export interface EmailOTPOptions {
 	 * @default false
 	 */
 	overrideDefaultEmailVerification?: boolean | undefined;
+	/**
+	 * Rate limit configuration
+	 *
+	 * @default {
+	 * 	window: 60,
+	 * 	max: 3,
+	 * }
+	 */
+	rateLimit?: {
+		window: number;
+		max: number;
+	};
 }

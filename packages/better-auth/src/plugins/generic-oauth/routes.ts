@@ -234,6 +234,12 @@ const OAuth2CallbackQuerySchema = z.object({
 			description: "The state parameter from the OAuth2 request",
 		})
 		.optional(),
+	iss: z
+		.string()
+		.meta({
+			description: "The issuer identifier",
+		})
+		.optional(),
 });
 
 export const oAuth2Callback = (options: GenericOAuthOptions) =>
@@ -325,10 +331,13 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 
 			let finalTokenUrl = providerConfig.tokenUrl;
 			let finalUserInfoUrl = providerConfig.userInfoUrl;
+			let expectedIssuer = providerConfig.issuer;
+
 			if (providerConfig.discoveryUrl) {
 				const discovery = await betterFetch<{
 					token_endpoint: string;
 					userinfo_endpoint: string;
+					issuer: string;
 				}>(providerConfig.discoveryUrl, {
 					method: "GET",
 					headers: providerConfig.discoveryHeaders,
@@ -336,14 +345,40 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (discovery.data) {
 					finalTokenUrl = discovery.data.token_endpoint;
 					finalUserInfoUrl = discovery.data.userinfo_endpoint;
+					if (!expectedIssuer && discovery.data.issuer) {
+						expectedIssuer = discovery.data.issuer;
+					}
 				}
 			}
+
+			if (expectedIssuer) {
+				if (ctx.query.iss) {
+					if (ctx.query.iss !== expectedIssuer) {
+						ctx.context.logger.error("OAuth issuer mismatch", {
+							expected: expectedIssuer,
+							received: ctx.query.iss,
+						});
+						return redirectOnError("issuer_mismatch");
+					}
+				} else if (providerConfig.requireIssuerValidation) {
+					ctx.context.logger.error("OAuth issuer parameter missing", {
+						expected: expectedIssuer,
+					});
+					return redirectOnError("issuer_missing");
+				}
+			}
+
 			try {
+				const callbackRedirectURI =
+					ctx.request?.url != null
+						? new URL(ctx.request.url).origin +
+							new URL(ctx.request.url).pathname
+						: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`;
 				// Use custom getToken if provided
 				if (providerConfig.getToken) {
 					tokens = await providerConfig.getToken({
 						code,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI: callbackRedirectURI,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
 					});
 				} else {
@@ -362,11 +397,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						headers: providerConfig.authorizationHeaders,
 						code,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI: callbackRedirectURI,
 						options: {
 							clientId: providerConfig.clientId,
 							clientSecret: providerConfig.clientSecret,
-							redirectURI: providerConfig.redirectURI,
+							redirectURI: callbackRedirectURI,
 						},
 						tokenEndpoint: finalTokenUrl,
 						authentication: providerConfig.authentication,
@@ -424,7 +459,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (
 					ctx.context.options.account?.accountLinking?.allowDifferentEmails !==
 						true &&
-					link.email !== userInfo.email
+					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
 					return redirectOnError("email_doesn't_match");
 				}

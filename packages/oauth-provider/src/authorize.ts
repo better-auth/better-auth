@@ -3,6 +3,7 @@ import { getSessionFromCtx } from "better-auth/api";
 import { generateRandomString, makeSignature } from "better-auth/crypto";
 import type { Verification } from "better-auth/db";
 import { APIError } from "better-call";
+import { oAuthState } from "./oauth";
 import type {
 	OAuthAuthorizationQuery,
 	OAuthConsent,
@@ -10,7 +11,14 @@ import type {
 	Scope,
 	VerificationValue,
 } from "./types";
-import { getClient, parsePrompt, storeToken } from "./utils";
+
+import {
+	getClient,
+	getJwtPlugin,
+	isPKCERequired,
+	parsePrompt,
+	storeToken,
+} from "./utils";
 
 /**
  * Formats an error url
@@ -20,12 +28,14 @@ export function formatErrorURL(
 	error: string,
 	description: string,
 	state?: string,
+	iss?: string,
 ) {
 	const searchParams = new URLSearchParams({
 		error,
 		error_description: description,
 	});
 	state && searchParams.append("state", state);
+	iss && searchParams.append("iss", iss);
 	return `${url}${url.includes("?") ? "&" : "?"}${searchParams.toString()}`;
 }
 
@@ -40,6 +50,57 @@ export const handleRedirect = (ctx: GenericEndpointContext, uri: string) => {
 		throw ctx.redirect(uri);
 	}
 };
+
+/**
+ * Validates that the issuer URL
+ * - MUST use HTTPS scheme (HTTP allowed for localhost in dev)
+ * - MUST NOT contain query components
+ * - MUST NOT contain fragment components
+ *
+ * @returns The validated issuer URL, or a sanitized version if invalid
+ */
+export function validateIssuerUrl(issuer: string): string {
+	try {
+		const url = new URL(issuer);
+
+		const isLocalhost =
+			url.hostname === "localhost" || url.hostname === "127.0.0.1";
+		if (url.protocol !== "https:" && !isLocalhost) {
+			url.protocol = "https:";
+		}
+
+		url.search = "";
+		url.hash = "";
+
+		return url.toString().replace(/\/$/, "");
+	} catch {
+		// If URL parsing fails, return as-is
+		return issuer;
+	}
+}
+
+/**
+ * Gets the issuer identifier
+ */
+export function getIssuer(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+): string {
+	let issuer: string;
+
+	if (opts.disableJwtPlugin) {
+		issuer = ctx.context.baseURL;
+	} else {
+		try {
+			const jwtPluginOptions = getJwtPlugin(ctx.context).options;
+			issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL;
+		} catch {
+			issuer = ctx.context.baseURL;
+		}
+	}
+
+	return validateIssuerUrl(issuer);
+}
 
 /**
  * Error page url if redirect_uri has not been verified yet
@@ -78,6 +139,10 @@ export async function authorizeEndpoint(
 
 	// Check request
 	const query: OAuthAuthorizationQuery = ctx.query;
+	await oAuthState.set({
+		query: query.toString(),
+	});
+
 	if (!query.client_id) {
 		throw ctx.redirect(
 			getErrorURL(ctx, "invalid_client", "client_id is required"),
@@ -140,12 +205,7 @@ export async function authorizeEndpoint(
 	if (requestedScopes) {
 		const validScopes = new Set(client.scopes ?? opts.scopes);
 		const invalidScopes = requestedScopes.filter((scope) => {
-			return (
-				!validScopes?.has(scope) ||
-				// offline access must be requested through PKCE
-				(scope === "offline_access" &&
-					(query.code_challenge_method !== "S256" || !query.code_challenge))
-			);
+			return !validScopes?.has(scope);
 		});
 		if (invalidScopes.length) {
 			throw ctx.redirect(
@@ -154,6 +214,7 @@ export async function authorizeEndpoint(
 					"invalid_scope",
 					`The following scopes are invalid: ${invalidScopes.join(", ")}`,
 					query.state,
+					getIssuer(ctx, opts),
 				),
 			);
 		}
@@ -164,28 +225,52 @@ export async function authorizeEndpoint(
 		query.scope = requestedScopes.join(" ");
 	}
 
-	if (!query.code_challenge || !query.code_challenge_method) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-				query.state,
-			),
-		);
+	// Check if PKCE is required for this client and scope
+	const pkceRequired = isPKCERequired(client, requestedScopes);
+
+	// Validate PKCE parameters if required
+	if (pkceRequired) {
+		if (!query.code_challenge || !query.code_challenge_method) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					pkceRequired.valueOf(),
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
-	// Check code challenges
-	const codeChallengesSupported = ["S256"];
-	if (!codeChallengesSupported.includes(query.code_challenge_method)) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"invalid code_challenge method",
-				query.state,
-			),
-		);
+	// If PKCE parameters are provided, validate them (even if not required)
+	if (query.code_challenge || query.code_challenge_method) {
+		// Both parameters must be provided together
+		if (!query.code_challenge || !query.code_challenge_method) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"code_challenge and code_challenge_method must both be provided",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+
+		// Check code challenge method is supported (only S256)
+		const codeChallengesSupported = ["S256"];
+		if (!codeChallengesSupported.includes(query.code_challenge_method)) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_request",
+					"invalid code_challenge method, only S256 is supported",
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
 	}
 
 	// Check for session
@@ -267,6 +352,7 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
+			authTime: new Date(session.session.createdAt).getTime(),
 			referenceId,
 		});
 	}
@@ -304,6 +390,7 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
+		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
 	});
 }
@@ -316,6 +403,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
+		authTime: number;
 		referenceId?: string;
 	},
 ) {
@@ -333,6 +421,7 @@ async function redirectWithAuthorizationCode(
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
+			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
 	ctx.context.verification_id
@@ -353,6 +442,7 @@ async function redirectWithAuthorizationCode(
 			verificationValue.query.state,
 		);
 	}
+	redirectUriWithCode.searchParams.set("iss", getIssuer(ctx, opts));
 
 	return handleRedirect(ctx, redirectUriWithCode.toString());
 }

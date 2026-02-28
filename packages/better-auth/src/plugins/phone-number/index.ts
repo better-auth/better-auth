@@ -17,8 +17,7 @@ import type { PhoneNumberOptions, UserWithPhoneNumber } from "./types";
 export type { PhoneNumberOptions, UserWithPhoneNumber };
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"phone-number": {
 			creator: typeof phoneNumber;
 		};
@@ -72,7 +71,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
 				},
-				window: 60 * 1000,
+				window: 60,
 				max: 10,
 			},
 		],

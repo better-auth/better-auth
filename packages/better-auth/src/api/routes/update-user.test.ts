@@ -17,7 +17,7 @@ describe("updateUser", async () => {
 			user: {
 				changeEmail: {
 					enabled: true,
-					sendChangeEmailVerification: async ({
+					sendChangeEmailConfirmation: async ({
 						user,
 						newEmail,
 						url,
@@ -366,6 +366,58 @@ describe("updateUser", async () => {
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
 
+	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
+		const store = new Map<string, string>();
+		const writeLog: { key: string; timestamp: number }[] = [];
+
+		const { auth, signInWithTestUser: signIn } = await getTestInstance({
+			secondaryStorage: {
+				set(key, value) {
+					writeLog.push({ key, timestamp: Date.now() });
+					store.set(key, value);
+				},
+				get(key) {
+					return store.get(key) || null;
+				},
+				delete(key) {
+					store.delete(key);
+				},
+			},
+		});
+
+		// Clear any previous state
+		store.clear();
+		writeLog.length = 0;
+
+		const { headers } = await signIn();
+
+		// Get the session token that was just created
+		const sessionTokens = Array.from(store.keys()).filter(
+			(k) => !k.startsWith("active-sessions-"),
+		);
+		expect(sessionTokens.length).toBe(1);
+		const sessionToken = sessionTokens[0];
+
+		// Clear the write log before updateUser call
+		writeLog.length = 0;
+
+		// Use auth.api.updateUser directly to reproduce the issue
+		await auth.api.updateUser({
+			body: {
+				name: "updatedName",
+			},
+			headers,
+		});
+
+		// Count how many times the same session token was written
+		const sessionTokenWrites = writeLog.filter(
+			(log) => log.key === sessionToken,
+		);
+
+		// Should only write once per session token, not multiple times
+		expect(sessionTokenWrites.length).toBe(1);
+	});
+
 	it("should not allow updating user with additional fields that are input: false", async () => {
 		const { auth, customFetchImpl, signInWithTestUser } = await getTestInstance(
 			{
@@ -437,6 +489,53 @@ describe("delete user", async () => {
 			const session = await client.getSession();
 			expect(session.data).toBeNull();
 		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8173
+	 */
+	it("should require password when session is no longer fresh", async () => {
+		const { client, signInWithTestUser, db } = await getTestInstance({
+			user: {
+				deleteUser: {
+					enabled: true,
+				},
+			},
+			session: {
+				freshAge: 1,
+			},
+		});
+
+		const { headers } = await signInWithTestUser();
+		const currentSession = await client.getSession({
+			fetchOptions: {
+				headers,
+			},
+		});
+		const sessionId = currentSession.data?.session.id;
+		expect(sessionId).toBeDefined();
+
+		await db.update({
+			model: "session",
+			where: [
+				{
+					field: "id",
+					value: sessionId!,
+				},
+			],
+			update: {
+				createdAt: new Date(Date.now() - 5_000),
+			},
+		});
+
+		const res = await client.deleteUser({
+			fetchOptions: {
+				headers,
+			},
+		});
+
+		expect(res.error?.status).toBe(400);
+		expect(res.error?.code).toBe("SESSION_EXPIRED");
 	});
 
 	it("should delete every session from deleted user", async () => {
@@ -581,5 +680,88 @@ describe("delete user", async () => {
 		});
 
 		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
+});
+
+describe("change-email enumeration protection", async () => {
+	const { client, signInWithTestUser, testUser, sessionSetter } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail() {},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+	it("should return 200 when target email already exists", async () => {
+		// Create a second user to be the "existing" target
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Other User",
+			email: "other-user@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		// Sign in as test user and try to change email to the existing one
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "other-user@test.com",
+			});
+			// Should return success, not throw
+			expect(res.data?.status).toBe(true);
+		});
+	});
+
+	it("should not change the user's email", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
+
+describe("change-email without sendVerificationEmail", async () => {
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("should return the same error for existing and non-existing emails", async () => {
+		// Create a second user
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Existing User",
+			email: "existing-no-verif@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const resExisting = await client.changeEmail({
+				newEmail: "existing-no-verif@test.com",
+			});
+			const resNonExisting = await client.changeEmail({
+				newEmail: "does-not-exist@test.com",
+			});
+
+			// Both should fail with the same error
+			expect(resExisting.error?.status).toBe(400);
+			expect(resNonExisting.error?.status).toBe(400);
+			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
 	});
 });

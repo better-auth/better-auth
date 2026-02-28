@@ -36,8 +36,7 @@ import { defaultClientSecretHasher } from "./utils";
 import { parsePrompt } from "./utils/prompt";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"oidc-provider": {
 			creator: typeof oidcProvider;
 		};
@@ -1032,7 +1031,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer:
 										jwtPlugin.options?.jwt?.issuer ??
-										ctx.context.options.baseURL,
+										(typeof ctx.context.options.baseURL === "string"
+											? ctx.context.options.baseURL
+											: undefined),
 									expirationTime,
 									definePayload: () => payload,
 								},
