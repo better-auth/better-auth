@@ -361,7 +361,7 @@ function PlatformCard({
 			<div className="flex flex-col h-full p-5">
 				{/* Header */}
 				<div className="flex items-center gap-2 mb-3">
-					<Icon className="text-foreground/50" />
+					<Icon className="w-6 h-6 text-foreground/50" />
 					<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/40">
 						{platform.name}
 					</h3>
