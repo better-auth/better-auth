@@ -1,4 +1,3 @@
-import { base64 } from "@better-auth/utils/base64";
 import { BetterFetchError, betterFetch } from "@better-fetch/fetch";
 import type { User, Verification } from "better-auth";
 import {
@@ -20,7 +19,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { handleOAuthUserInfo } from "better-auth/oauth2";
 import { XMLParser } from "fast-xml-parser";
 import { decodeJwt } from "jose";
-import * as saml from "samlify";
+import saml from "samlify";
 import type { BindingContext } from "samlify/types/src/entity";
 import type { IdentityProvider } from "samlify/types/src/entity-idp";
 import type { FlowResult } from "samlify/types/src/flow";
@@ -40,6 +39,7 @@ import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
 import {
@@ -64,6 +64,31 @@ import {
 	createSP,
 	findSAMLProvider,
 } from "./helpers";
+
+/**
+ * Builds the OIDC redirect URI. Uses the shared `redirectURI` option
+ * when set, otherwise falls back to `/sso/callback/:providerId`.
+ */
+function getOIDCRedirectURI(
+	baseURL: string,
+	providerId: string,
+	options?: SSOOptions,
+): string {
+	if (options?.redirectURI?.trim()) {
+		try {
+			// Full URL — use as-is
+			new URL(options.redirectURI);
+			return options.redirectURI;
+		} catch {
+			// Relative path — append to baseURL
+			const path = options.redirectURI.startsWith("/")
+				? options.redirectURI
+				: `/${options.redirectURI}`;
+			return `${baseURL}${path}`;
+		}
+	}
+	return `${baseURL}/sso/callback/${providerId}`;
+}
 
 export interface TimestampValidationOptions {
 	clockSkew?: number;
@@ -918,7 +943,11 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 				samlConfig: safeJsonParse<SAMLConfig>(
 					provider.samlConfig as unknown as string,
 				),
-				redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
+				redirectURI: getOIDCRedirectURI(
+					ctx.context.baseURL,
+					provider.providerId,
+					options,
+				),
 				...(options?.domainVerification?.enabled ? { domainVerified } : {}),
 				...(options?.domainVerification?.enabled
 					? { domainVerificationToken }
@@ -1235,44 +1264,49 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
-				let finalAuthUrl = provider.oidcConfig.authorizationEndpoint;
-				if (!finalAuthUrl && provider.oidcConfig.discoveryEndpoint) {
-					const discovery = await betterFetch<{
-						authorization_endpoint: string;
-					}>(provider.oidcConfig.discoveryEndpoint, {
-						method: "GET",
-					});
-					if (discovery.data) {
-						finalAuthUrl = discovery.data.authorization_endpoint;
+				let config = provider.oidcConfig;
+				try {
+					config = await ensureRuntimeDiscovery(
+						provider.oidcConfig,
+						provider.issuer,
+						(url) => ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
 					}
+					throw error;
 				}
-				if (!finalAuthUrl) {
+				if (!config.authorizationEndpoint) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
 				}
-				const state = await generateState(ctx, undefined, false);
-				const redirectURI = `${ctx.context.baseURL}/sso/callback/${provider.providerId}`;
+				const state = await generateState(
+					ctx,
+					undefined,
+					options?.redirectURI?.trim()
+						? { ssoProviderId: provider.providerId }
+						: false,
+				);
+				const redirectURI = getOIDCRedirectURI(
+					ctx.context.baseURL,
+					provider.providerId,
+					options,
+				);
 				const authorizationURL = await createAuthorizationURL({
 					id: provider.issuer,
 					options: {
-						clientId: provider.oidcConfig.clientId,
-						clientSecret: provider.oidcConfig.clientSecret,
+						clientId: config.clientId,
+						clientSecret: config.clientSecret,
 					},
 					redirectURI,
 					state: state.state,
-					codeVerifier: provider.oidcConfig.pkce
-						? state.codeVerifier
-						: undefined,
+					codeVerifier: config.pkce ? state.codeVerifier : undefined,
 					scopes: ctx.body.scopes ||
-						provider.oidcConfig.scopes || [
-							"openid",
-							"email",
-							"profile",
-							"offline_access",
-						],
+						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
-					authorizationEndpoint: finalAuthUrl,
+					authorizationEndpoint: config.authorizationEndpoint,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -1425,33 +1459,393 @@ const callbackSSOQuerySchema = z.object({
 	error_description: z.string().optional(),
 });
 
+/**
+ * Core OIDC callback handler logic, shared between the per-provider and
+ * shared callback endpoints. Resolves the provider, exchanges the
+ * authorization code for tokens, and creates a session.
+ *
+ * @param stateData - Pre-parsed state data. If not provided, it will be
+ *   parsed from the request context.
+ */
+async function handleOIDCCallback(
+	ctx: any,
+	options: SSOOptions | undefined,
+	providerId: string,
+	stateData?: Awaited<ReturnType<typeof parseState>>,
+) {
+	const { code, error, error_description } = ctx.query;
+	if (!stateData) {
+		stateData = await parseState(ctx);
+	}
+	if (!stateData) {
+		const errorURL =
+			ctx.context.options.onAPIError?.errorURL ||
+			`${ctx.context.baseURL}/error`;
+		throw ctx.redirect(`${errorURL}?error=invalid_state`);
+	}
+	const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
+	if (!code || error) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=${error}&error_description=${error_description}`,
+		);
+	}
+	let provider: SSOProvider<SSOOptions> | null = null;
+	if (options?.defaultSSO?.length) {
+		const matchingDefault = options.defaultSSO.find(
+			(defaultProvider) => defaultProvider.providerId === providerId,
+		);
+		if (matchingDefault) {
+			provider = {
+				...matchingDefault,
+				issuer: matchingDefault.oidcConfig?.issuer || "",
+				userId: "default",
+				...(options.domainVerification?.enabled
+					? { domainVerified: true }
+					: {}),
+			} as SSOProvider<SSOOptions>;
+		}
+	}
+	if (!provider) {
+		provider = await ctx.context.adapter
+			.findOne({
+				model: "ssoProvider",
+				where: [
+					{
+						field: "providerId",
+						value: providerId,
+					},
+				],
+			})
+			.then((res: { oidcConfig: string } | null) => {
+				if (!res) {
+					return null;
+				}
+				return {
+					...res,
+					oidcConfig: safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
+				} as SSOProvider<SSOOptions>;
+			});
+	}
+	if (!provider) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=provider not found`,
+		);
+	}
+
+	if (
+		options?.domainVerification?.enabled &&
+		!("domainVerified" in provider && provider.domainVerified)
+	) {
+		throw new APIError("UNAUTHORIZED", {
+			message: "Provider domain has not been verified",
+		});
+	}
+
+	let config = provider.oidcConfig;
+
+	if (!config) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=provider not found`,
+		);
+	}
+
+	try {
+		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
+			ctx.context.isTrustedOrigin(url),
+		);
+	} catch (error) {
+		if (error instanceof DiscoveryError) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=discovery_failed&error_description=${encodeURIComponent(error.message)}`,
+			);
+		}
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=discovery_failed&error_description=unexpected_discovery_error`,
+		);
+	}
+	if (!config.scopes) {
+		config = {
+			...config,
+			scopes: ["openid", "email", "profile", "offline_access"],
+		};
+	}
+
+	if (!config.tokenEndpoint) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=token_endpoint_not_found`,
+		);
+	}
+
+	const tokenResponse = await validateAuthorizationCode({
+		code,
+		codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
+		redirectURI: getOIDCRedirectURI(
+			ctx.context.baseURL,
+			provider.providerId,
+			options,
+		),
+		options: {
+			clientId: config.clientId,
+			clientSecret: config.clientSecret,
+		},
+		tokenEndpoint: config.tokenEndpoint,
+		authentication:
+			config.tokenEndpointAuthentication === "client_secret_post"
+				? "post"
+				: "basic",
+	}).catch((e) => {
+		if (e instanceof BetterFetchError) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=${e.message}`,
+			);
+		}
+		return null;
+	});
+	if (!tokenResponse) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=token_response_not_found`,
+		);
+	}
+	let userInfo: {
+		id?: string;
+		email?: string;
+		name?: string;
+		image?: string;
+		emailVerified?: boolean;
+		[key: string]: any;
+	} | null = null;
+	if (tokenResponse.idToken) {
+		const idToken = decodeJwt(tokenResponse.idToken);
+		if (!config.jwksEndpoint) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
+			);
+		}
+		const verified = await validateToken(
+			tokenResponse.idToken,
+			config.jwksEndpoint,
+			{
+				audience: config.clientId,
+				issuer: provider.issuer,
+			},
+		).catch((e) => {
+			ctx.context.logger.error(e);
+			return null;
+		});
+		if (!verified) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=token_not_verified`,
+			);
+		}
+
+		const mapping = config.mapping || {};
+		userInfo = {
+			...Object.fromEntries(
+				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+					key,
+					verified.payload[value],
+				]),
+			),
+			id: idToken[mapping.id || "sub"],
+			email: idToken[mapping.email || "email"],
+			emailVerified: options?.trustEmailVerified
+				? idToken[mapping.emailVerified || "email_verified"]
+				: false,
+			name: idToken[mapping.name || "name"],
+			image: idToken[mapping.image || "picture"],
+		} as {
+			id?: string;
+			email?: string;
+			name?: string;
+			image?: string;
+			emailVerified?: boolean;
+		};
+	}
+
+	if (!userInfo) {
+		if (!config.userInfoEndpoint) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+			);
+		}
+		const userInfoResponse = await betterFetch<{
+			email?: string;
+			name?: string;
+			id?: string;
+			image?: string;
+			emailVerified?: boolean;
+		}>(config.userInfoEndpoint, {
+			headers: {
+				Authorization: `Bearer ${tokenResponse.accessToken}`,
+			},
+		});
+		if (userInfoResponse.error) {
+			throw ctx.redirect(
+				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
+					userInfoResponse.error.message
+				}`,
+			);
+		}
+		userInfo = userInfoResponse.data;
+	}
+
+	if (!userInfo.email || !userInfo.id) {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=missing_user_info`,
+		);
+	}
+	const isTrustedProvider =
+		"domainVerified" in provider &&
+		(provider as { domainVerified?: boolean }).domainVerified === true &&
+		validateEmailDomain(userInfo.email, provider.domain);
+
+	const linked = await handleOAuthUserInfo(ctx, {
+		userInfo: {
+			email: userInfo.email,
+			name: userInfo.name || "",
+			id: userInfo.id,
+			image: userInfo.image,
+			emailVerified: options?.trustEmailVerified
+				? userInfo.emailVerified || false
+				: false,
+		},
+		account: {
+			idToken: tokenResponse.idToken,
+			accessToken: tokenResponse.accessToken,
+			refreshToken: tokenResponse.refreshToken,
+			accountId: userInfo.id,
+			providerId: provider.providerId,
+			accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
+			refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
+			scope: tokenResponse.scopes?.join(","),
+		},
+		callbackURL,
+		disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
+		overrideUserInfo: config.overrideUserInfo,
+		isTrustedProvider,
+	});
+	if (linked.error) {
+		throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
+	}
+	const { session, user } = linked.data!;
+
+	if (options?.provisionUser && linked.isRegister) {
+		await options.provisionUser({
+			user,
+			userInfo,
+			token: tokenResponse,
+			provider,
+		});
+	}
+
+	await assignOrganizationFromProvider(ctx as any, {
+		user,
+		profile: {
+			providerType: "oidc",
+			providerId: provider.providerId,
+			accountId: userInfo.id,
+			email: userInfo.email,
+			emailVerified: Boolean(userInfo.emailVerified),
+			rawAttributes: userInfo,
+		},
+		provider,
+		token: tokenResponse,
+		provisioningOptions: options?.organizationProvisioning,
+	});
+
+	await setSessionCookie(ctx, {
+		session,
+		user,
+	});
+	let toRedirectTo: string;
+	try {
+		const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
+		toRedirectTo = url.toString();
+	} catch {
+		toRedirectTo = linked.isRegister ? newUserURL || callbackURL : callbackURL;
+	}
+	throw ctx.redirect(toRedirectTo);
+}
+
+const callbackSSOEndpointConfig = {
+	method: "GET" as const,
+	query: callbackSSOQuerySchema,
+	allowedMediaTypes: [
+		"application/x-www-form-urlencoded",
+		"application/json",
+	] as const,
+	metadata: {
+		...HIDE_METADATA,
+		openapi: {
+			operationId: "handleSSOCallback",
+			summary: "Callback URL for SSO provider",
+			description:
+				"This endpoint is used as the callback URL for SSO providers. It handles the authorization code and exchanges it for an access token",
+			responses: {
+				"302": {
+					description: "Redirects to the callback URL",
+				},
+			},
+		},
+	},
+};
+
 export const callbackSSO = (options?: SSOOptions) => {
 	return createAuthEndpoint(
 		"/sso/callback/:providerId",
+		callbackSSOEndpointConfig,
+		async (ctx) => {
+			return handleOIDCCallback(ctx, options, ctx.params.providerId);
+		},
+	);
+};
+
+/**
+ * Shared OIDC callback endpoint (no `:providerId` in path).
+ * Used when `options.redirectURI` is set — the `providerId` is read from
+ * the OAuth state instead of the URL path.
+ */
+export const callbackSSOShared = (options?: SSOOptions) => {
+	return createAuthEndpoint(
+		"/sso/callback",
 		{
-			method: "GET",
-			query: callbackSSOQuerySchema,
-			allowedMediaTypes: [
-				"application/x-www-form-urlencoded",
-				"application/json",
-			],
+			...callbackSSOEndpointConfig,
 			metadata: {
-				...HIDE_METADATA,
+				...callbackSSOEndpointConfig.metadata,
 				openapi: {
-					operationId: "handleSSOCallback",
-					summary: "Callback URL for SSO provider",
+					...callbackSSOEndpointConfig.metadata.openapi,
+					operationId: "handleSSOCallbackShared",
+					summary: "Shared callback URL for all SSO providers",
 					description:
-						"This endpoint is used as the callback URL for SSO providers. It handles the authorization code and exchanges it for an access token",
-					responses: {
-						"302": {
-							description: "Redirects to the callback URL",
-						},
-					},
+						"This endpoint is used as a shared callback URL for all SSO providers when `redirectURI` is configured. The provider is identified via the OAuth state parameter.",
 				},
 			},
 		},
 		async (ctx) => {
-			const { code, error, error_description } = ctx.query;
 			const stateData = await parseState(ctx);
 			if (!stateData) {
 				const errorURL =
@@ -1459,310 +1853,16 @@ export const callbackSSO = (options?: SSOOptions) => {
 					`${ctx.context.baseURL}/error`;
 				throw ctx.redirect(`${errorURL}?error=invalid_state`);
 			}
-			const { callbackURL, errorURL, newUserURL, requestSignUp } = stateData;
-			if (!code || error) {
+
+			const providerId = stateData.ssoProviderId as string | undefined;
+			if (!providerId) {
+				const errorURL = stateData.errorURL || stateData.callbackURL;
 				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=${error}&error_description=${error_description}`,
-				);
-			}
-			let provider: SSOProvider<SSOOptions> | null = null;
-			if (options?.defaultSSO?.length) {
-				const matchingDefault = options.defaultSSO.find(
-					(defaultProvider) =>
-						defaultProvider.providerId === ctx.params.providerId,
-				);
-				if (matchingDefault) {
-					provider = {
-						...matchingDefault,
-						issuer: matchingDefault.oidcConfig?.issuer || "",
-						userId: "default",
-						...(options.domainVerification?.enabled
-							? { domainVerified: true }
-							: {}),
-					} as SSOProvider<SSOOptions>;
-				}
-			}
-			if (!provider) {
-				provider = await ctx.context.adapter
-					.findOne<{
-						oidcConfig: string;
-					}>({
-						model: "ssoProvider",
-						where: [
-							{
-								field: "providerId",
-								value: ctx.params.providerId,
-							},
-						],
-					})
-					.then((res) => {
-						if (!res) {
-							return null;
-						}
-						return {
-							...res,
-							oidcConfig:
-								safeJsonParse<OIDCConfig>(res.oidcConfig) || undefined,
-						} as SSOProvider<SSOOptions>;
-					});
-			}
-			if (!provider) {
-				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=invalid_provider&error_description=provider not found`,
+					`${errorURL}?error=invalid_state&error_description=missing_provider_id`,
 				);
 			}
 
-			if (
-				options?.domainVerification?.enabled &&
-				!("domainVerified" in provider && provider.domainVerified)
-			) {
-				throw new APIError("UNAUTHORIZED", {
-					message: "Provider domain has not been verified",
-				});
-			}
-
-			let config = provider.oidcConfig;
-
-			if (!config) {
-				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=invalid_provider&error_description=provider not found`,
-				);
-			}
-
-			const discovery = await betterFetch<{
-				token_endpoint: string;
-				userinfo_endpoint: string;
-				token_endpoint_auth_method:
-					| "client_secret_basic"
-					| "client_secret_post";
-			}>(config.discoveryEndpoint);
-
-			if (discovery.data) {
-				config = {
-					tokenEndpoint: discovery.data.token_endpoint,
-					tokenEndpointAuthentication:
-						discovery.data.token_endpoint_auth_method,
-					userInfoEndpoint: discovery.data.userinfo_endpoint,
-					scopes: ["openid", "email", "profile", "offline_access"],
-					...config,
-				};
-			}
-
-			if (!config.tokenEndpoint) {
-				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=invalid_provider&error_description=token_endpoint_not_found`,
-				);
-			}
-
-			const tokenResponse = await validateAuthorizationCode({
-				code,
-				codeVerifier: config.pkce ? stateData.codeVerifier : undefined,
-				redirectURI: `${ctx.context.baseURL}/sso/callback/${provider.providerId}`,
-				options: {
-					clientId: config.clientId,
-					clientSecret: config.clientSecret,
-				},
-				tokenEndpoint: config.tokenEndpoint,
-				authentication:
-					config.tokenEndpointAuthentication === "client_secret_post"
-						? "post"
-						: "basic",
-			}).catch((e) => {
-				if (e instanceof BetterFetchError) {
-					throw ctx.redirect(
-						`${
-							errorURL || callbackURL
-						}?error=invalid_provider&error_description=${e.message}`,
-					);
-				}
-				return null;
-			});
-			if (!tokenResponse) {
-				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=invalid_provider&error_description=token_response_not_found`,
-				);
-			}
-			let userInfo: {
-				id?: string;
-				email?: string;
-				name?: string;
-				image?: string;
-				emailVerified?: boolean;
-				[key: string]: any;
-			} | null = null;
-			if (tokenResponse.idToken) {
-				const idToken = decodeJwt(tokenResponse.idToken);
-				if (!config.jwksEndpoint) {
-					throw ctx.redirect(
-						`${
-							errorURL || callbackURL
-						}?error=invalid_provider&error_description=jwks_endpoint_not_found`,
-					);
-				}
-				const verified = await validateToken(
-					tokenResponse.idToken,
-					config.jwksEndpoint,
-					{
-						audience: config.clientId,
-						issuer: provider.issuer,
-					},
-				).catch((e) => {
-					ctx.context.logger.error(e);
-					return null;
-				});
-				if (!verified) {
-					throw ctx.redirect(
-						`${
-							errorURL || callbackURL
-						}?error=invalid_provider&error_description=token_not_verified`,
-					);
-				}
-
-				const mapping = config.mapping || {};
-				userInfo = {
-					...Object.fromEntries(
-						Object.entries(mapping.extraFields || {}).map(([key, value]) => [
-							key,
-							verified.payload[value],
-						]),
-					),
-					id: idToken[mapping.id || "sub"],
-					email: idToken[mapping.email || "email"],
-					emailVerified: options?.trustEmailVerified
-						? idToken[mapping.emailVerified || "email_verified"]
-						: false,
-					name: idToken[mapping.name || "name"],
-					image: idToken[mapping.image || "picture"],
-				} as {
-					id?: string;
-					email?: string;
-					name?: string;
-					image?: string;
-					emailVerified?: boolean;
-				};
-			}
-
-			if (!userInfo) {
-				if (!config.userInfoEndpoint) {
-					throw ctx.redirect(
-						`${
-							errorURL || callbackURL
-						}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
-					);
-				}
-				const userInfoResponse = await betterFetch<{
-					email?: string;
-					name?: string;
-					id?: string;
-					image?: string;
-					emailVerified?: boolean;
-				}>(config.userInfoEndpoint, {
-					headers: {
-						Authorization: `Bearer ${tokenResponse.accessToken}`,
-					},
-				});
-				if (userInfoResponse.error) {
-					throw ctx.redirect(
-						`${
-							errorURL || callbackURL
-						}?error=invalid_provider&error_description=${
-							userInfoResponse.error.message
-						}`,
-					);
-				}
-				userInfo = userInfoResponse.data;
-			}
-
-			if (!userInfo.email || !userInfo.id) {
-				throw ctx.redirect(
-					`${
-						errorURL || callbackURL
-					}?error=invalid_provider&error_description=missing_user_info`,
-				);
-			}
-			const isTrustedProvider =
-				"domainVerified" in provider &&
-				(provider as { domainVerified?: boolean }).domainVerified === true &&
-				validateEmailDomain(userInfo.email, provider.domain);
-
-			const linked = await handleOAuthUserInfo(ctx, {
-				userInfo: {
-					email: userInfo.email,
-					name: userInfo.name || "",
-					id: userInfo.id,
-					image: userInfo.image,
-					emailVerified: options?.trustEmailVerified
-						? userInfo.emailVerified || false
-						: false,
-				},
-				account: {
-					idToken: tokenResponse.idToken,
-					accessToken: tokenResponse.accessToken,
-					refreshToken: tokenResponse.refreshToken,
-					accountId: userInfo.id,
-					providerId: provider.providerId,
-					accessTokenExpiresAt: tokenResponse.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokenResponse.refreshTokenExpiresAt,
-					scope: tokenResponse.scopes?.join(","),
-				},
-				callbackURL,
-				disableSignUp: options?.disableImplicitSignUp && !requestSignUp,
-				overrideUserInfo: config.overrideUserInfo,
-				isTrustedProvider,
-			});
-			if (linked.error) {
-				throw ctx.redirect(`${errorURL || callbackURL}?error=${linked.error}`);
-			}
-			const { session, user } = linked.data!;
-
-			if (options?.provisionUser && linked.isRegister) {
-				await options.provisionUser({
-					user,
-					userInfo,
-					token: tokenResponse,
-					provider,
-				});
-			}
-
-			await assignOrganizationFromProvider(ctx as any, {
-				user,
-				profile: {
-					providerType: "oidc",
-					providerId: provider.providerId,
-					accountId: userInfo.id,
-					email: userInfo.email,
-					emailVerified: Boolean(userInfo.emailVerified),
-					rawAttributes: userInfo,
-				},
-				provider,
-				token: tokenResponse,
-				provisioningOptions: options?.organizationProvisioning,
-			});
-
-			await setSessionCookie(ctx, {
-				session,
-				user,
-			});
-			let toRedirectTo: string;
-			try {
-				const url = linked.isRegister ? newUserURL || callbackURL : callbackURL;
-				toRedirectTo = url.toString();
-			} catch {
-				toRedirectTo = linked.isRegister
-					? newUserURL || callbackURL
-					: callbackURL;
-			}
-			throw ctx.redirect(toRedirectTo);
+			return handleOIDCCallback(ctx, options, providerId, stateData);
 		},
 	);
 };
@@ -1974,21 +2074,6 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					message: "Invalid SAML configuration",
 				});
 			}
-
-			const isTrusted = (
-				url: string,
-				settings?: { allowRelativePaths: boolean },
-			) => ctx.context.isTrustedOrigin(url, settings);
-
-			const safeErrorUrl = getSafeRedirectUrl(
-				relayState?.errorURL ||
-					relayState?.callbackURL ||
-					parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				isTrusted,
-			);
-
 			const idpData = parsedSamlConfig.idpMetadata;
 			let idp: IdentityProvider | null = null;
 
@@ -2061,8 +2146,8 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2115,8 +2200,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							"SAML InResponseTo validation failed: unknown or expired request ID",
 							{ inResponseTo, providerId: provider.providerId },
 						);
+						const redirectUrl =
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
-							`${safeErrorUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
 						);
 					}
 
@@ -2133,8 +2222,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseTo}`,
 						);
+						const redirectUrl =
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
-							`${safeErrorUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 						);
 					}
 
@@ -2146,8 +2239,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
 						{ providerId: provider.providerId },
 					);
+					const redirectUrl =
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
-						`${safeErrorUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
 					);
 				}
 			}
@@ -2198,8 +2295,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 							providerId: provider.providerId,
 						},
 					);
+					const redirectUrl =
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
-						`${safeErrorUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 					);
 				}
 
@@ -2243,8 +2344,7 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 						.filter(Boolean)
 						.join(" ") ||
 					attributes[mapping.name || "displayName"] ||
-					extract.nameID ||
-					"",
+					extract.nameID,
 				emailVerified:
 					options?.trustEmailVerified && mapping.emailVerified
 						? ((attributes[mapping.emailVerified] || false) as boolean)
@@ -2266,24 +2366,20 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));
 
-			const safeCallbackUrl = getSafeRedirectUrl(
-				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				isTrusted,
-			);
+			const callbackUrl =
+				relayState?.callbackURL ||
+				parsedSamlConfig.callbackUrl ||
+				ctx.context.baseURL;
 
 			const result = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email as string,
-					name: (userInfo.name || "") as string,
+					name: (userInfo.name || userInfo.email) as string,
 					id: userInfo.id as string,
 					emailVerified: Boolean(userInfo.emailVerified),
 				},
@@ -2293,20 +2389,20 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					accessToken: "",
 					refreshToken: "",
 				},
-				callbackURL: safeCallbackUrl,
+				callbackURL: callbackUrl,
 				disableSignUp: options?.disableImplicitSignUp,
 				isTrustedProvider,
 			});
 
 			if (result.error) {
 				throw ctx.redirect(
-					`${safeCallbackUrl}?error=${result.error.split(" ").join("_")}`,
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
 				);
 			}
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser && result.isRegister) {
+			if (options?.provisionUser) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
@@ -2491,23 +2587,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const parsedSamlConfig = provider.samlConfig;
-
-			const isTrusted = (
-				url: string,
-				settings?: { allowRelativePaths: boolean },
-			) => ctx.context.isTrustedOrigin(url, settings);
-
-			// Compute a safe error redirect URL once, reused by all error paths.
-			// Prefers errorURL from relay state, falls back to callbackURL, then provider config, then baseURL.
-			const safeErrorUrl = getSafeRedirectUrl(
-				relayState?.errorURL ||
-					relayState?.callbackURL ||
-					parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				isTrusted,
-			);
-
 			// Configure SP and IdP
 			const sp = saml.ServiceProvider({
 				entityID:
@@ -2552,12 +2631,16 @@ export const acsEndpoint = (options?: SSOOptions) => {
 				validateSingleAssertion(SAMLResponse);
 			} catch (error) {
 				if (error instanceof APIError) {
+					const redirectUrl =
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					const errorCode =
 						error.body?.code === "SAML_MULTIPLE_ASSERTIONS"
 							? "multiple_assertions"
 							: "no_assertion";
 					throw ctx.redirect(
-						`${safeErrorUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
+						`${redirectUrl}?error=${errorCode}&error_description=${encodeURIComponent(error.message)}`,
 					);
 				}
 				throw error;
@@ -2579,8 +2662,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			} catch (error) {
 				ctx.context.logger.error("SAML response validation failed", {
 					error,
-					decodedResponse: new TextDecoder().decode(
-						base64.decode(SAMLResponse),
+					decodedResponse: Buffer.from(SAMLResponse, "base64").toString(
+						"utf-8",
 					),
 				});
 				throw new APIError("BAD_REQUEST", {
@@ -2633,8 +2716,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							"SAML InResponseTo validation failed: unknown or expired request ID",
 							{ inResponseTo: inResponseToAcs, providerId },
 						);
+						const redirectUrl =
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
-							`${safeErrorUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
+							`${redirectUrl}?error=invalid_saml_response&error_description=Unknown+or+expired+request+ID`,
 						);
 					}
 
@@ -2650,8 +2737,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 							`${constants.AUTHN_REQUEST_KEY_PREFIX}${inResponseToAcs}`,
 						);
+						const redirectUrl =
+							relayState?.callbackURL ||
+							parsedSamlConfig.callbackUrl ||
+							ctx.context.baseURL;
 						throw ctx.redirect(
-							`${safeErrorUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
+							`${redirectUrl}?error=invalid_saml_response&error_description=Provider+mismatch`,
 						);
 					}
 
@@ -2663,15 +2754,19 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						"SAML IdP-initiated SSO rejected: InResponseTo missing and allowIdpInitiated is false",
 						{ providerId },
 					);
+					const redirectUrl =
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
-						`${safeErrorUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
+						`${redirectUrl}?error=unsolicited_response&error_description=IdP-initiated+SSO+not+allowed`,
 					);
 				}
 			}
 
 			// Assertion Replay Protection
-			const samlContentAcs = new TextDecoder().decode(
-				base64.decode(SAMLResponse),
+			const samlContentAcs = Buffer.from(SAMLResponse, "base64").toString(
+				"utf-8",
 			);
 			const assertionIdAcs = extractAssertionId(samlContentAcs);
 
@@ -2715,8 +2810,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 							providerId,
 						},
 					);
+					const redirectUrl =
+						relayState?.callbackURL ||
+						parsedSamlConfig.callbackUrl ||
+						ctx.context.baseURL;
 					throw ctx.redirect(
-						`${safeErrorUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
+						`${redirectUrl}?error=replay_detected&error_description=SAML+assertion+has+already+been+used`,
 					);
 				}
 
@@ -2760,8 +2859,7 @@ export const acsEndpoint = (options?: SSOOptions) => {
 						.filter(Boolean)
 						.join(" ") ||
 					attributes[mapping.name || "displayName"] ||
-					extract.nameID ||
-					"",
+					extract.nameID,
 				emailVerified:
 					options?.trustEmailVerified && mapping.emailVerified
 						? ((attributes[mapping.emailVerified] || false) as boolean)
@@ -2784,24 +2882,20 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			}
 
 			const isTrustedProvider: boolean =
-				!!ctx.context.options.account?.accountLinking?.trustedProviders?.includes(
-					provider.providerId,
-				) ||
+				ctx.context.trustedProviders.includes(provider.providerId) ||
 				("domainVerified" in provider &&
 					!!(provider as { domainVerified?: boolean }).domainVerified &&
 					validateEmailDomain(userInfo.email as string, provider.domain));
 
-			const safeCallbackUrl = getSafeRedirectUrl(
-				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
-				currentCallbackPath,
-				appOrigin,
-				isTrusted,
-			);
+			const callbackUrl =
+				relayState?.callbackURL ||
+				parsedSamlConfig.callbackUrl ||
+				ctx.context.baseURL;
 
 			const result = await handleOAuthUserInfo(ctx, {
 				userInfo: {
 					email: userInfo.email as string,
-					name: (userInfo.name || "") as string,
+					name: (userInfo.name || userInfo.email) as string,
 					id: userInfo.id as string,
 					emailVerified: Boolean(userInfo.emailVerified),
 				},
@@ -2811,20 +2905,20 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					accessToken: "",
 					refreshToken: "",
 				},
-				callbackURL: safeCallbackUrl,
+				callbackURL: callbackUrl,
 				disableSignUp: options?.disableImplicitSignUp,
 				isTrustedProvider,
 			});
 
 			if (result.error) {
 				throw ctx.redirect(
-					`${safeCallbackUrl}?error=${result.error.split(" ").join("_")}`,
+					`${callbackUrl}?error=${result.error.split(" ").join("_")}`,
 				);
 			}
 
 			const { session, user } = result.data!;
 
-			if (options?.provisionUser && result.isRegister) {
+			if (options?.provisionUser) {
 				await options.provisionUser({
 					user: user as User & Record<string, any>,
 					userInfo,
@@ -2847,7 +2941,6 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			});
 
 			await setSessionCookie(ctx, { session, user });
-
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
 				const samlSessionData: SAMLSessionRecord = {
@@ -2881,7 +2974,13 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					);
 			}
 
-			throw ctx.redirect(safeCallbackUrl);
+			const safeRedirectUrl = getSafeRedirectUrl(
+				relayState?.callbackURL || parsedSamlConfig.callbackUrl,
+				currentCallbackPath,
+				appOrigin,
+				(url, settings) => ctx.context.isTrustedOrigin(url, settings),
+			);
+			throw ctx.redirect(safeRedirectUrl);
 		},
 	);
 };

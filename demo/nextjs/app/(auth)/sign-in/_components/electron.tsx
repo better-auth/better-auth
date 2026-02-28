@@ -1,12 +1,51 @@
 "use client";
 
-import { Loader2, LogInIcon } from "lucide-react";
+import { CheckIcon, CopyIcon, Loader2, LogInIcon, XIcon } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState, useTransition } from "react";
+import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { authClient } from "@/lib/auth-client";
+
+export function ElectronManualSignInToast({
+	t,
+	authorizationCode,
+}: {
+	t: string | number;
+	authorizationCode: string;
+}) {
+	const [copied, setCopied] = useState(false);
+	return (
+		<div className="flex items-start gap-2 border bg-background p-4 rounded-lg">
+			<div className="flex flex-col gap-2 text-xs">
+				<p className="font-semibold">Having trouble being redirected?</p>
+				<p className="text-muted-foreground">
+					Copy and paste the code into the app to continue.
+				</p>
+				<button
+					onClick={() => {
+						navigator.clipboard.writeText(authorizationCode);
+						setCopied(true);
+						setTimeout(() => setCopied(false), 2000);
+					}}
+					className="inline-flex items-center gap-2 text-muted-foreground pointer-events-auto! hover:text-foreground focus-visible:text-foreground transition-colors"
+				>
+					{authorizationCode}
+					{copied ? (
+						<CheckIcon className="size-3.5" />
+					) : (
+						<CopyIcon className="size-3.5" />
+					)}
+				</button>
+			</div>
+			<button onClick={() => toast.dismiss(t)}>
+				<XIcon className="size-3.5" />
+			</button>
+		</div>
+	);
+}
 
 export function ElectronTransferUser({
 	session: activeSession,
@@ -18,6 +57,10 @@ export function ElectronTransferUser({
 	const [users, setUsers] = useState<(typeof authClient.$Infer.Session)[]>([
 		activeSession,
 	]);
+	const [authorizationCode, setAuthorizationCode] = useState<string | null>(
+		null,
+	);
+	const [copied, setCopied] = useState(false);
 
 	useEffect(() => {
 		startTransition(async () => {
@@ -45,11 +88,18 @@ export function ElectronTransferUser({
 	const handleContinueAsUser = useCallback(
 		(session: typeof authClient.$Infer.Session) => () =>
 			startTransition(async () => {
+				setAuthorizationCode(null);
+
 				if (session.user.id === activeSession.user.id) {
 					// Continue as current user
 					await authClient.electron.transferUser({
 						fetchOptions: {
 							query: params,
+							onSuccess: (ctx) => {
+								setAuthorizationCode(
+									ctx.data?.electron_authorization_code ?? null,
+								);
+							},
 						},
 					});
 					return;
@@ -64,6 +114,11 @@ export function ElectronTransferUser({
 				const promise = authClient.electron.transferUser({
 					fetchOptions: {
 						query: params,
+						onSuccess: (ctx) => {
+							setAuthorizationCode(
+								ctx.data?.electron_authorization_code ?? null,
+							);
+						},
 					},
 				});
 
@@ -90,6 +145,28 @@ export function ElectronTransferUser({
 					onContinue={handleContinueAsUser(session)}
 				/>
 			))}
+
+			{authorizationCode && (
+				<p className="text-xs text-muted-foreground leading-relaxed">
+					<span className="font-medium">Having trouble being redirected?</span>{" "}
+					Paste the code into the app:{" "}
+					<button
+						onClick={() => {
+							navigator.clipboard.writeText(authorizationCode);
+							setCopied(true);
+							setTimeout(() => setCopied(false), 2000);
+						}}
+						className="inline-flex items-center gap-2 hover:text-foreground focus-visible:text-foreground transition-colors"
+					>
+						{authorizationCode}
+						{copied ? (
+							<CheckIcon className="size-3.5" />
+						) : (
+							<CopyIcon className="size-3.5" />
+						)}
+					</button>
+				</p>
+			)}
 		</div>
 	);
 }

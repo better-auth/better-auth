@@ -369,11 +369,16 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 			}
 
 			try {
+				const callbackRedirectURI =
+					ctx.request?.url != null
+						? new URL(ctx.request.url).origin +
+							new URL(ctx.request.url).pathname
+						: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`;
 				// Use custom getToken if provided
 				if (providerConfig.getToken) {
 					tokens = await providerConfig.getToken({
 						code,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI: callbackRedirectURI,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
 					});
 				} else {
@@ -392,11 +397,11 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 						headers: providerConfig.authorizationHeaders,
 						code,
 						codeVerifier: providerConfig.pkce ? codeVerifier : undefined,
-						redirectURI: `${ctx.context.baseURL}/oauth2/callback/${providerConfig.providerId}`,
+						redirectURI: callbackRedirectURI,
 						options: {
 							clientId: providerConfig.clientId,
 							clientSecret: providerConfig.clientSecret,
-							redirectURI: providerConfig.redirectURI,
+							redirectURI: callbackRedirectURI,
 						},
 						tokenEndpoint: finalTokenUrl,
 						authentication: providerConfig.authentication,

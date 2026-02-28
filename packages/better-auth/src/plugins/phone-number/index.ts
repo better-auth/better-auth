@@ -71,7 +71,7 @@ export const phoneNumber = (options?: PhoneNumberOptions | undefined) => {
 				pathMatcher(path) {
 					return path.startsWith("/phone-number");
 				},
-				window: 60 * 1000,
+				window: 60,
 				max: 10,
 			},
 		],

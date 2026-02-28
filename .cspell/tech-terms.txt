@@ -42,3 +42,6 @@ setex
 kxeyPrefix
 dyld
 nsis
+ftyp
+heix
+whsec

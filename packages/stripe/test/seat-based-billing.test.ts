@@ -43,6 +43,12 @@ describe("seat-based billing", () => {
 			list: vi.fn().mockResolvedValue({ data: [] }),
 			update: vi.fn().mockResolvedValue({}),
 		},
+		subscriptionSchedules: {
+			list: vi.fn().mockResolvedValue({ data: [] }),
+			create: vi.fn().mockResolvedValue({ id: "sub_sched_mock", phases: [] }),
+			update: vi.fn(),
+			release: vi.fn(),
+		},
 		webhooks: {
 			constructEventAsync: vi.fn(),
 		},

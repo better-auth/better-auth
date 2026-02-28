@@ -294,10 +294,9 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-
-			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			const isTrustedProvider = c.context.trustedProviders.includes(
+				provider.id,
+			);
 			if (
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -566,6 +565,7 @@ export const getAccessToken = createAuthEndpoint(
 						: account.refreshToken,
 					refreshTokenExpiresAt:
 						newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
+					idToken: newTokens?.idToken || account.idToken,
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {

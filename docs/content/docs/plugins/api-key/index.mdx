@@ -1,0 +1,493 @@
+---
+title: API Key
+description: API Key plugin for Better Auth.
+---
+
+The API Key plugin allows you to create and manage API keys for your application. It provides a way to authenticate and authorize API requests by verifying API keys.
+
+## Features
+
+- Create, manage, and verify API keys
+- [Built-in rate limiting](/docs/plugins/api-key/advanced#rate-limiting)
+- [Custom expiration times, remaining count, and refill systems](/docs/plugins/api-key/advanced#remaining-refill-and-expiration)
+- [Metadata for API keys](/docs/plugins/api-key/advanced#metadata)
+- Custom prefix
+- [Sessions from API keys](/docs/plugins/api-key/advanced#sessions-from-api-keys)
+- [Secondary storage support](/docs/plugins/api-key/advanced#storage-modes) for high-performance API key lookups
+- [Multiple configurations](/docs/plugins/api-key/advanced#multiple-configurations) for different API key types
+- [Organization-owned API keys](/docs/plugins/api-key/advanced#organization-owned-api-keys) in addition to user-owned keys
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Install the plugin
+
+        ```package-install
+        @better-auth/api-key
+        ```
+    </Step>
+    <Step>
+        ### Add Plugin to the server
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth"
+        import { apiKey } from "@better-auth/api-key" // [!code highlight]
+
+        export const auth = betterAuth({
+            plugins: [
+                apiKey() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary fields and tables to the database.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```package-install
+            npx auth migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```package-install
+            npx auth generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](/docs/plugins/api-key/reference#schema) section to add the fields manually.
+    </Step>
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client"
+        import { apiKeyClient } from "@better-auth/api-key/client"  // [!code highlight]
+
+        export const authClient = createAuthClient({
+            plugins: [
+                apiKeyClient() // [!code highlight]
+            ]
+        })
+        ```
+    </Step>
+
+</Steps>
+
+## Usage
+
+You can view the list of API Key plugin options [here](/docs/plugins/api-key/reference#api-key-plugin-options).
+
+### Create an API key
+
+<APIMethod
+  path="/api-key/create"
+  method="POST"
+  serverOnlyNote="If you're creating an API key on the server, without access to headers, you must pass the `userId` property (for user-owned keys) or `organizationId` (for organization-owned keys)."
+  clientOnlyNote="You can adjust more specific API key configurations by using the server method instead."
+>
+```ts
+type createApiKey = {
+    /**
+     * The configuration ID to use. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
+     * Name of the Api Key.
+     */
+    name?: string = 'project-api-key'
+    /**
+     * Expiration time of the Api Key in seconds.
+     */
+    expiresIn?: number = 60 * 60 * 24 * 7
+    /**
+     * User Id of the user that the Api Key belongs to. server-only.
+     * Required for user-owned keys when not using session headers.
+     * @serverOnly
+     */
+    userId?: string = "user-id"
+    /**
+     * Organization Id that the Api Key belongs to. 
+     * Required for organization-owned keys (when config has `references: "organization"`).
+     */
+    organizationId?: string = "org-id"
+    /**
+     * Prefix of the Api Key.
+     */
+    prefix?: string = 'project-api-key'
+    /**
+     * Remaining number of requests. server-only.
+     * @serverOnly
+     */
+    remaining?: number = 100
+    /**
+     * Metadata of the Api Key.
+     */
+    metadata?: any | null = { someKey: 'someValue' }
+    /**
+     * Amount to refill the remaining count of the Api Key. server-only.
+     * @serverOnly
+     */
+    refillAmount?: number = 100
+    /**
+     * Interval to refill the Api Key in milliseconds. server-only.
+     * @serverOnly
+     */
+    refillInterval?: number = 1000
+    /**
+     * The duration in milliseconds where each request is counted. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+     * @serverOnly
+     */
+    rateLimitTimeWindow?: number = 1000
+    /**
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+     * @serverOnly
+     */
+    rateLimitMax?: number = 100
+    /**
+     * Whether the key has rate limiting enabled. server-only.
+     * @serverOnly
+     */
+    rateLimitEnabled?: boolean = true
+    /**
+     * Permissions of the Api Key.
+     * @serverOnly
+     */
+    permissions?: Record<string, string[]>
+}
+```
+</APIMethod>
+
+<Callout>API keys can be owned by either a user or an organization, depending on the configuration's `references` setting.</Callout>
+
+#### Result
+
+It'll return the `ApiKey` object which includes the `key` value for you to use.
+Otherwise if it throws, it will throw an `APIError`.
+
+---
+
+### Verify an API key
+
+<APIMethod
+  path="/api-key/verify"
+  method="POST"
+  isServerOnly
+>
+```ts
+const permissions = { // Permissions to check are optional.
+  projects: ["read", "read-write"],
+}
+
+type verifyApiKey = {
+    /**
+     * The configuration ID to use for verification. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
+     * The key to verify.
+     */
+    key: string = "your_api_key_here"
+    /**
+     * The permissions to verify. Optional.
+     */
+    permissions?: Record<string, string[]>
+}
+```
+</APIMethod>
+
+
+#### Result
+
+```ts
+type Result = {
+  valid: boolean;
+  error: { message: string; code: string } | null;
+  key: Omit<ApiKey, "key"> | null;
+};
+```
+
+---
+
+### Get an API key
+
+<APIMethod
+  path="/api-key/get"
+  method="GET"
+  requireSession
+>
+```ts
+type getApiKey = {
+    /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
+     * The id of the Api Key.
+     */
+    id: string = "some-api-key-id"
+}
+```
+</APIMethod>
+
+#### Result
+
+You'll receive everything about the API key details, except for the `key` value itself.
+If it fails, it will throw an `APIError`.
+
+```ts
+type Result = Omit<ApiKey, "key">;
+```
+
+---
+
+### Update an API key
+
+<APIMethod path="/api-key/update" method="POST">
+```ts
+type updateApiKey = {
+    /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
+     * The id of the Api Key to update.
+     */
+    keyId: string = "some-api-key-id"
+    /**
+     * The id of the user which the api key belongs to. server-only.
+     * @serverOnly
+     */
+    userId?: string = "some-user-id"
+    /**
+     * The name of the key.
+     */
+    name?: string = "some-api-key-name"
+    /**
+     * Whether the Api Key is enabled or not. server-only.
+     * @serverOnly
+     */
+    enabled?: boolean = true
+    /**
+     * The number of remaining requests. server-only.
+     * @serverOnly
+     */
+    remaining?: number = 100
+    /**
+     * The refill amount. server-only.
+     * @serverOnly
+     */
+    refillAmount?: number = 100
+    /**
+     * The refill interval in milliseconds. server-only.
+     * @serverOnly
+     */
+    refillInterval?: number = 1000
+    /**
+     * The metadata of the Api Key. server-only.
+     * @serverOnly
+     */
+    metadata?: any | null = { "key": "value" }
+    /**
+     * Expiration time of the Api Key in seconds. server-only.
+     * @serverOnly
+     */
+    expiresIn?: number = 60 * 60 * 24 * 7
+    /**
+     * Whether the key has rate limiting enabled. server-only.
+     * @serverOnly
+     */
+    rateLimitEnabled?: boolean = true
+    /**
+     * The duration in milliseconds where each request is counted. server-only.
+     * @serverOnly
+     */
+    rateLimitTimeWindow?: number = 1000
+    /**
+     * Maximum amount of requests allowed within a window. Once the `maxRequests` is reached, the request will be rejected until the `timeWindow` has passed, at which point the `timeWindow` will be reset. server-only.
+     * @serverOnly
+     */
+    rateLimitMax?: number = 100
+    /**
+     * Update the permissions on the API Key. server-only.
+     * @serverOnly
+     */
+    permissions?: Record<string, string[]>
+}
+```
+</APIMethod>
+
+#### Result
+
+If fails, throws `APIError`.
+Otherwise, you'll receive the API Key details, except for the `key` value itself.
+
+---
+
+### Delete an API Key
+
+<APIMethod
+  path="/api-key/delete"
+  method="POST"
+  requireSession
+  note="This endpoint is attempting to delete the API key from the perspective of the user. It will check if the user's ID matches the key owner to be able to delete it. If you want to delete a key without these checks, we recommend you use an ORM to directly mutate your DB instead."
+>
+```ts
+type deleteApiKey = {
+    /**
+     * The configuration ID to use for the API key lookup. If not provided, the default configuration is used.
+     */
+    configId?: string
+    /**
+     * The id of the Api Key to delete.
+     */
+    keyId: string = "some-api-key-id"
+}
+```
+</APIMethod>
+
+#### Result
+
+If fails, throws `APIError`.
+Otherwise, you'll receive:
+
+```ts
+type Result = {
+  success: boolean;
+};
+```
+
+---
+
+### List API keys
+
+<APIMethod
+  path="/api-key/list"
+  method="GET"
+  requireSession
+>
+```ts
+type listApiKeys = {
+    /**
+     * Filter by configuration ID. If not provided, returns keys from all configurations.
+     */
+    configId?: string
+    /**
+     * Organization ID to list keys for. If provided, returns organization-owned keys.
+     * If not provided, returns user-owned keys for the current session user.
+     */
+    organizationId?: string
+    /**
+     * The number of API keys to return.
+     */
+    limit?: number
+    /**
+     * The offset to start from (for pagination).
+     */
+    offset?: number
+    /**
+     * The field to sort by (e.g., "createdAt", "name", "expiresAt").
+     */
+    sortBy?: string
+    /**
+     * The direction to sort by.
+     */
+    sortDirection?: "asc" | "desc"
+}
+```
+</APIMethod>
+
+#### Result
+
+If fails, throws `APIError`.
+Otherwise, you'll receive a paginated response:
+
+```ts
+type Result = {
+  apiKeys: Omit<ApiKey, "key">[];
+  total: number;
+  limit?: number;
+  offset?: number;
+};
+```
+
+#### Pagination Examples
+
+```ts
+// Get first 10 API keys for the current user
+const result = await authClient.apiKey.list({
+  query: { limit: 10 }
+});
+
+// Get second page (10 items per page)
+const page2 = await authClient.apiKey.list({
+  query: { limit: 10, offset: 10 }
+});
+
+// Sort by creation date (newest first)
+const sorted = await authClient.apiKey.list({
+  query: { sortBy: "createdAt", sortDirection: "desc" }
+});
+
+// Combined pagination and sorting
+const combined = await authClient.apiKey.list({
+  query: { 
+    limit: 20, 
+    offset: 0, 
+    sortBy: "name", 
+    sortDirection: "asc" 
+  }
+});
+
+// List organization-owned keys
+const orgKeys = await authClient.apiKey.list({
+  query: { organizationId: "org_123" }
+});
+
+// List organization keys with specific config
+const orgPublicKeys = await authClient.apiKey.list({
+  query: { 
+    organizationId: "org_123",
+    configId: "public" 
+  }
+});
+```
+
+---
+
+### Delete all expired API keys
+
+This function will delete all API keys that have an expired expiration date.
+
+<APIMethod
+  path="/api-key/delete-all-expired-api-keys"
+  method="POST"
+  isServerOnly
+>
+```ts
+type deleteAllExpiredApiKeys = {
+}
+```
+</APIMethod>
+
+<Callout>
+  We automatically delete expired API keys every time any apiKey plugin
+  endpoints were called, however they are rate-limited to a 10 second cool down
+  each call to prevent multiple calls to the database.
+</Callout>
+
+## Next Steps
+
+<Cards>
+
+<Card href="/docs/plugins/api-key/advanced" title="Advanced Features">
+  Sessions, multiple configurations, organization keys, storage, rate limiting, and more.
+</Card>
+
+<Card href="/docs/plugins/api-key/reference" title="Reference">
+  Plugin options, permissions, and schema.
+</Card>
+</Cards>
