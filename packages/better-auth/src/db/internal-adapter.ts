@@ -487,11 +487,11 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-              if (!s) return [];
-              const expiresAt = new Date(s.session.expiresAt);
-              if (options?.onlyActiveSessions && expiresAt <= new Date()) {
-                continue;
-              }
+							if (!s) return [];
+							const expiresAt = new Date(s.session.expiresAt);
+							if (options?.onlyActiveSessions && expiresAt <= new Date()) {
+								continue;
+							}
 							const session = {
 								session: {
 									...s.session,

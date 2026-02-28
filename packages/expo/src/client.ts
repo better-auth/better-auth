@@ -449,17 +449,13 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						}
 						if (options.body?.newUserCallbackURL) {
 							if (options.body.newUserCallbackURL.startsWith("/")) {
-								const url = Linking.createURL(
-									options.body.newUserCallbackURL,
-								);
+								const url = Linking.createURL(options.body.newUserCallbackURL);
 								options.body.newUserCallbackURL = url;
 							}
 						}
 						if (options.body?.errorCallbackURL) {
 							if (options.body.errorCallbackURL.startsWith("/")) {
-								const url = Linking.createURL(
-									options.body.errorCallbackURL,
-								);
+								const url = Linking.createURL(options.body.errorCallbackURL);
 								options.body.errorCallbackURL = url;
 							}
 						}

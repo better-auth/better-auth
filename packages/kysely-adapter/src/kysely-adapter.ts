@@ -8,6 +8,7 @@ import type {
 	Where,
 } from "@better-auth/core/db/adapter";
 import { createAdapterFactory } from "@better-auth/core/db/adapter";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	InsertQueryBuilder,
 	Kysely,
@@ -15,7 +16,6 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
