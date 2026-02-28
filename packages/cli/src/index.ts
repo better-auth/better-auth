@@ -8,6 +8,7 @@ import { login, logout } from "./commands/login";
 import { mcp } from "./commands/mcp";
 import { migrate } from "./commands/migrate";
 import { generateSecret } from "./commands/secret";
+import { upgrade } from "./commands/upgrade";
 import { getPackageInfo } from "./utils/get-package-info";
 
 import "dotenv/config";
@@ -37,6 +38,7 @@ async function main() {
 		.addCommand(login)
 		.addCommand(logout)
 		.addCommand(mcp)
+		.addCommand(upgrade)
 		.version(cliVersion)
 		.description("Better Auth CLI")
 		.action(() => program.help());
