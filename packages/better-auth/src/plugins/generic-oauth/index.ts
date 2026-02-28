@@ -127,9 +127,13 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier?: string | undefined;
 						deviceId?: string | undefined;
 					}) {
+						const codeVerifier = c.pkce ? data.codeVerifier : undefined;
 						// Use custom getToken if provided
 						if (c.getToken) {
-							return c.getToken(data);
+							return c.getToken({
+								...data,
+								codeVerifier,
+							});
 						}
 
 						// Standard token exchange flow
@@ -158,7 +162,7 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
-							codeVerifier: data.codeVerifier,
+							codeVerifier,
 							redirectURI: data.redirectURI,
 							options: {
 								clientId: c.clientId,
