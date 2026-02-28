@@ -1,4 +1,3 @@
-import type { TOCItemType } from "fumadocs-core/toc";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { Step, Steps } from "fumadocs-ui/components/steps";
 import { Tab, Tabs } from "fumadocs-ui/components/tabs";
@@ -7,23 +6,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BlogLeftPanel } from "@/components/blog/blog-left-panel";
-import type { StepperTOCItem } from "@/components/docs/stepper-toc";
-import { StepperTOC } from "@/components/docs/stepper-toc";
+import { groupTocItems, StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
 import { blogs } from "@/lib/source";
 import { cn } from "@/lib/utils";
-
-function groupTocItems(toc: TOCItemType[]): StepperTOCItem[] {
-	const grouped: StepperTOCItem[] = [];
-	for (const item of toc) {
-		if (item.depth <= 2) {
-			grouped.push({ ...item, subheadings: [] });
-		} else if (grouped.length > 0) {
-			grouped[grouped.length - 1].subheadings.push(item);
-		}
-	}
-	return grouped;
-}
 
 function formatDate(date: Date) {
 	return new Date(date).toLocaleDateString("en-US", {
