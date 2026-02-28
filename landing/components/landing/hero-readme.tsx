@@ -2344,7 +2344,7 @@ export function HeroReadMe({
 									</div>
 
 									{/* Dashboard demo video — crop top border from video */}
-									<div className="overflow-hidden">
+									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
 											src={getSrc("/demo-dark.mp4")}
 											autoPlay
