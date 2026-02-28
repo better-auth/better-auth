@@ -16,7 +16,7 @@ import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
-	parseSessionInput,
+	getSessionDefaultFields,
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
@@ -294,7 +294,7 @@ export const createInternalAdapter = (
 			} = override || {};
 
 			// we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(options, {});
+			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
