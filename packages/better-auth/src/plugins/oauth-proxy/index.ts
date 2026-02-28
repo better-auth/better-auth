@@ -99,10 +99,6 @@ const oauthCallbackQuerySchema = z.object({
 	error: z.string().optional(),
 });
 
-function isOAuthCallbackPath(path: string | undefined) {
-	return path === "/callback/:id" || path === "/oauth2/callback/:providerId";
-}
-
 export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 	const maxAge = opts?.maxAge ?? 60; // Default 60 seconds
 
@@ -290,7 +286,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				{
 					// Intercept OAuth callback on production to handle passthrough
 					matcher(context) {
-						return isOAuthCallbackPath(context.path);
+						return context.path === "/callback/:id";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const state = ctx.query?.state || ctx.body?.state;
@@ -363,7 +359,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						}
 
 						// Find the OAuth provider
-						const providerId = ctx.params?.id || ctx.params?.providerId;
+						const providerId = ctx.params?.id;
 						const provider = ctx.context.socialProviders.find(
 							(p) => p.id === providerId,
 						);
@@ -374,20 +370,11 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 
 						// Exchange code for tokens
 						let tokens: OAuth2Tokens | null;
-						const fallbackCallbackPath =
-							ctx.params?.providerId != null
-								? `/oauth2/callback/${provider.id}`
-								: `/callback/${provider.id}`;
-						const callbackRedirectURI =
-							ctx.request?.url != null
-								? new URL(ctx.request.url).origin +
-									new URL(ctx.request.url).pathname
-								: `${ctx.context.baseURL}${fallbackCallbackPath}`;
 						try {
 							tokens = await provider.validateAuthorizationCode({
 								code,
 								codeVerifier: stateData.codeVerifier,
-								redirectURI: callbackRedirectURI,
+								redirectURI: `${ctx.context.baseURL}/callback/${provider.id}`,
 							});
 						} catch (e) {
 							ctx.context.logger.error(
@@ -559,7 +546,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 				},
 				{
 					matcher(context) {
-						return isOAuthCallbackPath(context.path);
+						return context.path === "/callback/:id";
 					},
 					handler: createAuthMiddleware(async (ctx) => {
 						const headers = ctx.context.responseHeaders;

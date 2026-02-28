@@ -127,13 +127,9 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 						codeVerifier?: string | undefined;
 						deviceId?: string | undefined;
 					}) {
-						const codeVerifier = c.pkce ? data.codeVerifier : undefined;
 						// Use custom getToken if provided
 						if (c.getToken) {
-							return c.getToken({
-								...data,
-								codeVerifier,
-							});
+							return c.getToken(data);
 						}
 
 						// Standard token exchange flow
@@ -157,17 +153,15 @@ export const genericOAuth = (options: GenericOAuthOptions) => {
 								GENERIC_OAUTH_ERROR_CODES.TOKEN_URL_NOT_FOUND,
 							);
 						}
-						// Use data.redirectURI for token exchange so it matches the redirect_uri
-						// from the authorization request (required by OAuth2; mismatch causes invalid_code).
 						return validateAuthorizationCode({
 							headers: c.authorizationHeaders,
 							code: data.code,
-							codeVerifier,
+							codeVerifier: data.codeVerifier,
 							redirectURI: data.redirectURI,
 							options: {
 								clientId: c.clientId,
 								clientSecret: c.clientSecret,
-								redirectURI: data.redirectURI,
+								redirectURI: c.redirectURI,
 							},
 							tokenEndpoint: finalTokenUrl,
 							authentication: c.authentication,
