@@ -360,9 +360,11 @@ function PlatformCard({
 		>
 			<div className="flex flex-col h-full p-5">
 				{/* Header */}
-				<div className="flex items-center gap-2 mb-3">
-					<Icon className="text-foreground/50" />
-					<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/40">
+				<div className="flex flex-col items-center gap-2 mb-3">
+					<div className="bg-muted/20 border border-foreground/[0.06] p-2 rounded-full">
+						<Icon className="size-8 text-foreground/50" />
+					</div>
+					<h3 className="text-base font-mono uppercase tracking-widest text-foreground/40">
 						{platform.name}
 					</h3>
 				</div>
@@ -386,7 +388,7 @@ function PlatformCard({
 					rel="noreferrer"
 					className="block"
 				>
-					<div className="w-full py-2.5 text-center border border-dashed border-foreground/[0.12] text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all cursor-pointer">
+					<div className="w-full py-2.5 text-center border flex items-center justify-center border-dashed border-foreground/[0.12] text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all cursor-pointer">
 						<span className="font-mono text-[10px] uppercase tracking-widest">
 							{platform.cta}
 						</span>
@@ -434,7 +436,7 @@ export function CommunityPageClient({ stats }: { stats: CommunityStats }) {
 										icon={DownloadIcon}
 										label="NPM Downloads"
 										value={stats.npmDownloads}
-										subtext="total"
+										subtext="/ year"
 										index={0}
 									/>
 									<StatCard
