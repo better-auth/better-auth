@@ -357,6 +357,43 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 				}
 			}
 
+			/**
+			 * Resolve the db.query key for a model.
+			 *
+			 * When `usePlural` is false (default), Better Auth uses singular model
+			 * names like "user", but Drizzle's db.query is keyed by the schema
+			 * export names (often plural like "users"). This function:
+			 *
+			 * 1. Tries the model name directly (works when schema keys match)
+			 * 2. If usePlural is set, tries appending "s"
+			 * 3. Falls back to scanning config.schema to find which db.query key
+			 *    corresponds to the same table object
+			 */
+			function getQueryModel(model: string): string | null {
+				if (db.query[model]) return model;
+
+				if (config.usePlural) {
+					const plural = `${model}s`;
+					if (db.query[plural]) return plural;
+				}
+
+				if (config.schema) {
+					const targetTable = config.schema[model];
+					if (targetTable) {
+						const fullSchema = db._.fullSchema;
+						if (fullSchema) {
+							for (const key of Object.keys(db.query)) {
+								if (fullSchema[key] === targetTable) {
+									return key;
+								}
+							}
+						}
+					}
+				}
+
+				return null;
+			}
+
 			return {
 				async create({ model, data: values }) {
 					const schemaModel = getSchema(model);
@@ -370,7 +407,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const clause = convertWhereClause(where, model);
 
 					if (options.experimental?.joins) {
-						if (!db.query || !db.query[model]) {
+						const queryModel = getQueryModel(model);
+						if (!db.query || !queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -399,7 +437,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									}
 								}
 							}
-							const query = db.query[model].findFirst({
+							const query = db.query[queryModel].findFirst({
 								where: clause[0],
 								columns:
 									select?.length && select.length > 0
@@ -456,7 +494,8 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 					const sortFn = sortBy?.direction === "desc" ? desc : asc;
 
 					if (options.experimental?.joins) {
-						if (!db.query[model]) {
+						const queryModel = getQueryModel(model);
+						if (!queryModel) {
 							logger.error(
 								`[# Drizzle Adapter]: The model "${model}" was not found in the query object. Please update your Drizzle schema to include relations or re-generate using "npx auth@latest generate".`,
 							);
@@ -492,7 +531,7 @@ export const drizzleAdapter = (db: DB, config: DrizzleAdapterConfig) => {
 									),
 								];
 							}
-							const query = db.query[model].findMany({
+							const query = db.query[queryModel].findMany({
 								where: clause[0],
 								with: includes,
 								columns:
