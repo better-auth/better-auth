@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
+import { groupTocItems } from "@/components/docs/group-toc-items";
 import {
 	AddToCursor,
 	DatabaseTable,
@@ -23,7 +24,7 @@ import {
 	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
-import { groupTocItems, StepperTOC } from "@/components/docs/stepper-toc";
+import { StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
