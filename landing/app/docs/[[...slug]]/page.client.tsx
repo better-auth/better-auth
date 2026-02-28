@@ -1,5 +1,4 @@
 "use client";
-import { useEffectEvent } from "fumadocs-core/utils/use-effect-event";
 import {
 	Popover,
 	PopoverContent,
@@ -13,7 +12,13 @@ import {
 	MessageCircle,
 } from "lucide-react";
 import type { MouseEventHandler } from "react";
-import { useEffect, useRef, useState, useTransition } from "react";
+import {
+	useEffect,
+	useEffectEvent,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import { cn } from "@/lib/utils";
 
 function useCopyButton(
