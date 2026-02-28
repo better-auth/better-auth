@@ -1,7 +1,6 @@
 import { GeistPixelSquare } from "geist/font/pixel";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Script from "next/script";
 import type { ReactNode } from "react";
 import { CommandMenuProvider } from "@/components/command-menu";
 import { StaggeredNavFiles } from "@/components/landing/staggered-nav-files";
@@ -66,25 +65,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                   `,
 					}}
 				/>
-				{process.env.NODE_ENV === "development" && (
-					<Script
-						src="//unpkg.com/react-grab/dist/index.global.js"
-						crossOrigin="anonymous"
-						strategy="beforeInteractive"
-						data-options={JSON.stringify({
-							activationKey: " ",
-							activationMode: "toggle",
-							allowActivationInsideInput: false,
-							maxContextLines: 3,
-						})}
-					/>
-				)}
-				{process.env.NODE_ENV === "development" && (
-					<Script
-						src="//unpkg.com/@react-grab/mcp/dist/client.global.js"
-						strategy="lazyOnload"
-					/>
-				)}
 			</head>
 			<body
 				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-hidden`}
