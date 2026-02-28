@@ -5,7 +5,7 @@
   "private": true,
   "scripts": {
     "fetch-docs": "bash scripts/fetch-docs.sh",
-    "postinstall": "npm run fetch-docs && fumadocs-mdx",
+    "postinstall": "pnpm run fetch-docs && fumadocs-mdx",
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start",
