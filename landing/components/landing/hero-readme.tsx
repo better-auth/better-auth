@@ -963,7 +963,7 @@ function SentinelSection() {
 							<span className="text-[11px] font-medium text-foreground/60 dark:text-foreground/45">
 								Sentinel
 							</span>
-							<span className="text-[10px] font-mono text-foreground/25 dark:text-foreground/15 ml-1">
+							<span className="text-[10px] font-mono text-foreground/50  ml-1">
 								Monitor and analyze security events
 							</span>
 						</div>
@@ -1000,22 +1000,22 @@ function SentinelSection() {
 
 					{/* Table header */}
 					<div className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Action
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Identifier
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Reason
 						</span>
-						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Location
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Path
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25 text-right">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50 text-right">
 							Time
 						</span>
 					</div>
@@ -1046,7 +1046,7 @@ function SentinelSection() {
 									{event.identifier}
 								</span>
 								{event.ip && (
-									<span className="text-[9px] font-mono text-foreground/25 dark:text-foreground/15 block truncate">
+									<span className="text-[9px] font-mono text-foreground/50  block truncate">
 										{event.ip}
 									</span>
 								)}
@@ -1054,10 +1054,10 @@ function SentinelSection() {
 							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30 truncate">
 								{event.reason}
 							</span>
-							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/25 truncate">
+							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
 								{event.location}
 							</span>
-							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/25 truncate">
+							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
 								{event.path}
 							</span>
 							<span className="text-[10px] font-mono text-foreground/30 dark:text-foreground/20 text-right">
@@ -1670,7 +1670,7 @@ export function HeroReadMe({
 												strokeWidth="2"
 												strokeLinecap="round"
 												strokeLinejoin="round"
-												className="text-foreground/40 dark:text-foreground/25"
+												className="text-foreground/40 dark:text-foreground/50"
 											>
 												<line x1="7" y1="17" x2="17" y2="7" />
 												<polyline points="7 7 17 7 17 17" />
@@ -1939,7 +1939,7 @@ export function HeroReadMe({
 														</span>
 													</div>
 													<div className="relative size-5 rounded-full border border-foreground/[0.08] bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center z-[1]">
-														<span className="text-[8px] font-mono text-foreground/40 dark:text-foreground/25 leading-none">
+														<span className="text-[8px] font-mono text-foreground/40 dark:text-foreground/50 leading-none">
 															C
 														</span>
 													</div>
@@ -1957,7 +1957,7 @@ export function HeroReadMe({
 													<span className="text-[8px] font-mono text-foreground/35 dark:text-foreground/20 px-1.5 py-0.5 border border-foreground/[0.06] bg-foreground/[0.015]">
 														admin
 													</span>
-													<span className="text-[8px] font-mono text-foreground/30 dark:text-foreground/15 px-1.5 py-0.5 border border-dashed border-foreground/[0.08]">
+													<span className="text-[8px] font-mono text-foreground/30  px-1.5 py-0.5 border border-dashed border-foreground/[0.08]">
 														member
 													</span>
 												</div>
@@ -1980,7 +1980,7 @@ export function HeroReadMe({
 													].map((plugin, i) => (
 														<span
 															key={plugin}
-															className={`text-[8px] font-mono whitespace-nowrap px-1.5 py-0.5 border shrink-0 ${i < 2 ? "text-foreground/50 dark:text-foreground/30 border-foreground/[0.08] bg-foreground/[0.02]" : i < 4 ? "text-foreground/40 dark:text-foreground/22 border-foreground/[0.06] bg-foreground/[0.015]" : "text-foreground/30 dark:text-foreground/15 border-foreground/[0.05]"}`}
+															className={`text-[8px] font-mono whitespace-nowrap px-1.5 py-0.5 border shrink-0 ${i < 2 ? "text-foreground/50 dark:text-foreground/30 border-foreground/[0.08] bg-foreground/[0.02]" : i < 4 ? "text-foreground/40 dark:text-foreground/22 border-foreground/[0.06] bg-foreground/[0.015]" : "text-foreground/30  border-foreground/[0.05]"}`}
 														>
 															{plugin}
 														</span>
@@ -2065,26 +2065,20 @@ export function HeroReadMe({
 										)}
 										{"agent" in feature && feature.agent && (
 											<div className="mt-3 flex items-center h-5 px-2.5 border border-foreground/[0.06] bg-foreground/[0.015] font-mono text-[8px] gap-1">
-												<span className="text-foreground/30 dark:text-foreground/15">
-													$
-												</span>
+												<span className="text-foreground/30 ">$</span>
 												<span className="text-foreground/50 dark:text-foreground/30">
 													agent
-													<span className="text-foreground/30 dark:text-foreground/15">
-														.
-													</span>
+													<span className="text-foreground/30 ">.</span>
 													auth
-													<span className="text-foreground/30 dark:text-foreground/15">
-														()
-													</span>
+													<span className="text-foreground/30 ">()</span>
 												</span>
-												<span className="text-foreground/25 dark:text-foreground/10 mx-0.5">
+												<span className="text-foreground/50 dark:text-foreground/10 mx-0.5">
 													→
 												</span>
 												<span className="text-foreground/35 dark:text-foreground/20">
 													sk-<span className="tracking-[0.08em]">••••</span>
 												</span>
-												<span className="text-foreground/40 dark:text-foreground/25">
+												<span className="text-foreground/40 dark:text-foreground/50">
 													✓
 												</span>
 												<span className="inline-block w-px h-2.5 bg-foreground/30 animate-[blink_1s_steps(2)_infinite]" />
@@ -2165,7 +2159,7 @@ export function HeroReadMe({
 																	key={`${setIdx}-${event.time}-${event.user}`}
 																	className="flex items-center gap-1.5 shrink-0 h-5 whitespace-nowrap"
 																>
-																	<span className="text-[8px] font-mono text-foreground/30 dark:text-foreground/15">
+																	<span className="text-[8px] font-mono text-foreground/30 ">
 																		{event.time}
 																	</span>
 																	<span className="text-[8px] font-mono text-foreground/50 dark:text-foreground/30 border-b border-dashed border-foreground/20">

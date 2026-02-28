@@ -245,7 +245,7 @@ function ComparisonCell({ value }: { value: string | boolean }) {
 	if (value === false)
 		return (
 			<span className="inline-flex items-center justify-center w-5 h-5">
-				<Minus className="w-3 h-3 text-foreground/25 dark:text-foreground/15" />
+				<Minus className="w-3 h-3 text-foreground/50 " />
 			</span>
 		);
 	return (
@@ -307,7 +307,7 @@ function PricingHero() {
 							<p className="text-sm font-light text-foreground/80 tabular-nums flex items-baseline justify-center gap-0.5">
 								<span>{tier.price}</span>
 								{tier.note && (
-									<span className="text-[9px] text-foreground/40 dark:text-foreground/25 font-mono">
+									<span className="text-[9px] text-foreground/40 dark:text-foreground/50 font-mono">
 										{tier.note}
 									</span>
 								)}
@@ -440,7 +440,7 @@ function PricingCard({
 								key={feature}
 								className="flex items-start gap-2 text-[11px] text-foreground/70 dark:text-foreground/50 group-hover:text-foreground/75 dark:group-hover:text-foreground/55 transition-colors duration-300"
 							>
-								<span className="text-foreground/40 dark:text-foreground/25 mt-px font-mono text-[9px] leading-none select-none shrink-0">
+								<span className="text-foreground/40 dark:text-foreground/50 mt-px font-mono text-[9px] leading-none select-none shrink-0">
 									+
 								</span>
 								<span>{feature}</span>

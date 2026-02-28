@@ -358,7 +358,7 @@ export function DatabaseTable({
 								"px-2 py-0.5 font-mono text-[10px] tracking-wide transition-colors cursor-pointer",
 								view === opt.key
 									? "text-foreground/70 bg-foreground/[0.05]"
-									: "text-foreground/25 hover:text-foreground/50",
+									: "text-foreground/50 hover:text-foreground/50",
 							)}
 						>
 							{opt.label}
@@ -411,16 +411,16 @@ export function DatabaseTable({
 				<>
 					{/* Column headers */}
 					<div className="grid grid-cols-[minmax(120px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] border-b border-foreground/[0.06] bg-foreground/[0.02]">
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/25">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
 							Field
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/25">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
 							Type
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/25">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
 							Key
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/25">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
 							Description
 						</div>
 					</div>
