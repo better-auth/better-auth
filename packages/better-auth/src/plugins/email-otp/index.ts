@@ -6,10 +6,12 @@ import { getEndpointResponse } from "../../utils/plugin-helper";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 import { storeOTP } from "./otp-token";
 import {
+	changeEmailEmailOTP,
 	checkVerificationOTP,
 	createVerificationOTP,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
+	requestEmailChangeEmailOTP,
 	requestPasswordResetEmailOTP,
 	resetPasswordEmailOTP,
 	sendVerificationOTP,
@@ -78,6 +80,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			requestPasswordResetEmailOTP: requestPasswordResetEmailOTP(opts),
 			forgetPasswordEmailOTP: forgetPasswordEmailOTP(opts),
 			resetPasswordEmailOTP: resetPasswordEmailOTP(opts),
+			requestEmailChangeEmailOTP: requestEmailChangeEmailOTP(opts),
+			changeEmailEmailOTP: changeEmailEmailOTP(opts),
 		},
 		hooks: {
 			after: [
@@ -166,6 +170,20 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			{
 				pathMatcher(path) {
 					return path === "/forget-password/email-otp";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-email-change";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/change-email";
 				},
 				window: opts.rateLimit?.window || 60,
 				max: opts.rateLimit?.max || 3,
