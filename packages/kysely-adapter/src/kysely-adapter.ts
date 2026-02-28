@@ -15,7 +15,7 @@ import type {
 	UpdateQueryBuilder,
 } from "kysely";
 import { sql } from "kysely";
-import { capitalizeFirstLetter } from "../..";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type { KyselyDatabaseType } from "./types";
 
 interface KyselyAdapterConfig {
