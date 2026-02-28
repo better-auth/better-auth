@@ -316,7 +316,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	) {
 		if (opts.storeClientSecret === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: clientSecret,
 			});
 		}
@@ -350,7 +350,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		if (opts.storeClientSecret === "encrypted") {
 			return (
 				(await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedClientSecret,
 				})) === clientSecret
 			);

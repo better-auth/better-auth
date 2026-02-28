@@ -18,6 +18,7 @@ import type {
 	BetterAuthRateLimitOptions,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
+import type { SecretConfig } from "./secret";
 
 /**
  * @internal
@@ -339,6 +340,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
+			secretConfig: string | SecretConfig;
 			sessionConfig: {
 				updateAge: number;
 				expiresIn: number;

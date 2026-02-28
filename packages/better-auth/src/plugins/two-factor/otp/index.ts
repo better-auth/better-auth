@@ -126,7 +126,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		}
 		if (opts.storeOTP === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: otp,
 			});
 		}
@@ -145,7 +145,7 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 		if (opts.storeOTP === "encrypted") {
 			// For encrypted storage: decrypt stored value and compare with plain input
 			const decrypted = await symmetricDecrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: storedOtp,
 			});
 			return [decrypted, userInput];
