@@ -1,13 +1,13 @@
 ---
 title: "Better Auth 1.5"
-description: "Auth CLI, MCP Auth, Electron integration, i18n, adapter extraction, dynamic base URL, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
+description: "Auth CLI, MCP Auth, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
 date: 2025-02-28
 author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
   twitter: "himseIf_65"
   image: "/release-og/1-5.png"
-tags: ["1.5", "CLI", "MCP", "electron", "i18n", "adapters", "stripe", "SSO", "SCIM", "CLI", "test-utils"]
+tags: ["1.5", "CLI", "MCP", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
 ---
 
 ## Better Auth 1.5 Release
@@ -434,6 +434,27 @@ export const auth = betterAuth({
     database: drizzleAdapter(db, { provider: "pg" }),
 });
 ```
+
+---
+
+### Cloudflare D1 Support
+
+Better Auth now natively supports [Cloudflare D1](https://developers.cloudflare.com/d1/) as a first-class database option. Pass your D1 binding directly — no custom adapter setup required.
+
+```tsx
+import { betterAuth } from "better-auth";
+
+export default {
+    async fetch(request, env) {
+        const auth = betterAuth({
+            database: env.DB, // D1 binding, auto-detected // [!code highlight]
+        });
+        return auth.handler(request);
+    },
+} satisfies ExportedHandler<{ DB: D1Database }>;
+```
+
+The built-in D1 dialect handles query execution, batch operations, and introspection through D1's native API. Note that D1 does not support interactive transactions — Better Auth uses D1's `batch()` API for atomicity instead.
 
 ---
 
