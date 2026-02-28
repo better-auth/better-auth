@@ -472,6 +472,42 @@ export const deleteOrgRole = <O extends OrganizationOptions>(options: O) => {
 				existingRoleInDB.permission as never as string,
 			);
 
+			// Check if any members are assigned to this role
+			const roleToDelete = existingRoleInDB.role;
+			const members = await ctx.context.adapter.findMany<Member>({
+				model: "member",
+				where: [
+					{
+						field: "organizationId",
+						value: organizationId,
+						operator: "eq",
+						connector: "AND",
+					},
+					{
+						field: "role",
+						value: roleToDelete,
+						operator: "contains",
+					},
+				],
+			});
+			const memberWithRole = members.find((member) => {
+				const memberRoles = member.role.split(",").map((r) => r.trim());
+				return memberRoles.includes(roleToDelete);
+			});
+			if (memberWithRole) {
+				ctx.context.logger.error(
+					`[Dynamic Access Control] Cannot delete a role that is assigned to members.`,
+					{
+						role: existingRoleInDB.role,
+						organizationId,
+					},
+				);
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ROLE_IS_ASSIGNED_TO_MEMBERS,
+				);
+			}
+
 			await ctx.context.adapter.delete({
 				model: "organizationRole",
 				where: [

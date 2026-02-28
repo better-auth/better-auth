@@ -1,13 +1,36 @@
 {
   "name": "@better-auth/memory-adapter",
-  "version": "1.5.0-beta.9",
+  "version": "1.5.0-beta.20",
   "description": "Memory adapter for Better Auth",
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/better-auth/better-auth.git",
     "directory": "packages/memory-adapter"
   },
+  "keywords": [
+    "auth",
+    "memory",
+    "adapter",
+    "typescript",
+    "better-auth"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest"
+  },
+  "files": [
+    "dist"
+  ],
   "main": "./dist/index.mjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.mts",
@@ -18,19 +41,13 @@
       "default": "./dist/index.mjs"
     }
   },
-  "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
-    "test": "vitest",
-    "typecheck": "tsc --noEmit"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/utils": "^0.3.0",
+    "@better-auth/utils": "^0.3.1",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

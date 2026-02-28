@@ -30,7 +30,6 @@ import type {
 } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		admin: {
 			creator: typeof admin;
@@ -94,9 +93,9 @@ export const admin = <O extends AdminOptions>(options?: O | undefined) => {
 									}
 									const user = (await ctx.context.internalAdapter.findUserById(
 										session.userId,
-									)) as UserWithRole;
+									)) as UserWithRole | null;
 
-									if (user.banned) {
+									if (user?.banned) {
 										if (
 											user.banExpires &&
 											new Date(user.banExpires).getTime() < Date.now()

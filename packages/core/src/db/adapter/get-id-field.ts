@@ -31,9 +31,7 @@ export const initGetIdField = ({
 		customModelName?: string;
 		forceAllowId?: boolean;
 	}) => {
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		const shouldGenerateId: boolean = (() => {

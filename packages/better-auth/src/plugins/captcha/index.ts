@@ -6,7 +6,6 @@ import { EXTERNAL_ERROR_CODES, INTERNAL_ERROR_CODES } from "./error-codes";
 import type { CaptchaOptions } from "./types";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		captcha: {
 			creator: typeof captcha;
@@ -21,6 +20,7 @@ export type * from "./types";
 export const captcha = (options: CaptchaOptions) =>
 	({
 		id: "captcha",
+		$ERROR_CODES: EXTERNAL_ERROR_CODES,
 		onRequest: async (request, ctx) => {
 			try {
 				const endpoints = options.endpoints?.length
@@ -40,6 +40,7 @@ export const captcha = (options: CaptchaOptions) =>
 				if (!captchaResponse) {
 					return middlewareResponse({
 						message: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.message,
+						code: EXTERNAL_ERROR_CODES.MISSING_RESPONSE.code,
 						status: 400,
 					});
 				}
@@ -89,6 +90,7 @@ export const captcha = (options: CaptchaOptions) =>
 
 				return middlewareResponse({
 					message: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.message,
+					code: EXTERNAL_ERROR_CODES.UNKNOWN_ERROR.code,
 					status: 500,
 				});
 			}

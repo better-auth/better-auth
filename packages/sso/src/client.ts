@@ -1,4 +1,4 @@
-import type { BetterAuthClientPlugin } from "better-auth";
+import type { BetterAuthClientPlugin } from "better-auth/client";
 import type { SSOPlugin } from "./index";
 
 interface SSOClientOptions {
@@ -23,7 +23,7 @@ export const ssoClient = <CO extends SSOClientOptions>(
 		}>,
 		pathMethods: {
 			"/sso/providers": "GET",
-			"/sso/providers/:providerId": "GET",
+			"/sso/get-provider": "GET",
 		},
 	} satisfies BetterAuthClientPlugin;
 };

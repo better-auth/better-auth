@@ -1,12 +1,12 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { describe, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as z from "zod";
 import { createAuthClient } from "../../client";
 import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { originCheck } from "./origin-check";
 
-describe("Origin Check", async (it) => {
+describe("Origin Check", async () => {
 	const { customFetchImpl, testUser } = await getTestInstance({
 		trustedOrigins: [
 			"http://localhost:5000",
@@ -245,7 +245,7 @@ describe("Origin Check", async (it) => {
 	});
 });
 
-describe("Fetch Metadata CSRF Protection", async (it) => {
+describe("Fetch Metadata CSRF Protection", async () => {
 	const { testUser, auth } = await getTestInstance({
 		trustedOrigins: ["http://localhost:3000", "https://app.example.com"],
 		emailAndPassword: {
@@ -493,7 +493,7 @@ describe("Fetch Metadata CSRF Protection", async (it) => {
 	});
 });
 
-describe("origin check middleware", async (it) => {
+describe("origin check middleware", async () => {
 	it("should return invalid origin", async () => {
 		const { client } = await getTestInstance({
 			trustedOrigins: ["https://trusted-site.com"],
@@ -539,7 +539,7 @@ describe("origin check middleware", async (it) => {
 	});
 });
 
-describe("trusted origins with baseURL inferred from request", async (it) => {
+describe("trusted origins with baseURL inferred from request", async () => {
 	it("should respect trustedOrigins array when baseURL is NOT in config", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
 			baseURL: undefined,
@@ -732,7 +732,7 @@ describe("trusted origins with baseURL inferred from request", async (it) => {
 	});
 });
 
-describe("disableCSRFCheck and disableOriginCheck separation", async (it) => {
+describe("disableCSRFCheck and disableOriginCheck separation", async () => {
 	it("disableCSRFCheck should allow untrusted origins with cookies (CSRF bypass)", async () => {
 		const { customFetchImpl, testUser } = await getTestInstance({
 			trustedOrigins: ["http://localhost:3000"],

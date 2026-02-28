@@ -1,7 +1,8 @@
 import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
 import { getCurrentAdapter } from "@better-auth/core/context";
-import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { WhereOperator } from "@better-auth/core/db/adapter";
 import { BetterAuthError } from "@better-auth/core/error";
+import { filterOutputFields } from "@better-auth/core/utils/db";
 import { parseJSON } from "../../client/parser";
 import type { InferAdditionalFieldsFromPluginOptions } from "../../db";
 import type { Session, User } from "../../types";
@@ -20,25 +21,6 @@ import type {
 	TeamMember,
 } from "./schema";
 import type { OrganizationOptions } from "./types";
-
-/**
- * Filters output data by removing fields with `returned: false` attribute.
- * This ensures sensitive fields are not exposed in API responses.
- */
-function filterOutputFields<T extends Record<string, unknown> | null>(
-	data: T,
-	additionalFields: Record<string, DBFieldAttribute> | undefined,
-): T {
-	if (!data || !additionalFields) {
-		return data;
-	}
-	const returnFiltered = Object.entries(additionalFields)
-		.filter(([, { returned }]) => returned === false)
-		.map(([key]) => key);
-	return Object.entries(structuredClone(data))
-		.filter(([key]) => !returnFiltered.includes(key))
-		.reduce((acc, [key, value]) => ({ ...acc, [key]: value }), {} as T);
-}
 
 export const getOrgAdapter = <O extends OrganizationOptions>(
 	context: AuthContext,
@@ -153,7 +135,7 @@ export const getOrgAdapter = <O extends OrganizationOptions>(
 			filter?:
 				| {
 						field: string;
-						operator?: "eq" | "ne" | "lt" | "lte" | "gt" | "gte" | "contains";
+						operator?: WhereOperator;
 						value: any;
 				  }
 				| undefined;

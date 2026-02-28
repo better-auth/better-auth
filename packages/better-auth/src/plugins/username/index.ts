@@ -17,7 +17,6 @@ import { getSchema } from "./schema";
 export { USERNAME_ERROR_CODES } from "./error-codes";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: AuthOptions and Options need to be same as declared in the module
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		username: {
 			creator: typeof username;
@@ -398,12 +397,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(
 						ctx,
