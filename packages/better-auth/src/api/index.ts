@@ -43,6 +43,7 @@ import {
 	unlinkAccount,
 	updateSession,
 	updateUser,
+	validatePasswordResetToken,
 	verifyEmail,
 	verifyPassword,
 } from "./routes";
@@ -230,6 +231,7 @@ export function getEndpoints<Option extends BetterAuthOptions>(
 		deleteUser,
 		requestPasswordReset,
 		requestPasswordResetCallback,
+		validatePasswordResetToken,
 		listSessions: listSessions<Option>(),
 		revokeSession,
 		revokeSessions,
