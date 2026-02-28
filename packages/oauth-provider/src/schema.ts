@@ -183,6 +183,10 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			authTime: {
+				type: "date",
+				required: false,
+			},
 			// Immutable
 			scopes: {
 				type: "string[]",
