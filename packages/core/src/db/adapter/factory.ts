@@ -1,4 +1,4 @@
-import { getColorDepth, logger, TTY_COLORS } from "../../env";
+import { createLogger, getColorDepth, TTY_COLORS } from "../../env";
 import { BetterAuthError } from "../../error";
 import type { BetterAuthOptions } from "../../types";
 import { safeJSONParse } from "../../utils/json";
@@ -38,20 +38,20 @@ let debugLogs: { instance: string; args: any[] }[] = [];
 let transactionId = -1;
 
 const createAsIsTransaction =
-	(adapter: DBAdapter<BetterAuthOptions>) =>
-	<R>(fn: (trx: DBTransactionAdapter<BetterAuthOptions>) => Promise<R>) =>
+	<Options extends BetterAuthOptions>(adapter: DBAdapter<Options>) =>
+	<R>(fn: (trx: DBTransactionAdapter<Options>) => Promise<R>) =>
 		fn(adapter);
 
-export type AdapterFactory = (
-	options: BetterAuthOptions,
-) => DBAdapter<BetterAuthOptions>;
+export type AdapterFactory<Options extends BetterAuthOptions> = (
+	options: Options,
+) => DBAdapter<Options>;
 
 export const createAdapterFactory =
-	({
+	<Options extends BetterAuthOptions>({
 		adapter: customAdapter,
 		config: cfg,
-	}: AdapterFactoryOptions): AdapterFactory =>
-	(options: BetterAuthOptions): DBAdapter<BetterAuthOptions> => {
+	}: AdapterFactoryOptions): AdapterFactory<Options> =>
+	(options: Options): DBAdapter<Options> => {
 		const uniqueAdapterFactoryInstanceId = Math.random()
 			.toString(36)
 			.substring(2, 15);
@@ -64,14 +64,14 @@ export const createAdapterFactory =
 			adapterName: cfg.adapterName ?? cfg.adapterId,
 			supportsNumericIds: cfg.supportsNumericIds ?? true,
 			supportsUUIDs: cfg.supportsUUIDs ?? false,
+			supportsArrays: cfg.supportsArrays ?? false,
 			transaction: cfg.transaction ?? false,
 			disableTransformInput: cfg.disableTransformInput ?? false,
 			disableTransformOutput: cfg.disableTransformOutput ?? false,
 			disableTransformJoin: cfg.disableTransformJoin ?? false,
 		} satisfies AdapterFactoryConfig;
-		const useNumberId =
-			options.advanced?.database?.useNumberId === true ||
-			options.advanced?.database?.generateId === "serial";
+
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		if (useNumberId && config.supportsNumericIds === false) {
 			throw new BetterAuthError(
 				`[${config.adapterName}] Your database or database adapter does not support numeric ids. Please disable "useNumberId" in your config.`,
@@ -83,6 +83,7 @@ export const createAdapterFactory =
 
 		const debugLog = (...args: any[]) => {
 			if (config.debugLogs === true || typeof config.debugLogs === "object") {
+				const logger = createLogger({ level: "info" });
 				// If we're running adapter tests, we'll keep debug logs in memory, then print them out if a test fails.
 				if (
 					typeof config.debugLogs === "object" &&
@@ -138,6 +139,8 @@ export const createAdapterFactory =
 			}
 		};
 
+		const logger = createLogger(options.logger);
+
 		const getDefaultModelName = initGetDefaultModelName({
 			usePlural: config.usePlural,
 			schema,
@@ -184,9 +187,7 @@ export const createAdapterFactory =
 			const fields = schema[defaultModelName]!.fields;
 
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
-			const useNumberId =
-				options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial";
+			const useNumberId = options.advanced?.database?.generateId === "serial";
 			fields.id = idField({
 				customModelName: defaultModelName,
 				forceAllowId: forceAllowId && "id" in data,
@@ -195,7 +196,7 @@ export const createAdapterFactory =
 				let value = data[field];
 				const fieldAttributes = fields[field];
 
-				let newFieldName: string =
+				const newFieldName: string =
 					newMappedKeys[field] || fields[field]!.fieldName || field;
 				if (
 					value === undefined &&
@@ -248,7 +249,7 @@ export const createAdapterFactory =
 				) {
 					newValue = JSON.stringify(newValue);
 				} else if (
-					config.supportsJSON === false &&
+					config.supportsArrays === false &&
 					Array.isArray(newValue) &&
 					(fieldAttributes!.type === "string[]" ||
 						fieldAttributes!.type === "number[]")
@@ -304,9 +305,7 @@ export const createAdapterFactory =
 				const idKey = Object.entries(newMappedKeys).find(
 					([_, v]) => v === "id",
 				)?.[0];
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				tableSchema[idKey ?? "id"] = {
 					type: useNumberId ? "number" : "string",
 				};
@@ -330,7 +329,7 @@ export const createAdapterFactory =
 							newValue = await field.transform.output(newValue);
 						}
 
-						let newFieldName: string = newMappedKeys[key] || key;
+						const newFieldName: string = newMappedKeys[key] || key;
 
 						if (originalKey === "id" || field.references?.field === "id") {
 							// Even if `useNumberId` is true, we must always return a string `id` output.
@@ -343,7 +342,7 @@ export const createAdapterFactory =
 						) {
 							newValue = safeJSONParse(newValue);
 						} else if (
-							config.supportsJSON === false &&
+							config.supportsArrays === false &&
 							typeof newValue === "string" &&
 							(field.type === "string[]" || field.type === "number[]")
 						) {
@@ -387,7 +386,7 @@ export const createAdapterFactory =
 			unsafe_model = getDefaultModelName(unsafe_model);
 			// for now we just transform the base model
 			// later we append the joined models to this object.
-			let transformedData: Record<string, any> = await transformSingleOutput(
+			const transformedData: Record<string, any> = await transformSingleOutput(
 				data,
 				unsafe_model,
 				select,
@@ -438,7 +437,7 @@ export const createAdapterFactory =
 					joinedData = [joinedData];
 				}
 
-				let transformed = [];
+				const transformed = [];
 
 				if (Array.isArray(joinedData)) {
 					for (const item of joinedData) {
@@ -469,9 +468,19 @@ export const createAdapterFactory =
 		const transformWhereClause = <W extends Where[] | undefined>({
 			model,
 			where,
+			action,
 		}: {
 			where: W;
 			model: string;
+			action:
+				| "create"
+				| "update"
+				| "findOne"
+				| "findMany"
+				| "updateMany"
+				| "delete"
+				| "deleteMany"
+				| "count";
 		}): W extends undefined ? undefined : CleanedWhere[] => {
 			if (!where) return undefined as any;
 			const newMappedKeys = config.mapKeysTransformInput ?? {};
@@ -508,9 +517,7 @@ export const createAdapterFactory =
 					model: defaultModelName,
 				});
 
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 
 				if (
 					defaultFieldName === "id" ||
@@ -533,12 +540,32 @@ export const createAdapterFactory =
 					newValue = value.toISOString();
 				}
 
+				if (fieldAttr.type === "boolean" && typeof newValue === "string") {
+					newValue = newValue === "true";
+				}
+
+				if (fieldAttr.type === "number") {
+					if (typeof newValue === "string" && newValue.trim() !== "") {
+						const parsed = Number(newValue);
+						if (!Number.isNaN(parsed)) {
+							newValue = parsed;
+						}
+					} else if (Array.isArray(newValue)) {
+						const parsed = newValue.map((v) =>
+							typeof v === "string" && v.trim() !== "" ? Number(v) : NaN,
+						);
+						if (parsed.every((n) => !Number.isNaN(n))) {
+							newValue = parsed;
+						}
+					}
+				}
+
 				if (
 					fieldAttr.type === "boolean" &&
-					typeof value === "boolean" &&
+					typeof newValue === "boolean" &&
 					!config.supportsBooleans
 				) {
-					newValue = value ? 1 : 0;
+					newValue = newValue ? 1 : 0;
 				}
 
 				if (
@@ -555,6 +582,18 @@ export const createAdapterFactory =
 							{ cause: error },
 						);
 					}
+				}
+
+				if (config.customTransformInput) {
+					newValue = config.customTransformInput({
+						data: newValue,
+						fieldAttributes: fieldAttr,
+						field: fieldName,
+						model: getModelName(model),
+						schema,
+						options,
+						action,
+					});
 				}
 
 				return {
@@ -722,6 +761,7 @@ export const createAdapterFactory =
 						connector: "AND",
 					},
 				],
+				action: "findOne",
 			});
 			try {
 				if (joinConfig.relation === "one-to-one") {
@@ -765,10 +805,8 @@ export const createAdapterFactory =
 			transformWhereClause,
 		});
 
-		let lazyLoadTransaction:
-			| DBAdapter<BetterAuthOptions>["transaction"]
-			| null = null;
-		const adapter: DBAdapter<BetterAuthOptions> = {
+		let lazyLoadTransaction: DBAdapter<Options>["transaction"] | null = null;
+		const adapter: DBAdapter<Options> = {
 			transaction: async (cb) => {
 				if (!lazyLoadTransaction) {
 					if (!config.transaction) {
@@ -794,7 +832,7 @@ export const createAdapterFactory =
 				forceAllowId?: boolean;
 			}): Promise<R> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				unsafeModel = getDefaultModelName(unsafeModel);
 				if (
@@ -875,12 +913,13 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}): Promise<T | null> => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				unsafeModel = getDefaultModelName(unsafeModel);
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "update",
 				});
 				debugLog(
 					{ method: "update" },
@@ -936,11 +975,12 @@ export const createAdapterFactory =
 				update: Record<string, any>;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "updateMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -991,11 +1031,12 @@ export const createAdapterFactory =
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findOne",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
@@ -1052,6 +1093,7 @@ export const createAdapterFactory =
 				model: unsafeModel,
 				where: unsafeWhere,
 				limit: unsafeLimit,
+				select,
 				sortBy,
 				offset,
 				join: unsafeJoin,
@@ -1059,12 +1101,13 @@ export const createAdapterFactory =
 				model: string;
 				where?: Where[];
 				limit?: number;
+				select?: string[] | undefined;
 				sortBy?: { field: string; direction: "asc" | "desc" };
 				offset?: number;
 				join?: JoinOption;
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const limit =
 					unsafeLimit ??
 					options.advanced?.database?.defaultFindManyLimit ??
@@ -1073,18 +1116,16 @@ export const createAdapterFactory =
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "findMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				let join: JoinConfig | undefined;
 				let passJoinToAdapter = true;
 				if (!config.disableTransformJoin) {
-					const result = transformJoinClause(
-						unsafeModel,
-						unsafeJoin,
-						undefined,
-					);
+					const result = transformJoinClause(unsafeModel, unsafeJoin, select);
 					if (result) {
 						join = result.join;
+						select = result.select;
 					}
 					// If adapter doesn't support joins and we have joins, don't pass them to the adapter
 					const experimentalJoins = options.experimental?.joins;
@@ -1105,6 +1146,7 @@ export const createAdapterFactory =
 					model,
 					where,
 					limit: limit,
+					select,
 					sortBy,
 					offset,
 					join: passJoinToAdapter ? join : undefined,
@@ -1141,11 +1183,12 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "delete",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1173,11 +1216,12 @@ export const createAdapterFactory =
 				where: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "deleteMany",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1206,11 +1250,12 @@ export const createAdapterFactory =
 				where?: Where[];
 			}) => {
 				transactionId++;
-				let thisTransactionId = transactionId;
+				const thisTransactionId = transactionId;
 				const model = getModelName(unsafeModel);
 				const where = transformWhereClause({
 					model: unsafeModel,
 					where: unsafeWhere,
+					action: "count",
 				});
 				unsafeModel = getDefaultModelName(unsafeModel);
 				debugLog(
@@ -1249,42 +1294,6 @@ export const createAdapterFactory =
 							delete tables.session;
 						}
 
-						if (
-							options.rateLimit &&
-							options.rateLimit.storage === "database" &&
-							// rate-limit will default to enabled in production,
-							// and given storage is database, it will try to use the rate-limit table,
-							// so we should make sure to generate rate-limit table schema
-							(typeof options.rateLimit.enabled === "undefined" ||
-								// and of course if they forcefully set to true, then they want rate-limit,
-								// thus we should also generate rate-limit table schema
-								options.rateLimit.enabled === true)
-						) {
-							tables.ratelimit = {
-								modelName: options.rateLimit.modelName ?? "ratelimit",
-								fields: {
-									key: {
-										type: "string",
-										unique: true,
-										required: true,
-										fieldName: options.rateLimit.fields?.key ?? "key",
-									},
-									count: {
-										type: "number",
-										required: true,
-										fieldName: options.rateLimit.fields?.count ?? "count",
-									},
-									lastRequest: {
-										type: "number",
-										required: true,
-										bigint: true,
-										defaultValue: () => Date.now(),
-										fieldName:
-											options.rateLimit.fields?.lastRequest ?? "lastRequest",
-									},
-								},
-							};
-						}
 						return adapterInstance.createSchema!({ file, tables });
 					}
 				: undefined,
@@ -1315,7 +1324,7 @@ export const createAdapterFactory =
 								}
 
 								//`${colors.fg.blue}|${colors.reset} `,
-								let log: any[] = logs
+								const log: any[] = logs
 									.reverse()
 									.map((log) => {
 										log.args[0] = `\n${log.args[0]}`;
@@ -1355,9 +1364,3 @@ function formatMethod(method: string) {
 function formatAction(action: string) {
 	return `${TTY_COLORS.dim}(${action})${TTY_COLORS.reset}`;
 }
-
-/**
- * @deprecated Use `createAdapterFactory` instead. This export will be removed in a future version.
- * @alias
- */
-export const createAdapter = createAdapterFactory;

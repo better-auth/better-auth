@@ -1,33 +1,6 @@
 import type { AsyncLocalStorage } from "node:async_hooks";
-import { env } from "../env";
 
 export type { AsyncLocalStorage };
-
-/**
- * Due to the lack of AsyncLocalStorage in some environments (like Convex),
- *
- * We assume serverless functions are short-lived and single-threaded, so we can use a simple polyfill.
- */
-class AsyncLocalStoragePolyfill<T> {
-	#current: T | undefined = undefined;
-
-	run(store: T, fn: () => unknown): unknown {
-		const prev = this.#current;
-		this.#current = store;
-		const result = fn();
-		if (result instanceof Promise) {
-			return result.finally(() => {
-				this.#current = prev;
-			});
-		}
-		this.#current = prev;
-		return result;
-	}
-
-	getStore(): T | undefined {
-		return this.#current;
-	}
-}
 
 const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =
 	import(
@@ -42,9 +15,6 @@ const AsyncLocalStoragePromise: Promise<typeof AsyncLocalStorage | null> =
 			}
 			if (typeof window !== "undefined") {
 				return null;
-			}
-			if (env["CONVEX_CLOUD_URL"] || env["CONVEX_SITE_URL"]) {
-				return AsyncLocalStoragePolyfill;
 			}
 			console.warn(
 				"[better-auth] Warning: AsyncLocalStorage is not available in this environment. Some features may not work as expected.",

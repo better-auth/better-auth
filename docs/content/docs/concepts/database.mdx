@@ -21,8 +21,8 @@ Better Auth comes with a CLI tool to manage database migrations and generate sch
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is only supported for the built-in Kysely adapter. For other adapters, you can use the `generate` command to create the schema and handle the migration through your ORM.
 
-```bash
-npx @better-auth/cli migrate
+```package-install
+npx auth@latest migrate
 ```
 
 <Callout type="info">
@@ -33,8 +33,8 @@ For PostgreSQL users: The migrate command supports non-default schemas. It autom
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
-```bash
-npx @better-auth/cli generate
+```package-install
+npx auth@latest generate
 ```
 
 See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
@@ -45,9 +45,86 @@ See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
   required by plugins in the plugin documentation.
 </Callout>
 
+### Programmatic Migrations
+
+In environments where the CLI isn't available (e.g. Cloudflare Workers, serverless functions), you can run migrations programmatically using `getMigrations` from `better-auth/db/migration`.
+
+```typescript
+import { getMigrations } from "better-auth/db/migration";
+import { auth } from "./auth";
+
+const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
+
+await runMigrations();
+```
+
+<Callout type="warn">
+`getMigrations` only works with the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL, MSSQL). It does **not** work with Prisma or Drizzle ORM adapters — use CLI migrations with those ORMs instead.
+</Callout>
+
+<Accordions>
+<Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
+[Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so the CLI cannot access it directly. Instead, you can run programmatic migrations through an endpoint:
+
+```typescript title="auth.ts"
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: env.DB,
+  // ... rest of config
+});
+```
+
+```typescript title="src/index.ts"
+import { Hono } from "hono";
+import { auth } from "./auth";
+import { getMigrations } from "better-auth/db/migration";
+
+const app = new Hono();
+
+// Protect or remove this endpoint in production
+app.post("/migrate", async (c) => {
+  try {
+    const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
+
+    if (toBeCreated.length === 0 && toBeAdded.length === 0) {
+      return c.json({ message: "No migrations needed" });
+    }
+
+    await runMigrations();
+    return c.json({
+      message: "Migrations completed successfully",
+      created: toBeCreated.map((t) => t.table),
+      added: toBeAdded.map((t) => t.table),
+    });
+  } catch (error) {
+    return c.json(
+      { error: error instanceof Error ? error.message : "Migration failed" },
+      500,
+    );
+  }
+});
+
+app.on(["POST", "GET"], "/api/auth/*", (c) => {
+  return auth.handler(c.req.raw);
+});
+
+export default app;
+```
+
+<Callout type="info">
+If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
+
+- [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
+- [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
+</Callout>
+</Accordion>
+</Accordions>
+
 ## Secondary Storage
 
-Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
+Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
@@ -55,7 +132,7 @@ To use secondary storage, implement the `SecondaryStorage` interface:
 
 ```typescript
 interface SecondaryStorage {
-  get: (key: string) => Promise<unknown>; 
+  get: (key: string) => Promise<unknown>;
   set: (key: string, value: string, ttl?: number) => Promise<void>;
   delete: (key: string) => Promise<void>;
 }
@@ -63,7 +140,9 @@ interface SecondaryStorage {
 
 Then, provide your implementation to the `betterAuth` function:
 
-```typescript
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
 betterAuth({
   // ... other options
   secondaryStorage: {
@@ -72,11 +151,44 @@ betterAuth({
 });
 ```
 
-**Example: Redis Implementation**
+### Redis Storage
 
-Here's a basic example using Redis:
+Better Auth provides an official Redis storage package that uses [ioredis](https://github.com/redis/ioredis):
+
+```bash
+npm install @better-auth/redis-storage ioredis
+# or
+pnpm add @better-auth/redis-storage ioredis
+```
+
+**Usage:**
 
 ```typescript
+import { betterAuth } from "better-auth";
+import { Redis } from "ioredis";
+import { redisStorage } from "@better-auth/redis-storage";
+
+const redis = new Redis({
+	host: "localhost",
+	port: 6379,
+});
+
+export const auth = betterAuth({
+	// ... other options
+	secondaryStorage: redisStorage({
+		client: redis,
+		kxeyPrefix: "better-auth:", // optional, defaults to "better-auth:"
+	}),
+});
+```
+
+The Redis storage supports all ioredis connection modes including standalone, cluster, and sentinel configurations.
+
+**Manual Implementation:**
+
+If you prefer to implement your own Redis secondary storage, here's a basic example:
+
+```typescript title="auth.ts"
 import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
@@ -91,8 +203,6 @@ export const auth = betterAuth({
 		},
 		set: async (key, value, ttl) => {
 			if (ttl) await redis.set(key, value, { EX: ttl });
-			// or for ioredis:
-			// if (ttl) await redis.set(key, value, 'EX', ttl)
 			else await redis.set(key, value);
 		},
 		delete: async (key) => {
@@ -406,7 +516,7 @@ export const auth = betterAuth({
   user: {
     additionalFields: {
       role: {
-        type: "string",
+        type: ["user", "admin"],
         required: false,
         defaultValue: "user",
         input: false, // don't allow user to set role
@@ -426,10 +536,12 @@ Now you can access the additional fields in your application logic.
 ```ts
 //on signup
 const res = await auth.api.signUpEmail({
-  email: "test@example.com",
-  password: "password",
-  name: "John Doe",
-  lang: "fr",
+	body: {
+		email: 'test@example.com',
+		password: 'password',
+		name: 'John Doe',
+		lang: 'fr',
+	},
 });
 
 //user object
@@ -556,7 +668,7 @@ database will generate the numeric ID automatically.
 When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
 with auto-incrementing attributes associated with it.
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
@@ -677,7 +789,7 @@ export const auth = betterAuth({
           if (user.email.includes("admin")) {
             return false; // Abort deletion
           }
-          
+
           return true; // Allow deletion
         },
         after: async (user) => {
@@ -780,7 +892,7 @@ Both methods ensure your database schema stays up to date with your plugins' req
 
 Since Better-Auth version `1.4` we've introduced experimental database joins support.
 This allows Better-Auth to perform multiple database queries in a single request, reducing the number of database roundtrips.
-Over 50 endpoints support joins, and we're constantly adding more. 
+Over 50 endpoints support joins, and we're constantly adding more.
 
 Under the hood, our adapter system supports joins natively, meaning even if you don't enable experimental joins,
 it will still fallback to making multiple database queries and combining the results.
@@ -788,6 +900,8 @@ it will still fallback to making multiple database queries and combining the res
 To enable joins, update your auth config with the following:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });
@@ -804,4 +918,4 @@ It's very important to read the documentation regarding experimental joins for y
 - [MySQL](/docs/adapters/mysql#joins-experimental)
 - [PostgreSQL](/docs/adapters/postgresql#joins-experimental)
 - [MSSQL](/docs/adapters/mssql#joins-experimental)
-- [MongoDB](/docs/adapters/mongodb#joins-experimental)
+- [MongoDB](/docs/adapters/mongo#joins-experimental)

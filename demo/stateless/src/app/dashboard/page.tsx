@@ -31,7 +31,7 @@ export default function Dashboard() {
 				const response = await fetch("/api/user");
 				const data = await response.json();
 				setServerData(data);
-			} catch (error) {
+			} catch {
 				setServerData("Failed to fetch server data");
 			}
 		});

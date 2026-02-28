@@ -35,8 +35,8 @@ async function createAuthTestInstance(overrides?: Partial<BetterAuthOptions>) {
 
 	const { auth, client } = await getTestInstance(
 		{
-			plugins: [testServerPlugin],
 			...overrides,
+			plugins: [testServerPlugin, ...(overrides?.plugins || [])],
 		},
 		{ clientOptions: { plugins: [testClientPlugin] } },
 	);
@@ -63,6 +63,44 @@ describe("trusted origins", () => {
 	describe("trusted origins list support", () => {
 		it("should always allow the app's origin", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance();
+
+			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
+				true,
+			);
+
+			await expect(
+				isTrustedOrigin("http://localhost:3000/some/path"),
+			).resolves.toBe(true);
+		});
+
+		it("should always allow the app's origin (inferred from baseURL)", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: undefined,
+			});
+
+			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
+				true,
+			);
+
+			await expect(
+				isTrustedOrigin("http://localhost:3000/some/path"),
+			).resolves.toBe(true);
+		});
+
+		it("should always allow the app's origin (even if context is updated)", async () => {
+			const { isTrustedOrigin } = await createAuthTestInstance({
+				baseURL: undefined,
+				plugins: [
+					{
+						id: "test-init-plugin",
+						init() {
+							return {
+								context: {},
+							};
+						},
+					},
+				],
+			});
 
 			await expect(isTrustedOrigin("http://localhost:3000")).resolves.toBe(
 				true,
@@ -261,7 +299,8 @@ describe("trusted origins", () => {
 	describe("dynamic trusted origins", () => {
 		it("should allow dynamically computed trusted origins", async () => {
 			const { isTrustedOrigin } = await createAuthTestInstance({
-				trustedOrigins: async (request) => {
+				trustedOrigins: async (request: Request | undefined) => {
+					if (!request) return [];
 					const url = new URL(
 						new URL(request.url).searchParams.get("url") ?? "unknown",
 					);
@@ -285,5 +324,42 @@ describe("trusted origins", () => {
 				isTrustedOrigin("http://localhost:5000/callback"),
 			).resolves.toBe(false);
 		});
+	});
+
+	it("should merge trustedOrigins from plugins using init() with user config", async () => {
+		const { isTrustedOrigin } = await createAuthTestInstance({
+			trustedOrigins: async () => ["https://user-dynamic.com"],
+			plugins: [
+				{
+					id: "plugin-a",
+					init() {
+						return {
+							options: {
+								trustedOrigins: ["https://plugin-static.com"],
+							},
+						};
+					},
+				},
+				{
+					id: "plugin-b",
+					init() {
+						return {
+							options: {
+								trustedOrigins: () => ["https://plugin-fn.com"],
+							},
+						};
+					},
+				},
+			],
+		});
+
+		await expect(isTrustedOrigin("https://user-dynamic.com")).resolves.toBe(
+			true,
+		);
+		await expect(isTrustedOrigin("https://plugin-static.com")).resolves.toBe(
+			true,
+		);
+		await expect(isTrustedOrigin("https://plugin-fn.com")).resolves.toBe(true);
+		await expect(isTrustedOrigin("https://unknown.com")).resolves.toBe(false);
 	});
 });

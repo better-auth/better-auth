@@ -1,8 +1,14 @@
-import { afterEach, describe, expect, vi } from "vitest";
+import { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
 
-describe("sign-up with custom fields", async (it) => {
+describe("sign-up with custom fields", async () => {
 	const mockFn = vi.fn();
+
+	afterEach(() => {
+		mockFn.mockReset();
+	});
 	const { auth, db } = await getTestInstance(
 		{
 			account: {
@@ -43,10 +49,6 @@ describe("sign-up with custom fields", async (it) => {
 		},
 	);
 
-	afterEach(() => {
-		mockFn.mockReset();
-	});
-
 	it("should work with custom fields on account table", async () => {
 		const res = await auth.api.signUpEmail({
 			body: {
@@ -75,7 +77,25 @@ describe("sign-up with custom fields", async (it) => {
 				url: expect.any(String),
 				user: expect.any(Object),
 			}),
+			undefined,
 		);
+	});
+
+	it("should succeed when passing empty name", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "noname@test.com",
+				password: "password",
+				name: "",
+			},
+		});
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${res.token}`,
+			}),
+		});
+		expect(session).toBeDefined();
+		expect(session!.user.name).toBe("");
 	});
 
 	it("should get the ipAddress and userAgent from headers", async () => {
@@ -143,5 +163,636 @@ describe("sign-up with custom fields", async (it) => {
 				},
 			}),
 		).rejects.toThrow("role is not allowed to be set");
+	});
+
+	it("should return additionalFields in signUpEmail response", async () => {
+		const res = await auth.api.signUpEmail({
+			body: {
+				email: "additional-fields@test.com",
+				password: "password",
+				name: "Additional Fields Test",
+				newField: "custom-value",
+			},
+		});
+
+		// additionalFields should be returned in API response
+		expect(res.user).toBeDefined();
+		expect(res.user.newField).toBe("custom-value");
+		// defaultValue should also be applied and returned
+		expect(res.user.isAdmin).toBe(true);
+	});
+
+	it("should throw status code 400 when passing invalid body", async () => {
+		await expect(
+			auth.api.signUpEmail({
+				body: {
+					name: "Test",
+					email: "body-validation@test.com",
+					// @ts-expect-error
+					password: undefined,
+				},
+			}),
+		).rejects.toThrowError(
+			expect.objectContaining({
+				statusCode: 400,
+			}),
+		);
+	});
+});
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7972
+ */
+describe("sign-up user enumeration protection", async () => {
+	it("should return success for existing email when email verification is required", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-email@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+
+	it("should call onExistingUserSignUp when requireEmailVerification is true", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-rev@test.com",
+			password: "password123",
+			name: "Callback User",
+		};
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+
+		await auth.api.signUpEmail({ body });
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+		expect(onExistingUserSignUp).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({ email: body.email }),
+			}),
+			undefined,
+		);
+	});
+
+	it("should call onExistingUserSignUp when autoSignIn is false", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-autosignin@test.com",
+			password: "password123",
+			name: "Callback AutoSignIn",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await auth.api.signUpEmail({ body });
+
+		expect(onExistingUserSignUp).toHaveBeenCalledTimes(1);
+	});
+
+	it("should not call onExistingUserSignUp when enumeration protection is inactive", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "callback-noenum@test.com",
+			password: "password123",
+			name: "No Enum",
+		};
+
+		await auth.api.signUpEmail({ body });
+		await expect(auth.api.signUpEmail({ body })).rejects.toThrow();
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should not call onExistingUserSignUp for new user sign-ups", async () => {
+		const onExistingUserSignUp = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+					onExistingUserSignUp,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "brand-new-user@test.com",
+				password: "password123",
+				name: "Brand New",
+			},
+		});
+
+		expect(onExistingUserSignUp).not.toHaveBeenCalled();
+	});
+
+	it("should return success for existing email when autoSignIn is disabled", async () => {
+		const { auth } = await getTestInstance(
+			{
+				emailAndPassword: {
+					enabled: true,
+					autoSignIn: false,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		const body = {
+			email: "existing-auto-signin@test.com",
+			password: "password123",
+			name: "Existing User",
+		};
+
+		await auth.api.signUpEmail({ body });
+
+		const duplicatedSignUp = await auth.api.signUpEmail({ body });
+
+		expect(duplicatedSignUp.token).toBeNull();
+		expect(duplicatedSignUp.user.email).toBe(body.email);
+	});
+});
+
+describe("sign-up CSRF protection", async () => {
+	const { auth } = await getTestInstance(
+		{
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should block cross-site navigation sign-up attempts (no cookies)", async () => {
+		const maliciousRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: JSON.stringify({
+					email: "victim@example.com",
+					password: "password123",
+					name: "Victim",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
+		);
+	});
+
+	it("should allow same-origin navigation sign-up attempts", async () => {
+		const legitimateRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "newuser@example.com",
+					password: "password123",
+					name: "New User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(legitimateRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should allow fetch/XHR sign-up requests (cors mode)", async () => {
+		const fetchRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "cors",
+					"Sec-Fetch-Dest": "empty",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "fetchuser@example.com",
+					password: "password123",
+					name: "Fetch User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(fetchRequest);
+		expect(response.status).not.toBe(403);
+	});
+
+	it("should use origin validation when cookies exist", async () => {
+		const requestWithCookies = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					cookie: "some_cookie=value",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					origin: "http://localhost:3000",
+				},
+				body: JSON.stringify({
+					email: "cookieuser@example.com",
+					password: "password123",
+					name: "Cookie User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(requestWithCookies);
+		// Should not be blocked by CSRF check since cookies exist - uses origin validation instead
+		expect(response.status).not.toBe(403);
+	});
+});
+
+describe("sign-up with form data", async () => {
+	const { auth } = await getTestInstance(
+		{
+			trustedOrigins: ["http://localhost:3000"],
+			emailAndPassword: {
+				enabled: true,
+			},
+			advanced: {
+				disableCSRFCheck: false,
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should accept form-urlencoded content type", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-origin",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "formuser@example.com",
+					password: "password123",
+					name: "Form User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+		const data = await response.json();
+		expect(data.token).toBeDefined();
+		expect(data.user.email).toBe("formuser@example.com");
+	});
+
+	it("should block cross-site form submissions", async () => {
+		const maliciousFormRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "cross-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "https://evil.com",
+				},
+				body: new URLSearchParams({
+					email: "victim@example.com",
+					password: "password123",
+					name: "Victim",
+				}),
+			},
+		);
+
+		const response = await auth.handler(maliciousFormRequest);
+		expect(response.status).toBe(403);
+		const error = await response.json();
+		expect(error.message).toBe(
+			BASE_ERROR_CODES.CROSS_SITE_NAVIGATION_LOGIN_BLOCKED.message,
+		);
+	});
+
+	it("should allow same-site form submissions from trusted origins", async () => {
+		const formRequest = new Request(
+			"http://localhost:3000/api/auth/sign-up/email",
+			{
+				method: "POST",
+				headers: {
+					"content-type": "application/x-www-form-urlencoded",
+					"Sec-Fetch-Site": "same-site",
+					"Sec-Fetch-Mode": "navigate",
+					"Sec-Fetch-Dest": "document",
+					origin: "http://localhost:3000",
+				},
+				body: new URLSearchParams({
+					email: "samesiteuser@example.com",
+					password: "password123",
+					name: "Same Site User",
+				}),
+			},
+		);
+
+		const response = await auth.handler(formRequest);
+		expect(response.status).toBe(200);
+	});
+});
+
+describe("sign-up sendOnSignUp option behavior", async () => {
+	it("should not send verification email when sendOnSignUp is false, even with requireEmailVerification", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: false,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "no-verification@test.com",
+				password: "password123",
+				name: "No Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).not.toHaveBeenCalled();
+	});
+
+	it("should send verification email when sendOnSignUp is true", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendOnSignUp: true,
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "with-verification@test.com",
+				password: "password123",
+				name: "With Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+
+	it("should send verification email when sendOnSignUp is not set but requireEmailVerification is true (default)", async () => {
+		const sendVerificationEmail = vi.fn();
+		const { auth } = await getTestInstance(
+			{
+				emailVerification: {
+					sendVerificationEmail,
+				},
+				emailAndPassword: {
+					enabled: true,
+					requireEmailVerification: true,
+				},
+			},
+			{
+				disableTestUser: true,
+			},
+		);
+
+		await auth.api.signUpEmail({
+			body: {
+				email: "default-verification@test.com",
+				password: "password123",
+				name: "Default Verification",
+			},
+		});
+
+		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("sign-up enumeration protection — indistinguishable response", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendVerificationEmail: vi.fn(),
+			},
+			user: {
+				additionalFields: {
+					displayName: {
+						type: "string",
+						required: false,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: false,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return same keys in same order for real and synthetic user", async () => {
+		const first = await auth.api.signUpEmail({
+			body: {
+				email: "indistinguishable@test.com",
+				password: "password123",
+				name: "First User",
+				displayName: "FirstDisplay",
+			},
+		});
+
+		const second = await auth.api.signUpEmail({
+			body: {
+				email: "indistinguishable@test.com",
+				password: "password456",
+				name: "Second Attempt",
+				displayName: "SecondDisplay",
+			},
+		});
+
+		// Same keys in same order
+		expect(Object.keys(second)).toEqual(Object.keys(first));
+		expect(Object.keys(second.user)).toEqual(Object.keys(first.user));
+
+		// Both return token: null (requireEmailVerification)
+		expect(second.token).toBeNull();
+
+		// Synthetic user reflects request body, not real DB user
+		expect(second.user.name).toBe("Second Attempt");
+		expect(second.user.id).not.toBe(first.user.id);
+
+		// Additional fields with defaults present in both
+		expect(second.user.isAdmin).toBe(false);
+		expect(second.user.displayName).toBe("SecondDisplay");
+	});
+});
+
+describe("sign-up enumeration protection — customSyntheticUser with admin plugin", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+				customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+					...coreFields,
+					// Admin plugin fields (in schema order)
+					role: "user",
+					banned: false,
+					banReason: null,
+					banExpires: null,
+					...additionalFields,
+					id,
+				}),
+			},
+			emailVerification: {
+				sendVerificationEmail: vi.fn(),
+			},
+			plugins: [admin()],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return indistinguishable response with admin plugin fields", async () => {
+		const first = await auth.api.signUpEmail({
+			body: {
+				email: "admin-enum@test.com",
+				password: "password123",
+				name: "First",
+			},
+		});
+
+		const second = await auth.api.signUpEmail({
+			body: {
+				email: "admin-enum@test.com",
+				password: "password456",
+				name: "Second",
+			},
+		});
+
+		// Same keys in same order (including plugin fields)
+		expect(Object.keys(second.user)).toEqual(Object.keys(first.user));
+
+		// Plugin fields have correct values
+		const firstUser = first.user as Record<string, unknown>;
+		const secondUser = second.user as Record<string, unknown>;
+		expect(firstUser.role).toBe("user");
+		expect(secondUser.role).toBe("user");
+		expect(secondUser.banned).toBe(false);
+		expect(secondUser.banReason).toBeNull();
+		expect(secondUser.banExpires).toBeNull();
 	});
 });

@@ -3,6 +3,12 @@ import type {
 	ClientFetchOption,
 	ClientStore,
 } from "@better-auth/core";
+import { safeJSONParse } from "@better-auth/core/utils/json";
+import {
+	parseSetCookieHeader,
+	SECURE_COOKIE_PREFIX,
+	stripSecureCookiePrefix,
+} from "better-auth/cookies";
 import Constants from "expo-constants";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -12,70 +18,6 @@ import { setupExpoOnlineManager } from "./online-manager";
 if (Platform.OS !== "web") {
 	setupExpoFocusManager();
 	setupExpoOnlineManager();
-}
-
-interface CookieAttributes {
-	value: string;
-	expires?: Date | undefined;
-	"max-age"?: number | undefined;
-	domain?: string | undefined;
-	path?: string | undefined;
-	secure?: boolean | undefined;
-	httpOnly?: boolean | undefined;
-	sameSite?: ("Strict" | "Lax" | "None") | undefined;
-}
-
-export function parseSetCookieHeader(
-	header: string,
-): Map<string, CookieAttributes> {
-	const cookieMap = new Map<string, CookieAttributes>();
-	const cookies = splitSetCookieHeader(header);
-	cookies.forEach((cookie) => {
-		const parts = cookie.split(";").map((p) => p.trim());
-		const [nameValue, ...attributes] = parts;
-		const [name, ...valueParts] = nameValue!.split("=");
-		const value = valueParts.join("=");
-		const cookieObj: CookieAttributes = { value };
-		attributes.forEach((attr) => {
-			const [attrName, ...attrValueParts] = attr.split("=");
-			const attrValue = attrValueParts.join("=");
-			cookieObj[attrName!.toLowerCase() as "value"] = attrValue;
-		});
-		cookieMap.set(name!, cookieObj);
-	});
-	return cookieMap;
-}
-
-function splitSetCookieHeader(setCookie: string): string[] {
-	const parts: string[] = [];
-	let buffer = "";
-	let i = 0;
-	while (i < setCookie.length) {
-		const char = setCookie[i];
-		if (char === ",") {
-			const recent = buffer.toLowerCase();
-			const hasExpires = recent.includes("expires=");
-			const hasGmt = /gmt/i.test(recent);
-			if (hasExpires && !hasGmt) {
-				buffer += char;
-				i += 1;
-				continue;
-			}
-			if (buffer.trim().length > 0) {
-				parts.push(buffer.trim());
-				buffer = "";
-			}
-			i += 1;
-			if (setCookie[i] === " ") i += 1;
-			continue;
-		}
-		buffer += char;
-		i += 1;
-	}
-	if (buffer.trim().length > 0) {
-		parts.push(buffer.trim());
-	}
-	return parts;
 }
 
 interface ExpoClientOptions {
@@ -100,6 +42,26 @@ interface ExpoClientOptions {
 	 */
 	cookiePrefix?: string | string[] | undefined;
 	disableCache?: boolean | undefined;
+	/**
+	 * Options to customize the Expo web browser behavior when opening authentication
+	 * sessions. These are passed directly to `expo-web-browser`'s
+	 * `Browser.openBrowserAsync`.
+	 *
+	 * For example, on iOS you can use `{ preferEphemeralSession: true }` to prevent
+	 * the authentication session from sharing cookies with the user's default
+	 * browser session:
+	 *
+	 * ```ts
+	 * const client = createClient({
+	 *   expo: {
+	 *     webBrowserOptions: {
+	 *       preferEphemeralSession: true,
+	 *     },
+	 *   },
+	 * });
+	 * ```
+	 */
+	webBrowserOptions?: import("expo-web-browser").AuthSessionOpenOptions;
 }
 
 interface StoredCookie {
@@ -109,31 +71,29 @@ interface StoredCookie {
 
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
-	let toSetCookie: Record<string, StoredCookie> = {};
+	const toSetCookie =
+		safeJSONParse<Record<string, StoredCookie>>(prevCookie) ?? {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
+		if (maxAge !== undefined && Number(maxAge) <= 0) {
+			delete toSetCookie[key];
+			return;
+		}
 		const expires = maxAge
 			? new Date(Date.now() + Number(maxAge) * 1000)
 			: expiresAt
 				? new Date(String(expiresAt))
 				: null;
+		if (expires && expires.getTime() <= Date.now()) {
+			delete toSetCookie[key];
+			return;
+		}
 		toSetCookie[key] = {
 			value: cookie["value"],
 			expires: expires ? expires.toISOString() : null,
 		};
 	});
-	if (prevCookie) {
-		try {
-			const prevCookieParsed = JSON.parse(prevCookie);
-			toSetCookie = {
-				...prevCookieParsed,
-				...toSetCookie,
-			};
-		} catch {
-			//
-		}
-	}
 	return JSON.stringify(toSetCookie);
 }
 
@@ -141,14 +101,41 @@ export function getCookie(cookie: string) {
 	let parsed = {} as Record<string, StoredCookie>;
 	try {
 		parsed = JSON.parse(cookie) as Record<string, StoredCookie>;
-	} catch (e) {}
+	} catch {}
 	const toSend = Object.entries(parsed).reduce((acc, [key, value]) => {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
-		return `${acc}; ${key}=${value.value}`;
+		return acc ? `${acc}; ${key}=${value.value}` : `${key}=${value.value}`;
 	}, "");
 	return toSend;
+}
+
+function getOAuthStateValue(
+	cookieJson: string | null,
+	cookiePrefix: string | string[],
+): string | null {
+	if (!cookieJson) return null;
+
+	const parsed = safeJSONParse<Record<string, StoredCookie>>(cookieJson);
+	if (!parsed) return null;
+
+	const prefixes = Array.isArray(cookiePrefix) ? cookiePrefix : [cookiePrefix];
+
+	for (const prefix of prefixes) {
+		// cookie strategy uses: <prefix>.oauth_state
+		const candidates = [
+			`${SECURE_COOKIE_PREFIX}${prefix}.oauth_state`,
+			`${prefix}.oauth_state`,
+		];
+
+		for (const name of candidates) {
+			const value = parsed?.[name]?.value;
+			if (value) return value;
+		}
+	}
+
+	return null;
 }
 
 function getOrigin(scheme: string) {
@@ -229,9 +216,7 @@ export function hasBetterAuthCookies(
 	// Check if any cookie is a better-auth cookie
 	for (const name of cookies.keys()) {
 		// Remove __Secure- prefix if present for comparison
-		const nameWithoutSecure = name.startsWith("__Secure-")
-			? name.slice(9)
-			: name;
+		const nameWithoutSecure = stripSecureCookiePrefix(name);
 
 		// Check against all provided prefixes
 		for (const prefix of prefixes) {
@@ -337,7 +322,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 							// Only process and notify if the Set-Cookie header contains better-auth cookies
 							// This prevents infinite refetching when other cookies (like Cloudflare's __cf_bm) are present
 							if (hasBetterAuthCookies(setCookie, cookiePrefix)) {
-								const prevCookie = await storage.getItem(cookieName);
+								const prevCookie = storage.getItem(cookieName);
 								const toSetCookie = getSetCookie(
 									setCookie || "",
 									prevCookie ?? undefined,
@@ -345,11 +330,11 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								// Only notify $sessionSignal if the session cookie values actually changed
 								// This prevents infinite refetching when the server sends the same cookie with updated expiry
 								if (hasSessionCookieChanged(prevCookie, toSetCookie)) {
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 									store?.notify("$sessionSignal");
 								} else {
 									// Still update the storage to refresh expiry times, but don't trigger refetch
-									await storage.setItem(cookieName, toSetCookie);
+									storage.setItem(cookieName, toSetCookie);
 								}
 							}
 						}
@@ -375,28 +360,47 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								undefined;
 							try {
 								Browser = await import("expo-web-browser");
-							} catch (error) {
-								throw new Error(
-									'"expo-web-browser" is not installed as a dependency!',
-									{
-										cause: error,
-									},
-								);
+							} catch {
+								try {
+									Browser = require("expo-web-browser");
+								} catch (error) {
+									throw new Error(
+										'"expo-web-browser" is not installed as a dependency!',
+										{
+											cause: error,
+										},
+									);
+								}
 							}
 
 							if (Platform.OS === "android") {
 								try {
-									Browser.dismissAuthSession();
-								} catch (e) {}
+									Browser!.dismissAuthSession();
+								} catch {}
 							}
 
-							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?authorizationURL=${encodeURIComponent(signInURL)}`;
-							const result = await Browser.openAuthSessionAsync(proxyURL, to);
+							const storedCookieJson = storage.getItem(cookieName);
+							const oauthStateValue = getOAuthStateValue(
+								storedCookieJson,
+								cookiePrefix,
+							);
+							const params = new URLSearchParams({
+								authorizationURL: signInURL,
+							});
+							if (oauthStateValue) {
+								params.append("oauthState", oauthStateValue);
+							}
+							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
+							const result = await Browser!.openAuthSessionAsync(
+								proxyURL,
+								to,
+								opts?.webBrowserOptions,
+							);
 							if (result.type !== "success") return;
 							const url = new URL(result.url);
-							const cookie = String(url.searchParams.get("cookie"));
+							const cookie = url.searchParams.get("cookie");
 							if (!cookie) return;
-							const prevCookie = await storage.getItem(cookieName);
+							const prevCookie = storage.getItem(cookieName);
 							const toSetCookie = getSetCookie(cookie, prevCookie ?? undefined);
 							storage.setItem(cookieName, toSetCookie);
 							store?.notify("$sessionSignal");
@@ -411,48 +415,64 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						};
 					}
 					options = options || {};
-					const storedCookie = storage.getItem(cookieName);
-					const cookie = getCookie(storedCookie || "{}");
 					options.credentials = "omit";
-					options.headers = {
-						...options.headers,
-						cookie,
-						"expo-origin": getOrigin(scheme!),
-						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
-					};
-					if (options.body?.callbackURL) {
-						if (options.body.callbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.callbackURL, {
-								scheme,
-							});
-							options.body.callbackURL = url;
+					/**
+					 * ID token flow (native sign-in) doesn't need cookie-based auth.
+					 * The ID token itself is cryptographically signed by the provider
+					 * and validated server-side, so no session cookies or origin
+					 * validation is required.
+					 *
+					 * Sending cookie/expo-origin headers for ID token requests triggers
+					 * unnecessary origin checks that fail for custom URL schemes.
+					 */
+					const isIdTokenRequest = options.body?.idToken !== undefined;
+
+					if (isIdTokenRequest) {
+						options.headers = {
+							...options.headers,
+							"x-skip-oauth-proxy": "true",
+						};
+					} else {
+						const storedCookie = storage.getItem(cookieName);
+						const cookie = getCookie(storedCookie || "{}");
+						options.headers = {
+							...options.headers,
+							...(cookie ? { cookie } : {}),
+							"expo-origin": getOrigin(scheme!),
+							"x-skip-oauth-proxy": "true",
+						};
+						if (options.body?.callbackURL) {
+							if (options.body.callbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.callbackURL);
+								options.body.callbackURL = url;
+							}
 						}
-					}
-					if (options.body?.newUserCallbackURL) {
-						if (options.body.newUserCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.newUserCallbackURL, {
-								scheme,
-							});
-							options.body.newUserCallbackURL = url;
+						if (options.body?.newUserCallbackURL) {
+							if (options.body.newUserCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(
+									options.body.newUserCallbackURL,
+								);
+								options.body.newUserCallbackURL = url;
+							}
 						}
-					}
-					if (options.body?.errorCallbackURL) {
-						if (options.body.errorCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.errorCallbackURL, {
-								scheme,
-							});
-							options.body.errorCallbackURL = url;
+						if (options.body?.errorCallbackURL) {
+							if (options.body.errorCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(
+									options.body.errorCallbackURL,
+								);
+								options.body.errorCallbackURL = url;
+							}
 						}
-					}
-					if (url.includes("/sign-out")) {
-						await storage.setItem(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						storage.setItem(localCacheName, "{}");
+						if (url.includes("/sign-out")) {
+							storage.setItem(cookieName, "{}");
+							store?.atoms.session?.set({
+								...store.atoms.session.get(),
+								data: null,
+								error: null,
+								isPending: false,
+							});
+							storage.setItem(localCacheName, "{}");
+						}
 					}
 					return {
 						url,
@@ -464,5 +484,6 @@ export const expoClient = (opts: ExpoClientOptions) => {
 	} satisfies BetterAuthClientPlugin;
 };
 
+export { parseSetCookieHeader } from "better-auth/cookies";
 export * from "./focus-manager";
 export * from "./online-manager";

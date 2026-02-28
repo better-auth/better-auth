@@ -33,3 +33,8 @@ giget
 segoe
 conar
 nuxtzzle
+Deel
+WorkOS
+authjs
+vite
+electronjs

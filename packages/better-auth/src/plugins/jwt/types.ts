@@ -1,7 +1,7 @@
+import type { Awaitable } from "@better-auth/core";
 import type { JWTPayload } from "jose";
 import type { GenericEndpointContext } from "../..";
 import type { InferOptionSchema, Session, User } from "../../types";
-import type { Awaitable } from "../../types/helper";
 import type { schema } from "./schema";
 
 export interface JwtOptions {
@@ -63,7 +63,7 @@ export interface JwtOptions {
 				/**
 				 * The audience of the JWT
 				 */
-				audience?: string | undefined;
+				audience?: string | string[] | undefined;
 				/**
 				 * Set the "exp" (Expiration Time) Claim.
 				 *
@@ -94,7 +94,7 @@ export interface JwtOptions {
 				definePayload?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<Record<string, any>> | Record<string, any> | undefined;
+				}) => Awaitable<Record<string, any>> | undefined;
 				/**
 				 * A function that is called to get the subject of the JWT
 				 *
@@ -103,7 +103,7 @@ export interface JwtOptions {
 				getSubject?: (session: {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
-				}) => Promise<string> | string | undefined;
+				}) => Awaitable<string> | undefined;
 				/**
 				 * A custom function to remote sign the jwt payload.
 				 *

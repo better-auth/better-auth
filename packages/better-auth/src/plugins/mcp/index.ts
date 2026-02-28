@@ -8,16 +8,21 @@ import {
 	createAuthMiddleware,
 } from "@better-auth/core/api";
 import { isProduction, logger } from "@better-auth/core/env";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getWebcryptoSubtle } from "@better-auth/utils";
 import { base64 } from "@better-auth/utils/base64";
 import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
-import { getBaseURL } from "../../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../../utils/url";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -30,6 +35,14 @@ import { schema } from "../oidc-provider/schema";
 import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		mcp: {
+			creator: typeof mcp;
+		};
+	}
+}
+
 interface MCPOptions {
 	loginPage: string;
 	resource?: string | undefined;
@@ -40,7 +53,10 @@ export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const issuer =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: "";
 	const baseURL = ctx.context.baseURL;
 	if (!issuer || !baseURL) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -195,8 +211,9 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -209,6 +226,12 @@ export const mcp = (options: MCPOptions) => {
 						if (!session) {
 							return;
 						}
+						const parsedCookie = safeJSONParse<Record<string, string>>(cookie);
+						if (!parsedCookie) {
+							return;
+						}
+						ctx.query = parsedCookie;
+
 						// Remove "login" from prompt since user just logged in
 						const promptSet = parsePrompt(String(ctx.query?.prompt));
 						if (promptSet.has("login")) {
@@ -233,9 +256,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-authorization-server",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					try {
@@ -251,9 +272,7 @@ export const mcp = (options: MCPOptions) => {
 				"/.well-known/oauth-protected-resource",
 				{
 					method: "GET",
-					metadata: {
-						...HIDE_METADATA,
-					},
+					metadata: HIDE_METADATA,
 				},
 				async (c) => {
 					const metadata = getMCPProtectedResourceMetadata(c, options);
@@ -296,7 +315,7 @@ export const mcp = (options: MCPOptions) => {
 					method: "POST",
 					body: mcpOAuthTokenBodySchema,
 					metadata: {
-						isAction: false,
+						...HIDE_METADATA,
 						allowedMediaTypes: [
 							"application/x-www-form-urlencoded",
 							"application/json",
@@ -356,7 +375,7 @@ export const mcp = (options: MCPOptions) => {
 							}
 							client_id = id;
 							client_secret = secret;
-						} catch (error) {
+						} catch {
 							throw new APIError("UNAUTHORIZED", {
 								error_description: "invalid authorization header format",
 								error: "invalid_client",
@@ -627,7 +646,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
+					const secretKey = {
 						alg: "HS256",
 						key: await getWebcryptoSubtle().generateKey(
 							{
@@ -947,6 +966,7 @@ export const mcp = (options: MCPOptions) => {
 			),
 		},
 		schema,
+		options,
 	} satisfies BetterAuthPlugin;
 };
 
@@ -965,7 +985,15 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+		const basePath = auth.options.basePath || "/api/auth";
+		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			: getBaseURL(
+					typeof auth.options.baseURL === "string"
+						? auth.options.baseURL
+						: undefined,
+					basePath,
+				);
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}

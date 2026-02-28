@@ -1,11 +1,11 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
 import { organization } from "./organization";
 
-describe("team", async (it) => {
+describe("team", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		user: {
 			modelName: "users",
@@ -348,8 +348,8 @@ describe("team", async (it) => {
 	});
 });
 
-describe("multi team support", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+describe("multi team support", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				organization({
@@ -655,7 +655,7 @@ describe("multi team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,
@@ -751,7 +751,7 @@ describe("multi team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,

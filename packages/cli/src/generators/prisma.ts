@@ -1,10 +1,10 @@
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { capitalizeFirstLetter } from "@better-auth/core/utils";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import { produceSchema } from "@mrleebo/prisma-ast";
 import { initGetFieldName, initGetModelName } from "better-auth/adapters";
-import type { FieldType } from "better-auth/db";
+import type { DBFieldType } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import { getPrismaVersion } from "../utils/get-package-info";
 import type { SchemaGenerator } from "./types";
@@ -14,7 +14,8 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 	options,
 	file,
 }) => {
-	const provider = adapter.options?.provider || "postgresql";
+	const provider: "sqlite" | "postgresql" | "mysql" | "mongodb" =
+		adapter.options?.provider || "postgresql";
 	const tables = getAuthTables(options);
 	const filePath = file || "./prisma/schema.prisma";
 	const schemaPrismaExist = existsSync(path.join(process.cwd(), filePath));
@@ -38,7 +39,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schemaPrisma = getNewPrisma(provider, process.cwd());
 	}
 
-	// Update generator block for Prisma v7+ in existing schemas
+	// Update generator and datasource blocks for Prisma v7+ in existing schemas
 	const prismaVersion = getPrismaVersion(process.cwd());
 	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
 		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
@@ -51,6 +52,18 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				);
 				if (providerProp && providerProp.value === '"prisma-client-js"') {
 					providerProp.value = '"prisma-client"';
+				}
+			}
+			// Remove url from datasource block (now configured in prisma.config.ts)
+			const datasource: any = builder.findByType("datasource", {
+				name: "db",
+			});
+			if (datasource && datasource.properties) {
+				const urlIndex = datasource.properties.findIndex(
+					(prop: any) => prop.type === "assignment" && prop.key === "url",
+				);
+				if (urlIndex !== -1) {
+					datasource.properties.splice(urlIndex, 1);
 				}
 			}
 		});
@@ -113,7 +126,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				isOptional,
 				type,
 			}: {
-				type: FieldType;
+				type: DBFieldType;
 				isOptional: boolean;
 				isBigint: boolean;
 			}) {
@@ -133,13 +146,26 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					return isOptional ? "DateTime?" : "DateTime";
 				}
 				if (type === "json") {
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
 					return isOptional ? "Json?" : "Json";
 				}
 				if (type === "string[]") {
-					return isOptional ? "String[]" : "String[]";
+					// SQLite and MySQL don't support array of strings, so we use string instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return isOptional ? "String?" : "String";
+					}
+					return "String[]";
 				}
 				if (type === "number[]") {
-					return isOptional ? "Int[]" : "Int[]";
+					// SQLite and MySQL don't support array of numbers, so we use int instead
+					// adapter should handle JSON.stringify and JSON.parse conversion for these fields
+					if (provider === "sqlite" || provider === "mysql") {
+						return "String";
+					}
+					return "Int[]";
 				}
 			}
 
@@ -157,7 +183,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					const useNumberId =
-						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
 					const useUUIDs = options.advanced?.database?.generateId === "uuid";
 					if (useNumberId) {
@@ -193,9 +218,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
 					field === "id" && useNumberId
@@ -240,7 +263,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								);
 								continue;
 							}
-							let jsonArray = [];
+							const jsonArray = [];
 							for (const value of attr.defaultValue) jsonArray.push(value);
 							fieldBuilder.attribute(
 								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
@@ -255,12 +278,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							typeof attr.defaultValue[0] === "string" &&
 							attr.type === "string[]"
 						) {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(JSON.stringify(value));
 							fieldBuilder.attribute(`default([${valueArray}])`);
 						} else if (typeof attr.defaultValue[0] === "number") {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(`${value}`);
 							fieldBuilder.attribute(`default([${valueArray}])`);
@@ -413,7 +436,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
 						const useNumberId =
-							options.advanced?.database?.useNumberId ||
 							options.advanced?.database?.generateId === "serial";
 						const useUUIDs = options.advanced?.database?.generateId === "uuid";
 						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
@@ -454,9 +476,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 const getNewPrisma = (provider: string, cwd?: string) => {
 	const prismaVersion = getPrismaVersion(cwd);
+	const isV7 = prismaVersion && prismaVersion >= 7;
 	// Use "prisma-client" for Prisma v7+, otherwise use "prisma-client-js"
-	const clientProvider =
-		prismaVersion && prismaVersion >= 7 ? "prisma-client" : "prisma-client-js";
+	const clientProvider = isV7 ? "prisma-client" : "prisma-client-js";
+
+	// In Prisma v7+, the url is configured in prisma.config.ts instead of the schema
+	if (isV7) {
+		return `generator client {
+    provider = "${clientProvider}"
+  }
+
+  datasource db {
+    provider = "${provider}"
+  }`;
+	}
 
 	return `generator client {
     provider = "${clientProvider}"

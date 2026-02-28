@@ -11,7 +11,11 @@ export interface EmailOTPOptions {
 		data: {
 			email: string;
 			otp: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "change-email";
 		},
 		ctx?: GenericEndpointContext | undefined,
 	) => Promise<void>;
@@ -33,7 +37,11 @@ export interface EmailOTPOptions {
 	generateOTP?: (
 		data: {
 			email: string;
-			type: "sign-in" | "email-verification" | "forget-password";
+			type:
+				| "sign-in"
+				| "email-verification"
+				| "forget-password"
+				| "change-email";
 		},
 		ctx?: GenericEndpointContext,
 	) => string | undefined;
@@ -74,9 +82,33 @@ export interface EmailOTPOptions {
 		  )
 		| undefined;
 	/**
+	 * Change email configuration for the change email with OTP flow
+	 *
+	 * @default {
+	 *  enabled: false,
+	 *  verifyCurrentEmail: false,
+	 * }
+	 */
+	changeEmail?: {
+		enabled?: boolean;
+		verifyCurrentEmail?: boolean;
+	};
+	/**
 	 * Override the default email verification to use email otp instead
 	 *
 	 * @default false
 	 */
 	overrideDefaultEmailVerification?: boolean | undefined;
+	/**
+	 * Rate limit configuration
+	 *
+	 * @default {
+	 * 	window: 60,
+	 * 	max: 3,
+	 * }
+	 */
+	rateLimit?: {
+		window: number;
+		max: number;
+	};
 }

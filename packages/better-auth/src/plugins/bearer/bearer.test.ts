@@ -75,4 +75,31 @@ describe("bearer", async () => {
 		});
 		expect(session.data?.session).toBeDefined();
 	});
+
+	it.each([
+		["lowercase 'bearer'", "bearer"],
+		["uppercase 'BEARER'", "BEARER"],
+		["mixed case 'BeArEr'", "BeArEr"],
+		["extra whitespace", "Bearer "],
+	])("should work with %s prefix (RFC 7235)", async (_, prefix) => {
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `${prefix} ${token}`,
+			}),
+		});
+		expect(session?.session).toBeDefined();
+	});
+
+	it.each([
+		["Raw (already URL-encoded from header)", (t: string) => t],
+		["URL-decoded", (t: string) => decodeURIComponent(t)],
+	])("should work with %s token", async (_, transform) => {
+		const testToken = transform(token);
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${testToken}`,
+			}),
+		});
+		expect(session?.session).toBeDefined();
+	});
 });

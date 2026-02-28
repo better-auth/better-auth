@@ -64,9 +64,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
 				if (useNumberId) {
 					if (databaseType === "pg") {
@@ -139,23 +137,21 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 					mysql: `timestamp('${name}', { fsp: 3 })`,
 				},
 				"number[]": {
-					sqlite: `integer('${name}').array()`,
+					sqlite: `text('${name}', { mode: "json" })`,
 					pg: field.bigint
 						? `bigint('${name}', { mode: 'number' }).array()`
 						: `integer('${name}').array()`,
-					mysql: field.bigint
-						? `bigint('${name}', { mode: 'number' }).array()`
-						: `int('${name}').array()`,
+					mysql: `text('${name}', { mode: 'json' })`,
 				},
 				"string[]": {
-					sqlite: `text('${name}').array()`,
+					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `text('${name}').array()`,
-					mysql: `text('${name}').array()`,
+					mysql: `text('${name}', { mode: "json" })`,
 				},
 				json: {
-					sqlite: `text('${name}')`,
+					sqlite: `text('${name}', { mode: "json" })`,
 					pg: `jsonb('${name}')`,
-					mysql: `json('${name}')`,
+					mysql: `json('${name}', { mode: "json" })`,
 				},
 			} as const;
 			const dbTypeMap = (
@@ -171,9 +167,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId =
-			options.advanced?.database?.useNumberId ||
-			options.advanced?.database?.generateId === "serial";
+		const useNumberId = options.advanced?.database?.generateId === "serial";
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
 		if (useUUIDs && databaseType === "pg") {
@@ -198,12 +192,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		type Index = { type: "uniqueIndex" | "index"; name: string; on: string };
 
-		let indexes: Index[] = [];
+		const indexes: Index[] = [];
 
 		const assignIndexes = (indexes: Index[]): string => {
 			if (!indexes.length) return "";
 
-			let code: string[] = [`, (table) => [`];
+			const code: string[] = [`, (table) => [`];
 
 			for (const index of indexes) {
 				code.push(`  ${index.type}("${index.name}").on(table.${index.on}),`);
@@ -387,11 +381,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		}
 
 		// Add relations, deduplicating by relationKey
-		for (const {
-			modelName,
-			hasUnique,
-			hasMany,
-		} of modelRelationsMap.values()) {
+		for (const { modelName, hasMany } of modelRelationsMap.values()) {
 			// Determine relation type: if all are unique, it's "one", otherwise "many"
 			const relationType = hasMany ? "many" : "one";
 			let relationKey = getModelName(modelName);
@@ -433,7 +423,7 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		const duplicateRelations: Relation[] = [];
 		const singleRelations: Relation[] = [];
 
-		for (const [modelKey, relations] of relationsByModel.entries()) {
+		for (const [_modelKey, relations] of relationsByModel.entries()) {
 			if (relations.length > 1) {
 				// Multiple relations to the same model - these need field-specific naming
 				duplicateRelations.push(...relations);
@@ -557,9 +547,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId =
-		options.advanced?.database?.useNumberId ||
-		options.advanced?.database?.generateId === "serial";
+	const useNumberId = options.advanced?.database?.generateId === "serial";
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -584,7 +572,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = !!useNumberId || hasNonBigintNumber;
+		const needsInt = useNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
 		}
@@ -620,9 +608,7 @@ function generateImport({
 		// handles the references field with useNumberId
 		const needsInteger =
 			hasNonBigintNumber ||
-			((options.advanced?.database?.useNumberId ||
-				options.advanced?.database?.generateId === "serial") &&
-				hasFkToId);
+			(options.advanced?.database?.generateId === "serial" && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

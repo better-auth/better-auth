@@ -1,9 +1,9 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { siweClient } from "./client";
 import { siwe } from "./index";
 
-describe("siwe", async (it) => {
+describe("siwe", async () => {
 	const walletAddress = "0x000000000000000000000000000000000000dEaD";
 	const domain = "example.com";
 	const chainId = 1; // Ethereum mainnet
@@ -508,7 +508,7 @@ describe("siwe", async (it) => {
 			walletAddress: walletAddress.toUpperCase(),
 			chainId,
 		});
-		const { data: data2, error: error2 } = await client.siwe.verify({
+		const { data: data2 } = await client.siwe.verify({
 			message: "valid_message",
 			signature: "valid_signature",
 			walletAddress: walletAddress.toUpperCase(),

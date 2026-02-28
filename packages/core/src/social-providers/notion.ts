@@ -94,10 +94,10 @@ export const notion = (options: NotionOptions) => {
 			return {
 				user: {
 					id: userProfile.id,
-					name: userProfile.name || "Notion User",
+					name: userProfile.name || "",
 					email: userProfile.person?.email || null,
 					image: userProfile.avatar_url,
-					emailVerified: !!userProfile.person?.email,
+					emailVerified: false,
 					...userMap,
 				},
 				data: userProfile,

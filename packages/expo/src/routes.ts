@@ -1,3 +1,4 @@
+import { HIDE_METADATA } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
 
@@ -7,12 +8,24 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 		method: "GET",
 		query: z.object({
 			authorizationURL: z.string(),
+			oauthState: z.string().optional(),
 		}),
-		metadata: {
-			isAction: false,
-		},
+		metadata: HIDE_METADATA,
 	},
 	async (ctx) => {
+		const { oauthState } = ctx.query;
+		if (oauthState) {
+			const oauthStateCookie = ctx.context.createAuthCookie("oauth_state", {
+				maxAge: 10 * 60, // 10 minutes
+			});
+			ctx.setCookie(
+				oauthStateCookie.name,
+				oauthState,
+				oauthStateCookie.attributes,
+			);
+			return ctx.redirect(ctx.query.authorizationURL);
+		}
+
 		const { authorizationURL } = ctx.query;
 		const url = new URL(authorizationURL);
 		const state = url.searchParams.get("state");
@@ -22,7 +35,7 @@ export const expoAuthorizationProxy = createAuthEndpoint(
 			});
 		}
 		const stateCookie = ctx.context.createAuthCookie("state", {
-			maxAge: 5 * 60 * 1000, // 5 minutes
+			maxAge: 5 * 60, // 5 minutes
 		});
 		await ctx.setSignedCookie(
 			stateCookie.name,

@@ -1,5 +1,5 @@
 {
-	"$schema": "https://unpkg.com/knip@5/schema-jsonc.json",
+	"$schema": "./node_modules/knip/schema-jsonc.json",
 	"ignoreExportsUsedInFile": {
 		"interface": true,
 		"type": true
@@ -8,7 +8,11 @@
 	"workspaces": {
 		"packages/*": {
 			"entry": ["src/index.ts"],
-			"project": ["src/**/*.ts!"]
+			"project": ["src/**/*.ts!"],
+			"ignoreDependencies": ["@better-auth/core"]
+		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
 		},
 		"packages/better-auth": {
 			"project": [
@@ -22,6 +26,8 @@
 				"drizzle-kit",
 				"drizzle-orm",
 				"mongodb",
+				"@prisma/client",
+				"prisma",
 
 				// implicit test-instance dependencies
 				"vitest",
@@ -33,7 +39,7 @@
 				"@lynx-js/react",
 				"@sveltejs/kit",
 				"@tanstack/react-start",
-				"@tanstack/start-server-core",
+				"@tanstack/solid-start",
 				"next",
 				"react",
 				"react-dom",
@@ -46,7 +52,10 @@
 			"ignoreDependencies": [
 				// type-only dependencies
 				"kysely!",
-				"nanostores!"
+				"nanostores!",
+
+				// implicit test dependencies
+				"vitest"
 			]
 		},
 		"packages/cli": {
@@ -57,8 +66,25 @@
 				"@types/pg",
 				"drizzle-orm",
 				"pg",
-				"prisma"
-			]
+				"prisma",
+				// implicit dependencies
+				"semver",
+				"@babel/core",
+				"@babel/preset-react",
+				"@babel/preset-typescript",
+				"@better-auth/telemetry",
+				"@clack/prompts",
+				"@mrleebo/prisma-ast",
+				"better-auth",
+				"c12",
+				"chalk",
+				"open",
+				"prettier",
+				"prompts",
+				"yocto-spinner",
+				"zod"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
 		"packages/expo": {
 			"ignoreDependencies": [
@@ -72,6 +98,16 @@
 				"react-native"
 			]
 		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
 		"packages/stripe": {
 			"ignoreDependencies": [
 				// implicit dependencies
@@ -81,7 +117,17 @@
 		"packages/sso": {
 			"ignoreDependencies": [
 				// type-only dependencies
+				"@better-auth/core",
 				"better-call"
+			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
 			]
 		}
 	},
@@ -94,5 +140,5 @@
 		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
 }

@@ -47,14 +47,14 @@ your database schema based on your Better Auth configuration and plugins.
   </thead>
   <tbody>
     <tr className="h-10">
-      <td>✅ Supported</td>
-      <td>❌ Not Supported</td>
+      <td>&#9989; Supported</td>
+      <td>&#10060; Not Supported</td>
     </tr>
   </tbody>
 </table>
 
 ```package-install title="Schema Generation"
-npx @better-auth/cli@latest generate
+npx auth@latest generate
 ```
 
 ## Joins (Experimental)
@@ -67,6 +67,8 @@ The Prisma adapter supports joins out of the box since version `1.4.0`.
 To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });
@@ -75,7 +77,7 @@ export const auth = betterAuth({
 <Callout type="warn">
   Please make sure that your Prisma schema has the necessary relations defined.
   If you do not see any relations in your Prisma schema, you can manually add them using the `@relation` directive
-  or run our latest CLI version `npx @better-auth/cli@latest generate` to generate a new Prisma schema with the relations.
+  or run our latest CLI version `npx auth@latest generate` to generate a new Prisma schema with the relations.
 </Callout>
 
 ## Additional Information

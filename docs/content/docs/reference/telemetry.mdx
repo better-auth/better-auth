@@ -18,7 +18,7 @@ The following data points may be reported. Everything is anonymous and intended 
 - **Anonymous identifier**: A non-reversible hash derived from your project (`package.json` name and optionally `baseURL`). This lets us de‑duplicate events per project without knowing who you are.
 - **Runtime**: `{ name: "node" | "bun" | "deno", version }`.
 - **Environment**: one of `development`, `production`, `test`, or `ci`.
-- **Framework (if detected)**: `{ name, version }` for frameworks like Next.js, Nuxt, Remix, Astro, SvelteKit, etc.
+- **Framework (if detected)**: `{ name, version }` for frameworks like Next.js, Nuxt, React Router, Astro, SvelteKit, etc.
 - **Database (if detected)**: `{ name, version }` for integrations like PostgreSQL, MySQL, SQLite, Prisma, Drizzle, MongoDB, etc.
 - **System info**: platform, OS release, architecture, CPU count/model/speed, total memory, and flags like `isDocker`, `isWSL`, `isTTY`.
 - **Package manager**: `{ name, version }` derived from the npm user agent.
@@ -49,7 +49,7 @@ All collected data is fully anonymous and only useful in aggregate. It cannot be
 
 - **No PII or secrets**: We do not collect emails, usernames, tokens, secrets, client IDs, client secrets, or database URLs.
 - **No full config**: We never send your full `betterAuth` configuration. Instead we send a reduced, redacted snapshot of non‑sensitive toggles and counts.
-- **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/main/packages/better-auth/src/telemetry/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
+- **Redaction by design**: See [detect-auth-config.ts](https://github.com/better-auth/better-auth/blob/canary/packages/telemetry/src/detectors/detect-auth-config.ts) in the Better Auth source for the exact shape of what is included. It purposely converts sensitive values to booleans, counts, or generic identifiers.
 
 ## How can I enable it?
 
