@@ -39,6 +39,7 @@ import type { HydratedOIDCConfig } from "../oidc";
 import {
 	DiscoveryError,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	mapDiscoveryErrorToAPIError,
 } from "../oidc";
 import {
@@ -1263,18 +1264,20 @@ export const signInSSO = (options?: SSOOptions) => {
 			}
 
 			if (provider.oidcConfig && body.providerType !== "saml") {
-				let finalAuthUrl = provider.oidcConfig.authorizationEndpoint;
-				if (!finalAuthUrl && provider.oidcConfig.discoveryEndpoint) {
-					const discovery = await betterFetch<{
-						authorization_endpoint: string;
-					}>(provider.oidcConfig.discoveryEndpoint, {
-						method: "GET",
-					});
-					if (discovery.data) {
-						finalAuthUrl = discovery.data.authorization_endpoint;
+				let config = provider.oidcConfig;
+				try {
+					config = await ensureRuntimeDiscovery(
+						provider.oidcConfig,
+						provider.issuer,
+						(url) => ctx.context.isTrustedOrigin(url),
+					);
+				} catch (error) {
+					if (error instanceof DiscoveryError) {
+						throw mapDiscoveryErrorToAPIError(error);
 					}
+					throw error;
 				}
-				if (!finalAuthUrl) {
+				if (!config.authorizationEndpoint) {
 					throw new APIError("BAD_REQUEST", {
 						message: "Invalid OIDC configuration. Authorization URL not found.",
 					});
@@ -1294,23 +1297,16 @@ export const signInSSO = (options?: SSOOptions) => {
 				const authorizationURL = await createAuthorizationURL({
 					id: provider.issuer,
 					options: {
-						clientId: provider.oidcConfig.clientId,
-						clientSecret: provider.oidcConfig.clientSecret,
+						clientId: config.clientId,
+						clientSecret: config.clientSecret,
 					},
 					redirectURI,
 					state: state.state,
-					codeVerifier: provider.oidcConfig.pkce
-						? state.codeVerifier
-						: undefined,
+					codeVerifier: config.pkce ? state.codeVerifier : undefined,
 					scopes: ctx.body.scopes ||
-						provider.oidcConfig.scopes || [
-							"openid",
-							"email",
-							"profile",
-							"offline_access",
-						],
+						config.scopes || ["openid", "email", "profile", "offline_access"],
 					loginHint: ctx.body.loginHint || email,
-					authorizationEndpoint: finalAuthUrl,
+					authorizationEndpoint: config.authorizationEndpoint,
 				});
 				return ctx.json({
 					url: authorizationURL.toString(),
@@ -1559,19 +1555,28 @@ async function handleOIDCCallback(
 		);
 	}
 
-	const discovery = await betterFetch<{
-		token_endpoint: string;
-		userinfo_endpoint: string;
-		token_endpoint_auth_method: "client_secret_basic" | "client_secret_post";
-	}>(config.discoveryEndpoint);
-
-	if (discovery.data) {
+	try {
+		config = await ensureRuntimeDiscovery(config, provider.issuer, (url) =>
+			ctx.context.isTrustedOrigin(url),
+		);
+	} catch (error) {
+		if (error instanceof DiscoveryError) {
+			throw ctx.redirect(
+				`${
+					errorURL || callbackURL
+				}?error=discovery_failed&error_description=${encodeURIComponent(error.message)}`,
+			);
+		}
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=discovery_failed&error_description=unexpected_discovery_error`,
+		);
+	}
+	if (!config.scopes) {
 		config = {
-			tokenEndpoint: discovery.data.token_endpoint,
-			tokenEndpointAuthentication: discovery.data.token_endpoint_auth_method,
-			userInfoEndpoint: discovery.data.userinfo_endpoint,
-			scopes: ["openid", "email", "profile", "offline_access"],
 			...config,
+			scopes: ["openid", "email", "profile", "offline_access"],
 		};
 	}
 
