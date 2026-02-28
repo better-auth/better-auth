@@ -44,3 +44,4 @@ dyld
 nsis
 ftyp
 heix
+whsec
