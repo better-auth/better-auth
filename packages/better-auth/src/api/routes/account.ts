@@ -565,6 +565,7 @@ export const getAccessToken = createAuthEndpoint(
 						ctx.context,
 					),
 					refreshTokenExpiresAt: newTokens?.refreshTokenExpiresAt,
+					idToken: newTokens?.idToken || account.idToken,
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {
