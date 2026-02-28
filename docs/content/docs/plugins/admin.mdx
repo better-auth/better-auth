@@ -437,6 +437,19 @@ type impersonateUser = {
 ```
 </APIMethod>
 
+By default, admins cannot impersonate other admin users. To allow this, grant the `impersonate-admins` permission to a role:
+
+```ts title="auth.ts"
+const superAdmin = ac.newRole({
+  ...adminAc.statements,
+  user: ["impersonate-admins", ...adminAc.statements.user],
+});
+```
+
+<Callout type="info">
+  The legacy `allowImpersonatingAdmins` option is still supported, but is deprecated and will be removed in a future version.
+</Callout>
+
 ### Stop Impersonating User
 
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
@@ -489,7 +502,7 @@ By default, there are two roles:
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
+  `create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
 
 **session**:
   `list` `revoke` `delete`
@@ -865,12 +878,3 @@ admin({
 });
 ```
 
-### allowImpersonatingAdmins
-
-Whether to allow impersonating other admin users. Defaults to `false`.
-
-```ts title="auth.ts"
-admin({
-  allowImpersonatingAdmins: true,
-});
-```
