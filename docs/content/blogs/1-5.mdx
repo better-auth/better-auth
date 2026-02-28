@@ -32,17 +32,23 @@ npx auth upgrade
 
 ## 🚀 Highlights
 
-## New Better Auth CLI
+### New Better Auth CLI
 
-We’re announcing a new better auth cli command. `npx auth` As we’ll soon be deprecating the previous`@better-auth/cli` package.
+We’re introducing a new standalone CLI: `npx auth`. This replaces the previous `@better-auth/cli` package, which will be deprecated in a future release.
 
-```jsx
+```bash
 npx auth init
 ```
 
-You can now initialize better auth with one interactive command `npx auth init`
+With a single interactive command, `npx auth init` scaffolds a complete Better Auth setup — configuration file, database adapter, and framework integration.
 
-You should also be able to run `migrate` `generate` and other better auth commands with it.
+All existing commands like `migrate` and `generate` are available through the new CLI as well:
+
+```bash
+npx auth migrate   # Run database migrations
+npx auth generate  # Generate auth schema
+npx auth upgrade   # Upgrade Better Auth to the latest version
+```
 
 ### Remote MCP Auth Client
 
