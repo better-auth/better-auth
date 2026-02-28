@@ -1,13 +1,13 @@
 ---
 title: "Better Auth 1.5"
-description: "Auth CLI, MCP Auth, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
+description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
 date: 2026-02-28
 author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
   twitter: "himseIf_65"
   image: "/release-og/1-5.png"
-tags: ["1.5", "CLI", "MCP", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
+tags: ["1.5", "CLI", "MCP", "oauth-provider", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
 ---
 
 ## Better Auth 1.5 Release
@@ -17,6 +17,8 @@ We’re excited to announce the release of Better Auth 1.5! 🎉
 This is our biggest release yet, with over 600 commits, 70 new features, 200 bug fixes, and 7 entirely new packages. From MCP authentication to Electron desktop support, this release brings Better Auth to new platforms and use cases.
 
 We’re also announcing our new Infrastructure product. It lets you use a full user management and analytics dashboard, security and protection tooling, audit logs, a self-service SSO UI, and more, all with your own Better Auth instance.
+
+Starting with this release, the self-service SSO dashboard — which lets your enterprise customers onboard their own SAML providers without support tickets — is powered by Better Auth Infrastructure. If you’re using the SSO plugin in production, we recommend upgrading to the Pro or Business tier to get access to the dashboard and streamline your enterprise onboarding.
 
 And soon, you’ll be able to host your Better Auth instance on our infrastructure as well, so you can own your auth at scale without worrying about infrastructure needs.
 
@@ -80,6 +82,44 @@ import { mcpAuthHono } from "better-auth/plugins/mcp/client/adapters";
 
 const middleware = mcpAuthHono(mcpAuth);
 ```
+
+---
+
+### OAuth 2.1 Provider
+
+The new `@better-auth/oauth-provider` plugin turns your Better Auth instance into a full OAuth 2.1 authorization server with OIDC compatibility. Issue access tokens, manage client registrations, and let third-party apps authenticate against your API — including MCP agents.
+
+[👉 Read more about the OAuth Provider](https://www.better-auth.com/docs/plugins/oauth-provider)
+
+```tsx
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+export const auth = betterAuth({
+    plugins: [
+        jwt(),
+        oauthProvider({
+            loginPage: "/sign-in",
+            consentPage: "/consent",
+        }),
+    ],
+});
+```
+
+Key features:
+
+- **OAuth 2.1 with OIDC**: Supports `authorization_code`, `refresh_token`, and `client_credentials` grants with `openid` scope support.
+- **MCP-ready**: Works out of the box as an authorization server for MCP tools and agents.
+- **Dynamic Client Registration**: Allow clients to register dynamically, with support for both public and confidential clients.
+- **JWT & JWKS verification**: Sign access tokens as JWTs and verify them remotely via the `/jwks` endpoint.
+- **Consent & authorization flows**: Built-in consent, account selection, and post-login redirect screens.
+- **Token introspection & revocation**: RFC 7662 and RFC 7009 compliant endpoints.
+- **Per-endpoint rate limiting**: Configurable rate limits for each OAuth endpoint.
+
+<Callout type="info">
+The OAuth 2.1 Provider replaces the previous OIDC Provider plugin, which will be deprecated in a future release. The MCP plugin will also transition to use the OAuth 2.1 Provider as its foundation. See the [migration guide](https://www.better-auth.com/docs/plugins/oauth-provider#from-oidc-provider-plugin) for upgrading from the OIDC Provider plugin.
+</Callout>
 
 ---
 
@@ -177,6 +217,18 @@ This is the foundation that the i18n plugin builds on — every error code from 
 ### SSO — Production Ready
 
 The SSO plugin has received extensive hardening to be production-ready, with 23+ commits improving security and compliance.
+
+### Self-Service SSO Dashboard
+
+As part of our new Infrastructure product, the SSO plugin is now accompanied by a self-service dashboard for onboarding enterprise customers. Organization admins can generate a shareable link that walks enterprise customers through configuring their SAML identity provider — no back-and-forth support tickets required.
+
+The dashboard is available at:
+
+```
+https://better-auth.com/dashboard/[project]/organization/[orgId]/enterprise
+```
+
+From there, you can generate onboarding links, monitor SSO connection status, and manage provider configurations for each organization.
 
 ### SAML Single Logout (SLO)
 
