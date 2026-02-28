@@ -16,7 +16,7 @@ import type { Account, Session, User, Verification } from "../types";
 import { getDate } from "../utils/date";
 import { getIp } from "../utils/get-request-ip";
 import {
-	parseSessionInput,
+	getSessionDefaultFields,
 	parseSessionOutput,
 	parseUserOutput,
 } from "./schema";
@@ -155,7 +155,10 @@ export const createInternalAdapter = (
 			);
 			return createdAccount as T & Account;
 		},
-		listSessions: async (userId: string) => {
+		listSessions: async (
+			userId: string,
+			options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+		) => {
 			if (secondaryStorage) {
 				const currentList = await secondaryStorage.get(
 					`active-sessions-${userId}`,
@@ -207,6 +210,15 @@ export const createInternalAdapter = (
 						field: "userId",
 						value: userId,
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 			});
 			return sessions;
@@ -294,7 +306,7 @@ export const createInternalAdapter = (
 			} = override || {};
 
 			// we're parsing default values for session additional fields
-			const defaultAdditionalFields = parseSessionInput(options, {});
+			const defaultAdditionalFields = getSessionDefaultFields(options);
 			const data = {
 				ipAddress: headers ? getIp(headers, options) || "" : "",
 				userAgent: headers?.get("user-agent") || "",
@@ -358,7 +370,9 @@ export const createInternalAdapter = (
 									);
 								}
 
-								const user = await adapter.findOne<User>({
+								const user = await (
+									await getCurrentAdapter(adapter)
+								).findOne<User>({
 									model: "user",
 									where: [
 										{
@@ -448,7 +462,14 @@ export const createInternalAdapter = (
 				user: parsedUser,
 			};
 		},
-		findSessions: async (sessionTokens: string[]) => {
+		findSessions: async (
+			sessionTokens: string[],
+			options?:
+				| {
+						onlyActiveSessions?: boolean | undefined;
+				  }
+				| undefined,
+		) => {
 			if (secondaryStorage) {
 				const sessions: {
 					session: Session;
@@ -466,7 +487,11 @@ export const createInternalAdapter = (
 								session: Session;
 								user: User;
 							};
-							if (!s?.session) continue;
+              if (!s) return [];
+              const expiresAt = new Date(s.session.expiresAt);
+              if (options?.onlyActiveSessions && expiresAt <= new Date()) {
+                continue;
+              }
 							const session = {
 								session: {
 									...s.session,
@@ -501,6 +526,15 @@ export const createInternalAdapter = (
 						value: sessionTokens,
 						operator: "in",
 					},
+					...(options?.onlyActiveSessions
+						? [
+								{
+									field: "expiresAt",
+									value: new Date(),
+									operator: "gt",
+								} satisfies Where,
+							]
+						: []),
 				],
 				join: {
 					user: true,

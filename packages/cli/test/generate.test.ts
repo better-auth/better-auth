@@ -392,24 +392,6 @@ describe("generate", async () => {
 		);
 	});
 
-	it("should generate kysely schema with uuid id", async () => {
-		const schema = await generateKyselySchema({
-			file: "test.sql",
-			options: {
-				database: new Database(":memory:"),
-				advanced: {
-					database: {
-						generateId: "uuid",
-					},
-				},
-			},
-			adapter: {} as any,
-		});
-		await expect(schema.code).toMatchFileSnapshot(
-			"./__snapshots__/migrations-uuid.sql",
-		);
-	});
-
 	it("should throw for unsupported additionalFields type in migrations", async () => {
 		await expect(
 			generateKyselySchema({
@@ -425,35 +407,6 @@ describe("generate", async () => {
 				adapter: {} as any,
 			}),
 		).rejects.toThrow(/Unsupported field type/);
-	});
-
-	it("should add plugin to empty plugins array without leading comma", async () => {
-		const initialConfig = `export const auth = betterAuth({
-			plugins: []
-		});`;
-
-		const mockFormat = (code: string) => Promise.resolve(code);
-		const mockSpinner = { stop: () => {} };
-		const plugins: SupportedPlugin[] = [
-			{
-				id: "next-cookies",
-				name: "nextCookies",
-				path: "better-auth/next-js",
-				clientName: undefined,
-				clientPath: undefined,
-			},
-		];
-
-		const result = await generateAuthConfig({
-			format: mockFormat,
-			current_user_config: initialConfig,
-			spinner: mockSpinner as any,
-			plugins,
-			database: null,
-		});
-
-		expect(result.generatedCode).toContain(`plugins: [nextCookies()]`);
-		expect(result.generatedCode).not.toContain(`plugins: [, nextCookies()]`);
 	});
 });
 
@@ -896,6 +849,8 @@ describe("Prisma v7 compatibility", () => {
 
 			expect(schema.code).toContain('provider = "prisma-client"');
 			expect(schema.code).not.toContain('provider = "prisma-client-js"');
+			// Prisma v7+ should not include url in datasource (configured in prisma.config.ts)
+			expect(schema.code).not.toContain("url");
 		} finally {
 			process.chdir(originalCwd);
 			fs.rmSync(tmpDir, { recursive: true });

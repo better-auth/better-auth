@@ -8,6 +8,8 @@ import { getTestInstance } from "../../test-utils/test-instance";
 import { DEFAULT_SECRET } from "../../utils/constants";
 import { genericOAuthClient } from "../generic-oauth/client";
 import { genericOAuth } from "../generic-oauth/index";
+import { magicLink } from "../magic-link";
+import { magicLinkClient } from "../magic-link/client";
 import { siwe } from "../siwe";
 import { siweClient } from "../siwe/client";
 import { lastLoginMethod } from ".";
@@ -125,6 +127,112 @@ describe("lastLoginMethod", async () => {
 		);
 		const cookies = parseCookies(headers.get("cookie") || "");
 		expect(cookies.get("better-auth.last_used_login_method")).toBe("siwe");
+	});
+
+	it("should set the last login method cookie for magic-link", async () => {
+		let magicLinkEmail = { email: "", token: "", url: "" };
+		const { client, cookieSetter, testUser } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod(),
+					magicLink({
+						async sendMagicLink(data) {
+							magicLinkEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [lastLoginMethodClient(), magicLinkClient()],
+				},
+			},
+		);
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token =
+			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		const headers = new Headers();
+		await client.$fetch("/magic-link/verify", {
+			method: "GET",
+			query: {
+				token,
+				callbackURL: "/callback",
+			},
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)(context as any);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				const lastMethod = cookies.get(
+					"better-auth.last_used_login_method",
+				)?.value;
+				expect(lastMethod).toBe("magic-link");
+			},
+		});
+	});
+
+	it("should set the last login method for magic-link in the database", async () => {
+		let magicLinkEmail = { email: "", token: "", url: "" };
+		const { client, auth, testUser } = await getTestInstance(
+			{
+				plugins: [
+					lastLoginMethod({ storeInDatabase: true }),
+					magicLink({
+						async sendMagicLink(data) {
+							magicLinkEmail = data;
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [magicLinkClient()],
+				},
+			},
+		);
+		await client.signIn.magicLink({
+			email: testUser.email,
+		});
+		const token =
+			new URL(magicLinkEmail.url).searchParams.get("token") || "";
+		let sessionToken = "";
+		await client.magicLink.verify(
+			{
+				query: { token },
+			},
+			{
+				onSuccess(context) {
+					const data = context.data as { token?: string };
+					if (data?.token) {
+						sessionToken = data.token;
+					}
+				},
+				onError(context) {
+					// magic-link verify redirects with 302, extract session from set-cookie
+					if (context.response.status === 302) {
+						const cookies = parseSetCookieHeader(
+							context.response.headers.get("set-cookie") || "",
+						);
+						const sessionCookie = cookies.get(
+							"better-auth.session_token",
+						);
+						if (sessionCookie?.value) {
+							sessionToken = sessionCookie.value;
+						}
+					}
+				},
+			},
+		);
+		expect(sessionToken).toBeTruthy();
+		const session = await auth.api.getSession({
+			headers: new Headers({
+				authorization: `Bearer ${sessionToken}`,
+			}),
+		});
+		expect((session?.user as any).lastLoginMethod).toBe("magic-link");
 	});
 
 	it("should set the last login method in the database", async () => {

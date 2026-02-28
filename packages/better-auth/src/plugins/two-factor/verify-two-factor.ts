@@ -80,7 +80,7 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 				expireCookie(ctx, twoFactorCookie);
 				if (ctx.body.trustDevice) {
 					const plugin = ctx.context.getPlugin("two-factor");
-					const trustDeviceMaxAge = plugin!.options.trustDeviceMaxAge;
+					const trustDeviceMaxAge = plugin!.options?.trustDeviceMaxAge;
 					const maxAge = trustDeviceMaxAge ?? TRUST_DEVICE_COOKIE_MAX_AGE;
 					const trustDeviceCookie = ctx.context.createAuthCookie(
 						TRUST_DEVICE_COOKIE_NAME,

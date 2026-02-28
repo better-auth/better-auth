@@ -4,6 +4,7 @@ import {
 } from "@better-auth/core/api";
 import type { Session } from "@better-auth/core/db";
 import type { Where } from "@better-auth/core/db/adapter";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
@@ -574,9 +575,11 @@ const listUsersQuerySchema = z.object({
 		})
 		.or(z.number())
 		.or(z.boolean())
+		.or(z.array(z.string()))
+		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
-		.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+		.enum(whereOperators)
 		.meta({
 			description: "The operator to use for the filter",
 		})
@@ -655,7 +658,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			if (ctx.query?.filterValue) {
+			if (ctx.query?.filterValue !== undefined) {
 				where.push({
 					field: ctx.query.filterField || "email",
 					operator: ctx.query.filterOperator || "eq",
@@ -1076,15 +1079,26 @@ export const impersonateUser = (opts: AdminOptions) =>
 				opts.defaultRole ||
 				"user"
 			).split(",");
-			if (
-				opts.allowImpersonatingAdmins !== true &&
-				(targetUserRole.some((role) => adminRoles.includes(role)) ||
-					opts.adminUserIds?.includes(targetUser.id))
-			) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
-				);
+			const isTargetAdmin =
+				targetUserRole.some((role) => adminRoles.includes(role)) ||
+				!!opts.adminUserIds?.includes(targetUser.id);
+			if (isTargetAdmin) {
+				const canImpersonateAdmins =
+					opts.allowImpersonatingAdmins === true ||
+					hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["impersonate-admins"],
+						},
+					});
+				if (!canImpersonateAdmins) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
+					);
+				}
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(

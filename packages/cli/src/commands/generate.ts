@@ -132,7 +132,7 @@ async function generateAction(opts: any) {
 				type: "cli_generate",
 				payload: {
 					outcome: "no_changes",
-					config: getTelemetryAuthConfig(config, {
+					config: await getTelemetryAuthConfig(config, {
 						adapter: adapter.id,
 						database:
 							typeof config.database === "function" ? "adapter" : "kysely",
@@ -181,7 +181,7 @@ async function generateAction(opts: any) {
 					type: "cli_generate",
 					payload: {
 						outcome: schema.overwrite ? "overwritten" : "appended",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
@@ -195,7 +195,7 @@ async function generateAction(opts: any) {
 					type: "cli_generate",
 					payload: {
 						outcome: "aborted",
-						config: getTelemetryAuthConfig(config),
+						config: await getTelemetryAuthConfig(config),
 					},
 				});
 			} catch {}
@@ -228,7 +228,10 @@ async function generateAction(opts: any) {
 			const telemetry = await createTelemetry(config);
 			await telemetry.publish({
 				type: "cli_generate",
-				payload: { outcome: "aborted", config: getTelemetryAuthConfig(config) },
+				payload: {
+					outcome: "aborted",
+					config: await getTelemetryAuthConfig(config),
+				},
 			});
 		} catch {}
 		process.exit(1);
@@ -252,7 +255,10 @@ async function generateAction(opts: any) {
 		const telemetry = await createTelemetry(config);
 		await telemetry.publish({
 			type: "cli_generate",
-			payload: { outcome: "generated", config: getTelemetryAuthConfig(config) },
+			payload: {
+				outcome: "generated",
+				config: await getTelemetryAuthConfig(config),
+			},
 		});
 	} catch {}
 	process.exit(0);

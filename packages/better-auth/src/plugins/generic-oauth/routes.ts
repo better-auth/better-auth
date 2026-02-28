@@ -438,6 +438,10 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 					}
 					const id = mapUser.id ? String(mapUser.id) : String(userInfo.id);
 					const name = mapUser.name ? mapUser.name : userInfo.name;
+					if (!name) {
+						ctx.context.logger.error("Unable to get user info", userInfo);
+						throw redirectOnError("name_is_missing");
+					}
 					return {
 						...userInfo,
 						...mapUser,
@@ -450,7 +454,7 @@ export const oAuth2Callback = (options: GenericOAuthOptions) =>
 				if (
 					ctx.context.options.account?.accountLinking?.allowDifferentEmails !==
 						true &&
-					link.email !== userInfo.email
+					link.email.toLowerCase() !== userInfo.email.toLowerCase()
 				) {
 					return redirectOnError("email_doesn't_match");
 				}

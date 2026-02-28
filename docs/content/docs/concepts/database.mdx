@@ -21,8 +21,8 @@ Better Auth comes with a CLI tool to manage database migrations and generate sch
 
 The cli checks your database and prompts you to add missing tables or update existing ones with new columns. This is only supported for the built-in Kysely adapter. For other adapters, you can use the `generate` command to create the schema and handle the migration through your ORM.
 
-```bash
-npx @better-auth/cli migrate
+```package-install
+npx auth@latest migrate
 ```
 
 <Callout type="info">
@@ -33,8 +33,8 @@ For PostgreSQL users: The migrate command supports non-default schemas. It autom
 
 Better Auth also provides a `generate` command to generate the schema required by Better Auth. The `generate` command creates the schema required by Better Auth. If you're using a database adapter like Prisma or Drizzle, this command will generate the right schema for your ORM. If you're using the built-in Kysely adapter, it will generate an SQL file you can run directly on your database.
 
-```bash
-npx @better-auth/cli generate
+```package-install
+npx auth@latest generate
 ```
 
 See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
@@ -47,76 +47,65 @@ See the [CLI](/docs/concepts/cli) documentation for more information on the CLI.
 
 ### Programmatic Migrations
 
-In some environments (like Cloudflare Workers, serverless functions, or custom deployment setups), running the CLI may not be possible or practical. In these cases, you can run migrations programmatically from within your application code.
-
-Better Auth provides a `getMigrations` function that you can use to generate and run migrations programmatically. This is particularly useful when:
-
-- You're deploying to edge environments (Cloudflare Workers, Deno Deploy, etc.)
-- Your environment variables are only available at runtime (not at build time)
-- You need to run migrations as part of your application startup or through a custom endpoint
-
-#### Using `getMigrations`
-
-The `getMigrations` function is available from `better-auth/db/migration` and works with the built-in Kysely adapter (SQLite, PostgreSQL, MySQL, MSSQL).
+In environments where the CLI isn't available (e.g. Cloudflare Workers, serverless functions), you can run migrations programmatically using `getMigrations` from `better-auth/db/migration`.
 
 ```typescript
 import { getMigrations } from "better-auth/db/migration";
+import { auth } from "./auth";
 
-const { toBeCreated, toBeAdded, runMigrations, compileMigrations } = await getMigrations(authConfig);
+const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
 
-// Check what migrations are needed
-console.log("Tables to create:", toBeCreated);
-console.log("Fields to add:", toBeAdded);
-
-// Run migrations
 await runMigrations();
-
-// Or get the SQL to run manually
-const sql = await compileMigrations();
-console.log(sql);
 ```
 
-#### Example: Cloudflare Workers Migration Endpoint
+<Callout type="warn">
+`getMigrations` only works with the built-in Kysely adapter (SQLite/D1, PostgreSQL, MySQL, MSSQL). It does **not** work with Prisma or Drizzle ORM adapters — use CLI migrations with those ORMs instead.
+</Callout>
 
-For Cloudflare Workers using D1 (SQLite), you can create a migration endpoint that runs when your worker starts or through a manual trigger:
+<Accordions>
+<Accordion id="cloudflare-d1-example" title="Example: Cloudflare D1">
+[Cloudflare D1](https://developers.cloudflare.com/d1/) can only be queried through a Cloudflare Worker, so the CLI cannot access it directly. Instead, you can run programmatic migrations through an endpoint:
+
+```typescript title="auth.ts"
+import { env } from "cloudflare:workers";
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+  database: env.DB,
+  // ... rest of config
+});
+```
 
 ```typescript title="src/index.ts"
 import { Hono } from "hono";
-import { auth } from "./auth"; // your auth instance
+import { auth } from "./auth";
 import { getMigrations } from "better-auth/db/migration";
 
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono();
 
-// Migration endpoint - call this once to set up your database
+// Protect or remove this endpoint in production
 app.post("/migrate", async (c) => {
-  const env = c.env;
-
-  // Create auth config with runtime environment
-  const authConfig = {
-    database: env.DB, // D1 database binding
-    // ... rest of your auth config
-  };
-
   try {
-    const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(authConfig);
+    const { toBeCreated, toBeAdded, runMigrations } = await getMigrations(auth.options);
 
     if (toBeCreated.length === 0 && toBeAdded.length === 0) {
       return c.json({ message: "No migrations needed" });
     }
 
     await runMigrations();
-
     return c.json({
       message: "Migrations completed successfully",
-      created: toBeCreated.map(t => t.table),
-      added: toBeAdded.map(t => t.table)
+      created: toBeCreated.map((t) => t.table),
+      added: toBeAdded.map((t) => t.table),
     });
   } catch (error) {
-    return c.json({ error: error instanceof Error ? error.message : String(error) }, 500);
+    return c.json(
+      { error: error instanceof Error ? error.message : "Migration failed" },
+      500,
+    );
   }
 });
 
-// Your normal auth endpoints
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
   return auth.handler(c.req.raw);
 });
@@ -124,78 +113,18 @@ app.on(["POST", "GET"], "/api/auth/*", (c) => {
 export default app;
 ```
 
-<Callout type="warn">
-**Important Limitations**
-
-Programmatic migrations currently work **only** with:
-- Built-in database adapters (SQLite/D1, PostgreSQL, MySQL, MSSQL) using the Kysely adapter
-- Does **not** work with Prisma or Drizzle ORM adapters
-
-For Prisma or Drizzle in Cloudflare Workers, see the [Cloudflare Workers](#cloudflare-workers-with-prisma-drizzle) section below.
-</Callout>
-
-#### Cloudflare Workers with Prisma/Drizzle
-
-If you're using Prisma or Drizzle with Cloudflare Workers, you have a few options:
-
-1. **Use `cloudflare:workers` import** (Recommended for newer Cloudflare projects):
-
-   Cloudflare now supports importing environment variables from `cloudflare:workers`, which allows you to access `env` at the top level:
-
-   ```typescript title="auth.ts"
-   import { env } from "cloudflare:workers";
-   import { drizzle } from "drizzle-orm/d1";
-
-   export const auth = betterAuth({
-     database: drizzle(env.DB),
-     // ... rest of config
-   });
-   ```
-
-   With this approach, you can run the standard CLI commands:
-
-   ```bash
-   npx @better-auth/cli migrate
-   # or
-   npx @better-auth/cli generate
-   ```
-
-2. **Use `process.env` with compatibility flag**:
-
-   Add the `nodejs_compat_populate_process_env` compatibility flag to your `wrangler.toml`:
-
-   ```toml title="wrangler.toml"
-   compatibility_flags = ["nodejs_compat_populate_process_env"]
-   ```
-
-   Then use `process.env` in your auth config:
-
-   ```typescript title="auth.ts"
-   import { drizzle } from "drizzle-orm/d1";
-
-   export const auth = betterAuth({
-     database: drizzle(process.env.DB as any),
-     // ... rest of config
-   });
-   ```
-
-   After setting this up, run the CLI commands as normal:
-
-   ```bash
-   npx @better-auth/cli generate
-   ```
-
-3. **Generate schema locally and push manually**:
-
-   Run the generate command locally with a mock configuration, then use your ORM's push/migrate commands to apply the schema.
-
 <Callout type="info">
-See the [Hono integration documentation](/docs/integrations/hono#cloudflare-workers) for a complete example of using Better Auth with Cloudflare Workers.
+If you're using Cloudflare D1 with Drizzle or Prisma, use [`cloudflare:workers`](https://developers.cloudflare.com/workers/runtime-apis/bindings/) to access `env` and follow the guides below:
+
+- [Drizzle with Cloudflare D1 guide](https://orm.drizzle.team/docs/guides/d1-http-with-drizzle-kit)
+- [Prisma with Cloudflare D1 guide](https://www.prisma.io/docs/guides/cloudflare-d1)
 </Callout>
+</Accordion>
+</Accordions>
 
 ## Secondary Storage
 
-Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of this intensive records to a high performance storage or even RAM.
+Secondary storage in Better Auth allows you to use key-value stores for managing session data, rate limiting counters, etc. This can be useful when you want to offload the storage of intensive records to a high performance storage or even RAM.
 
 ### Implementation
 
@@ -211,7 +140,9 @@ interface SecondaryStorage {
 
 Then, provide your implementation to the `betterAuth` function:
 
-```typescript
+```typescript title="auth.ts"
+import { betterAuth } from "better-auth";
+
 betterAuth({
   // ... other options
   secondaryStorage: {
@@ -257,7 +188,7 @@ The Redis storage supports all ioredis connection modes including standalone, cl
 
 If you prefer to implement your own Redis secondary storage, here's a basic example:
 
-```typescript
+```typescript title="auth.ts"
 import { createClient } from "redis";
 import { betterAuth } from "better-auth";
 
@@ -300,6 +231,11 @@ Table Name: `user`
       isPrimaryKey: true,
     },
     {
+      name: "name",
+      type: "string",
+      description: "User's chosen display name",
+    },
+    {
       name: "email",
       type: "string",
       description: "User's email address for communication and login",
@@ -308,12 +244,6 @@ Table Name: `user`
       name: "emailVerified",
       type: "boolean",
       description: "Whether the user's email is verified",
-    },
-        {
-      name: "name",
-      type: "string",
-      description: "User's chosen display name",
-      isOptional: true,
     },
     {
       name: "image",
@@ -639,10 +569,9 @@ export const auth = betterAuth({
       clientId: "YOUR_GITHUB_CLIENT_ID",
       clientSecret: "YOUR_GITHUB_CLIENT_SECRET",
       mapProfileToUser: (profile) => {
-        const nameParts = profile.name?.split(" ") ?? [];
         return {
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(" ") || undefined,
+          firstName: profile.name.split(" ")[0],
+          lastName: profile.name.split(" ")[1],
         };
       },
     },
@@ -739,7 +668,7 @@ database will generate the numeric ID automatically.
 When enabled, the Better-Auth CLI will generate or migrate the schema with the `id` field as a numeric type for your database
 with auto-incrementing attributes associated with it.
 
-```ts
+```ts title="auth.ts"
 import { betterAuth } from "better-auth";
 import { db } from "./db";
 
@@ -841,13 +770,12 @@ export const auth = betterAuth({
       create: {
         before: async (user, ctx) => {
           // Modify the user object before it is created
-          const nameParts = user.name?.split(" ") ?? [];
           return {
             data: {
               // Ensure to return Better-Auth named fields, not the original field names in your database.
               ...user,
-              firstName: nameParts[0],
-              lastName: nameParts.slice(1).join(" ") || undefined,
+              firstName: user.name.split(" ")[0],
+              lastName: user.name.split(" ")[1],
             },
           };
         },
@@ -972,6 +900,8 @@ it will still fallback to making multiple database queries and combining the res
 To enable joins, update your auth config with the following:
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });
