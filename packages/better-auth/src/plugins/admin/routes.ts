@@ -1079,15 +1079,26 @@ export const impersonateUser = (opts: AdminOptions) =>
 				opts.defaultRole ||
 				"user"
 			).split(",");
-			if (
-				opts.allowImpersonatingAdmins !== true &&
-				(targetUserRole.some((role) => adminRoles.includes(role)) ||
-					opts.adminUserIds?.includes(targetUser.id))
-			) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
-				);
+			const isTargetAdmin =
+				targetUserRole.some((role) => adminRoles.includes(role)) ||
+				!!opts.adminUserIds?.includes(targetUser.id);
+			if (isTargetAdmin) {
+				const canImpersonateAdmins =
+					opts.allowImpersonatingAdmins === true ||
+					hasPermission({
+						userId: ctx.context.session.user.id,
+						role: ctx.context.session.user.role,
+						options: opts,
+						permissions: {
+							user: ["impersonate-admins"],
+						},
+					});
+				if (!canImpersonateAdmins) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
+					);
+				}
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
