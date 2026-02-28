@@ -22,7 +22,7 @@ export function getContributors(): ContributorInfo[] {
 async function fetchNpmDownloads(): Promise<number> {
 	try {
 		const response = await fetch(
-			"https://api.npmjs.org/downloads/point/last-month/better-auth",
+			"https://api.npmjs.org/downloads/point/last-year/better-auth",
 			{ next: { revalidate: 3600 } }, // Cache for 1 hour
 		);
 
