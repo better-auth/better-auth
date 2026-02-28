@@ -3,7 +3,6 @@ import { HalftoneBackground } from "@/components/landing/halftone-bg";
 import { HeroReadMe } from "@/components/landing/hero-readme";
 import { HeroTitle } from "@/components/landing/hero-title";
 import { getCommunityStats, getContributors } from "@/lib/community-stats";
-import { getSrc } from "@/lib/utils";
 
 export default async function HomePage() {
 	const contributors = getContributors();
@@ -21,7 +20,7 @@ export default async function HomePage() {
 							{/* Dark mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-60">
 								<Image
-									src={getSrc("/left-3d-logo.svg")}
+									src="/left-3d-logo.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -30,7 +29,7 @@ export default async function HomePage() {
 									draggable={false}
 								/>
 								<Image
-									src={getSrc("/right-3d-logo.svg")}
+									src="/right-3d-logo.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -42,7 +41,7 @@ export default async function HomePage() {
 							{/* Light mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] flex dark:hidden justify-center opacity-60">
 								<Image
-									src={getSrc("/left-3d-logo-light.svg")}
+									src="/left-3d-logo-light.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -51,7 +50,7 @@ export default async function HomePage() {
 									draggable={false}
 								/>
 								<Image
-									src={getSrc("/right-3d-logo-light.svg")}
+									src="/right-3d-logo-light.svg"
 									alt=""
 									width={518}
 									height={667}
