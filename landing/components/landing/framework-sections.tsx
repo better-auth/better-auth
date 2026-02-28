@@ -1125,13 +1125,13 @@ export function PluginEcosystem() {
 					<span className="text-base text-foreground/85 dark:text-foreground/75">
 						Plugin Ecosystem
 					</span>
-					<span className="text-[11px] font-mono text-foreground/35 dark:text-foreground/25">
+					<span className="text-[11px] font-mono text-foreground/35 dark:text-foreground/50">
 						{plugins.length} official
 					</span>
 				</div>
 				<Link
 					href="/docs/plugins"
-					className="text-[10px] font-mono text-foreground/35 dark:text-foreground/25 hover:text-foreground/55 transition-colors uppercase tracking-wider"
+					className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 hover:text-foreground/55 transition-colors uppercase tracking-wider"
 				>
 					browse all &rarr;
 				</Link>
@@ -1146,7 +1146,7 @@ export function PluginEcosystem() {
 							className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 mr-1.5 text-[11px] text-foreground dark:text-foreground/90 border border-foreground/[0.06] rounded-sm cursor-default whitespace-nowrap"
 						>
 							{plugin.name}
-							<span className="text-[7px] font-mono uppercase tracking-wider text-foreground/25 dark:text-foreground/18">
+							<span className="text-[7px] font-mono uppercase tracking-wider text-foreground/50 ">
 								{categoryLabels[plugin.category]}
 							</span>
 						</span>
@@ -1161,7 +1161,7 @@ export function PluginEcosystem() {
 							className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 mr-1.5 text-[11px] text-foreground dark:text-foreground/90 border border-foreground/[0.06] rounded-sm cursor-default whitespace-nowrap"
 						>
 							{plugin.name}
-							<span className="text-[7px] font-mono uppercase tracking-wider text-foreground/25 dark:text-foreground/18">
+							<span className="text-[7px] font-mono uppercase tracking-wider text-foreground/50 ">
 								{categoryLabels[plugin.category]}
 							</span>
 						</span>
