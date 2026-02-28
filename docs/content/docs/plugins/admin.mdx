@@ -796,6 +796,30 @@ And adds one field in the `session` table:
   ]}
 />
 
+### Email Enumeration Protection
+
+If you use [email enumeration protection](/docs/authentication/email-password#email-enumeration-protection) (`requireEmailVerification` or `autoSignIn: false`), you need to configure `customSyntheticUser` to include the admin plugin fields in the fake sign-up response:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+      ...coreFields,
+      // Admin plugin fields (in schema order)
+      role: "user", // or your configured defaultRole
+      banned: false,
+      banReason: null,
+      banExpires: null,
+      ...additionalFields,
+      id,
+    }),
+  },
+  plugins: [admin()],
+});
+```
+
 ## Options
 
 ### Default Role
