@@ -62,6 +62,23 @@ export const getJwtPlugin = (ctx: AuthContext) => {
 
 const cachedTrustedClients = new TTLCache<string, SchemaClient<Scope[]>>();
 
+export async function verifyOAuthQueryParams(
+	oauth_query: string,
+	secret: string,
+) {
+	let queryParams = new URLSearchParams(oauth_query);
+	const sig = queryParams.get("sig");
+	const exp = Number(queryParams.get("exp"));
+	queryParams.delete("sig");
+	queryParams = new URLSearchParams(queryParams);
+	const verifySig = await makeSignature(queryParams.toString(), secret);
+	return (
+		!!sig &&
+		constantTimeEqual(sig, verifySig) &&
+		new Date(exp * 1000) >= new Date()
+	);
+}
+
 /**
  * Get a client by ID, checking trusted clients first, then database
  */
