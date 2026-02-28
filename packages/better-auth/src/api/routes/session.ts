@@ -289,6 +289,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 								// Set the refreshed cookie cache
 								await setCookieCache(ctx, refreshedSession, false);
 
+								// Also refresh the session_token cookie expiry
+								const sessionTokenOptions =
+									ctx.context.authCookies.sessionToken.attributes;
+								const sessionTokenMaxAge = dontRememberMe
+									? undefined
+									: ctx.context.sessionConfig.expiresIn;
+								await ctx.setSignedCookie(
+									ctx.context.authCookies.sessionToken.name,
+									session.session.token,
+									ctx.context.secret,
+									{
+										...sessionTokenOptions,
+										maxAge: sessionTokenMaxAge,
+									},
+								);
+
 								// Parse session and user to ensure additionalFields are included
 								// Rehydrate date fields from JSON strings before parsing
 								const parsedRefreshedSession = parseSessionOutput(
