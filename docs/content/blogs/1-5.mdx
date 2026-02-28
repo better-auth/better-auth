@@ -519,6 +519,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 - **`deferSessionRefresh`**: Support for read-replica database setups.
 - **Awaitable social provider config**: Provider configuration can now be async.
 - **Limit enumeration on sign-up**: When email verification is required, sign-up no longer reveals existing accounts.
+- **`customSyntheticUser` option**: Support plugin fields in enumeration-protected responses ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
 - **Form data support for email sign-in/sign-up**: In addition to JSON bodies.
 
 ### OAuth & Providers
@@ -576,6 +577,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 
 - **Prevent OTP reuse via race condition**: Atomically invalidate OTPs on use.
 - **Prevent user enumeration**: In email-otp when sign-up is disabled, and on sign-up with required email verification.
+- **Prevent email enumeration on `/change-email`**: Always returns `{ status: true }` and simulates token generation for timing safety ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
 - **Stricter default rate limits**: For password reset and phone number verification endpoints.
 - **Separate CSRF and origin checks**: More granular request validation.
 - **Prevent trial abuse**: Check all user subscriptions before granting a free trial.
