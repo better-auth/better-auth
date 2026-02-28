@@ -1,6 +1,5 @@
 packages:
   - packages/**
-  - docs
   - landing
   - demo/*
   - e2e/**
