@@ -39,7 +39,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 		schemaPrisma = getNewPrisma(provider, process.cwd());
 	}
 
-	// Update generator block for Prisma v7+ in existing schemas
+	// Update generator and datasource blocks for Prisma v7+ in existing schemas
 	const prismaVersion = getPrismaVersion(process.cwd());
 	if (prismaVersion && prismaVersion >= 7 && schemaPrismaExist) {
 		schemaPrisma = produceSchema(schemaPrisma, (builder) => {
@@ -52,6 +52,18 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 				);
 				if (providerProp && providerProp.value === '"prisma-client-js"') {
 					providerProp.value = '"prisma-client"';
+				}
+			}
+			// Remove url from datasource block (now configured in prisma.config.ts)
+			const datasource: any = builder.findByType("datasource", {
+				name: "db",
+			});
+			if (datasource && datasource.properties) {
+				const urlIndex = datasource.properties.findIndex(
+					(prop: any) => prop.type === "assignment" && prop.key === "url",
+				);
+				if (urlIndex !== -1) {
+					datasource.properties.splice(urlIndex, 1);
 				}
 			}
 		});
@@ -171,7 +183,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 						.attribute(`map("_id")`);
 				} else {
 					const useNumberId =
-						options.advanced?.database?.useNumberId ||
 						options.advanced?.database?.generateId === "serial";
 					const useUUIDs = options.advanced?.database?.generateId === "uuid";
 					if (useNumberId) {
@@ -207,9 +218,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					}
 				}
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				const useNumberId =
-					options.advanced?.database?.useNumberId ||
-					options.advanced?.database?.generateId === "serial";
+				const useNumberId = options.advanced?.database?.generateId === "serial";
 				const fieldBuilder = builder.model(modelName).field(
 					fieldName,
 					field === "id" && useNumberId
@@ -254,7 +263,7 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 								);
 								continue;
 							}
-							let jsonArray = [];
+							const jsonArray = [];
 							for (const value of attr.defaultValue) jsonArray.push(value);
 							fieldBuilder.attribute(
 								`default("${JSON.stringify(jsonArray).replace(/"/g, '\\"')}")`,
@@ -269,12 +278,12 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 							typeof attr.defaultValue[0] === "string" &&
 							attr.type === "string[]"
 						) {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(JSON.stringify(value));
 							fieldBuilder.attribute(`default([${valueArray}])`);
 						} else if (typeof attr.defaultValue[0] === "number") {
-							let valueArray = [];
+							const valueArray = [];
 							for (const value of attr.defaultValue)
 								valueArray.push(`${value}`);
 							fieldBuilder.attribute(`default([${valueArray}])`);
@@ -427,7 +436,6 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 					let indexField = fieldName;
 					if (provider === "mysql" && field && field.type === "string") {
 						const useNumberId =
-							options.advanced?.database?.useNumberId ||
 							options.advanced?.database?.generateId === "serial";
 						const useUUIDs = options.advanced?.database?.generateId === "uuid";
 						if (field.references?.field === "id" && (useNumberId || useUUIDs)) {
@@ -468,9 +476,20 @@ export const generatePrismaSchema: SchemaGenerator = async ({
 
 const getNewPrisma = (provider: string, cwd?: string) => {
 	const prismaVersion = getPrismaVersion(cwd);
+	const isV7 = prismaVersion && prismaVersion >= 7;
 	// Use "prisma-client" for Prisma v7+, otherwise use "prisma-client-js"
-	const clientProvider =
-		prismaVersion && prismaVersion >= 7 ? "prisma-client" : "prisma-client-js";
+	const clientProvider = isV7 ? "prisma-client" : "prisma-client-js";
+
+	// In Prisma v7+, the url is configured in prisma.config.ts instead of the schema
+	if (isV7) {
+		return `generator client {
+    provider = "${clientProvider}"
+  }
+
+  datasource db {
+    provider = "${provider}"
+  }`;
+	}
 
 	return `generator client {
     provider = "${clientProvider}"

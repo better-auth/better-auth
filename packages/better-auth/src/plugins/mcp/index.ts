@@ -15,10 +15,14 @@ import { createHash } from "@better-auth/utils/hash";
 import { SignJWT } from "jose";
 import * as z from "zod";
 import { APIError, getSessionFromCtx } from "../../api";
-import { parseSetCookieHeader } from "../../cookies";
+import { expireCookie, parseSetCookieHeader } from "../../cookies";
 import { generateRandomString } from "../../crypto";
 import { HIDE_METADATA } from "../../utils";
-import { getBaseURL } from "../../utils/url";
+import {
+	getBaseURL,
+	isDynamicBaseURLConfig,
+	resolveBaseURL,
+} from "../../utils/url";
 import type {
 	Client,
 	CodeVerificationValue,
@@ -32,8 +36,7 @@ import { parsePrompt } from "../oidc-provider/utils/prompt";
 import { authorizeMCPOAuth } from "./authorize";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		mcp: {
 			creator: typeof mcp;
 		};
@@ -50,7 +53,10 @@ export const getMCPProviderMetadata = (
 	ctx: GenericEndpointContext,
 	options?: OIDCOptions | undefined,
 ): OIDCMetadata => {
-	const issuer = ctx.context.options.baseURL as string;
+	const issuer =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: "";
 	const baseURL = ctx.context.baseURL;
 	if (!issuer || !baseURL) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -205,8 +211,9 @@ export const mcp = (options: MCPOptions) => {
 						if (!cookie || !hasSessionToken) {
 							return;
 						}
-						ctx.setCookie("oidc_login_prompt", "", {
-							maxAge: 0,
+						expireCookie(ctx, {
+							name: "oidc_login_prompt",
+							attributes: { path: "/" },
 						});
 						const sessionCookie = parsedSetCookieHeader.get(cookieName)?.value;
 						const sessionToken = sessionCookie?.split(".")[0]!;
@@ -639,7 +646,7 @@ export const mcp = (options: MCPOptions) => {
 							error: "invalid_grant",
 						});
 					}
-					let secretKey = {
+					const secretKey = {
 						alg: "HS256",
 						key: await getWebcryptoSubtle().generateKey(
 							{
@@ -978,7 +985,15 @@ export const withMcpAuth = <
 	) => Response | Promise<Response>,
 ) => {
 	return async (req: Request) => {
-		const baseURL = getBaseURL(auth.options.baseURL, auth.options.basePath);
+		const basePath = auth.options.basePath || "/api/auth";
+		const baseURL = isDynamicBaseURLConfig(auth.options.baseURL)
+			? resolveBaseURL(auth.options.baseURL, basePath, req)
+			: getBaseURL(
+					typeof auth.options.baseURL === "string"
+						? auth.options.baseURL
+						: undefined,
+					basePath,
+				);
 		if (!baseURL && !isProduction) {
 			logger.warn("Unable to get the baseURL, please check your config!");
 		}

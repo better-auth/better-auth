@@ -15,6 +15,7 @@ export {
 	type OnlineListener,
 	type OnlineManager,
 } from "./online-manager";
+export * from "./parser";
 export * from "./query";
 export * from "./session-refresh";
 export * from "./types";
@@ -35,7 +36,6 @@ export function InferAuth<O extends { options: BetterAuthOptions }>() {
 export type * from "@better-auth/core/db";
 export type { DBPrimitive } from "@better-auth/core/db";
 export type * from "@better-fetch/fetch";
-// @ts-expect-error
 export type * from "nanostores";
 export type * from "../plugins/access";
 export type * from "../plugins/organization";

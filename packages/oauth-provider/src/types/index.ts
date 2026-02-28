@@ -614,6 +614,56 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	disableJwtPlugin?: boolean;
+	/**
+	 * Rate limit configuration for OAuth endpoints.
+	 *
+	 * Each endpoint can be configured with a `window` (in seconds) and `max` requests.
+	 * Set to `false` to disable rate limiting for a specific endpoint.
+	 *
+	 * @default
+	 * ```ts
+	 * {
+	 *   token: { window: 60, max: 20 },
+	 *   authorize: { window: 60, max: 30 },
+	 *   introspect: { window: 60, max: 100 },
+	 *   revoke: { window: 60, max: 30 },
+	 *   register: { window: 60, max: 5 },
+	 *   userinfo: { window: 60, max: 60 },
+	 * }
+	 * ```
+	 */
+	rateLimit?: {
+		/**
+		 * Rate limit for /oauth2/token endpoint
+		 * @default { window: 60, max: 20 }
+		 */
+		token?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/authorize endpoint
+		 * @default { window: 60, max: 30 }
+		 */
+		authorize?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/introspect endpoint
+		 * @default { window: 60, max: 100 }
+		 */
+		introspect?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/revoke endpoint
+		 * @default { window: 60, max: 30 }
+		 */
+		revoke?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/register endpoint
+		 * @default { window: 60, max: 5 }
+		 */
+		register?: { window: number; max: number } | false;
+		/**
+		 * Rate limit for /oauth2/userinfo endpoint
+		 * @default { window: 60, max: 60 }
+		 */
+		userinfo?: { window: number; max: number } | false;
+	};
 }
 
 export interface OAuthAuthorizationQuery {
@@ -739,6 +789,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
+	authTime?: number;
 }
 
 /**
@@ -842,6 +893,15 @@ export interface SchemaClient<
 	 * - user-agent-based - A user-agent-based application (public client)
 	 */
 	type?: "web" | "native" | "user-agent-based";
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	requirePKCE?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
@@ -922,6 +982,11 @@ export interface OAuthRefreshToken<
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
+	/**
+	 * The time the user originally authenticated.
+	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
+	 */
+	authTime?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *

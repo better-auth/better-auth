@@ -96,7 +96,7 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it.each([
+	it.for([
 		"native",
 		"user-agent-based",
 	] as OAuthClient["type"][])("should fail with type '%s' check for confidential client request", async (type) => {
@@ -108,7 +108,7 @@ describe("oauth register", async () => {
 		expect(response.error?.status).toBe(400);
 	});
 
-	it.each([
+	it.for([
 		"native",
 		"user-agent-based",
 	] as OAuthClient["type"][])("should register public '%s' client with minimum requirements via server", async (type) => {
@@ -133,7 +133,7 @@ describe("oauth register", async () => {
 			scope: "create:test delete:test",
 			//---- Recommended client data ----//
 			user_id: "bad-actor",
-			client_id_issued_at: Math.round(Date.now() / 1000),
+			client_id_issued_at: Math.floor(Date.now() / 1000),
 			//---- UI Metadata ----//
 			client_name: "accept name",
 			client_uri: "https://example.com/ok",
@@ -229,7 +229,7 @@ describe("oauth register", async () => {
 		expect(response?.nested).toEqual({ key: "value" });
 	});
 
-	it("should register client with metadata and other extra fields", async () => {
+	it("should register client with metadata and strip extra fields not in schema", async () => {
 		const response = await auth.api.adminCreateOAuthClient({
 			headers,
 			body: {
@@ -241,9 +241,9 @@ describe("oauth register", async () => {
 			} as any,
 		});
 		expect(response?.client_id).toBeDefined();
-		// Both metadata and extra fields should be spread at the top level
+		// metadata contents should be spread at the top level, extra fields not in schema should be stripped
 		expect(response?.fromMetadata).toBe("value1");
-		expect(response?.customField).toBe("value2");
+		expect(response?.customField).toBe(undefined);
 	});
 });
 

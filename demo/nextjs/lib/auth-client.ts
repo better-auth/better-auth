@@ -1,3 +1,5 @@
+import { dashClient } from "@better-auth/dash/client";
+import { electronProxyClient } from "@better-auth/electron/proxy";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { passkeyClient } from "@better-auth/passkey/client";
 import { stripeClient } from "@better-auth/stripe/client";
@@ -17,6 +19,7 @@ import type { auth } from "./auth";
 
 export const authClient = createAuthClient({
 	plugins: [
+		dashClient(),
 		organizationClient(),
 		twoFactorClient({
 			onTwoFactorRedirect() {
@@ -39,6 +42,11 @@ export const authClient = createAuthClient({
 		customSessionClient<typeof auth>(),
 		deviceAuthorizationClient(),
 		lastLoginMethodClient(),
+		electronProxyClient({
+			protocol: {
+				scheme: "com.better-auth.demo",
+			},
+		}),
 	],
 	fetchOptions: {
 		onError(e) {

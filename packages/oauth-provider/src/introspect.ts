@@ -102,7 +102,7 @@ async function validateJwtAccessToken(
 	}
 
 	// Validate JWT against its session if it exists
-	let sessionId = jwtPayload.sid;
+	const sessionId = jwtPayload.sid;
 	if (sessionId) {
 		const session = await ctx.context.adapter.findOne<Session>({
 			model: "session",
@@ -236,8 +236,8 @@ async function validateOpaqueAccessToken(
 		client_id: accessToken.clientId,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(accessToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(accessToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(accessToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(accessToken.createdAt).getTime() / 1000),
 		scope: accessToken.scopes?.join(" "),
 	} as JWTPayload;
 }
@@ -323,8 +323,8 @@ async function validateRefreshToken(
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
 		sub: user?.id,
 		sid: sessionId,
-		exp: Math.floor(refreshToken.expiresAt.getTime() / 1000),
-		iat: Math.floor(refreshToken.createdAt.getTime() / 1000),
+		exp: Math.floor(new Date(refreshToken.expiresAt).getTime() / 1000),
+		iat: Math.floor(new Date(refreshToken.createdAt).getTime() / 1000),
 		scope: refreshToken.scopes?.join(" "),
 	} as JWTPayload;
 }

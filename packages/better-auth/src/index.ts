@@ -10,7 +10,7 @@ export * from "@better-auth/core/utils/error-codes";
 export * from "@better-auth/core/utils/id";
 export * from "@better-auth/core/utils/json";
 //#endregion
-export { betterAuth } from "./auth";
+export { betterAuth } from "./auth/full";
 // @ts-expect-error
 export * from "./types";
 export * from "./utils";

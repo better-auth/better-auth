@@ -12,12 +12,12 @@ The multi-session plugin allows users to maintain multiple active sessions acros
 ### Add the plugin to your **auth** config
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
-import { multiSession } from "better-auth/plugins"
+import { multiSession } from "better-auth/plugins"  // [!code highlight]
 
 export const auth = betterAuth({
-    plugins: [ // [!code highlight]
+    plugins: [
         multiSession(), // [!code highlight]
-    ] // [!code highlight]
+    ]
 })
 ```
 </Step>
@@ -28,11 +28,11 @@ export const auth = betterAuth({
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { multiSessionClient } from "better-auth/client/plugins"
+        import { multiSessionClient } from "better-auth/client/plugins"  // [!code highlight]
 
         export const authClient = createAuthClient({
             plugins: [
-                multiSessionClient()
+                multiSessionClient()  // [!code highlight]
             ]
         })
         ```
@@ -108,6 +108,7 @@ You can specify the maximum number of sessions a user can have by passing the `m
 
 ```ts title="auth.ts"
 import { betterAuth } from "better-auth"
+import { multiSession } from "better-auth/plugins"
 
 export const auth = betterAuth({
     plugins: [

@@ -170,6 +170,14 @@ export interface AuthServerMetadata {
 	 * @default ["S256"]
 	 */
 	code_challenge_methods_supported: "S256"[];
+	/**
+	 * Boolean value specifying whether the authorization server provides
+	 * the iss parameter in the authorization response (RFC 9207)
+	 *
+	 * @see https://datatracker.ietf.org/doc/html/rfc9207
+	 * @default true
+	 */
+	authorization_response_iss_parameter_supported?: boolean;
 }
 
 /**
@@ -290,6 +298,15 @@ export interface OAuthClient {
 	disabled?: boolean;
 	skip_consent?: boolean;
 	enable_end_session?: boolean;
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	require_pkce?: boolean;
 	//---- All other metadata ----//
 	reference_id?: string;
 	[key: string]: unknown;
