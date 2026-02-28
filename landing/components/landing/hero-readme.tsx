@@ -31,14 +31,14 @@ const cliCommands = [
 ];
 
 const mcpCommands = [
-	{ name: "Cursor", command: "npx @better-auth/cli mcp --cursor" },
+	{ name: "Cursor", command: "npx auth mcp --cursor" },
 	{
 		name: "Claude Code",
 		command:
 			"claude mcp add --transport http better-auth https://mcp.inkeep.com/better-auth/mcp",
 	},
-	{ name: "Open Code", command: "npx @better-auth/cli mcp --open-code" },
-	{ name: "Manual", command: "npx @better-auth/cli mcp --manual" },
+	{ name: "Open Code", command: "npx auth mcp --open-code" },
+	{ name: "Manual", command: "npx auth mcp --manual" },
 ];
 
 const aiPromptText = `Set up authentication in my project using Better Auth (better-auth npm package).
@@ -60,7 +60,7 @@ const aiPromptText = `Set up authentication in my project using Better Auth (bet
 
 5. Add BETTER_AUTH_SECRET to my .env if it doesn't exist (generate a 32+ char secret).
 
-6. Run npx @better-auth/cli migrate to apply database migrations.
+6. Run npx auth migrate to apply database migrations.
 
 Refer to better-auth.com/docs for exact API and plugin syntax.`;
 
