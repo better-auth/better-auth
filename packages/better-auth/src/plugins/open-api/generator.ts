@@ -80,6 +80,10 @@ export interface Path {
 type AllowedType = "string" | "number" | "boolean" | "array" | "object";
 const allowedType = new Set(["string", "number", "boolean", "array", "object"]);
 function getTypeFromZodType(zodType: z.ZodType<any>) {
+	// unwrap ZodDefault to get the inner type
+	if (zodType instanceof z.ZodDefault) {
+		return getTypeFromZodType(zodType.unwrap() as any);
+	}
 	const type = zodType.type;
 	return allowedType.has(type) ? (type as AllowedType) : "string";
 }
@@ -192,7 +196,7 @@ function getRequestBody(options: EndpointOptions): any {
 function processZodType(zodType: z.ZodType<any>): any {
 	// optional unwrapping
 	if (zodType instanceof z.ZodOptional) {
-		const innerType = (zodType as any)._def.innerType;
+		const innerType = zodType.unwrap() as any;
 		const innerSchema = processZodType(innerType);
 		if (innerSchema.type) {
 			const type = Array.isArray(innerSchema.type)
@@ -205,6 +209,20 @@ function processZodType(zodType: z.ZodType<any>): any {
 		}
 		return {
 			anyOf: [innerSchema, { type: "null" }],
+		};
+	}
+	// default unwrapping
+	if (zodType instanceof z.ZodDefault) {
+		const innerType = zodType.unwrap() as any;
+		const innerSchema = processZodType(innerType);
+		const defaultValueDef = (zodType as any)._def.defaultValue;
+		const defaultValue =
+			typeof defaultValueDef === "function"
+				? defaultValueDef()
+				: defaultValueDef;
+		return {
+			...innerSchema,
+			default: defaultValue,
 		};
 	}
 	// object unwrapping
@@ -407,10 +425,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 		const options = value.options as EndpointOptions;
 		if (options.metadata?.SERVER_ONLY) return;
 		const path = toOpenApiPath(value.path);
-		if (options.method === "GET" || options.method === "DELETE") {
+		const methods = Array.isArray(options.method)
+			? options.method
+			: [options.method];
+		for (const method of methods.filter((m) => m === "GET" || m === "DELETE")) {
 			paths[path] = {
 				...paths[path],
-				[options.method.toLowerCase()]: {
+				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -424,16 +445,13 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 				},
 			};
 		}
-
-		if (
-			options.method === "POST" ||
-			options.method === "PATCH" ||
-			options.method === "PUT"
-		) {
+		for (const method of methods.filter(
+			(m) => m === "POST" || m === "PATCH" || m === "PUT",
+		)) {
 			const body = getRequestBody(options);
 			paths[path] = {
 				...paths[path],
-				[options.method.toLowerCase()]: {
+				[method.toLowerCase()]: {
 					tags: ["Default", ...(options.metadata?.openapi?.tags || [])],
 					description: options.metadata?.openapi?.description,
 					operationId: options.metadata?.openapi?.operationId,
@@ -488,10 +506,15 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 			const options = value.options as EndpointOptions;
 			if (options.metadata?.SERVER_ONLY) return;
 			const path = toOpenApiPath(value.path);
-			if (options.method === "GET" || options.method === "DELETE") {
+			const methods = Array.isArray(options.method)
+				? options.method
+				: [options.method];
+			for (const method of methods.filter(
+				(m) => m === "GET" || m === "DELETE",
+			)) {
 				paths[path] = {
 					...paths[path],
-					[options.method.toLowerCase()]: {
+					[method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],
@@ -507,14 +530,12 @@ export async function generator(ctx: AuthContext, options: BetterAuthOptions) {
 					},
 				};
 			}
-			if (
-				options.method === "POST" ||
-				options.method === "PATCH" ||
-				options.method === "PUT"
-			) {
+			for (const method of methods.filter(
+				(m) => m === "POST" || m === "PATCH" || m === "PUT",
+			)) {
 				paths[path] = {
 					...paths[path],
-					[options.method.toLowerCase()]: {
+					[method.toLowerCase()]: {
 						tags: options.metadata?.openapi?.tags || [
 							plugin.id.charAt(0).toUpperCase() + plugin.id.slice(1),
 						],

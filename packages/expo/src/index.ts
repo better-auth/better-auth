@@ -10,6 +10,14 @@ export interface ExpoOptions {
 	disableOriginOverride?: boolean | undefined;
 }
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		expo: {
+			creator: typeof expo;
+		};
+	}
+}
+
 export const expo = (options?: ExpoOptions | undefined) => {
 	return {
 		id: "expo",
@@ -35,8 +43,12 @@ export const expo = (options?: ExpoOptions | undefined) => {
 			if (!expoOrigin) {
 				return;
 			}
-			const req = request.clone();
-			req.headers.set("origin", expoOrigin);
+
+			// Construct new Headers with new Request to avoid mutating the original request
+			const newHeaders = new Headers(request.headers);
+			newHeaders.set("origin", expoOrigin);
+			const req = new Request(request, { headers: newHeaders });
+
 			return {
 				request: req,
 			};
@@ -62,12 +74,19 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						if (isProxyURL) {
 							return;
 						}
-						const trustedOrigins = ctx.context.trustedOrigins.filter(
-							(origin: string) => !origin.startsWith("http"),
-						);
-						const isTrustedOrigin = trustedOrigins.some((origin: string) =>
-							location?.startsWith(origin),
-						);
+						let redirectURL: URL;
+						try {
+							redirectURL = new URL(location);
+						} catch {
+							return;
+						}
+						const isHttpRedirect =
+							redirectURL.protocol === "http:" ||
+							redirectURL.protocol === "https:";
+						if (isHttpRedirect) {
+							return;
+						}
+						const isTrustedOrigin = ctx.context.isTrustedOrigin(location);
 						if (!isTrustedOrigin) {
 							return;
 						}
@@ -75,9 +94,8 @@ export const expo = (options?: ExpoOptions | undefined) => {
 						if (!cookie) {
 							return;
 						}
-						const url = new URL(location);
-						url.searchParams.set("cookie", cookie);
-						ctx.setHeader("location", url.toString());
+						redirectURL.searchParams.set("cookie", cookie);
+						ctx.setHeader("location", redirectURL.toString());
 					}),
 				},
 			],

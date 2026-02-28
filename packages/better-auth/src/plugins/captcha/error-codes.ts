@@ -1,5 +1,5 @@
 // These error codes are returned by the API
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const EXTERNAL_ERROR_CODES = defineErrorCodes({
 	VERIFICATION_FAILED: "Captcha verification failed",

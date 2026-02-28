@@ -1,12 +1,12 @@
 import type { BetterAuthOptions } from "@better-auth/core";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+	expireCookie,
 	getCookieCache,
 	getCookies,
 	getSessionCookie,
 	parseCookies,
 } from "../cookies";
-import { parseUserOutput } from "../db/schema";
 import { getTestInstance } from "../test-utils/test-instance";
 import {
 	HOST_COOKIE_PREFIX,
@@ -37,15 +37,25 @@ describe("cookies", async () => {
 	});
 
 	it("should set multiple cookies", async () => {
-		await client.signIn.social(
+		const { client, testUser } = await getTestInstance({
+			session: {
+				cookieCache: {
+					enabled: true,
+				},
+			},
+		});
+		await client.signIn.email(
 			{
-				provider: "github",
-				callbackURL: "https://example.com",
+				email: testUser.email,
+				password: testUser.password,
 			},
 			{
 				onSuccess(context) {
 					const cookies = context.response.headers.get("Set-Cookie");
-					expect(cookies?.split(",").length).toBeGreaterThan(1);
+					expect(cookies).toBeDefined();
+					const parsed = parseSetCookieHeader(cookies!);
+					// With cookie cache enabled, we should have session_token and session_data cookies
+					expect(parsed.size).toBeGreaterThan(1);
 				},
 			},
 		);
@@ -86,6 +96,43 @@ describe("cookies", async () => {
 				},
 			},
 		);
+	});
+
+	describe("production environment", () => {
+		afterEach(() => {
+			vi.unstubAllEnvs();
+			vi.resetModules();
+		});
+
+		it("should use secure cookies when baseURL is not configured", async () => {
+			// Set NODE_ENV to production
+			vi.stubEnv("NODE_ENV", "production");
+
+			// Reset modules to reload with new NODE_ENV
+			vi.resetModules();
+
+			// Re-import modules after NODE_ENV change
+			const { getTestInstance: getTestInstanceReloaded } = await import(
+				"../test-utils/test-instance"
+			);
+
+			const { client, testUser } = await getTestInstanceReloaded({
+				baseURL: undefined,
+			});
+
+			await client.signIn.email(
+				{
+					email: testUser.email,
+					password: testUser.password,
+				},
+				{
+					onResponse(context) {
+						const setCookie = context.response.headers.get("set-cookie");
+						expect(setCookie).toContain("Secure");
+					},
+				},
+			);
+		});
 	});
 });
 
@@ -157,10 +204,10 @@ describe("cookie configuration", () => {
 
 		const cookies = getCookies(options);
 
-		expect(cookies.sessionToken.options.secure).toBe(true);
+		expect(cookies.sessionToken.attributes.secure).toBe(true);
 		expect(cookies.sessionToken.name).toContain("test-prefix.session_token");
-		expect(cookies.sessionData.options.sameSite).toBe("lax");
-		expect(cookies.sessionData.options.domain).toBe("example.com");
+		expect(cookies.sessionData.attributes.sameSite).toBe("lax");
+		expect(cookies.sessionData.attributes.domain).toBe("example.com");
 	});
 });
 
@@ -171,6 +218,24 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		const map = parseSetCookieHeader(header);
 		expect(map.get("a")?.value).toBe("1");
 		expect(map.get("b")?.value).toBe("2");
+		expect(map.get("a")?.expires).toEqual(
+			new Date("Wed, 21 Oct 2015 07:28:00 GMT"),
+		);
+		expect(map.get("b")?.expires).toEqual(
+			new Date("Thu, 22 Oct 2015 07:28:00 GMT"),
+		);
+	});
+
+	it("handles cookie with Expires followed by cookie without Expires", () => {
+		const map = parseSetCookieHeader(
+			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
+		);
+		expect(map.get("session")?.value).toBe("xyz");
+		expect(map.get("session")?.expires).toEqual(
+			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+		);
+		expect(map.get("token")?.value).toBe("abc");
+		expect(map.get("token")?.expires).toBeUndefined();
 	});
 });
 
@@ -238,6 +303,55 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
+	it("should work with Headers object directly", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Pass Headers object directly (simulating Next.js ReadonlyHeaders from `await headers()`)
+		const cookies = getSessionCookie(headers);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with Headers-like object that has inherited 'headers' property", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		class ReadonlyHeadersLike extends Headers {
+			// This property exists in the prototype chain, making "headers" in obj return true
+			get headers(): undefined {
+				return undefined;
+			}
+		}
+
+		const readonlyHeaders = new ReadonlyHeadersLike();
+		// Copy cookies from original headers
+		const cookieValue = headers.get("cookie");
+		if (cookieValue) {
+			readonlyHeaders.set("cookie", cookieValue);
+		}
+
+		const cookies = getSessionCookie(readonlyHeaders);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
+	it("should work with cross-realm Headers-like object (instanceof fails)", async () => {
+		const { signInWithTestUser } = await getTestInstance();
+		const { headers } = await signInWithTestUser();
+
+		// Simulate cross-realm Headers where instanceof check fails
+		// See: https://github.com/better-auth/better-auth/pull/1838
+		const crossRealmHeaders = {
+			get: (name: string) => headers.get(name),
+			has: (name: string) => headers.has(name),
+		};
+
+		const cookies = getSessionCookie(crossRealmHeaders as Headers);
+		expect(cookies).not.toBeNull();
+		expect(cookies).toBeDefined();
+	});
+
 	it("should return the correct session cookie on production", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			baseURL: "https://example.com",
@@ -260,7 +374,37 @@ describe("getSessionCookie", async () => {
 		expect(cookies).toBeDefined();
 	});
 
-	it("should allow override cookie prefix", async () => {
+	describe.each([".", "-"])("with '%s' separator", (separator) => {
+		describe.each([
+			["", "regular"],
+			[SECURE_COOKIE_PREFIX, "secure"],
+		])("with %s prefix (%s)", (securePrefix) => {
+			it.each([
+				[{}, "better-auth", "session_token"],
+				[{ cookiePrefix: "myprefix" }, "myprefix", "session_token"],
+				[{ cookieName: "my_token" }, "better-auth", "my_token"],
+				[
+					{ cookiePrefix: "myprefix", cookieName: "my_token" },
+					"myprefix",
+					"my_token",
+				],
+			])("finds cookie with config %j", (config, prefix, name) => {
+				const headers = new Headers();
+				headers.set(
+					"cookie",
+					`${securePrefix}${prefix}${separator}${name}=token-123`,
+				);
+
+				const request = new Request("https://example.com/api/auth/session", {
+					headers,
+				});
+
+				expect(getSessionCookie(request, config)).toBe("token-123");
+			});
+		});
+	});
+
+	it("should allow override cookie prefix with secure cookies", async () => {
 		const { client, testUser, cookieSetter } = await getTestInstance({
 			advanced: {
 				useSecureCookies: true,
@@ -604,26 +748,6 @@ describe("Cookie Cache Field Filtering", () => {
 		// Fields with returned: false should be excluded
 		expect(cache?.user?.internalNotes).toBeUndefined();
 		expect(cache?.user?.adminFlags).toBeUndefined();
-	});
-
-	it("should always include id in parseUserOutput", () => {
-		const options = {
-			user: {
-				additionalFields: {
-					id: { type: "string", returned: false },
-				},
-			},
-		} as any;
-		const user = {
-			id: "custom-oauth-id-123",
-			email: "test@example.com",
-			emailVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date(),
-			name: "Test User",
-		};
-		const result = parseUserOutput(options, user);
-		expect(result.id).toBe("custom-oauth-id-123");
 	});
 
 	it("should reduce cookie size when large fields are excluded", async () => {
@@ -1192,5 +1316,23 @@ describe("parse cookies", () => {
 		expect(parsedCookies.get("better-auth.session_data")).toBe(
 			"session-data.signature=",
 		);
+	});
+});
+
+describe("expireCookie", () => {
+	it("preserves attributes", () => {
+		const setCookie = vi.fn();
+		expireCookie({ setCookie } as any, {
+			name: "test",
+			attributes: {
+				path: "/custom",
+				httpOnly: true,
+			},
+		});
+		expect(setCookie).toHaveBeenCalledWith("test", "", {
+			path: "/custom",
+			httpOnly: true,
+			maxAge: 0,
+		});
 	});
 });

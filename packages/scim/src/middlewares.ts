@@ -1,5 +1,5 @@
 import { base64Url } from "@better-auth/utils/base64";
-import { createAuthMiddleware } from "better-auth/plugins";
+import { createAuthMiddleware } from "better-auth/api";
 import { SCIMAPIError } from "./scim-error";
 import { verifySCIMToken } from "./scim-tokens";
 import type { SCIMOptions, SCIMProvider } from "./types";
@@ -33,7 +33,30 @@ export const authMiddlewareFactory = (opts: SCIMOptions) =>
 			});
 		}
 
-		const scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
+		let scimProvider: Omit<SCIMProvider, "id"> | null =
+			opts.defaultSCIM?.find((p) => {
+				if (p.providerId === providerId && !organizationId) {
+					return true;
+				}
+
+				return !!(
+					p.providerId === providerId &&
+					organizationId &&
+					p.organizationId === organizationId
+				);
+			}) ?? null;
+
+		if (scimProvider) {
+			if (scimProvider.scimToken === scimToken) {
+				return { authSCIMToken: scimProvider.scimToken, scimProvider };
+			} else {
+				throw new SCIMAPIError("UNAUTHORIZED", {
+					detail: "Invalid SCIM token",
+				});
+			}
+		}
+
+		scimProvider = await ctx.context.adapter.findOne<SCIMProvider>({
 			model: "scimProvider",
 			where: [
 				{ field: "providerId", value: providerId },

@@ -1,5 +1,6 @@
 import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx, sessionMiddleware } from "../../../api";
@@ -137,7 +138,20 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 			const membershipLimit = ctx.context.orgOptions?.membershipLimit || 100;
 			const count = await adapter.countMembers({ organizationId: orgId });
 
-			if (count >= membershipLimit) {
+			const organization = await adapter.findOrganizationById(orgId);
+			if (!organization) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
+			}
+
+			const limit =
+				typeof membershipLimit === "number"
+					? membershipLimit
+					: await membershipLimit(user, organization);
+
+			if (count >= limit) {
 				throw APIError.from(
 					"FORBIDDEN",
 					ORGANIZATION_ERROR_CODES.ORGANIZATION_MEMBERSHIP_LIMIT_REACHED,
@@ -150,14 +164,6 @@ export const addMember = <O extends OrganizationOptions>(option: O) => {
 				organizationId: ___,
 				...additionalFields
 			} = ctx.body;
-
-			const organization = await adapter.findOrganizationById(orgId);
-			if (!organization) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
-				);
-			}
 
 			let memberData = {
 				organizationId: orgId,
@@ -294,7 +300,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 					ORGANIZATION_ERROR_CODES.MEMBER_NOT_FOUND,
 				);
 			}
-			let toBeRemovedMember: InferMember<O, false> | null = null;
+			let toBeRemovedMember: InferMember<O> | null = null;
 			if (ctx.body.memberIdOrEmail.includes("@")) {
 				toBeRemovedMember = await adapter.findMemberByEmail({
 					email: ctx.body.memberIdOrEmail,
@@ -305,7 +311,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 				if (!result) toBeRemovedMember = null;
 				else {
 					const { user: _user, ...member } = result;
-					toBeRemovedMember = member as unknown as InferMember<O, false>;
+					toBeRemovedMember = member as unknown as InferMember<O>;
 				}
 			}
 			if (!toBeRemovedMember) {
@@ -874,9 +880,11 @@ export const listMembers = <O extends OrganizationOptions>(options: O) =>
 						})
 						.or(z.number())
 						.or(z.boolean())
+						.or(z.array(z.string()))
+						.or(z.array(z.number()))
 						.optional(),
 					filterOperator: z
-						.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+						.enum(whereOperators)
 						.meta({
 							description: "The operator to use for the filter",
 						})

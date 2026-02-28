@@ -8,13 +8,21 @@ import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { createEmailVerificationToken } from "../../api";
 import { setSessionCookie } from "../../cookies";
-import { mergeSchema } from "../../db";
+import { mergeSchema, parseUserOutput } from "../../db";
 import type { InferOptionSchema } from "../../types/plugins";
 import { USERNAME_ERROR_CODES as ERROR_CODES } from "./error-codes";
 import type { UsernameSchema } from "./schema";
 import { getSchema } from "./schema";
 
 export { USERNAME_ERROR_CODES } from "./error-codes";
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		username: {
+			creator: typeof username;
+		};
+	}
+}
 
 export type UsernameOptions = {
 	schema?: InferOptionSchema<UsernameSchema> | undefined;
@@ -389,12 +397,10 @@ export const username = (options?: UsernameOptions | undefined) => {
 						ctx.body.rememberMe === false,
 					);
 					if (!session) {
-						return ctx.json(null, {
-							status: 500,
-							body: {
-								message: BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION.message,
-							},
-						});
+						throw APIError.from(
+							"INTERNAL_SERVER_ERROR",
+							BASE_ERROR_CODES.FAILED_TO_CREATE_SESSION,
+						);
 					}
 					await setSessionCookie(
 						ctx,
@@ -403,17 +409,7 @@ export const username = (options?: UsernameOptions | undefined) => {
 					);
 					return ctx.json({
 						token: session.token,
-						user: {
-							id: user.id,
-							email: user.email,
-							emailVerified: user.emailVerified,
-							username: user.username,
-							displayUsername: user.displayUsername,
-							name: user.name,
-							image: user.image,
-							createdAt: user.createdAt,
-							updatedAt: user.updatedAt,
-						},
+						user: parseUserOutput(ctx.context.options, user),
 					});
 				},
 			),

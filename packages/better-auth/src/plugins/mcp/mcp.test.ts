@@ -750,4 +750,104 @@ describe("mcp", async () => {
 			);
 		});
 	});
+
+	describe("OAuth cookie persistence", () => {
+		it("should redirect back to client after login, not to /api/auth/error", async ({
+			expect,
+		}) => {
+			// Use unique email to avoid conflicts with other test runs
+			const uniqueEmail = `test-${Date.now()}@test.com`;
+			const password = "testpassword123";
+
+			// Create a test user
+			await customFetchImpl(`${baseURL}/api/auth/sign-up/email`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					email: uniqueEmail,
+					password: password,
+					name: "Test User",
+				}),
+			});
+
+			// Register a test client
+			const testClient = await serverClient.$fetch("/mcp/register", {
+				method: "POST",
+				body: {
+					client_name: "test-magiclink-client",
+					redirect_uris: [
+						"http://localhost:3000/api/auth/oauth2/callback/magiclink-test",
+					],
+					token_endpoint_auth_method: "none",
+				},
+			});
+
+			const clientId = (testClient.data as any).client_id;
+			const redirectUri = (testClient.data as any).redirect_uris[0];
+
+			// Logout to simulate unauthenticated user
+			await serverClient.$fetch("/sign-out", {
+				method: "POST",
+			});
+
+			// Initiate OAuth authorization without being logged in
+			const authURL = new URL(`${baseURL}/api/auth/mcp/authorize`);
+			authURL.searchParams.set("client_id", clientId);
+			authURL.searchParams.set("redirect_uri", redirectUri);
+			authURL.searchParams.set("response_type", "code");
+			authURL.searchParams.set("scope", "openid profile email");
+			authURL.searchParams.set("state", "magiclink-test-state");
+			authURL.searchParams.set("code_challenge", "test-challenge-magiclink");
+			authURL.searchParams.set("code_challenge_method", "S256");
+
+			let redirectLocation = "";
+			const oidcHeaders = new Headers();
+
+			await customFetchImpl(authURL.toString(), {
+				method: "GET",
+				redirect: "manual",
+			}).then((res) => {
+				redirectLocation = res.headers.get("Location") || "";
+				// Capture oidc_login_prompt cookie
+				const setCookie = res.headers.get("set-cookie");
+				if (setCookie) {
+					oidcHeaders.set("Cookie", setCookie);
+				}
+			});
+
+			// Should redirect to login page with oidc_login_prompt cookie set
+			expect(redirectLocation).toContain("/login");
+			expect(oidcHeaders.get("Cookie")).toContain("oidc_login_prompt");
+
+			const oidcCookie = oidcHeaders.get("Cookie")?.split(";")[0] || "";
+
+			const user = await customFetchImpl(`${baseURL}/api/auth/sign-in/email`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+					Cookie: oidcCookie,
+				},
+				body: JSON.stringify({
+					email: uniqueEmail,
+					password: password,
+				}),
+				redirect: "manual",
+			});
+			redirectLocation = user.headers.get("Location") || "";
+
+			// Verify the redirect after authenticated login
+			expect(redirectLocation).not.toContain("error=invalid_client");
+			expect(redirectLocation).not.toContain("/api/auth/error");
+
+			// Should either redirect to consent or directly to callback with code
+			const shouldHaveValidRedirect =
+				redirectLocation.includes("consent_code=") ||
+				(redirectLocation.includes(redirectUri) &&
+					redirectLocation.includes("code="));
+
+			expect(shouldHaveValidRedirect).toBe(true);
+		});
+	});
 });

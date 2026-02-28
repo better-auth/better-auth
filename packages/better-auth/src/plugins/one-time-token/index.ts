@@ -13,6 +13,14 @@ import { generateRandomString } from "../../crypto";
 import type { Session, User } from "../../types";
 import { defaultKeyHasher } from "./utils";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"one-time-token": {
+			creator: typeof oneTimeToken;
+		};
+	}
+}
+
 export interface OneTimeTokenOptions {
 	/**
 	 * Expires in minutes
