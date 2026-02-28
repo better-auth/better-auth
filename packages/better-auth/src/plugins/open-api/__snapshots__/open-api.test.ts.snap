@@ -5018,6 +5018,156 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
         ],
       },
     },
+    "/validate-reset-password-token": {
+      "post": {
+        "description": "Validate a password reset token without consuming it",
+        "operationId": undefined,
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "token": {
+                    "description": "The token to validate",
+                    "type": "string",
+                  },
+                },
+                "required": [
+                  "token",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                    "valid": {
+                      "type": "boolean",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Token validation result",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Bad Request. Usually due to missing parameters, or invalid parameters.",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "required": [
+                    "message",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Unauthorized. Due to missing or invalid authentication.",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Forbidden. You do not have permission to access this resource or to perform this action.",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Not Found. The requested resource was not found.",
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Too Many Requests. You have exceeded the rate limit. Try again later.",
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Internal Server Error. This is a problem with the server that you cannot fix.",
+          },
+        },
+        "security": [
+          {
+            "bearerAuth": [],
+          },
+        ],
+        "tags": [
+          "Default",
+        ],
+      },
+    },
     "/verify-email": {
       "get": {
         "description": "Verify the email of the user",
