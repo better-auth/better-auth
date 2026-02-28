@@ -789,6 +789,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
+	authTime?: number;
 }
 
 /**
@@ -892,6 +893,15 @@ export interface SchemaClient<
 	 * - user-agent-based - A user-agent-based application (public client)
 	 */
 	type?: "web" | "native" | "user-agent-based";
+	/**
+	 * Whether this client requires PKCE for authorization code flow.
+	 *
+	 * @default true
+	 *
+	 * Note: PKCE is always required for public clients and when
+	 * requesting offline_access scope, regardless of this setting.
+	 */
+	requirePKCE?: boolean;
 	//---- All other metadata ----//
 	/** Used to indicate if consent screen can be skipped */
 	skipConsent?: boolean;
@@ -972,6 +982,11 @@ export interface OAuthRefreshToken<
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
+	/**
+	 * The time the user originally authenticated.
+	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
+	 */
+	authTime?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *

@@ -294,10 +294,9 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-
-			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			const isTrustedProvider = c.context.trustedProviders.includes(
+				provider.id,
+			);
 			if (
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -309,7 +308,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			if (
-				linkingUserInfo.user.email !== session.user.email &&
+				linkingUserInfo.user.email?.toLowerCase() !==
+					session.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				throw APIError.from("UNAUTHORIZED", {
@@ -560,11 +560,12 @@ export const getAccessToken = createAuthEndpoint(
 				const updatedData = {
 					accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
 					accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
-					refreshToken: await setTokenUtil(
-						newTokens?.refreshToken,
-						ctx.context,
-					),
-					refreshTokenExpiresAt: newTokens?.refreshTokenExpiresAt,
+					refreshToken: newTokens?.refreshToken
+						? await setTokenUtil(newTokens.refreshToken, ctx.context)
+						: account.refreshToken,
+					refreshTokenExpiresAt:
+						newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
+					idToken: newTokens?.idToken || account.idToken,
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {
@@ -754,13 +755,19 @@ export const refreshToken = createAuthEndpoint(
 				decryptedRefreshToken,
 			);
 
+			const resolvedRefreshToken = tokens.refreshToken
+				? await setTokenUtil(tokens.refreshToken, ctx.context)
+				: refreshToken;
+			const resolvedRefreshTokenExpiresAt =
+				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+
 			if (account.id) {
 				const updateData = {
 					...(account || {}),
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || account.scope,
 					idToken: tokens.idToken || account.idToken,
 				};
@@ -775,9 +782,9 @@ export const refreshToken = createAuthEndpoint(
 				const updateData = {
 					...accountData,
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken || accountData.idToken,
 				};
@@ -785,9 +792,9 @@ export const refreshToken = createAuthEndpoint(
 			}
 			return ctx.json({
 				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
+				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: tokens.scopes?.join(",") || account.scope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,

@@ -201,7 +201,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMember = useAuthQuery<Member>(
-				[$activeMemberSignal],
+				[$activeOrgSignal, $activeMemberSignal],
 				"/organization/get-active-member",
 				$fetch,
 				{
@@ -210,7 +210,7 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			);
 
 			const activeMemberRole = useAuthQuery<{ role: string }>(
-				[$activeMemberRoleSignal],
+				[$activeOrgSignal, $activeMemberRoleSignal],
 				"/organization/get-active-member-role",
 				$fetch,
 				{
@@ -252,7 +252,14 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 			},
 			{
 				matcher(path) {
-					return path.startsWith("/organization/set-active");
+					return (
+						path.startsWith("/organization/set-active") ||
+						path === "/organization/create" ||
+						path === "/organization/delete" ||
+						path === "/organization/remove-member" ||
+						path === "/organization/leave" ||
+						path === "/organization/accept-invitation"
+					);
 				},
 				signal: "$sessionSignal",
 			},

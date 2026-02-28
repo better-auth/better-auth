@@ -22,29 +22,28 @@
     "@better-auth/electron": "workspace:*",
     "@electron-toolkit/utils": "^4.0.0",
     "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-slot": "^1.2.3",
+    "@radix-ui/react-slot": "^1.2.4",
     "better-auth": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "conf": "^15.0.2",
+    "conf": "^15.1.0",
     "electron-store": "^11.0.2",
-    "tailwind-merge": "^3.3.1",
+    "tailwind-merge": "^3.5.0",
     "tailwindcss-animate": "catalog:tailwind"
   },
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@tailwindcss/vite": "catalog:tailwind",
-    "@types/node": "^22.19.1",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
-    "@vitejs/plugin-react": "^5.1.1",
-    "electron": "^39.2.6",
-    "electron-builder": "^26.0.12",
+    "@vitejs/plugin-react": "^5.1.4",
+    "electron": "^39.7.0",
+    "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:tailwind",
     "typescript": "catalog:",
-    "vite": "^7.2.6"
+    "vite": "^7.3.1"
   }
 }

@@ -86,13 +86,19 @@ export async function signJWT(
 	// Nbf
 	const nbf = payload.nbf!;
 
+	// At handler-time, options.baseURL is always a resolved string origin
+	const baseURLOrigin =
+		typeof ctx.context.options.baseURL === "string"
+			? ctx.context.options.baseURL
+			: "";
+
 	// Iss
 	const iss = payload.iss;
-	const defaultIss = options?.jwt?.issuer ?? ctx.context.options.baseURL!;
+	const defaultIss = options?.jwt?.issuer ?? baseURLOrigin;
 
 	// Aud
 	const aud = payload.aud;
-	const defaultAud = options?.jwt?.audience ?? ctx.context.options.baseURL!;
+	const defaultAud = options?.jwt?.audience ?? baseURLOrigin;
 
 	// Custom/remote signing function
 	if (options?.jwt?.sign) {

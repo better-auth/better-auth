@@ -182,9 +182,13 @@ export const generatePasskeyRegistrationOptions = (
 			const userID = new TextEncoder().encode(
 				generateRandomString(32, "a-z", "0-9"),
 			);
+			const baseURLString =
+				typeof ctx.context.options.baseURL === "string"
+					? ctx.context.options.baseURL
+					: undefined;
 			const options = await generateRegistrationOptions({
 				rpName: opts.rpName || ctx.context.appName,
-				rpID: getRpID(opts, ctx.context.options.baseURL),
+				rpID: getRpID(opts, baseURLString),
 				userID,
 				userName: ctx.query?.name || session.user.email || session.user.id,
 				userDisplayName: session.user.email || session.user.id,
@@ -350,8 +354,12 @@ export const generatePasskeyAuthenticationOptions = (
 					],
 				});
 			}
+			const baseURLString =
+				typeof ctx.context.options.baseURL === "string"
+					? ctx.context.options.baseURL
+					: undefined;
 			const options = await generateAuthenticationOptions({
-				rpID: getRpID(opts, ctx.context.options.baseURL),
+				rpID: getRpID(opts, baseURLString),
 				userVerification: "preferred",
 				...(userPasskeys.length
 					? {
@@ -437,9 +445,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 		async (ctx) => {
 			const origin = options?.origin || ctx.headers?.get("origin") || "";
 			if (!origin) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+				);
 			}
 			const resp = ctx.body.response;
 			const webAuthnCookie = ctx.context.createAuthCookie(
@@ -461,9 +470,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 					verificationToken,
 				);
 			if (!data) {
-				return ctx.json(null, {
-					status: 400,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					PASSKEY_ERROR_CODES.CHALLENGE_NOT_FOUND,
+				);
 			}
 			const { expectedChallenge, userData } = JSON.parse(
 				data.value,
@@ -477,18 +487,23 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) =>
 			}
 
 			try {
+				const verifyBaseURL =
+					typeof ctx.context.options.baseURL === "string"
+						? ctx.context.options.baseURL
+						: undefined;
 				const verification = await verifyRegistrationResponse({
 					response: resp,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, ctx.context.options.baseURL),
+					expectedRPID: getRpID(options, verifyBaseURL),
 					requireUserVerification: false,
 				});
 				const { verified, registrationInfo } = verification;
 				if (!verified || !registrationInfo) {
-					return ctx.json(null, {
-						status: 400,
-					});
+					throw APIError.from(
+						"BAD_REQUEST",
+						PASSKEY_ERROR_CODES.FAILED_TO_VERIFY_REGISTRATION,
+					);
 				}
 				const { aaguid, credentialDeviceType, credentialBackedUp, credential } =
 					registrationInfo;
@@ -621,11 +636,15 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 			try {
+				const authBaseURL =
+					typeof ctx.context.options.baseURL === "string"
+						? ctx.context.options.baseURL
+						: undefined;
 				const verification = await verifyAuthenticationResponse({
 					response: resp as AuthenticationResponseJSON,
 					expectedChallenge,
 					expectedOrigin: origin,
-					expectedRPID: getRpID(options, ctx.context.options.baseURL),
+					expectedRPID: getRpID(options, authBaseURL),
 					credential: {
 						id: passkey.credentialID,
 						publicKey: base64.decode(passkey.publicKey),

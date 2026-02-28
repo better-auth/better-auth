@@ -164,6 +164,32 @@ import { authClient } from "@/lib/auth-client"
 await authClient.revokeSessions()
 ```
 
+### Update Session
+
+If you have [additional fields](/docs/concepts/database#extending-core-schema) configured on the session, you can update them using the `updateSession` function.
+
+```ts title="auth-client.ts"
+import { authClient } from "@/lib/auth-client"
+
+await authClient.updateSession({
+    theme: "dark",
+    language: "en",
+})
+```
+
+Core session fields (`token`, `userId`, `expiresAt`, `createdAt`, `updatedAt`, `ipAddress`, `userAgent`) cannot be updated through this endpoint. Only custom additional fields are allowed.
+
+On the server:
+
+```ts title="server.ts"
+await auth.api.updateSession({
+    body: {
+        theme: "dark",
+    },
+    headers: await headers() // headers containing the user's session token
+});
+```
+
 ### Revoking Sessions on Password Change
 
 You can revoke all sessions when the user changes their password by passing `revokeOtherSessions` as true on `changePassword` function.

@@ -550,6 +550,179 @@ describe("base context creation", () => {
 		});
 	});
 
+	describe("trusted providers", () => {
+		it("should include static trusted providers", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: ["google", "github"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("github");
+		});
+
+		it("should resolve dynamic trusted providers from function", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: async () => ["google", "microsoft"],
+					},
+				},
+			});
+			expect(res.trustedProviders).toContain("google");
+			expect(res.trustedProviders).toContain("microsoft");
+		});
+
+		it("should return empty array when no trusted providers configured", async () => {
+			const res = await initBase({
+				baseURL: "http://localhost:3000",
+			});
+			expect(res.trustedProviders).toEqual([]);
+		});
+
+		it("should pass request to dynamic trustedProviders function", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(["google", "github"]),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			await auth.handler(request);
+
+			expect(trustedProvidersFn).toHaveBeenCalledWith(request);
+		});
+
+		it("should re-resolve trustedProviders per request and pass the Request to the resolver", async () => {
+			const trustedProvidersList = ["provider-a", "provider-b"];
+			const trustedProvidersFn = vi.fn((request?: Request) =>
+				Promise.resolve(trustedProvidersList),
+			);
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const request = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers",
+			);
+			const response = await auth.handler(request);
+			const data = (await response.json()) as { trustedProviders: string[] };
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(2);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, request);
+			expect(data.trustedProviders).toEqual(trustedProvidersList);
+		});
+
+		it("should use request-dependent trustedProviders when resolver returns different lists per request", async () => {
+			const trustedProvidersFn = vi.fn((request?: Request) => {
+				if (!request?.url) return Promise.resolve([]);
+				const url = new URL(request.url);
+				return Promise.resolve(
+					url.searchParams.get("variant") === "first"
+						? ["google", "github"]
+						: ["microsoft", "apple"],
+				);
+			});
+
+			const { auth } = await getTestInstance({
+				baseURL: "http://localhost:3000",
+				account: {
+					accountLinking: {
+						trustedProviders: trustedProvidersFn,
+					},
+				},
+				plugins: [
+					{
+						id: "test-trusted-providers",
+						endpoints: {
+							getTrustedProviders: createAuthEndpoint(
+								"/test-trusted-providers",
+								{ method: "GET" },
+								async (ctx) =>
+									ctx.json({
+										trustedProviders: ctx.context.trustedProviders,
+									}),
+							),
+						},
+					},
+				],
+			});
+
+			const requestFirst = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=first",
+			);
+			const responseFirst = await auth.handler(requestFirst);
+			const dataFirst = (await responseFirst.json()) as {
+				trustedProviders: string[];
+			};
+
+			const requestSecond = new Request(
+				"http://localhost:3000/api/auth/test-trusted-providers?variant=second",
+			);
+			const responseSecond = await auth.handler(requestSecond);
+			const dataSecond = (await responseSecond.json()) as {
+				trustedProviders: string[];
+			};
+
+			// Called once during init (request undefined) and once per request
+			expect(trustedProvidersFn).toHaveBeenCalledTimes(3);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(2, requestFirst);
+			expect(trustedProvidersFn).toHaveBeenNthCalledWith(3, requestSecond);
+			expect(dataFirst.trustedProviders).toEqual(["google", "github"]);
+			expect(dataSecond.trustedProviders).toEqual(["microsoft", "apple"]);
+		});
+	});
+
 	describe("generate ID", () => {
 		it("should fallback to advanced.database.generateId", async () => {
 			const databaseGenerateId = vi.fn(() => "db-id");

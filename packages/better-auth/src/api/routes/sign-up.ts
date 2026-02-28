@@ -3,6 +3,7 @@ import { createAuthEndpoint } from "@better-auth/core/api";
 import { runWithTransaction } from "@better-auth/core/context";
 import { isDevelopment } from "@better-auth/core/env";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { generateId } from "@better-auth/core/utils/id";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
 import { parseUserInput } from "../../db";
@@ -230,11 +231,83 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						BASE_ERROR_CODES.PASSWORD_TOO_LONG,
 					);
 				}
-				const dbUser = await ctx.context.internalAdapter.findUserByEmail(email);
+				const shouldReturnGenericDuplicateResponse =
+					ctx.context.options.emailAndPassword.autoSignIn === false ||
+					ctx.context.options.emailAndPassword.requireEmailVerification;
+				const additionalUserFields = parseUserInput(
+					ctx.context.options,
+					rest,
+					"create",
+				);
+				const normalizedEmail = email.toLowerCase();
+				const dbUser =
+					await ctx.context.internalAdapter.findUserByEmail(normalizedEmail);
 				if (dbUser?.user) {
 					ctx.context.logger.info(
 						`Sign-up attempt for existing email: ${email}`,
 					);
+					if (shouldReturnGenericDuplicateResponse) {
+						/**
+						 * Hash the password to reduce timing differences
+						 * between existing and non-existing emails.
+						 */
+						await ctx.context.password.hash(password);
+						if (ctx.context.options.emailAndPassword?.onExistingUserSignUp) {
+							await ctx.context.runInBackgroundOrAwait(
+								ctx.context.options.emailAndPassword.onExistingUserSignUp(
+									{ user: dbUser.user },
+									ctx.request,
+								),
+							);
+						}
+						const now = new Date();
+						const generatedId =
+							ctx.context.generateId({ model: "user" }) || generateId();
+						const coreFields = {
+							name,
+							email: normalizedEmail,
+							emailVerified: false,
+							image: image || null,
+							createdAt: now,
+							updatedAt: now,
+						};
+
+						const customSyntheticUser =
+							ctx.context.options.emailAndPassword?.customSyntheticUser;
+
+						let syntheticUser: Record<string, unknown>;
+						if (customSyntheticUser) {
+							// Extract only user-defined additionalFields (not plugin fields)
+							const additionalFieldKeys = Object.keys(
+								ctx.context.options.user?.additionalFields ?? {},
+							);
+							const additionalFields: Record<string, unknown> = {};
+							for (const key of additionalFieldKeys) {
+								if (key in additionalUserFields) {
+									additionalFields[key] = additionalUserFields[key];
+								}
+							}
+							syntheticUser = customSyntheticUser({
+								coreFields,
+								additionalFields,
+								id: generatedId,
+							});
+						} else {
+							syntheticUser = {
+								...coreFields,
+								...additionalUserFields,
+								id: generatedId,
+							};
+						}
+
+						return ctx.json({
+							token: null,
+							user: parseUserOutput(
+								ctx.context.options,
+								syntheticUser as User,
+							) as User<O["user"], O["plugins"]>,
+						});
+					}
 					throw APIError.from(
 						"UNPROCESSABLE_ENTITY",
 						BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
@@ -251,12 +324,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 				const hash = await ctx.context.password.hash(password);
 				let createdUser: User;
 				try {
-					const data = parseUserInput(ctx.context.options, rest, "create");
 					createdUser = await ctx.context.internalAdapter.createUser({
-						email: email.toLowerCase(),
+						email: normalizedEmail,
 						name,
 						image,
-						...data,
+						...additionalUserFields,
 						emailVerified: false,
 					});
 					if (!createdUser) {
@@ -319,10 +391,7 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					}
 				}
 
-				if (
-					ctx.context.options.emailAndPassword.autoSignIn === false ||
-					ctx.context.options.emailAndPassword.requireEmailVerification
-				) {
+				if (shouldReturnGenericDuplicateResponse) {
 					return ctx.json({
 						token: null,
 						user: parseUserOutput(ctx.context.options, createdUser) as User<
