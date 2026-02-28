@@ -147,11 +147,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: secret,
 					});
 					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
