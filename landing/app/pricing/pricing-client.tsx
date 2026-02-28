@@ -18,7 +18,6 @@ const pricingTiers = [
 		features: [
 			"All auth features",
 			"User management",
-			"3 projects",
 			"Audit logs (1 day)",
 			"1 dashboard seat",
 			"10k events/mo included",
@@ -38,7 +37,6 @@ const pricingTiers = [
 		seats: "3 seats included",
 		featuresPrefix: "Everything in Starter +",
 		features: [
-			"Unlimited projects",
 			"3 seats included",
 			"100k events/mo included",
 			"Security detection (1k/mo)",
@@ -122,13 +120,6 @@ const comparisonRows = [
 		pro: "$10/seat",
 		business: "$10/seat",
 		enterprise: "Included",
-	},
-	{
-		label: "Projects",
-		starter: "3",
-		pro: "Unlimited",
-		business: "Unlimited",
-		enterprise: "Unlimited",
 	},
 	{
 		label: "User management",
