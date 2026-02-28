@@ -39,6 +39,20 @@ export interface LastLoginMethodOptions {
 	 */
 	storeInDatabase?: boolean | undefined;
 	/**
+	 * A hook to run before the last login method is stored in the cookie.
+	 * Useful if you are required to follow GDPR or other regulations to ensure that you're allowed to store the last login method in the cookie.
+	 *
+	 * @param ctx - The context from the hook
+	 * @param lastUsedLoginMethod - The last login method
+	 * @returns Whether to continue the flow
+	 */
+	beforeStoreCookie?:
+		| ((
+				ctx: GenericEndpointContext,
+				lastUsedLoginMethod: string,
+		  ) => Promise<boolean> | boolean)
+		| undefined;
+	/**
 	 * Custom schema for the plugin
 	 * @default undefined
 	 */
@@ -157,6 +171,28 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 									maxAge: config.maxAge,
 									httpOnly: false, // Override: plugin cookies are not httpOnly
 								};
+
+								let isPermitted = true;
+								if (config.beforeStoreCookie) {
+									try {
+										isPermitted = await config.beforeStoreCookie(
+											ctx,
+											lastUsedLoginMethod,
+										);
+									} catch (error) {
+										// If beforeStoreCookie throws an error, don't set the cookie
+										// Log the error but don't break the authentication flow
+										if (ctx.context.logger) {
+											ctx.context.logger.error?.(
+												"[LastLoginMethod] Error in beforeStoreCookie hook",
+												error,
+											);
+										}
+										isPermitted = false;
+									}
+								}
+
+								if (!isPermitted) return;
 
 								ctx.setCookie(
 									config.cookieName,
