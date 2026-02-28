@@ -76,7 +76,7 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 									ul: (props) => <ul className="space-y-0.5 my-1" {...props} />,
 									li: (props) => (
 										<li
-											className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-foreground/25"
+											className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed pl-3 relative before:content-['·'] before:absolute before:left-0 before:text-foreground/50"
 											{...props}
 										/>
 									),
