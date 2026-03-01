@@ -147,11 +147,11 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 					}
 					const secret = generateRandomString(32);
 					const encryptedSecret = await symmetricEncrypt({
-						key: ctx.context.secret,
+						key: ctx.context.secretConfig,
 						data: secret,
 					});
 					const backupCodes = await generateBackupCodes(
-						ctx.context.secret,
+						ctx.context.secretConfig,
 						backupCodeOptions,
 					);
 					if (options?.skipVerificationOnEnable) {
@@ -373,8 +373,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 										verificationRecord.value === data.user.id &&
 										verificationRecord.expiresAt > new Date()
 									) {
-										await ctx.context.internalAdapter.deleteVerificationValue(
-											verificationRecord.id,
+										await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+											trustIdentifier,
 										);
 										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
 										const newToken = await createHMAC(
