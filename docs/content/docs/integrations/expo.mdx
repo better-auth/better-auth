@@ -186,7 +186,9 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Configure Metro Bundler
 
-        To resolve Better Auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
+        Better Auth relies on package exports to resolve its modules. Starting with **Expo SDK 53**, `unstable_enablePackageExports` is enabled by default in Metro, so no extra configuration is needed.
+
+        If you're using **Expo SDK 52 or earlier**, you'll need to enable it manually in your metro config:
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
@@ -199,7 +201,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
 
         <Callout>In case you don't have a `metro.config.js` file in your project run `npx expo customize metro.config.js`.</Callout>
-        
+
         If you can't enable `unstable_enablePackageExports` option, you can use [babel-plugin-module-resolver](https://github.com/tleunen/babel-plugin-module-resolver) to manually resolve the paths.
 
         ```ts title="babel.config.js"
@@ -323,21 +325,32 @@ With Better Auth initialized, you can now use the `authClient` to authenticate u
 
 #### Social Sign-In
 
-For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL.
+For social sign-in, you can use the `authClient.signIn.social` method with the provider name and a callback URL. When you pass a relative path like "/dashboard", the Expo plugin automatically converts it to a deep link using `Linking.createURL`.
 
 ```tsx title="app/social-sign-in.tsx"
 import { Button } from "react-native";
+import { router } from "expo-router";
+import { authClient } from "@/lib/auth-client";
 
 export default function SocialSignIn() {
     const handleLogin = async () => {
-        await authClient.signIn.social({
+        const { error } = await authClient.signIn.social({
             provider: "google",
-            callbackURL: "/dashboard" // this will be converted to a deep link (eg. `myapp://dashboard`) on native
+            callbackURL: "/dashboard" // [!code highlight]
         })
+        if (error) {
+            // handle error
+            return;
+        }
+        router.replace("/dashboard"); // [!code highlight]
     };
     return <Button title="Login with Google" onPress={handleLogin} />;
 }
 ```
+
+<Callout type="info">
+On native (iOS/Android), `signIn.social` does not navigate automatically. Handle navigation yourself after it resolves. Note that the underlying browser behavior differs by platform. For more information, see [here](https://docs.expo.dev/versions/latest/sdk/webbrowser/#webbrowseropenauthsessionasyncurl-redirecturl-options).
+</Callout>
 
 #### IdToken Sign-In
 

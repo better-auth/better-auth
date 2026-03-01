@@ -34,6 +34,10 @@ BETTER_AUTH_SECRET=
 
 <GenerateSecret />
 
+<Callout type="info">
+Need to rotate your secret later? You can use `BETTER_AUTH_SECRETS` (plural) to roll over to a new secret without invalidating existing data. See the [`secrets` option](/docs/reference/options#secrets) for details.
+</Callout>
+
 2. **Set Base URL**
 
 ```txt title=".env"

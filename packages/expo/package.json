@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/expo",
-  "version": "1.5.0-beta.19",
+  "version": "1.5.0-beta.20",
   "description": "Better Auth integration for Expo and React Native applications.",
   "type": "module",
   "license": "MIT",
@@ -74,11 +74,11 @@
     "@better-auth/core": "workspace:*",
     "@better-fetch/fetch": "catalog:",
     "better-auth": "workspace:*",
-    "expo-constants": "~18.0.13",
-    "expo-linking": "~8.0.11",
-    "expo-network": "^8.0.8",
-    "expo-web-browser": "~15.0.10",
-    "react-native": "~0.83.1",
+    "expo-constants": "~55.0.7",
+    "expo-linking": "~55.0.7",
+    "expo-network": "~55.0.8",
+    "expo-web-browser": "~55.0.9",
+    "react-native": "~0.84.1",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
@@ -86,7 +86,7 @@
     "better-auth": "workspace:*",
     "expo-constants": ">=17.0.0",
     "expo-linking": ">=7.0.0",
-    "expo-network": "^8.0.7",
+    "expo-network": ">=8.0.7",
     "expo-web-browser": ">=14.0.0"
   },
   "peerDependenciesMeta": {

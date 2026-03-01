@@ -1631,6 +1631,126 @@ describe("access control", async () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/7822
+ */
+describe("dynamic access control should merge DB permissions with built-in roles", async () => {
+	// Extend default ac with a custom resource that default roles don't cover
+	const ac = createAccessControl({
+		...defaultStatements,
+		sales: ["create", "read", "update", "delete"],
+	});
+	const { auth, signInWithTestUser, db } = await getTestInstance({
+		plugins: [
+			organization({
+				ac,
+				roles: {
+					owner: ownerAc,
+					admin: adminAc,
+					member: memberAc,
+				},
+				dynamicAccessControl: {
+					enabled: true,
+				},
+			}),
+		],
+	});
+
+	const { headers } = await signInWithTestUser();
+
+	const org = await auth.api.createOrganization({
+		body: {
+			name: "test-dac",
+			slug: "test-dac",
+		},
+		headers,
+	});
+	if (!org) throw new Error("Organization not created");
+
+	it("should merge DB permissions with built-in role permissions", async () => {
+		// Insert an "owner" role record in DB with only sales permissions.
+		// The built-in ownerAc does NOT have sales at all.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					sales: ["create", "read", "delete"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		// DB adds sales:delete which the built-in owner doesn't have
+		const salesDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					sales: ["delete"],
+				},
+			},
+		});
+		expect(salesDelete.success).toBe(true);
+
+		// Built-in ownerAc has organization:["update","delete"], which is NOT in the DB record.
+		// Merge should preserve it.
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
+	});
+
+	it("should not lose built-in actions when DB defines partial actions for the same resource", async () => {
+		// Clean up previous test data
+		await db.delete({
+			model: "organizationRole",
+			where: [{ field: "organizationId", value: org.id }],
+		});
+
+		// Built-in ownerAc has organization:["update","delete"].
+		// DB only defines organization:["update"] (missing "delete").
+		// Merge should preserve both actions.
+		await db.create({
+			model: "organizationRole",
+			data: {
+				organizationId: org.id,
+				role: "owner",
+				permission: JSON.stringify({
+					organization: ["update"],
+				}),
+				createdAt: new Date(),
+			},
+		});
+
+		const orgUpdate = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["update"],
+				},
+			},
+		});
+		expect(orgUpdate.success).toBe(true);
+
+		// "delete" is only in built-in, not in DB -> must still be preserved
+		const orgDelete = await auth.api.hasPermission({
+			headers,
+			body: {
+				permissions: {
+					organization: ["delete"],
+				},
+			},
+		});
+		expect(orgDelete.success).toBe(true);
+	});
+});
+
 describe("invitation limit", async () => {
 	const { customFetchImpl, signInWithTestUser } = await getTestInstance({
 		plugins: [
