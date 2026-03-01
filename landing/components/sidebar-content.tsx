@@ -1,6 +1,9 @@
 import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
+	AppWindow,
+	BadgeCent,
+	BarChart4,
 	Binoculars,
 	Book,
 	CircleHelp,
@@ -9,15 +12,20 @@ import {
 	Gauge,
 	Key,
 	KeyRound,
+	Lock,
+	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
 	Phone,
 	ScanFace,
+	Server,
+	Settings,
 	ShieldCheck,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
+	Users,
 	Users2,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
@@ -1532,6 +1540,66 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				title: "Lynx",
 				icon: Icons.lynx,
 				href: "/docs/integrations/lynx",
+			},
+		],
+	},
+	{
+		title: "Infrastructure",
+		Icon: () => (
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				viewBox="0 0 24 24"
+				width="1.2em"
+				height="1.2em"
+			>
+				<path
+					fill="currentColor"
+					d="M2.25 5.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 6.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5zM2.25 14.7c0-.943.661-1.95 1.75-1.95h16c1.089 0 1.75 1.007 1.75 1.95v3.6c0 .943-.661 1.95-1.75 1.95H4c-1.089 0-1.75-1.007-1.75-1.95zM6 15.75a.75.75 0 0 0 0 1.5h2a.75.75 0 0 0 0-1.5z"
+				/>
+			</svg>
+		),
+		list: [
+			{
+				title: "Introduction",
+				href: "/docs/infrastructure/introduction",
+				icon: () => <Book className="size-4" />,
+			},
+			{
+				title: "Getting Started",
+				href: "/docs/infrastructure/getting-started",
+				icon: () => <Gauge className="size-4" />,
+			},
+			{
+				title: "Services",
+				group: true,
+				icon: () => <Server className="size-4" />,
+				href: "",
+			},
+			{
+				title: "Email",
+				href: "/docs/infrastructure/services/email",
+				icon: () => <Mail className="size-4" />,
+			},
+			{
+				title: "SMS",
+				href: "/docs/infrastructure/services/sms",
+				icon: () => <Phone className="size-4" />,
+			},
+			{
+				title: "Plugins",
+				group: true,
+				icon: () => <Server className="size-4" />,
+				href: "",
+			},
+			{
+				title: "Dash",
+				href: "/docs/infrastructure/plugins/dash",
+				icon: () => <AppWindow className="size-4" />,
+			},
+			{
+				title: "Sentinel",
+				href: "/docs/infrastructure/plugins/sentinel",
+				icon: () => <ShieldCheck className="size-4" />,
 			},
 		],
 	},
