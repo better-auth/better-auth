@@ -267,7 +267,6 @@ function PricingHero() {
 	const principles = [
 		{ label: "Framework", value: "Open source" },
 		{ label: "Users", value: "Unlimited" },
-		{ label: "Plugins", value: "50+ included" },
 		{ label: "Audit logs", value: "From 10k/mo" },
 		{ label: "Extra seats", value: "$10/seat (Pro+)" },
 		{ label: "Security", value: "$100/100k overage" },
@@ -514,34 +513,52 @@ export function PricingPageClient() {
 								<span className="text-sm text-foreground/60">Pricing</span>
 							</div>
 
-							{/* Section: Open Source */}
+							{/* Section: Open Source Framework */}
 							<motion.div
 								initial={{ opacity: 0, y: 6 }}
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
-									<span className="text-foreground/75 dark:text-foreground/60">
-										# Framework
-									</span>
-								</p>
+								<div className="mb-4">
+									<h2 className="text-base text-foreground/90 tracking-tight mb-1">
+										Better Auth Framework
+									</h2>
+									<p className="text-[13px] text-foreground/55 dark:text-foreground/45">
+										Free and open source.
+									</p>
+								</div>
 
 								<div className="relative border border-dashed border-foreground/[0.12] bg-foreground/[0.02] overflow-hidden">
 									<div className="px-5 py-5">
 										<div className="flex items-start justify-between gap-6">
-											<div className="space-y-2.5 flex-1">
+											<div className="space-y-3 flex-1">
 												<div className="flex items-center gap-2">
 													<h3 className="text-[11px] font-mono uppercase tracking-widest text-foreground/85">
 														Community
 													</h3>
 													<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
-														open source
+														free forever
 													</span>
 												</div>
-												<p className="text-[13px] text-foreground/80 dark:text-foreground/65 leading-relaxed max-w-md">
-													Comprehensive authentication and authorization
-													framework. Unlimited users on every plan.
-												</p>
+												<ul className="space-y-2">
+													{[
+														"Unlimited users",
+														"All auth features",
+														"50+ plugins included",
+														"Self-hosted",
+														"MIT license",
+													].map((item) => (
+														<li
+															key={item}
+															className="flex items-start gap-2 text-[13px] text-foreground/75 dark:text-foreground/60"
+														>
+															<span className="text-foreground/50 dark:text-foreground/55 mt-0.5 font-mono text-[10px] leading-none select-none shrink-0">
+																+
+															</span>
+															<span>{item}</span>
+														</li>
+													))}
+												</ul>
 											</div>
 											<div className="text-right shrink-0 flex flex-col items-end gap-3">
 												<Link
@@ -569,17 +586,35 @@ export function PricingPageClient() {
 								</div>
 							</motion.div>
 
-							{/* Section: Plans */}
+							{/* Transition: Framework -> Infrastructure */}
+							<motion.div
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ duration: 0.3, delay: 0.1 }}
+								className="relative flex items-center gap-4 py-2"
+							>
+							<div className="flex-1 h-px bg-foreground/15" />
+							<p className="text-[11px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 shrink-0">
+								We also offer managed infrastructure
+							</p>
+							<div className="flex-1 h-px bg-foreground/15" />
+							</motion.div>
+
+							{/* Section: Infrastructure Plans */}
 							<motion.div
 								initial={{ opacity: 0 }}
 								animate={{ opacity: 1 }}
 								transition={{ duration: 0.4, delay: 0.15 }}
 							>
-								<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
-									<span className="text-foreground/75 dark:text-foreground/60">
-										# Infrastructure
-									</span>
-								</p>
+								<div className="mb-5">
+									<h2 className="text-base text-foreground/90 tracking-tight mb-1">
+										Infrastructure Plans
+									</h2>
+									<p className="text-[13px] text-foreground/55 dark:text-foreground/45 max-w-lg">
+										Add a managed dashboard, audit logs, security detection, and
+										team seats on top of the open-source framework.
+									</p>
+								</div>
 
 								{/* Pricing Cards */}
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0">

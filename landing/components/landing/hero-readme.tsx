@@ -1615,14 +1615,16 @@ export function HeroReadMe({
 									headline: "Security & observability.",
 									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
 									security: true,
-									href: "/docs",
+									href: "/pricing",
+									managed: true,
 								},
 								{
 									label: "Dashboard",
 									headline: "User management.",
 									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
 									dashboard: true,
-									href: "/docs",
+									href: "/pricing",
+									managed: true,
 								},
 							].map((feature, i) => (
 								<Link
@@ -1681,6 +1683,11 @@ export function HeroReadMe({
 												{String(i + 1).padStart(2, "0")}
 											</span>
 											{feature.label}
+											{"managed" in feature && feature.managed && (
+												<span className="ml-1.5 text-[8px] normal-case tracking-widest text-foreground/40 dark:text-foreground/30 border border-dashed border-foreground/10 px-1 py-px">
+													managed
+												</span>
+											)}
 										</div>
 										<div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-950 dark:group-hover/card:text-white">
 											{feature.headline}
@@ -2222,6 +2229,17 @@ export function HeroReadMe({
 
 						<div className="mt-8">
 							<PluginEcosystem />
+						</div>
+
+						{/* Infrastructure transition */}
+						<div className="mt-12 mb-10">
+							<div className="flex items-center gap-4 mb-5">
+								<div className="flex-1 h-px bg-foreground/15" />
+								<span className="text-[11px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 shrink-0">
+									We also offer managed infrastructure
+								</span>
+								<div className="flex-1 h-px bg-foreground/15" />
+							</div>
 						</div>
 
 						{/* Dashboard */}
