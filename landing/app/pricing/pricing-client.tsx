@@ -579,6 +579,18 @@ export function PricingPageClient() {
 										<PricingCard key={tier.name} tier={tier} index={index} />
 									))}
 								</div>
+
+								<div className="mt-4 px-1">
+									<p className="text-[10px] text-foreground/45 dark:text-foreground/35 leading-relaxed">
+										<span className="text-foreground/60 dark:text-foreground/50 font-mono uppercase tracking-wider">
+											What&apos;s an event?
+										</span>{" "}
+										An event is any auth action tracked by the dashboard &mdash;
+										sign-ins, sign-ups, session refreshes, password resets, OTP
+										verifications, and more. Each API call that triggers an
+										auth action counts as one event.
+									</p>
+								</div>
 							</motion.div>
 
 							{/* Section: Feature comparison */}
