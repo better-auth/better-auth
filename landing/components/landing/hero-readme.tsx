@@ -22,8 +22,6 @@ import {
 	SocialProvidersSection,
 } from "./framework-sections";
 import { TrustedBy } from "./trusted-by";
-import { Button } from "../ui/button";
-import { useRouter } from "next/navigation";
 
 const cliCommands = [
 	{ name: "npm", command: "npx auth init" },
@@ -74,7 +72,6 @@ function CredentialFields() {
 	const [isTyping, setIsTyping] = useState(false);
 	const timeoutsRef = useRef<NodeJS.Timeout[]>([]);
 	const isTypingRef = useRef(false);
-	const router = useRouter();
 
 	const startTyping = useCallback(() => {
 		if (isTypingRef.current) return;
@@ -1337,7 +1334,6 @@ function ReadmeFooter({
 }: {
 	stats: { npmDownloads: number; githubStars: number };
 }) {
-	const router = useRouter();
 	return (
 		<div className="relative mt-10 pt-8 pb-0 overflow-hidden">
 			{/* Watermark logo */}
@@ -1380,17 +1376,12 @@ function ReadmeFooter({
 				</p>
 
 				<div className="flex items-center justify-center gap-4 mt-4">
-					<Button
-						onMouseEnter={()=>{
-							router.prefetch("/sign-in");
-						}}
-						onClick={()=>{
-							router.push("/sign-in");
-						}}
+					<a
+						href="/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
-					</Button>
+					</a>
 					<Link
 						href="/docs"
 						className="inline-flex items-center gap-1.5 px-4 py-2 border border-foreground/12 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 text-[11px] font-mono uppercase tracking-wider transition-all"
