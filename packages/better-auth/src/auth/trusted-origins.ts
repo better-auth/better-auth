@@ -1,12 +1,5 @@
-import {
-	getHost,
-	getOrigin,
-	getProtocol,
-	matchesHostPattern,
-} from "../utils/url";
+import { getHost, getOrigin, getProtocol } from "../utils/url";
 import { wildcardMatch } from "../utils/wildcard";
-
-export { matchesHostPattern };
 
 /**
  * Matches the given url against an origin or origin pattern
