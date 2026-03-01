@@ -1,7 +1,7 @@
 // spell-checker:disable
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 
 const VERTEX_SHADER = `
 attribute vec2 a_position;
@@ -139,7 +139,7 @@ export function HalftoneBackground() {
 	const smoothMouseRef = useRef({ x: -1, y: -1 });
 	const clickRef = useRef({ strength: 0, x: 0, y: 0 });
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const canvas = canvasRef.current;
 		const wrapper = wrapperRef.current;
 		if (!canvas || !wrapper) return;
@@ -225,12 +225,10 @@ export function HalftoneBackground() {
 		const draw = () => {
 			const elapsed = (performance.now() - startTime) / 1000;
 
-			// Smooth mouse interpolation for fluid feel
 			const lerp = 0.08;
 			const target = mouseRef.current;
 			const smooth = smoothMouseRef.current;
 			if (target.x < 0) {
-				// Mouse left - smoothly fade out
 				smooth.x += (target.x - smooth.x) * 0.02;
 				smooth.y += (target.y - smooth.y) * 0.02;
 			} else {
@@ -238,7 +236,6 @@ export function HalftoneBackground() {
 				smooth.y += (target.y - smooth.y) * lerp;
 			}
 
-			// Decay click strength
 			clickRef.current.strength *= 0.96;
 
 			gl.uniform1f(uTime, elapsed);
@@ -247,8 +244,17 @@ export function HalftoneBackground() {
 			gl.uniform1f(uClick, clickRef.current.strength);
 			gl.uniform2f(uClickPos, clickRef.current.x, clickRef.current.y);
 			gl.drawArrays(gl.TRIANGLES, 0, 6);
+
 			frameRef.current = requestAnimationFrame(draw);
 		};
+
+		// Draw the first frame synchronously so the canvas has content before paint
+		gl.uniform1f(uTime, 0);
+		gl.uniform2f(uResolution, canvas.width, canvas.height);
+		gl.uniform2f(uMouse, -1, -1);
+		gl.uniform1f(uClick, 0);
+		gl.uniform2f(uClickPos, 0, 0);
+		gl.drawArrays(gl.TRIANGLES, 0, 6);
 
 		frameRef.current = requestAnimationFrame(draw);
 
@@ -268,10 +274,13 @@ export function HalftoneBackground() {
 	return (
 		<div
 			ref={wrapperRef}
-			className="absolute inset-0 overflow-hidden bg-white dark:bg-black"
+			className="absolute inset-0 overflow-hidden bg-background"
 			aria-hidden="true"
 		>
-			<canvas ref={canvasRef} className="w-full h-full invert dark:invert-0" />
+			<canvas
+				ref={canvasRef}
+				className="w-full h-full invert dark:invert-0"
+			/>
 		</div>
 	);
 }

@@ -239,17 +239,17 @@ function ComparisonCell({ value }: { value: string | boolean }) {
 	if (value === true)
 		return (
 			<span className="inline-flex items-center justify-center w-5 h-5">
-				<Check className="w-3.5 h-3.5 text-foreground/60" />
+				<Check className="w-3.5 h-3.5 text-foreground/70" />
 			</span>
 		);
 	if (value === false)
 		return (
 			<span className="inline-flex items-center justify-center w-5 h-5">
-				<Minus className="w-3 h-3 text-foreground/50 " />
+				<Minus className="w-3 h-3 text-foreground/40 " />
 			</span>
 		);
 	return (
-		<span className="text-[11px] text-foreground/70 dark:text-foreground/50 font-mono">
+		<span className="text-[11px] text-foreground/80 dark:text-foreground/60 font-mono">
 			{value}
 		</span>
 	);
@@ -287,7 +287,7 @@ function PricingHero() {
 							Infrastructure
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/60 dark:text-foreground/40 leading-relaxed max-w-[260px]">
+					<p className="text-[11px] text-foreground/70 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						Dashboard, security, audit logs, and more for your auth.
 					</p>
 				</div>
@@ -301,15 +301,15 @@ function PricingHero() {
 								tier.highlight ? "bg-foreground/[0.03]" : ""
 							}`}
 						>
-							<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/50 dark:text-foreground/30 mb-1">
+							<p className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/40 mb-1">
 								{tier.name}
 							</p>
 							<p className="text-sm font-light text-foreground/80 tabular-nums flex items-baseline justify-center gap-0.5">
 								<span>{tier.price}</span>
 								{tier.note && (
-									<span className="text-[9px] text-foreground/40 dark:text-foreground/50 font-mono">
-										{tier.note}
-									</span>
+<span className="text-[9px] text-foreground/50 dark:text-foreground/55 font-mono">
+									{tier.note}
+								</span>
 								)}
 							</p>
 						</div>
@@ -330,10 +330,10 @@ function PricingHero() {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<span className="text-[11px] text-foreground/60 dark:text-foreground/40 uppercase tracking-wider">
-								{item.label}
-							</span>
-							<span className="text-[11px] text-foreground/80 dark:text-foreground/70 font-mono">
+<span className="text-[11px] text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
+							{item.label}
+						</span>
+						<span className="text-[11px] text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
@@ -350,7 +350,7 @@ function PricingHero() {
 					</Link>
 					<Link
 						href="/enterprise"
-						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 dark:text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
 						Contact Sales
 						<svg
@@ -403,13 +403,13 @@ function PricingCard({
 			<div className="flex flex-col flex-1 p-5">
 				{/* Tier name + badge */}
 				<div className="flex items-center gap-2 mb-4">
-					<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/40">
+					<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/50">
 						{tier.name}
 					</h3>
 					{isHighlighted && (
-						<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/60 dark:text-foreground/40 border border-dashed border-foreground/10 px-1.5 py-0.5 leading-none">
-							popular
-						</span>
+<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/50 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
+						popular
+					</span>
 					)}
 				</div>
 
@@ -423,24 +423,24 @@ function PricingCard({
 						{tier.price}
 					</span>
 					{tier.priceNote && (
-						<span className="text-[10px] text-foreground/50 dark:text-foreground/30 font-mono">
-							{tier.priceNote}
-						</span>
+<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono">
+						{tier.priceNote}
+					</span>
 					)}
 				</div>
 
 				{/* Features */}
 				<div className="flex-1 mb-5">
-					<p className="text-[9px] text-foreground/50 dark:text-foreground/30 uppercase tracking-widest font-mono mb-3">
+					<p className="text-[9px] text-foreground/60 dark:text-foreground/40 uppercase tracking-widest font-mono mb-3">
 						{tier.featuresPrefix}
 					</p>
 					<ul className="space-y-2">
 						{tier.features.map((feature) => (
 							<li
 								key={feature}
-								className="flex items-start gap-2 text-[11px] text-foreground/70 dark:text-foreground/50 group-hover:text-foreground/75 dark:group-hover:text-foreground/55 transition-colors duration-300"
+								className="flex items-start gap-2 text-[11px] text-foreground/80 dark:text-foreground/60 group-hover:text-foreground/85 dark:group-hover:text-foreground/65 transition-colors duration-300"
 							>
-								<span className="text-foreground/40 dark:text-foreground/50 mt-px font-mono text-[9px] leading-none select-none shrink-0">
+								<span className="text-foreground/50 dark:text-foreground/55 mt-px font-mono text-[9px] leading-none select-none shrink-0">
 									+
 								</span>
 								<span>{feature}</span>
@@ -456,7 +456,7 @@ function PricingCard({
 							className={`w-full py-2.5 text-center transition-all duration-200 cursor-pointer ${
 								isHighlighted
 									? "bg-foreground text-background hover:opacity-90"
-									: "border border-dashed border-foreground/[0.12] text-foreground/60 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 hover:bg-foreground/[0.02]"
+									: "border border-dashed border-foreground/[0.12] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02]"
 							}`}
 						>
 							<span className="font-mono text-[10px] uppercase tracking-widest">
@@ -512,25 +512,25 @@ export function PricingPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/50 dark:text-foreground/30 font-mono mb-5">
-									<span className="text-foreground/65 dark:text-foreground/50">
-										# Framework
-									</span>
-								</p>
+<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+								<span className="text-foreground/75 dark:text-foreground/60">
+									# Framework
+								</span>
+							</p>
 
 								<div className="relative border border-dashed border-foreground/[0.12] bg-foreground/[0.02] overflow-hidden">
 									<div className="px-5 py-5">
 										<div className="flex items-start justify-between gap-6">
 											<div className="space-y-2.5 flex-1">
 												<div className="flex items-center gap-2">
-													<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/80">
-														Community
-													</h3>
-													<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/65 dark:text-foreground/50 border border-dashed border-foreground/10 px-1.5 py-0.5 leading-none">
+<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/85">
+													Community
+												</h3>
+												<span className="text-[8px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
 														open source
 													</span>
 												</div>
-												<p className="text-[11px] text-foreground/70 dark:text-foreground/55 leading-relaxed max-w-md">
+												<p className="text-[11px] text-foreground/80 dark:text-foreground/65 leading-relaxed max-w-md">
 													Comprehensive authentication and authorization
 													framework.
 												</p>
@@ -538,7 +538,7 @@ export function PricingPageClient() {
 											<div className="text-right shrink-0 flex flex-col items-end gap-3">
 												<Link
 													href="/docs"
-													className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/[0.12] text-foreground/60 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+													className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-foreground/[0.12] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
 												>
 													<span className="font-mono text-[10px] uppercase tracking-widest">
 														Read Docs
@@ -567,11 +567,11 @@ export function PricingPageClient() {
 								animate={{ opacity: 1 }}
 								transition={{ duration: 0.4, delay: 0.15 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/50 dark:text-foreground/30 font-mono mb-5">
-									<span className="text-foreground/65 dark:text-foreground/50">
-										# Infrastructure
-									</span>
-								</p>
+<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+								<span className="text-foreground/75 dark:text-foreground/60">
+									# Infrastructure
+								</span>
+							</p>
 
 								{/* Pricing Cards */}
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0">
@@ -587,15 +587,15 @@ export function PricingPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.45 }}
 							>
-								<p className="text-[10px] uppercase tracking-widest text-foreground/50 dark:text-foreground/30 font-mono mb-5">
-									# feature comparison
-								</p>
+<p className="text-[10px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+								# feature comparison
+							</p>
 
 								<div className="border border-dashed border-foreground/[0.08] overflow-x-auto">
 									<table className="w-full min-w-[600px]">
 										<thead>
 											<tr className="border-b border-foreground/[0.08]">
-												<th className="text-left text-[10px] uppercase tracking-widest text-foreground/50 dark:text-foreground/30 font-mono font-normal py-3 px-5 w-[28%]">
+												<th className="text-left text-[10px] uppercase tracking-widest text-foreground/60 dark:text-foreground/40 font-mono font-normal py-3 px-5 w-[28%]">
 													Feature
 												</th>
 												{tierLabels.map((name) => (
@@ -603,8 +603,8 @@ export function PricingPageClient() {
 														key={name}
 														className={`text-center text-[10px] uppercase tracking-widest font-mono font-normal py-3 px-3 w-[18%] ${
 															name === "Pro"
-																? "text-foreground/70 bg-foreground/[0.025]"
-																: "text-foreground/50 dark:text-foreground/30"
+? "text-foreground/80 bg-foreground/[0.025]"
+															: "text-foreground/60 dark:text-foreground/40"
 														}`}
 													>
 														{name}
@@ -620,7 +620,7 @@ export function PricingPageClient() {
 														i % 2 === 0 ? "bg-foreground/[0.008]" : ""
 													}`}
 												>
-													<td className="text-[11px] text-foreground/70 dark:text-foreground/50 py-2.5 px-5">
+													<td className="text-[11px] text-foreground/80 dark:text-foreground/60 py-2.5 px-5">
 														{row.label}
 													</td>
 													{tierKeys.map((tier) => (

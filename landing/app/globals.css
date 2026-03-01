@@ -759,17 +759,17 @@ html:not([data-anchor-scrolling]) {
 .docs-layout #nd-page article > div.\@container > a div svg {
 	width: 12px;
 	height: 12px;
-	opacity: 0.3;
+	opacity: 0.45;
 	transition: opacity 200ms ease;
 }
 
 .docs-layout #nd-page article > div.\@container > a:hover div svg {
-	opacity: 0.7;
+	opacity: 0.8;
 }
 
 .docs-layout #nd-page article > div.\@container > a > p {
 	font-size: 11px;
-	opacity: 0.35;
+	opacity: 0.5;
 	font-family: var(--font-sans);
 	letter-spacing: 0;
 }
