@@ -186,7 +186,9 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Configure Metro Bundler
 
-        To resolve Better Auth exports you'll need to enable `unstable_enablePackageExports` in your metro config. 
+        Better Auth relies on package exports to resolve its modules. Starting with **Expo SDK 53**, `unstable_enablePackageExports` is enabled by default in Metro, so no extra configuration is needed.
+
+        If you're using **Expo SDK 52 or earlier**, you'll need to enable it manually in your metro config:
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
@@ -199,7 +201,7 @@ Expo is a popular framework for building cross-platform apps with React Native. 
         ```
 
         <Callout>In case you don't have a `metro.config.js` file in your project run `npx expo customize metro.config.js`.</Callout>
-        
+
         If you can't enable `unstable_enablePackageExports` option, you can use [babel-plugin-module-resolver](https://github.com/tleunen/babel-plugin-module-resolver) to manually resolve the paths.
 
         ```ts title="babel.config.js"
