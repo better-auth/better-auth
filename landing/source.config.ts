@@ -4,9 +4,20 @@ import {
 	defineDocs,
 } from "fumadocs-mdx/config";
 import * as z from "zod";
+import lastModified from "fumadocs-mdx/plugins/last-modified";
+import {
+	createFileSystemGeneratorCache,
+	createGenerator,
+	remarkAutoTypeTable,
+} from "fumadocs-typescript";
 
 export const docs = defineDocs({
 	dir: "../docs/content/docs",
+	docs: {
+		postprocess: {
+			includeProcessedMarkdown: true,
+		},
+	},
 });
 
 export const canaryDocs = defineDocs({
@@ -31,6 +42,23 @@ export const blogCollection = defineCollections({
 		image: z.string().optional(),
 		tags: z.array(z.string()).optional(),
 	}),
+	postprocess: {
+		includeProcessedMarkdown: true,
+	},
 });
 
-export default defineConfig({});
+const generator = createGenerator({
+	cache: createFileSystemGeneratorCache(".next/fumadocs-typescript"),
+});
+
+export default defineConfig({
+	mdxOptions: {
+		remarkNpmOptions: {
+			persist: {
+				id: "persist-install",
+			},
+		},
+		remarkPlugins: [[remarkAutoTypeTable, { generator }]],
+	},
+	plugins: [lastModified()],
+});

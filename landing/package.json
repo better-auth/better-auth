@@ -44,6 +44,7 @@
     "framer-motion": "^12.23.12",
     "fumadocs-core": "16.6.7",
     "fumadocs-mdx": "^14.2.8",
+    "fumadocs-typescript": "^5.1.4",
     "fumadocs-ui": "16.6.7",
     "geist": "^1.7.0",
     "hast-util-to-jsx-runtime": "^2.3.6",
