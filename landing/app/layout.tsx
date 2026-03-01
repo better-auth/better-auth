@@ -33,7 +33,6 @@ export const metadata: Metadata = {
 		],
 		apple: "https://docs.better-auth.com/favicon/apple-touch-icon.png",
 	},
-	manifest: "https://docs.better-auth.com/favicon/site.webmanifest",
 	openGraph: {
 		images: ["https://docs.better-auth.com/og.png"],
 	},
