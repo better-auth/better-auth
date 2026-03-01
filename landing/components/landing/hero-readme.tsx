@@ -13,7 +13,7 @@ import {
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
-import { cn, getSrc } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
 	AiNativeSection,
 	DatabaseSection,
@@ -1411,7 +1411,7 @@ function ReadmeFooter({
 									/>
 								</svg>
 								<span className="text-[9px] font-mono">
-									{formatCount(stats.npmDownloads)} / week
+									{formatCount(stats.npmDownloads)} / year
 								</span>
 							</div>
 						</a>
@@ -2340,7 +2340,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={getSrc("/demo-dark.mp4")}
+											src={"/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2348,7 +2348,7 @@ export function HeroReadMe({
 											className="w-full h-auto -mt-[2px] dark:block hidden"
 										/>
 										<video
-											src={getSrc("/demo-light.mp4")}
+											src={"/demo-light.mp4"}
 											autoPlay
 											loop
 											muted
