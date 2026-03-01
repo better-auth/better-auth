@@ -2,7 +2,6 @@ packages:
   - packages/**
   - landing
   - docs
-  - demo/*
   - e2e/**
   - test
 
@@ -40,6 +39,7 @@ onlyBuiltDependencies:
   - '@prisma/client'
   - '@prisma/engines'
   - '@swc/core'
+  - '@tsparticles/engine'
   - better-sqlite3
   - electron
   - electron-winstaller
@@ -47,6 +47,7 @@ onlyBuiltDependencies:
   - less
   - msw
   - prisma
+  - protobufjs
   - sharp
   - workerd
 
