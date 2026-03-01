@@ -153,8 +153,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 						}
 
 						// Clean up used nonce
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`siwe:${walletAddress}:${chainId}`,
 						);
 
 						// Look for existing user by their wallet addresses

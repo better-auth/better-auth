@@ -69,8 +69,8 @@ export async function verifyTwoFactor(ctx: GenericEndpointContext) {
 					});
 				}
 				// Delete the verification token from the database after successful verification
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					verificationToken.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					signedTwoFactorCookie,
 				);
 				await setSessionCookie(ctx, {
 					session,

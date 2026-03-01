@@ -233,13 +233,13 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete verification by value with hooks", async () => {
-		const verification = await internalAdapter.createVerificationValue({
+		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
 			expiresAt: new Date(Date.now() + 1000),
 		});
 
-		await internalAdapter.deleteVerificationValue(verification.id);
+		await internalAdapter.deleteVerificationByIdentifier("test-id-1");
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});

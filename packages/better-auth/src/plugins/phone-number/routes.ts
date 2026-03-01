@@ -473,7 +473,9 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					ctx.body.phoneNumber,
 				);
 				if (otp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						ctx.body.phoneNumber,
+					);
 				}
 			} else {
 				// Default internal verification logic
@@ -496,23 +498,30 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				const [otpValue, attempts] = otp.value.split(":");
 				const allowedAttempts = opts?.allowedAttempts || 3;
 				if (attempts && parseInt(attempts) >= allowedAttempts) {
-					await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						ctx.body.phoneNumber,
+					);
 					throw APIError.from(
 						"FORBIDDEN",
 						PHONE_NUMBER_ERROR_CODES.TOO_MANY_ATTEMPTS,
 					);
 				}
 				if (otpValue !== ctx.body.code) {
-					await ctx.context.internalAdapter.updateVerificationValue(otp.id, {
-						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
-					});
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						ctx.body.phoneNumber,
+						{
+							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
+						},
+					);
 					throw APIError.from(
 						"BAD_REQUEST",
 						PHONE_NUMBER_ERROR_CODES.INVALID_OTP,
 					);
 				}
 
-				await ctx.context.internalAdapter.deleteVerificationValue(otp.id);
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					ctx.body.phoneNumber,
+				);
 			}
 
 			if (ctx.body.updatePhoneNumber) {
@@ -789,9 +798,10 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			const [otpValue, attempts] = verification.value.split(":");
 			const allowedAttempts = opts?.allowedAttempts || 3;
+			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
 			if (attempts && parseInt(attempts) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					verification.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					phoneResetIdentifier,
 				);
 				throw APIError.from(
 					"FORBIDDEN",
@@ -799,8 +809,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				);
 			}
 			if (ctx.body.otp !== otpValue) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verification.id,
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					phoneResetIdentifier,
 					{
 						value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 					},
@@ -858,8 +868,8 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					hashedPassword,
 				);
 			}
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				phoneResetIdentifier,
 			);
 
 			if (ctx.context.options.emailAndPassword?.onPasswordReset) {

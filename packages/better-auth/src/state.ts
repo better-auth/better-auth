@@ -201,7 +201,7 @@ export async function parseGenericState(
 		expireCookie(c, stateCookie);
 
 		// Delete verification value after retrieval
-		await c.context.internalAdapter.deleteVerificationValue(data.id);
+		await c.context.internalAdapter.deleteVerificationByIdentifier(state);
 	}
 
 	// Check expiration

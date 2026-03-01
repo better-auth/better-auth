@@ -108,7 +108,9 @@ export const electronToken = (_opts: ElectronOptions) =>
 					);
 				}
 			}
-			await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+				`electron:${ctx.body.token}`,
+			);
 
 			const user = await ctx.context.internalAdapter.findUserById(
 				tokenRecord.userId,

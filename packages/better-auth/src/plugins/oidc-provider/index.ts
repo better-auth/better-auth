@@ -594,8 +594,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							consentCode,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -605,8 +605,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const codeExpiresInMs =
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						consentCode,
 						{
 							value: JSON.stringify({
 								...value,
@@ -812,8 +812,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -921,8 +921,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");

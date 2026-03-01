@@ -424,15 +424,10 @@ async function redirectWithAuthorizationCode(
 			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
-	ctx.context.verification_id
-		? await ctx.context.internalAdapter.updateVerificationValue(
-				ctx.context.verification_id,
-				data,
-			)
-		: await ctx.context.internalAdapter.createVerificationValue({
-				...data,
-				createdAt: new Date(iat * 1000),
-			});
+	await ctx.context.internalAdapter.createVerificationValue({
+		...data,
+		createdAt: new Date(iat * 1000),
+	});
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

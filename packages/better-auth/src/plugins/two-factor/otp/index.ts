@@ -312,8 +312,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			const [otp, counter] = toCheckOtp?.value?.split(":") ?? [];
 			if (!toCheckOtp || toCheckOtp.expiresAt < new Date()) {
 				if (toCheckOtp) {
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						toCheckOtp.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						`2fa-otp-${key}`,
 					);
 				}
 				throw APIError.from(
@@ -323,8 +323,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 			}
 			const allowedAttempts = options?.allowedAttempts || 5;
 			if (parseInt(counter!) >= allowedAttempts) {
-				await ctx.context.internalAdapter.deleteVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+					`2fa-otp-${key}`,
 				);
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -373,8 +373,8 @@ export const otp2fa = (options?: OTPOptions | undefined) => {
 				}
 				return valid(ctx);
 			} else {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					toCheckOtp.id,
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(
+					`2fa-otp-${key}`,
 					{
 						value: `${otp}:${(parseInt(counter!, 10) || 0) + 1}`,
 					},
