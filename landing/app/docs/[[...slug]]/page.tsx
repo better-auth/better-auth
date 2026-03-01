@@ -65,7 +65,9 @@ export default async function Page({
 			}}
 		>
 			<StepperTOC items={groupedToc}>
-				<LLMCopyButton />
+				<LLMCopyButton
+					rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/${gitBranch}/docs/content/docs/${page.path}`}
+				/>
 				<ViewOptions
 					markdownUrl={`${page.url}.mdx`}
 					githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
