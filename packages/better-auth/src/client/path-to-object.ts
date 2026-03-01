@@ -89,35 +89,61 @@ export type InferUserUpdateCtx<
 type InferBodyFromMetadata<T extends Endpoint> =
 	T["options"]["metadata"] extends { $Infer: { body: infer B } } ? B : never;
 
+/**
+ * Checks if a type is `any` using the `0 extends 1 & T` trick.
+ * Returns `true` if T is `any`, `false` otherwise.
+ */
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
-	C["body"] extends Record<string, any>
-		? C["body"] & {
-				fetchOptions?: FetchOptions | undefined;
-			}
-		: C["query"] extends Record<string, any>
+	IsAny<C["body"]> extends true
+		? C["query"] extends Record<string, any>
 			? {
 					query: C["query"];
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: C["query"] extends Record<string, any> | undefined
+			: {
+					fetchOptions?: FetchOptions | undefined;
+				}
+		: C["body"] extends Record<string, any>
+			? C["body"] & {
+					fetchOptions?: FetchOptions | undefined;
+				}
+			: C["query"] extends Record<string, any>
 				? {
-						query?: C["query"] | undefined;
+						query: C["query"];
 						fetchOptions?: FetchOptions | undefined;
 					}
-				: {
-						fetchOptions?: FetchOptions | undefined;
-					};
+				: C["query"] extends Record<string, any> | undefined
+					? {
+							query?: C["query"] | undefined;
+							fetchOptions?: FetchOptions | undefined;
+						}
+					: {
+							fetchOptions?: FetchOptions | undefined;
+						};
 
+/**
+ * Resolves the input context for an endpoint, using `$Infer.body` metadata
+ * to override the Zod-inferred body type when present. This prevents
+ * endpoints using `z.record(z.string(), z.any())` from collapsing to `any`.
+ *
+ * Falls back to `InferCtx` when metadata body is `never` or `any`.
+ */
 type InferEndpointCtx<
 	T extends Endpoint,
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > = [InferBodyFromMetadata<T>] extends [never]
 	? InferCtx<C, FetchOptions>
-	: InferBodyFromMetadata<T> & { fetchOptions?: FetchOptions | undefined };
+	: IsAny<InferBodyFromMetadata<T>> extends true
+		? InferCtx<C, FetchOptions>
+		: InferBodyFromMetadata<T> & {
+				fetchOptions?: FetchOptions | undefined;
+			};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
