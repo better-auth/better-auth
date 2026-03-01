@@ -51,20 +51,9 @@ export default async function Page({
 		<DocsPage
 			toc={page.data.toc}
 			full={false}
-			tableOfContent={{
-				style: "clerk",
-				footer: (
-					<div className="flex items-center gap-2 pt-2 border-t border-foreground/5">
-						<LLMCopyButton
-							rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/${gitBranch}/docs/content/docs/${page.path}`}
-						/>
-						<ViewOptions
-							markdownUrl={`${page.url}.mdx`}
-							githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
-						/>
-					</div>
-				),
-			}}
+		tableOfContent={{
+			style: "clerk",
+		}}
 			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
@@ -73,7 +62,18 @@ export default async function Page({
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			<DocsTitle>{page.data.title}</DocsTitle>
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton
+						rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+					<ViewOptions
+						markdownUrl={`${page.url}.mdx`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+				</div>
+			</div>
 			{page.data.description && (
 				<DocsDescription>{page.data.description}</DocsDescription>
 			)}
