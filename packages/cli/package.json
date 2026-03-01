@@ -35,8 +35,6 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "exports": {
     "./api": {
       "types": "./dist/api.d.mts",
