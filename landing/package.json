@@ -4,8 +4,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "fetch-docs": "bash scripts/fetch-docs.sh",
-    "postinstall": "pnpm run fetch-docs && fumadocs-mdx",
+    "link-docs": "bash scripts/link-docs.sh",
+    "postinstall": "pnpm run link-docs && fumadocs-mdx",
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start",

@@ -1,9 +1,6 @@
 .next
 node_modules
 .source
-content/docs
-content/docs-canary
-content/blogs
-.tmp-docs-fetch
+content/
 .env
 .DS_Store
