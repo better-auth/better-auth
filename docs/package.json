@@ -1,6 +1,5 @@
 {
-  "name": "docs-content",
-  "version": "0.1.0",
+  "name": "@better-auth/docs-content",
   "type": "module",
   "private": true,
   "dependencies": {
