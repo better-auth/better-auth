@@ -2,8 +2,6 @@ import type { Folder, Root } from "fumadocs-core/page-tree";
 import type { LucideIcon } from "lucide-react";
 import {
 	AppWindow,
-	BadgeCent,
-	BarChart4,
 	Binoculars,
 	Book,
 	CircleHelp,
@@ -12,20 +10,16 @@ import {
 	Gauge,
 	Key,
 	KeyRound,
-	Lock,
-	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
 	Phone,
 	ScanFace,
 	Server,
-	Settings,
 	ShieldCheck,
 	TriangleAlertIcon,
 	UserCircle,
 	UserSquare2,
-	Users,
 	Users2,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
