@@ -226,12 +226,12 @@ function BranchSwitcher() {
 								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
 								branch === "main"
 									? "text-foreground bg-foreground/5"
-: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
-						)}
-						onClick={() => switchBranch("main")}
-					>
-						<span className="grow text-left">main</span>
-						<span className="text-[10px] text-foreground/45 uppercase tracking-wider">
+									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
+							)}
+							onClick={() => switchBranch("main")}
+						>
+							<span className="grow text-left">main</span>
+							<span className="text-[10px] text-foreground/45 uppercase tracking-wider">
 								Stable
 							</span>
 						</button>
@@ -241,9 +241,9 @@ function BranchSwitcher() {
 								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
 								branch === "canary"
 									? "text-foreground bg-foreground/5"
-: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
-						)}
-						onClick={() => switchBranch("canary")}
+									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
+							)}
+							onClick={() => switchBranch("canary")}
 						>
 							<span className="grow text-left">canary</span>
 							<Badge

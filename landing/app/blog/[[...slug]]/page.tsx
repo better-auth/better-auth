@@ -25,9 +25,7 @@ function BlogList() {
 		.getPages()
 		.filter((p) => !p.data.draft)
 		.sort((a, b) => {
-			return (
-				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
-			);
+			return new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
 		});
 
 	return (
