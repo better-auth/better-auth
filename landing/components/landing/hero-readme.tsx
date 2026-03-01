@@ -894,7 +894,7 @@ function SentinelSection() {
 			</div>
 
 			<div className="mb-5">
-				<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+				<h3 className="text-base sm:text-lg  text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
 					Security infrastructure for your app.
 				</h3>
 				<p className="text-[14px] text-foreground/70 dark:text-foreground/55 leading-relaxed max-w-2xl">
@@ -2232,20 +2232,23 @@ export function HeroReadMe({
 						</div>
 
 						{/* Infrastructure transition */}
-						<div className="mt-12 mb-6">
-							<div className="flex items-center gap-3">
-								<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+						<div className="mt-16 mb-8">
+							<div className="flex items-center gap-4">
+								<span className="text-lg sm:text-xl font-bold text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 									Infrastructure
 								</span>
-								<div className="flex-1 border-t border-foreground/10" />
+								<div className="flex-1 border-t border-foreground/15" />
 							</div>
+							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
+								Managed infrastructure on top of the open-source framework.
+							</p>
 						</div>
 
 						{/* Dashboard */}
 						<div className="mt-10 mb-4">
 							<div className="mb-5">
-								<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-									The best user management and monitoring platform.
+								<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+									User management and monitoring platform.
 								</h3>
 								<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
 									Monitor sign-ups, manage users, track sessions, and surface
@@ -2397,7 +2400,7 @@ export function HeroReadMe({
 							{/* Audit Logs */}
 							<div className="mt-10">
 								<div className="mb-4">
-									<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
 										Audit Logs
 									</h3>
 									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
@@ -2435,7 +2438,7 @@ export function HeroReadMe({
 							{/* Transactional Comms */}
 							<div className="mt-10">
 								<div className="mb-4">
-									<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
 										Transactional Comms
 									</h3>
 									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
