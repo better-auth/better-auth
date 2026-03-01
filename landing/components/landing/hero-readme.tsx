@@ -13,7 +13,7 @@ import {
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
-import { cn, getSrc } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
 	AiNativeSection,
 	DatabaseSection,
