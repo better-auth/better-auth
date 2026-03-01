@@ -52,7 +52,8 @@
     }
   },
   "bin": {
-    "better-auth": "./dist/index.mjs"
+    "better-auth": "./dist/index.mjs",
+    "auth": "./dist/index.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
