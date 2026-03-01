@@ -284,9 +284,21 @@ export async function generateMetadata({
 		};
 	}
 	const page = blogs.getPage(slug);
-	if (!page || page.data.draft) return notFound();
-	const { title, description } = page.data;
-	return { title, description };
+  if (!page || page.data.draft) return notFound();
+	const { title, description, image } = page.data;
+	return {
+		title,
+		description,
+		...(image && {
+			openGraph: {
+				images: [image],
+			},
+			twitter: {
+				card: "summary_large_image" as const,
+				images: [image],
+			},
+		}),
+	};
 }
 
 export function generateStaticParams() {
