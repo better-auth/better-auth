@@ -685,7 +685,7 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 80rem) {
 	.docs-layout {
-		--fd-toc-width: 220px;
+		--fd-toc-width: 280px;
 		--fd-layout-width: calc(100vw - var(--landing-left-pane-width));
 		padding-inline-start: var(--landing-left-pane-width);
 	}
@@ -700,6 +700,10 @@ html:not([data-anchor-scrolling]) {
 	.docs-layout #nd-page > article {
 		width: auto;
 		max-width: none;
+	}
+
+	.docs-layout #nd-toc {
+		padding-inline-start: 2rem;
 	}
 }
 
