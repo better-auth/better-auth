@@ -1570,11 +1570,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 				icon: () => <Gauge className="size-4" />,
 			},
 			{
-				title: "Pricing & Plans",
-				href: "/docs/infrastructure/pricing",
-				icon: () => <BadgeCent className="size-4" />,
-			},
-			{
 				title: "Services",
 				group: true,
 				icon: () => <Server className="size-4" />,
