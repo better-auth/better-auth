@@ -216,6 +216,11 @@ export interface InternalAdapter<
 		id: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
+
+	updateVerificationByIdentifier(
+		identifier: string,
+		data: Partial<Verification>,
+	): Promise<Verification>;
 }
 
 type CreateCookieGetterFn = (
