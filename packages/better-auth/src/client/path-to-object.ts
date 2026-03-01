@@ -86,6 +86,9 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
+type InferBodyFromMetadata<T extends Endpoint> =
+	T["options"]["metadata"] extends { $Infer: { body: infer B } } ? B : never;
+
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
@@ -107,6 +110,14 @@ export type InferCtx<
 				: {
 						fetchOptions?: FetchOptions | undefined;
 					};
+
+type InferEndpointCtx<
+	T extends Endpoint,
+	C extends InputContext<any, any>,
+	FetchOptions extends ClientFetchOption,
+> = [InferBodyFromMetadata<T>] extends [never]
+	? InferCtx<C, FetchOptions>
+	: InferBodyFromMetadata<T> & { fetchOptions?: FetchOptions | undefined };
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -138,25 +149,26 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											C["params"]
 										>,
 									>(
-										...data: HasRequiredKeys<
-											InferCtx<C, FetchOptions>
-										> extends true
+										...data: T["path"] extends `/update-user`
 											? [
-													Prettify<
-														T["path"] extends `/sign-up/email`
-															? InferSignUpEmailCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
-													>,
+													Prettify<InferUserUpdateCtx<COpts, FetchOptions>>?,
 													FetchOptions?,
 												]
-											: [
-													Prettify<
-														T["path"] extends `/update-user`
-															? InferUserUpdateCtx<COpts, FetchOptions>
-															: InferCtx<C, FetchOptions>
-													>?,
-													FetchOptions?,
-												]
+											: HasRequiredKeys<
+														InferEndpointCtx<T, C, FetchOptions>
+													> extends true
+												? [
+														Prettify<
+															T["path"] extends `/sign-up/email`
+																? InferSignUpEmailCtx<COpts, FetchOptions>
+																: InferEndpointCtx<T, C, FetchOptions>
+														>,
+														FetchOptions?,
+													]
+												: [
+														Prettify<InferEndpointCtx<T, C, FetchOptions>>?,
+														FetchOptions?,
+													]
 									) => Promise<
 										BetterFetchResponse<
 											T["options"]["metadata"] extends {
