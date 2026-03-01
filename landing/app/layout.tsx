@@ -1,6 +1,7 @@
 import { GeistPixelSquare } from "geist/font/pixel";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import type { Metadata } from "next";
 import Script from "next/script";
 import type { ReactNode } from "react";
 import { CommandMenuProvider } from "@/components/command-menu";
@@ -17,18 +18,35 @@ const fontMono = Geist_Mono({
 	variable: "--font-mono",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
+	metadataBase: new URL("https://docs.better-auth.com"),
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
 	},
 	description: "The Most Comprehensive Authentication Framework",
+	icons: {
+		icon: [
+			{ url: "https://docs.better-auth.com/favicon/favicon.ico", sizes: "any" },
+			{
+				url: "https://docs.better-auth.com/favicon/favicon-32x32.png",
+				sizes: "32x32",
+				type: "image/png",
+			},
+			{
+				url: "https://docs.better-auth.com/favicon/favicon-16x16.png",
+				sizes: "16x16",
+				type: "image/png",
+			},
+		],
+		apple: "https://docs.better-auth.com/favicon/apple-touch-icon.png",
+	},
 	openGraph: {
-		images: ["/og.png"],
+		images: ["https://docs.better-auth.com/og.png"],
 	},
 	twitter: {
 		card: "summary_large_image",
-		images: ["/og.png"],
+		images: ["https://docs.better-auth.com/og.png"],
 	},
 };
 
@@ -36,25 +54,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
 		<html lang="en" suppressHydrationWarning>
 			<head>
-				<link rel="icon" href="/favicon/favicon.ico" sizes="any" />
-				<link
-					rel="icon"
-					type="image/png"
-					sizes="32x32"
-					href="/favicon/favicon-32x32.png"
-				/>
-				<link
-					rel="icon"
-					type="image/png"
-					sizes="16x16"
-					href="/favicon/favicon-16x16.png"
-				/>
-				<link
-					rel="apple-touch-icon"
-					sizes="180x180"
-					href="/favicon/apple-touch-icon.png"
-				/>
-				<link rel="manifest" href="/favicon/site.webmanifest" />
 				<script
 					dangerouslySetInnerHTML={{
 						__html: `

@@ -77,7 +77,7 @@ export function APIMethod({
 					<span className="rounded bg-primary/10 px-2 py-0.5 text-xs font-semibold uppercase text-primary">
 						{method}
 					</span>
-					<span className="text-muted-foreground">{path}</span>
+					<span className="text-muted-foreground/80">{path}</span>
 				</div>
 			)}
 			<div className="prose-sm">{children}</div>
@@ -187,7 +187,7 @@ function TypeIcon({ type }: { type: string }) {
 			strokeWidth="2"
 			strokeLinecap="round"
 			strokeLinejoin="round"
-			className={cn(className, "text-foreground/30")}
+			className={cn(className, "text-foreground/40")}
 		>
 			<path d="M8 3H7a2 2 0 0 0-2 2v5a2 2 0 0 1-2 2 2 2 0 0 1 2 2v5a2 2 0 0 0 2 2h1" />
 			<path d="M16 3h1a2 2 0 0 1 2 2v5a2 2 0 0 0 2 2 2 2 0 0 0-2 2v5a2 2 0 0 1-2 2h-1" />
@@ -263,7 +263,7 @@ function SchemaCodeBlock({
 		<div className="relative">
 			<button
 				type="button"
-				className="absolute top-2 right-2 font-mono text-[10px] text-foreground/30 hover:text-foreground/60 transition-colors"
+				className="absolute top-2 right-2 font-mono text-[10px] text-foreground/40 hover:text-foreground/65 transition-colors"
 				onClick={() => {
 					void navigator.clipboard.writeText(code);
 					setCopied(true);
@@ -272,7 +272,7 @@ function SchemaCodeBlock({
 			>
 				{copied ? "copied" : "copy"}
 			</button>
-			<pre className="overflow-x-auto p-4 font-mono text-[12px] leading-relaxed text-foreground/70 whitespace-pre">
+			<pre className="overflow-x-auto p-4 font-mono text-[12px] leading-relaxed text-foreground/80 whitespace-pre">
 				{code}
 			</pre>
 		</div>
@@ -319,24 +319,24 @@ export function DatabaseTable({
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className="text-foreground/40"
+						className="text-foreground/50"
 					>
 						<ellipse cx="12" cy="5" rx="9" ry="3" />
 						<path d="M3 5v14a9 3 0 0 0 18 0V5" />
 						<path d="M3 12a9 3 0 0 0 18 0" />
 					</svg>
 					{name ? (
-						<span className="font-mono text-[13px] text-foreground/70">
-							<span className="text-foreground/30">table </span>
+						<span className="font-mono text-[13px] text-foreground/80">
+							<span className="text-foreground/40">table </span>
 							{name}
 						</span>
 					) : (
-						<span className="text-[11px] text-foreground/30 font-mono uppercase tracking-widest">
+						<span className="text-[11px] text-foreground/40 font-mono uppercase tracking-widest">
 							Table
 						</span>
 					)}
 					{name && (
-						<span className="text-[10px] text-foreground/20 font-mono">
+						<span className="text-[10px] text-foreground/35 font-mono">
 							({fields.length})
 						</span>
 					)}
@@ -357,8 +357,8 @@ export function DatabaseTable({
 							className={cn(
 								"px-2 py-0.5 font-mono text-[10px] tracking-wide transition-colors cursor-pointer",
 								view === opt.key
-									? "text-foreground/70 bg-foreground/[0.05]"
-									: "text-foreground/50 hover:text-foreground/50",
+									? "text-foreground/80 bg-foreground/[0.05]"
+									: "text-foreground/55 hover:text-foreground/65",
 							)}
 						>
 							{opt.label}
@@ -378,8 +378,8 @@ export function DatabaseTable({
 							className={cn(
 								"px-1.5 py-0.5 font-mono text-[9px] tracking-wide transition-colors cursor-pointer",
 								sqlDialect === d.key
-									? "text-foreground/60 bg-foreground/[0.05]"
-									: "text-foreground/20 hover:text-foreground/40",
+									? "text-foreground/70 bg-foreground/[0.05]"
+									: "text-foreground/35 hover:text-foreground/50",
 							)}
 						>
 							{d.label}
@@ -397,8 +397,8 @@ export function DatabaseTable({
 							className={cn(
 								"px-1.5 py-0.5 font-mono text-[9px] tracking-wide transition-colors cursor-pointer",
 								drizzleProvider === d.key
-									? "text-foreground/60 bg-foreground/[0.05]"
-									: "text-foreground/20 hover:text-foreground/40",
+									? "text-foreground/70 bg-foreground/[0.05]"
+									: "text-foreground/35 hover:text-foreground/50",
 							)}
 						>
 							{d.label}
@@ -411,16 +411,16 @@ export function DatabaseTable({
 				<>
 					{/* Column headers */}
 					<div className="grid grid-cols-[minmax(120px,1.2fr)_minmax(100px,0.8fr)_minmax(40px,0.4fr)_minmax(150px,2fr)] border-b border-foreground/[0.06] bg-foreground/[0.02]">
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
 							Field
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
 							Type
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
 							Key
 						</div>
-						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/50">
+						<div className="px-4 py-1.5 text-[10px] font-mono uppercase tracking-widest text-foreground/60">
 							Description
 						</div>
 					</div>
@@ -436,7 +436,7 @@ export function DatabaseTable({
 							</div>
 							<div className="px-4 py-2 flex items-center gap-1.5">
 								<TypeIcon type={field.type} />
-								<span className="font-mono text-[11px] text-foreground/40">
+								<span className="font-mono text-[11px] text-foreground/55">
 									{field.type}
 								</span>
 							</div>
@@ -454,17 +454,17 @@ export function DatabaseTable({
 									</span>
 								)}
 								{field.isOptional && (
-									<span className="font-mono text-[10px] text-foreground/20">
+									<span className="font-mono text-[10px] text-foreground/35">
 										?
 									</span>
 								)}
 								{!field.isPrimaryKey &&
 									!field.isForeignKey &&
 									!field.isOptional && (
-										<span className="text-foreground/10">—</span>
+										<span className="text-foreground/20">—</span>
 									)}
 							</div>
-							<div className="px-4 py-2 text-[11px] text-foreground/40 leading-relaxed">
+							<div className="px-4 py-2 text-[11px] text-foreground/55 leading-relaxed">
 								{field.description}
 							</div>
 						</div>
@@ -516,7 +516,7 @@ export function Endpoint({
 			)}
 		>
 			<Method method={method || "GET"} />
-			<span className="font-mono text-sm text-muted-foreground">{path}</span>
+			<span className="font-mono text-sm text-muted-foreground/80">{path}</span>
 		</div>
 	);
 }
@@ -590,7 +590,7 @@ export function DividerText({ children }: { children: ReactNode }) {
 	return (
 		<div className="flex items-center justify-center w-full">
 			<div className="w-full border-b border-muted"></div>
-			<div className="flex items-center justify-center w-full text-muted-foreground">
+			<div className="flex items-center justify-center w-full text-muted-foreground/80">
 				{children}
 			</div>
 			<div className="w-full border-b border-muted"></div>
@@ -602,7 +602,7 @@ export function DividerText({ children }: { children: ReactNode }) {
 
 export function GenerateAppleJwt() {
 	return (
-		<div className="my-4 rounded-lg border bg-card p-4 text-sm text-muted-foreground">
+		<div className="my-4 rounded-lg border bg-card p-4 text-sm text-muted-foreground/80">
 			See the Apple documentation for generating a client secret JWT.
 		</div>
 	);

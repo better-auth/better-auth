@@ -62,12 +62,12 @@ export function HeroTitle() {
 
 				{/* CTA Buttons */}
 				<div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 sm:pt-4 lg:mt-5 pointer-events-auto">
-					<Link
+					<a
 						href="/sign-in"
 						className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 text-xs sm:text-sm font-medium hover:opacity-90 transition-colors"
 					>
 						Get Started
-					</Link>
+					</a>
 					<Link
 						href="/docs"
 						className="relative inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 text-neutral-600 dark:text-neutral-300 text-xs sm:text-sm font-medium transition-colors group"
