@@ -1407,7 +1407,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
 			await ctx.internalAdapter.createVerificationValue({
@@ -1433,7 +1433,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
 			const expiresAt = new Date(Date.now() + 60000);
@@ -1467,7 +1467,7 @@ describe("internal adapter test", async () => {
 				secondaryStorage: storage,
 			} satisfies BetterAuthOptions;
 
-			(await getMigrations(opts)).runMigrations();
+			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
 			await ctx.internalAdapter.createVerificationValue({
