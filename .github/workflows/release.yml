@@ -55,16 +55,16 @@ jobs:
           else
             # Check if the commit is on the main branch or a version branch
             git fetch origin main
-            CURRENT_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -E 'origin/(main|v[0-9]+\.[0-9]+\.x-latest)' | head -1 | sed 's/.*origin\///')
+            CURRENT_BRANCH=$(git branch -r --contains "$GITHUB_SHA" | grep -E 'origin/(main|v[0-9]+\.[0-9]+\.x)' | head -1 | sed 's/.*origin\///')
 
             if [[ "$CURRENT_BRANCH" == "main" ]]; then
               NPM_TAG="latest"
-            elif [[ "$CURRENT_BRANCH" =~ ^v[0-9]+\.[0-9]+\.x-latest$ ]]; then
-              # For version branches like v1.3.x-latest, v1.4.x-latest, use "latest" tag
-              NPM_TAG="latest"
+            elif [[ "$CURRENT_BRANCH" =~ ^v([0-9]+\.[0-9]+)\.x$ ]]; then
+              # For version branches like v1.3.x, v1.4.x, use the version as npm tag
+              NPM_TAG="${BASH_REMATCH[1]}"
             else
-              echo "The tagged commit is not on the main branch or a version branch (v*.*.x-latest)."
-              echo "::error ::Releases with the 'latest' npm tag must be on the main branch or a version branch."
+              echo "The tagged commit is not on the main branch or a version branch (v*.*.x)."
+              echo "::error ::Releases must be on the main branch or a version branch (v*.*.x)."
               exit 1
             fi
           fi

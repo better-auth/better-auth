@@ -49,8 +49,9 @@ The release workflow will publish to npm with the `beta` tag.
 
 For maintaining older versions (e.g., v1.3.x while v1.4.x is latest):
 
-1. Create a version branch named `v1.3.x-latest`
-2. Tags pushed from this branch will also receive the `latest` npm tag
+1. Create a version branch named `v1.3.x` (or `v1.4.x`, etc.)
+2. Tags pushed from this branch will receive the version as the npm tag
+   (e.g., `v1.4.x` publishes with tag `1.4`)
 
 ## Notes
 
@@ -66,5 +67,5 @@ For maintaining older versions (e.g., v1.3.x while v1.4.x is latest):
 * All releases are triggered by pushing tags matching `v*`
 * The CI determines the npm tag based on:
   * Pre-release suffix in tag name (canary, beta, rc, next)
-  * Whether the commit is on `main` or a version branch (`v*.*.x-latest`)
+  * Whether the commit is on `main` or a version branch (`v*.*.x`)
 * Always ensure CI is green before creating release tags
