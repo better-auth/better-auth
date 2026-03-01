@@ -633,6 +633,55 @@ The `/forget-password/email-otp` endpoint has been removed. Use the standard pas
 
 The `better-auth/adapters/test` export has been removed. Use the `testUtils` plugin instead.
 
+### API Key Plugin Moved to `@better-auth/api-key`
+
+The api-key plugin has been extracted into its own package. Install it separately:
+
+```bash
+npm install @better-auth/api-key
+```
+
+```diff
+- import { apiKey } from "better-auth/plugins";
++ import { apiKey } from "@better-auth/api-key";
+```
+
+**Schema changes:**
+
+- The `userId` field on the `ApiKey` table has been renamed to `referenceId`.
+- A new `configId` field has been added (defaults to `"default"`).
+
+**Plugin options changes:**
+
+The `permissions.defaultPermissions` callback's first argument is now `referenceId` instead of `userId`:
+
+```diff
+export const auth = betterAuth({
+    plugins: [
+        apiKey({
+            permissions: {
+-               defaultPermissions: async (userId, ctx) => {
++               defaultPermissions: async (referenceId, ctx) => {
+                    return {
+                        files: ["read"],
+                        users: ["read"],
+                    };
+                },
+            }
+        })
+    ]
+})
+```
+
+**Client SDK changes:**
+
+```diff
+- const ownerId = apiKey.userId;
++ const ownerId = apiKey.referenceId;
++ const ownerType = apiKey.references; // "user" or "organization"
++ const configId = apiKey.configId;
+```
+
 ---
 
 ## 🛠 Developer Changes
