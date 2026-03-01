@@ -68,7 +68,7 @@ export function DocsSidebar() {
 			initial={{ x: -24, opacity: 0 }}
 			animate={{ x: 0, opacity: 1 }}
 			transition={{ duration: 0.28, ease: "easeOut" }}
-			className="fixed left-0 top-[44px] bottom-0 w-[22vw] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
+			className="fixed left-0 top-[44px] bottom-0 w-[22vw] max-w-[300px] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
 		>
 			{/* Branch switcher */}
 			<BranchSwitcher />
@@ -109,7 +109,7 @@ export function DocsSidebar() {
 								<button
 									type="button"
 									className={cn(
-										"border-b border-foreground/6 w-full text-left flex gap-2 items-center px-4 py-3 transition-colors",
+										"border-b border-foreground/6 w-full text-left flex gap-2 items-center px-4 py-2.5 transition-colors",
 										"lg:px-7",
 										"font-medium text-sm tracking-wider",
 										currentOpen === index

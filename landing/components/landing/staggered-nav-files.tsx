@@ -23,8 +23,11 @@ interface NavFileItem {
 const navFiles: NavFileItem[] = [
 	{ name: "readme", href: "/" },
 	{ name: "docs", href: "/docs" },
-	{ name: "pricing", href: "/pricing" },
-	{ name: "enterprise", href: "/enterprise" },
+];
+
+const productFiles: NavFileItem[] = [
+	{ name: "framework", href: "/products?tab=framework" },
+	{ name: "infrastructure", href: "/products?tab=infrastructure" },
 ];
 
 const resourceFiles: NavFileItem[] = [
@@ -93,12 +96,21 @@ const logoAssets = {
 
 export function StaggeredNavFiles() {
 	const pathname = usePathname() || "/";
+	const [productsOpen, setProductsOpen] = useState(false);
 	const [resourcesOpen, setResourcesOpen] = useState(false);
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 	const [mobileView, setMobileView] = useState<"docs" | "nav">("docs");
 	const [mobileDocSection, setMobileDocSection] = useState(-1);
+	const productsTimeout = useRef<NodeJS.Timeout>(undefined);
 	const resourcesTimeout = useRef<NodeJS.Timeout>(undefined);
 
+	const openProducts = () => {
+		clearTimeout(productsTimeout.current);
+		setProductsOpen(true);
+	};
+	const closeProducts = () => {
+		productsTimeout.current = setTimeout(() => setProductsOpen(false), 150);
+	};
 	const openResources = () => {
 		clearTimeout(resourcesTimeout.current);
 		setResourcesOpen(true);
@@ -108,14 +120,15 @@ export function StaggeredNavFiles() {
 	};
 	const isActive = useCallback((href: string) => pathname === href, [pathname]);
 	const isDocs = pathname.startsWith("/docs");
+	const isProductPage = pathname === "/products" || pathname.startsWith("/products/");
 	const isResourcePage = resourceFiles.some((r) => {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
 	});
 	const isNarrowLeft = isDocs;
 	const leftPaneWidthClass = isNarrowLeft
-		? "w-[22vw]"
-		: pathname === "/pricing" || isResourcePage
+		? "w-[22vw] max-w-[300px]"
+		: isProductPage || isResourcePage
 			? "w-[30%]"
 			: "w-[40%]";
 	const navBottomBorderClass = isNarrowLeft ? "border-foreground/5" : "";
@@ -274,11 +287,116 @@ export function StaggeredNavFiles() {
 						);
 					})}
 
-					{/* Resources folder tab */}
+					{/* Products folder tab */}
 					<motion.div
 						initial={{ opacity: 0, y: -4 }}
 						animate={{ opacity: 1, y: 0 }}
-						transition={{ duration: 0.2, delay: 0.17, ease: "easeOut" }}
+						transition={{ duration: 0.2, delay: 0.14, ease: "easeOut" }}
+						className="relative flex-1"
+						onMouseEnter={openProducts}
+						onMouseLeave={closeProducts}
+					>
+						<div
+							className={`group/tab flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} cursor-pointer transition-colors duration-150 ${
+								isProductPage
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: productsOpen
+										? "bg-foreground/[0.04]"
+										: "hover:bg-foreground/[0.03]"
+							}`}
+						>
+							<span
+								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+									isProductPage
+										? "text-foreground"
+										: productsOpen
+											? "text-foreground/80"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								products
+							</span>
+							<svg
+								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
+									productsOpen ? "rotate-180" : ""
+								}`}
+								viewBox="0 0 10 6"
+								fill="none"
+							>
+								<path
+									d="M1 1L5 5L9 1"
+									stroke="currentColor"
+									strokeWidth="1.2"
+								/>
+							</svg>
+						</div>
+
+						<AnimatePresence>
+							{productsOpen && (
+								<motion.div
+									initial={{ opacity: 0, y: -4 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -4 }}
+									transition={{ duration: 0.12, ease: "easeOut" }}
+									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+								>
+									{productFiles.map((item, i) => (
+										<motion.div
+											key={item.name}
+											initial={{ opacity: 0 }}
+											animate={{ opacity: 1 }}
+											transition={{ duration: 0.1, delay: i * 0.02 }}
+										>
+											<Link
+												href={item.href}
+												onClick={() => setProductsOpen(false)}
+												className="block"
+											>
+												<DropdownItem item={item} />
+											</Link>
+										</motion.div>
+									))}
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</motion.div>
+
+				{/* Enterprise tab */}
+				<motion.div
+					initial={{ opacity: 0, y: -4 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{
+						duration: 0.2,
+						delay: 0.155,
+						ease: "easeOut",
+					}}
+					className="flex-1"
+				>
+					<Link
+						href="/enterprise"
+						className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
+							isActive("/enterprise")
+								? `bg-background border-b-2 ${activeTabBorderClass}`
+								: "bg-transparent hover:bg-foreground/[0.03]"
+						}`}
+					>
+						<span
+							className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+								isActive("/enterprise")
+									? "text-foreground"
+									: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+							}`}
+						>
+							enterprise
+						</span>
+					</Link>
+				</motion.div>
+
+				{/* Resources folder tab */}
+				<motion.div
+					initial={{ opacity: 0, y: -4 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: 0.2, delay: 0.17, ease: "easeOut" }}
 						className="relative flex-1"
 						onMouseEnter={openResources}
 						onMouseLeave={closeResources}
@@ -325,7 +443,7 @@ export function StaggeredNavFiles() {
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full left-0 z-50 min-w-[160px] border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
 								>
 									{resourceFiles.map((item, i) => (
 										<motion.div
@@ -669,7 +787,7 @@ export function StaggeredNavFiles() {
 									)}
 
 									{/* Default nav items */}
-									{[...navFiles, ...resourceFiles].map((item, i) => (
+									{[...navFiles, ...productFiles, ...resourceFiles].map((item, i) => (
 										<motion.div
 											key={item.name}
 											initial={{ opacity: 0, x: -8 }}
@@ -719,7 +837,7 @@ export function StaggeredNavFiles() {
 										animate={{ opacity: 1, x: 0 }}
 										transition={{
 											duration: 0.15,
-											delay: [...navFiles, ...resourceFiles].length * 0.03,
+											delay: [...navFiles, ...productFiles, ...resourceFiles].length * 0.03,
 										}}
 										className="px-5 pt-4"
 									>
