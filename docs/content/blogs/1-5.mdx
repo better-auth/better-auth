@@ -273,7 +273,7 @@ export const auth = betterAuth({
 
 ### API Key Plugin
 
-The API Key plugin has recieved some major improvements.
+The API Key plugin has received some major improvements.
 
 We've extracted the plugin into it's own package, install it via:
 
@@ -322,7 +322,7 @@ You can now support multiple api-key use-cases within your app!
 
 ```ts
 export const auth = betterAuth({
-    pluguns: [
+    plugins: [
         apiKey([
             {
                 configId: "user-keys",
@@ -331,7 +331,7 @@ export const auth = betterAuth({
             {
                 configId: "org-keys",
                 prefix: "org_",
-                refrences: "organization"
+                references: "organization"
             }
         ])
     ]
