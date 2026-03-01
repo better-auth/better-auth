@@ -451,7 +451,7 @@ function PricingCard({
 
 				{/* CTA */}
 				<div className="mt-auto">
-					<Link href={tier.ctaHref} className="block">
+					<a href={tier.ctaHref} className="block">
 						<div
 							className={`w-full py-2.5 text-center transition-all duration-200 cursor-pointer ${
 								isHighlighted
@@ -463,7 +463,7 @@ function PricingCard({
 								{tier.cta}
 							</span>
 						</div>
-					</Link>
+					</a>
 				</div>
 			</div>
 		</motion.div>
