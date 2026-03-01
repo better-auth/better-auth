@@ -1,6 +1,6 @@
 ---
 title: "Better Auth 1.5"
-description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
+description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, secret key rotation, and more!"
 date: 2026-02-28
 author:
   name: "Alex Yang"
@@ -50,6 +50,13 @@ All existing commands like `migrate` and `generate` are available through the ne
 npx auth migrate   # Run database migrations
 npx auth generate  # Generate auth schema
 npx auth upgrade   # Upgrade Better Auth to the latest version
+```
+
+The `generate` command now also supports a `--adapter` flag, letting you generate schema output tailored to your specific database adapter without needing a full Better Auth config file:
+
+```bash
+npx auth generate --adapter prisma
+npx auth generate --adapter drizzle
 ```
 
 ### Remote MCP Auth Client
@@ -381,6 +388,31 @@ export const auth = betterAuth({
 
 ---
 
+### Non-Destructive Secret Key Rotation
+
+Better Auth now supports rotating `BETTER_AUTH_SECRET` without invalidating existing sessions, tokens, or encrypted data. When you need to rotate your secret — whether for scheduled rotation or incident response — you can introduce a new key while keeping old keys available for decryption.
+
+```tsx
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    secrets: [
+        { version: 2, value: "new-secret-key-at-least-32-chars" },   // current (first = active)
+        { version: 1, value: "old-secret-key-still-used-to-decrypt" }, // previous
+    ],
+});
+```
+
+Or via environment variable:
+
+```bash
+BETTER_AUTH_SECRETS="2:new-secret-key,1:old-secret-key"
+```
+
+New data is always encrypted with the latest key (first in the array), while decryption automatically tries all configured keys. This lets you roll secrets gradually without downtime or data loss.
+
+---
+
 ### Seat-Based Billing (Stripe)
 
 The Stripe plugin now supports per-seat billing for organizations. Member changes automatically sync seat quantity with Stripe.
@@ -521,6 +553,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 - **Limit enumeration on sign-up**: When email verification is required, sign-up no longer reveals existing accounts.
 - **`customSyntheticUser` option**: Support plugin fields in enumeration-protected responses ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
 - **Form data support for email sign-in/sign-up**: In addition to JSON bodies.
+- **Automatic base URL detection from `VERCEL_URL` and `NEXTAUTH_URL`**: The client now falls back to `VERCEL_URL` and `NEXTAUTH_URL` environment variables when no explicit `baseURL` is configured, making server-side rendering on Vercel work out of the box.
 
 ### OAuth & Providers
 
@@ -555,6 +588,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 ### Plugin Improvements
 
 - **`magic-link`: `allowedAttempts` option**: Limit verification attempts.
+- **`email-otp`: Change email flow with OTP**: Users can change their email address via OTP verification, with optional current-email confirmation for added security.
 - **`email-otp`: Name, image, and additional fields in sign-in**: Richer OTP sign-in.
 - **`phone-number`: Additional fields in `signUpOnVerification`**: Pass extra data.
 - **`two-factor`: `twoFactorCookieMaxAge` and server-side trust device expiration**.
@@ -724,7 +758,12 @@ This release includes over 220 bug fixes addressing issues across all areas:
 - **Prisma Adapter**: Fixed null condition handling and unique where field detection.
 - **OAuth**: Fixed `refresh_token_expires_in` handling, callback routing, and token encryption.
 - **Organization**: Fixed role deletion prevention, active member refetch, and dynamic access control inference.
-- **Expo**: Fixed immutable headers on Cloudflare Workers and cookie injection wildcards.
+- **Expo**: Fixed immutable headers on Cloudflare Workers, cookie injection wildcards, and skipped cookie/expo-origin headers for ID token requests.
+- **Kysely Adapter**: Fixed edge case with aliased joined table names.
+- **Last Login Method**: Fixed handling of multiple Set-Cookie headers.
+- **Session Listing**: Fixed endpoints returning empty arrays when more than 100 inactive sessions exist.
+- **Organization**: Fixed path matching for active member signals.
+- **OAuth**: Fixed preserving refresh tokens when provider omits them on refresh.
 - **Secondary Storage**: Synced `updateSession` changes and removed duplicate writes.
 - And many more!
 
