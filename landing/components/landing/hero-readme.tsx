@@ -2337,7 +2337,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={"/demo-dark.mp4"}
+											src={"https://docs.better-auth.com/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2345,7 +2345,7 @@ export function HeroReadMe({
 											className="w-full h-auto -mt-[2px] dark:block hidden"
 										/>
 										<video
-											src={"/demo-light.mp4"}
+											src={"https://docs.better-auth.com/demo-light.mp4"}
 											autoPlay
 											loop
 											muted
