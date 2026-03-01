@@ -97,8 +97,10 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					).filter((v) => typeof v === "string");
 
 					if (!sessionTokens.length) return ctx.json([]);
-					const sessions =
-						await ctx.context.internalAdapter.findSessions(sessionTokens);
+					const sessions = await ctx.context.internalAdapter.findSessions(
+						sessionTokens,
+						{ onlyActiveSessions: true },
+					);
 					const validSessions = sessions.filter(
 						(session) => session && session.session.expiresAt > new Date(),
 					);
@@ -140,7 +142,6 @@ export const multiSession = (options?: MultiSessionConfig | undefined) => {
 					method: "POST",
 					body: setActiveSessionBodySchema,
 					requireHeaders: true,
-					use: [sessionMiddleware],
 					metadata: {
 						openapi: {
 							description: "Set the active session",

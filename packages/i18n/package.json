@@ -1,23 +1,40 @@
 {
   "name": "@better-auth/i18n",
-  "version": "1.5.0-beta.17",
-  "type": "module",
+  "version": "1.5.1-beta.1",
   "description": "i18n plugin for Better Auth - translate error messages",
-  "main": "dist/index.mjs",
-  "module": "dist/index.mjs",
-  "types": "dist/index.d.mts",
+  "type": "module",
+  "license": "MIT",
+  "homepage": "https://www.better-auth.com/docs/plugins/i18n",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/better-auth/better-auth.git",
+    "directory": "packages/i18n"
+  },
+  "keywords": [
+    "auth",
+    "i18n",
+    "internationalization",
+    "typescript",
+    "better-auth"
+  ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "test": "vitest",
-    "coverage": "vitest run --coverage --coverage.provider=istanbul",
-    "lint:package": "publint run --strict",
-    "lint:types": "attw --profile esm-only --pack .",
     "build": "tsdown",
     "dev": "tsdown --watch",
-    "typecheck": "tsc --project tsconfig.json"
+    "lint:package": "publint run --strict",
+    "lint:types": "attw --profile esm-only --pack .",
+    "typecheck": "tsc --project tsconfig.json",
+    "test": "vitest",
+    "coverage": "vitest run --coverage --coverage.provider=istanbul"
   },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.mjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "exports": {
     ".": {
       "dev-source": "./src/index.ts",
@@ -48,22 +65,5 @@
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*"
-  },
-  "files": [
-    "dist"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/better-auth/better-auth.git",
-    "directory": "packages/i18n"
-  },
-  "homepage": "https://www.better-auth.com/docs/plugins/i18n",
-  "keywords": [
-    "auth",
-    "i18n",
-    "internationalization",
-    "typescript",
-    "better-auth"
-  ],
-  "license": "MIT"
+  }
 }

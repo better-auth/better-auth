@@ -1,15 +1,7 @@
 {
-  "name": "@better-auth/docs",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@better-auth/docs-content",
   "type": "module",
-  "scripts": {
-    "build": "next build",
-    "dev": "next dev",
-    "start": "next start",
-    "postinstall": "fumadocs-mdx",
-    "scripts:endpoint-to-doc": "bun ./scripts/endpoint-to-doc/index.ts"
-  },
+  "private": true,
   "dependencies": {
     "@ai-sdk/openai-compatible": "^2.0.28",
     "@ai-sdk/react": "^3.0.80",

@@ -39,7 +39,6 @@ gitea
 MMDD
 ABCDEFGHJKLMNPQRSTUVWXYZ23456789
 setex
-kxeyPrefix
 dyld
 nsis
 ftyp
@@ -48,3 +47,4 @@ sessionMiddleware
 SIEM
 sess
 reactivations
+whsec
