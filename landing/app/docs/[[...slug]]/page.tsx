@@ -13,6 +13,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
+import { Features } from "@/components/docs/features";
 import { groupTocItems } from "@/components/docs/group-toc-items";
 import {
 	AddToCursor,
@@ -28,7 +29,6 @@ import { Callout } from "@/components/ui/callout";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
-import { Features } from "@/components/docs/features";
 
 export default async function Page({
 	params,
