@@ -28,7 +28,7 @@ export interface DynamicCodeblockProps {
 	 * @defaultValue true
 	 */
 	allowCopy?: boolean;
-	options?: Omit<HighlightOptions, "lang">;
+	options?: Omit<CodeBlockProps, "lang"> & { components?: Record<string, FC> };
 }
 
 const PropsContext = createContext<CodeBlockProps | undefined>(undefined);
