@@ -17,7 +17,7 @@ export function FloatingToolbar() {
 			<button
 				type="button"
 				onClick={() => setOpen(true)}
-				className="group flex items-center justify-center size-9 text-foreground/30 hover:text-foreground/60 transition-colors"
+				className="group flex items-center justify-center size-9 text-foreground/40 hover:text-foreground/70 transition-colors"
 			>
 				<kbd className="flex items-center gap-0.5 text-[10px] font-mono">
 					<span className="text-[11px]">&#8984;</span>K
@@ -25,7 +25,7 @@ export function FloatingToolbar() {
 				<span className="sr-only">Command menu</span>
 			</button>
 			<span className="w-px h-3 bg-foreground/[0.08]" />
-			<div className="flex items-center justify-center size-9 [&_button]:text-foreground/30 [&_button:hover]:text-foreground/60">
+			<div className="flex items-center justify-center size-9 [&_button]:text-foreground/40 [&_button:hover]:text-foreground/70">
 				<ThemeToggle />
 			</div>
 		</motion.div>
