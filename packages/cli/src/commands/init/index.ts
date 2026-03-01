@@ -1522,7 +1522,7 @@ export const auth = betterAuth({
 		return;
 	}
 	if (connectResponse.connect) {
-		await open("https://beta.better-auth.com/onboarding");
+		await open("https://better-auth.com/onboarding");
 		console.log(
 			chalk.cyan("\n→ ") +
 				"Opening Better Auth onboarding in your browser...\n",
