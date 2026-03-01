@@ -307,9 +307,9 @@ function PricingHero() {
 							<p className="text-sm font-light text-foreground/80 tabular-nums flex items-baseline justify-center gap-0.5">
 								<span>{tier.price}</span>
 								{tier.note && (
-<span className="text-[9px] text-foreground/50 dark:text-foreground/55 font-mono">
-									{tier.note}
-								</span>
+									<span className="text-[9px] text-foreground/50 dark:text-foreground/55 font-mono">
+										{tier.note}
+									</span>
 								)}
 							</p>
 						</div>
@@ -330,10 +330,10 @@ function PricingHero() {
 							}}
 							className="flex items-baseline justify-between py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-<span className="text-[11px] text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
-							{item.label}
-						</span>
-						<span className="text-[11px] text-foreground/85 dark:text-foreground/75 font-mono">
+							<span className="text-[11px] text-foreground/70 dark:text-foreground/50 uppercase tracking-wider">
+								{item.label}
+							</span>
+							<span className="text-[11px] text-foreground/85 dark:text-foreground/75 font-mono">
 								{item.value}
 							</span>
 						</motion.div>
@@ -407,9 +407,9 @@ function PricingCard({
 						{tier.name}
 					</h3>
 					{isHighlighted && (
-<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/50 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
-						popular
-					</span>
+						<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/50 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
+							popular
+						</span>
 					)}
 				</div>
 
@@ -423,9 +423,9 @@ function PricingCard({
 						{tier.price}
 					</span>
 					{tier.priceNote && (
-<span className="text-[11px] text-foreground/60 dark:text-foreground/40 font-mono">
-						{tier.priceNote}
-					</span>
+						<span className="text-[11px] text-foreground/60 dark:text-foreground/40 font-mono">
+							{tier.priceNote}
+						</span>
 					)}
 				</div>
 
@@ -512,21 +512,21 @@ export function PricingPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.05 }}
 							>
-<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
-								<span className="text-foreground/75 dark:text-foreground/60">
-									# Framework
-								</span>
-							</p>
+								<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+									<span className="text-foreground/75 dark:text-foreground/60">
+										# Framework
+									</span>
+								</p>
 
 								<div className="relative border border-dashed border-foreground/[0.12] bg-foreground/[0.02] overflow-hidden">
 									<div className="px-5 py-5">
 										<div className="flex items-start justify-between gap-6">
 											<div className="space-y-2.5 flex-1">
 												<div className="flex items-center gap-2">
-<h3 className="text-[11px] font-mono uppercase tracking-widest text-foreground/85">
-													Community
-												</h3>
-												<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
+													<h3 className="text-[11px] font-mono uppercase tracking-widest text-foreground/85">
+														Community
+													</h3>
+													<span className="text-[9px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 border border-dashed border-foreground/15 px-1.5 py-0.5 leading-none">
 														open source
 													</span>
 												</div>
@@ -567,11 +567,11 @@ export function PricingPageClient() {
 								animate={{ opacity: 1 }}
 								transition={{ duration: 0.4, delay: 0.15 }}
 							>
-<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
-								<span className="text-foreground/75 dark:text-foreground/60">
-									# Infrastructure
-								</span>
-							</p>
+								<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+									<span className="text-foreground/75 dark:text-foreground/60">
+										# Infrastructure
+									</span>
+								</p>
 
 								{/* Pricing Cards */}
 								<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-0">
@@ -587,8 +587,8 @@ export function PricingPageClient() {
 										</span>{" "}
 										An event is any auth action tracked by the dashboard &mdash;
 										sign-ins, sign-ups, session refreshes, password resets, OTP
-										verifications, and more. Each API call that triggers an
-										auth action counts as one event.
+										verifications, and more. Each API call that triggers an auth
+										action counts as one event.
 									</p>
 								</div>
 							</motion.div>
@@ -599,9 +599,9 @@ export function PricingPageClient() {
 								animate={{ opacity: 1, y: 0 }}
 								transition={{ duration: 0.3, delay: 0.45 }}
 							>
-<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
-								# feature comparison
-							</p>
+								<p className="text-[11px] uppercase tracking-widest text-foreground/55 dark:text-foreground/40 font-mono mb-5">
+									# feature comparison
+								</p>
 
 								<div className="border border-dashed border-foreground/[0.08] overflow-x-auto">
 									<table className="w-full min-w-[600px]">
@@ -615,8 +615,8 @@ export function PricingPageClient() {
 														key={name}
 														className={`text-center text-[11px] uppercase tracking-widest font-mono font-normal py-3 px-3 w-[18%] ${
 															name === "Pro"
-? "text-foreground/80 bg-foreground/[0.025]"
-															: "text-foreground/60 dark:text-foreground/40"
+																? "text-foreground/80 bg-foreground/[0.025]"
+																: "text-foreground/60 dark:text-foreground/40"
 														}`}
 													>
 														{name}

@@ -28,8 +28,16 @@ export const metadata: Metadata = {
 	icons: {
 		icon: [
 			{ url: "https://docs.better-auth.com/favicon/favicon.ico", sizes: "any" },
-			{ url: "https://docs.better-auth.com/favicon/favicon-32x32.png", sizes: "32x32", type: "image/png" },
-			{ url: "https://docs.better-auth.com/favicon/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+			{
+				url: "https://docs.better-auth.com/favicon/favicon-32x32.png",
+				sizes: "32x32",
+				type: "image/png",
+			},
+			{
+				url: "https://docs.better-auth.com/favicon/favicon-16x16.png",
+				sizes: "16x16",
+				type: "image/png",
+			},
 		],
 		apple: "https://docs.better-auth.com/favicon/apple-touch-icon.png",
 	},
