@@ -3101,7 +3101,7 @@ snapshots:
     dependencies:
       '@types/http-cache-semantics': 4.2.0
       '@types/keyv': 3.1.4
-      '@types/node': 25.3.3
+      '@types/node': 22.19.13
       '@types/responselike': 1.0.3
 
   '@types/debug@4.1.12':
@@ -3118,7 +3118,7 @@ snapshots:
 
   '@types/keyv@3.1.4':
     dependencies:
-      '@types/node': 25.3.3
+      '@types/node': 22.19.13
 
   '@types/ms@2.1.0': {}
 
@@ -3146,7 +3146,7 @@ snapshots:
 
   '@types/responselike@1.0.3':
     dependencies:
-      '@types/node': 25.3.3
+      '@types/node': 22.19.13
 
   '@types/verror@1.10.11':
     optional: true
