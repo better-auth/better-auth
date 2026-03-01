@@ -61,6 +61,7 @@
     "@babel/preset-env": "^7.29.0",
     "@babel/runtime": "^7.28.6",
     "@types/babel__core": "^7.20.5",
-    "@types/react": "^19.2.14"
+    "@types/react": "^19.2.14",
+    "babel-preset-expo": "~55.0.10"
   }
 }
