@@ -51,7 +51,7 @@ For maintaining older versions (e.g., v1.3.x while v1.4.x is latest):
 
 1. Create a version branch named `v1.3.x` (or `v1.4.x`, etc.)
 2. Tags pushed from this branch will receive the version as the npm tag
-   (e.g., `v1.4.x` publishes with tag `v1.4`)
+   (e.g., `v1.4.x` publishes with tag `release-1.4`)
 
 ## Notes
 
