@@ -19,9 +19,9 @@ const pricingTiers = [
 			"Unlimited users",
 			"All auth features",
 			"User management",
-			"Audit logs (1 day)",
+			"Audit log retention (1 day)",
 			"1 dashboard seat",
-			"10k events/mo included",
+			"10k audit logs/mo included",
 		],
 		cta: "Get Started",
 		ctaHref: "/sign-in",
@@ -39,9 +39,9 @@ const pricingTiers = [
 		featuresPrefix: "Everything in Starter +",
 		features: [
 			"3 seats included",
-			"100k events/mo included",
+			"100k audit logs/mo included",
 			"Security detection (1k/mo)",
-			"Audit logs (7 days)",
+			"Audit log retention (7 days)",
 			"Transactional email & SMS",
 			"Email templates & abuse protection",
 		],
@@ -61,9 +61,9 @@ const pricingTiers = [
 		featuresPrefix: "Everything in Pro +",
 		features: [
 			"Self-service SSO included",
-			"500k events/mo included",
+			"500k audit logs/mo included",
 			"Security detection (10k/mo)",
-			"Audit logs (30 days)",
+			"Audit log retention (30 days)",
 			"Log drain",
 			"Email support",
 			"5 seats included",
@@ -83,10 +83,10 @@ const pricingTiers = [
 		seats: "Unlimited seats",
 		featuresPrefix: "Everything in Business +",
 		features: [
-			"Custom events volume",
+			"Custom audit logs volume",
 			"Custom security detection",
 			"Dashboard RBAC",
-			"Custom audit logs",
+			"Custom audit log retention",
 			"Implementation assistance",
 			"Advanced support",
 			"Unlimited seats",
@@ -137,21 +137,21 @@ const comparisonRows = [
 		enterprise: true,
 	},
 	{
-		label: "Events included",
+		label: "Audit logs included",
 		starter: "10k/mo",
 		pro: "100k/mo",
 		business: "500k/mo",
 		enterprise: "Custom",
 	},
 	{
-		label: "Additional events",
+		label: "Additional audit logs",
 		starter: false,
 		pro: "$5/100k",
 		business: "$5/100k",
 		enterprise: "Custom",
 	},
 	{
-		label: "Audit logs",
+		label: "Audit log retention",
 		starter: "1 day",
 		pro: "7 days",
 		business: "30 days",
@@ -165,7 +165,7 @@ const comparisonRows = [
 		enterprise: "Custom",
 	},
 	{
-		label: "Additional security events",
+		label: "Additional security detection",
 		starter: false,
 		pro: "$100/100k",
 		business: "$100/100k",
@@ -200,7 +200,7 @@ const comparisonRows = [
 		enterprise: true,
 	},
 	{
-		label: "Custom audit logs",
+		label: "Custom audit log retention",
 		starter: false,
 		pro: false,
 		business: false,
@@ -268,7 +268,7 @@ function PricingHero() {
 		{ label: "Framework", value: "Open source" },
 		{ label: "Users", value: "Unlimited" },
 		{ label: "Plugins", value: "50+ included" },
-		{ label: "Events", value: "From 10k/mo" },
+		{ label: "Audit logs", value: "From 10k/mo" },
 		{ label: "Extra seats", value: "$10/seat (Pro+)" },
 		{ label: "Security", value: "$100/100k overage" },
 		{ label: "SSO", value: "Business+" },
@@ -591,12 +591,12 @@ export function PricingPageClient() {
 								<div className="mt-4 px-1">
 									<p className="text-xs text-foreground/45 dark:text-foreground/35 leading-relaxed">
 										<span className="text-foreground/60 dark:text-foreground/50 font-mono uppercase tracking-wider">
-											What&apos;s an event?
+											What&apos;s an audit log?
 										</span>{" "}
-										An event is any auth action tracked by the dashboard &mdash;
-										sign-ins, sign-ups, session refreshes, password resets, OTP
-										verifications, and more. Each API call that triggers an auth
-										action counts as one event.
+										An audit log is any auth action tracked by the dashboard
+										&mdash; sign-ins, sign-ups, session refreshes, password
+										resets, OTP verifications, and more. Each API call that
+										triggers an auth action counts as one audit log.
 									</p>
 								</div>
 							</motion.div>
