@@ -234,7 +234,7 @@ function CommunityHero({ stats }: { stats: CommunityStats }) {
 						</p>
 						<p className="text-sm font-light text-foreground/80 tabular-nums">
 							{formatNumber(stats.npmDownloads)}
-							<span className="text-[9px] text-foreground/25 font-mono">
+							<span className="text-[9px] text-foreground/50 font-mono">
 								/mo
 							</span>
 						</p>

@@ -145,6 +145,32 @@ You can generate a good secret using the following command:
 openssl rand -base64 32
 ```
 
+## `secrets`
+
+Versioned secrets for non-destructive secret rotation. When set, encrypted data uses an envelope format that embeds the key version, allowing you to rotate secrets without invalidating existing data.
+
+```ts
+import { betterAuth } from "better-auth";
+export const auth = betterAuth({
+	secrets: [
+		{ version: 2, value: "new-secret-key" },
+		{ version: 1, value: "old-secret-key" },
+	],
+})
+```
+
+- The first entry is the **current** key used for all new encryption.
+- Remaining entries are **decryption-only** (previous rotations).
+- Versions are integers. Gaps are allowed (e.g., `1, 3` after revoking version 2).
+
+You can also set this via the `BETTER_AUTH_SECRETS` environment variable:
+
+```txt title=".env"
+BETTER_AUTH_SECRETS=2:new-secret-base64,1:old-secret-base64
+```
+
+When `secrets` is set, `secret` (singular) is only used as a fallback for decrypting legacy data that predates the envelope format. Both can coexist during migration.
+
 ## `database`
 
 Database configuration for Better Auth.
@@ -248,6 +274,7 @@ export const auth = betterAuth({
 - `revokeSessionsOnPasswordReset`: Revoke all other sessions when resetting password (default: `false`)
 - `resetPasswordTokenExpiresIn`: Number of seconds the reset password token is valid for (default: `3600` seconds)
 - `onExistingUserSignUp`: Callback triggered when someone signs up with an already-registered email. Only called when `requireEmailVerification` is `true` or `autoSignIn` is `false` (default: `undefined`).
+- `customSyntheticUser`: Function to build a custom synthetic user for email enumeration protection. Use when plugins add fields to the user table. See [email enumeration protection](/docs/authentication/email-password#plugins-that-add-user-fields).
 - `password`: Custom password hashing and verification functions
 
 ## `socialProviders`

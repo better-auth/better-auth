@@ -81,7 +81,7 @@ export function DocsSidebar() {
 				<Search className="size-3.5 shrink-0" />
 				<span className="truncate">Search</span>
 				<span
-					className="ml-auto flex items-center gap-1 shrink-0 text-foreground/25 hover:text-foreground/55 transition-colors"
+					className="ml-auto flex items-center gap-1 shrink-0 text-foreground/50 hover:text-foreground/55 transition-colors"
 					onClick={(e) => {
 						e.stopPropagation();
 						openAI();
