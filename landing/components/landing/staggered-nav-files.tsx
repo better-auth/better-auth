@@ -459,13 +459,8 @@ export function StaggeredNavFiles() {
 						transition={{ duration: 0.2, delay: 0.2, ease: "easeOut" }}
 						className="flex items-stretch shrink-0"
 					>
-						<button
-							onMouseEnter={()=>{
-								router.prefetch("/sign-in");
-							}}
-							onClick={()=>{
-								router.push("/sign-in");
-							}}
+						<a
+							href="/sign-in"
 							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
@@ -482,7 +477,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</button>
+						</a>
 					</motion.div>
 				</motion.div>
 			</div>
@@ -730,11 +725,11 @@ export function StaggeredNavFiles() {
 										}}
 										className="px-5 pt-4"
 									>
-										<Link
-											href="/sign-in"
-											onClick={() => setMobileMenuOpen(false)}
-											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
-										>
+									<a
+										href="/sign-in"
+										onClick={() => setMobileMenuOpen(false)}
+										className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
+									>
 											get-started
 											<svg
 												className="h-2.5 w-2.5 opacity-50"
@@ -747,7 +742,7 @@ export function StaggeredNavFiles() {
 													strokeWidth="1.2"
 												/>
 											</svg>
-										</Link>
+										</a>
 									</motion.div>
 								</>
 							)}
