@@ -12,7 +12,7 @@
     "android": "expo run:android"
   },
   "dependencies": {
-    "@better-auth/expo": "workspace:*",
+    "@better-auth/expo": "link:../../packages/expo",
     "@expo/metro-runtime": "^55.0.6",
     "@expo/vector-icons": "^15.1.1",
     "@nanostores/react": "^1.0.0",
@@ -24,7 +24,7 @@
     "@rn-primitives/types": "^1.2.0",
     "@types/better-sqlite3": "^7.6.13",
     "babel-plugin-transform-import-meta": "^2.3.3",
-    "better-auth": "workspace:*",
+    "better-auth": "link:../../packages/better-auth",
     "better-sqlite3": "^12.6.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
