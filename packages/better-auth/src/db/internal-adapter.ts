@@ -1139,19 +1139,6 @@ export const createInternalAdapter = (
 
 			return (verification[0] as Verification) || null;
 		},
-		/**
-		 * Note: In secondary-only mode, this is a no-op since secondary storage
-		 * is keyed by identifier, not id. Use deleteVerificationByIdentifier instead.
-		 */
-		deleteVerificationValue: async (id: string) => {
-			if (!secondaryStorage || options.verification?.storeInDatabase) {
-				await deleteWithHooks(
-					[{ field: "id", value: id }],
-					"verification",
-					undefined,
-				);
-			}
-		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1173,18 +1160,6 @@ export const createInternalAdapter = (
 					undefined,
 				);
 			}
-		},
-		updateVerificationValue: async (
-			id: string,
-			data: Partial<Verification>,
-		) => {
-			const verification = await updateWithHooks<Verification>(
-				data,
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
-			);
-			return verification;
 		},
 		updateVerificationByIdentifier: async (
 			identifier: string,

@@ -373,8 +373,8 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 										verificationRecord.value === data.user.id &&
 										verificationRecord.expiresAt > new Date()
 									) {
-										await ctx.context.internalAdapter.deleteVerificationValue(
-											verificationRecord.id,
+										await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+											trustIdentifier,
 										);
 										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
 										const newToken = await createHMAC(

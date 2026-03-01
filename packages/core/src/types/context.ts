@@ -208,14 +208,7 @@ export interface InternalAdapter<
 
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
-	deleteVerificationValue(id: string): Promise<void>;
-
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
-
-	updateVerificationValue(
-		id: string,
-		data: Partial<Verification>,
-	): Promise<Verification>;
 
 	updateVerificationByIdentifier(
 		identifier: string,
