@@ -2,7 +2,7 @@ import type { BetterAuthOptions, BetterAuthPlugin } from "@better-auth/core";
 import type {
 	InferDBFieldsFromOptionsInput,
 	InferDBFieldsFromPluginsInput,
-} from "../db";
+} from "@better-auth/core/db";
 import type { UnionToIntersection } from "./helper";
 
 export type AdditionalUserFieldsInput<Options extends BetterAuthOptions> =
