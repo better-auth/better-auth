@@ -20,6 +20,7 @@ export const blogCollection = defineCollections({
 		title: z.string(),
 		description: z.string(),
 		date: z.date(),
+		draft: z.boolean().optional(),
 		author: z
 			.object({
 				name: z.string(),
