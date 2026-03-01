@@ -31,7 +31,6 @@ const resourceFiles: NavFileItem[] = [
 	{ name: "blog", href: "/blog" },
 	{ name: "changelog", href: "/changelog" },
 	{ name: "community", href: "/community" },
-	{ name: "company", href: "/company" },
 	{ name: "careers", href: "/careers" },
 ];
 
