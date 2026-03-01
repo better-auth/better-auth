@@ -1,11 +1,11 @@
 import type { DynamicBaseURLConfig } from "@better-auth/core";
 import { describe, expect, it } from "vitest";
-import { matchesHostPattern } from "../auth/trusted-origins";
 import {
 	getBaseURL,
 	getHostFromRequest,
 	getProtocolFromRequest,
 	isDynamicBaseURLConfig,
+	matchesHostPattern,
 	resolveBaseURL,
 	resolveDynamicBaseURL,
 } from "./url";
