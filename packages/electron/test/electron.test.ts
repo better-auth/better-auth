@@ -638,7 +638,7 @@ describe("Electron", () => {
 		});
 
 		const ctx = await auth.$context;
-		const spy = vi.spyOn(ctx.internalAdapter, "deleteVerificationValue");
+		const spy = vi.spyOn(ctx.internalAdapter, "deleteVerificationByIdentifier");
 
 		const { data } = await client.$fetch<any>("/electron/token", {
 			method: "POST",

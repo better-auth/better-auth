@@ -3116,7 +3116,7 @@ async function handleLogoutResponse(
 		}
 
 		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
+			.deleteVerificationByIdentifier(key)
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete logout request verification value",
@@ -3183,7 +3183,7 @@ async function handleLogoutRequest(
 						}),
 					);
 				await ctx.context.internalAdapter
-					.deleteVerificationValue(
+					.deleteVerificationByIdentifier(
 						`${constants.SAML_SESSION_BY_ID_PREFIX}${data.sessionId}`,
 					)
 					.catch((e: unknown) =>
@@ -3204,7 +3204,7 @@ async function handleLogoutRequest(
 			}
 		}
 		await ctx.context.internalAdapter
-			.deleteVerificationValue(key)
+			.deleteVerificationByIdentifier(key)
 			.catch((e: unknown) =>
 				ctx.context.logger.warn(
 					"Failed to delete SAML session key during SLO",
@@ -3339,7 +3339,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 
 			if (samlSessionKey) {
 				await ctx.context.internalAdapter
-					.deleteVerificationValue(samlSessionKey)
+					.deleteVerificationByIdentifier(samlSessionKey)
 					.catch((e) =>
 						ctx.context.logger.warn(
 							"Failed to delete SAML session key during logout",
@@ -3348,7 +3348,7 @@ export const initiateSLO = (options?: SSOOptions) => {
 					);
 			}
 			await ctx.context.internalAdapter
-				.deleteVerificationValue(sessionLookupKey)
+				.deleteVerificationByIdentifier(sessionLookupKey)
 				.catch((e) =>
 					ctx.context.logger.warn(
 						"Failed to delete session lookup key during logout",
