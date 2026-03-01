@@ -1044,6 +1044,7 @@ export const createInternalAdapter = (
 
 			const verification = await createWithHooks(
 				{
+					id: generateId(),
 					// todo: we should remove auto setting createdAt and updatedAt in the next major release, since the db generators already handle that
 					createdAt: new Date(),
 					updatedAt: new Date(),
@@ -1061,6 +1062,16 @@ export const createInternalAdapter = (
 										JSON.stringify(verificationData),
 										ttl,
 									);
+									// Store reverse mapping from id to identifier so
+									// updateVerificationValue can find the secondary storage
+									// entry by id
+									if (verificationData.id) {
+										await secondaryStorage.set(
+											`verification-id:${verificationData.id}`,
+											storedIdentifier,
+											ttl,
+										);
+									}
 								}
 								return verificationData;
 							},
@@ -1139,11 +1150,17 @@ export const createInternalAdapter = (
 
 			return (verification[0] as Verification) || null;
 		},
-		/**
-		 * Note: In secondary-only mode, this is a no-op since secondary storage
-		 * is keyed by identifier, not id. Use deleteVerificationByIdentifier instead.
-		 */
 		deleteVerificationValue: async (id: string) => {
+			if (secondaryStorage) {
+				const storedIdentifier = await secondaryStorage.get(
+					`verification-id:${id}`,
+				);
+				if (storedIdentifier) {
+					await secondaryStorage.delete(`verification:${storedIdentifier}`);
+					await secondaryStorage.delete(`verification-id:${id}`);
+				}
+			}
+
 			if (!secondaryStorage || options.verification?.storeInDatabase) {
 				await deleteWithHooks(
 					[{ field: "id", value: id }],
@@ -1163,6 +1180,16 @@ export const createInternalAdapter = (
 			);
 
 			if (secondaryStorage) {
+				// Clean up the reverse id mapping
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				if (cached) {
+					const parsed = safeJSONParse<Verification>(cached);
+					if (parsed?.id) {
+						await secondaryStorage.delete(`verification-id:${parsed.id}`);
+					}
+				}
 				await secondaryStorage.delete(`verification:${storedIdentifier}`);
 			}
 
@@ -1182,7 +1209,40 @@ export const createInternalAdapter = (
 				data,
 				[{ field: "id", value: id }],
 				"verification",
-				undefined,
+				secondaryStorage
+					? {
+							async fn(updateData) {
+								// Look up the identifier from the reverse mapping
+								const storedIdentifier = await secondaryStorage.get(
+									`verification-id:${id}`,
+								);
+								if (storedIdentifier) {
+									const cached = await secondaryStorage.get(
+										`verification:${storedIdentifier}`,
+									);
+									if (cached) {
+										const parsed = safeJSONParse<Verification>(cached);
+										if (parsed) {
+											const updated = { ...parsed, ...updateData };
+											const ttl = getTTLSeconds(
+												updated.expiresAt ?? parsed.expiresAt,
+											);
+											if (ttl > 0) {
+												await secondaryStorage.set(
+													`verification:${storedIdentifier}`,
+													JSON.stringify(updated),
+													ttl,
+												);
+											}
+											return updated;
+										}
+									}
+								}
+								return updateData;
+							},
+							executeMainFn: options.verification?.storeInDatabase,
+						}
+					: undefined,
 			);
 			return verification;
 		},
