@@ -699,7 +699,7 @@ html:not([data-anchor-scrolling]) {
 
 	.docs-layout #nd-page > article {
 		width: auto;
-		max-width: none;
+		max-width: 900px;
 	}
 
 	.docs-layout #nd-toc {
