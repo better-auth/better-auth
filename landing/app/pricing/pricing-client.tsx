@@ -16,6 +16,7 @@ const pricingTiers = [
 		seats: "1 dashboard seat",
 		featuresPrefix: "Includes",
 		features: [
+			"Unlimited users",
 			"All auth features",
 			"User management",
 			"Audit logs (1 day)",
@@ -100,6 +101,13 @@ const pricingTiers = [
 
 // Comparison table data
 const comparisonRows = [
+	{
+		label: "Unlimited users",
+		starter: true,
+		pro: true,
+		business: true,
+		enterprise: true,
+	},
 	{
 		label: "All auth features",
 		starter: true,
@@ -532,7 +540,7 @@ export function PricingPageClient() {
 												</div>
 												<p className="text-[13px] text-foreground/80 dark:text-foreground/65 leading-relaxed max-w-md">
 													Comprehensive authentication and authorization
-													framework.
+													framework. Unlimited users on every plan.
 												</p>
 											</div>
 											<div className="text-right shrink-0 flex flex-col items-end gap-3">
