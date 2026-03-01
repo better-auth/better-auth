@@ -3,13 +3,13 @@ import {
 	defineConfig,
 	defineDocs,
 } from "fumadocs-mdx/config";
-import * as z from "zod";
 import lastModified from "fumadocs-mdx/plugins/last-modified";
 import {
 	createFileSystemGeneratorCache,
 	createGenerator,
 	remarkAutoTypeTable,
 } from "fumadocs-typescript";
+import * as z from "zod";
 
 export const docs = defineDocs({
 	dir: "../docs/content/docs",
