@@ -18,7 +18,7 @@ export function getContributors(): ContributorInfo[] {
 	return staticContributors as ContributorInfo[];
 }
 
-// Fetch NPM download stats for the last month
+// Fetch NPM download stats for the last year
 async function fetchNpmDownloads(): Promise<number> {
 	try {
 		const response = await fetch(
