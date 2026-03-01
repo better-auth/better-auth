@@ -5,6 +5,10 @@ description: Integrate Better Auth with Expo.
 
 Expo is a popular framework for building cross-platform apps with React Native. Better Auth supports both Expo native and web apps.
 
+<Callout type="info">
+This guide is written for **Expo SDK 55** (React Native 0.83, React 19.2). SDK 55 requires the [New Architecture](https://docs.expo.dev/guides/new-architecture/) — the Legacy Architecture is no longer supported. If you're upgrading from an older SDK, see the [Expo SDK 55 upgrade guide](https://expo.dev/blog/upgrading-to-sdk-55).
+</Callout>
+
 ## Installation
 
 <Steps>
@@ -186,48 +190,22 @@ Expo is a popular framework for building cross-platform apps with React Native. 
     <Step>
         ## Configure Metro Bundler
 
-        Better Auth relies on package exports to resolve its modules. Starting with **Expo SDK 53**, `unstable_enablePackageExports` is enabled by default in Metro, so no extra configuration is needed.
+        Better Auth relies on `package.json` exports to resolve its modules. Starting with **Expo SDK 53+** (including SDK 55), package exports support is enabled by default in Metro, so **no extra Metro configuration is needed**.
 
-        If you're using **Expo SDK 52 or earlier**, you'll need to enable it manually in your metro config:
+        If you have a custom `metro.config.js`, make sure you're not disabling package exports:
 
         ```js title="metro.config.js"
         const { getDefaultConfig } = require("expo/metro-config");
 
-        const config = getDefaultConfig(__dirname)
+        const config = getDefaultConfig(__dirname);
 
-        config.resolver.unstable_enablePackageExports = true; // [!code highlight]
+        // Do NOT set this to false — Better Auth requires package exports
+        // config.resolver.unstable_enablePackageExports = false;
 
         module.exports = config;
         ```
 
-        <Callout>In case you don't have a `metro.config.js` file in your project run `npx expo customize metro.config.js`.</Callout>
-
-        If you can't enable `unstable_enablePackageExports` option, you can use [babel-plugin-module-resolver](https://github.com/tleunen/babel-plugin-module-resolver) to manually resolve the paths.
-
-        ```ts title="babel.config.js"
-        module.exports = function (api) {
-            api.cache(true);
-            return {
-                presets: ["babel-preset-expo"],
-                plugins: [
-                    [
-                        "module-resolver",
-                        {
-                            alias: {
-                                "better-auth/react": "./node_modules/better-auth/dist/client/react/index.mjs",
-                                "better-auth/client/plugins": "./node_modules/better-auth/dist/client/plugins/index.mjs",
-                                "@better-auth/expo/client": "./node_modules/@better-auth/expo/dist/client.mjs",
-                            },
-                        },
-                    ],
-                ],
-            }
-        }
-        ```
-
-        <Callout>In case you don't have a `babel.config.js` file in your project run `npx expo customize babel.config.js`.</Callout>
-
-        Don't forget to clear the cache after making changes.
+        Don't forget to clear the cache after making changes to your Metro config.
 
         ```bash
         npx expo start --clear
