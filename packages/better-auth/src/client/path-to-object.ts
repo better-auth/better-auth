@@ -86,64 +86,27 @@ export type InferUserUpdateCtx<
 	UnionToIntersection<InferAdditionalFromClient<ClientOpts, "user", "input">>
 >;
 
-type InferBodyFromMetadata<T extends Endpoint> =
-	T["options"]["metadata"] extends { $Infer: { body: infer B } } ? B : never;
-
-/**
- * Checks if a type is `any` using the `0 extends 1 & T` trick.
- * Returns `true` if T is `any`, `false` otherwise.
- */
-type IsAny<T> = 0 extends 1 & T ? true : false;
-
 export type InferCtx<
 	C extends InputContext<any, any>,
 	FetchOptions extends ClientFetchOption,
 > =
-	IsAny<C["body"]> extends true
-		? C["query"] extends Record<string, any>
+	C["body"] extends Record<string, any>
+		? C["body"] & {
+				fetchOptions?: FetchOptions | undefined;
+			}
+		: C["query"] extends Record<string, any>
 			? {
 					query: C["query"];
 					fetchOptions?: FetchOptions | undefined;
 				}
-			: {
-					fetchOptions?: FetchOptions | undefined;
-				}
-		: C["body"] extends Record<string, any>
-			? C["body"] & {
-					fetchOptions?: FetchOptions | undefined;
-				}
-			: C["query"] extends Record<string, any>
+			: C["query"] extends Record<string, any> | undefined
 				? {
-						query: C["query"];
+						query?: C["query"] | undefined;
 						fetchOptions?: FetchOptions | undefined;
 					}
-				: C["query"] extends Record<string, any> | undefined
-					? {
-							query?: C["query"] | undefined;
-							fetchOptions?: FetchOptions | undefined;
-						}
-					: {
-							fetchOptions?: FetchOptions | undefined;
-						};
-
-/**
- * Resolves the input context for an endpoint, using `$Infer.body` metadata
- * to override the Zod-inferred body type when present. This prevents
- * endpoints using `z.record(z.string(), z.any())` from collapsing to `any`.
- *
- * Falls back to `InferCtx` when metadata body is `never` or `any`.
- */
-type InferEndpointCtx<
-	T extends Endpoint,
-	C extends InputContext<any, any>,
-	FetchOptions extends ClientFetchOption,
-> = [InferBodyFromMetadata<T>] extends [never]
-	? InferCtx<C, FetchOptions>
-	: IsAny<InferBodyFromMetadata<T>> extends true
-		? InferCtx<C, FetchOptions>
-		: InferBodyFromMetadata<T> & {
-				fetchOptions?: FetchOptions | undefined;
-			};
+				: {
+						fetchOptions?: FetchOptions | undefined;
+					};
 
 export type MergeRoutes<T> = UnionToIntersection<T>;
 
@@ -175,26 +138,25 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											C["params"]
 										>,
 									>(
-										...data: T["path"] extends `/update-user`
+										...data: HasRequiredKeys<
+											InferCtx<C, FetchOptions>
+										> extends true
 											? [
-													Prettify<InferUserUpdateCtx<COpts, FetchOptions>>?,
+													Prettify<
+														T["path"] extends `/sign-up/email`
+															? InferSignUpEmailCtx<COpts, FetchOptions>
+															: InferCtx<C, FetchOptions>
+													>,
 													FetchOptions?,
 												]
-											: HasRequiredKeys<
-														InferEndpointCtx<T, C, FetchOptions>
-													> extends true
-												? [
-														Prettify<
-															T["path"] extends `/sign-up/email`
-																? InferSignUpEmailCtx<COpts, FetchOptions>
-																: InferEndpointCtx<T, C, FetchOptions>
-														>,
-														FetchOptions?,
-													]
-												: [
-														Prettify<InferEndpointCtx<T, C, FetchOptions>>?,
-														FetchOptions?,
-													]
+											: [
+													Prettify<
+														T["path"] extends `/update-user`
+															? InferUserUpdateCtx<COpts, FetchOptions>
+															: InferCtx<C, FetchOptions>
+													>?,
+													FetchOptions?,
+												]
 									) => Promise<
 										BetterFetchResponse<
 											T["options"]["metadata"] extends {
