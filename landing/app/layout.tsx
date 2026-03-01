@@ -85,7 +85,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 					<CommandMenuProvider>
 						<div className="relative h-dvh overflow-x-hidden">
 							<StaggeredNavFiles />
-							<div className="absolute inset-0 overflow-y-auto overflow-x-hidden">
+							<div className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain">
 								{children}
 							</div>
 						</div>
