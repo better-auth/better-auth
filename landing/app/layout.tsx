@@ -17,7 +17,14 @@ const fontMono = Geist_Mono({
 	variable: "--font-mono",
 });
 
+const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+	? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+	: process.env.VERCEL_URL
+		? `https://${process.env.VERCEL_URL}`
+		: "http://localhost:3000";
+
 export const metadata = {
+	metadataBase: new URL(baseUrl),
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
