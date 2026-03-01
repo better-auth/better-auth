@@ -42,7 +42,7 @@ Open **[localhost:3000](http://localhost:3000)** to preview.
 ```
 ├─ app/
 │  ├─ page.tsx              # Home — hero + sign-in demo
-│  ├─ pricing/              # Pricing page
+│  ├─ products/             # Products page
 │  ├─ blog/                 # Blog posts
 │  └─ docs/[[...slug]]/     # Documentation (MDX)
 │

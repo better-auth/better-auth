@@ -631,7 +631,7 @@ html:not([data-anchor-scrolling]) {
 	--fd-layout-offset: 0px;
 	--fd-page-width: 100%;
 	--fd-banner-height: 44px;
-	--landing-left-pane-width: 22vw;
+	--landing-left-pane-width: min(22vw, 300px);
 	--staggered-nav-cta-width: 128px;
 	padding-top: 44px;
 }
@@ -656,7 +656,7 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.docs-layout {
-		--fd-page-width: calc(78vw - var(--staggered-nav-cta-width));
+		--fd-page-width: calc(100vw - var(--landing-left-pane-width) - var(--staggered-nav-cta-width));
 	}
 
 	.docs-layout #nd-page {
@@ -714,7 +714,7 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.blog-layout {
-		margin-inline-start: 22vw;
+		margin-inline-start: var(--landing-left-pane-width);
 	}
 
 	.blog-layout::before {
@@ -722,7 +722,7 @@ html:not([data-anchor-scrolling]) {
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: 22vw;
+		inset-inline-start: var(--landing-left-pane-width);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;

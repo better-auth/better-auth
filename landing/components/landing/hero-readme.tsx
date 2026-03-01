@@ -1184,7 +1184,7 @@ function SentinelSection() {
 				).map(({ tag, icon }) => (
 					<span
 						key={tag}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/40 border border-foreground/[0.1] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/75 dark:hover:text-foreground/60 transition-colors"
+						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.14] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/85 dark:hover:text-foreground/75 transition-colors"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -1196,7 +1196,7 @@ function SentinelSection() {
 							strokeWidth="2"
 							strokeLinecap="round"
 							strokeLinejoin="round"
-							className="opacity-70 shrink-0"
+							className="opacity-80 shrink-0"
 						>
 							{icon}
 						</svg>
@@ -1470,7 +1470,7 @@ function ReadmeFooter({
 					</div>
 
 					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground/20 font-mono">
+						<span className="text-[10px] text-foreground font-mono">
 							© {new Date().getFullYear()} Better Auth Inc.
 						</span>
 						<div className="flex items-center gap-3 sm:gap-4">
@@ -1535,10 +1535,10 @@ export function HeroReadMe({
 						</h1>
 
 						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
-							Better Auth is an authentication and authorization framework. It
-							provides a comprehensive set of features out of the box and
-							includes a Plugin ecosystem that simplifies adding advanced
-							functionalities and infrastructure to help own your auth at scale.
+							Better Auth is an authentication framework. It provides a
+							comprehensive set of features out of the box and includes a Plugin
+							ecosystem that simplifies adding advanced functionalities and
+							infrastructure to help own your auth at scale.
 						</p>
 
 						<InstallBlock />
@@ -1615,7 +1615,7 @@ export function HeroReadMe({
 									headline: "Security & observability.",
 									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
 									security: true,
-									href: "/pricing",
+									href: "/products?tab=infrastructure",
 									managed: true,
 								},
 								{
@@ -1623,7 +1623,7 @@ export function HeroReadMe({
 									headline: "User management.",
 									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
 									dashboard: true,
-									href: "/pricing",
+									href: "/products?tab=infrastructure",
 									managed: true,
 								},
 							].map((feature, i) => (

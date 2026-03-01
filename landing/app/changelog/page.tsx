@@ -17,6 +17,9 @@ interface GitHubRelease {
 function getContent(content: string) {
 	const lines = content.split("\n");
 	const newContext = lines.map((line) => {
+		if (line.trim().startsWith("## ") || line.trim().startsWith("### ")) {
+			return line.split("date=")[0].trim();
+		}
 		if (line.trim().startsWith("- ")) {
 			const mainContent = line.split(";")[0];
 			const context = line.split(";")[2];
