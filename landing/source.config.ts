@@ -6,16 +6,16 @@ import {
 import * as z from "zod";
 
 export const docs = defineDocs({
-	dir: "./content/docs",
+	dir: "../docs/content/docs",
 });
 
 export const canaryDocs = defineDocs({
-	dir: "./content/docs-canary",
+	dir: "../docs/content/docs",
 });
 
 export const blogCollection = defineCollections({
 	type: "doc",
-	dir: "./content/blogs",
+	dir: "../docs/content/blogs",
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
