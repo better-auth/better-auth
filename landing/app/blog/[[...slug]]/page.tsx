@@ -130,7 +130,15 @@ export default async function Page({
 
 	return (
 		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
-			<BlogLeftPanel />
+			<BlogLeftPanel
+				post={{
+					title,
+					description,
+					date,
+					author: page.data.author,
+					toc,
+				}}
+			/>
 
 			{/* Right panel — blog content */}
 			<div className="w-full lg:w-[70%] flex flex-col">
