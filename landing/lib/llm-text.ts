@@ -244,60 +244,10 @@ function createServerBody(
 export async function getLLMText(
 	docPage: InferPageType<typeof source>,
 ): Promise<string> {
-	// #region agent log
-	fetch("http://127.0.0.1:7244/ingest/de578d54-c643-480d-8a02-f027de97ce25", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "llm-text.ts:246",
-			message: "function entry",
-			data: {
-				hasGetText: typeof (docPage.data as any).getText,
-				dataKeys: Object.keys(docPage.data),
-			},
-			timestamp: Date.now(),
-			runId: "post-fix-2",
-		}),
-	}).catch(() => {});
-	// #endregion
-	let mdContent = "";
-	try {
-		const pageData = docPage.data as {
-			getText: (type: string) => Promise<string>;
-		};
-		mdContent = await pageData.getText("processed");
-	} catch (err) {
-		// #region agent log
-		fetch("http://127.0.0.1:7244/ingest/de578d54-c643-480d-8a02-f027de97ce25", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({
-				location: "llm-text.ts:254",
-				message: "getText error",
-				data: { error: String(err), errorName: (err as any)?.name },
-				timestamp: Date.now(),
-				runId: "post-fix-2",
-			}),
-		}).catch(() => {});
-		// #endregion
-		throw err;
-	}
-	// #region agent log
-	fetch("http://127.0.0.1:7244/ingest/de578d54-c643-480d-8a02-f027de97ce25", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({
-			location: "llm-text.ts:259",
-			message: "getText success",
-			data: {
-				mdContentLength: mdContent.length,
-				preview: mdContent.slice(0, 200),
-			},
-			timestamp: Date.now(),
-			runId: "post-fix-2",
-		}),
-	}).catch(() => {});
-	// #endregion
+	const pageData = docPage.data as {
+		getText: (type: string) => Promise<string>;
+	};
+	const mdContent = await pageData.getText("processed");
 
 	// Extract APIMethod components & other nested wrapper before processing
 	const processedContent = extractAPIMethods(mdContent);
