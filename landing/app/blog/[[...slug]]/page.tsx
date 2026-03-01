@@ -21,9 +21,14 @@ function formatDate(date: Date) {
 }
 
 function BlogList() {
-	const posts = blogs.getPages().sort((a, b) => {
-		return new Date(b.data.date).getTime() - new Date(a.data.date).getTime();
-	});
+	const posts = blogs
+		.getPages()
+		.filter((p) => !p.data.draft)
+		.sort((a, b) => {
+			return (
+				new Date(b.data.date).getTime() - new Date(a.data.date).getTime()
+			);
+		});
 
 	return (
 		<div className="flex flex-col lg:flex-row h-full min-h-dvh pt-14 lg:pt-0">
@@ -114,7 +119,7 @@ export default async function Page({
 	}
 
 	const page = blogs.getPage(slug);
-	if (!page) {
+	if (!page || page.data.draft) {
 		notFound();
 	}
 
@@ -271,11 +276,14 @@ export async function generateMetadata({
 		};
 	}
 	const page = blogs.getPage(slug);
-	if (!page) return notFound();
+	if (!page || page.data.draft) return notFound();
 	const { title, description } = page.data;
 	return { title, description };
 }
 
 export function generateStaticParams() {
-	return blogs.generateParams();
+	return blogs
+		.getPages()
+		.filter((p) => !p.data.draft)
+		.map((p) => ({ slug: p.slugs }));
 }
