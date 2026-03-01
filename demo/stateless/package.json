@@ -10,17 +10,17 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "better-auth": "workspace:*",
+    "better-auth": "link:../../packages/better-auth",
     "next": "16.1.6",
-    "react": "catalog:react19",
-    "react-dom": "catalog:react19"
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "catalog:tailwind",
-    "@types/react": "catalog:react19",
-    "@types/react-dom": "catalog:react19",
+    "@tailwindcss/postcss": "^4.2.1",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "postcss": "^8.5.6",
-    "tailwindcss": "catalog:tailwind",
+    "tailwindcss": "^4.2.1",
     "typescript": "^5.9.3"
   }
 }
