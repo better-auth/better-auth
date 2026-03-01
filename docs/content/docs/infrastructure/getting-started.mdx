@@ -2,8 +2,6 @@
 title: Getting Started
 description: This guide will help you integrate Better Auth Infrastructure into your application.
 ---
-
-
 <Steps>
 
   <Step>
@@ -29,9 +27,9 @@ description: This guide will help you integrate Better Auth Infrastructure into 
     ## Environment Variables
 
     Once you've gotten the API Key from the infrastructure dashboard,
-    go ahead and add the `BETTER_AUTH_API_KEY` environment variable to your `.env` file:
+    go ahead and add the `BETTER_AUTH_API_KEY` environment variable in your production environment variables.
 
-    ```dotenv title=".env"
+    ```dotenv
     # Required: Your Better Auth Infrastructure API key
     BETTER_AUTH_API_KEY=your_api_key_here
     ```
@@ -114,8 +112,8 @@ You can use either plugin independently, but using both together provides the fu
 
 Now that you have the basic setup, explore these topics:
 
-- [Dashboard Plugin](/plugins/dash) - Learn about all dash() features
-- [Security Plugin](/plugins/sentinel) - Configure advanced security
-- [Email Service](/services/email) - Set up transactional emails
-- [SMS Service](/services/sms) - Enable SMS verification
-- [Dashboard UI](/dashboard/overview) - Explore the web dashboard
+- [Dashboard](/docs/infrastructure/plugins/dashboard) - Analytics, activity tracking, and admin APIs
+- [Audit Logs](/docs/infrastructure/plugins/audit-logs) - Track and query authentication events
+- [Sentinel](/docs/infrastructure/plugins/sentinel) - Configure advanced security
+- [Email Service](/docs/infrastructure/services/email) - Set up transactional emails
+- [SMS Service](/docs/infrastructure/services/sms) - Enable SMS verification

@@ -21,6 +21,7 @@ You're one plugin away from getting started:
 ```ts
 import { betterAuth } from "better-auth";
 import { dash } from "@better-auth/infra";
+import { sentinel } from "@better-auth/infra";
 
 export const auth = betterAuth({
   plugins: [dash()],
@@ -33,6 +34,7 @@ Check out our [Getting Started](/docs/infrastructure/getting-started) guide for 
 
 <Cards>
   <Card href="/docs/infrastructure/getting-started" title="Getting Started" description="Install and configure the infrastructure package." />
-  <Card href="/docs/infrastructure/plugins/dash" title="Dashboard Plugin" description="Set up analytics and admin APIs." />
-  <Card href="/docs/infrastructure/plugins/sentinel" title="Security Plugin" description="Enable abuse protection." />
+  <Card href="/docs/infrastructure/plugins/dashboard" title="Dashboard" description="Set up analytics, activity tracking, and admin APIs." />
+  <Card href="/docs/infrastructure/plugins/audit-logs" title="Audit Logs" description="Track and query authentication events." />
+  <Card href="/docs/infrastructure/plugins/sentinel" title="Sentinel" description="Enable abuse protection and security checks." />
 </Cards>
