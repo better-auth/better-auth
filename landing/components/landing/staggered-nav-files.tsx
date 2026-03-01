@@ -3,7 +3,7 @@
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
@@ -12,9 +12,7 @@ import { Logo } from "../icons/logo";
 import { contents } from "../sidebar-content";
 import { Badge } from "../ui/badge";
 import LogoContextMenu from "./logo-context-menu";
-import { Button } from "../ui/button";
-import { useRouter } from "next/navigation";
-	
+
 interface NavFileItem {
 	name: string;
 	href: string;
@@ -130,7 +128,7 @@ export function StaggeredNavFiles() {
 	const dropdownBorderClass = isNarrowLeft
 		? "border-foreground/6"
 		: "border-foreground/[0.08]";
-	const router = useRouter();
+	const _router = useRouter();
 	return (
 		<>
 			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
@@ -266,10 +264,10 @@ export function StaggeredNavFiles() {
 										className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
 											active
 												? "text-foreground"
-: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
-									}`}
-								>
-									{item.name}
+												: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+										}`}
+									>
+										{item.name}
 									</span>
 								</Link>
 							</motion.div>
@@ -300,10 +298,10 @@ export function StaggeredNavFiles() {
 										? "text-foreground"
 										: resourcesOpen
 											? "text-foreground/80"
-: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
-							}`}
-						>
-							resources
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								resources
 							</span>
 							<svg
 								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
@@ -352,8 +350,8 @@ export function StaggeredNavFiles() {
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
 											rel="noreferrer"
-className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
-										aria-label="GitHub"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											aria-label="GitHub"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -371,8 +369,8 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 											href="https://discord.gg/better-auth"
 											target="_blank"
 											rel="noreferrer"
-className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
-										aria-label="Discord"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											aria-label="Discord"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -390,8 +388,8 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 											href="https://reddit.com/r/better_auth"
 											target="_blank"
 											rel="noreferrer"
-className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
-										aria-label="Reddit"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											aria-label="Reddit"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -411,8 +409,8 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 											href="https://x.com/better_auth"
 											target="_blank"
 											rel="noreferrer"
-className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
-										aria-label="X"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											aria-label="X"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -430,8 +428,8 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
 											rel="noreferrer"
-className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
-										aria-label="npm"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
+											aria-label="npm"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -531,10 +529,10 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 															"font-medium text-sm tracking-wider",
 															mobileDocSection === index
 																? "text-foreground bg-foreground/3"
-: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
-													)}
-													onClick={() =>
-														setMobileDocSection((prev) =>
+																: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
+														)}
+														onClick={() =>
+															setMobileDocSection((prev) =>
 																prev === index ? -1 : index,
 															)
 														}
@@ -568,10 +566,10 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 																				"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
 																				pathname === section.href
 																					? "text-foreground bg-foreground/6"
-: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																		)}
-																	>
-																		<span className="truncate">Overview</span>
+																					: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
+																			)}
+																		>
+																			<span className="truncate">Overview</span>
 																		</Link>
 																	)}
 																	{section.list.map((item, i) => {
@@ -603,15 +601,15 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 																					"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
 																					active
 																						? "text-foreground bg-foreground/6"
-: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
-																)}
-															>
-																<span
-																	className={cn(
-																		"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
-																		active
-																			? "text-foreground"
-																			: "text-foreground/75 dark:text-foreground/60",
+																						: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
+																				)}
+																			>
+																				<span
+																					className={cn(
+																						"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
+																						active
+																							? "text-foreground"
+																							: "text-foreground/75 dark:text-foreground/60",
 																					)}
 																				>
 																					<item.icon className="text-foreground/75" />
@@ -695,8 +693,8 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 														isActive(item.path || item.href) ||
 														(item.href === "/docs" && isDocs)
 															? "text-foreground"
-: "text-foreground/75 dark:text-foreground/60"
-												}`}
+															: "text-foreground/75 dark:text-foreground/60"
+													}`}
 												>
 													{item.name}
 												</span>
@@ -725,11 +723,11 @@ className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foregroun
 										}}
 										className="px-5 pt-4"
 									>
-									<a
-										href="/sign-in"
-										onClick={() => setMobileMenuOpen(false)}
-										className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
-									>
+										<a
+											href="/sign-in"
+											onClick={() => setMobileMenuOpen(false)}
+											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
+										>
 											get-started
 											<svg
 												className="h-2.5 w-2.5 opacity-50"

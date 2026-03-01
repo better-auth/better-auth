@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { HalftoneBackground } from "@/components/landing/halftone-bg";
-import { BlogTOC } from "./blog-toc";
-
 import type { ReactNode } from "react";
+import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
 interface BlogPostData {
 	title: string;
@@ -96,17 +94,13 @@ export function BlogLeftPanel({ postCount, post }: BlogLeftPanelProps) {
 
 						<div className="flex items-center gap-2 text-[11px] font-mono text-foreground/40">
 							{post.author?.name && (
-								<span className="text-foreground/60">
-									{post.author.name}
-								</span>
+								<span className="text-foreground/60">{post.author.name}</span>
 							)}
 							{post.author?.name && post.date && (
 								<span className="text-foreground/20">&middot;</span>
 							)}
 							{post.date && <span>{formatDate(post.date)}</span>}
 						</div>
-
-						
 					</div>
 				</div>
 			</div>
