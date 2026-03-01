@@ -61,7 +61,8 @@ jobs:
               NPM_TAG="latest"
             elif [[ "$CURRENT_BRANCH" =~ ^v([0-9]+\.[0-9]+)\.x$ ]]; then
               # For version branches like v1.3.x, v1.4.x, use the version as npm tag
-              NPM_TAG="${BASH_REMATCH[1]}"
+              # Prefix with "v" to avoid SemVer range conflict (npm rejects bare "1.4")
+              NPM_TAG="v${BASH_REMATCH[1]}"
             else
               echo "The tagged commit is not on the main branch or a version branch (v*.*.x)."
               echo "::error ::Releases must be on the main branch or a version branch (v*.*.x)."
