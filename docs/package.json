@@ -1,0 +1,10 @@
+{
+  "name": "@better-auth/docs-content",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "fumadocs-ui": "16.6.7",
+    "lucide-react": "^0.575.0",
+    "react": "^19.1.0"
+  }
+}
