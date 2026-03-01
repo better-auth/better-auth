@@ -53,26 +53,19 @@ const cache = new Map<string, string>();
 const tocAction =
 	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/60 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
 
-export function LLMCopyButton() {
+export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
 		startTransition(async () => {
-			const url = window.location.pathname + ".mdx";
-			const cached = cache.get(url);
+			const cached = cache.get(rawUrl);
 
 			if (cached) {
 				await navigator.clipboard.writeText(cached);
 			} else {
-				await navigator.clipboard.write([
-					new ClipboardItem({
-						"text/plain": fetch(url).then(async (res) => {
-							const content = await res.text();
-							cache.set(url, content);
-
-							return content;
-						}),
-					}),
-				]);
+				const res = await fetch(rawUrl);
+				const content = await res.text();
+				cache.set(rawUrl, content);
+				await navigator.clipboard.writeText(content);
 			}
 		});
 	});
