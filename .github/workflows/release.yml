@@ -29,6 +29,7 @@ jobs:
           node-version-file: '.nvmrc'
 
       - run: npx changelogithub
+        continue-on-error: true
         env:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
