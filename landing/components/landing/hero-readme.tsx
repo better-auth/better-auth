@@ -2232,25 +2232,17 @@ export function HeroReadMe({
 						</div>
 
 						{/* Infrastructure transition */}
-						<div className="mt-12 mb-10">
-							<div className="flex items-center gap-4 mb-5">
-								<div className="flex-1 h-px bg-foreground/15" />
-								<span className="text-[11px] font-mono uppercase tracking-widest text-foreground/75 dark:text-foreground/60 shrink-0">
-									We also offer managed infrastructure
+						<div className="mt-12 mb-6">
+							<div className="flex items-center gap-3">
+								<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+									Infrastructure
 								</span>
-								<div className="flex-1 h-px bg-foreground/15" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 						</div>
 
 						{/* Dashboard */}
 						<div className="mt-10 mb-4">
-							<div className="flex items-center gap-3 mb-6">
-								<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
-									Monitoring & Agentic Dashboard
-								</span>
-								<div className="flex-1 border-t border-foreground/[0.06]" />
-							</div>
-
 							<div className="mb-5">
 								<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
 									The best user management and monitoring platform.
@@ -2401,10 +2393,123 @@ export function HeroReadMe({
 									</div>
 								))}
 							</div>
+
+							{/* Audit Logs */}
+							<div className="mt-10">
+								<div className="mb-4">
+									<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+										Audit Logs
+									</h3>
+									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
+										Every auth event captured automatically — sign-ins, password
+										resets, MFA challenges, session changes, and more. Filter,
+										search, and export with configurable retention and log drain
+										to your SIEM.
+									</p>
+								</div>
+								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
+									{[
+										{ label: "Auto Capture", desc: "Every auth event logged" },
+										{ label: "Log Explorer", desc: "Filter & search events" },
+										{ label: "Retention", desc: "1 day to custom" },
+										{ label: "Log Drain", desc: "Export to your SIEM" },
+									].map((item, i) => (
+										<div
+											key={item.label}
+											className={cn(
+												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												i > 0 && "-ml-px",
+											)}
+										>
+											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
+												{item.label}
+											</div>
+											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
+												{item.desc}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Transactional Comms */}
+							<div className="mt-10">
+								<div className="mb-4">
+									<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+										Transactional Comms
+									</h3>
+									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
+										Built-in email and SMS delivery for verification codes,
+										magic links, password resets, and MFA. Customizable
+										templates, abuse protection, and delivery tracking — no
+										third-party setup required.
+									</p>
+								</div>
+								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
+									{[
+										{ label: "Email & SMS", desc: "Built-in delivery" },
+										{ label: "Templates", desc: "Fully customizable" },
+										{
+											label: "Abuse Protection",
+											desc: "Rate limits & blocking",
+										},
+										{ label: "Delivery Tracking", desc: "Status & analytics" },
+									].map((item, i) => (
+										<div
+											key={item.label}
+											className={cn(
+												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												i > 0 && "-ml-px",
+											)}
+										>
+											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
+												{item.label}
+											</div>
+											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
+												{item.desc}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
 						</div>
 
 						{/* Sentinel */}
 						<SentinelSection />
+
+						{/* Infrastructure CTA */}
+						<div className="mt-8 mb-4">
+							<div className="border border-dashed border-foreground/[0.10] p-5 flex items-center justify-between">
+								<div>
+									<p className="text-[11px] font-mono uppercase tracking-widest text-foreground/80 dark:text-foreground/80 mb-1">
+										Explore plans
+									</p>
+									<p className="text-[12px] text-foreground/50 dark:text-foreground/40 leading-relaxed">
+										Dashboard, audit logs, security detection, transactional
+										comms, and more.
+									</p>
+								</div>
+								<Link
+									href="/products?tab=infrastructure"
+									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+								>
+									<span className="font-mono text-[11px] uppercase tracking-widest">
+										View Plans
+									</span>
+									<svg
+										className="h-2.5 w-2.5 opacity-50"
+										viewBox="0 0 10 10"
+										fill="none"
+									>
+										<path
+											d="M1 9L9 1M9 1H3M9 1V7"
+											stroke="currentColor"
+											strokeWidth="1.2"
+										/>
+									</svg>
+								</Link>
+							</div>
+						</div>
 
 						<ContributorsSection contributors={contributors} />
 
