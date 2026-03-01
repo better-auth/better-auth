@@ -66,6 +66,7 @@ export function LLMCopyButton() {
 				await navigator.clipboard.write([
 					new ClipboardItem({
 						"text/plain": fetch(url).then(async (res) => {
+							if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
 							const content = await res.text();
 							cache.set(url, content);
 

@@ -42,6 +42,10 @@ const nextConfig = {
 					source: "/docs-assets/_next/:path*",
 					destination: "/_next/:path*",
 				},
+				{
+					source: "/docs/:path*.mdx",
+					destination: "/llms.mdx/:path*",
+				},
 			],
 		};
 	},
