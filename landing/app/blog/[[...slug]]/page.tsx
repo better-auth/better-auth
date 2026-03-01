@@ -282,7 +282,7 @@ export async function generateMetadata({
 		};
 	}
 	const page = blogs.getPage(slug);
-  if (!page || page.data.draft) return notFound();
+	if (!page || page.data.draft) return notFound();
 	const { title, description, image } = page.data;
 	return {
 		title,
