@@ -1,0 +1,197 @@
+---
+title: Audit Logs
+description: Track and query authentication events across your application with automatic audit logging.
+---
+
+Better Auth Infrastructure automatically collects audit logs for authentication events in your application. Once you've added the `dash()` plugin, events are tracked without any additional configuration.
+
+## How Audit Logs Are Collected
+
+The `dash()` plugin hooks into your Better Auth instance and automatically records events as they happen. No manual instrumentation is needed — sign-ups, sign-ins, password changes, and more are all captured.
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  plugins: [
+    dash({
+      apiKey: process.env.BETTER_AUTH_API_KEY,
+    }),
+  ],
+});
+```
+
+That's it. Once `dash()` is active, audit logs are collected automatically.
+
+## Tracked Events
+
+<Tabs items={["User", "Session", "Account", "Verification", "Organization", "Security"]}>
+  <Tab value="User">
+    | Event | Trigger |
+    |-------|---------|
+    | `user_signed_up` | New user registration |
+    | `user_profile_updated` | User updates their profile |
+    | `user_profile_image_updated` | User changes their avatar |
+    | `user_email_verified` | Email verification completed |
+    | `user_banned` | User is banned |
+    | `user_unbanned` | User is unbanned |
+    | `user_deleted` | User account deleted |
+  </Tab>
+  <Tab value="Session">
+    | Event | Trigger |
+    |-------|---------|
+    | `user_signed_in` | Successful sign-in |
+    | `user_signed_out` | User signs out |
+    | `session_created` | New session created |
+    | `session_revoked` | Single session revoked |
+    | `sessions_revoked_all` | All sessions revoked |
+    | `user_impersonated` | Admin starts impersonating user |
+    | `user_impersonation_stopped` | Admin stops impersonating |
+  </Tab>
+  <Tab value="Account">
+    | Event | Trigger |
+    |-------|---------|
+    | `account_linked` | Social account linked |
+    | `account_unlinked` | Social account unlinked |
+    | `password_changed` | Password updated |
+  </Tab>
+  <Tab value="Verification">
+    | Event | Trigger |
+    |-------|---------|
+    | `password_reset_requested` | Password reset initiated |
+    | `password_reset_completed` | Password reset finished |
+    | `email_verification_sent` | Verification email sent |
+  </Tab>
+  <Tab value="Organization">
+    Tracked when using the [organization plugin](/docs/plugins/organization).
+
+    | Event | Trigger |
+    |-------|---------|
+    | `organization_created` | New organization created |
+    | `organization_updated` | Organization settings changed |
+    | `member_added` | Member added to organization |
+    | `member_removed` | Member removed from organization |
+    | `member_role_updated` | Member role changed |
+    | `member_invited` | Invitation sent |
+    | `invite_accepted` | Invitation accepted |
+    | `invite_rejected` | Invitation rejected |
+    | `invite_cancelled` | Invitation cancelled |
+    | `team_created` | Team created |
+    | `team_updated` | Team updated |
+    | `team_deleted` | Team deleted |
+    | `team_member_added` | Member added to team |
+    | `team_member_removed` | Member removed from team |
+  </Tab>
+  <Tab value="Security">
+    Tracked when using the [Sentinel](/docs/infrastructure/plugins/sentinel) plugin.
+
+    | Event | Trigger |
+    |-------|---------|
+    | `security_blocked` | Request was blocked |
+    | `security_allowed` | Request was allowed after challenge |
+    | `security_credential_stuffing` | Credential stuffing detected |
+    | `security_impossible_travel` | Impossible travel detected |
+    | `security_geo_blocked` | Geo-blocking triggered |
+    | `security_bot_blocked` | Bot detected and blocked |
+    | `security_suspicious_ip` | Suspicious IP detected |
+    | `security_velocity_exceeded` | Rate limit exceeded |
+    | `security_free_trial_abuse` | Free trial abuse detected |
+    | `security_compromised_password` | Compromised password detected |
+    | `security_stale_account` | Stale account reactivation |
+  </Tab>
+</Tabs>
+
+## Fetching Audit Logs
+
+### Client Setup
+
+Add `dashClient()` to your auth client:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient } from "@better-auth/infra/client";
+
+export const authClient = createAuthClient({
+  plugins: [dashClient()],
+});
+```
+
+### Basic Query
+
+```ts
+const session = await authClient.getSession();
+
+const logs = await authClient.dash.getAuditLogs({
+  session: session.data,
+  limit: 50,
+  offset: 0,
+});
+
+logs.data?.events;  // Array of audit log events
+logs.data?.total;   // Total count
+logs.data?.limit;   // Page size
+logs.data?.offset;  // Current offset
+```
+
+### Query Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `limit` | `number` | Results per page (max 100, default 50) |
+| `offset` | `number` | Pagination offset (default 0) |
+| `organizationId` | `string` | Filter by organization |
+| `identifier` | `string` | Filter by identifier |
+| `eventType` | `string` | Filter by event type |
+| `userId` | `string` | Filter by user ID |
+| `user` | `object` | User object with ID |
+| `session` | `object` | Session object with user |
+
+### Filtering
+
+```ts
+// Filter by event type
+const signIns = await authClient.dash.getAuditLogs({
+  session,
+  eventType: "user_signed_in",
+});
+
+// Filter by organization
+const orgLogs = await authClient.dash.getAuditLogs({
+  session,
+  organizationId: "org_123",
+});
+
+// Combine filters
+const orgSignIns = await authClient.dash.getAuditLogs({
+  session,
+  organizationId: "org_123",
+  eventType: "user_signed_in",
+});
+```
+
+### Pagination
+
+```ts
+async function getAllAuditLogs(session: unknown) {
+  const limit = 100;
+  let offset = 0;
+  const allEvents = [];
+
+  while (true) {
+    const result = await authClient.dash.getAuditLogs({
+      session,
+      limit,
+      offset,
+    });
+    
+    const events = result.data?.events ?? [];
+    allEvents.push(...events);
+
+    if (events.length < limit) break;
+    offset += limit;
+  }
+
+  return allEvents;
+}
+```
