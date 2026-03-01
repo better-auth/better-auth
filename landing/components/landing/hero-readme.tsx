@@ -1411,7 +1411,7 @@ function ReadmeFooter({
 									/>
 								</svg>
 								<span className="text-[9px] font-mono">
-									{formatCount(stats.npmDownloads)} / year
+									{formatCount(stats.npmDownloads)} / week
 								</span>
 							</div>
 						</a>
