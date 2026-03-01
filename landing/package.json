@@ -4,8 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "link-docs": "bash scripts/link-docs.sh",
-    "postinstall": "pnpm run link-docs && fumadocs-mdx",
+    "postinstall": "fumadocs-mdx",
     "dev": "next dev --turbopack --port 3000",
     "build": "next build",
     "start": "next start",

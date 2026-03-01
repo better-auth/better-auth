@@ -1,6 +1,5 @@
 .next
 node_modules
 .source
-content/
 .env
 .DS_Store
