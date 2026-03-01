@@ -19,7 +19,6 @@ import {
 	DatabaseTable,
 	DividerText,
 	Endpoint,
-	Features,
 	ForkButton,
 	GenerateAppleJwt,
 	GenerateSecret,
@@ -29,6 +28,7 @@ import { Callout } from "@/components/ui/callout";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+import { Features } from "@/components/docs/features";
 
 export default async function Page({
 	params,
