@@ -51,9 +51,9 @@ export default async function Page({
 		<DocsPage
 			toc={page.data.toc}
 			full={false}
-		tableOfContent={{
-			style: "clerk",
-		}}
+			tableOfContent={{
+				style: "clerk",
+			}}
 			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
