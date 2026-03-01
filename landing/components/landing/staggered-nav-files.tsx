@@ -12,7 +12,9 @@ import { Logo } from "../icons/logo";
 import { contents } from "../sidebar-content";
 import { Badge } from "../ui/badge";
 import LogoContextMenu from "./logo-context-menu";
-
+import { Button } from "../ui/button";
+import { useRouter } from "next/navigation";
+	
 interface NavFileItem {
 	name: string;
 	href: string;
@@ -128,7 +130,7 @@ export function StaggeredNavFiles() {
 	const dropdownBorderClass = isNarrowLeft
 		? "border-foreground/6"
 		: "border-foreground/[0.08]";
-
+	const router = useRouter();
 	return (
 		<>
 			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
@@ -457,9 +459,14 @@ export function StaggeredNavFiles() {
 						transition={{ duration: 0.2, delay: 0.2, ease: "easeOut" }}
 						className="flex items-stretch shrink-0"
 					>
-						<Link
-							href="/sign-in"
-							className="flex items-center gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
+						<button
+							onMouseEnter={()=>{
+								router.prefetch("/sign-in");
+							}}
+							onClick={()=>{
+								router.push("/sign-in");
+							}}
+							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
 								get-started
@@ -475,7 +482,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</Link>
+						</button>
 					</motion.div>
 				</motion.div>
 			</div>
