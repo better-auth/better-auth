@@ -58,7 +58,7 @@ function EnterpriseHero() {
 							auth at scale.
 						</span>
 					</h1>
-					<p className="text-[11px] text-foreground/40 leading-relaxed max-w-[260px]">
+					<p className="text-[11px] text-foreground/55 dark:text-foreground/50 leading-relaxed max-w-[260px]">
 						Custom pricing, unlimited seats, SSO, RBAC, and advanced support for
 						teams that need more.
 					</p>
@@ -66,7 +66,7 @@ function EnterpriseHero() {
 
 				{/* What's included */}
 				<div className="border-t border-foreground/10 pt-4 space-y-0">
-					<p className="text-[10px] uppercase tracking-widest text-foreground/30 font-mono mb-3">
+					<p className="text-[10px] uppercase tracking-widest text-foreground/45 dark:text-foreground/40 font-mono mb-3">
 						What&apos;s included
 					</p>
 					{included.map((item, i) => (
@@ -81,10 +81,10 @@ function EnterpriseHero() {
 							}}
 							className="py-2.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-							<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/50 mb-0.5">
+							<h3 className="text-[10px] font-mono uppercase tracking-widest text-foreground/70 dark:text-foreground/60 mb-0.5">
 								{item.title}
 							</h3>
-							<p className="text-[11px] text-foreground/35 leading-relaxed">
+							<p className="text-[11px] text-foreground/50 dark:text-foreground/45 leading-relaxed">
 								{item.desc}
 							</p>
 						</motion.div>
@@ -95,7 +95,7 @@ function EnterpriseHero() {
 				<div className="flex items-center gap-3 pt-1">
 					<Link
 						href="/pricing"
-						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/40 hover:text-foreground/70 font-mono uppercase tracking-wider transition-colors"
+						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
 						View Pricing
 						<svg
