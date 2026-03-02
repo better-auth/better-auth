@@ -581,7 +581,7 @@ export function StaggeredNavFiles() {
 							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
-								get-started
+								sign-in
 							</span>
 							<svg
 								className="h-2.5 w-2.5 opacity-50"
