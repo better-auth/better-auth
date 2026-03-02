@@ -13,8 +13,6 @@ import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
-type PendingVerificationEmail = { user: User; url: string; token: string };
-
 const signUpEmailBodySchema = z
 	.object({
 		name: z.string(),
@@ -180,7 +178,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			let pendingVerificationEmail: PendingVerificationEmail | null = null;
+			let pendingVerificationEmail: {
+				user: User;
+				url: string;
+				token: string
+			} | null = null;
 			const response = await runWithTransaction(ctx.context.adapter, async () => {
 				if (
 					!ctx.context.options.emailAndPassword?.enabled ||
