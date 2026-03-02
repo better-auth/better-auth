@@ -10,7 +10,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, isDefaultConfigId, resolveConfiguration } from ".";
 
@@ -77,7 +77,7 @@ const listApiKeysQuerySchema = z
 	})
 	.optional();
 
-export function listApiKeys({
+export function listApiKeys<O extends ApiKeyOptions>({
 	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
@@ -393,7 +393,7 @@ export function listApiKeys({
 			}
 
 			return ctx.json({
-				apiKeys: returningApiKeys,
+				apiKeys: returningApiKeys as Omit<InferApiKey<O>, "key">[],
 				total,
 				limit,
 				offset,

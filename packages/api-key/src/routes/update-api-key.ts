@@ -14,7 +14,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyOptions } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
@@ -513,7 +513,7 @@ export function updateApiKey<O extends ApiKeyOptions>({
 							[key: string]: string[];
 						}>(returningApiKey.permissions)
 					: null,
-			});
+			} as unknown as Omit<InferApiKey<O>, "key">);
 		},
 	);
 }

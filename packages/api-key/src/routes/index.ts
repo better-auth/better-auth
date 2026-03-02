@@ -153,12 +153,12 @@ export function createApiKeyRoutes<O extends ApiKeyOptions>({
 			additionalFields,
 			deleteAllExpiredApiKeys,
 		}),
-		verifyApiKey: verifyApiKey({
+		verifyApiKey: verifyApiKey<O>({
 			configurations,
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		getApiKey: getApiKey({ configurations, schema, deleteAllExpiredApiKeys }),
+		getApiKey: getApiKey<O>({ configurations, schema, deleteAllExpiredApiKeys }),
 		updateApiKey: updateApiKey<O>({
 			configurations,
 			schema,
@@ -170,7 +170,7 @@ export function createApiKeyRoutes<O extends ApiKeyOptions>({
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		listApiKeys: listApiKeys({
+		listApiKeys: listApiKeys<O>({
 			configurations,
 			schema,
 			deleteAllExpiredApiKeys,

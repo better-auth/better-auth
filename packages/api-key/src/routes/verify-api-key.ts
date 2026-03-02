@@ -14,7 +14,7 @@ import {
 } from "../adapter";
 import { isRateLimited } from "../rate-limit";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import { isAPIError } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
@@ -237,7 +237,7 @@ const verifyApiKeyBodySchema = z.object({
 		.optional(),
 });
 
-export function verifyApiKey({
+export function verifyApiKey<O extends ApiKeyOptions>({
 	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
@@ -367,7 +367,7 @@ export function verifyApiKey({
 						: ({
 								...returningApiKey,
 								metadata: migratedMetadata,
-							} as Omit<ApiKey, "key">),
+							} as unknown as Omit<InferApiKey<O>, "key">),
 			});
 		},
 	);

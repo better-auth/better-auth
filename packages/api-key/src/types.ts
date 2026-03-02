@@ -6,6 +6,7 @@ import type {
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Statements } from "better-auth/plugins/access";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 
@@ -20,6 +21,19 @@ export type ApiKeySchema = InferOptionSchema<
 export interface ApiKeyOptions {
 	schema?: ApiKeySchema | undefined;
 }
+
+/**
+ * Infers the full ApiKey type including any additional fields defined in the
+ * plugin options schema.
+ *
+ * @param O - The ApiKeyOptions type (pass the specific options object type)
+ * @param isClientSide - When `true` (default), filters out `returned: false` fields.
+ *   When `false`, includes all fields (for server-side use).
+ */
+export type InferApiKey<
+	O extends ApiKeyOptions,
+	isClientSide extends boolean = true,
+> = ApiKey & InferAdditionalFieldsFromPluginOptions<"apikey", O, isClientSide>;
 
 export interface ApiKeyConfigurationOptions {
 	/**
