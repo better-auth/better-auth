@@ -522,9 +522,9 @@ async function checkVerificationValue(
 	}
 
 	// Delete used code
-	if (verification?.id) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
-	}
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+		await storeToken(opts.storeTokens, code, "authorization_code"),
+	);
 
 	// Check verification
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {

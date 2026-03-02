@@ -157,8 +157,8 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 													isActive
 														? "text-foreground"
 														: isVisible
-? "text-foreground/60"
-														: "text-foreground/40 group-hover:text-foreground/65"
+															? "text-foreground/60"
+															: "text-foreground/40 group-hover:text-foreground/65"
 												}
                       `}
 										>
@@ -209,11 +209,18 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 										key={sub.url}
 										ref={(el) => {
 											if (isSubActive && el) {
-												el.scrollIntoView({
-													behavior: "smooth",
-													block: "nearest",
-													inline: "center",
-												});
+												const container = el.parentElement;
+												if (container) {
+													const containerWidth = container.clientWidth;
+													const elementLeft = el.offsetLeft;
+													const elementWidth = el.offsetWidth;
+													const scrollTarget =
+														elementLeft - containerWidth / 2 + elementWidth / 2;
+													container.scrollTo({
+														left: scrollTarget,
+														behavior: "smooth",
+													});
+												}
 											}
 										}}
 										href={sub.url}
@@ -229,8 +236,8 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 										<span
 											className={`text-[10px] uppercase tracking-wider whitespace-nowrap transition-colors duration-200 ${
 												isSubActive
-? "text-foreground"
-											: "text-foreground/40 group-hover:text-foreground/65"
+													? "text-foreground"
+													: "text-foreground/40 group-hover:text-foreground/65"
 											}`}
 										>
 											{sub.title}

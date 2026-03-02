@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useInView } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
 import React, { useEffect, useRef, useState } from "react";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
@@ -951,7 +951,6 @@ export function DatabaseSection() {
 								}}
 							/>
 						</div>
-						<div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-neutral-50 dark:from-black to-transparent pointer-events-none" />
 						<div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-neutral-50 dark:from-black to-transparent pointer-events-none" />
 					</div>
 
@@ -1183,14 +1182,6 @@ const mcpClients = [
 ];
 
 export function AiNativeSection() {
-	const ref = useRef<HTMLDivElement>(null);
-	const inView = useInView(ref, { once: true, amount: 0.4 });
-	const [promptText, setPromptText] = useState("");
-	const [showSteps, setShowSteps] = useState(false);
-	const [visibleSteps, setVisibleSteps] = useState(0);
-	const hasPlayed = useRef(false);
-	const fullPrompt = "Add Google login and 2FA to my app";
-
 	const steps = [
 		{ label: "mcp", text: "Connected to better-auth docs" },
 		{ label: "skill", text: "better-auth/add-provider → google" },
@@ -1199,45 +1190,21 @@ export function AiNativeSection() {
 		{ label: "done", text: "Google OAuth + 2FA configured" },
 	];
 
-	useEffect(() => {
-		if (!inView || hasPlayed.current) return;
-		hasPlayed.current = true;
-		let i = 0;
-		const typing = setInterval(() => {
-			i++;
-			setPromptText(fullPrompt.slice(0, i));
-			if (i >= fullPrompt.length) {
-				clearInterval(typing);
-				setTimeout(() => setShowSteps(true), 500);
-			}
-		}, 30);
-		return () => clearInterval(typing);
-	}, [inView]);
-
-	useEffect(() => {
-		if (!showSteps || visibleSteps >= steps.length) return;
-		const timeout = setTimeout(
-			() => setVisibleSteps((v) => v + 1),
-			visibleSteps === 0 ? 200 : 400,
-		);
-		return () => clearTimeout(timeout);
-	}, [showSteps, visibleSteps, steps.length]);
-
 	return (
-		<div ref={ref} className="mt-8">
+		<div className="mt-8">
 			<div className="flex items-center gap-3 mb-3">
 				<div className="flex-1 border-t border-foreground/[0.06]" />
-				<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+				<span className="text-[10px] text-foreground/70 dark:text-foreground/55 font-mono tracking-wider uppercase shrink-0">
 					AI Native
 				</span>
 			</div>
-			<p className="text-[14px] text-foreground/70 dark:text-foreground/55 leading-[1.9] mb-5">
+			<p className="text-[14px] text-foreground/80 dark:text-foreground/70 leading-[1.9] mb-5">
 				Your auth lives in{" "}
-				<span className="text-foreground/75 dark:text-foreground/60">
+				<span className="text-foreground/90 dark:text-foreground/80">
 					your codebase
 				</span>{" "}
 				&mdash; so AI can configure it. Ships with{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/75 dark:text-foreground/60">
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1248,7 +1215,7 @@ export function AiNativeSection() {
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className="opacity-60"
+						className="opacity-75"
 					>
 						<path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
 						<path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
@@ -1263,7 +1230,7 @@ export function AiNativeSection() {
 					MCP server
 				</span>
 				,{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/75 dark:text-foreground/60">
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1274,7 +1241,7 @@ export function AiNativeSection() {
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className="opacity-60"
+						className="opacity-75"
 					>
 						<polyline points="4 17 10 11 4 5" />
 						<line x1="12" x2="20" y1="19" y2="19" />
@@ -1282,7 +1249,7 @@ export function AiNativeSection() {
 					Claude Code skills
 				</span>
 				, and{" "}
-				<span className="inline-flex items-center gap-1 text-foreground/75 dark:text-foreground/60">
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1293,7 +1260,7 @@ export function AiNativeSection() {
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
-						className="opacity-60"
+						className="opacity-75"
 					>
 						<path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
 						<polyline points="14 2 14 8 20 8" />
@@ -1306,68 +1273,60 @@ export function AiNativeSection() {
 			<div className="border border-dashed border-foreground/[0.08] overflow-hidden">
 				{/* Prompt line */}
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-foreground/[0.06] bg-foreground/[0.015]">
-					<span className="text-foreground/35 font-mono text-xs select-none">
+					<span className="text-foreground/50 font-mono text-xs select-none">
 						&rsaquo;
 					</span>
-					<span className="text-[11px] font-mono text-foreground/70 dark:text-foreground/55">
-						{promptText}
+					<span className="text-[11px] font-mono text-foreground/80 dark:text-foreground/70">
+						Add Google login and 2FA to my app
 					</span>
-					{!showSteps && inView && (
-						<span className="inline-block w-[1.5px] h-[12px] bg-foreground/50 animate-pulse" />
-					)}
 				</div>
 
 				{/* Steps */}
-				{showSteps && (
-					<div className="divide-y divide-foreground/[0.04]">
-						{steps.slice(0, visibleSteps).map((step) => (
-							<motion.div
-								key={step.text}
-								initial={{ opacity: 0, x: -4 }}
-								animate={{ opacity: 1, x: 0 }}
-								transition={{ duration: 0.2 }}
-								className="flex items-center gap-2.5 px-3 py-1.5"
-							>
-								<span className="text-[8px] font-mono uppercase tracking-wider text-foreground/45 dark:text-foreground/35 w-8 shrink-0">
-									{step.label}
+				<div className="divide-y divide-foreground/[0.04]">
+					{steps.map((step) => (
+						<div
+							key={step.text}
+							className="flex items-center gap-2.5 px-3 py-1.5"
+						>
+							<span className="text-[8px] font-mono uppercase tracking-wider text-foreground/60 dark:text-foreground/50 w-8 shrink-0">
+								{step.label}
+							</span>
+							<span className="text-[10px] font-mono text-foreground/75 dark:text-foreground/65 truncate">
+								{step.text}
+							</span>
+							{"lines" in step && typeof step.lines === "number" && (
+								<span className="text-[9px] font-mono text-emerald-600/80 dark:text-emerald-400/70 ml-auto shrink-0">
+									+{step.lines}
 								</span>
-								<span className="text-[10px] font-mono text-foreground/60 dark:text-foreground/45 truncate">
-									{step.text}
-								</span>
-								{"lines" in step && typeof step.lines === "number" && (
-									<span className="text-[9px] font-mono text-emerald-600/70 dark:text-emerald-400/55 ml-auto shrink-0">
-										+{step.lines}
-									</span>
-								)}
-								{step.label === "done" && (
-									<svg
-										width="10"
-										height="10"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										strokeWidth="3"
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										className="text-foreground/45 ml-auto shrink-0"
-									>
-										<polyline points="20 6 9 17 4 12" />
-									</svg>
-								)}
-							</motion.div>
-						))}
-					</div>
-				)}
+							)}
+							{step.label === "done" && (
+								<svg
+									width="10"
+									height="10"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									strokeWidth="3"
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									className="text-foreground/60 ml-auto shrink-0"
+								>
+									<polyline points="20 6 9 17 4 12" />
+								</svg>
+							)}
+						</div>
+					))}
+				</div>
 
 				{/* MCP clients */}
 				<div className="border-t border-foreground/[0.06] bg-foreground/[0.015]">
 					<div className="flex divide-x divide-foreground/[0.06]">
 						{mcpClients.map((mc) => (
 							<div key={mc.name} className="flex-1 px-3 py-2">
-								<p className="text-[8px] font-mono uppercase tracking-wider text-foreground/40 dark:text-foreground/30 mb-0.5">
+								<p className="text-[8px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/45 mb-0.5">
 									{mc.name}
 								</p>
-								<code className="text-[9px] font-mono text-foreground/55 dark:text-foreground/40 truncate block">
+								<code className="text-[9px] font-mono text-foreground/70 dark:text-foreground/55 truncate block">
 									{mc.cmd}
 								</code>
 							</div>
