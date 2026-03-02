@@ -13,8 +13,8 @@ catalogs:
       specifier: 1.1.21
       version: 1.1.21
     better-call:
-      specifier: 2.0.0-beta.2
-      version: 2.0.0-beta.2
+      specifier: 2.0.0-beta.3
+      version: 2.0.0-beta.3
     tsdown:
       specifier: 0.21.0-beta.2
       version: 0.21.0-beta.2
@@ -1019,7 +1019,7 @@ importers:
         version: 7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -1262,7 +1262,7 @@ importers:
         version: 4.20260226.1
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       jose:
         specifier: ^6.1.3
         version: 6.1.3
@@ -1304,7 +1304,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       conf:
         specifier: ^15.0.2
         version: 15.1.0
@@ -1338,7 +1338,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1444,7 +1444,7 @@ importers:
         version: 1.1.21
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       jose:
         specifier: ^6.1.3
         version: 6.1.3
@@ -1484,7 +1484,7 @@ importers:
         version: 13.2.3
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       nanostores:
         specifier: ^1.0.1
         version: 1.1.1
@@ -1555,7 +1555,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -1605,7 +1605,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       body-parser:
         specifier: ^2.2.2
         version: 2.2.2
@@ -1636,7 +1636,7 @@ importers:
         version: link:../better-auth
       better-call:
         specifier: 'catalog:'
-        version: 2.0.0-beta.2(zod@4.3.6)
+        version: 2.0.0-beta.3(zod@4.3.6)
       stripe:
         specifier: ^20.4.0
         version: 20.4.0(@types/node@25.3.2)
@@ -8745,8 +8745,8 @@ packages:
       zod:
         optional: true
 
-  better-call@2.0.0-beta.2:
-    resolution: {integrity: sha512-ZoVB3deF/Bj2yDRiKgQ/KhjpSSZOkwwKrI9LAABQwyFA/sE2YR7IlYUKvkcjd9tZd9bxS8SUZDjqnzXuFEu+oA==}
+  better-call@2.0.0-beta.3:
+    resolution: {integrity: sha512-xBNvI/La3XKhwI5y72Alm01oPKVaBNv9OpEdfnEODW0/GyJ1U7q/0wmw6XRQDaHtiDq9vMKeR8K3MCpArRJDaA==}
     peerDependencies:
       zod: ^4.0.0
     peerDependenciesMeta:
@@ -25201,7 +25201,7 @@ snapshots:
     optionalDependencies:
       zod: 4.3.6
 
-  better-call@2.0.0-beta.2(zod@4.3.6):
+  better-call@2.0.0-beta.3(zod@4.3.6):
     dependencies:
       '@better-auth/utils': 0.3.1
       '@better-fetch/fetch': 1.1.21
