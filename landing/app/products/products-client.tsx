@@ -260,7 +260,7 @@ function ComparisonCell({ value }: { value: string | boolean }) {
 	);
 }
 
-export function FrameworkHero() {
+function FrameworkHero() {
 	const highlights = [{ label: "License", value: "MIT" }];
 
 	return (
@@ -336,12 +336,13 @@ export function FrameworkHero() {
 	);
 }
 
-export function InfrastructureHero() {
+function InfrastructureHero() {
 	const principles = [
+		{ label: "Framework", value: "Open source" },
 		{ label: "Users", value: "Unlimited" },
 		{ label: "Audit logs", value: "From 10k/mo" },
 		{ label: "Security", value: "$0.0001/event overage" },
-		{ label: "Self-service SSO", value: "Business+" },
+		{ label: "SSO", value: "Business+" },
 	];
 
 	const tiers = [
@@ -424,10 +425,10 @@ export function InfrastructureHero() {
 						Get Started
 					</Link>
 					<Link
-						href="/docs/infrastructure/introduction"
+						href="/enterprise"
 						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
-						Read Docs
+						Contact Sales
 						<svg
 							className="h-2.5 w-2.5 opacity-50"
 							viewBox="0 0 10 10"
@@ -540,7 +541,7 @@ function PricingCard({
 	);
 }
 
-export function FrameworkContent() {
+function FrameworkContent() {
 	const frameworkFeatures = [
 		{
 			category: "Authentication",
@@ -692,7 +693,7 @@ export function FrameworkContent() {
 	);
 }
 
-export function InfrastructureContent() {
+function InfrastructureContent() {
 	const tierKeys = ["starter", "pro", "business", "enterprise"] as const;
 	const tierLabels = ["Starter", "Pro", "Business", "Enterprise"];
 
