@@ -10,11 +10,7 @@ import { getClient, resolveSubjectIdentifier } from "./utils";
  *
  * @see https://openid.net/specs/openid-connect-core-1_0.html#NormalClaims
  */
-export function userNormalClaims(
-	user: User,
-	scopes: string[],
-	resolvedSub?: string,
-) {
+export function userNormalClaims(user: User, scopes: string[]) {
 	const name = user.name.split(" ").filter((v) => v !== "");
 	const profile = {
 		name: user.name ?? undefined,
@@ -28,7 +24,7 @@ export function userNormalClaims(
 	};
 
 	return {
-		sub: resolvedSub ?? user.id ?? undefined,
+		sub: user.id ?? undefined,
 		...(scopes.includes("profile") ? profile : {}),
 		...(scopes.includes("email") ? email : {}),
 	};
@@ -84,17 +80,20 @@ export async function userInfoEndpoint(
 		});
 	}
 
+	const baseUserClaims = userNormalClaims(user, scopes ?? []);
+
 	// Resolve pairwise sub if client is configured for it
-	let resolvedSub: string | undefined;
 	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
 	if (clientId) {
 		const client = await getClient(ctx, opts, clientId);
 		if (client) {
-			resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+			baseUserClaims.sub = await resolveSubjectIdentifier(
+				user.id,
+				client,
+				opts,
+			);
 		}
 	}
-
-	const baseUserClaims = userNormalClaims(user, scopes ?? [], resolvedSub);
 	const additionalInfoUserClaims =
 		opts.customUserInfoClaims && scopes?.length
 			? await opts.customUserInfoClaims({ user, scopes, jwt })

@@ -394,6 +394,72 @@ describe("pairwise DCR validation", async () => {
 		expect(response?.subject_type).toBeUndefined();
 	});
 
+	it("should reject pairwise client with redirect_uris on different hosts", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.adminCreateOAuthClient({
+				headers,
+				body: {
+					redirect_uris: [
+						"https://app-a.example.com/callback",
+						"https://app-b.example.com/callback",
+					],
+					subject_type: "pairwise",
+				},
+			}),
+		).rejects.toThrow(APIError);
+	});
+
+	it("should accept pairwise client with redirect_uris on the same host", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt(),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					pairwiseSecret: "test-secret-for-dcr-test-32chars!",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+				}),
+			],
+		});
+
+		const { headers } = await signInWithTestUser();
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [
+					"https://app.example.com/callback-a",
+					"https://app.example.com/callback-b",
+				],
+				subject_type: "pairwise",
+				skip_consent: true,
+			},
+		});
+
+		expect(response?.client_id).toBeDefined();
+		expect(response?.subject_type).toBe("pairwise");
+	});
+
 	it("should round-trip subject_type through DCR", async () => {
 		const { signInWithTestUser, customFetchImpl } = await getTestInstance({
 			baseURL: authServerBaseUrl,
@@ -432,6 +498,28 @@ describe("pairwise DCR validation", async () => {
 		});
 
 		expect(response.data?.subject_type).toBe("pairwise");
+	});
+});
+
+describe("pairwise configuration validation", () => {
+	it("should reject pairwiseSecret shorter than 32 characters", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "too-short",
+			}),
+		).toThrow("pairwiseSecret must be at least 32 characters");
+	});
+
+	it("should accept pairwiseSecret of 32+ characters", () => {
+		expect(() =>
+			oauthProvider({
+				loginPage: "/login",
+				consentPage: "/consent",
+				pairwiseSecret: "a-valid-secret-that-is-32-chars!",
+			}),
+		).not.toThrow();
 	});
 });
 
