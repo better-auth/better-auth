@@ -5,6 +5,7 @@ export type * from "../../types/helper";
 export * from "../../plugins/additional-fields/client";
 export * from "../../plugins/admin/client";
 export * from "../../plugins/anonymous/client";
+export * from "../../plugins/ciba/client";
 export * from "../../plugins/custom-session/client";
 export * from "../../plugins/device-authorization/client";
 export * from "../../plugins/email-otp/client";

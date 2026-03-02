@@ -9,7 +9,8 @@ export type GrantType =
 	// | "implicit" // NEVER SUPPORT - deprecated in oAuth2.1
 	// | "password" // NEVER SUPPORT - deprecated in oAuth2.1
 	| "client_credentials"
-	| "refresh_token";
+	| "refresh_token"
+	| "urn:openid:params:grant-type:ciba"; // CIBA - Client Initiated Backchannel Authentication
 // | "urn:ietf:params:oauth:grant-type:device_code"  // specified in oAuth2.1 but not yet implemented
 // | "urn:ietf:params:oauth:grant-type:jwt-bearer"   // unspecified in oAuth2.1
 // | "urn:ietf:params:oauth:grant-type:saml2-bearer" // unspecified in oAuth2.1
