@@ -5,8 +5,8 @@ import type {
 	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { Statements } from "better-auth/plugins/access";
 import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 

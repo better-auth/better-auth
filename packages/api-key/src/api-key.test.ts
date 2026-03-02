@@ -1,6 +1,14 @@
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
-import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";

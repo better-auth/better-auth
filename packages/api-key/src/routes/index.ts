@@ -3,7 +3,11 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "better-auth/api";
 import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyConfigurationOptions, ApiKeyOptions } from "../types";
+import type {
+	ApiKey,
+	ApiKeyConfigurationOptions,
+	ApiKeyOptions,
+} from "../types";
 import { createApiKey } from "./create-api-key";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
@@ -158,7 +162,11 @@ export function createApiKeyRoutes<O extends ApiKeyOptions>({
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		getApiKey: getApiKey<O>({ configurations, schema, deleteAllExpiredApiKeys }),
+		getApiKey: getApiKey<O>({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
 		updateApiKey: updateApiKey<O>({
 			configurations,
 			schema,

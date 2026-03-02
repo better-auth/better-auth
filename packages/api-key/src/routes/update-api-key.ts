@@ -4,7 +4,8 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
-import { InferAdditionalFieldsFromPluginOptions, toZodSchema } from "better-auth/db";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
