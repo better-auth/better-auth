@@ -27,45 +27,43 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 }
 
 /**
- * Split `Set-Cookie` header, handling commas in `Expires` dates.
+ * Split a comma-joined `Set-Cookie` header string into individual cookies.
  */
 export function splitSetCookieHeader(setCookie: string): string[] {
 	if (!setCookie) return [];
 
 	const result: string[] = [];
-	let current = "";
+	let start = 0;
 	let i = 0;
 
 	while (i < setCookie.length) {
-		const c = setCookie[i];
-
-		if (c === ",") {
-			const lower = current.toLowerCase();
-			if (lower.includes("expires=") && !lower.includes("gmt")) {
-				current += c;
-				i++;
-			} else {
-				const trimmed = current.trim();
-				if (trimmed) {
-					result.push(trimmed);
-				}
-				current = "";
-				i++;
-				if (i < setCookie.length && setCookie[i] === " ") {
-					i++;
-				}
+		if (setCookie[i] === ",") {
+			let j = i + 1;
+			while (j < setCookie.length && setCookie[j] === " ") j++;
+			while (
+				j < setCookie.length &&
+				setCookie[j] !== "=" &&
+				setCookie[j] !== ";" &&
+				setCookie[j] !== ","
+			) {
+				j++;
 			}
-			continue;
+
+			if (j < setCookie.length && setCookie[j] === "=") {
+				const part = setCookie.slice(start, i).trim();
+				if (part) result.push(part);
+				start = i + 1;
+				while (start < setCookie.length && setCookie[start] === " ") start++;
+				i = start;
+				continue;
+			}
 		}
 
-		current += c;
 		i++;
 	}
 
-	const trimmed = current.trim();
-	if (trimmed) {
-		result.push(trimmed);
-	}
+	const last = setCookie.slice(start).trim();
+	if (last) result.push(last);
 
 	return result;
 }
