@@ -1615,7 +1615,7 @@ export function HeroReadMe({
 									headline: "Security & observability.",
 									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
 									security: true,
-									href: "/products?tab=infrastructure",
+									href: "/products/infrastructure",
 									managed: true,
 								},
 								{
@@ -1623,7 +1623,7 @@ export function HeroReadMe({
 									headline: "User management.",
 									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
 									dashboard: true,
-									href: "/products?tab=infrastructure",
+									href: "/products/infrastructure",
 									managed: true,
 								},
 							].map((feature, i) => (
@@ -2495,7 +2495,7 @@ export function HeroReadMe({
 									</p>
 								</div>
 								<Link
-									href="/products?tab=infrastructure"
+									href="/products/infrastructure"
 									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
 								>
 									<span className="font-mono text-[11px] uppercase tracking-widest">
