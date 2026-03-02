@@ -29,7 +29,9 @@ export function DocsSidebar() {
 			item.list.some(
 				(listItem) =>
 					listItem.href === pathname ||
-					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)) ||
+					(listItem.subpages &&
+						listItem.subpages.length > 0 &&
+						pathname.startsWith(`${listItem.href}/`)) ||
 					listItem.subpages?.some((sp) => sp.href && pathname === sp.href),
 			),
 		);
@@ -316,7 +318,8 @@ function SidebarSection({
 				const active =
 					pathname === item.href ||
 					subpageMatch ||
-					(!!item.hasSubpages && pathname.startsWith(`${item.href}/`));
+					(!!(item.subpages && item.subpages.length > 0) &&
+						pathname.startsWith(`${item.href}/`));
 
 				return (
 					<SidebarItemWithSubpages
