@@ -13,6 +13,8 @@ import { isAPIError } from "../../utils/is-api-error";
 import { formCsrfMiddleware } from "../middlewares/origin-check";
 import { createEmailVerificationToken } from "./email-verification";
 
+type PendingVerificationEmail = { user: User; url: string; token: string };
+
 const signUpEmailBodySchema = z
 	.object({
 		name: z.string(),
@@ -178,7 +180,8 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 			},
 		},
 		async (ctx) => {
-			return runWithTransaction(ctx.context.adapter, async () => {
+			let pendingVerificationEmail: PendingVerificationEmail | null = null;
+			const response = await runWithTransaction(ctx.context.adapter, async () => {
 				if (
 					!ctx.context.options.emailAndPassword?.enabled ||
 					ctx.context.options.emailAndPassword?.disableSignUp
@@ -376,19 +379,11 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 						? encodeURIComponent(body.callbackURL)
 						: encodeURIComponent("/");
 					const url = `${ctx.context.baseURL}/verify-email?token=${token}&callbackURL=${callbackURL}`;
-
-					if (ctx.context.options.emailVerification?.sendVerificationEmail) {
-						await ctx.context.runInBackgroundOrAwait(
-							ctx.context.options.emailVerification.sendVerificationEmail(
-								{
-									user: createdUser,
-									url,
-									token,
-								},
-								ctx.request,
-							),
-						);
-					}
+					pendingVerificationEmail = {
+						user: createdUser,
+						url,
+						token,
+					};
 				}
 
 				if (shouldReturnGenericDuplicateResponse) {
@@ -427,5 +422,19 @@ export const signUpEmail = <O extends BetterAuthOptions>() =>
 					>,
 				});
 			});
+
+			// Send verification email after transaction committed, so the token exists in the DB
+			if (
+				pendingVerificationEmail &&
+				ctx.context.options.emailVerification?.sendVerificationEmail
+			) {
+				await ctx.context.runInBackgroundOrAwait(
+					ctx.context.options.emailVerification.sendVerificationEmail(
+						pendingVerificationEmail,
+						ctx.request,
+					),
+				);
+			}
+			return response;
 		},
 	);
