@@ -1194,17 +1194,17 @@ export function AiNativeSection() {
 		<div className="mt-8">
 			<div className="flex items-center gap-3 mb-3">
 				<div className="flex-1 border-t border-foreground/[0.06]" />
-			<span className="text-[10px] text-foreground/70 dark:text-foreground/55 font-mono tracking-wider uppercase shrink-0">
-				AI Native
-			</span>
+				<span className="text-[10px] text-foreground/70 dark:text-foreground/55 font-mono tracking-wider uppercase shrink-0">
+					AI Native
+				</span>
 			</div>
-		<p className="text-[14px] text-foreground/80 dark:text-foreground/70 leading-[1.9] mb-5">
-			Your auth lives in{" "}
-			<span className="text-foreground/90 dark:text-foreground/80">
-				your codebase
-			</span>{" "}
-			&mdash; so AI can configure it. Ships with{" "}
-			<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
+			<p className="text-[14px] text-foreground/80 dark:text-foreground/70 leading-[1.9] mb-5">
+				Your auth lives in{" "}
+				<span className="text-foreground/90 dark:text-foreground/80">
+					your codebase
+				</span>{" "}
+				&mdash; so AI can configure it. Ships with{" "}
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1227,10 +1227,10 @@ export function AiNativeSection() {
 						<path d="M6 18a4 4 0 0 1-1.967-.516" />
 						<path d="M19.967 17.484A4 4 0 0 1 18 18" />
 					</svg>
-				MCP server
-			</span>
-			,{" "}
-			<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
+					MCP server
+				</span>
+				,{" "}
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1246,10 +1246,10 @@ export function AiNativeSection() {
 						<polyline points="4 17 10 11 4 5" />
 						<line x1="12" x2="20" y1="19" y2="19" />
 					</svg>
-				Claude Code skills
-			</span>
-			, and{" "}
-			<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
+					Claude Code skills
+				</span>
+				, and{" "}
+				<span className="inline-flex items-center gap-1 text-foreground/90 dark:text-foreground/80">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						width="11"
@@ -1273,12 +1273,12 @@ export function AiNativeSection() {
 			<div className="border border-dashed border-foreground/[0.08] overflow-hidden">
 				{/* Prompt line */}
 				<div className="flex items-center gap-2 px-3 py-2 border-b border-foreground/[0.06] bg-foreground/[0.015]">
-				<span className="text-foreground/50 font-mono text-xs select-none">
-					&rsaquo;
-				</span>
-				<span className="text-[11px] font-mono text-foreground/80 dark:text-foreground/70">
-					Add Google login and 2FA to my app
-				</span>
+					<span className="text-foreground/50 font-mono text-xs select-none">
+						&rsaquo;
+					</span>
+					<span className="text-[11px] font-mono text-foreground/80 dark:text-foreground/70">
+						Add Google login and 2FA to my app
+					</span>
 				</div>
 
 				{/* Steps */}
@@ -1288,12 +1288,12 @@ export function AiNativeSection() {
 							key={step.text}
 							className="flex items-center gap-2.5 px-3 py-1.5"
 						>
-						<span className="text-[8px] font-mono uppercase tracking-wider text-foreground/60 dark:text-foreground/50 w-8 shrink-0">
-							{step.label}
-						</span>
-						<span className="text-[10px] font-mono text-foreground/75 dark:text-foreground/65 truncate">
-							{step.text}
-						</span>
+							<span className="text-[8px] font-mono uppercase tracking-wider text-foreground/60 dark:text-foreground/50 w-8 shrink-0">
+								{step.label}
+							</span>
+							<span className="text-[10px] font-mono text-foreground/75 dark:text-foreground/65 truncate">
+								{step.text}
+							</span>
 							{"lines" in step && typeof step.lines === "number" && (
 								<span className="text-[9px] font-mono text-emerald-600/80 dark:text-emerald-400/70 ml-auto shrink-0">
 									+{step.lines}
@@ -1323,12 +1323,12 @@ export function AiNativeSection() {
 					<div className="flex divide-x divide-foreground/[0.06]">
 						{mcpClients.map((mc) => (
 							<div key={mc.name} className="flex-1 px-3 py-2">
-							<p className="text-[8px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/45 mb-0.5">
-								{mc.name}
-							</p>
-							<code className="text-[9px] font-mono text-foreground/70 dark:text-foreground/55 truncate block">
-								{mc.cmd}
-							</code>
+								<p className="text-[8px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/45 mb-0.5">
+									{mc.name}
+								</p>
+								<code className="text-[9px] font-mono text-foreground/70 dark:text-foreground/55 truncate block">
+									{mc.cmd}
+								</code>
 							</div>
 						))}
 					</div>

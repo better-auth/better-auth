@@ -275,42 +275,42 @@ export function StaggeredNavFiles() {
 						);
 					})}
 
-				{/* Enterprise tab */}
-				<motion.div
-					initial={{ opacity: 0, y: -4 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{
-						duration: 0.2,
-						delay: 0.155,
-						ease: "easeOut",
-					}}
-					className="flex-1"
-				>
-					<Link
-						href="/enterprise"
-						className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
-							isActive("/enterprise")
-								? `bg-background border-b-2 ${activeTabBorderClass}`
-								: "bg-transparent hover:bg-foreground/[0.03]"
-						}`}
+					{/* Enterprise tab */}
+					<motion.div
+						initial={{ opacity: 0, y: -4 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{
+							duration: 0.2,
+							delay: 0.155,
+							ease: "easeOut",
+						}}
+						className="flex-1"
 					>
-						<span
-							className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+						<Link
+							href="/enterprise"
+							className={`group/tab relative flex items-center justify-center gap-1.5 px-2 xl:px-4 py-3 h-full border-r ${tabDividerClass} transition-colors duration-150 ${
 								isActive("/enterprise")
-									? "text-foreground"
-									: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+									? `bg-background border-b-2 ${activeTabBorderClass}`
+									: "bg-transparent hover:bg-foreground/[0.03]"
 							}`}
 						>
-							enterprise
-						</span>
-					</Link>
-				</motion.div>
+							<span
+								className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
+									isActive("/enterprise")
+										? "text-foreground"
+										: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
+								}`}
+							>
+								enterprise
+							</span>
+						</Link>
+					</motion.div>
 
-				{/* Resources folder tab */}
-				<motion.div
-					initial={{ opacity: 0, y: -4 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: 0.2, delay: 0.17, ease: "easeOut" }}
+					{/* Resources folder tab */}
+					<motion.div
+						initial={{ opacity: 0, y: -4 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.2, delay: 0.17, ease: "easeOut" }}
 						className="relative flex-1"
 						onMouseEnter={openResources}
 						onMouseLeave={closeResources}

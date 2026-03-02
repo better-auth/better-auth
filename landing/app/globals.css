@@ -656,7 +656,11 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.docs-layout {
-		--fd-page-width: calc(100vw - var(--landing-left-pane-width) - var(--staggered-nav-cta-width));
+		--fd-page-width: calc(
+			100vw -
+			var(--landing-left-pane-width) -
+			var(--staggered-nav-cta-width)
+		);
 	}
 
 	.docs-layout #nd-page {

@@ -53,22 +53,22 @@ export function ChangelogContent({ messages }: { messages: ReleaseMessage[] }) {
 							<Markdown
 								rehypePlugins={[[rehypeHighlight]]}
 								components={{
-								h2: ({ children, ...props }) => (
-									<h2
-										className="text-base font-medium tracking-tight text-neutral-800 dark:text-neutral-200 mt-4 mb-2"
-										{...props}
-									>
-										{children}
-									</h2>
-								),
-								h3: ({ children, ...props }) => (
-									<h3
-										className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1.5 pb-1 border-b border-dashed border-foreground/[0.06]"
-										{...props}
-									>
-										{children}
-									</h3>
-								),
+									h2: ({ children, ...props }) => (
+										<h2
+											className="text-base font-medium tracking-tight text-neutral-800 dark:text-neutral-200 mt-4 mb-2"
+											{...props}
+										>
+											{children}
+										</h2>
+									),
+									h3: ({ children, ...props }) => (
+										<h3
+											className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mt-3 mb-1.5 pb-1 border-b border-dashed border-foreground/[0.06]"
+											{...props}
+										>
+											{children}
+										</h3>
+									),
 									p: (props) => (
 										<p
 											className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed my-1"

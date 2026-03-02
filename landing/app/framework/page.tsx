@@ -2,10 +2,7 @@
 
 import { motion } from "framer-motion";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
-import {
-	FrameworkContent,
-	FrameworkHero,
-} from "../products/products-client";
+import { FrameworkContent, FrameworkHero } from "../products/products-client";
 
 export default function FrameworkPage() {
 	return (
