@@ -1261,3 +1261,133 @@ describe("OIDC SSO with defaultSSO array", async () => {
 		);
 	});
 });
+
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8269
+ */
+describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
+	const { auth, signInWithTestUser, customFetchImpl, cookieSetter } =
+		await getTestInstance({
+			trustedOrigins: ["http://localhost:8080"],
+			plugins: [sso(), organization()],
+		});
+
+	const authClient = createAuthClient({
+		plugins: [ssoClient()],
+		baseURL: "http://localhost:3000",
+		fetchOptions: { customFetchImpl },
+	});
+
+	const userinfoHandler = (userInfoResponse: any) => {
+		userInfoResponse.body = {
+			sub: "userinfo-only-sub-id",
+			email: "userinfo-only@test.com",
+			name: "UserInfo Only User",
+			picture: "https://test.com/picture.png",
+			email_verified: true,
+		};
+		userInfoResponse.statusCode = 200;
+	};
+
+	// Strip the id_token from the token endpoint response to simulate providers
+	// that do not include user claims in the ID token (or return no ID token).
+	const beforeResponseHandler = (tokenEndpointResponse: any) => {
+		delete tokenEndpointResponse.body.id_token;
+	};
+
+	const tokenHandler = (token: any) => {
+		// Intentionally leave the token payload minimal — no email claim —
+		// so that the UserInfo endpoint path is exercised.
+	};
+
+	beforeAll(async () => {
+		await server.issuer.keys.generate("RS256");
+		server.service.removeAllListeners("beforeUserinfo");
+		server.service.removeAllListeners("beforeTokenSigning");
+		server.service.removeAllListeners("beforeResponse");
+		server.service.on("beforeUserinfo", userinfoHandler);
+		server.service.on("beforeTokenSigning", tokenHandler);
+		server.service.on("beforeResponse", beforeResponseHandler);
+		await server.start(8080, "localhost");
+	});
+
+	afterAll(async () => {
+		server.service.removeListener("beforeUserinfo", userinfoHandler);
+		server.service.removeListener("beforeTokenSigning", tokenHandler);
+		server.service.removeListener("beforeResponse", beforeResponseHandler);
+		await server.stop().catch(() => {});
+	});
+
+	async function simulateOAuthFlow(authUrl: string, headers: Headers) {
+		let location: string | null = null;
+		await betterFetch(authUrl, {
+			method: "GET",
+			redirect: "manual",
+			onError(context) {
+				location = context.response.headers.get("location");
+			},
+		});
+
+		if (!location) throw new Error("No redirect location found");
+		const newHeaders = new Headers();
+		let callbackURL = "";
+		await betterFetch(location, {
+			method: "GET",
+			customFetchImpl,
+			headers,
+			onError(context) {
+				callbackURL = context.response.headers.get("location") || "";
+				cookieSetter(newHeaders)(context);
+			},
+		});
+
+		return { callbackURL, headers: newHeaders };
+	}
+
+	it("should sign in successfully using sub claim from UserInfo endpoint when no ID token is returned", async () => {
+		const { headers } = await signInWithTestUser();
+		await auth.api.registerSSOProvider({
+			body: {
+				issuer: server.issuer.url!,
+				domain: "test.com",
+				providerId: "userinfo-sub-test",
+				oidcConfig: {
+					clientId: "test",
+					clientSecret: "test",
+					authorizationEndpoint: `${server.issuer.url}/authorize`,
+					tokenEndpoint: `${server.issuer.url}/token`,
+					jwksEndpoint: `${server.issuer.url}/jwks`,
+					userInfoEndpoint: `${server.issuer.url}/userinfo`,
+					discoveryEndpoint: `${server.issuer.url}/.well-known/openid-configuration`,
+				},
+			},
+			headers,
+		});
+
+		const signInHeaders = new Headers();
+		const res = await authClient.signIn.sso({
+			email: "user@test.com",
+			callbackURL: "/dashboard",
+			fetchOptions: {
+				throw: true,
+				onSuccess: cookieSetter(signInHeaders),
+			},
+		});
+
+		const { callbackURL, headers: sessionHeaders } = await simulateOAuthFlow(
+			res.url,
+			signInHeaders,
+		);
+
+		// Should redirect to dashboard, not an error page
+		expect(callbackURL).toContain("/dashboard");
+		expect(callbackURL).not.toContain("error=invalid_provider");
+		expect(callbackURL).not.toContain("missing_user_info");
+
+		// Verify the session was created with the correct email from UserInfo
+		const session = await authClient.getSession({
+			fetchOptions: { headers: sessionHeaders },
+		});
+		expect(session.data?.user.email).toBe("userinfo-only@test.com");
+	});
+});
