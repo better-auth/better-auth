@@ -285,7 +285,7 @@ export const verifyEmail = createAuthEndpoint(
 			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		await ctx.context.internalAdapter.deleteVerificationByIdentifier(token.id);
-		if (token.expiresAt < new Date()) {
+		if (token.expiresAt <= new Date()) {
 			return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
 		}
 		const schema = z.object({
