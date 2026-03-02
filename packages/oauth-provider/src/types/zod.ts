@@ -4,7 +4,10 @@ const DANGEROUS_SCHEMES = ["javascript:", "data:", "vbscript:"];
 
 function isLocalhost(hostname: string): boolean {
 	return (
-		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname.endsWith(".localhost")
+		hostname === "localhost" 
+		|| hostname === "127.0.0.1" 
+		|| hostname === "[::1]" 
+		|| hostname.endsWith(".localhost")
 	);
 }
 
