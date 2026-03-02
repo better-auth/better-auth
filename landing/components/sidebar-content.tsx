@@ -14,7 +14,6 @@ import {
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
-	Navigation,
 	Phone,
 	ScanFace,
 	Server,
@@ -23,6 +22,7 @@ import {
 	UserCircle,
 	UserSquare2,
 	Users2,
+	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
@@ -30,8 +30,8 @@ import { Icons } from "./icons";
 export interface SubpageItem {
 	title: string;
 	href?: string;
-	group?: boolean;
 	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
 }
 
 export interface ListItem {
@@ -436,11 +436,6 @@ export const contents: Content[] = [
 						></path>
 					</svg>
 				),
-			},
-			{
-				title: "Dynamic Base URL",
-				href: "/docs/concepts/dynamic-base-url",
-				icon: () => <Navigation className="w-4 h-4 text-current" />,
 			},
 		],
 		Icon: () => (
@@ -1780,30 +1775,29 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						href: "/docs/plugins/api-key/advanced",
 						title: "Advanced Features",
-
-						// icon: () => <Zap className="size-4" />,
+						icon: () => <Zap className="size-4" />,
 					},
 					{
 						href: "/docs/plugins/api-key/reference",
 						title: "Reference",
-						// icon: () => (
-						// 	<svg
-						// 		xmlns="http://www.w3.org/2000/svg"
-						// 		viewBox="0 0 24 24"
-						// 		fill="none"
-						// 		stroke="currentColor"
-						// 		strokeWidth="2"
-						// 		strokeLinecap="round"
-						// 		strokeLinejoin="round"
-						// 		className="size-4"
-						// 	>
-						// 		<path d="M20 11v6" />
-						// 		<path d="M20 13h2" />
-						// 		<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
-						// 		<circle cx="10" cy="7" r="4" />
-						// 		<circle cx="20" cy="19" r="2" />
-						// 	</svg>
-						// ),
+						icon: () => (
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="size-4"
+							>
+								<path d="M20 11v6" />
+								<path d="M20 13h2" />
+								<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
+								<circle cx="10" cy="7" r="4" />
+								<circle cx="20" cy="19" r="2" />
+							</svg>
+						),
 					},
 				],
 			},
@@ -2312,26 +2306,6 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 							d="M32.5 64C50.1731 64 64.5 49.6731 64.5 32C64.5 20.1555 58.0648 9.81393 48.5 4.28099V31.9999V47.9998H40.5V45.8594C38.1466 47.2207 35.4143 47.9999 32.5 47.9999C23.6634 47.9999 16.5 40.8364 16.5 31.9999C16.5 23.1633 23.6634 15.9999 32.5 15.9999C35.4143 15.9999 38.1466 16.779 40.5 18.1404V1.00812C37.943 0.350018 35.2624 0 32.5 0C14.8269 0 0.500038 14.3269 0.500038 32C0.500038 49.6731 14.8269 64 32.5 64Z"
 							fill="currentColor"
 						/>
-					</svg>
-				),
-			},
-			{
-				title: "Openfort",
-				href: "/docs/plugins/openfort",
-				icon: () => (
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						width="1.2em"
-						height="1.2em"
-						fill="none"
-						aria-hidden="true"
-						viewBox="597.32 331.34 171.36 105.32"
-					>
-						<g fill="currentColor">
-							<rect x="673.9" y="404.26" width="18.2" height="32.4" />
-							<polygon points="768.68,331.36 768.68,331.36 768.68,331.34 610.78,331.34 610.78,331.36 597.32,331.36 597.32,436.64    615.52,436.64 615.52,349.54 750.48,349.54 750.48,436.64 768.68,436.64  " />
-							<polygon points="732.16,367.79 633.83,367.79 633.83,370.19 633.79,370.19 633.79,436.64 651.99,436.64 651.99,385.99    713.9,385.99 713.9,436.64 732.09,436.64 732.09,385.99 732.16,385.99  " />
-						</g>
 					</svg>
 				),
 			},
