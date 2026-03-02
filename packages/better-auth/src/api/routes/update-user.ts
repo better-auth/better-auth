@@ -763,7 +763,7 @@ export const changeEmail = createAuthEndpoint(
 		if (existingUser) {
 			// Simulate token generation to prevent timing attacks
 			await createEmailVerificationToken(
-				ctx.context.secret,
+				ctx,
 				ctx.context.session.user.email,
 				newEmail,
 				ctx.context.options.emailVerification?.expiresIn,
@@ -793,7 +793,7 @@ export const changeEmail = createAuthEndpoint(
 			});
 			if (canSendVerification) {
 				const token = await createEmailVerificationToken(
-					ctx.context.secret,
+					ctx,
 					newEmail,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -828,7 +828,7 @@ export const changeEmail = createAuthEndpoint(
 		 */
 		if (canSendConfirmation) {
 			const token = await createEmailVerificationToken(
-				ctx.context.secret,
+				ctx,
 				ctx.context.session.user.email,
 				newEmail,
 				ctx.context.options.emailVerification?.expiresIn,
@@ -863,7 +863,7 @@ export const changeEmail = createAuthEndpoint(
 		}
 
 		const token = await createEmailVerificationToken(
-			ctx.context.secret,
+			ctx,
 			ctx.context.session.user.email,
 			newEmail,
 			ctx.context.options.emailVerification?.expiresIn,
