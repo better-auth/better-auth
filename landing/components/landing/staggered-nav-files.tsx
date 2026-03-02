@@ -208,7 +208,8 @@ export function StaggeredNavFiles() {
 											s.list.some(
 												(l) =>
 													l.href === pathname ||
-													(l.hasSubpages && pathname.startsWith(`${l.href}/`)),
+													(l.subpages?.length &&
+														pathname.startsWith(`${l.href}/`)),
 											),
 										);
 										setMobileDocSection(idx === -1 ? 0 : idx);
@@ -733,7 +734,7 @@ export function StaggeredNavFiles() {
 																		if (!item.href) return null;
 																		const active =
 																			pathname === item.href ||
-																			(!!item.hasSubpages &&
+																			(!!item.subpages?.length &&
 																				pathname.startsWith(`${item.href}/`));
 																		return (
 																			<Link
