@@ -3630,8 +3630,6 @@ describe("api-key", async () => {
 			},
 		};
 
-		const pluginWithAdditionalFields = apiKey(additionalFieldsOptions);
-
 		const { auth, signInWithTestUser } = await getTestInstance(
 			{ plugins: [apiKey(additionalFieldsOptions)] },
 			{ clientOptions: { plugins: [apiKeyClient()] } },
@@ -3642,12 +3640,7 @@ describe("api-key", async () => {
 		// --- Request body type inference ---
 
 		it("should infer additional fields in createApiKey body", () => {
-			type CreateBody =
-				typeof pluginWithAdditionalFields.endpoints.createApiKey extends {
-					options: { metadata: { $Infer: { body: infer B } } };
-				}
-					? B
-					: never;
+			type CreateBody = Parameters<typeof auth.api.createApiKey>[0]["body"];
 
 			// organizationId is required, projectId is optional
 			expectTypeOf<CreateBody>().toMatchTypeOf<{
@@ -3661,12 +3654,7 @@ describe("api-key", async () => {
 		});
 
 		it("should infer additional fields as optional in updateApiKey body", () => {
-			type UpdateBody =
-				typeof pluginWithAdditionalFields.endpoints.updateApiKey extends {
-					options: { metadata: { $Infer: { body: infer B } } };
-				}
-					? B
-					: never;
+			type UpdateBody = Parameters<typeof auth.api.updateApiKey>[0]["body"];
 
 			// All additional fields are optional for update
 			expectTypeOf<UpdateBody>().toMatchTypeOf<{
