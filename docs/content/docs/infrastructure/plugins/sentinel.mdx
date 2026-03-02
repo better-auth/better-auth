@@ -12,9 +12,6 @@ import { sentinel } from "@better-auth/infra";
 export const auth = betterAuth({
   plugins: [
     sentinel({
-      apiUrl: process.env.BETTER_AUTH_API_URL,
-      kvUrl: process.env.BETTER_AUTH_KV_URL,
-      apiKey: process.env.BETTER_AUTH_API_KEY,
       security: {
         // Configure security features here
       },
@@ -333,45 +330,6 @@ The client automatically includes a visitor ID in requests via the `X-Visitor-ID
 ### PoW Solution Header
 
 When auto-solving is enabled, solved challenges are sent via the `X-PoW-Solution` header.
-
-## Protected Endpoints
-
-Sentinel protects the following authentication endpoints:
-
-### Sign-In Endpoints
-- `/sign-in/email`
-- `/sign-in/username`
-- `/sign-in/email-otp`
-- `/sign-in/social`
-- `/sign-in/passkey`
-- `/sign-in/magic-link`
-- `/sign-in/sso`
-- `/sign-in/anonymous`
-
-### Sign-Up Endpoints
-- `/sign-up/email`
-
-### Password Endpoints
-- `/forget-password`
-- `/reset-password`
-- `/change-password`
-- `/set-password`
-
-### Two-Factor Endpoints
-- `/two-factor/verify-totp`
-- `/two-factor/verify-backup`
-- `/two-factor/verify-otp`
-
-### OTP Endpoints
-- `/email-otp/send`
-- `/phone/send-otp`
-
-### Other Sensitive Endpoints
-- `/magic-link/verify`
-- `/organization/create`
-- `/change-email`
-- `/link-social`
-- `/passkey/add`
 
 ## Security Events
 
