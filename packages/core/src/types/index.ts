@@ -37,3 +37,4 @@ export type {
 	ClientFetchOption,
 	ClientStore,
 } from "./plugin-client";
+export type { SecretConfig } from "./secret";

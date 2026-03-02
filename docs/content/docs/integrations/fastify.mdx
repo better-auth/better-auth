@@ -119,3 +119,24 @@ fastify.register(fastifyCors, {
 ```
 
 <Callout type="warning"> Always restrict CORS origins in production environments. Use environment variables for dynamic configuration. </Callout>
+
+### Getting the User Session
+
+To retrieve the user's session in your Fastify routes, use the `auth.api.getSession` method. Better Auth provides a `fromNodeHeaders` helper function that converts Node.js request headers to the format expected by Better Auth.
+
+```ts title="server.ts"
+import { fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth"; // Your Better Auth instance
+
+fastify.get("/api/me", async (request, reply) => {
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(request.headers),
+  });
+
+  if (!session) {
+    return reply.status(401).send({ error: "Unauthorized" });
+  }
+
+  return reply.send(session);
+});
+```

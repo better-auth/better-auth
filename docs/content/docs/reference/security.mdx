@@ -10,6 +10,14 @@ This page contains information about security features of Better Auth.
 
 Better Auth uses the `scrypt` algorithm to hash passwords by default. This algorithm is designed to be memory-hard and CPU-intensive, making it resistant to brute-force attacks. You can customize the password hashing function by setting the `password` option in the configuration. This option should include a `hash` function to hash passwords and a `verify` function to verify them.
 
+## Secret Rotation
+
+Better Auth supports non-destructive rotation of `BETTER_AUTH_SECRET`. When you configure versioned secrets via the `secrets` option or the `BETTER_AUTH_SECRETS` environment variable, all new encrypted data includes a key version identifier. Decryption performs a direct key lookup by version — no trial decryption.
+
+Legacy data encrypted before rotation (bare-hex format) is still decryptable using the original `BETTER_AUTH_SECRET` as a fallback. No database migrations or downtime are required. Data is lazily re-encrypted with the current key when it is next written.
+
+See the [`secrets` option](/docs/reference/options#secrets) for configuration details.
+
 ## Session Management
 
 ### Session Expiration
@@ -262,6 +270,12 @@ You can also dynamically set the list of trusted origins by providing a function
 <Callout>
 **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
+
+## Email Enumeration Protection
+
+Better Auth prevents email enumeration on the sign-up and change-email endpoints. When `requireEmailVerification` is enabled or `autoSignIn` is set to `false`, the sign-up endpoint returns the same `200` response whether the email is already registered or not, following [OWASP authentication best practices](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#authentication-and-error-messages). Timing attacks are mitigated by simulating password hashing on duplicate sign-up attempts.
+
+See [Email and Password — Email Enumeration Protection](/docs/authentication/email-password#email-enumeration-protection) for configuration details.
 
 ## Reporting Vulnerabilities
 

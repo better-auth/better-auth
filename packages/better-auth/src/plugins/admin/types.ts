@@ -77,7 +77,9 @@ export interface AdminOptions {
 	 */
 	bannedUserMessage?: string | undefined;
 	/**
-	 * Whether to allow impersonating other admins
+	 * Whether to allow impersonating other admins.
+	 *
+	 * @deprecated Use the `impersonate-admins` permission instead.
 	 *
 	 * @default false
 	 */

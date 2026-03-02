@@ -1,0 +1,38 @@
+---
+title: Better Auth Infrastructure
+description: Enterprise-grade dashboard, security, and managed services for Better Auth.
+---
+
+Better Auth Infrastructure is a paid service that extends your authentication system with a management dashboard,
+abuse protection, transactional messaging, and enterprise features - all without managing additional infrastructure.
+
+
+## Key Features
+
+<Cards>
+  <Card title="Dashboard" description="Manage users, organizations, sessions, and view analytics from a single interface." />
+  <Card title="Security" description="Protect against credential stuffing, bots, disposable emails, and impossible travel." />
+  <Card title="Email & SMS" description="Send verification emails, password resets, and OTP codes with pre-built templates." />
+  <Card title="Enterprise" description="SSO/SAML, directory sync (SCIM), log drains, and role-based dashboard access." />
+</Cards>
+
+You're one plugin away from getting started:
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash } from "@better-auth/infra";
+
+export const auth = betterAuth({
+  plugins: [dash()],
+});
+```
+
+Check out our [Getting Started](/docs/infrastructure/getting-started) guide for more details.
+
+## Next Steps
+
+<Cards>
+  <Card href="/docs/infrastructure/getting-started" title="Getting Started" description="Install and configure the infrastructure package." />
+  <Card href="/docs/infrastructure/plugins/dash" title="Dashboard Plugin" description="Set up analytics and admin APIs." />
+  <Card href="/docs/infrastructure/plugins/sentinel" title="Security Plugin" description="Enable abuse protection." />
+</Cards>
