@@ -53,10 +53,10 @@ function EnterpriseHero() {
 							}}
 							className="flex items-center gap-2 py-1.5 border-b border-dashed border-foreground/[0.06] last:border-0"
 						>
-						<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
-							+
-						</span>
-						<span className="text-[11px] text-foreground/65 dark:text-foreground/55 font-mono tracking-wide">
+							<span className="text-foreground/40 dark:text-foreground/35 font-mono text-[10px] leading-none select-none shrink-0">
+								+
+							</span>
+							<span className="text-[11px] text-foreground/65 dark:text-foreground/55 font-mono tracking-wide">
 								{item}
 							</span>
 						</motion.div>
@@ -278,23 +278,23 @@ export function EnterprisePageClient() {
 											</button>
 										</form>
 
-								<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
-									By submitting, you agree to our{" "}
-									<Link
-										href="/terms"
-										className="underline hover:text-foreground/55"
-									>
-										Terms of Service
-									</Link>{" "}
-									and{" "}
-									<Link
-										href="/privacy"
-										className="underline hover:text-foreground/55"
-									>
-										Privacy Policy
-									</Link>
-									.
-								</p>
+										<p className="mt-4 text-foreground/40 dark:text-foreground/30 text-[10px] leading-relaxed">
+											By submitting, you agree to our{" "}
+											<Link
+												href="/terms"
+												className="underline hover:text-foreground/55"
+											>
+												Terms of Service
+											</Link>{" "}
+											and{" "}
+											<Link
+												href="/privacy"
+												className="underline hover:text-foreground/55"
+											>
+												Privacy Policy
+											</Link>
+											.
+										</p>
 									</div>
 								</div>
 							</motion.div>
