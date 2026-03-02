@@ -262,45 +262,31 @@ export function createCibaTokenHandler() {
 			// Generate tokens
 			const accessToken = generateRandomString(32, "a-z", "A-Z", "0-9");
 			const now = Date.now();
+			const iat = Math.floor(now / 1000);
 			const accessTokenExpiresAt = new Date(now + accessTokenExpiresIn * 1000);
 
 			const requestedScopes = cibaRequest.scope.split(" ");
 			const needsRefreshToken = requestedScopes.includes("offline_access");
 
-			// Always generate refresh token for DB storage (unique constraint)
-			// but only return it if offline_access scope is requested
 			const refreshToken = generateRandomString(32, "a-z", "A-Z", "0-9");
 			const refreshTokenExpiresAt = new Date(
 				now + refreshTokenExpiresIn * 1000,
 			);
 
-			// Store refresh token first (if needed) to get the ID for access token reference
-			let refreshTokenRecord: { id: string } | null = null;
-			if (needsRefreshToken) {
-				refreshTokenRecord = await ctx.context.adapter.create<{ id: string }>({
-					model: "oauthRefreshToken",
-					data: {
-						token: refreshToken,
-						clientId: credentials.clientId,
-						userId: user.id,
-						scopes: cibaRequest.scope.split(" "),
-						expiresAt: refreshTokenExpiresAt,
-						createdAt: new Date(),
-					},
-				});
-			}
-
-			// Store access token (field names must match oauth-provider schema)
+			// Store in the oidc-provider oauthAccessToken table
+			// which holds both access and refresh tokens in one row
 			await ctx.context.adapter.create({
 				model: "oauthAccessToken",
 				data: {
-					token: accessToken,
+					accessToken,
+					refreshToken: needsRefreshToken ? refreshToken : refreshToken,
+					accessTokenExpiresAt,
+					refreshTokenExpiresAt,
 					clientId: credentials.clientId,
 					userId: user.id,
-					scopes: cibaRequest.scope.split(" "),
-					refreshId: refreshTokenRecord?.id,
-					expiresAt: accessTokenExpiresAt,
-					createdAt: new Date(),
+					scopes: requestedScopes.join(" "),
+					createdAt: new Date(iat * 1000),
+					updatedAt: new Date(iat * 1000),
 				},
 			});
 

@@ -54,7 +54,7 @@ export async function findCibaRequest(
 	if (!verification) return null;
 
 	if (verification.expiresAt < new Date()) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(key);
 		return null;
 	}
 
@@ -101,10 +101,9 @@ export async function updateCibaRequest(
 			const verification =
 				await ctx.context.internalAdapter.findVerificationValue(key);
 			if (verification) {
-				await ctx.context.internalAdapter.updateVerificationValue(
-					verification.id,
-					{ value },
-				);
+				await ctx.context.internalAdapter.updateVerificationByIdentifier(key, {
+					value,
+				});
 			}
 		}
 		return updated;
@@ -120,10 +119,9 @@ export async function updateCibaRequest(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(key);
 		if (verification) {
-			await ctx.context.internalAdapter.updateVerificationValue(
-				verification.id,
-				{ value },
-			);
+			await ctx.context.internalAdapter.updateVerificationByIdentifier(key, {
+				value,
+			});
 		}
 	}
 
@@ -146,9 +144,7 @@ export async function deleteCibaRequest(
 		const verification =
 			await ctx.context.internalAdapter.findVerificationValue(key);
 		if (verification) {
-			await ctx.context.internalAdapter.deleteVerificationValue(
-				verification.id,
-			);
+			await ctx.context.internalAdapter.deleteVerificationByIdentifier(key);
 		}
 	}
 }
