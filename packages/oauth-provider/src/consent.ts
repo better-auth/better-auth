@@ -104,7 +104,7 @@ export async function consentEndpoint(
 					},
 				],
 				update: {
-					resource: consent.resources,
+					resources: consent.resources,
 					scopes: consent.scopes,
 					updatedAt: new Date(iat * 1000),
 				},

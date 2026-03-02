@@ -276,7 +276,22 @@ export async function authorizeEndpoint(
 
 	// Validate the resource sent to the authorize endpoint
 	const resource = query.resource;
-	await checkResource(ctx, opts, resource, requestedScopes);
+	try {
+		await checkResource(ctx, opts, resource, requestedScopes);
+	} catch (err) {
+		if (err instanceof APIError) {
+			throw ctx.redirect(
+				formatErrorURL(
+					query.redirect_uri,
+					"invalid_target",
+					err.message,
+					query.state,
+					getIssuer(ctx, opts),
+				),
+			);
+		}
+		throw err;
+	}
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);

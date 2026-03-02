@@ -461,7 +461,7 @@ By default, the token endpoint supports providing tokens for the following grant
 - "refresh_token"
 
 Important Notes:
-- Use of the `resource` parameter results in a JWT access token ([RFC 8707](https://www.rfc-editor.org/rfc/rfc8707.html)).
+- Use of the `resource` parameter results in a JWT access token (with JWT plugin enabled).
 
 #### Authorization code grant
 
@@ -999,9 +999,10 @@ oauthProvider({
     };
   },
   // Attach claims to access tokens
-  customAccessTokenClaims: ({ user, scopes, referenceId, resource, metadata }) => {
+  customAccessTokenClaims: ({ user, scopes, referenceId, resources, metadata }) => {
     return {
       "https://example.com/org": referenceId,
+      "https://example.com/resources": resources,
       "https://example.com/roles": ["editor"],
     };
   },

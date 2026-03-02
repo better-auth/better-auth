@@ -589,14 +589,31 @@ async function checkVerificationValue(
 		typeof verificationValue.query.resource === "string"
 			? [verificationValue.query.resource]
 			: verificationValue.query.resource;
-	if (
-		verificationResources &&
-		(!resource || !verificationResources.every((v) => resource.includes(v)))
-	) {
-		throw new APIError("BAD_REQUEST", {
-			error_description: "resource not found in original authorization request",
-			error: "invalid_request",
-		});
+	if (verificationResources) {
+		if (!resource) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"resource not found in original authorization request",
+				error: "invalid_target",
+			});
+		}
+		const requestedSet = new Set(resource);
+		const authorizedSet = new Set(verificationResources);
+		for (const r of requestedSet) {
+			if (!authorizedSet.has(r)) {
+				throw new APIError("BAD_REQUEST", {
+					error_description: "requested resource not authorized",
+					error: "invalid_target",
+				});
+			}
+		}
+		if (requestedSet.size !== authorizedSet.size) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"resource set mismatch between authorization and token request",
+				error: "invalid_target",
+			});
+		}
 	}
 
 	return verificationValue;
@@ -830,7 +847,7 @@ async function handleClientCredentialsGrant(
 		client_id?: string;
 		client_secret?: string;
 		scope?: string;
-		resource?: string;
+		resource?: string | string[];
 	} = ctx.body;
 
 	const authorization = ctx.request?.headers.get("authorization") || null;

@@ -423,9 +423,9 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 									name: "resource",
 									in: "query",
 									required: false,
-									schema: { type: "string" },
+									schema: { type: "array", items: { type: "string" } },
 									description:
-										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token",
+										"Requested token resource(s) (ie audience) to obtain a JWT formatted access token. May be supplied multiple times as repeated 'resource' query parameters (RFC 8707) or as an array of strings.",
 								},
 								{
 									name: "prompt",
