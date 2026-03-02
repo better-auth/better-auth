@@ -66,11 +66,10 @@ export async function verifyOAuthQueryParams(
 	oauth_query: string,
 	secret: string,
 ) {
-	let queryParams = new URLSearchParams(oauth_query);
+	const queryParams = new URLSearchParams(oauth_query);
 	const sig = queryParams.get("sig");
 	const exp = Number(queryParams.get("exp"));
 	queryParams.delete("sig");
-	queryParams = new URLSearchParams(queryParams);
 	const verifySig = await makeSignature(queryParams.toString(), secret);
 	return (
 		!!sig &&
