@@ -1,4 +1,5 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "better-auth/api";
 import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
@@ -134,6 +135,7 @@ export function createApiKeyRoutes({
 	defaultKeyGenerator,
 	configurations,
 	schema,
+	additionalFields,
 }: {
 	defaultKeyGenerator: (options: {
 		length: number;
@@ -141,12 +143,14 @@ export function createApiKeyRoutes({
 	}) => Awaitable<string>;
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
+	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 }) {
 	return {
 		createApiKey: createApiKey({
 			defaultKeyGenerator,
 			configurations,
 			schema,
+			additionalFields,
 			deleteAllExpiredApiKeys,
 		}),
 		verifyApiKey: verifyApiKey({
@@ -158,6 +162,7 @@ export function createApiKeyRoutes({
 		updateApiKey: updateApiKey({
 			configurations,
 			schema,
+			additionalFields,
 			deleteAllExpiredApiKeys,
 		}),
 		deleteApiKey: deleteApiKey({

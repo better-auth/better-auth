@@ -4,12 +4,21 @@ import type {
 	HookEndpointContext,
 	LiteralString,
 } from "@better-auth/core";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
 
+export type ApiKeySchema = InferOptionSchema<
+	ReturnType<typeof apiKeySchema>
+> & {
+	apikey?: {
+		additionalFields?: Record<string, DBFieldAttribute> | undefined;
+	};
+};
+
 export interface ApiKeyOptions {
-	schema?: InferOptionSchema<ReturnType<typeof apiKeySchema>> | undefined;
+	schema?: ApiKeySchema | undefined;
 }
 
 export interface ApiKeyConfigurationOptions {

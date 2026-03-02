@@ -3402,6 +3402,207 @@ describe("api-key", async () => {
 		});
 	});
 
+	describe("additional fields", async () => {
+		const { auth, client, signInWithTestUser } = await getTestInstance(
+			{
+				plugins: [
+					apiKey({
+						schema: {
+							apikey: {
+								additionalFields: {
+									organizationId: {
+										type: "string",
+										required: true,
+									},
+									projectId: {
+										type: "string",
+										required: false,
+									},
+									serverOnlyField: {
+										type: "string",
+										required: false,
+										input: false,
+									},
+								},
+							},
+						},
+					}),
+				],
+			},
+			{
+				clientOptions: {
+					plugins: [apiKeyClient()],
+				},
+			},
+		);
+
+		const { headers } = await signInWithTestUser();
+		type AdditionalFields = {
+			organizationId?: string;
+			projectId?: string;
+			serverOnlyField?: string;
+		};
+
+		it("should require required additional fields on create", async () => {
+			const result = await client.apiKey.create({}, { headers });
+
+			expect(result.data).toBeNull();
+			expect(result.error).toBeDefined();
+			expect(result.error?.status).toBe(400);
+		});
+
+		it("should persist additional fields on create", async () => {
+			const body = {
+				organizationId: "org-create",
+				projectId: "project-create",
+			};
+			const createdKey = await auth.api.createApiKey({
+				body: body as never,
+				headers,
+			});
+			const fields = createdKey as unknown as AdditionalFields;
+
+			expect(fields.organizationId).toBe("org-create");
+			expect(fields.projectId).toBe("project-create");
+
+			const dbKey = await (await auth.$context).adapter.findOne<{
+				id: string;
+				organizationId: string;
+				projectId?: string;
+			}>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			});
+
+			expect(dbKey?.organizationId).toBe("org-create");
+			expect(dbKey?.projectId).toBe("project-create");
+		});
+
+		it("should allow optional additional fields to be omitted", async () => {
+			const body = {
+				organizationId: "org-optional",
+			};
+			const createdKey = await auth.api.createApiKey({
+				body: body as never,
+				headers,
+			});
+			const fields = createdKey as unknown as AdditionalFields;
+
+			expect(fields.organizationId).toBe("org-optional");
+			expect(fields.projectId).toBeNull();
+		});
+
+		it("should persist additional fields on update", async () => {
+			const createBody = {
+				organizationId: "org-update-1",
+				projectId: "project-update-1",
+			};
+			const createdKey = await auth.api.createApiKey({
+				body: createBody as never,
+				headers,
+			});
+
+			const updateBody = {
+				keyId: createdKey.id,
+				organizationId: "org-update-2",
+				projectId: "project-update-2",
+			};
+			const updatedKey = await auth.api.updateApiKey({
+				body: updateBody,
+				headers,
+			});
+			const fields = updatedKey as unknown as AdditionalFields;
+
+			expect(fields.organizationId).toBe("org-update-2");
+			expect(fields.projectId).toBe("project-update-2");
+
+			const dbKey = await (await auth.$context).adapter.findOne<{
+				id: string;
+				organizationId: string;
+				projectId?: string;
+			}>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			});
+
+			expect(dbKey?.organizationId).toBe("org-update-2");
+			expect(dbKey?.projectId).toBe("project-update-2");
+		});
+
+		it("should allow partial additional field updates", async () => {
+			const createBody = {
+				organizationId: "org-partial",
+			};
+			const createdKey = await auth.api.createApiKey({
+				body: createBody as never,
+				headers,
+			});
+
+			const updateBody = {
+				keyId: createdKey.id,
+				projectId: "project-partial",
+			};
+			const updatedKey = await auth.api.updateApiKey({
+				body: updateBody,
+				headers,
+			});
+			const fields = updatedKey as unknown as AdditionalFields;
+
+			expect(fields.organizationId).toBe("org-partial");
+			expect(fields.projectId).toBe("project-partial");
+		});
+
+		it("should ignore fields with input false", async () => {
+			const createBody = {
+				organizationId: "org-input-false",
+				serverOnlyField: "hidden-create",
+			};
+			const createdKey = await auth.api.createApiKey({
+				body: createBody as never,
+				headers,
+			});
+			const createFields = createdKey as unknown as AdditionalFields;
+
+			expect(createFields.serverOnlyField).toBeNull();
+
+			const createDbKey = await (await auth.$context).adapter.findOne<{
+				id: string;
+				serverOnlyField?: string;
+			}>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			});
+
+			expect(createDbKey?.serverOnlyField).toBeNull();
+
+			const updateBody = {
+				keyId: createdKey.id,
+				projectId: "project-input-false",
+				serverOnlyField: "hidden-update",
+			};
+			const updatedKey = await auth.api.updateApiKey({
+				body: updateBody,
+				headers,
+			});
+			const updateFields = updatedKey as unknown as AdditionalFields;
+
+			expect(updateFields.projectId).toBe("project-input-false");
+			expect(updateFields.serverOnlyField).toBeNull();
+
+			const updateDbKey = await (await auth.$context).adapter.findOne<{
+				id: string;
+				projectId?: string;
+				serverOnlyField?: string;
+			}>({
+				model: "apikey",
+				where: [{ field: "id", value: createdKey.id }],
+			});
+
+			expect(updateDbKey?.projectId).toBe("project-input-false");
+			expect(updateDbKey?.serverOnlyField).toBeNull();
+		});
+	});
+
 	// =========================================================================
 	// LEGACY DOUBLE-STRINGIFIED METADATA MIGRATION
 	// =========================================================================

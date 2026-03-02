@@ -1,9 +1,11 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
@@ -113,6 +115,7 @@ export function createApiKey({
 	defaultKeyGenerator,
 	configurations,
 	schema,
+	additionalFields,
 	deleteAllExpiredApiKeys,
 }: {
 	defaultKeyGenerator: (options: {
@@ -121,16 +124,24 @@ export function createApiKey({
 	}) => Awaitable<string>;
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
+	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: additionalFields || {},
+		isClientSide: true,
+	});
+	const bodySchema = createApiKeyBodySchema.extend(
+		additionalFieldsSchema.shape,
+	);
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: createApiKeyBodySchema,
+			body: bodySchema,
 			metadata: {
 				openapi: {
 					description: "Create a new API key for a user",
@@ -271,6 +282,7 @@ export function createApiKey({
 			},
 		},
 		async (ctx) => {
+			const extra = additionalFieldsSchema.parse(ctx.body);
 			const {
 				configId,
 				name,
@@ -452,6 +464,7 @@ export function createApiKey({
 
 			const data: Omit<ApiKey, "id"> = {
 				configId: resolvedConfigId,
+				...extra,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -480,7 +493,7 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-expect-error - we intentionally save the permissions as string on DB.
+				// @ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 

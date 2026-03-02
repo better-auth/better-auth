@@ -140,9 +140,9 @@ Customize the rate-limiting.
   </Accordion>
 </Accordions>
 
-`schema` <span className="opacity-70">`InferOptionSchema<ReturnType<typeof apiKeySchema>>`</span>
+`schema` <span className="opacity-70">`ApiKeySchema`</span>
 
-Custom schema for the API key plugin.
+Custom schema for the API key plugin, including additional fields for the `apikey` table.
 
 `enableSessionForAPIKeys` <span className="opacity-70">`boolean`</span>
 
@@ -430,6 +430,23 @@ When verifying an API key, all required permissions must be present in the API k
 ## Schema
 
 Table: `apikey`
+
+You can extend the table with additional fields:
+
+```ts
+apiKey({
+  schema: {
+    apikey: {
+      additionalFields: {
+        organizationId: {
+          type: "string",
+          required: false,
+        },
+      },
+    },
+  },
+})
+```
 
 <DatabaseTable
   fields={[
