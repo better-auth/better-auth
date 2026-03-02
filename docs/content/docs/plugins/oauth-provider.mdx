@@ -1368,6 +1368,48 @@ oauthProvider({
 ```
 
 
+### Pairwise Subject Identifiers
+
+By default, the `sub` (subject) claim in tokens uses the user's internal ID, which is the same across all clients. This is the **public** subject type per [OIDC Core Section 8](https://openid.net/specs/openid-connect-core-1_0.html#SubjectIDTypes).
+
+You can enable **pairwise** subject identifiers so each client receives a unique, unlinkable `sub` for the same user. This prevents relying parties from correlating users across services.
+
+```ts title="auth.ts"
+oauthProvider({
+  pairwiseSecret: "your-256-bit-secret", // [!code highlight]
+})
+```
+
+When `pairwiseSecret` is configured, the server advertises both `"public"` and `"pairwise"` in the discovery endpoint's `subject_types_supported`. Clients opt in by setting `subject_type: "pairwise"` at registration.
+
+#### Per-Client Configuration
+
+```ts title="register-client.ts"
+const response = await auth.api.createOAuthClient({
+  headers,
+  body: {
+    client_name: 'Privacy-Sensitive App',
+    redirect_uris: ['https://app.example.com/callback'],
+    token_endpoint_auth_method: 'client_secret_post',
+    subject_type: 'pairwise', // Enable pairwise sub for this client
+  }
+});
+```
+
+#### How It Works
+
+Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier** (the host of the client's first redirect URI) and the user ID, keyed with `pairwiseSecret`. This means:
+
+- Two clients with different redirect URI hosts always receive different `sub` values for the same user
+- Two clients sharing the same redirect URI host receive the **same** pairwise `sub` (per OIDC Core Section 8.1)
+- The same client always receives the same `sub` for the same user (deterministic)
+
+Pairwise `sub` appears in:
+- `id_token`
+- `/oauth2/userinfo` response
+- Token introspection (`/oauth2/introspect`)
+- JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly
+
 ### MCP
 
 You can easily make your APIs [MCP-compatible](https://modelcontextprotocol.io/specification/draft/basic/authorization) simply by adding a resource server which directs users to this OAuth 2.1 authorization server.
@@ -1575,6 +1617,12 @@ Table Name: `oauthClient`
       name: "enableEndSession",
       type: "boolean",
       description: "Field that indicates if the application can logout via an id_token. You may choose to enable this for trusted applications.",
+      isOptional: true,
+    },
+    {
+      name: "subjectType",
+      type: "string",
+      description: "Subject identifier type for this client. Set to \"pairwise\" to receive unique, unlinkable sub claims per user. Requires pairwiseSecret to be configured on the server.",
       isOptional: true,
     },
     {
