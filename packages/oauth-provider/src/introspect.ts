@@ -378,20 +378,16 @@ export async function validateAccessToken(
  * keep real user.id (needed for user lookup in /userinfo).
  */
 async function resolveIntrospectionSub(
-	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
 	payload: JWTPayload,
+	client: SchemaClient<Scope[]>,
 ): Promise<JWTPayload> {
-	const clientId = (payload.client_id ?? payload.azp) as string | undefined;
-	if (payload.active && payload.sub && clientId) {
-		const tokenClient = await getClient(ctx, opts, clientId);
-		if (tokenClient) {
-			payload.sub = await resolveSubjectIdentifier(
-				payload.sub as string,
-				tokenClient,
-				opts,
-			);
-		}
+	if (payload.active && payload.sub) {
+		payload.sub = await resolveSubjectIdentifier(
+			payload.sub as string,
+			client,
+			opts,
+		);
 	}
 	return payload;
 }
@@ -454,7 +450,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return resolveIntrospectionSub(ctx, opts, payload);
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -477,7 +473,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return resolveIntrospectionSub(ctx, opts, payload);
+				return resolveIntrospectionSub(opts, payload, client);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

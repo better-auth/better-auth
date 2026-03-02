@@ -128,6 +128,25 @@ export async function checkOAuthClient(
 					"pairwise subject_type requires server pairwiseSecret configuration",
 			});
 		}
+		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
+		// a sector_identifier_uri is required (not yet supported). Reject registration
+		// until sector_identifier_uri support is added.
+		if (
+			client.subject_type === "pairwise" &&
+			client.redirect_uris &&
+			client.redirect_uris.length > 1
+		) {
+			const hosts = new Set(
+				client.redirect_uris.map((uri: string) => new URL(uri).host),
+			);
+			if (hosts.size > 1) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"pairwise clients with redirect_uris on different hosts require a sector_identifier_uri, which is not yet supported. All redirect_uris must share the same host.",
+				});
+			}
+		}
 	}
 
 	// Check requested application scopes

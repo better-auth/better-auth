@@ -1408,7 +1408,15 @@ Pairwise `sub` appears in:
 - `id_token`
 - `/oauth2/userinfo` response
 - Token introspection (`/oauth2/introspect`)
-- JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly
+
+JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
+
+<Callout type="warn">
+**Limitations:**
+- `sector_identifier_uri` is not yet supported. All `redirect_uris` for a pairwise client must share the same host. Clients with redirect URIs on different hosts will be rejected at registration.
+- `pairwiseSecret` must be at least 32 characters long.
+- Rotating `pairwiseSecret` will change all pairwise `sub` values, breaking existing RP sessions. Treat this secret as permanent once set.
+</Callout>
 
 ### MCP
 

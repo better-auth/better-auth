@@ -132,8 +132,8 @@ async function createIdToken(
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
+	const userClaims = userNormalClaims(user, scopes);
 	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
-	const userClaims = userNormalClaims(user, scopes, resolvedSub);
 	const authTimeSec =
 		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
