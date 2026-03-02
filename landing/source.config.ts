@@ -17,11 +17,18 @@ export const docs = defineDocs({
 		postprocess: {
 			includeProcessedMarkdown: true,
 		},
+		async: true,
 	},
 });
 
 export const canaryDocs = defineDocs({
 	dir: "../docs/content/docs",
+	docs: {
+		postprocess: {
+			includeProcessedMarkdown: true,
+		},
+		async: true,
+	},
 });
 
 export const blogCollection = defineCollections({
