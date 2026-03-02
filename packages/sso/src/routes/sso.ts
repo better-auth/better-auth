@@ -1630,7 +1630,43 @@ async function handleOIDCCallback(
 		emailVerified?: boolean;
 		[key: string]: any;
 	} | null = null;
-	if (tokenResponse.idToken) {
+	const mapping = config.mapping || {};
+
+	if (config.userInfoEndpoint) {
+		const userInfoResponse = await betterFetch<Record<string, unknown>>(
+			config.userInfoEndpoint,
+			{
+				headers: {
+					Authorization: `Bearer ${tokenResponse.accessToken}`,
+				},
+			},
+		);
+		if (userInfoResponse.error) {
+			throw ctx.redirect(
+				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
+					userInfoResponse.error.message
+				}`,
+			);
+		}
+		const rawUserInfo = userInfoResponse.data;
+		userInfo = {
+			...Object.fromEntries(
+				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+					key,
+					rawUserInfo[value],
+				]),
+			),
+			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
+			email: rawUserInfo[mapping.email || "email"] as string | undefined,
+			emailVerified: options?.trustEmailVerified
+				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
+						| boolean
+						| undefined)
+				: false,
+			name: rawUserInfo[mapping.name || "name"] as string | undefined,
+			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
+		};
+	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
 		if (!config.jwksEndpoint) {
 			throw ctx.redirect(
@@ -1658,7 +1694,6 @@ async function handleOIDCCallback(
 			);
 		}
 
-		const mapping = config.mapping || {};
 		userInfo = {
 			...Object.fromEntries(
 				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
@@ -1680,35 +1715,12 @@ async function handleOIDCCallback(
 			image?: string;
 			emailVerified?: boolean;
 		};
-	}
-
-	if (!userInfo) {
-		if (!config.userInfoEndpoint) {
-			throw ctx.redirect(
-				`${
-					errorURL || callbackURL
-				}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
-			);
-		}
-		const userInfoResponse = await betterFetch<{
-			email?: string;
-			name?: string;
-			id?: string;
-			image?: string;
-			emailVerified?: boolean;
-		}>(config.userInfoEndpoint, {
-			headers: {
-				Authorization: `Bearer ${tokenResponse.accessToken}`,
-			},
-		});
-		if (userInfoResponse.error) {
-			throw ctx.redirect(
-				`${errorURL || callbackURL}?error=invalid_provider&error_description=${
-					userInfoResponse.error.message
-				}`,
-			);
-		}
-		userInfo = userInfoResponse.data;
+	} else {
+		throw ctx.redirect(
+			`${
+				errorURL || callbackURL
+			}?error=invalid_provider&error_description=user_info_endpoint_not_found`,
+		);
 	}
 
 	if (!userInfo.email || !userInfo.id) {
