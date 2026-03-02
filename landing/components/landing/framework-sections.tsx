@@ -785,11 +785,11 @@ export function ServerClientTabs() {
 			<div className="absolute -inset-4 bg-gradient-to-br from-foreground/[0.02] via-transparent to-foreground/[0.02] rounded-2xl blur-xl pointer-events-none dark:from-foreground/[0.03] dark:to-foreground/[0.03]" />
 
 			<div className="relative overflow-hidden bg-neutral-50 dark:bg-black">
-				<div className="flex border border-b-0 border-foreground/[0.08] rounded-t-lg bg-neutral-100/50 dark:bg-[#0a0a0a]/50">
+				<div className="flex border border-foreground/[0.08] rounded-t-lg bg-neutral-100/50 dark:bg-[#0a0a0a]/50">
 					<button
 						type="button"
 						onClick={() => startTransition(() => setActiveTab("server"))}
-						className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono transition-colors relative ${
+						className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors relative ${
 							activeTab === "server"
 								? "text-foreground/80"
 								: "text-foreground/40 hover:text-foreground/60"
@@ -797,13 +797,13 @@ export function ServerClientTabs() {
 					>
 						auth.ts
 						{activeTab === "server" && (
-							<span className="absolute bottom-0 left-2 right-2 h-px bg-foreground/50" />
+							<span className="absolute bottom-0 left-2 right-2 h-[1.5px] bg-foreground/70" />
 						)}
 					</button>
 					<button
 						type="button"
 						onClick={() => startTransition(() => setActiveTab("client"))}
-						className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono transition-colors relative ${
+						className={`flex items-center gap-1.5 px-4 py-2 text-xs font-medium transition-colors relative ${
 							activeTab === "client"
 								? "text-foreground/80"
 								: "text-foreground/40 hover:text-foreground/60"
@@ -811,7 +811,7 @@ export function ServerClientTabs() {
 					>
 						auth-client.ts
 						{activeTab === "client" && (
-							<span className="absolute bottom-0 left-2 right-2 h-px bg-foreground/50" />
+							<span className="absolute bottom-0 left-2 right-2 h-[1.5px] bg-foreground/70" />
 						)}
 					</button>
 				</div>
@@ -925,7 +925,7 @@ export function DatabaseSection() {
 							</span>
 							{db}
 							{activeDb === db && (
-								<span className="absolute bottom-0 left-0 right-0 h-px bg-amber-500/70 dark:bg-amber-400/60" />
+								<span className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-amber-500/70 dark:bg-amber-400/60" />
 							)}
 						</button>
 					))}
