@@ -38,6 +38,19 @@ const nextConfig = {
 				destination: "/docs/introduction",
 				permanent: false,
 			},
+			// Legacy query string based redirects
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "framework" }],
+				destination: "/products/framework",
+				permanent: true,
+			},
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "infrastructure" }],
+				destination: "/products/infrastructure",
+				permanent: true,
+			},
 		];
 	},
 };
