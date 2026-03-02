@@ -237,6 +237,51 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		expect(map.get("token")?.value).toBe("abc");
 		expect(map.get("token")?.expires).toBeUndefined();
 	});
+
+	it("handles Expires when cookie value contains gmt substring", () => {
+		const map = parseSetCookieHeader(
+			"session_data=abcgmtxyz; Path=/; Expires=Mon, 02 Mar 2026 05:42:16 GMT; Max-Age=300; Secure; HttpOnly; SameSite=lax",
+		);
+
+		expect(map.get("session_data")?.value).toBe("abcgmtxyz");
+		expect(map.get("session_data")?.expires).toEqual(
+			new Date("Mon, 02 Mar 2026 05:42:16 GMT"),
+		);
+	});
+
+	it("handles non-standard Expires=0", () => {
+		const map = parseSetCookieHeader("a=1; Expires=0, b=2");
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles RFC 850 date format", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Expires=Sunday, 06-Nov-94 08:49:37 GMT, b=2",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles asctime date format (no comma in date)", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Expires=Sun Nov 6 08:49:37 1994, b=2",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+	});
+
+	it("handles mixed cookies with and without Expires", () => {
+		const map = parseSetCookieHeader(
+			"a=1; Path=/; HttpOnly, b=2; Expires=Mon, 01 Jan 2026 00:00:00 GMT; Secure, c=3; SameSite=Lax",
+		);
+		expect(map.get("a")?.value).toBe("1");
+		expect(map.get("b")?.value).toBe("2");
+		expect(map.get("b")?.expires).toEqual(
+			new Date("Mon, 01 Jan 2026 00:00:00 GMT"),
+		);
+		expect(map.get("c")?.value).toBe("3");
+	});
 });
 
 describe("cookie-utils stripSecureCookiePrefix", () => {
