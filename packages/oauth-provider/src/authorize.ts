@@ -244,22 +244,6 @@ export async function authorizeEndpoint(
 		}
 	}
 
-	// Validate the resource sent to the authorize endpoint
-	const resource = query.resource;
-	await checkResource(ctx, opts, resource, requestedScopes);
-
-	if (!query.code_challenge || !query.code_challenge_method) {
-		throw ctx.redirect(
-			formatErrorURL(
-				query.redirect_uri,
-				"invalid_request",
-				"pkce is required",
-				query.state,
-				getIssuer(ctx, opts),
-			),
-		);
-	}
-
 	// If PKCE parameters are provided, validate them (even if not required)
 	if (query.code_challenge || query.code_challenge_method) {
 		// Both parameters must be provided together
@@ -289,6 +273,10 @@ export async function authorizeEndpoint(
 			);
 		}
 	}
+
+	// Validate the resource sent to the authorize endpoint
+	const resource = query.resource;
+	await checkResource(ctx, opts, resource, requestedScopes);
 
 	// Check for session
 	const session = await getSessionFromCtx(ctx);
