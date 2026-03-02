@@ -1292,7 +1292,7 @@ describe("SSO OIDC UserInfo endpoint sub claim mapping", async () => {
 	// Strip the id_token from the token endpoint response to simulate providers
 	// that do not include user claims in the ID token (or return no ID token).
 	const beforeResponseHandler = (tokenEndpointResponse: any) => {
-		delete tokenEndpointResponse.body.id_token;
+		tokenEndpointResponse.body.id_token = undefined;
 	};
 
 	const tokenHandler = (token: any) => {
