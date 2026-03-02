@@ -872,8 +872,7 @@ export function DatabaseSection() {
 
 		const el = codeScrollRef.current;
 		if (el) {
-			const scrollMax = el.scrollHeight - el.clientHeight;
-			el.scrollTop = Math.min(scrollMax, scrollMax * 0.35);
+			el.scrollTop = 0;
 		}
 
 		const sidebar = sidebarRef.current;
