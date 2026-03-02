@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import Link from "next/link";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
+const dashboardSignInHref = `/sign-in?callbackUrl=${encodeURIComponent("/dashboard?redirectTo=/settings/billing")}`;
+
 function FrameworkHero() {
 	const highlights = [{ label: "License", value: "MIT" }];
 
@@ -163,7 +165,7 @@ function InfrastructureHero() {
 
 				<div className="flex items-center gap-3 pt-1">
 					<Link
-						href="/sign-in"
+						href={dashboardSignInHref}
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-sm font-medium hover:opacity-90 transition-colors"
 					>
 						Get Started
