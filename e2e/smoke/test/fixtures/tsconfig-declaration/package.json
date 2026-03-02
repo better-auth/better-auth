@@ -12,6 +12,6 @@
     "@better-auth/sso": "workspace:*",
     "@better-auth/stripe": "workspace:*",
     "better-auth": "workspace:*",
-    "stripe": "^20.2.0"
+    "stripe": "^20.4.0"
   }
 }

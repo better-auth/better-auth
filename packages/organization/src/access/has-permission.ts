@@ -51,34 +51,15 @@ export const hasPermission = async (
 		});
 
 		for (const { role, permission: permissionsString } of roles) {
-			// If it's for an existing role, skip as we shouldn't override hard-coded roles.
-			if (role in acRoles) continue;
-
-			let parsed: Record<string, string[]>;
-			try {
-				parsed = JSON.parse(permissionsString);
-			} catch (error: unknown) {
-				ctx.context.logger.error(
-					"[hasPermission] Failed to parse permissions for role " + role,
-					{
-						permissions: permissionsString,
-						error: error,
-					},
-				);
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: "Failed to parse permissions for role " + role,
-				});
-			}
-
 			const result = z
 				.record(z.string(), z.array(z.string()))
-				.safeParse(parsed);
+				.safeParse(JSON.parse(permissionsString));
 
 			if (!result.success) {
 				ctx.context.logger.error(
 					"[hasPermission] Invalid permissions for role " + role,
 					{
-						permissions: parsed,
+						permissions: JSON.parse(permissionsString),
 					},
 				);
 				throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -86,17 +67,18 @@ export const hasPermission = async (
 				});
 			}
 
-			acRoles[role] = input.options.ac.newRole(result.data);
+			const merged: Record<string, string[]> = { ...acRoles[role]?.statements };
+			for (const [key, actions] of Object.entries(result.data)) {
+				merged[key] = [...new Set([...(merged[key] ?? []), ...actions])];
+			}
+			acRoles[role] = input.options.ac.newRole(merged);
 		}
 	}
 
 	if (input.useMemoryCache) {
-		// Only read from cache, don't update it with potentially incomplete data
 		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
-	} else {
-		// Only cache when fresh data was loaded from database
-		cacheAllRoles.set(input.organizationId, acRoles);
 	}
+	cacheAllRoles.set(input.organizationId, acRoles);
 
 	return hasPermissionFn(input, acRoles);
 };

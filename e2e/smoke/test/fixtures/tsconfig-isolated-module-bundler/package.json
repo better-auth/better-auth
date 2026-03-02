@@ -8,6 +8,6 @@
   "dependencies": {
     "@better-auth/organization": "workspace:*",
     "better-auth": "workspace:*",
-    "better-auth-harmony": "^1.2.5"
+    "better-auth-harmony": "^1.3.0"
   }
 }

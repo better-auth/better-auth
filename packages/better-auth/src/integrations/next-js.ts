@@ -36,10 +36,10 @@ export const nextCookies = () => {
 						// In Server Components, `cookies().set()` throws an error.
 						// In Server Actions or Route Handlers, it succeeds.
 						let cookieStore: Awaited<
-							ReturnType<typeof import("next/headers").cookies>
+							ReturnType<typeof import("next/headers.js").cookies>
 						>;
 						try {
-							const { cookies } = await import("next/headers");
+							const { cookies } = await import("next/headers.js");
 							cookieStore = await cookies();
 						} catch {
 							// import failed or not in request context
@@ -47,6 +47,8 @@ export const nextCookies = () => {
 						}
 						try {
 							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
+							// If cookie was set successfully, we should clean up.
+							cookieStore.delete("__better-auth-cookie-store");
 						} catch {
 							await setShouldSkipSessionRefresh(true);
 						}
@@ -67,7 +69,7 @@ export const nextCookies = () => {
 							const setCookies = returned?.get("set-cookie");
 							if (!setCookies) return;
 							const parsed = parseSetCookieHeader(setCookies);
-							const { cookies } = await import("next/headers");
+							const { cookies } = await import("next/headers.js");
 							let cookieHelper: Awaited<ReturnType<typeof cookies>>;
 							try {
 								cookieHelper = await cookies();

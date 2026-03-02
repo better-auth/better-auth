@@ -194,6 +194,24 @@ export const organizationClient = <CO extends OrganizationClientOptions>(
 				},
 				signal: "$sessionSignal",
 			},
+			{
+				matcher(path) {
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.startsWith("/organization/set-active")
+					);
+				},
+				signal: "$activeMemberSignal",
+			},
+			{
+				matcher(path) {
+					return (
+						path.includes("/organization/update-member-role") ||
+						path.startsWith("/organization/set-active")
+					);
+				},
+				signal: "$activeMemberRoleSignal",
+			},
 		],
 		$ERROR_CODES: ORGANIZATION_ERROR_CODES,
 	} satisfies BetterAuthClientPlugin;
