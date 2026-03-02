@@ -576,6 +576,49 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 	});
 
+	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.id_token).toBeDefined();
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const originalIdToken = decodeJwt(tokens!.id_token!);
+		expect(originalIdToken.auth_time).toBeDefined();
+
+		// Refresh tokens
+		const { body, headers } = createRefreshAccessTokenRequest({
+			refreshToken: tokens?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: {
+				scope: scopes.join(" "),
+			},
+		});
+		const newTokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body,
+			headers: headers,
+		});
+		expect(newTokens.data?.id_token).toBeDefined();
+
+		const refreshedIdToken = decodeJwt(newTokens.data!.id_token!);
+		expect(refreshedIdToken.auth_time).toBe(originalIdToken.auth_time);
+	});
+
 	it("should refresh token with same scopes, JWT access token", async ({
 		expect,
 	}) => {
