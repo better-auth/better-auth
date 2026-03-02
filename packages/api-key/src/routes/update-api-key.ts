@@ -4,7 +4,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
-import { toZodSchema } from "better-auth/db";
+import { InferAdditionalFieldsFromPluginOptions, toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
@@ -14,7 +14,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
@@ -106,7 +106,7 @@ const updateApiKeyBodySchema = z.object({
 		.nullable(),
 });
 
-export function updateApiKey({
+export function updateApiKey<O extends ApiKeyOptions>({
 	configurations,
 	schema,
 	additionalFields,
@@ -127,12 +127,17 @@ export function updateApiKey({
 	const bodySchema = updateApiKeyBodySchema.extend(
 		additionalFieldsSchema.partial().shape,
 	);
+	type Body = z.infer<typeof updateApiKeyBodySchema> &
+		Partial<InferAdditionalFieldsFromPluginOptions<"apikey", O>>;
 	return createAuthEndpoint(
 		"/api-key/update",
 		{
 			method: "POST",
 			body: bodySchema,
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					description: "Update an existing API key by ID",
 					responses: {

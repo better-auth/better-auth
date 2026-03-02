@@ -1,6 +1,6 @@
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
@@ -3600,6 +3600,73 @@ describe("api-key", async () => {
 
 			expect(updateDbKey?.projectId).toBe("project-input-false");
 			expect(updateDbKey?.serverOnlyField).toBeNull();
+		});
+	});
+
+	// =========================================================================
+	// TYPE INFERENCE FOR ADDITIONAL FIELDS
+	// =========================================================================
+
+	describe("additional fields type inference", () => {
+		const pluginWithAdditionalFields = apiKey({
+			schema: {
+				apikey: {
+					additionalFields: {
+						organizationId: {
+							type: "string",
+							required: true,
+						},
+						projectId: {
+							type: "string",
+							required: false,
+						},
+						serverOnlyField: {
+							type: "string",
+							required: false,
+							input: false,
+						},
+					},
+				},
+			},
+		});
+
+		it("should infer additional fields in createApiKey body", () => {
+			type CreateBody =
+				typeof pluginWithAdditionalFields.endpoints.createApiKey extends {
+					options: { metadata: { $Infer: { body: infer B } } };
+				}
+					? B
+					: never;
+
+			// organizationId is required
+			expectTypeOf<CreateBody>().toMatchTypeOf<{ organizationId: string }>();
+			// projectId is optional
+			expectTypeOf<CreateBody>().toMatchTypeOf<{
+				projectId?: string | undefined;
+			}>();
+			// serverOnlyField should NOT be in the body (input: false)
+			expectTypeOf<CreateBody>().not.toMatchTypeOf<{
+				serverOnlyField: string;
+			}>();
+		});
+
+		it("should infer additional fields as optional in updateApiKey body", () => {
+			type UpdateBody =
+				typeof pluginWithAdditionalFields.endpoints.updateApiKey extends {
+					options: { metadata: { $Infer: { body: infer B } } };
+				}
+					? B
+					: never;
+
+			// Both fields are optional for update
+			expectTypeOf<UpdateBody>().toMatchTypeOf<{
+				organizationId?: string | undefined;
+				projectId?: string | undefined;
+			}>();
+			// serverOnlyField should NOT be in the body (input: false)
+			expectTypeOf<UpdateBody>().not.toMatchTypeOf<{
+				serverOnlyField: string;
+			}>();
 		});
 	});
 

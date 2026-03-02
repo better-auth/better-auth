@@ -5,14 +5,14 @@ import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
-import { toZodSchema } from "better-auth/db";
+import { InferAdditionalFieldsFromPluginOptions, toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
@@ -111,7 +111,7 @@ const createApiKeyBodySchema = z.object({
 		.optional(),
 });
 
-export function createApiKey({
+export function createApiKey<O extends ApiKeyOptions>({
 	defaultKeyGenerator,
 	configurations,
 	schema,
@@ -137,12 +137,17 @@ export function createApiKey({
 	const bodySchema = createApiKeyBodySchema.extend(
 		additionalFieldsSchema.shape,
 	);
+	type Body = z.infer<typeof createApiKeyBodySchema> &
+		InferAdditionalFieldsFromPluginOptions<"apikey", O>;
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
 			body: bodySchema,
 			metadata: {
+				$Infer: {
+					body: {} as Body,
+				},
 				openapi: {
 					description: "Create a new API key for a user",
 					responses: {

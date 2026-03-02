@@ -36,12 +36,12 @@ export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export function apiKey(
+export function apiKey<O extends ApiKeyOptions>(
 	_configurations?:
-		| (ApiKeyConfigurationOptions & ApiKeyOptions)
-		| ApiKeyConfigurationOptions[]
+		| (ApiKeyConfigurationOptions & O)
+		| (ApiKeyConfigurationOptions & O)[]
 		| undefined,
-	_options?: ApiKeyOptions | undefined,
+	_options?: O | undefined,
 ) {
 	if (Array.isArray(_configurations) && _configurations.length > 0) {
 		if (!_configurations.every((option) => option.configId)) {
@@ -57,11 +57,11 @@ export function apiKey(
 		}
 	}
 
-	const options: ApiKeyOptions = _options ?? {
+	const options: O = (_options ?? {
 		schema: Array.isArray(_configurations)
 			? undefined
-			: (_configurations as ApiKeyOptions | undefined)?.schema,
-	};
+			: (_configurations as O | undefined)?.schema,
+	}) as O;
 
 	const configurations = [
 		...(Array.isArray(_configurations)
@@ -156,7 +156,7 @@ export function apiKey(
 		return null;
 	}
 
-	const routes = createApiKeyRoutes({
+	const routes = createApiKeyRoutes<O>({
 		defaultKeyGenerator,
 		configurations,
 		schema,

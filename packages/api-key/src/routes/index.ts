@@ -3,7 +3,7 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "better-auth/api";
 import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyConfigurationOptions } from "../types";
+import type { ApiKey, ApiKeyConfigurationOptions, ApiKeyOptions } from "../types";
 import { createApiKey } from "./create-api-key";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
@@ -131,7 +131,7 @@ export async function deleteAllExpiredApiKeys(
 		});
 }
 
-export function createApiKeyRoutes({
+export function createApiKeyRoutes<O extends ApiKeyOptions>({
 	defaultKeyGenerator,
 	configurations,
 	schema,
@@ -146,7 +146,7 @@ export function createApiKeyRoutes({
 	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 }) {
 	return {
-		createApiKey: createApiKey({
+		createApiKey: createApiKey<O>({
 			defaultKeyGenerator,
 			configurations,
 			schema,
@@ -159,7 +159,7 @@ export function createApiKeyRoutes({
 			deleteAllExpiredApiKeys,
 		}),
 		getApiKey: getApiKey({ configurations, schema, deleteAllExpiredApiKeys }),
-		updateApiKey: updateApiKey({
+		updateApiKey: updateApiKey<O>({
 			configurations,
 			schema,
 			additionalFields,
