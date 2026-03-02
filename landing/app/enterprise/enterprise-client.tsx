@@ -66,7 +66,7 @@ function EnterpriseHero() {
 				{/* CTA */}
 				<div className="flex items-center gap-3 pt-1">
 					<Link
-						href="/products?tab=infrastructure"
+						href="/products/infrastructure"
 						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/60 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
 						View Products

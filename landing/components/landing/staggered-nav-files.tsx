@@ -26,8 +26,8 @@ const navFiles: NavFileItem[] = [
 ];
 
 const productFiles: NavFileItem[] = [
-	{ name: "framework", href: "/products?tab=framework" },
-	{ name: "infrastructure", href: "/products?tab=infrastructure" },
+	{ name: "framework", href: "/products/framework" },
+	{ name: "infrastructure", href: "/products/infrastructure" },
 ];
 
 const resourceFiles: NavFileItem[] = [
