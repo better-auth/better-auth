@@ -33,6 +33,11 @@ const nextConfig = {
 				destination: "/docs/introduction",
 				permanent: false,
 			},
+			{
+				source: "/products",
+				destination: "/framework",
+				permanent: false,
+			},
 		];
 	},
 	async rewrites() {
