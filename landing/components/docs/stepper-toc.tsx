@@ -209,11 +209,18 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 										key={sub.url}
 										ref={(el) => {
 											if (isSubActive && el) {
-												el.scrollIntoView({
-													behavior: "smooth",
-													block: "nearest",
-													inline: "center",
-												});
+												const container = el.parentElement;
+												if (container) {
+													const containerWidth = container.clientWidth;
+													const elementLeft = el.offsetLeft;
+													const elementWidth = el.offsetWidth;
+													const scrollTarget =
+														elementLeft - containerWidth / 2 + elementWidth / 2;
+													container.scrollTo({
+														left: scrollTarget,
+														behavior: "smooth",
+													});
+												}
 											}
 										}}
 										href={sub.url}
