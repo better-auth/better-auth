@@ -5,7 +5,7 @@ import {
 	sessionMiddleware,
 } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
-import * as z from "zod";
+import * as z from "zod/v4";
 import type { SSOOptions, SSOProvider } from "../types";
 
 const DNS_LABEL_MAX_LENGTH = 63;

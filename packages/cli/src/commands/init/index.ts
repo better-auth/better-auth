@@ -6,7 +6,7 @@ import { Command } from "commander";
 import open from "open";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
-import  * as z from "zod";
+import z from "zod";
 import { cliVersion } from "../..";
 import { generateDrizzleSchema } from "../../generators/drizzle";
 import { generatePrismaSchema } from "../../generators/prisma";

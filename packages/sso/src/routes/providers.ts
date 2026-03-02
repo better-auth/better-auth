@@ -4,7 +4,7 @@ import {
 	createAuthEndpoint,
 	sessionMiddleware,
 } from "better-auth/api";
-import * as z from "zod";
+import z from "zod/v4";
 import { DEFAULT_MAX_SAML_METADATA_SIZE } from "../constants";
 import { validateConfigAlgorithms } from "../saml";
 import type { Member, OIDCConfig, SAMLConfig, SSOOptions } from "../types";
