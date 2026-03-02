@@ -894,7 +894,7 @@ export function DatabaseSection() {
 			<div className="flex items-center gap-3 mb-5">
 				<span className="text-base text-foreground/85 dark:text-foreground/75">
 					Bring Your Own{" "}
-					<span className="text-amber-500 dark:text-amber-400">Database</span>
+					<span className="text-amber-600 dark:text-amber-400">Database</span>
 				</span>
 				<div className="h-px flex-1 bg-foreground/[0.08]" />
 			</div>
