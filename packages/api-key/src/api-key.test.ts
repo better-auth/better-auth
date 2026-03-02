@@ -3607,28 +3607,39 @@ describe("api-key", async () => {
 	// TYPE INFERENCE FOR ADDITIONAL FIELDS
 	// =========================================================================
 
-	describe("additional fields type inference", () => {
-		const pluginWithAdditionalFields = apiKey({
+	describe("additional fields type inference", async () => {
+		const additionalFieldsOptions = {
 			schema: {
 				apikey: {
 					additionalFields: {
 						organizationId: {
-							type: "string",
-							required: true,
+							type: "string" as const,
+							required: true as const,
 						},
 						projectId: {
-							type: "string",
-							required: false,
+							type: "string" as const,
+							required: false as const,
 						},
 						serverOnlyField: {
-							type: "string",
-							required: false,
-							input: false,
+							type: "string" as const,
+							required: false as const,
+							input: false as const,
 						},
 					},
 				},
 			},
-		});
+		};
+
+		const pluginWithAdditionalFields = apiKey(additionalFieldsOptions);
+
+		const { auth, signInWithTestUser } = await getTestInstance(
+			{ plugins: [apiKey(additionalFieldsOptions)] },
+			{ clientOptions: { plugins: [apiKeyClient()] } },
+		);
+
+		const { headers } = await signInWithTestUser();
+
+		// --- Request body type inference ---
 
 		it("should infer additional fields in createApiKey body", () => {
 			type CreateBody =
@@ -3638,13 +3649,12 @@ describe("api-key", async () => {
 					? B
 					: never;
 
-			// organizationId is required
-			expectTypeOf<CreateBody>().toMatchTypeOf<{ organizationId: string }>();
-			// projectId is optional
+			// organizationId is required, projectId is optional
 			expectTypeOf<CreateBody>().toMatchTypeOf<{
+				organizationId: string;
 				projectId?: string | undefined;
 			}>();
-			// serverOnlyField should NOT be in the body (input: false)
+			// serverOnlyField must NOT appear (input: false)
 			expectTypeOf<CreateBody>().not.toMatchTypeOf<{
 				serverOnlyField: string;
 			}>();
@@ -3658,15 +3668,84 @@ describe("api-key", async () => {
 					? B
 					: never;
 
-			// Both fields are optional for update
+			// All additional fields are optional for update
 			expectTypeOf<UpdateBody>().toMatchTypeOf<{
 				organizationId?: string | undefined;
 				projectId?: string | undefined;
 			}>();
-			// serverOnlyField should NOT be in the body (input: false)
+			// serverOnlyField must NOT appear (input: false)
 			expectTypeOf<UpdateBody>().not.toMatchTypeOf<{
 				serverOnlyField: string;
 			}>();
+		});
+
+		// --- Response type inference ---
+
+		it("should infer additional fields in createApiKey response", async () => {
+			const key = await auth.api.createApiKey({
+				body: { organizationId: "org-1", projectId: "proj-1" } as never,
+				headers,
+			});
+			type Result = typeof key;
+			expectTypeOf<Result>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string | undefined;
+			}>();
+		});
+
+		it("should infer additional fields in getApiKey response", async () => {
+			const created = await auth.api.createApiKey({
+				body: { organizationId: "org-2" } as never,
+				headers,
+			});
+			const key = await auth.api.getApiKey({
+				query: { id: created.id },
+				headers,
+			});
+			type Result = typeof key;
+			expectTypeOf<Result>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string | undefined;
+			}>();
+		});
+
+		it("should infer additional fields in updateApiKey response", async () => {
+			const created = await auth.api.createApiKey({
+				body: { organizationId: "org-3" } as never,
+				headers,
+			});
+			const key = await auth.api.updateApiKey({
+				body: { keyId: created.id, organizationId: "org-3-updated" },
+				headers,
+			});
+			type Result = typeof key;
+			expectTypeOf<Result>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string | undefined;
+			}>();
+		});
+
+		it("should infer additional fields in listApiKeys response", async () => {
+			const result = await auth.api.listApiKeys({ headers });
+			type ApiKeys = typeof result.apiKeys;
+			expectTypeOf<ApiKeys>().toMatchTypeOf<
+				{ organizationId: string; projectId?: string | undefined }[]
+			>();
+		});
+
+		it("should infer additional fields in verifyApiKey response", async () => {
+			const created = await auth.api.createApiKey({
+				body: { organizationId: "org-4" } as never,
+				headers,
+			});
+			const result = await auth.api.verifyApiKey({
+				body: { key: created.key },
+			});
+			type Key = typeof result.key;
+			expectTypeOf<Key>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string | undefined;
+			} | null>();
 		});
 	});
 
