@@ -822,7 +822,7 @@ export function ServerClientTabs() {
 						code={activeTab === "server" ? serverCode : clientCode}
 						codeblock={{
 							className:
-								"border-0 rounded-none my-0 shadow-none bg-neutral-50 dark:bg-black [&_div]:bg-neutral-50 [&_div]:dark:bg-black",
+								"border-0 rounded-none my-0 shadow-none bg-neutral-50 dark:bg-black [&_div]:bg-neutral-50 [&_div]:dark:bg-black [&_div]:text-[12px]",
 							"data-line-numbers": true,
 						}}
 					/>
@@ -842,7 +842,7 @@ export function ServerClientTabs() {
 							opacity: 0.08,
 						}}
 					/>
-					<div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-background to-transparent pointer-events-none" />
+					<div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent pointer-events-none" />
 				</div>
 			</div>
 		</div>
@@ -944,7 +944,7 @@ export function DatabaseSection() {
 								code={dbCodeExamples[activeDb]}
 								codeblock={{
 									className:
-										"border-0 rounded-none my-0 shadow-none bg-neutral-50 dark:bg-black [&_div]:bg-neutral-50 [&_div]:dark:bg-black",
+										"border-0 rounded-none my-0 shadow-none bg-neutral-50 dark:bg-black [&_div]:bg-neutral-50 [&_div]:dark:bg-black [&_div]:text-[12px]",
 									"data-line-numbers": true,
 								}}
 							/>
