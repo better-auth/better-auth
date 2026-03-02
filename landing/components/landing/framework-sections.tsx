@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import React, { useEffect, useRef, useState } from "react";
+import { startTransition, useEffect, useRef, useState } from "react";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 
 export const providerIcons: Record<string, () => React.ReactNode> = {
@@ -788,7 +788,7 @@ export function ServerClientTabs() {
 				<div className="flex border border-b-0 border-foreground/[0.08] rounded-t-lg bg-neutral-100/50 dark:bg-[#0a0a0a]/50">
 					<button
 						type="button"
-						onClick={() => setActiveTab("server")}
+						onClick={() => startTransition(() => setActiveTab("server"))}
 						className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono transition-colors relative ${
 							activeTab === "server"
 								? "text-foreground/80"
@@ -802,7 +802,7 @@ export function ServerClientTabs() {
 					</button>
 					<button
 						type="button"
-						onClick={() => setActiveTab("client")}
+						onClick={() => startTransition(() => setActiveTab("client"))}
 						className={`flex items-center gap-1.5 px-4 py-2 text-[11px] font-mono transition-colors relative ${
 							activeTab === "client"
 								? "text-foreground/80"
@@ -859,10 +859,10 @@ function getDbIcon(name: string) {
 export function DatabaseSection() {
 	const [activeDb, setActiveDb] = useState<string>("PostgreSQL");
 	const dbOptions = Object.keys(dbCodeExamples);
-	const codeScrollRef = React.useRef<HTMLDivElement>(null);
-	const sidebarRef = React.useRef<HTMLDivElement>(null);
+	const codeScrollRef = useRef<HTMLDivElement>(null);
+	const sidebarRef = useRef<HTMLDivElement>(null);
 
-	const isFirstRender = React.useRef(true);
+	const isFirstRender = useRef(true);
 
 	useEffect(() => {
 		if (isFirstRender.current) {
@@ -909,7 +909,7 @@ export function DatabaseSection() {
 						<button
 							key={db}
 							type="button"
-							onClick={() => setActiveDb(db)}
+							onClick={() => startTransition(() => setActiveDb(db))}
 							className={`flex items-center gap-1.5 px-3 py-2 text-[11px] font-mono transition-colors relative border-r border-foreground/[0.08] last:border-r-0 shrink-0 ${
 								activeDb === db
 									? "text-foreground/90 bg-foreground/[0.03]"
@@ -968,7 +968,8 @@ export function DatabaseSection() {
 										type="button"
 										data-db={db.name}
 										onClick={() =>
-											dbCodeExamples[db.name] && setActiveDb(db.name)
+											dbCodeExamples[db.name] &&
+											startTransition(() => setActiveDb(db.name))
 										}
 										className={`group flex items-center gap-2 w-full text-left transition-colors py-1 px-1.5 ${
 											activeDb === db.name
@@ -995,7 +996,8 @@ export function DatabaseSection() {
 										type="button"
 										data-db={adapter.name}
 										onClick={() =>
-											dbCodeExamples[adapter.name] && setActiveDb(adapter.name)
+											dbCodeExamples[adapter.name] &&
+											startTransition(() => setActiveDb(adapter.name))
 										}
 										className={`group flex items-center gap-2 w-full text-left transition-colors py-1 px-1.5 ${
 											activeDb === adapter.name
