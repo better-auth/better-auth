@@ -41,8 +41,6 @@ onlyBuiltDependencies:
   - '@swc/core'
   - '@tsparticles/engine'
   - better-sqlite3
-  - electron
-  - electron-winstaller
   - esbuild
   - less
   - msw
