@@ -97,7 +97,7 @@ const pricingTiers = [
 			"Unlimited seats",
 		],
 		cta: "Contact Us",
-		ctaHref: "/company",
+		ctaHref: "/enterprise",
 		ctaStyle: "outline" as const,
 		highlighted: false,
 		isFree: false,
