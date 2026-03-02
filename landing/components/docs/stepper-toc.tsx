@@ -146,7 +146,7 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 														? "bg-foreground border-foreground scale-125"
 														: isVisible
 															? "bg-foreground/50 border-foreground/50"
-															: "bg-transparent border-foreground/20 group-hover:border-foreground/40"
+															: "bg-transparent border-foreground/30 group-hover:border-foreground/50"
 												}
                       `}
 										/>
@@ -157,8 +157,8 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 													isActive
 														? "text-foreground"
 														: isVisible
-															? "text-foreground/50"
-															: "text-foreground/30 group-hover:text-foreground/60"
+															? "text-foreground/60"
+															: "text-foreground/40 group-hover:text-foreground/65"
 												}
                       `}
 										>
@@ -167,7 +167,7 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 									</a>
 
 									{i < headings.length - 1 && (
-										<span className="mx-2 text-foreground/20 text-[11px] select-none">
+										<span className="mx-2 text-foreground/30 text-[11px] select-none">
 											/
 										</span>
 									)}
@@ -181,7 +181,7 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 				{children && (
 					<div className="flex items-center gap-3 shrink-0 ml-auto pl-2">
 						{headings.length > 0 && (
-							<span className="text-foreground/10 text-[11px] select-none">
+							<span className="text-foreground/20 text-[11px] select-none">
 								|
 							</span>
 						)}
@@ -209,11 +209,18 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 										key={sub.url}
 										ref={(el) => {
 											if (isSubActive && el) {
-												el.scrollIntoView({
-													behavior: "smooth",
-													block: "nearest",
-													inline: "center",
-												});
+												const container = el.parentElement;
+												if (container) {
+													const containerWidth = container.clientWidth;
+													const elementLeft = el.offsetLeft;
+													const elementWidth = el.offsetWidth;
+													const scrollTarget =
+														elementLeft - containerWidth / 2 + elementWidth / 2;
+													container.scrollTo({
+														left: scrollTarget,
+														behavior: "smooth",
+													});
+												}
 											}
 										}}
 										href={sub.url}
@@ -230,7 +237,7 @@ export function StepperTOC({ items, children }: StepperTOCProps) {
 											className={`text-[10px] uppercase tracking-wider whitespace-nowrap transition-colors duration-200 ${
 												isSubActive
 													? "text-foreground"
-													: "text-foreground/30 group-hover:text-foreground/60"
+													: "text-foreground/40 group-hover:text-foreground/65"
 											}`}
 										>
 											{sub.title}

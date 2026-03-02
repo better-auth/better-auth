@@ -6,7 +6,7 @@ author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
   twitter: "himseIf_65"
-image: "https://docs.better-auth.com/release-og/1-5.png"
+image: "https://docs.better-auth.com/release-og/v1.5-release.png"
 tags: ["1.5", "CLI", "MCP", "oauth-provider", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
 ---
 
@@ -63,7 +63,7 @@ npx auth generate --adapter drizzle
 
 The MCP plugin now ships a framework-agnostic remote auth client. If your MCP server is separate from your Better Auth instance, you can verify tokens and protect resources without duplicating auth logic.
 
-[👉 Read more about MCP authentication](https://www.notion.so/docs/plugins/mcp)
+[👉 Read more about MCP authentication](https://www.better-auth.com/docs/plugins/mcp)
 
 ```tsx
 import { createMcpAuthClient } from "better-auth/plugins/mcp/client";
@@ -134,7 +134,7 @@ The OAuth 2.1 Provider replaces the previous OIDC Provider plugin, which will be
 
 Full desktop authentication support for Electron apps. The plugin handles the complete OAuth flow — opening the system browser, exchanging authorization codes via custom protocol, and managing cookies securely.
 
-[👉 Read more about Electron integration](https://www.notion.so/docs/integrations/electron)
+[👉 Read more about Electron integration](https://www.better-auth.com/docs/integrations/electron)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -167,7 +167,7 @@ await client.requestAuth();
 
 The new i18n plugin provides type-safe error message translations with automatic locale detection from headers, cookies, or sessions.
 
-[👉 Read more about i18n](https://www.notion.so/docs/plugins/i18n)
+[👉 Read more about i18n](https://www.better-auth.com/docs/plugins/i18n)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -391,7 +391,7 @@ hooks: {
 
 Better Auth can now resolve the base URL dynamically from incoming requests, making it work seamlessly with Vercel preview deployments, multi-domain setups, and reverse proxies.
 
-[👉 Read more about dynamic base URL](https://www.notion.so/docs/concepts/dynamic-base-url)
+[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/concepts/dynamic-base-url)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -533,7 +533,7 @@ The plugin also adds support for usage-based billing via `lineItems`, subscripti
 
 A new `testUtils` plugin provides factories, database helpers, and auth utilities for integration and E2E testing.
 
-[👉 Read more about test utilities](https://www.notion.so/docs/plugins/test-utils)
+[👉 Read more about test utilities](https://www.better-auth.com/docs/plugins/test-utils)
 
 ```tsx
 import { betterAuth } from "better-auth";

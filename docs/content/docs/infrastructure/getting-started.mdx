@@ -1,0 +1,121 @@
+---
+title: Getting Started
+description: This guide will help you integrate Better Auth Infrastructure into your application.
+---
+
+
+<Steps>
+
+  <Step>
+    ## Prerequisites
+
+    Before you begin, make sure you have:
+
+    1. A working [Better Auth](/docs/installation) installation
+    2. An account & API Key from the [Better Auth Infrastructure](/dashboard) dashboard
+  </Step>
+
+  <Step>
+    ## Installation
+
+    Install the `@better-auth/infra` package:
+
+    ```package-install
+    @better-auth/infra
+    ```
+  </Step>
+
+  <Step>
+    ## Environment Variables
+
+    Once you've gotten the API Key from the infrastructure dashboard,
+    go ahead and add the `BETTER_AUTH_API_KEY` environment variable to your `.env` file:
+
+    ```dotenv title=".env"
+    # Required: Your Better Auth Infrastructure API key
+    BETTER_AUTH_API_KEY=your_api_key_here
+    ```
+
+    <Callout>
+      You can get your API key by signing-up and creating a new project in the
+      [Better Auth Infrastructure dashboard](/dashboard).
+    </Callout>
+  </Step>
+
+</Steps>
+
+
+## Server Setup
+
+### Basic Configuration
+
+Add the `dash()` plugin to your Better Auth configuration:
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash } from "@better-auth/infra"; // [!code highlight]
+
+export const auth = betterAuth({
+  // ... your existing Better Auth config
+  plugins: [
+    dash({ // [!code highlight]
+      apiKey: process.env.BETTER_AUTH_API_KEY, // [!code highlight]
+    }), // [!code highlight]
+  ],
+});
+```
+
+If you're on **pro** plan or above, you can use the `sentinel()` plugin to enable security checks, abuse protection, and more:
+
+```ts
+import { betterAuth } from "better-auth";
+import { dash, sentinel } from "@better-auth/infra";  // [!code highlight]
+
+export const auth = betterAuth({
+  plugins: [
+    dash({ /* ... */ }),
+    sentinel({ // [!code highlight]
+      apiKey: process.env.BETTER_AUTH_API_KEY, // [!code highlight]
+    }) // [!code highlight]
+  ],
+});
+```
+
+## Client Setup
+
+### Basic Client Configuration
+
+Add the client plugins to your auth client:
+
+```ts
+import { createAuthClient } from "better-auth/client";
+import { dashClient, sentinelClient } from "@better-auth/infra/client";
+
+export const authClient = createAuthClient({
+  plugins: [
+    dashClient(),
+    sentinelClient({
+      autoSolveChallenge: true, // Automatically solve PoW challenges
+    }),
+  ],
+});
+```
+
+
+
+### Plugin Overview
+
+- **`dash()`** - Enables analytics tracking, audit logging, dashboard admin APIs, and more
+- **`sentinel()`** - Enables security checks and abuse protection
+
+You can use either plugin independently, but using both together provides the full Better Auth Infrastructure experience.
+
+## Next Steps
+
+Now that you have the basic setup, explore these topics:
+
+- [Dashboard Plugin](/plugins/dash) - Learn about all dash() features
+- [Security Plugin](/plugins/sentinel) - Configure advanced security
+- [Email Service](/services/email) - Set up transactional emails
+- [SMS Service](/services/sms) - Enable SMS verification
+- [Dashboard UI](/dashboard/overview) - Explore the web dashboard

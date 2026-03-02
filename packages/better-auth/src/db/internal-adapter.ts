@@ -1139,19 +1139,6 @@ export const createInternalAdapter = (
 
 			return (verification[0] as Verification) || null;
 		},
-		/**
-		 * Note: In secondary-only mode, this is a no-op since secondary storage
-		 * is keyed by identifier, not id. Use deleteVerificationByIdentifier instead.
-		 */
-		deleteVerificationValue: async (id: string) => {
-			if (!secondaryStorage || options.verification?.storeInDatabase) {
-				await deleteWithHooks(
-					[{ field: "id", value: id }],
-					"verification",
-					undefined,
-				);
-			}
-		},
 		deleteVerificationByIdentifier: async (identifier: string) => {
 			const storageOption = getStorageOption(
 				identifier,
@@ -1174,17 +1161,55 @@ export const createInternalAdapter = (
 				);
 			}
 		},
-		updateVerificationValue: async (
-			id: string,
+		updateVerificationByIdentifier: async (
+			identifier: string,
 			data: Partial<Verification>,
 		) => {
-			const verification = await updateWithHooks<Verification>(
-				data,
-				[{ field: "id", value: id }],
-				"verification",
-				undefined,
+			const storageOption = getStorageOption(
+				identifier,
+				options.verification?.storeIdentifier,
 			);
-			return verification;
+			const storedIdentifier = await processIdentifier(
+				identifier,
+				storageOption,
+			);
+
+			if (secondaryStorage) {
+				const cached = await secondaryStorage.get(
+					`verification:${storedIdentifier}`,
+				);
+				if (cached) {
+					const parsed = safeJSONParse<Verification>(cached);
+					if (parsed) {
+						const updated = { ...parsed, ...data };
+						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
+						const ttl = getTTLSeconds(
+							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
+						);
+						if (ttl > 0) {
+							await secondaryStorage.set(
+								`verification:${storedIdentifier}`,
+								JSON.stringify(updated),
+								ttl,
+							);
+						}
+						if (!options.verification?.storeInDatabase) {
+							return updated;
+						}
+					}
+				}
+			}
+
+			if (!secondaryStorage || options.verification?.storeInDatabase) {
+				const verification = await updateWithHooks<Verification>(
+					data,
+					[{ field: "identifier", value: storedIdentifier }],
+					"verification",
+					undefined,
+				);
+				return verification;
+			}
+			return data as Verification;
 		},
 	};
 };

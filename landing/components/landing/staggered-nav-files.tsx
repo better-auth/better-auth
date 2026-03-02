@@ -3,7 +3,7 @@
 import { AnimatePresence, MotionConfig, motion } from "framer-motion";
 import { ChevronDownIcon } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import DarkPng from "../../public/branding/better-auth-logo-dark.png";
@@ -37,7 +37,7 @@ const resourceFiles: NavFileItem[] = [
 function DropdownItem({ item }: { item: NavFileItem }) {
 	return (
 		<div className="group/item flex items-center gap-1.5 px-3 py-1.5 hover:bg-foreground/[0.06] transition-colors duration-150 cursor-pointer">
-			<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/65 dark:text-foreground/50 group-hover/item:text-foreground transition-colors duration-150 whitespace-nowrap">
+			<span className="font-mono text-[10px] uppercase tracking-wider text-foreground/75 dark:text-foreground/60 group-hover/item:text-foreground transition-colors duration-150 whitespace-nowrap">
 				{item.name}
 			</span>
 		</div>
@@ -128,7 +128,7 @@ export function StaggeredNavFiles() {
 	const dropdownBorderClass = isNarrowLeft
 		? "border-foreground/6"
 		: "border-foreground/[0.08]";
-
+	const _router = useRouter();
 	return (
 		<>
 			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
@@ -195,7 +195,7 @@ export function StaggeredNavFiles() {
 									}
 								}
 							}}
-							className="flex items-center justify-center px-4 py-3 text-foreground/65 dark:text-foreground/50 hover:text-foreground/80 transition-colors"
+							className="flex items-center justify-center px-4 py-3 text-foreground/75 dark:text-foreground/60 hover:text-foreground/85 transition-colors"
 						>
 							{mobileMenuOpen ? (
 								<svg
@@ -264,7 +264,7 @@ export function StaggeredNavFiles() {
 										className={`font-mono text-xs uppercase tracking-wider transition-colors duration-150 whitespace-nowrap ${
 											active
 												? "text-foreground"
-												: "text-foreground/60 dark:text-foreground/40 group-hover/tab:text-foreground/70"
+												: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 										}`}
 									>
 										{item.name}
@@ -298,13 +298,13 @@ export function StaggeredNavFiles() {
 										? "text-foreground"
 										: resourcesOpen
 											? "text-foreground/80"
-											: "text-foreground/60 dark:text-foreground/40 group-hover/tab:text-foreground/70"
+											: "text-foreground/65 dark:text-foreground/50 group-hover/tab:text-foreground/75"
 								}`}
 							>
 								resources
 							</span>
 							<svg
-								className={`h-2 w-2 text-foreground/50 dark:text-foreground/30 transition-transform duration-200 ${
+								className={`h-2 w-2 text-foreground/55 dark:text-foreground/40 transition-transform duration-200 ${
 									resourcesOpen ? "rotate-180" : ""
 								}`}
 								viewBox="0 0 10 6"
@@ -350,7 +350,7 @@ export function StaggeredNavFiles() {
 											href="https://github.com/better-auth/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/50 dark:text-foreground/30 hover:text-foreground/70 transition-colors"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="GitHub"
 										>
 											<svg
@@ -369,7 +369,7 @@ export function StaggeredNavFiles() {
 											href="https://discord.gg/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/50 dark:text-foreground/30 hover:text-foreground/70 transition-colors"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Discord"
 										>
 											<svg
@@ -388,7 +388,7 @@ export function StaggeredNavFiles() {
 											href="https://reddit.com/r/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/50 dark:text-foreground/30 hover:text-foreground/70 transition-colors"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="Reddit"
 										>
 											<svg
@@ -409,7 +409,7 @@ export function StaggeredNavFiles() {
 											href="https://x.com/better_auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/50 dark:text-foreground/30 hover:text-foreground/70 transition-colors"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="X"
 										>
 											<svg
@@ -428,7 +428,7 @@ export function StaggeredNavFiles() {
 											href="https://www.npmjs.com/package/better-auth"
 											target="_blank"
 											rel="noreferrer"
-											className="p-1.5 text-foreground/50 dark:text-foreground/30 hover:text-foreground/70 transition-colors"
+											className="p-1.5 text-foreground/55 dark:text-foreground/40 hover:text-foreground/75 transition-colors"
 											aria-label="npm"
 										>
 											<svg
@@ -457,9 +457,9 @@ export function StaggeredNavFiles() {
 						transition={{ duration: 0.2, delay: 0.2, ease: "easeOut" }}
 						className="flex items-stretch shrink-0"
 					>
-						<Link
+						<a
 							href="/sign-in"
-							className="flex items-center gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
+							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
 								get-started
@@ -475,7 +475,7 @@ export function StaggeredNavFiles() {
 									strokeWidth="1.2"
 								/>
 							</svg>
-						</Link>
+						</a>
 					</motion.div>
 				</motion.div>
 			</div>
@@ -497,7 +497,7 @@ export function StaggeredNavFiles() {
 									<button
 										type="button"
 										onClick={() => setMobileView("nav")}
-										className="flex items-center gap-2 px-5 py-2.5 text-foreground/55 dark:text-foreground/35 hover:text-foreground/60 transition-colors border-b border-foreground/[0.06]"
+										className="flex items-center gap-2 px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/[0.06]"
 									>
 										<svg
 											xmlns="http://www.w3.org/2000/svg"
@@ -529,7 +529,7 @@ export function StaggeredNavFiles() {
 															"font-medium text-sm tracking-wider",
 															mobileDocSection === index
 																? "text-foreground bg-foreground/3"
-																: "text-foreground/65 hover:text-foreground hover:bg-foreground/3",
+																: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
 														)}
 														onClick={() =>
 															setMobileDocSection((prev) =>
@@ -566,7 +566,7 @@ export function StaggeredNavFiles() {
 																				"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
 																				pathname === section.href
 																					? "text-foreground bg-foreground/6"
-																					: "text-foreground/70 dark:text-foreground/55 hover:text-foreground/85 hover:bg-foreground/3",
+																					: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
 																			)}
 																		>
 																			<span className="truncate">Overview</span>
@@ -579,7 +579,7 @@ export function StaggeredNavFiles() {
 																					key={`sep-${item.title}-${i}`}
 																					className="flex flex-row items-center gap-2 mx-5 my-2"
 																				>
-																					<p className="text-[10px] text-foreground/55 dark:text-foreground/35 uppercase tracking-wider">
+																					<p className="text-[10px] text-foreground/65 dark:text-foreground/45 uppercase tracking-wider">
 																						{item.title}
 																					</p>
 																					<div className="grow h-px bg-border" />
@@ -601,7 +601,7 @@ export function StaggeredNavFiles() {
 																					"relative flex items-center gap-2.5 px-5 py-1.5 text-[14px] transition-all duration-150",
 																					active
 																						? "text-foreground bg-foreground/6"
-																						: "text-foreground/70 dark:text-foreground/55 hover:text-foreground/85 hover:bg-foreground/3",
+																						: "text-foreground/75 dark:text-foreground/60 hover:text-foreground/90 hover:bg-foreground/3",
 																				)}
 																			>
 																				<span
@@ -609,7 +609,7 @@ export function StaggeredNavFiles() {
 																						"min-w-5 [&>svg]:size-[14px] transition-colors duration-150",
 																						active
 																							? "text-foreground"
-																							: "text-foreground/70 dark:text-foreground/55",
+																							: "text-foreground/75 dark:text-foreground/60",
 																					)}
 																				>
 																					<item.icon className="text-foreground/75" />
@@ -623,7 +623,7 @@ export function StaggeredNavFiles() {
 																							"pointer-events-none border-dashed rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider",
 																							active
 																								? "border-solid bg-foreground/10 text-foreground"
-																								: "text-foreground/65 dark:text-foreground/50 border-foreground/20",
+																								: "text-foreground/70 dark:text-foreground/55 border-foreground/25",
 																						)}
 																						variant="outline"
 																					>
@@ -649,7 +649,7 @@ export function StaggeredNavFiles() {
 										<button
 											type="button"
 											onClick={() => setMobileView("docs")}
-											className="flex items-center gap-2 px-5 py-2.5 text-foreground/55 dark:text-foreground/35 hover:text-foreground/60 transition-colors border-b border-foreground/[0.06]"
+											className="flex items-center gap-2 px-5 py-2.5 text-foreground/65 dark:text-foreground/45 hover:text-foreground/70 transition-colors border-b border-foreground/[0.06]"
 										>
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
@@ -693,14 +693,14 @@ export function StaggeredNavFiles() {
 														isActive(item.path || item.href) ||
 														(item.href === "/docs" && isDocs)
 															? "text-foreground"
-															: "text-foreground/65 dark:text-foreground/50"
+															: "text-foreground/75 dark:text-foreground/60"
 													}`}
 												>
 													{item.name}
 												</span>
 												{item.external && (
 													<svg
-														className="h-2.5 w-2.5 text-foreground/35 dark:text-foreground/20 ml-auto"
+														className="h-2.5 w-2.5 text-foreground/45 dark:text-foreground/30 ml-auto"
 														viewBox="0 0 10 10"
 														fill="none"
 													>
@@ -723,7 +723,7 @@ export function StaggeredNavFiles() {
 										}}
 										className="px-5 pt-4"
 									>
-										<Link
+										<a
 											href="/sign-in"
 											onClick={() => setMobileMenuOpen(false)}
 											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
@@ -740,7 +740,7 @@ export function StaggeredNavFiles() {
 													strokeWidth="1.2"
 												/>
 											</svg>
-										</Link>
+										</a>
 									</motion.div>
 								</>
 							)}

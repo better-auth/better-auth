@@ -75,13 +75,13 @@ export function DocsSidebar() {
 
 			<button
 				type="button"
-				className="flex w-full items-center gap-2 px-4 lg:px-7 py-2.5 border-b border-foreground/5 text-[12px] uppercase tracking-wider text-foreground/45 hover:text-foreground/75 transition-colors"
+				className="flex w-full items-center gap-2 px-4 lg:px-7 py-2.5 border-b border-foreground/5 text-[12px] uppercase tracking-wider text-foreground/55 hover:text-foreground/80 transition-colors"
 				onClick={() => setOpen(true)}
 			>
 				<Search className="size-3.5 shrink-0" />
 				<span className="truncate">Search</span>
 				<span
-					className="ml-auto flex items-center gap-1 shrink-0 text-foreground/50 hover:text-foreground/55 transition-colors"
+					className="ml-auto flex items-center gap-1 shrink-0 text-foreground/55 hover:text-foreground/70 transition-colors"
 					onClick={(e) => {
 						e.stopPropagation();
 						openAI();
@@ -114,7 +114,7 @@ export function DocsSidebar() {
 										"font-medium text-sm tracking-wider",
 										currentOpen === index
 											? "text-foreground bg-foreground/3"
-											: "text-foreground/65 hover:text-foreground hover:bg-foreground/3",
+											: "text-foreground/70 hover:text-foreground hover:bg-foreground/3",
 									)}
 									onClick={() => {
 										setCurrentOpen((prev) => (prev === index ? -1 : index));
@@ -196,16 +196,16 @@ function BranchSwitcher() {
 				className="flex w-full items-center gap-2 px-4 lg:px-7 py-3 hover:bg-foreground/[0.02] transition-colors"
 				onClick={() => setOpen((v) => !v)}
 			>
-				<GitBranch className="size-3.5 text-foreground/55 shrink-0" />
+				<GitBranch className="size-3.5 text-foreground/60 shrink-0" />
 				<div className="grow text-left min-w-0">
-					<p className="text-[12px] uppercase tracking-wider text-foreground/55 block">
+					<p className="text-[12px] uppercase tracking-wider text-foreground/60 block">
 						{branch}{" "}
-						<span className="text-[9px] text-foreground/30 ">
+						<span className="text-[9px] text-foreground/40 ">
 							{branch === "main" ? "" : "pre-release"}
 						</span>
 					</p>
 				</div>
-				<div className="flex flex-col items-center shrink-0 text-foreground/35">
+				<div className="flex flex-col items-center shrink-0 text-foreground/45">
 					<ChevronDownIcon className="size-3 rotate-180 -mb-[3px]" />
 					<ChevronDownIcon className="size-3 -mt-[3px]" />
 				</div>
@@ -226,12 +226,12 @@ function BranchSwitcher() {
 								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
 								branch === "main"
 									? "text-foreground bg-foreground/5"
-									: "text-foreground/55 hover:text-foreground hover:bg-foreground/3",
+									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
 							)}
 							onClick={() => switchBranch("main")}
 						>
 							<span className="grow text-left">main</span>
-							<span className="text-[10px] text-foreground/35 uppercase tracking-wider">
+							<span className="text-[10px] text-foreground/45 uppercase tracking-wider">
 								Stable
 							</span>
 						</button>
@@ -241,13 +241,13 @@ function BranchSwitcher() {
 								"flex w-full items-center gap-2 px-3 py-2 text-[12px] transition-colors",
 								branch === "canary"
 									? "text-foreground bg-foreground/5"
-									: "text-foreground/55 hover:text-foreground hover:bg-foreground/3",
+									: "text-foreground/60 hover:text-foreground hover:bg-foreground/3",
 							)}
 							onClick={() => switchBranch("canary")}
 						>
 							<span className="grow text-left">canary</span>
 							<Badge
-								className="pointer-events-none no-underline! border-dashed decoration-transparent! rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/50 border-foreground/20"
+								className="pointer-events-none no-underline! border-dashed decoration-transparent! rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider text-foreground/55 border-foreground/25"
 								variant="outline"
 							>
 								Pre-release
@@ -288,7 +288,7 @@ function SidebarSection({
 							key={`sep-${item.title}-${i}`}
 							className="flex flex-row items-center gap-2 mx-4 lg:mx-7 my-2"
 						>
-							<p className="text-[10px] text-foreground/35 uppercase tracking-wider">
+							<p className="text-[10px] text-foreground/45 uppercase tracking-wider">
 								{item.title}
 							</p>
 							<div className="grow h-px bg-border" />
@@ -301,7 +301,7 @@ function SidebarSection({
 							key={`group-${item.title}-${i}`}
 							className="flex flex-row items-center gap-2 mx-4 my-1 lg:mx-7"
 						>
-							<p className="text-[10px] text-foreground/35 uppercase tracking-wider">
+							<p className="text-[10px] text-foreground/45 uppercase tracking-wider">
 								{item.title}
 							</p>
 							<div className="grow h-px bg-border" />
@@ -409,7 +409,7 @@ function SubpageLink({
 				"relative flex items-center pr-4 lg:pr-7 py-1 text-[13px] transition-all duration-150",
 				active
 					? "text-foreground bg-foreground/6"
-					: "text-foreground/45 hover:text-foreground/75 hover:bg-foreground/3",
+					: "text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3",
 			)}
 		>
 			<span className="truncate">{children}</span>
@@ -441,14 +441,14 @@ function SidebarLink({
         ${
 					active
 						? "text-foreground bg-foreground/6"
-						: "text-foreground/55 hover:text-foreground/85 hover:bg-foreground/3"
+						: "text-foreground/65 hover:text-foreground/90 hover:bg-foreground/3"
 				}
       `}
 		>
 			{icon && (
 				<span
 					className={`transition-colors duration-150 ${
-						active ? "text-foreground" : "text-foreground/55"
+						active ? "text-foreground" : "text-foreground/65"
 					}`}
 				>
 					{icon}
@@ -467,7 +467,7 @@ function NewBadge({ isSelected }: { isSelected?: boolean }) {
 				"pointer-events-none no-underline! border-dashed decoration-transparent! rounded-none px-1.5 py-0 text-[9px] uppercase tracking-wider",
 				isSelected
 					? "border-solid! bg-foreground/10 text-foreground"
-					: "text-foreground/50 border-foreground/20",
+					: "text-foreground/55 border-foreground/25",
 			)}
 			variant="outline"
 		>

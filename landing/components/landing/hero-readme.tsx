@@ -1376,12 +1376,12 @@ function ReadmeFooter({
 				</p>
 
 				<div className="flex items-center justify-center gap-4 mt-4">
-					<Link
+					<a
 						href="/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
-					</Link>
+					</a>
 					<Link
 						href="/docs"
 						className="inline-flex items-center gap-1.5 px-4 py-2 border border-foreground/12 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 text-[11px] font-mono uppercase tracking-wider transition-all"
@@ -1530,22 +1530,22 @@ export function HeroReadMe({
 						transition={{ duration: 0.4, delay: 0.3 }}
 						className="overflow-y-auto overflow-x-hidden no-scrollbar pt-[30px] pb-0"
 					>
-						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-800 dark:text-neutral-200 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/10">
+						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/15">
 							README
 						</h1>
 
-						<p className="text-sm sm:text-[14px] text-neutral-700 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
+						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
 							Better Auth is an authentication and authorization framework. It
 							provides a comprehensive set of features out of the box and
 							includes a Plugin ecosystem that simplifies adding advanced
-							functionalities.
+							functionalities and infrastructure to help own your auth at scale.
 						</p>
 
 						<InstallBlock />
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
@@ -1553,13 +1553,13 @@ export function HeroReadMe({
 						<TrustedBy />
 
 						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Features
 							</span>
-							<div className="flex-1 border-t border-foreground/6"></div>
+							<div className="flex-1 border-t border-foreground/10"></div>
 						</div>
 
-						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/10 overflow-hidden">
+						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/15 overflow-hidden">
 							{[
 								{
 									label: "Framework Agnostic",
@@ -1646,7 +1646,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.1] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.15] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -1676,16 +1676,16 @@ export function HeroReadMe({
 												<polyline points="7 7 17 7 17 17" />
 											</svg>
 										</span>
-										<div className="text-[11px] font-mono text-neutral-500 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-400">
-											<span className="text-foreground/35 dark:text-foreground/20 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/50 dark:group-hover/card:text-foreground/30">
+										<div className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
+											<span className="text-foreground/45 dark:text-foreground/30 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
 												{String(i + 1).padStart(2, "0")}
 											</span>
 											{feature.label}
 										</div>
-										<div className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-900 dark:group-hover/card:text-neutral-100">
+										<div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-950 dark:group-hover/card:text-white">
 											{feature.headline}
 										</div>
-										<div className="text-[11px] text-neutral-500 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-400">
+										<div className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
 											{feature.desc}
 										</div>
 										{"logos" in feature && feature.logos && (
@@ -2340,7 +2340,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={"/demo-dark.mp4"}
+											src={"https://docs.better-auth.com/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2348,7 +2348,7 @@ export function HeroReadMe({
 											className="w-full h-auto -mt-[2px] dark:block hidden"
 										/>
 										<video
-											src={"/demo-light.mp4"}
+											src={"https://docs.better-auth.com/demo-light.mp4"}
 											autoPlay
 											loop
 											muted

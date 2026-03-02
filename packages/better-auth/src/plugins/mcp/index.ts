@@ -489,8 +489,8 @@ export const mcp = (options: MCPOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 
 					if (!client_id) {
@@ -612,8 +612,8 @@ export const mcp = (options: MCPOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");

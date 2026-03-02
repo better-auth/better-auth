@@ -1,6 +1,6 @@
 {
   "name": "auth",
-  "version": "1.5.0-beta.20",
+  "version": "1.5.1-beta.1",
   "description": "The CLI for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -35,10 +35,7 @@
   "files": [
     "dist"
   ],
-  "main": "./dist/index.mjs",
-  "module": "./dist/index.mjs",
   "exports": {
-    ".": "./dist/index.mjs",
     "./api": {
       "types": "./dist/api.d.mts",
       "default": "./dist/api.mjs"
@@ -52,7 +49,8 @@
     }
   },
   "bin": {
-    "better-auth": "./dist/index.mjs"
+    "better-auth": "./dist/index.mjs",
+    "auth": "./dist/index.mjs"
   },
   "dependencies": {
     "@babel/core": "^7.29.0",
