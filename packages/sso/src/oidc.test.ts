@@ -742,14 +742,14 @@ describe("provisioning", async (ctx) => {
 			headers,
 		});
 		const member = org?.members.find(
-			(m: any) => m.user.email === "sso-user@localhost:8000.com",
+			(m: any) => m.user.email === "test@localhost.com",
 		);
 		expect(member).toMatchObject({
 			role: "member",
 			user: {
 				id: expect.any(String),
-				name: "Test User",
-				email: "sso-user@localhost:8000.com",
+				name: "OAuth2 Test",
+				email: "test@localhost.com",
 				image: "https://test.com/picture.png",
 			},
 		});
