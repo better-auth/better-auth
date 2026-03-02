@@ -27613,6 +27613,28 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  fumadocs-typescript@5.1.4(3749dc07ba6aad1af5ecb0ad432fe651):
+    dependencies:
+      estree-util-value-to-estree: 3.5.0
+      fumadocs-core: 16.6.7(@mdx-js/mdx@3.1.1)(@oramacloud/client@2.1.4)(@tanstack/react-router@1.163.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(algoliasearch@5.46.2)(lucide-react@0.575.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6)
+      hast-util-to-estree: 3.1.3
+      hast-util-to-jsx-runtime: 2.3.6
+      react: 19.2.4
+      remark: 15.0.1
+      remark-rehype: 11.1.2
+      ts-morph: 27.0.2
+      typescript: 5.9.3
+      unified: 11.0.5
+      unist-util-visit: 5.1.0
+    optionalDependencies:
+      '@types/estree': 1.0.8
+      '@types/hast': 3.0.4
+      '@types/mdast': 4.0.4
+      '@types/react': 19.2.14
+      fumadocs-ui: 16.6.7(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(fumadocs-core@16.6.7(@mdx-js/mdx@3.1.1)(@oramacloud/client@2.1.4)(@tanstack/react-router@1.163.2(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@types/estree-jsx@1.0.5)(@types/hast@3.0.4)(@types/mdast@4.0.4)(@types/react@19.2.14)(algoliasearch@5.46.2)(lucide-react@0.575.0(react@19.2.4))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(zod@4.3.6))(next@16.1.6(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.58.2)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(sass@1.97.1))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(tailwindcss@4.2.1)
+    transitivePeerDependencies:
+      - supports-color
+
   fumadocs-typescript@5.1.4(f245ce4745497b47498caec764b8c0fe):
     dependencies:
       estree-util-value-to-estree: 3.5.0

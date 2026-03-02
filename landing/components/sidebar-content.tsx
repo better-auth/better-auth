@@ -10,7 +10,6 @@ import {
 	Gauge,
 	Key,
 	KeyRound,
-	Logs,
 	LucideAArrowDown,
 	Mail,
 	Mailbox,
