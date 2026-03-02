@@ -1,11 +1,13 @@
 import { createServer } from "node:http";
 import { DatabaseSync } from "node:sqlite";
+import type { BetterAuthOptions } from "better-auth";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 import { toNodeHandler } from "better-auth/node";
 
 export async function createAuthServer(
 	baseURL: string = "http://localhost:3000",
+	overrides?: Partial<BetterAuthOptions>,
 ) {
 	const database = new DatabaseSync(":memory:");
 
@@ -20,6 +22,7 @@ export async function createAuthServer(
 			"http://localhost:*", // Dynamic frontend port
 			"http://test.com:*", // Cross-domain test
 		],
+		...overrides,
 	});
 
 	const { runMigrations } = await getMigrations(auth.options);
