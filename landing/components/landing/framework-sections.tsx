@@ -957,7 +957,7 @@ export function DatabaseSection() {
 						className="hidden sm:block w-[180px] shrink-0 border-l border-foreground/[0.09] bg-foreground/[0.015] overflow-y-auto no-scrollbar"
 					>
 						<div className="px-3 pt-3 pb-2">
-							<p className="text-[9px] font-mono uppercase tracking-widest text-amber-600/70 dark:text-amber-400/50 mb-2.5">
+							<p className="text-[9px] font-mono uppercase tracking-widest text-amber-600/80 dark:text-amber-400/80 mb-2.5">
 								Direct Drivers
 							</p>
 							<div className="space-y-1">
@@ -985,7 +985,7 @@ export function DatabaseSection() {
 							</div>
 						</div>
 						<div className="border-t border-foreground/[0.06] px-3 pt-2.5 pb-2">
-							<p className="text-[9px] font-mono uppercase tracking-widest text-violet-600/70 dark:text-violet-400/50 mb-2.5">
+							<p className="text-[9px] font-mono uppercase tracking-widest text-violet-600/80 dark:text-violet-400/80 mb-2.5">
 								ORM Adapters
 							</p>
 							<div className="space-y-1">
@@ -1015,7 +1015,7 @@ export function DatabaseSection() {
 							</div>
 						</div>
 						<div className="border-t border-foreground/[0.06] px-3 pt-2.5 pb-3">
-							<p className="text-[9px] font-mono uppercase tracking-widest text-sky-600/70 dark:text-sky-400/50 mb-2">
+							<p className="text-[9px] font-mono uppercase tracking-widest text-sky-600/80 dark:text-sky-400/80 mb-2">
 								Community
 							</p>
 							<div className="space-y-1">
