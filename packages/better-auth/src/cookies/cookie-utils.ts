@@ -27,7 +27,7 @@ export function stripSecureCookiePrefix(cookieName: string): string {
 }
 
 /**
- * Split combined `Set-Cookie` header on commas that separate cookies.
+ * Split a comma-joined `Set-Cookie` header string into individual cookies.
  */
 export function splitSetCookieHeader(setCookie: string): string[] {
 	if (!setCookie) return [];
