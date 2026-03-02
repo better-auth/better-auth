@@ -18,6 +18,7 @@ import {
 	getJwtPlugin,
 	getStoredToken,
 	parseClientMetadata,
+	resolveSubjectIdentifier,
 	validateClientCredentials,
 } from "./utils";
 
@@ -371,6 +372,30 @@ export async function validateAccessToken(
 	});
 }
 
+/**
+ * Resolves pairwise sub on an introspection payload.
+ * Applied at the presentation layer so internal validation functions
+ * keep real user.id (needed for user lookup in /userinfo).
+ */
+async function resolveIntrospectionSub(
+	ctx: GenericEndpointContext,
+	opts: OAuthOptions<Scope[]>,
+	payload: JWTPayload,
+): Promise<JWTPayload> {
+	const clientId = (payload.client_id ?? payload.azp) as string | undefined;
+	if (payload.active && payload.sub && clientId) {
+		const tokenClient = await getClient(ctx, opts, clientId);
+		if (tokenClient) {
+			payload.sub = await resolveSubjectIdentifier(
+				payload.sub as string,
+				tokenClient,
+				opts,
+			);
+		}
+	}
+	return payload;
+}
+
 export async function introspectEndpoint(
 	ctx: GenericEndpointContext,
 	opts: OAuthOptions<Scope[]>,
@@ -429,7 +454,7 @@ export async function introspectEndpoint(
 					token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(ctx, opts, payload);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "access_token") {
@@ -452,7 +477,7 @@ export async function introspectEndpoint(
 					refreshToken.token,
 					client.clientId,
 				);
-				return payload;
+				return resolveIntrospectionSub(ctx, opts, payload);
 			} catch (error) {
 				if (error instanceof APIError) {
 					if (token_type_hint === "refresh_token") {

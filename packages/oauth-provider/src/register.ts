@@ -110,6 +110,26 @@ export async function checkOAuthClient(
 		});
 	}
 
+	// Validate subject_type
+	if (client.subject_type !== undefined) {
+		if (
+			client.subject_type !== "public" &&
+			client.subject_type !== "pairwise"
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `subject_type must be "public" or "pairwise"`,
+			});
+		}
+		if (client.subject_type === "pairwise" && !opts.pairwiseSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+	}
+
 	// Check requested application scopes
 	const requestedScopes = (client?.scope as string | undefined)
 		?.split(" ")
@@ -263,6 +283,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
 		require_pkce: requirePKCE,
+		subject_type: subjectType,
 		reference_id: referenceId,
 		metadata: inputMetadata,
 		// All other metadata
@@ -317,6 +338,7 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata,
 	};
@@ -364,6 +386,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skipConsent,
 		enableEndSession,
 		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
@@ -417,6 +440,7 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
 		require_pkce: requirePKCE ?? undefined,
+		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }
