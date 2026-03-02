@@ -260,7 +260,7 @@ function ComparisonCell({ value }: { value: string | boolean }) {
 	);
 }
 
-function FrameworkHero() {
+export function FrameworkHero() {
 	const highlights = [{ label: "License", value: "MIT" }];
 
 	return (
@@ -336,13 +336,12 @@ function FrameworkHero() {
 	);
 }
 
-function InfrastructureHero() {
+export function InfrastructureHero() {
 	const principles = [
-		{ label: "Framework", value: "Open source" },
 		{ label: "Users", value: "Unlimited" },
 		{ label: "Audit logs", value: "From 10k/mo" },
 		{ label: "Security", value: "$0.0001/event overage" },
-		{ label: "SSO", value: "Business+" },
+		{ label: "Self-service SSO", value: "Business+" },
 	];
 
 	const tiers = [
@@ -425,10 +424,10 @@ function InfrastructureHero() {
 						Get Started
 					</Link>
 					<Link
-						href="/enterprise"
+						href="/docs/infrastructure/introduction"
 						className="inline-flex items-center gap-1.5 text-[12px] text-foreground/70 dark:text-foreground/50 hover:text-foreground/80 font-mono uppercase tracking-wider transition-colors"
 					>
-						Contact Sales
+						Read Docs
 						<svg
 							className="h-2.5 w-2.5 opacity-50"
 							viewBox="0 0 10 10"
@@ -541,7 +540,7 @@ function PricingCard({
 	);
 }
 
-function FrameworkContent() {
+export function FrameworkContent() {
 	const frameworkFeatures = [
 		{
 			category: "Authentication",
@@ -693,7 +692,7 @@ function FrameworkContent() {
 	);
 }
 
-function InfrastructureContent() {
+export function InfrastructureContent() {
 	const tierKeys = ["starter", "pro", "business", "enterprise"] as const;
 	const tierLabels = ["Starter", "Pro", "Business", "Enterprise"];
 
@@ -745,9 +744,9 @@ function InfrastructureContent() {
 				transition={{ duration: 0.3, delay: 0.05 }}
 			>
 				<p className="text-[13px] text-foreground/65 dark:text-foreground/55 max-w-lg mb-6">
-					Managed infrastructure on top of the open-source framework.
-					Dashboard, audit logs, security detection, and more — without
-					building it yourself.
+					Managed infrastructure on top of the open-source framework. Dashboard,
+					audit logs, security detection, and more — without building it
+					yourself.
 				</p>
 
 				{/* Capability cards */}
@@ -866,8 +865,8 @@ function InfrastructureContent() {
 						<span className="text-foreground/70 dark:text-foreground/60 font-mono uppercase tracking-wider">
 							What&apos;s an audit log?
 						</span>{" "}
-						Any auth action tracked by the dashboard &mdash; sign-ins,
-						password resets, OTP checks, etc. Each action counts as one log.
+						Any auth action tracked by the dashboard &mdash; sign-ins, password
+						resets, OTP checks, etc. Each action counts as one log.
 					</p>
 				</div>
 			</motion.div>
