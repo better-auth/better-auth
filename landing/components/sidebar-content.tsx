@@ -25,13 +25,16 @@ import {
 	UserCircle,
 	UserSquare2,
 	Users2,
+	Zap,
 } from "lucide-react";
 import type { ReactNode, SVGProps } from "react";
 import { Icons } from "./icons";
 
 export interface SubpageItem {
 	title: string;
-	href: string;
+	href?: string;
+	icon?: ((props?: SVGProps<any>) => ReactNode) | LucideIcon;
+	group?: boolean;
 }
 
 export interface ListItem {
@@ -1775,30 +1778,29 @@ C0.7,239.6,62.1,0.5,62.2,0.4c0,0,54,13.8,119.9,30.8S302.1,62,302.2,62c0.2,0,0.2,
 					{
 						href: "/docs/plugins/api-key/advanced",
 						title: "Advanced Features",
-
-						// icon: () => <Zap className="size-4" />,
+						icon: () => <Zap className="size-4" />,
 					},
 					{
 						href: "/docs/plugins/api-key/reference",
 						title: "Reference",
-						// icon: () => (
-						// 	<svg
-						// 		xmlns="http://www.w3.org/2000/svg"
-						// 		viewBox="0 0 24 24"
-						// 		fill="none"
-						// 		stroke="currentColor"
-						// 		strokeWidth="2"
-						// 		strokeLinecap="round"
-						// 		strokeLinejoin="round"
-						// 		className="size-4"
-						// 	>
-						// 		<path d="M20 11v6" />
-						// 		<path d="M20 13h2" />
-						// 		<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
-						// 		<circle cx="10" cy="7" r="4" />
-						// 		<circle cx="20" cy="19" r="2" />
-						// 	</svg>
-						// ),
+						icon: () => (
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								strokeWidth="2"
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								className="size-4"
+							>
+								<path d="M20 11v6" />
+								<path d="M20 13h2" />
+								<path d="M3 21v-2a4 4 0 0 1 4-4h6a4 4 0 0 1 2.072.578" />
+								<circle cx="10" cy="7" r="4" />
+								<circle cx="20" cy="19" r="2" />
+							</svg>
+						),
 					},
 				],
 			},

@@ -2359,6 +2359,7 @@ export function HeroReadMe({
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:block hidden"
+											suppressHydrationWarning
 										/>
 										<video
 											src={"https://docs.better-auth.com/demo-light.mp4"}
@@ -2367,6 +2368,7 @@ export function HeroReadMe({
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:hidden"
+											suppressHydrationWarning
 										/>
 									</div>
 								</div>
