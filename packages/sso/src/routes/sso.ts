@@ -1705,7 +1705,7 @@ async function handleOIDCCallback(
 				}`,
 			);
 		}
-		const rawUserInfo = userInfoResponse.data as Record<string, unknown>;
+		const rawUserInfo = userInfoResponse.data;
 		const mapping = config.mapping || {};
 		userInfo = {
 			...Object.fromEntries(
