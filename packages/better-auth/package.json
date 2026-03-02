@@ -270,16 +270,6 @@
       "types": "./dist/plugins/oauth-proxy/index.d.mts",
       "default": "./dist/plugins/oauth-proxy/index.mjs"
     },
-    "./plugins/organization": {
-      "dev-source": "./src/plugins/organization/index.ts",
-      "types": "./dist/plugins/organization/index.d.mts",
-      "default": "./dist/plugins/organization/index.mjs"
-    },
-    "./plugins/organization/access": {
-      "dev-source": "./src/plugins/organization/access/index.ts",
-      "types": "./dist/plugins/organization/access/index.d.mts",
-      "default": "./dist/plugins/organization/access/index.mjs"
-    },
     "./plugins/one-time-token": {
       "dev-source": "./src/plugins/one-time-token/index.ts",
       "types": "./dist/plugins/one-time-token/index.d.mts",
@@ -457,12 +447,6 @@
       ],
       "plugins/magic-link": [
         "./dist/plugins/magic-link/index.d.mts"
-      ],
-      "plugins/organization": [
-        "./dist/plugins/organization/index.d.mts"
-      ],
-      "plugins/organization/access": [
-        "./dist/plugins/organization/access/index.d.mts"
       ],
       "plugins/phone-number": [
         "./dist/plugins/phone-number/index.d.mts"

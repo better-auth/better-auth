@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "references": [
+    {
+      "path": "../better-auth/tsconfig.json"
+    },
+    {
+      "path": "../core/tsconfig.json"
+    }
+  ],
+  "exclude": ["**/dist/**", "**/node_modules/**", "**/test/**", "**/*.test.ts"]
+}

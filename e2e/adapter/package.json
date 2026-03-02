@@ -3,6 +3,7 @@
   "type": "module",
   "private": true,
   "devDependencies": {
+    "@better-auth/organization": "workspace:*",
     "@types/better-sqlite3": "^7.6.13",
     "@types/pg": "^8.16.0",
     "better-sqlite3": "^12.6.2",

@@ -1,6 +1,9 @@
+import type {
+	Organization,
+	ResolvedOrganizationOptions,
+} from "@better-auth/organization";
 import type { BetterAuthPlugin, User } from "better-auth";
 import { APIError } from "better-auth";
-import type { Organization } from "better-auth/plugins/organization";
 import { defu } from "defu";
 import type Stripe from "stripe";
 import { STRIPE_ERROR_CODES } from "./error-codes";
@@ -87,7 +90,9 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					return;
 				}
 
-				const existingHooks = orgPlugin.options.organizationHooks ?? {};
+				const orgOptions = orgPlugin.options as ResolvedOrganizationOptions;
+
+				const existingHooks = orgOptions.hooks ?? {};
 
 				/**
 				 * Sync organization name to Stripe customer
@@ -251,35 +256,35 @@ export const stripe = <O extends StripeOptions>(options: O) => {
 					}
 				};
 
-				orgPlugin.options.organizationHooks = {
+				orgOptions.hooks = {
 					...existingHooks,
 					afterUpdateOrganization: existingHooks.afterUpdateOrganization
-						? async (data) => {
-								await existingHooks.afterUpdateOrganization!(data);
+						? async (data, ctx) => {
+								await existingHooks.afterUpdateOrganization?.(data, ctx);
 								await afterUpdateStripeOrg(data);
 							}
 						: afterUpdateStripeOrg,
 					beforeDeleteOrganization: existingHooks.beforeDeleteOrganization
-						? async (data) => {
-								await existingHooks.beforeDeleteOrganization!(data);
+						? async (data, ctx) => {
+								await existingHooks.beforeDeleteOrganization?.(data, ctx);
 								await beforeDeleteStripeOrg(data);
 							}
 						: beforeDeleteStripeOrg,
 					afterAddMember: existingHooks.afterAddMember
-						? async (data) => {
-								await existingHooks.afterAddMember!(data);
+						? async (data, ctx) => {
+								await existingHooks.afterAddMember?.(data, ctx);
 								await syncSeatsAfterMemberChange(data);
 							}
 						: syncSeatsAfterMemberChange,
 					afterRemoveMember: existingHooks.afterRemoveMember
-						? async (data) => {
-								await existingHooks.afterRemoveMember!(data);
+						? async (data, ctx) => {
+								await existingHooks.afterRemoveMember?.(data, ctx);
 								await syncSeatsAfterMemberChange(data);
 							}
 						: syncSeatsAfterMemberChange,
 					afterAcceptInvitation: existingHooks.afterAcceptInvitation
-						? async (data) => {
-								await existingHooks.afterAcceptInvitation!(data);
+						? async (data, ctx) => {
+								await existingHooks.afterAcceptInvitation?.(data, ctx);
 								await syncSeatsAfterMemberChange(data);
 							}
 						: syncSeatsAfterMemberChange,

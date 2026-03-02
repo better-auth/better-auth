@@ -427,6 +427,9 @@ importers:
         specifier: ^0.28.11
         version: 0.28.11
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../packages/organization
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
@@ -463,6 +466,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -478,6 +484,9 @@ importers:
       '@better-auth/drizzle-adapter':
         specifier: workspace:*
         version: link:../../../../packages/drizzle-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -490,6 +499,9 @@ importers:
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../../../../packages/kysely-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -505,6 +517,9 @@ importers:
       '@better-auth/memory-adapter':
         specifier: workspace:*
         version: link:../../../../packages/memory-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -520,6 +535,9 @@ importers:
       '@better-auth/mongo-adapter':
         specifier: workspace:*
         version: link:../../../../packages/mongo-adapter
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/test-utils':
         specifier: workspace:*
         version: link:../../../../packages/test-utils
@@ -535,6 +553,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../../../../packages/core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../packages/organization
       '@better-auth/prisma-adapter':
         specifier: workspace:*
         version: link:../../../../packages/prisma-adapter
@@ -699,6 +720,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: workspace:*
         version: link:../../../../../packages/oauth-provider
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../../../../../packages/passkey
@@ -717,6 +741,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-exact-optional-property-types:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../../../../../packages/sso
@@ -726,6 +753,9 @@ importers:
 
   e2e/smoke/test/fixtures/tsconfig-isolated-module-bundler:
     dependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
@@ -738,6 +768,9 @@ importers:
       '@better-auth/expo':
         specifier: workspace:*
         version: link:../../../../../packages/expo
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../../../../../packages/organization
       better-auth:
         specifier: workspace:*
         version: link:../../../../../packages/better-auth
@@ -972,6 +1005,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth
@@ -1208,6 +1244,9 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@better-auth/passkey':
         specifier: workspace:*
         version: link:../passkey
@@ -1455,6 +1494,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@modelcontextprotocol/sdk':
         specifier: ^1.27.1
         version: 1.27.1(zod@4.3.6)
@@ -1464,6 +1506,31 @@ importers:
       listhen:
         specifier: ^1.9.0
         version: 1.9.0
+      tsdown:
+        specifier: 'catalog:'
+        version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
+
+  packages/organization:
+    dependencies:
+      better-auth:
+        specifier: workspace:*
+        version: link:../better-auth
+      defu:
+        specifier: ^6.1.4
+        version: 6.1.4
+      nanostores:
+        specifier: ^1.1.0
+        version: 1.1.1
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+    devDependencies:
+      '@better-auth/core':
+        specifier: workspace:*
+        version: link:../core
+      better-call:
+        specifier: 'catalog:'
+        version: 1.3.2(zod@4.3.6)
       tsdown:
         specifier: 'catalog:'
         version: 0.21.0-beta.2(@arethetypeswrong/core@0.18.2)(oxc-resolver@11.19.0)(publint@0.3.17)(synckit@0.11.11)(typescript@5.9.3)
@@ -1563,6 +1630,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@better-auth/sso':
         specifier: workspace:*
         version: link:../sso
@@ -1594,6 +1664,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       '@types/body-parser':
         specifier: ^1.19.6
         version: 1.19.6
@@ -1631,6 +1704,9 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/organization':
+        specifier: workspace:*
+        version: link:../organization
       better-auth:
         specifier: workspace:*
         version: link:../better-auth

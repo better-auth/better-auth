@@ -1,13 +1,13 @@
-import { createAccessControl } from "better-auth/plugins/access";
-import { getTestInstance } from "better-auth/test";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { organization } from "@better-auth/organization";
 import {
 	adminAc,
 	defaultStatements,
 	memberAc,
 	ownerAc,
-} from "../../better-auth/src/plugins/organization/access";
-import { organization } from "../../better-auth/src/plugins/organization/organization";
+} from "@better-auth/organization/access";
+import { createAccessControl } from "better-auth/plugins/access";
+import { getTestInstance } from "better-auth/test";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 
@@ -204,7 +204,7 @@ describe("organization API keys", async () => {
 
 			// Accept the invitation directly using the returned invitation ID
 			await auth.api.acceptInvitation({
-				body: { invitationId: invitationResult.id },
+				body: { invitationId: invitationResult.invitation.id },
 				headers: memberHeaders,
 			});
 
@@ -356,7 +356,7 @@ describe("organization API keys", async () => {
 			const { headers } = await signInWithUser(email, "password123");
 
 			await auth.api.acceptInvitation({
-				body: { invitationId: invitationResult.id },
+				body: { invitationId: invitationResult.invitation.id },
 				headers,
 			});
 

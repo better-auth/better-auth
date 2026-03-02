@@ -1,16 +1,16 @@
+import type { Organization } from "@better-auth/organization";
+import { organization } from "@better-auth/organization";
+import { organizationClient } from "@better-auth/organization/client";
 import { createAuthClient } from "better-auth/client";
 import {
 	genericOAuthClient,
 	multiSessionClient,
-	organizationClient,
 } from "better-auth/client/plugins";
 import { toNodeHandler } from "better-auth/node";
 import type { GenericOAuthConfig } from "better-auth/plugins/generic-oauth";
 import { genericOAuth } from "better-auth/plugins/generic-oauth";
 import { jwt } from "better-auth/plugins/jwt";
 import { multiSession } from "better-auth/plugins/multi-session";
-import type { Organization } from "better-auth/plugins/organization";
-import { organization } from "better-auth/plugins/organization";
 import { getTestInstance } from "better-auth/test";
 import { APIError } from "better-call";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -450,7 +450,7 @@ describe("oauth - prompt", async () => {
 	const headers = new Headers();
 	let server: Listener;
 	let oauthClient: OAuthClient | null;
-	let org: Organization;
+	let org: Organization & { slug: string };
 
 	const providerId = "test";
 	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
@@ -1316,7 +1316,6 @@ describe("oauth - prompt", async () => {
 		await serverClient.organization.setActive(
 			{
 				organizationId: org.id,
-				organizationSlug: org.slug,
 			},
 			{
 				headers,

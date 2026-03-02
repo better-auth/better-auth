@@ -6,6 +6,7 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@better-auth/organization": "workspace:*",
     "@better-auth/oauth-provider": "workspace:*",
     "@better-auth/passkey": "workspace:*",
     "@better-auth/sso": "workspace:*",
