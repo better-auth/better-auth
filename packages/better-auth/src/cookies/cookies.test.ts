@@ -240,10 +240,10 @@ describe("cookie-utils parseSetCookieHeader", () => {
 
 	it("handles Expires when cookie value contains gmt substring", () => {
 		const map = parseSetCookieHeader(
-			"session_data=abcgmtxyz; Path=/; Expires=Mon, 02 Mar 2026 05:42:16 GMT; Max-Age=300; Secure; HttpOnly; SameSite=lax",
+			"session_data=testsessiondata; Path=/; Expires=Mon, 02 Mar 2026 05:42:16 GMT; Max-Age=300; Secure; HttpOnly; SameSite=lax",
 		);
 
-		expect(map.get("session_data")?.value).toBe("abcgmtxyz");
+		expect(map.get("session_data")?.value).toBe("testsessiondata");
 		expect(map.get("session_data")?.expires).toEqual(
 			new Date("Mon, 02 Mar 2026 05:42:16 GMT"),
 		);
