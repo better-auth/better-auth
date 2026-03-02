@@ -30,7 +30,7 @@ export function DocsSidebar() {
 				(listItem) =>
 					listItem.href === pathname ||
 					(listItem.hasSubpages && pathname.startsWith(`${listItem.href}/`)) ||
-					listItem.subpages?.some((sp) => pathname === sp.href),
+					listItem.subpages?.some((sp) => sp.href && pathname === sp.href),
 			),
 		);
 		return defaultValue === -1 ? 0 : defaultValue;
@@ -311,7 +311,8 @@ function SidebarSection({
 				if (!item.href) return null;
 				const hasSubpages = !!(item.subpages && item.subpages.length > 0);
 				const subpageMatch =
-					hasSubpages && item.subpages?.some((sp) => pathname === sp.href);
+					hasSubpages &&
+					item.subpages?.some((sp) => sp.href && pathname === sp.href);
 				const active =
 					pathname === item.href ||
 					subpageMatch ||
@@ -372,16 +373,37 @@ function SidebarItemWithSubpages({
 						transition={{ duration: 0.35, type: "spring", bounce: 0 }}
 						className="overflow-hidden"
 					>
-						<div className="relative ml-7 lg:ml-11 pl-3 border-l border-foreground/20">
-							{item.subpages.map((subpage) => (
-								<SubpageLink
-									key={subpage.href}
-									href={`${subpage.href}${branchQuery}`}
-									active={pathname === subpage.href}
-								>
-									{subpage.title}
-								</SubpageLink>
-							))}
+						<div className="relative before:absolute before:left-[calc(1.75rem+0.75rem)] lg:before:left-[calc(2.75rem+0.75rem)] before:top-0 before:bottom-0 before:w-px before:bg-foreground/20">
+							{item.subpages.map((subpage, i) => {
+								if (subpage.group) {
+									return (
+										<div
+											key={`subgroup-${subpage.title}-${i}`}
+											className="flex flex-row items-center gap-2 pl-[calc(1.75rem+0.75rem+0.75rem)] lg:pl-[calc(2.75rem+0.75rem+0.75rem)] pr-4 lg:pr-7 py-1.5 mt-1 first:mt-0"
+										>
+											<p className="text-[10px] text-foreground/45 uppercase tracking-wider">
+												{subpage.title}
+											</p>
+											<div className="grow h-px bg-border" />
+										</div>
+									);
+								}
+								if (!subpage.href) return null;
+								return (
+									<SubpageLink
+										key={subpage.href}
+										href={`${subpage.href}${branchQuery}`}
+										active={pathname === subpage.href}
+										icon={
+											subpage.icon ? (
+												<subpage.icon className="text-current" />
+											) : undefined
+										}
+									>
+										{subpage.title}
+									</SubpageLink>
+								);
+							})}
 						</div>
 					</motion.div>
 				)}
@@ -395,10 +417,12 @@ function SidebarItemWithSubpages({
 function SubpageLink({
 	href,
 	active,
+	icon,
 	children,
 }: {
 	href: string;
 	active: boolean;
+	icon?: ReactNode;
 	children: ReactNode;
 }) {
 	return (
@@ -406,12 +430,22 @@ function SubpageLink({
 			href={href}
 			data-active={active || undefined}
 			className={cn(
-				"relative flex items-center pr-4 lg:pr-7 py-1 text-[13px] transition-all duration-150",
+				"relative flex items-center gap-1 pl-[calc(1.75rem+0.75rem+0.75rem)] lg:pl-[calc(2.75rem+0.75rem+0.75rem)] pr-4 lg:pr-7 py-1 text-[13px] transition-all duration-150",
 				active
 					? "text-foreground bg-foreground/6"
 					: "text-foreground/55 hover:text-foreground/80 hover:bg-foreground/3",
 			)}
 		>
+			{icon && (
+				<span
+					className={cn(
+						"min-w-4 [&>svg]:size-[12px] transition-colors duration-150",
+						active ? "text-foreground" : "text-foreground/55",
+					)}
+				>
+					{icon}
+				</span>
+			)}
 			<span className="truncate">{children}</span>
 		</Link>
 	);
