@@ -18,7 +18,10 @@ export async function storeAsyncAuthRequest(
 ): Promise<void> {
 	const key = getStorageKey(data.authReqId);
 	const value = JSON.stringify(data);
-	const ttlSeconds = Math.floor((data.expiresAt - Date.now()) / 1000);
+	const ttlSeconds = Math.max(
+		1,
+		Math.floor((data.expiresAt - Date.now()) / 1000),
+	);
 
 	if (ctx.context.secondaryStorage) {
 		await ctx.context.secondaryStorage.set(key, value, ttlSeconds);
@@ -67,7 +70,10 @@ async function writeRequest(
 	data: AsyncAuthRequestData,
 ): Promise<void> {
 	const value = JSON.stringify(data);
-	const ttlSeconds = Math.floor((data.expiresAt - Date.now()) / 1000);
+	const ttlSeconds = Math.max(
+		1,
+		Math.floor((data.expiresAt - Date.now()) / 1000),
+	);
 
 	if (ctx.context.secondaryStorage) {
 		await ctx.context.secondaryStorage.set(key, value, ttlSeconds);
@@ -112,10 +118,11 @@ export async function updateAsyncAuthRequest(
 
 	// Status transitions are one-way: once approved/rejected, polls cannot revert.
 	if (existing.status !== "pending" && !updates.status) {
-		const safeUpdates: Partial<AsyncAuthRequestData> = {
-			lastPolledAt: updates.lastPolledAt,
-			pollingInterval: updates.pollingInterval,
-		};
+		const safeUpdates: Partial<AsyncAuthRequestData> = {};
+		if (updates.lastPolledAt !== undefined)
+			safeUpdates.lastPolledAt = updates.lastPolledAt;
+		if (updates.pollingInterval !== undefined)
+			safeUpdates.pollingInterval = updates.pollingInterval;
 		const updated: AsyncAuthRequestData = { ...existing, ...safeUpdates };
 		await writeRequest(ctx, key, updated);
 		return updated;

@@ -25,10 +25,11 @@ import type { AsyncAuthRequestData } from "./types";
 export function isSecureEndpoint(endpoint: string): boolean {
 	try {
 		const url = new URL(endpoint);
+		// URL.hostname returns "[::1]" for IPv6 loopback (brackets included)
 		const isLoopback =
 			url.hostname === "localhost" ||
 			url.hostname === "127.0.0.1" ||
-			url.hostname === "::1";
+			url.hostname === "[::1]";
 		return url.protocol === "https:" || isLoopback;
 	} catch {
 		return false;
@@ -39,11 +40,13 @@ export function isSecureEndpoint(endpoint: string): boolean {
  * Re-verify that the client is still valid and not disabled before
  * delivering tokens. Guards against the window between approval and delivery
  * where the client could have been disabled.
+ *
+ * Returns: true = valid, false = disabled/not found, null = transient error
  */
 async function verifyClientStillValid(
 	ctx: GenericEndpointContext,
 	clientId: string,
-): Promise<boolean> {
+): Promise<boolean | null> {
 	const { trustedClients, pluginId } = getOidcPluginContext(ctx);
 
 	const trusted = trustedClients?.find((c) => c.clientId === clientId);
@@ -53,12 +56,16 @@ async function verifyClientStillValid(
 
 	const modelName =
 		pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
-	const dbClient = await ctx.context.adapter
-		.findOne<MinimalClient>({
-			model: modelName,
-			where: [{ field: "clientId", value: clientId }],
-		})
-		.catch(() => null);
+	let dbClient: MinimalClient | null;
+	try {
+		dbClient =
+			(await ctx.context.adapter.findOne<MinimalClient>({
+				model: modelName,
+				where: [{ field: "clientId", value: clientId }],
+			})) ?? null;
+	} catch {
+		return null;
+	}
 
 	return !!dbClient && !dbClient.disabled;
 }
@@ -97,6 +104,12 @@ export async function pushTokensToClient(
 		ctx,
 		asyncAuthRequest.clientId,
 	);
+	if (clientValid === null) {
+		ctx.context.logger.error(
+			`Async auth push delivery deferred: could not verify client ${asyncAuthRequest.clientId} (transient error). Request preserved for retry.`,
+		);
+		return;
+	}
 	if (!clientValid) {
 		ctx.context.logger.error(
 			`Async auth push delivery aborted: client ${asyncAuthRequest.clientId} is disabled or no longer exists`,
