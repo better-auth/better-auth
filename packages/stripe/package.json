@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/stripe",
-  "version": "1.5.0-beta.18",
+  "version": "1.5.1-beta.2",
   "description": "Stripe plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -66,7 +66,7 @@
     "@better-auth/core": "workspace:*",
     "better-auth": "workspace:*",
     "better-call": "catalog:",
-    "stripe": "^20.2.0",
+    "stripe": "^20.4.0",
     "tsdown": "catalog:"
   },
   "peerDependencies": {

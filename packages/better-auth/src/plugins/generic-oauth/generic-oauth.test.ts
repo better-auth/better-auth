@@ -1148,8 +1148,7 @@ describe("oauth2", async () => {
 			expect(oktaConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(oktaConfig.clientId).toBe("okta-client-id");
 			expect(oktaConfig.clientSecret).toBe("okta-client-secret");
-			expect(oktaConfig.getUserInfo).toBeDefined();
-			expect(typeof oktaConfig.getUserInfo).toBe("function");
+			expect(oktaConfig.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle issuer with trailing slash", () => {
@@ -1204,8 +1203,7 @@ describe("oauth2", async () => {
 			expect(auth0Config.scopes).toEqual(["openid", "profile", "email"]);
 			expect(auth0Config.clientId).toBe("auth0-client-id");
 			expect(auth0Config.clientSecret).toBe("auth0-client-secret");
-			expect(auth0Config.getUserInfo).toBeDefined();
-			expect(typeof auth0Config.getUserInfo).toBe("function");
+			expect(auth0Config.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle domain with protocol prefix", () => {
@@ -1370,8 +1368,7 @@ describe("oauth2", async () => {
 			expect(keycloakConfig.scopes).toEqual(["openid", "profile", "email"]);
 			expect(keycloakConfig.clientId).toBe("keycloak-client-id");
 			expect(keycloakConfig.clientSecret).toBe("keycloak-client-secret");
-			expect(keycloakConfig.getUserInfo).toBeDefined();
-			expect(typeof keycloakConfig.getUserInfo).toBe("function");
+			expect(keycloakConfig.getUserInfo).toBeUndefined();
 		});
 
 		it("should handle issuer with trailing slash", () => {

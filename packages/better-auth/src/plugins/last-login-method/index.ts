@@ -73,6 +73,7 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 		}
 		if (ctx.path.includes("siwe")) return "siwe";
 		if (ctx.path.includes("/passkey/verify-authentication")) return "passkey";
+		if (ctx.path.startsWith("/magic-link/verify")) return "magic-link";
 		return null;
 	};
 
@@ -144,11 +145,13 @@ export const lastLoginMethod = <O extends LastLoginMethodOptions>(
 						const lastUsedLoginMethod =
 							config.customResolveMethod?.(ctx) ?? defaultResolveMethod(ctx);
 						if (lastUsedLoginMethod) {
-							const setCookie = ctx.context.responseHeaders?.get("set-cookie");
+							const setCookieHeaders =
+								ctx.context.responseHeaders?.getSetCookie?.() || [];
 							const sessionTokenName =
 								ctx.context.authCookies.sessionToken.name;
-							const hasSessionToken =
-								setCookie && setCookie.includes(sessionTokenName);
+							const hasSessionToken = setCookieHeaders.some((cookie) =>
+								cookie.includes(sessionTokenName),
+							);
 							if (hasSessionToken) {
 								// Inherit cookie attributes from Better Auth's centralized cookie system
 								// This ensures consistency with cross-origin, cross-subdomain, and security settings
