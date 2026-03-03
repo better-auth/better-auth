@@ -1,5 +1,10 @@
 import type { BetterAuthPlugin } from "@better-auth/core";
-import type { Account, Session, User } from "@better-auth/core/db";
+import type {
+	Account,
+	Session,
+	User,
+	Verification,
+} from "@better-auth/core/db";
 import { createTestSuite } from "@better-auth/test-utils/adapter";
 import type {
 	Invitation,
@@ -2156,6 +2161,21 @@ export const getNormalTestSuiteTests = (
 					],
 				}),
 			).resolves.not.toThrow();
+		},
+		/**
+		 * @see https://github.com/better-auth/better-auth/issues/8313
+		 */
+		"delete - should delete by non-unique field": async () => {
+			const [verification] = await insertRandom("verification");
+			await adapter.delete<Verification>({
+				model: "verification",
+				where: [{ field: "identifier", value: verification.identifier }],
+			});
+			const result = await adapter.findOne<Verification>({
+				model: "verification",
+				where: [{ field: "identifier", value: verification.identifier }],
+			});
+			expect(result).toBeNull();
 		},
 		"deleteMany - should delete many models": async () => {
 			const users = (await insertRandom("user", 3)).map((x) => x[0]);
