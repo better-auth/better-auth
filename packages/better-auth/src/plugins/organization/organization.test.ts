@@ -2515,6 +2515,12 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
+			members: {
+				id: string;
+				teamId: string;
+				userId: string;
+				createdAt: Date;
+			}[];
 		}>();
 	});
 
@@ -2774,6 +2780,23 @@ describe("Additional Fields", async () => {
 			teamRequiredField: string;
 			teamOptionalField?: string | undefined;
 			teamHiddenField?: string | undefined;
+			members: {
+				id: string;
+				teamId: string;
+				userId: string;
+				createdAt: Date;
+			}[];
+		}[];
+
+		type ExpectedBaseTeams = {
+			id: string;
+			name: string;
+			organizationId: string;
+			createdAt: Date;
+			updatedAt?: Date | undefined;
+			teamRequiredField: string;
+			teamOptionalField?: string | undefined;
+			teamHiddenField?: string | undefined;
 		}[];
 
 		type O = typeof orgOptions;
@@ -2783,7 +2806,7 @@ describe("Additional Fields", async () => {
 
 		expectTypeOf<Members>().toEqualTypeOf<ExpectedMembers>();
 		expectTypeOf<Invitations>().toEqualTypeOf<ExpectedInvitations>();
-		expectTypeOf<Teams>().toEqualTypeOf<ExpectedTeams>();
+		expectTypeOf<Teams>().toEqualTypeOf<ExpectedBaseTeams>();
 
 		expectTypeOf<NonNullable<Result>>().toEqualTypeOf<{
 			id: string;
