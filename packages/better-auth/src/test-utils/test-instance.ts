@@ -23,19 +23,6 @@ type CurrentUserContext = {
 	headers: Headers;
 };
 
-type TestDynamicBaseURLConfig = {
-	allowedHosts: string[];
-	fallback?: string | undefined;
-	protocol?: "http" | "https" | "auto" | undefined;
-};
-
-type TestInstanceOptions<O extends Partial<BetterAuthOptions>> = Omit<
-	O,
-	"baseURL"
-> & {
-	baseURL?: O["baseURL"] | TestDynamicBaseURLConfig;
-};
-
 const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 
 afterAll(async () => {
@@ -49,7 +36,7 @@ export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: TestInstanceOptions<O> | undefined,
+	options?: O | undefined,
 	config?:
 		| {
 				clientOptions?: C;
