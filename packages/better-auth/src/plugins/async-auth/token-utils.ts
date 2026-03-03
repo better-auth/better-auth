@@ -121,6 +121,13 @@ export async function generateTokensForAsyncAuthRequest(
 		const useJwtPlugin = oidcOpts.useJWTPlugin;
 		if (useJwtPlugin) {
 			const jwtPlugin = ctx.context.getPlugin("jwt");
+			if (!jwtPlugin) {
+				ctx.context.logger.warn(
+					"useJWTPlugin is enabled but the JWT plugin is not registered. " +
+						"Falling back to HS256 symmetric signing for ID tokens. " +
+						"Add the jwt plugin for asymmetric signing (RS256/EdDSA).",
+				);
+			}
 			if (jwtPlugin) {
 				idToken = await getJwtToken(
 					{
