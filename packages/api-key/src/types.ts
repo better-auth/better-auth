@@ -94,6 +94,14 @@ export interface ApiKeyConfigurationOptions {
 	 */
 	defaultPrefix?: string | undefined;
 	/**
+	 * Whether to disable custom prefixes passed from the client during API key creation or updates.
+	 *
+	 * If `true`, the prefix will always use `defaultPrefix` and any client-provided prefix will be ignored.
+	 *
+	 * @default false
+	 */
+	disableCustomPrefix?: boolean | undefined;
+	/**
 	 * The maximum length of the prefix.
 	 *
 	 * @default 32

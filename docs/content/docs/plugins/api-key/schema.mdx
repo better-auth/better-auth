@@ -1,0 +1,167 @@
+---
+title: API Key Schema
+description: API Key plugin schema reference.
+---
+
+## Schema
+
+Table: `apikey`
+
+<DatabaseTable
+  fields={[
+    {
+      name: "id",
+      type: "string",
+      description: "The ID of the API key.",
+      isUnique: true,
+      isPrimaryKey: true,
+    },
+    {
+      name: "configId",
+      type: "string",
+      description: "The configuration ID this key belongs to. Default is 'default'.",
+    },
+    {
+      name: "name",
+      type: "string",
+      description: "The name of the API key.",
+      isOptional: true,
+    },
+    {
+      name: "start",
+      type: "string",
+      description:
+        "The starting characters of the API key. Useful for showing the first few characters of the API key in the UI for the users to easily identify.",
+      isOptional: true,
+    },
+    {
+      name: "prefix",
+      type: "string",
+      description: "The API Key prefix. Stored as plain text.",
+      isOptional: true,
+    },
+    {
+      name: "key",
+      type: "string",
+      description: "The hashed API key itself.",
+    },
+    {
+      name: "referenceId",
+      type: "string",
+      description: "The ID of the owner (user ID or organization ID based on the config's `references` setting).",
+      isIndexed: true,
+    },
+    {
+      name: "refillInterval",
+      type: "number",
+      description: "The interval to refill the key in milliseconds.",
+      isOptional: true,
+    },
+    {
+      name: "refillAmount",
+      type: "number",
+      description: "The amount to refill the remaining count of the key.",
+      isOptional: true,
+    },
+    {
+      name: "lastRefillAt",
+      type: "Date",
+      description: "The date and time when the key was last refilled.",
+      isOptional: true,
+    },
+    {
+      name: "enabled",
+      type: "boolean",
+      description: "Whether the API key is enabled.",
+    },
+    {
+      name: "rateLimitEnabled",
+      type: "boolean",
+      description: "Whether the API key has rate limiting enabled.",
+    },
+    {
+      name: "rateLimitTimeWindow",
+      type: "number",
+      description: "The time window in milliseconds for the rate limit.",
+      isOptional: true,
+    },
+    {
+      name: "rateLimitMax",
+      type: "number",
+      description:
+        "The maximum number of requests allowed within the `rateLimitTimeWindow`.",
+      isOptional: true,
+    },
+    {
+      name: "requestCount",
+      type: "number",
+      description:
+        "The number of requests made within the rate limit time window.",
+    },
+    {
+      name: "remaining",
+      type: "number",
+      description: "The number of requests remaining.",
+      isOptional: true,
+    },
+    {
+      name: "lastRequest",
+      type: "Date",
+      description: "The date and time of the last request made to the key.",
+      isOptional: true,
+    },
+    {
+      name: "expiresAt",
+      type: "Date",
+      description: "The date and time when the key will expire.",
+      isOptional: true,
+    },
+    {
+      name: "createdAt",
+      type: "Date",
+      description: "The date and time the API key was created.",
+    },
+    {
+      name: "updatedAt",
+      type: "Date",
+      description: "The date and time the API key was updated.",
+    },
+    {
+      name: "permissions",
+      type: "string",
+      description: "The permissions of the key.",
+      isOptional: true,
+    },
+    {
+      name: "metadata",
+      type: "Object",
+      isOptional: true,
+      description: "Any additional metadata you want to store with the key.",
+    },
+  ]}
+/>
+
+### Migration from Previous Versions
+
+If you're upgrading from a previous version, you'll need to migrate the `userId` field to the new reference system:
+
+```sql
+-- Add new columns
+ALTER TABLE apikey ADD COLUMN config_id VARCHAR(255) NOT NULL DEFAULT 'default';
+ALTER TABLE apikey ADD COLUMN reference_id VARCHAR(255);
+
+-- Migrate existing data (copy userId to referenceId)
+UPDATE apikey SET reference_id = user_id WHERE reference_id IS NULL;
+
+-- Make reference_id required and add indexes
+ALTER TABLE apikey ALTER COLUMN reference_id SET NOT NULL;
+CREATE INDEX idx_apikey_reference_id ON apikey(reference_id);
+CREATE INDEX idx_apikey_config_id ON apikey(config_id);
+
+-- Optionally drop the old column after verifying migration
+-- ALTER TABLE apikey DROP COLUMN user_id;
+```
+
+<Callout type="warn">
+  **Breaking Change**: The `userId` field has been replaced with `referenceId`. API responses now return `referenceId` instead of `userId`. The owner type (user vs organization) is determined by the configuration's `references` setting, not stored on each key.
+</Callout>

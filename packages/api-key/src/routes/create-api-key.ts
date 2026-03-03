@@ -399,7 +399,12 @@ export function createApiKey({
 					throw APIError.from("BAD_REQUEST", msg);
 				}
 			}
-			if (prefix) {
+
+			const effectivePrefix = opts.disableCustomPrefix
+				? opts.defaultPrefix
+				: (prefix ?? opts.defaultPrefix);
+
+			if (prefix && !opts.disableCustomPrefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
 				}
@@ -423,7 +428,7 @@ export function createApiKey({
 
 			const key = await keyGenerator({
 				length: opts.defaultKeyLength,
-				prefix: prefix || opts.defaultPrefix,
+				prefix: effectivePrefix,
 			});
 
 			const hashed = opts.disableKeyHashing ? key : await defaultKeyHasher(key);
@@ -455,7 +460,7 @@ export function createApiKey({
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
-				prefix: prefix ?? opts.defaultPrefix ?? null,
+				prefix: effectivePrefix ?? null,
 				start: start,
 				key: hashed,
 				enabled: true,
