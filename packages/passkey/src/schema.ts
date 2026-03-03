@@ -45,6 +45,10 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
+			lastUsedAt: {
+				type: "date",
+				required: false,
+			},
 			aaguid: {
 				type: "string",
 				required: false,
