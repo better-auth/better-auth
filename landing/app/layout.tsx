@@ -19,7 +19,9 @@ const fontMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-	metadataBase: new URL("https://docs.better-auth.com"),
+	metadataBase: new URL(
+		process.env.NEXT_PUBLIC_URL || "https://better-auth.com",
+	),
 	title: {
 		template: "%s | Better Auth",
 		default: "Better Auth",
@@ -27,26 +29,26 @@ export const metadata: Metadata = {
 	description: "The Most Comprehensive Authentication Framework",
 	icons: {
 		icon: [
-			{ url: "https://docs.better-auth.com/favicon/favicon.ico", sizes: "any" },
+			{ url: "/favicon/favicon.ico", sizes: "any" },
 			{
-				url: "https://docs.better-auth.com/favicon/favicon-32x32.png",
+				url: "/favicon/favicon-32x32.png",
 				sizes: "32x32",
 				type: "image/png",
 			},
 			{
-				url: "https://docs.better-auth.com/favicon/favicon-16x16.png",
+				url: "/favicon/favicon-16x16.png",
 				sizes: "16x16",
 				type: "image/png",
 			},
 		],
-		apple: "https://docs.better-auth.com/favicon/apple-touch-icon.png",
+		apple: "/favicon/apple-touch-icon.png",
 	},
 	openGraph: {
-		images: ["https://docs.better-auth.com/og.png"],
+		images: ["/og.png"],
 	},
 	twitter: {
 		card: "summary_large_image",
-		images: ["https://docs.better-auth.com/og.png"],
+		images: ["/og.png"],
 	},
 };
 
