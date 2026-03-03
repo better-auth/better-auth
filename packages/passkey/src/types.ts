@@ -70,6 +70,6 @@ export type Passkey = {
 	backedUp: boolean;
 	transports?: string | undefined;
 	createdAt: Date;
-	lastUsedAt?: Date | undefined;
+	updatedAt?: Date | undefined;
 	aaguid?: string | undefined;
 };

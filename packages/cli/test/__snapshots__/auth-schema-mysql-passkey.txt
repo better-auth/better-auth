@@ -96,7 +96,7 @@ export const passkey = mysqlTable(
     backedUp: boolean("backed_up").notNull(),
     transports: text("transports"),
     createdAt: timestamp("created_at", { fsp: 3 }),
-    lastUsedAt: timestamp("last_used_at", { fsp: 3 }),
+    updatedAt: timestamp("updated_at", { fsp: 3 }),
     aaguid: text("aaguid"),
   },
   (table) => [
