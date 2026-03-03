@@ -185,12 +185,14 @@ function InstallBlock() {
 	}, []);
 
 	useLayoutEffect(() => {
+		setOverflow("hidden");
+	}, [mode]);
+
+	useLayoutEffect(() => {
 		if (pmOpen) {
 			setOverflow("visible");
-		} else {
-			setOverflow("hidden");
 		}
-	}, [mode, pmOpen]);
+	}, [pmOpen]);
 
 	const copy = (text: string) => {
 		navigator.clipboard.writeText(text);
