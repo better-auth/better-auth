@@ -1,18 +1,28 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
-import * as saml from "samlify";
+import saml from "samlify";
+import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
 	verifyDomain,
 } from "./routes/domain-verification";
 import {
+	deleteSSOProvider,
+	getSSOProvider,
+	listSSOProviders,
+	updateSSOProvider,
+} from "./routes/providers";
+import {
 	acsEndpoint,
 	callbackSSO,
 	callbackSSOSAML,
+	callbackSSOShared,
+	initiateSLO,
 	registerSSOProvider,
 	signInSSO,
+	sloEndpoint,
 	spMetadata,
 } from "./routes/sso";
 
@@ -40,6 +50,14 @@ export {
 import type { OIDCConfig, SAMLConfig, SSOOptions, SSOProvider } from "./types";
 
 export type { SAMLConfig, OIDCConfig, SSOOptions, SSOProvider };
+
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		sso: {
+			creator: typeof sso;
+		};
+	}
+}
 
 export {
 	computeDiscoveryUrl,
@@ -82,8 +100,15 @@ type SSOEndpoints<O extends SSOOptions> = {
 	registerSSOProvider: ReturnType<typeof registerSSOProvider<O>>;
 	signInSSO: ReturnType<typeof signInSSO>;
 	callbackSSO: ReturnType<typeof callbackSSO>;
+	callbackSSOShared: ReturnType<typeof callbackSSOShared>;
 	callbackSSOSAML: ReturnType<typeof callbackSSOSAML>;
 	acsEndpoint: ReturnType<typeof acsEndpoint>;
+	sloEndpoint: ReturnType<typeof sloEndpoint>;
+	initiateSLO: ReturnType<typeof initiateSLO>;
+	listSSOProviders: ReturnType<typeof listSSOProviders>;
+	getSSOProvider: ReturnType<typeof getSSOProvider>;
+	updateSSOProvider: ReturnType<typeof updateSSOProvider>;
+	deleteSSOProvider: ReturnType<typeof deleteSSOProvider>;
 };
 
 export type SSOPlugin<O extends SSOOptions> = {
@@ -94,6 +119,17 @@ export type SSOPlugin<O extends SSOOptions> = {
 			: {});
 };
 
+/**
+ * SAML endpoint paths that should skip origin check validation.
+ * These endpoints receive POST requests from external Identity Providers,
+ * which won't have a matching Origin header.
+ */
+const SAML_SKIP_ORIGIN_CHECK_PATHS = [
+	"/sso/saml2/callback", // SP-initiated SSO callback (prefix matches /callback/:providerId)
+	"/sso/saml2/sp/acs", // IdP-initiated SSO ACS (prefix matches /sp/acs/:providerId)
+	"/sso/saml2/sp/slo", // IdP-initiated SLO (prefix matches /sp/slo/:providerId)
+];
+
 export function sso<
 	O extends SSOOptions & {
 		domainVerification?: { enabled: true };
@@ -103,7 +139,7 @@ export function sso<
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O> & DomainVerificationEndpoints;
-	schema: any;
+	schema: NonNullable<BetterAuthPlugin["schema"]>;
 	options: O;
 };
 export function sso<O extends SSOOptions>(
@@ -111,18 +147,28 @@ export function sso<O extends SSOOptions>(
 ): {
 	id: "sso";
 	endpoints: SSOEndpoints<O>;
+	options: O;
 };
 
-export function sso<O extends SSOOptions>(options?: O | undefined): any {
+export function sso<O extends SSOOptions>(
+	options?: O | undefined,
+): BetterAuthPlugin {
 	const optionsWithStore = options as O;
 
 	let endpoints = {
-		spMetadata: spMetadata(),
+		spMetadata: spMetadata(optionsWithStore),
 		registerSSOProvider: registerSSOProvider(optionsWithStore),
 		signInSSO: signInSSO(optionsWithStore),
 		callbackSSO: callbackSSO(optionsWithStore),
+		callbackSSOShared: callbackSSOShared(optionsWithStore),
 		callbackSSOSAML: callbackSSOSAML(optionsWithStore),
 		acsEndpoint: acsEndpoint(optionsWithStore),
+		sloEndpoint: sloEndpoint(optionsWithStore),
+		initiateSLO: initiateSLO(optionsWithStore),
+		listSSOProviders: listSSOProviders(),
+		getSSOProvider: getSSOProvider(),
+		updateSSOProvider: updateSSOProvider(optionsWithStore),
+		deleteSSOProvider: deleteSSOProvider(),
 	};
 
 	if (options?.domainVerification?.enabled) {
@@ -139,8 +185,49 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 
 	return {
 		id: "sso",
+		init(ctx) {
+			const existing = ctx.skipOriginCheck;
+			if (existing === true) {
+				return {};
+			}
+			const existingPaths = Array.isArray(existing) ? existing : [];
+			return {
+				context: {
+					skipOriginCheck: [...existingPaths, ...SAML_SKIP_ORIGIN_CHECK_PATHS],
+				},
+			};
+		},
 		endpoints,
 		hooks: {
+			before: [
+				{
+					matcher(context) {
+						return context.path === "/sign-out";
+					},
+					handler: createAuthMiddleware(async (ctx) => {
+						if (!options?.saml?.enableSingleLogout) {
+							return;
+						}
+						const session = await getSessionFromCtx(ctx);
+						if (!session?.session?.id) {
+							return;
+						}
+						const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
+						const sessionLookup =
+							await ctx.context.internalAdapter.findVerificationValue(
+								sessionLookupKey,
+							);
+						if (sessionLookup?.value) {
+							await ctx.context.internalAdapter
+								.deleteVerificationByIdentifier(sessionLookup.value)
+								.catch(() => {});
+							await ctx.context.internalAdapter
+								.deleteVerificationByIdentifier(sessionLookupKey)
+								.catch(() => {});
+						}
+					}),
+				},
+			],
 			after: [
 				{
 					matcher(context) {
@@ -152,10 +239,7 @@ export function sso<O extends SSOOptions>(options?: O | undefined): any {
 							return;
 						}
 
-						const isOrgPluginEnabled = ctx.context.options.plugins?.find(
-							(plugin: { id: string }) => plugin.id === "organization",
-						);
-						if (!isOrgPluginEnabled) {
+						if (!ctx.context.hasPlugin("organization")) {
 							return;
 						}
 

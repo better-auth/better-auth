@@ -1,9 +1,8 @@
-import { BetterAuthError } from "@better-auth/core/error";
+import { APIError, BetterAuthError } from "@better-auth/core/error";
 import { createAuthClient } from "better-auth/client";
 import type { JwtOptions } from "better-auth/plugins/jwt";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
-import { APIError } from "better-call";
 import { describe, expect, it } from "vitest";
 import { oauthProviderClient } from "./client";
 import { oauthProviderResourceClient } from "./client-resource";
@@ -101,6 +100,7 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 			claims_supported: baseClaims,
 			userinfo_endpoint: `${baseURL}/oauth2/userinfo`,
 			subject_types_supported: ["public"],
@@ -151,6 +151,7 @@ describe("oauth metadata", async () => {
 				"client_secret_post",
 			],
 			code_challenge_methods_supported: ["S256"],
+			authorization_response_iss_parameter_supported: true,
 		});
 	});
 

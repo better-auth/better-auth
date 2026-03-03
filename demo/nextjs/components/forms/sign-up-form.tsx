@@ -36,11 +36,13 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 interface SignUpFormProps {
 	onSuccess?: () => void;
 	callbackURL?: string;
+	params?: URLSearchParams;
 }
 
 export function SignUpForm({
 	onSuccess,
 	callbackURL = "/dashboard",
+	params,
 }: SignUpFormProps) {
 	const [loading, startTransition] = useTransition();
 	const { image, imagePreview, handleImageChange, clearImage } =
@@ -66,6 +68,7 @@ export function SignUpForm({
 				image: image ? await convertImageToBase64(image) : "",
 				callbackURL,
 				fetchOptions: {
+					query: params ? Object.fromEntries(params.entries()) : undefined,
 					onError: (ctx) => {
 						toast.error(ctx.error.message);
 					},
@@ -79,7 +82,7 @@ export function SignUpForm({
 	};
 
 	return (
-		<form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-4">
+		<form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-2">
 			<FieldGroup>
 				<div className="grid grid-cols-2 gap-4">
 					<Controller
@@ -139,44 +142,50 @@ export function SignUpForm({
 						</Field>
 					)}
 				/>
-				<Controller
-					name="password"
-					control={form.control}
-					render={({ field, fieldState }) => (
-						<Field data-invalid={fieldState.invalid}>
-							<FieldLabel htmlFor="sign-up-password">Password</FieldLabel>
-							<Input
-								{...field}
-								id="sign-up-password"
-								type="password"
-								placeholder="Password"
-								aria-invalid={fieldState.invalid}
-								autoComplete="new-password"
-							/>
-							{fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-						</Field>
-					)}
-				/>
-				<Controller
-					name="passwordConfirmation"
-					control={form.control}
-					render={({ field, fieldState }) => (
-						<Field data-invalid={fieldState.invalid}>
-							<FieldLabel htmlFor="sign-up-password-confirmation">
-								Confirm Password
-							</FieldLabel>
-							<Input
-								{...field}
-								id="sign-up-password-confirmation"
-								type="password"
-								placeholder="Confirm Password"
-								aria-invalid={fieldState.invalid}
-								autoComplete="new-password"
-							/>
-							{fieldState.invalid && <FieldError errors={[fieldState.error]} />}
-						</Field>
-					)}
-				/>
+				<div className="grid grid-cols-2 gap-4">
+					<Controller
+						name="password"
+						control={form.control}
+						render={({ field, fieldState }) => (
+							<Field data-invalid={fieldState.invalid}>
+								<FieldLabel htmlFor="sign-up-password">Password</FieldLabel>
+								<Input
+									{...field}
+									id="sign-up-password"
+									type="password"
+									placeholder="Password"
+									aria-invalid={fieldState.invalid}
+									autoComplete="new-password"
+								/>
+								{fieldState.invalid && (
+									<FieldError errors={[fieldState.error]} />
+								)}
+							</Field>
+						)}
+					/>
+					<Controller
+						name="passwordConfirmation"
+						control={form.control}
+						render={({ field, fieldState }) => (
+							<Field data-invalid={fieldState.invalid}>
+								<FieldLabel htmlFor="sign-up-password-confirmation">
+									Confirm Password
+								</FieldLabel>
+								<Input
+									{...field}
+									id="sign-up-password-confirmation"
+									type="password"
+									placeholder="Confirm Password"
+									aria-invalid={fieldState.invalid}
+									autoComplete="new-password"
+								/>
+								{fieldState.invalid && (
+									<FieldError errors={[fieldState.error]} />
+								)}
+							</Field>
+						)}
+					/>
+				</div>
 				<Field>
 					<FieldLabel htmlFor="sign-up-image">
 						Profile Image (optional)

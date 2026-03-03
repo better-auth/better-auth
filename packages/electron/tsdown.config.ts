@@ -1,0 +1,32 @@
+import { defineConfig } from "tsdown";
+
+export default defineConfig([
+	{
+		dts: { build: true, incremental: true },
+		format: ["esm"],
+		entry: [
+			"./src/index.ts",
+			"./src/client.ts",
+			"./src/proxy.ts",
+			"./src/storage.ts",
+		],
+		external: ["better-auth", "better-call", "@better-fetch/fetch", "electron"],
+		treeshake: true,
+	},
+	{
+		dts: { build: true, incremental: true },
+		format: ["esm"],
+		entry: ["./src/preload.ts"],
+		external: (id, _, isResolved) => {
+			if (isResolved) return false;
+			return (
+				!id.startsWith(".") &&
+				!id.startsWith("better-call") &&
+				!id.startsWith("@better-auth/core")
+			);
+		},
+		noExternal: [/^@better-auth\/core/, /^better-call/],
+		inlineOnly: ["better-call", "@standard-schema/spec"],
+		treeshake: true,
+	},
+]);

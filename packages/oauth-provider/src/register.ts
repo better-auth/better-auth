@@ -4,7 +4,7 @@ import { generateRandomString } from "better-auth/crypto";
 import { toExpJWT } from "better-auth/plugins";
 import type { OAuthOptions, SchemaClient, Scope } from "./types";
 import type { OAuthClient } from "./types/oauth";
-import { storeClientSecret } from "./utils";
+import { parseClientMetadata, storeClientSecret } from "./utils";
 
 export async function registerEndpoint(
 	ctx: GenericEndpointContext,
@@ -110,6 +110,45 @@ export async function checkOAuthClient(
 		});
 	}
 
+	// Validate subject_type
+	if (client.subject_type !== undefined) {
+		if (
+			client.subject_type !== "public" &&
+			client.subject_type !== "pairwise"
+		) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description: `subject_type must be "public" or "pairwise"`,
+			});
+		}
+		if (client.subject_type === "pairwise" && !opts.pairwiseSecret) {
+			throw new APIError("BAD_REQUEST", {
+				error: "invalid_client_metadata",
+				error_description:
+					"pairwise subject_type requires server pairwiseSecret configuration",
+			});
+		}
+		// Per OIDC Core §8.1, when multiple redirect_uris have different hosts,
+		// a sector_identifier_uri is required (not yet supported). Reject registration
+		// until sector_identifier_uri support is added.
+		if (
+			client.subject_type === "pairwise" &&
+			client.redirect_uris &&
+			client.redirect_uris.length > 1
+		) {
+			const hosts = new Set(
+				client.redirect_uris.map((uri: string) => new URL(uri).host),
+			);
+			if (hosts.size > 1) {
+				throw new APIError("BAD_REQUEST", {
+					error: "invalid_client_metadata",
+					error_description:
+						"pairwise clients with redirect_uris on different hosts require a sector_identifier_uri, which is not yet supported. All redirect_uris must share the same host.",
+				});
+			}
+		}
+	}
+
 	// Check requested application scopes
 	const requestedScopes = (client?.scope as string | undefined)
 		?.split(" ")
@@ -127,6 +166,13 @@ export async function checkOAuthClient(
 				});
 			}
 		}
+	}
+
+	if (settings?.isRegister && client.require_pkce === false) {
+		throw new APIError("BAD_REQUEST", {
+			error: "invalid_client_metadata",
+			error_description: `pkce is required for registered clients.`,
+		});
 	}
 }
 
@@ -165,7 +211,7 @@ export async function createOAuthClientEndpoint(
 				session: session?.session,
 			})
 		: undefined;
-	let schema = oauthToSchema({
+	const schema = oauthToSchema({
 		...((body ?? {}) as OAuthClient),
 		// Dynamic registration should not have disabled defined
 		disabled: undefined,
@@ -188,7 +234,11 @@ export async function createOAuthClientEndpoint(
 	});
 	const client = await ctx.context.adapter.create<SchemaClient<Scope[]>>({
 		model: "oauthClient",
-		data: schema,
+		data: {
+			...schema,
+			createdAt: new Date(iat * 1000),
+			updatedAt: new Date(iat * 1000),
+		},
 	});
 	// Format the response according to RFC7591
 	return ctx.json(
@@ -251,7 +301,10 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		disabled,
 		skip_consent: skipConsent,
 		enable_end_session: enableEndSession,
+		require_pkce: requirePKCE,
+		subject_type: subjectType,
 		reference_id: referenceId,
+		metadata: inputMetadata,
 		// All other metadata
 		...rest
 	} = input;
@@ -260,8 +313,15 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 	const expiresAt = _expiresAt ? new Date(_expiresAt * 1000) : undefined;
 	const createdAt = _createdAt ? new Date(_createdAt * 1000) : undefined;
 	const scopes = _scope?.split(" ");
-	const metadata =
-		rest && Object.keys(rest).length ? JSON.stringify(rest) : undefined;
+	const metadataObj = {
+		...(rest && Object.keys(rest).length ? rest : {}),
+		...(inputMetadata && typeof inputMetadata === "object"
+			? inputMetadata
+			: {}),
+	};
+	const metadata = Object.keys(metadataObj).length
+		? JSON.stringify(metadataObj)
+		: undefined;
 
 	return {
 		// Important Fields
@@ -296,6 +356,8 @@ export function oauthToSchema(input: OAuthClient): SchemaClient<Scope[]> {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata,
 	};
@@ -342,19 +404,21 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		// All other metadata
 		skipConsent,
 		enableEndSession,
+		requirePKCE,
+		subjectType,
 		referenceId,
 		metadata, // in JSON format
 	} = input;
 
 	// Type conversions
 	const _expiresAt = expiresAt
-		? Math.round(expiresAt.getTime() / 1000)
+		? Math.round(new Date(expiresAt).getTime() / 1000)
 		: undefined;
 	const _createdAt = createdAt
-		? Math.round(createdAt.getTime() / 1000)
+		? Math.round(new Date(createdAt).getTime() / 1000)
 		: undefined;
 	const _scopes = scopes?.join(" ");
-	const _metadata = metadata ? JSON.parse(metadata) : undefined;
+	const _metadata = parseClientMetadata(metadata);
 
 	return {
 		// All other metadata
@@ -394,6 +458,8 @@ export function schemaToOAuth(input: SchemaClient<Scope[]>): OAuthClient {
 		disabled: disabled ?? undefined,
 		skip_consent: skipConsent ?? undefined,
 		enable_end_session: enableEndSession ?? undefined,
+		require_pkce: requirePKCE ?? undefined,
+		subject_type: subjectType ?? undefined,
 		reference_id: referenceId ?? undefined,
 	};
 }

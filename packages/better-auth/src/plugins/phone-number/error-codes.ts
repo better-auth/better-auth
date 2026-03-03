@@ -1,4 +1,4 @@
-import { defineErrorCodes } from "@better-auth/core/utils";
+import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
 export const PHONE_NUMBER_ERROR_CODES = defineErrorCodes({
 	INVALID_PHONE_NUMBER: "Invalid phone number",

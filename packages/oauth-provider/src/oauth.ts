@@ -30,9 +30,18 @@ import { SafeUrlSchema } from "./types/zod";
 import { userInfoEndpoint } from "./userinfo";
 import { deleteFromPrompt, getJwtPlugin } from "./utils";
 
+declare module "@better-auth/core" {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
+		"oauth-provider": {
+			creator: typeof oauthProvider;
+		};
+	}
+}
+
 export const oAuthState = defineRequestState<{ query?: string } | null>(
 	() => null,
 );
+export const getOAuthProviderState = oAuthState.get;
 
 /**
  * oAuth 2.1 provider plugin for Better Auth.
@@ -109,6 +118,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 
+	// Validate pairwiseSecret minimum length
+	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
+		throw new BetterAuthError(
+			"pairwiseSecret must be at least 32 characters long for adequate HMAC-SHA256 security",
+		);
+	}
+
 	// TODO: device_code grant also allows for refresh tokens
 	if (
 		opts.grantTypes &&
@@ -144,8 +160,8 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 	}
 
 	return {
-		id: "oauthProvider",
-		options: opts,
+		id: "oauth-provider",
+		options: opts as NoInfer<O>,
 		init: (ctx) => {
 			// Require session id storage on database (secondary-storage only solution not yet supported)
 			if (ctx.options.session && !ctx.options.session.storeSessionInDatabase) {
@@ -157,7 +173,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			// Check for jwt plugin registration
 			if (!opts.disableJwtPlugin) {
 				const jwtPlugin = getJwtPlugin(ctx);
-				const jwtPluginOptions = jwtPlugin.options;
+				const jwtPluginOptions = jwtPlugin?.options;
 
 				// Issuer and well-known endpoint checks
 				const issuer = jwtPluginOptions?.jwt?.issuer ?? ctx.baseURL;
@@ -286,10 +302,14 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 					} else {
 						const jwtPluginOptions = opts.disableJwtPlugin
 							? undefined
-							: getJwtPlugin(ctx.context).options;
+							: getJwtPlugin(ctx.context)?.options;
 						const authMetadata = authServerMetadata(ctx, jwtPluginOptions, {
 							scopes_supported:
 								opts.advertisedMetadata?.scopes_supported ?? opts.scopes,
+							public_client_supported:
+								opts.allowUnauthenticatedClientRegistration,
+							grant_types_supported: opts.grantTypes,
+							jwt_disabled: opts.disableJwtPlugin,
 						});
 						return authMetadata;
 					}
@@ -333,6 +353,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 						nonce: z.string().optional(),
 						prompt: z
 							.enum([
+								"none",
 								"consent",
 								"login",
 								"create",
@@ -1117,6 +1138,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default(["code"])
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						subject_type: z.enum(["public", "pairwise"]).optional(),
 					}),
 					metadata: {
 						openapi: {
@@ -1291,5 +1313,67 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 			deleteOAuthConsent: oauthConsentEndpoints.deleteOAuthConsent(opts),
 		},
 		schema: mergeSchema(schema, opts?.schema),
+		rateLimit: [
+			// Token endpoint - critical for preventing credential stuffing
+			...(opts.rateLimit?.token !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/token",
+							window: opts.rateLimit?.token?.window ?? 60,
+							max: opts.rateLimit?.token?.max ?? 20,
+						},
+					]
+				: []),
+			// Authorize endpoint - user-facing, prevent auth floods
+			...(opts.rateLimit?.authorize !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/authorize",
+							window: opts.rateLimit?.authorize?.window ?? 60,
+							max: opts.rateLimit?.authorize?.max ?? 30,
+						},
+					]
+				: []),
+			// Introspection - high traffic API endpoint
+			...(opts.rateLimit?.introspect !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/introspect",
+							window: opts.rateLimit?.introspect?.window ?? 60,
+							max: opts.rateLimit?.introspect?.max ?? 100,
+						},
+					]
+				: []),
+			// Revocation - moderate traffic
+			...(opts.rateLimit?.revoke !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/revoke",
+							window: opts.rateLimit?.revoke?.window ?? 60,
+							max: opts.rateLimit?.revoke?.max ?? 30,
+						},
+					]
+				: []),
+			// Dynamic registration - prevent spam
+			...(opts.rateLimit?.register !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/register",
+							window: opts.rateLimit?.register?.window ?? 60,
+							max: opts.rateLimit?.register?.max ?? 5,
+						},
+					]
+				: []),
+			// UserInfo - API endpoint
+			...(opts.rateLimit?.userinfo !== false
+				? [
+						{
+							pathMatcher: (path: string) => path === "/oauth2/userinfo",
+							window: opts.rateLimit?.userinfo?.window ?? 60,
+							max: opts.rateLimit?.userinfo?.max ?? 60,
+						},
+					]
+				: []),
+		],
 	} satisfies BetterAuthPlugin;
 };

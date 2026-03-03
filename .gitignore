@@ -199,3 +199,6 @@ playwright-report/
 test-results/
 
 state.txt
+
+.cursor/
+.claude/worktrees

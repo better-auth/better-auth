@@ -23,23 +23,77 @@
     "//#format": {},
     "lint": {},
     "lint:types": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"]
     },
     "lint:package": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"]
     },
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [".vitest/**", "coverage/**", "test-results/**"],
+      "cache": true
     },
     "coverage": {
-      "dependsOn": ["build"],
-      "outputs": ["coverage"]
+      "dependsOn": ["^build", "build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "src/**",
+        "test/**",
+        "tests/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["coverage/**", "coverage-final.json", ".nyc_output/**"]
     },
     "e2e:smoke": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": ["test-results/**", "playwright-report/**"],
+      "cache": true
     },
     "e2e:integration": {
-      "dependsOn": ["build"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "vitest.config.*",
+        "playwright.config.*",
+        "test/**",
+        "tests/**",
+        "e2e/**",
+        "*.test.*",
+        "*.spec.*",
+        "package.json"
+      ],
+      "outputs": [
+        "coverage/**",
+        "coverage-final.json",
+        ".nyc_output/**",
+        "test-results/**",
+        "playwright-report/**"
+      ],
+      "cache": true
     },
     "deploy": {
       "cache": false
