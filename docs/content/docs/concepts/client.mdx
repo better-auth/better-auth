@@ -66,6 +66,40 @@ If you're using a different base path other than `/api/auth`, make sure to pass 
     </Tab>
 </Tabs>
 
+## Framework-Specific Clients
+
+Better Auth provides specialized entry points for various frontend frameworks. Using the framework-specific package allows you to access reactive features like hooks.
+When creating your auth client instance, change the import source based on your framework:
+
+<TypeTable
+  type={{
+    "Vanilla JS": {
+      type: '"better-auth/client"',
+      description: "For vanilla JavaScript or TypeScript projects without a framework.",
+    },
+    "React / Next.js": {
+      type: '"better-auth/react"',
+      description: "For React and Next.js projects.",
+    },
+    "Vue": {
+      type: '"better-auth/vue"',
+      description: "For Vue projects.",
+    },
+    "Svelte": {
+      type: '"better-auth/svelte"',
+      description: "For Svelte projects.",
+    },
+    "Solid": {
+      type: '"better-auth/solid"',
+      description: "For Solid projects.",
+    },
+    "TanStack Start": {
+      type: '"better-auth/tanstack-start"',
+      description: "For TanStack Start projects.",
+    },
+  }}
+/>
+
 ## Usage
 
 Once you've created your client instance, you can use the client to interact with the Better Auth server. The client provides a set of functions by default and they can be extended with plugins.
