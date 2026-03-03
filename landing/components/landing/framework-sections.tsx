@@ -2,10 +2,11 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { startTransition, useEffect, useRef, useState } from "react";
 import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 
-export const providerIcons: Record<string, () => React.ReactNode> = {
+export const providerIcons: Record<string, () => ReactNode> = {
 	Google: () => (
 		<svg
 			xmlns="http://www.w3.org/2000/svg"
