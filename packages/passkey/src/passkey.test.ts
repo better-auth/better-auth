@@ -1,6 +1,9 @@
 import { APIError } from "@better-auth/core/error";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
+import { parseSetCookieHeader } from "better-auth/cookies";
 import { getTestInstance } from "better-auth/test";
 import {
 	afterEach,
@@ -84,6 +87,7 @@ describe("passkey", async () => {
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
+		const lastUsedAt = new Date();
 		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
 			model: "passkey",
 			data: {
@@ -94,6 +98,7 @@ describe("passkey", async () => {
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
 				createdAt: new Date(),
+				lastUsedAt,
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
@@ -110,6 +115,103 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("publicKey");
 		expect(passkeys[0]).toHaveProperty("credentialID");
 		expect(passkeys[0]).toHaveProperty("aaguid");
+		expect(passkeys[0]).toHaveProperty("lastUsedAt");
+		expect(new Date(passkeys[0]!.lastUsedAt!).toISOString()).toBe(
+			lastUsedAt.toISOString(),
+		);
+	});
+
+	it("should update passkey lastUsedAt after successful authentication", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const previousLastUsedAt = new Date(Date.now() - 60_000);
+		const passkeyRecord = await context.adapter.create<
+			Omit<Passkey, "id">,
+			Passkey
+		>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID-auth",
+				createdAt: new Date(),
+				lastUsedAt: previousLastUsedAt,
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers: headers,
+				customFetchImpl,
+			},
+		});
+
+		let passkeyCookie: string | undefined;
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			headers: headers,
+			method: "GET",
+			onResponse(context) {
+				const setCookie = context.response.headers.get("Set-Cookie");
+				expect(setCookie).toContain("better-auth-passkey");
+				const cookies = parseSetCookieHeader(setCookie || "");
+				const challengeCookie = [...cookies.entries()].find(([name]) =>
+					name.endsWith("better-auth-passkey"),
+				);
+				passkeyCookie = challengeCookie
+					? `${challengeCookie[0]}=${challengeCookie[1].value}`
+					: undefined;
+			},
+		});
+		expect(passkeyCookie).toBeDefined();
+
+		vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+			verified: true,
+			authenticationInfo: {
+				newCounter: 42,
+			},
+		} as any);
+
+		const authenticationResponse = {
+			id: passkeyRecord.credentialID,
+			rawId: passkeyRecord.credentialID,
+			type: "public-key",
+			clientExtensionResults: {},
+			response: {
+				clientDataJSON: "clientDataJSON",
+				authenticatorData: "authenticatorData",
+				signature: "signature",
+			},
+		} satisfies AuthenticationResponseJSON;
+
+		await auth.api.verifyPasskeyAuthentication({
+			headers: {
+				cookie: passkeyCookie!,
+				origin: "http://localhost:3000",
+			},
+			body: {
+				response: authenticationResponse,
+			},
+		});
+
+		const updatedPasskey = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "id", value: passkeyRecord.id }],
+		});
+
+		expect(updatedPasskey).toBeDefined();
+		expect(updatedPasskey?.counter).toBe(42);
+		expect(updatedPasskey?.lastUsedAt).toBeDefined();
+		expect(new Date(updatedPasskey!.lastUsedAt!).getTime()).toBeGreaterThan(
+			previousLastUsedAt.getTime(),
+		);
 	});
 
 	it("should update a passkey", async () => {

@@ -305,6 +305,12 @@ Table Name: `passkey`
             isOptional: true
         },
         {
+            name: "lastUsedAt",
+            type: "Date",
+            description: "The time when the passkey was last used for successful authentication",
+            isOptional: true
+        },
+        {
                 name: "aaguid",
                 type: "string",
                 description: "Authenticator's Attestation GUID indicating the type of the authenticator",
