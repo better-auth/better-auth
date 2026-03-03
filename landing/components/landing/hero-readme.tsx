@@ -601,8 +601,8 @@ function InstallBlock() {
 																{mc.name === "Claude Code" && (
 																	<svg
 																		xmlns="http://www.w3.org/2000/svg"
-																		className="h-[18px] w-[18px]"
-																		viewBox="0 0 24 24"
+																		className="h-3.5 w-3.5"
+																		viewBox="0 0 16 16"
 																	>
 																		<path
 																			fill="currentColor"
