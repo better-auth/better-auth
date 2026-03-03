@@ -47,8 +47,8 @@
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@types/node": "^25.3.2",
-    "ioredis": "^5.9.3",
+    "@types/node": "^25.3.3",
+    "ioredis": "^5.10.0",
     "tsdown": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:vitest"

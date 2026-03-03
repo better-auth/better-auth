@@ -52,9 +52,9 @@
     "kysely": "^0.27.0 || ^0.28.0"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250121.0",
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.1",
+    "@cloudflare/workers-types": "^4.20260301.1",
     "kysely": "^0.28.11",
     "tsdown": "catalog:",
     "typescript": "catalog:"

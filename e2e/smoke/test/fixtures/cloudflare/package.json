@@ -5,13 +5,13 @@
     "@better-auth/sso": "workspace:*",
     "better-auth": "workspace:*",
     "drizzle-orm": "^0.45.1",
-    "hono": "^4.12.3"
+    "hono": "^4.12.4"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.18",
-    "@cloudflare/workers-types": "^4.20260226.1",
+    "@cloudflare/workers-types": "^4.20260301.1",
     "drizzle-kit": "^0.31.9",
-    "wrangler": "4.61.0"
+    "wrangler": "4.69.0"
   },
   "scripts": {
     "check": "tsc && wrangler build",
