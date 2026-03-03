@@ -617,9 +617,16 @@ describe("CIBA plugin", async () => {
 		});
 
 		it("should reject rejection if different user is logged in", async () => {
-			// Sign in as other user (created in previous test)
+			// Create and sign in as a different user
+			await auth.api.signUpEmail({
+				body: {
+					email: "other-reject-user@test.com",
+					password: "password123",
+					name: "Other Reject User",
+				},
+			});
 			const { headers: otherHeaders } = await signInWithUser(
-				"other-user@test.com",
+				"other-reject-user@test.com",
 				"password123",
 			);
 
