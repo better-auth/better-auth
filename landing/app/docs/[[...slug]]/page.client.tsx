@@ -56,18 +56,29 @@ const tocAction =
 export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		startTransition(async () => {
-			const cached = cache.get(rawUrl);
+		const cached = cache.get(rawUrl);
 
-			if (cached) {
-				await navigator.clipboard.writeText(cached);
-			} else {
-				const res = await fetch(rawUrl);
-				const content = await res.text();
-				cache.set(rawUrl, content);
-				await navigator.clipboard.writeText(content);
-			}
+		if (cached) {
+			await navigator.clipboard.writeText(cached);
+			return;
+		}
+
+		const fetchPromise = fetch(rawUrl).then(async (res) => {
+			const text = await res.text();
+			cache.set(rawUrl, text);
+			return text;
 		});
+
+		startTransition(async () => {
+			await fetchPromise;
+		});
+
+		const item = new ClipboardItem({
+			"text/plain": fetchPromise.then(
+				(text) => new Blob([text], { type: "text/plain" }),
+			),
+		});
+		await navigator.clipboard.write([item]);
 	});
 
 	return (
