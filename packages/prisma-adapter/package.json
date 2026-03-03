@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/prisma-adapter",
-  "version": "1.5.1-beta.2",
+  "version": "1.5.1-beta.3",
   "description": "Prisma adapter for Better Auth",
   "type": "module",
   "license": "MIT",
