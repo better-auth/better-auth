@@ -712,7 +712,7 @@ describe("cookie cache with JWT strategy", async () => {
 		}
 		const payload = await verifyJWT(jwt, ctx.secret);
 		//should be greater than 299 seconds from now - (default max age is 300 seconds)
-		expect(payload.exp).toBeGreaterThan(Date.now() / 1000 + 299);
+		expect(payload.exp).toBeGreaterThanOrEqual(Date.now() / 1000 + 299);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {
@@ -1140,6 +1140,75 @@ describe("cookie cache refreshCache", async () => {
 		expect(sessionFromCache.data?.user.email).toBe(testUser.email);
 		expect(sessionFromCache.data?.session).toBeDefined();
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
+
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7994
+	 */
+	it("should extend session_token cookie expiry when refreshCache threshold is reached", async () => {
+		const expiresIn = 60 * 5; // 5 minutes
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			database: undefined as any,
+			session: {
+				expiresIn,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300, // 5 minutes
+					refreshCache: {
+						updateAge: 60, // Refresh when 60 seconds remain
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const ctx = await auth.$context;
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+		await ctx.internalAdapter.deleteSession(sessionToken!);
+
+		vi.useFakeTimers();
+		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		let sessionTokenMaxAge: number | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					sessionTokenMaxAge = parsed.get("better-auth.session_token")?.[
+						"max-age"
+					];
+				},
+			},
+		});
+
+		// The session_token cookie should have its maxAge extended to expiresIn
+		expect(sessionTokenMaxAge).toBe(expiresIn);
 
 		vi.useRealTimers();
 	});

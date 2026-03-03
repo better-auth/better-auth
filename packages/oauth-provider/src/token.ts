@@ -22,6 +22,7 @@ import {
 	getStoredToken,
 	isPKCERequired,
 	parseClientMetadata,
+	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
@@ -127,14 +128,14 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 	sessionId?: string,
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
-	const authTime = Math.floor(
-		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
-			1000,
-	);
+	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+	const authTimeSec =
+		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
 	// - bronze : password only
 	// - silver : mfa
@@ -153,12 +154,12 @@ async function createIdToken(
 		: getJwtPlugin(ctx.context).options;
 
 	const payload: JWTPayload = {
-		...customClaims,
 		...userClaims,
-		auth_time: authTime,
+		...customClaims,
+		auth_time: authTimeSec,
 		acr,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		sub: user.id,
+		sub: resolvedSub,
 		aud: client.clientId,
 		nonce,
 		iat,
@@ -272,6 +273,7 @@ async function createRefreshToken(
 	scopes: string[],
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
+	authTime?: Date,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -304,6 +306,7 @@ async function createRefreshToken(
 			sessionId,
 			userId: user.id,
 			referenceId,
+			authTime,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -371,6 +374,7 @@ async function createUserTokens(
 	additional?: {
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -410,6 +414,7 @@ async function createUserTokens(
 						sid: sessionId,
 					},
 					additional?.refreshToken,
+					authTime,
 				)
 			: undefined;
 
@@ -460,10 +465,20 @@ async function createUserTokens(
 							sid: sessionId,
 						},
 						additional?.refreshToken,
+						authTime,
 					)
 				: undefined,
 		isIdToken
-			? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId)
+			? createIdToken(
+					ctx,
+					opts,
+					user,
+					client,
+					scopes,
+					nonce,
+					sessionId,
+					authTime,
+				)
 			: undefined,
 	]);
 
@@ -509,9 +524,9 @@ async function checkVerificationValue(
 	}
 
 	// Delete used code
-	if (verification?.id) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
-	}
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+		await storeToken(opts.storeTokens, code, "authorization_code"),
+	);
 
 	// Check verification
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {
@@ -742,6 +757,11 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	const authTime =
+		verificationValue.authTime != null
+			? new Date(verificationValue.authTime)
+			: new Date(session.createdAt);
+
 	return createUserTokens(
 		ctx,
 		opts,
@@ -751,6 +771,8 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.referenceId,
 		session.id,
 		verificationValue.query?.nonce,
+		undefined,
+		authTime,
 	);
 }
 
@@ -1040,6 +1062,9 @@ async function handleRefreshTokenGrant(
 		});
 	}
 
+	const authTime =
+		refreshToken.authTime != null ? new Date(refreshToken.authTime) : undefined;
+
 	// Generate new tokens
 	return createUserTokens(
 		ctx,
@@ -1053,5 +1078,6 @@ async function handleRefreshTokenGrant(
 		{
 			refreshToken,
 		},
+		authTime,
 	);
 }
