@@ -310,6 +310,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 						if (trustId) {
 							await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 								trustId,
+								"trust-device",
 							);
 						}
 						expireCookie(ctx, disableTrustCookie);
@@ -367,6 +368,7 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 									const verificationRecord =
 										await ctx.context.internalAdapter.findVerificationValue(
 											trustIdentifier,
+											"trust-device",
 										);
 									if (
 										verificationRecord &&
@@ -375,8 +377,9 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 									) {
 										await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 											trustIdentifier,
+											"trust-device",
 										);
-										const newTrustIdentifier = `trust-device-${generateRandomString(32)}`;
+										const newTrustIdentifier = generateRandomString(32);
 										const newToken = await createHMAC(
 											"SHA-256",
 											"base64urlnopad",
@@ -384,13 +387,16 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 											ctx.context.secret,
 											`${data.user.id}!${newTrustIdentifier}`,
 										);
-										await ctx.context.internalAdapter.createVerificationValue({
-											value: data.user.id,
-											identifier: newTrustIdentifier,
-											expiresAt: new Date(
-												Date.now() + trustDeviceMaxAge * 1000,
-											),
-										});
+										await ctx.context.internalAdapter.createVerificationValue(
+											{
+												value: data.user.id,
+												identifier: newTrustIdentifier,
+												expiresAt: new Date(
+													Date.now() + trustDeviceMaxAge * 1000,
+												),
+											},
+											"trust-device",
+										);
 										const newTrustDeviceCookie = ctx.context.createAuthCookie(
 											TRUST_DEVICE_COOKIE_NAME,
 											{
@@ -422,12 +428,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 								maxAge,
 							},
 						);
-						const identifier = `2fa-${generateRandomString(20)}`;
-						await ctx.context.internalAdapter.createVerificationValue({
-							value: data.user.id,
-							identifier,
-							expiresAt: new Date(Date.now() + maxAge * 1000),
-						});
+						const identifier = generateRandomString(20);
+						await ctx.context.internalAdapter.createVerificationValue(
+							{
+								value: data.user.id,
+								identifier,
+								expiresAt: new Date(Date.now() + maxAge * 1000),
+							},
+							"2fa",
+						);
 						await ctx.setSignedCookie(
 							twoFactorCookie.name,
 							identifier,

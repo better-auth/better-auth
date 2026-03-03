@@ -509,6 +509,7 @@ async function checkVerificationValue(
 ) {
 	const verification = await ctx.context.internalAdapter.findVerificationValue(
 		await storeToken(opts.storeTokens, code, "authorization_code"),
+		"oauth-authorization-code",
 	);
 	const verificationValue: VerificationValue = verification
 		? JSON.parse(verification?.value)
@@ -524,6 +525,7 @@ async function checkVerificationValue(
 	// Delete used code
 	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 		await storeToken(opts.storeTokens, code, "authorization_code"),
+		"oauth-authorization-code",
 	);
 
 	// Check verification

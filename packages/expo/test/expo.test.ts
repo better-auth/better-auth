@@ -118,7 +118,10 @@ describe("expo", async () => {
 		if (!stateId) {
 			throw new Error("State ID not found");
 		}
-		const state = await ctx.internalAdapter.findVerificationValue(stateId);
+		const state = await ctx.internalAdapter.findVerificationValue(
+			stateId,
+			"state",
+		);
 		const callbackURL = JSON.parse(state?.value || "{}").callbackURL;
 		expect(callbackURL).toBe("better-auth:///dashboard");
 		expect(res).toMatchObject({

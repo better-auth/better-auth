@@ -1032,13 +1032,15 @@ export const createInternalAdapter = (
 		createVerificationValue: async (
 			data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 				Partial<Verification>,
+			namespace: string,
 		) => {
+			const prefixedIdentifier = `${namespace}:${data.identifier}`;
 			const storageOption = getStorageOption(
-				data.identifier,
+				prefixedIdentifier,
 				options.verification?.storeIdentifier,
 			);
 			const storedIdentifier = await processIdentifier(
-				data.identifier,
+				prefixedIdentifier,
 				storageOption,
 			);
 
@@ -1070,13 +1072,14 @@ export const createInternalAdapter = (
 			);
 			return verification as Verification;
 		},
-		findVerificationValue: async (identifier: string) => {
+		findVerificationValue: async (identifier: string, namespace: string) => {
+			const prefixedIdentifier = `${namespace}:${identifier}`;
 			const storageOption = getStorageOption(
-				identifier,
+				prefixedIdentifier,
 				options.verification?.storeIdentifier,
 			);
 			const storedIdentifier = await processIdentifier(
-				identifier,
+				prefixedIdentifier,
 				storageOption,
 			);
 
@@ -1092,7 +1095,7 @@ export const createInternalAdapter = (
 				}
 				if (storageOption && storageOption !== "plain") {
 					const plainCached = await secondaryStorage.get(
-						`verification:${identifier}`,
+						`verification:${prefixedIdentifier}`,
 					);
 					if (plainCached) {
 						const parsed = safeJSONParse<Verification>(plainCached);
@@ -1120,7 +1123,7 @@ export const createInternalAdapter = (
 			let verification = await findByIdentifier(storedIdentifier);
 
 			if (!verification.length && storageOption && storageOption !== "plain") {
-				verification = await findByIdentifier(identifier);
+				verification = await findByIdentifier(prefixedIdentifier);
 			}
 
 			if (!options.verification?.disableCleanup) {
@@ -1139,13 +1142,17 @@ export const createInternalAdapter = (
 
 			return (verification[0] as Verification) || null;
 		},
-		deleteVerificationByIdentifier: async (identifier: string) => {
+		deleteVerificationByIdentifier: async (
+			identifier: string,
+			namespace: string,
+		) => {
+			const prefixedIdentifier = `${namespace}:${identifier}`;
 			const storageOption = getStorageOption(
-				identifier,
+				prefixedIdentifier,
 				options.verification?.storeIdentifier,
 			);
 			const storedIdentifier = await processIdentifier(
-				identifier,
+				prefixedIdentifier,
 				storageOption,
 			);
 
@@ -1164,15 +1171,30 @@ export const createInternalAdapter = (
 		updateVerificationByIdentifier: async (
 			identifier: string,
 			data: Partial<Verification>,
+			namespace: string,
 		) => {
+			const prefixedIdentifier = `${namespace}:${identifier}`;
 			const storageOption = getStorageOption(
-				identifier,
+				prefixedIdentifier,
 				options.verification?.storeIdentifier,
 			);
 			const storedIdentifier = await processIdentifier(
-				identifier,
+				prefixedIdentifier,
 				storageOption,
 			);
+
+			const processedData = data.identifier
+				? {
+						...data,
+						identifier: await processIdentifier(
+							`${namespace}:${data.identifier}`,
+							getStorageOption(
+								`${namespace}:${data.identifier}`,
+								options.verification?.storeIdentifier,
+							),
+						),
+					}
+				: data;
 
 			if (secondaryStorage) {
 				const cached = await secondaryStorage.get(
@@ -1181,7 +1203,7 @@ export const createInternalAdapter = (
 				if (cached) {
 					const parsed = safeJSONParse<Verification>(cached);
 					if (parsed) {
-						const updated = { ...parsed, ...data };
+						const updated = { ...parsed, ...processedData };
 						const expiresAt = updated.expiresAt ?? parsed.expiresAt;
 						const ttl = getTTLSeconds(
 							expiresAt instanceof Date ? expiresAt : new Date(expiresAt),
@@ -1202,14 +1224,14 @@ export const createInternalAdapter = (
 
 			if (!secondaryStorage || options.verification?.storeInDatabase) {
 				const verification = await updateWithHooks<Verification>(
-					data,
+					processedData,
 					[{ field: "identifier", value: storedIdentifier }],
 					"verification",
 					undefined,
 				);
 				return verification;
 			}
-			return data as Verification;
+			return processedData as Verification;
 		},
 	};
 };

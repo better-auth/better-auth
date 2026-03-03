@@ -200,70 +200,95 @@ describe("internal adapter test", async () => {
 	});
 
 	it("should delete expired verification values on find", async () => {
-		await internalAdapter.createVerificationValue({
-			identifier: `test-id-1`,
-			value: "test-id-1",
-			expiresAt: new Date(Date.now() - 1000),
-		});
+		await internalAdapter.createVerificationValue(
+			{
+				identifier: `test-id-1`,
+				value: "test-id-1",
+				expiresAt: new Date(Date.now() - 1000),
+			},
+			"test",
+		);
 		expect(hookVerificationCreateBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
 
-		const value = await internalAdapter.findVerificationValue("test-id-1");
+		const value = await internalAdapter.findVerificationValue(
+			"test-id-1",
+			"test",
+		);
 		expect(value).toMatchObject({
-			identifier: "test-id-1",
+			identifier: "test:test-id-1",
 		});
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
-		const value2 = await internalAdapter.findVerificationValue("test-id-1");
+		const value2 = await internalAdapter.findVerificationValue(
+			"test-id-1",
+			"test",
+		);
 		expect(value2).toBeNull();
-		await internalAdapter.createVerificationValue({
-			identifier: `test-id-1`,
-			value: "test-id-1",
-			expiresAt: new Date(Date.now() + 1000),
-		});
-		const value3 = await internalAdapter.findVerificationValue("test-id-1");
+		await internalAdapter.createVerificationValue(
+			{
+				identifier: `test-id-1`,
+				value: "test-id-1",
+				expiresAt: new Date(Date.now() + 1000),
+			},
+			"test",
+		);
+		const value3 = await internalAdapter.findVerificationValue(
+			"test-id-1",
+			"test",
+		);
 		expect(value3).toMatchObject({
-			identifier: "test-id-1",
+			identifier: "test:test-id-1",
 		});
-		const value4 = await internalAdapter.findVerificationValue("test-id-1");
+		const value4 = await internalAdapter.findVerificationValue(
+			"test-id-1",
+			"test",
+		);
 		expect(value4).toMatchObject({
-			identifier: "test-id-1",
+			identifier: "test:test-id-1",
 		});
 	});
 
 	it("should delete verification by value with hooks", async () => {
-		await internalAdapter.createVerificationValue({
-			identifier: `test-id-1`,
-			value: "test-id-1",
-			expiresAt: new Date(Date.now() + 1000),
-		});
+		await internalAdapter.createVerificationValue(
+			{
+				identifier: `test-id-1`,
+				value: "test-id-1",
+				expiresAt: new Date(Date.now() + 1000),
+			},
+			"test",
+		);
 
-		await internalAdapter.deleteVerificationByIdentifier("test-id-1");
+		await internalAdapter.deleteVerificationByIdentifier("test-id-1", "test");
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
 	it("should delete verification by identifier with hooks", async () => {
-		const verification = await internalAdapter.createVerificationValue({
-			identifier: `test-id-1`,
-			value: "test-id-1",
-			expiresAt: new Date(Date.now() + 1000),
-		});
-
-		await internalAdapter.deleteVerificationByIdentifier(
-			verification.identifier,
+		await internalAdapter.createVerificationValue(
+			{
+				identifier: `test-id-1`,
+				value: "test-id-1",
+				expiresAt: new Date(Date.now() + 1000),
+			},
+			"test",
 		);
+
+		await internalAdapter.deleteVerificationByIdentifier("test-id-1", "test");
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
 	it("should not call adapter.delete for missing verification record (prevents Prisma P2025)", async () => {
-		const verification = await internalAdapter.createVerificationValue({
-			identifier: "missing-entity-test",
-			value: "test-value",
-			expiresAt: new Date(Date.now() + 60000),
-		});
+		const verification = await internalAdapter.createVerificationValue(
+			{
+				identifier: "missing-entity-test",
+				value: "test-value",
+				expiresAt: new Date(Date.now() + 60000),
+			},
+			"test",
+		);
 
 		// Remove the DB record so the entity no longer exists
 		await authContext.adapter.deleteMany({
@@ -273,7 +298,10 @@ describe("internal adapter test", async () => {
 
 		const deleteSpy = vi.spyOn(authContext.adapter, "delete");
 
-		await internalAdapter.deleteVerificationByIdentifier("missing-entity-test");
+		await internalAdapter.deleteVerificationByIdentifier(
+			"missing-entity-test",
+			"test",
+		);
 
 		// adapter.delete should NOT have been called because
 		// deleteWithHooks skips deletion when the entity is not found
@@ -297,28 +325,34 @@ describe("internal adapter test", async () => {
 			const hashedCtx = await init(hashedOpts);
 			const hashedAdapter = hashedCtx.internalAdapter;
 
-			const verification = await hashedAdapter.createVerificationValue({
-				identifier: "reset-password:my-token-123",
-				value: "user-id-123",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			const verification = await hashedAdapter.createVerificationValue(
+				{
+					identifier: "my-token-123",
+					value: "user-id-123",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"reset-password",
+			);
 
 			// Stored identifier should be hashed (not equal to original)
 			expect(verification.identifier).not.toBe("reset-password:my-token-123");
 
 			// Should be able to find by original identifier
 			const found = await hashedAdapter.findVerificationValue(
-				"reset-password:my-token-123",
+				"my-token-123",
+				"reset-password",
 			);
 			expect(found).toBeDefined();
 			expect(found?.value).toBe("user-id-123");
 
 			// Should be able to delete by original identifier
 			await hashedAdapter.deleteVerificationByIdentifier(
-				"reset-password:my-token-123",
+				"my-token-123",
+				"reset-password",
 			);
 			const deleted = await hashedAdapter.findVerificationValue(
-				"reset-password:my-token-123",
+				"my-token-123",
+				"reset-password",
 			);
 			expect(deleted).toBeNull();
 		});
@@ -341,21 +375,27 @@ describe("internal adapter test", async () => {
 			const overrideAdapter = overrideCtx.internalAdapter;
 
 			// reset-password should be hashed
-			const hashedVerification = await overrideAdapter.createVerificationValue({
-				identifier: "reset-password:token-abc",
-				value: "user-1",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			const hashedVerification = await overrideAdapter.createVerificationValue(
+				{
+					identifier: "token-abc",
+					value: "user-1",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"reset-password",
+			);
 			expect(hashedVerification.identifier).not.toBe(
 				"reset-password:token-abc",
 			);
 
 			// other identifiers should be plain
-			const plainVerification = await overrideAdapter.createVerificationValue({
-				identifier: "magic-link:token-xyz",
-				value: "user-2",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			const plainVerification = await overrideAdapter.createVerificationValue(
+				{
+					identifier: "token-xyz",
+					value: "user-2",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"magic-link",
+			);
 			expect(plainVerification.identifier).toBe("magic-link:token-xyz");
 		});
 
@@ -370,11 +410,14 @@ describe("internal adapter test", async () => {
 
 			(await getMigrations(plainOpts)).runMigrations();
 			const plainCtx = await init(plainOpts);
-			await plainCtx.internalAdapter.createVerificationValue({
-				identifier: "old-token:abc123",
-				value: "old-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await plainCtx.internalAdapter.createVerificationValue(
+				{
+					identifier: "old-token:abc123",
+					value: "old-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
 			// Now switch to hashed storage (simulating config change)
 			const hashedOpts = {
@@ -385,10 +428,10 @@ describe("internal adapter test", async () => {
 			const hashedCtx = await init(hashedOpts);
 
 			// Should still find old plain token via fallback
-			const found =
-				await hashedCtx.internalAdapter.findVerificationValue(
-					"old-token:abc123",
-				);
+			const found = await hashedCtx.internalAdapter.findVerificationValue(
+				"old-token:abc123",
+				"test",
+			);
 			expect(found).toBeDefined();
 			expect(found?.value).toBe("old-value");
 		});
@@ -1177,11 +1220,14 @@ describe("internal adapter test", async () => {
 			(await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
-			const verification = await ctx.internalAdapter.createVerificationValue({
-				identifier: "test-verification",
-				value: "test-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			const verification = await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "test-verification",
+					value: "test-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
 			expect(dataMap.has(`verification:${verification.identifier}`)).toBe(true);
 			expect(ttlMap.has(`verification:${verification.identifier}`)).toBe(true);
@@ -1198,16 +1244,21 @@ describe("internal adapter test", async () => {
 			(await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "find-test",
-				value: "find-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "find-test",
+					value: "find-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			const found =
-				await ctx.internalAdapter.findVerificationValue("find-test");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"find-test",
+				"test",
+			);
 			expect(found).not.toBeNull();
-			expect(found?.identifier).toBe("find-test");
+			expect(found?.identifier).toBe("test:find-test");
 			expect(found?.value).toBe("find-value");
 		});
 
@@ -1222,17 +1273,21 @@ describe("internal adapter test", async () => {
 			(await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "secondary-only-test",
-				value: "test-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "secondary-only-test",
+					value: "test-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			expect(dataMap.has("verification:secondary-only-test")).toBe(true);
+			expect(dataMap.has("verification:test:secondary-only-test")).toBe(true);
 
 			dataMap.clear();
 			const found = await ctx.internalAdapter.findVerificationValue(
 				"secondary-only-test",
+				"test",
 			);
 			expect(found).toBeNull(); // Proves DB was NOT used
 		});
@@ -1248,17 +1303,23 @@ describe("internal adapter test", async () => {
 			(await getMigrations(secondaryOnlyOpts)).runMigrations();
 			const ctx = await init(secondaryOnlyOpts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "delete-test",
-				value: "delete-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "delete-test",
+					value: "delete-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			expect(dataMap.has("verification:delete-test")).toBe(true);
+			expect(dataMap.has("verification:test:delete-test")).toBe(true);
 
-			await ctx.internalAdapter.deleteVerificationByIdentifier("delete-test");
+			await ctx.internalAdapter.deleteVerificationByIdentifier(
+				"delete-test",
+				"test",
+			);
 
-			expect(dataMap.has("verification:delete-test")).toBe(false);
+			expect(dataMap.has("verification:test:delete-test")).toBe(false);
 		});
 
 		it("should store in both when storeInDatabase is true", async () => {
@@ -1275,17 +1336,22 @@ describe("internal adapter test", async () => {
 			(await getMigrations(dualStorageOpts)).runMigrations();
 			const ctx = await init(dualStorageOpts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "both-test",
-				value: "both-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "both-test",
+					value: "both-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			expect(dataMap.has("verification:both-test")).toBe(true);
+			expect(dataMap.has("verification:test:both-test")).toBe(true);
 
 			dataMap.clear();
-			const found =
-				await ctx.internalAdapter.findVerificationValue("both-test");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"both-test",
+				"test",
+			);
 			expect(found).not.toBeNull();
 			expect(found?.value).toBe("both-value");
 		});
@@ -1304,16 +1370,21 @@ describe("internal adapter test", async () => {
 			(await getMigrations(dualStorageOpts)).runMigrations();
 			const ctx = await init(dualStorageOpts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "fallback-test",
-				value: "fallback-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "fallback-test",
+					value: "fallback-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
 			dataMap.clear();
 
-			const found =
-				await ctx.internalAdapter.findVerificationValue("fallback-test");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"fallback-test",
+				"test",
+			);
 			expect(found).not.toBeNull();
 			expect(found?.value).toBe("fallback-value");
 		});
@@ -1332,13 +1403,16 @@ describe("internal adapter test", async () => {
 			const expiresIn = 300000; // 5 minutes in ms
 			const expiresAt = new Date(Date.now() + expiresIn);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "ttl-test",
-				value: "ttl-value",
-				expiresAt,
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "ttl-test",
+					value: "ttl-value",
+					expiresAt,
+				},
+				"test",
+			);
 
-			const ttl = ttlMap.get("verification:ttl-test");
+			const ttl = ttlMap.get("verification:test:ttl-test");
 			expect(ttl).toBeDefined();
 			expect(ttl).toBeGreaterThanOrEqual(298);
 			expect(ttl).toBeLessThanOrEqual(300);
@@ -1385,14 +1459,19 @@ describe("internal adapter test", async () => {
 			(await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "date-test",
-				value: "test-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "date-test",
+					value: "test-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			const found =
-				await ctx.internalAdapter.findVerificationValue("date-test");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"date-test",
+				"test",
+			);
 			expect(found).not.toBeNull();
 			expect(found!.expiresAt).toBeInstanceOf(Date);
 			expect(found!.createdAt).toBeInstanceOf(Date);
@@ -1410,14 +1489,19 @@ describe("internal adapter test", async () => {
 			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "expiry-check",
-				value: "test-value",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "expiry-check",
+					value: "test-value",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			const found =
-				await ctx.internalAdapter.findVerificationValue("expiry-check");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"expiry-check",
+				"test",
+			);
 			expect(found).not.toBeNull();
 			// This comparison would silently fail if expiresAt were a string
 			// because string < Date coerces to NaN, making it always false
@@ -1437,23 +1521,30 @@ describe("internal adapter test", async () => {
 			const ctx = await init(opts);
 
 			const expiresAt = new Date(Date.now() + 60000);
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "multi-read-test",
-				value: "test-value",
-				expiresAt,
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "multi-read-test",
+					value: "test-value",
+					expiresAt,
+				},
+				"test",
+			);
 
 			// First read: safeJSONParse receives pre-parsed object from storage
-			const first =
-				await ctx.internalAdapter.findVerificationValue("multi-read-test");
+			const first = await ctx.internalAdapter.findVerificationValue(
+				"multi-read-test",
+				"test",
+			);
 			expect(first).not.toBeNull();
 			expect(first!.expiresAt).toBeInstanceOf(Date);
 			expect(first!.createdAt).toBeInstanceOf(Date);
 			expect(first!.updatedAt).toBeInstanceOf(Date);
 
 			// Second read: verify consistency (the stored object wasn't mutated)
-			const second =
-				await ctx.internalAdapter.findVerificationValue("multi-read-test");
+			const second = await ctx.internalAdapter.findVerificationValue(
+				"multi-read-test",
+				"test",
+			);
 			expect(second).not.toBeNull();
 			expect(second!.expiresAt).toBeInstanceOf(Date);
 			expect(second!.expiresAt.getTime()).toBe(first!.expiresAt.getTime());
@@ -1470,17 +1561,22 @@ describe("internal adapter test", async () => {
 			await (await getMigrations(opts)).runMigrations();
 			const ctx = await init(opts);
 
-			await ctx.internalAdapter.createVerificationValue({
-				identifier: "string-field-test",
-				value: "my-token-value-123",
-				expiresAt: new Date(Date.now() + 60000),
-			});
+			await ctx.internalAdapter.createVerificationValue(
+				{
+					identifier: "string-field-test",
+					value: "my-token-value-123",
+					expiresAt: new Date(Date.now() + 60000),
+				},
+				"test",
+			);
 
-			const found =
-				await ctx.internalAdapter.findVerificationValue("string-field-test");
+			const found = await ctx.internalAdapter.findVerificationValue(
+				"string-field-test",
+				"test",
+			);
 			expect(found).not.toBeNull();
 			// Non-date strings must NOT be converted
-			expect(found!.identifier).toBe("string-field-test");
+			expect(found!.identifier).toBe("test:string-field-test");
 			expect(typeof found!.identifier).toBe("string");
 			expect(found!.value).toBe("my-token-value-123");
 			expect(typeof found!.value).toBe("string");

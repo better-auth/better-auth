@@ -927,7 +927,12 @@ describe("trust device server-side validation", async () => {
 			expiresAt: Date;
 		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier! }],
+			where: [
+				{
+					field: "identifier",
+					value: `trust-device:${trustIdentifier!}`,
+				},
+			],
 		});
 		expect(verificationRecord).toBeDefined();
 
@@ -1239,7 +1244,12 @@ describe("trustDeviceMaxAge", async () => {
 			expiresAt: Date;
 		}>({
 			model: "verification",
-			where: [{ field: "identifier", value: trustIdentifier! }],
+			where: [
+				{
+					field: "identifier",
+					value: `trust-device:${trustIdentifier!}`,
+				},
+			],
 		});
 		expect(verificationRecord).toBeDefined();
 
