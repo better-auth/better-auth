@@ -13,10 +13,13 @@ import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 export async function runPluginInit(context: AuthContext) {
 	let options = context.options;
 	const plugins = options.plugins || [];
-	const dbHooks: BetterAuthOptions["databaseHooks"][] = [];
 	const pluginTrustedOrigins: NonNullable<
 		BetterAuthOptions["trustedOrigins"]
 	>[] = [];
+	const dbHooks: {
+		source: string;
+		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
+	}[] = [];
 	for (const plugin of plugins) {
 		if (plugin.init) {
 			const initPromise = plugin.init(context);
@@ -30,7 +33,10 @@ export async function runPluginInit(context: AuthContext) {
 				if (result.options) {
 					const { databaseHooks, trustedOrigins, ...restOpts } = result.options;
 					if (databaseHooks) {
-						dbHooks.push(databaseHooks);
+						dbHooks.push({
+							source: `plugin:${plugin.id}`,
+							hooks: databaseHooks,
+						});
 					}
 					if (trustedOrigins) {
 						pluginTrustedOrigins.push(trustedOrigins);
@@ -66,12 +72,16 @@ export async function runPluginInit(context: AuthContext) {
 			options.trustedOrigins = staticOrigins;
 		}
 	}
+
 	// Add the global database hooks last
-	dbHooks.push(options.databaseHooks);
+	if (options.databaseHooks) {
+		dbHooks.push({ source: "user", hooks: options.databaseHooks });
+	}
+
 	context.internalAdapter = createInternalAdapter(context.adapter, {
 		options,
 		logger: context.logger,
-		hooks: dbHooks.filter((u) => u !== undefined),
+		hooks: dbHooks,
 		generateId: context.generateId,
 	});
 	context.options = options;

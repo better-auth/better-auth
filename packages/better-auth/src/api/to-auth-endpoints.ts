@@ -7,6 +7,13 @@ import {
 } from "@better-auth/core/context";
 import { shouldPublishLog } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
+import {
+	ATTR_CONTEXT,
+	ATTR_HOOK_TYPE,
+	ATTR_HTTP_ROUTE,
+	ATTR_OPERATION_ID,
+	withSpan,
+} from "@better-auth/core/instrumentation";
 import type {
 	Endpoint,
 	EndpointContext,
@@ -59,6 +66,15 @@ const hooksSourceWeakMap = new WeakMap<
 	`user` | `plugin:${string}`
 >();
 
+function getOperationId(endpoint: Endpoint | undefined, key: string): string {
+	if (!endpoint?.options) return key;
+	const opts = endpoint.options as {
+		operationId?: string;
+		metadata?: { openapi?: { operationId?: string } };
+	};
+	return opts.operationId ?? opts.metadata?.openapi?.operationId ?? key;
+}
+
 type UserInputContext = Partial<
 	InputContext<string, any, any, any, any, any> &
 		EndpointContext<string, any, any, any, any, any, any, any>
@@ -81,8 +97,18 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 
 	for (const [key, endpoint] of Object.entries(endpoints)) {
 		api[key] = async (context?: UserInputContext) => {
+			const operationId = getOperationId(endpoint, key);
+			const endpointMethod = endpoint?.options?.method;
+			const defaultMethod = Array.isArray(endpointMethod)
+				? endpointMethod[0]
+				: endpointMethod;
+
 			const run = async () => {
 				const authContext = await ctx;
+				const methodName =
+					context?.method ?? context?.request?.method ?? defaultMethod ?? "?";
+				const pathName = context?.path ?? endpoint.path ?? "/:virtual";
+
 				let internalContext: InternalContext = {
 					...context,
 					context: {
@@ -94,117 +120,144 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 					path: endpoint.path,
 					headers: context?.headers ? new Headers(context?.headers) : undefined,
 				};
-				return runWithEndpointContext(internalContext, async () => {
-					const { beforeHooks, afterHooks } = getHooks(authContext);
-					const before = await runBeforeHooks(internalContext, beforeHooks);
-					/**
-					 * If `before.context` is returned, it should
-					 * get merged with the original context
-					 */
-					if (
-						"context" in before &&
-						before.context &&
-						typeof before.context === "object"
-					) {
-						const { headers, ...rest } = before.context as {
-							headers: Headers;
-						};
-						/**
-						 * Headers should be merged differently
-						 * so the hook doesn't override the whole
-						 * header
-						 */
-						if (headers) {
-							headers.forEach((value, key) => {
-								(internalContext.headers as Headers).set(key, value);
-							});
-						}
-						internalContext = defuReplaceArrays(rest, internalContext);
-					} else if (before) {
-						/* Return before hook response if it's anything other than a context return */
-						return context?.asResponse
-							? toResponse(before, {
-									headers: context?.headers,
-								})
-							: context?.returnHeaders
-								? {
-										headers: context?.headers,
-										response: before,
-									}
-								: before;
-					}
-
-					internalContext.asResponse = false;
-					internalContext.returnHeaders = true;
-					internalContext.returnStatus = true;
-					const result = (await runWithEndpointContext(internalContext, () =>
-						(endpoint as any)(internalContext as any),
-					).catch((e: any) => {
-						if (isAPIError(e)) {
+				return withSpan(
+					`${methodName} ${pathName}`,
+					{
+						[ATTR_HTTP_ROUTE]: pathName,
+						[ATTR_OPERATION_ID]: operationId,
+					},
+					async () =>
+						runWithEndpointContext(internalContext, async () => {
+							const { beforeHooks, afterHooks } = getHooks(authContext);
+							const before = await runBeforeHooks(
+								internalContext,
+								beforeHooks,
+								endpoint,
+								operationId,
+							);
 							/**
-							 * API Errors from response are caught
-							 * and returned to hooks
+							 * If `before.context` is returned, it should
+							 * get merged with the original context
 							 */
-							return {
-								response: e,
-								status: e.statusCode,
-								headers: e.headers ? new Headers(e.headers) : null,
+							if (
+								"context" in before &&
+								before.context &&
+								typeof before.context === "object"
+							) {
+								const { headers, ...rest } = before.context as {
+									headers: Headers;
+								};
+								/**
+								 * Headers should be merged differently
+								 * so the hook doesn't override the whole
+								 * header
+								 */
+								if (headers) {
+									headers.forEach((value, key) => {
+										(internalContext.headers as Headers).set(key, value);
+									});
+								}
+								internalContext = defuReplaceArrays(rest, internalContext);
+							} else if (before) {
+								/* Return before hook response if it's anything other than a context return */
+								return context?.asResponse
+									? toResponse(before, {
+											headers: context?.headers,
+										})
+									: context?.returnHeaders
+										? {
+												headers: context?.headers,
+												response: before,
+											}
+										: before;
+							}
+
+							internalContext.asResponse = false;
+							internalContext.returnHeaders = true;
+							internalContext.returnStatus = true;
+							const result = (await runWithEndpointContext(
+								internalContext,
+								() =>
+									withSpan(
+										`handler ${pathName}`,
+										{
+											[ATTR_HTTP_ROUTE]: pathName,
+											[ATTR_OPERATION_ID]: operationId,
+										},
+										() => (endpoint as any)(internalContext as any),
+									),
+							).catch((e: any) => {
+								if (isAPIError(e)) {
+									/**
+									 * API Errors from response are caught
+									 * and returned to hooks
+									 */
+									return {
+										response: e,
+										status: e.statusCode,
+										headers: e.headers ? new Headers(e.headers) : null,
+									};
+								}
+								throw e;
+							})) as {
+								headers: Headers;
+								response: any;
+								status: number;
 							};
-						}
-						throw e;
-					})) as {
-						headers: Headers;
-						response: any;
-						status: number;
-					};
 
-					//if response object is returned we skip after hooks and post processing
-					if (result && result instanceof Response) {
-						return result;
-					}
+							//if response object is returned we skip after hooks and post processing
+							if (result && result instanceof Response) {
+								return result;
+							}
 
-					internalContext.context.returned = result.response;
-					internalContext.context.responseHeaders = result.headers;
+							internalContext.context.returned = result.response;
+							internalContext.context.responseHeaders = result.headers;
 
-					const after = await runAfterHooks(internalContext, afterHooks);
+							const after = await runAfterHooks(
+								internalContext,
+								afterHooks,
+								endpoint,
+								operationId,
+							);
 
-					if (after.response) {
-						result.response = after.response;
-					}
+							if (after.response) {
+								result.response = after.response;
+							}
 
-					if (
-						isAPIError(result.response) &&
-						shouldPublishLog(authContext.logger.level, "debug")
-					) {
-						// inherit stack from errorStack if debug mode is enabled
-						result.response.stack = result.response.errorStack;
-					}
+							if (
+								isAPIError(result.response) &&
+								shouldPublishLog(authContext.logger.level, "debug")
+							) {
+								// inherit stack from errorStack if debug mode is enabled
+								result.response.stack = result.response.errorStack;
+							}
 
-					if (isAPIError(result.response) && !context?.asResponse) {
-						throw result.response;
-					}
+							if (isAPIError(result.response) && !context?.asResponse) {
+								throw result.response;
+							}
 
-					const response = context?.asResponse
-						? toResponse(result.response, {
-								headers: result.headers,
-								status: result.status,
-							})
-						: context?.returnHeaders
-							? context?.returnStatus
-								? {
+							const response = context?.asResponse
+								? toResponse(result.response, {
 										headers: result.headers,
-										response: result.response,
 										status: result.status,
-									}
-								: {
-										headers: result.headers,
-										response: result.response,
-									}
-							: context?.returnStatus
-								? { response: result.response, status: result.status }
-								: result.response;
-					return response;
-				});
+									})
+								: context?.returnHeaders
+									? context?.returnStatus
+										? {
+												headers: result.headers,
+												response: result.response,
+												status: result.status,
+											}
+										: {
+												headers: result.headers,
+												response: result.response,
+											}
+									: context?.returnStatus
+										? { response: result.response, status: result.status }
+										: result.response;
+							return response;
+						}),
+				);
 			};
 			if (await hasRequestState()) {
 				return run();
@@ -219,7 +272,12 @@ export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
 	return api as unknown as E;
 }
 
-async function runBeforeHooks(context: InternalContext, hooks: Hook[]) {
+async function runBeforeHooks(
+	context: InternalContext,
+	hooks: Hook[],
+	endpoint: Endpoint,
+	operationId: string,
+) {
 	let modifiedContext: Partial<InternalContext> = {};
 
 	for (const hook of hooks) {
@@ -239,21 +297,31 @@ async function runBeforeHooks(context: InternalContext, hooks: Hook[]) {
 			});
 		}
 		if (matched) {
-			const result = await hook
-				.handler({
-					...context,
-					returnHeaders: false,
-				})
-				.catch((e: unknown) => {
-					if (
-						isAPIError(e) &&
-						shouldPublishLog(context.context.logger.level, "debug")
-					) {
-						// inherit stack from errorStack if debug mode is enabled
-						e.stack = e.errorStack;
-					}
-					throw e;
-				});
+			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
+			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const result = await withSpan(
+				`hook before ${path} ${hookSource}`,
+				{
+					[ATTR_HOOK_TYPE]: "before",
+					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_CONTEXT]: hookSource,
+					[ATTR_OPERATION_ID]: operationId,
+				},
+				() =>
+					hook.handler({
+						...context,
+						returnHeaders: false,
+					}),
+			).catch((e: unknown) => {
+				if (
+					isAPIError(e) &&
+					shouldPublishLog(context.context.logger.level, "debug")
+				) {
+					// inherit stack from errorStack if debug mode is enabled
+					e.stack = e.errorStack;
+				}
+				throw e;
+			});
 			if (result && typeof result === "object") {
 				if ("context" in result && typeof result.context === "object") {
 					const { headers, ...rest } =
@@ -278,10 +346,26 @@ async function runBeforeHooks(context: InternalContext, hooks: Hook[]) {
 	return { context: modifiedContext };
 }
 
-async function runAfterHooks(context: InternalContext, hooks: Hook[]) {
+async function runAfterHooks(
+	context: InternalContext,
+	hooks: Hook[],
+	endpoint: Endpoint,
+	operationId: string,
+) {
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
-			const result = (await hook.handler(context).catch((e) => {
+			const hookSource = hooksSourceWeakMap.get(hook.handler) ?? "unknown";
+			const path = context.path ?? endpoint?.path ?? "/:virtual";
+			const result = (await withSpan(
+				`hook after ${path} ${hookSource}`,
+				{
+					[ATTR_HOOK_TYPE]: "after",
+					[ATTR_HTTP_ROUTE]: path,
+					[ATTR_CONTEXT]: hookSource,
+					[ATTR_OPERATION_ID]: operationId,
+				},
+				() => hook.handler(context),
+			).catch((e) => {
 				if (isAPIError(e)) {
 					const headers = (e as any)[kAPIErrorHeaderSymbol] as
 						| Headers
@@ -350,14 +434,18 @@ function getHooks(authContext: AuthContext) {
 			handler: afterHookHandler,
 		});
 	}
-	const pluginBeforeHooks = plugins
-		.filter((plugin) => plugin.hooks?.before)
-		.map((plugin) => plugin.hooks?.before!)
-		.flat();
-	const pluginAfterHooks = plugins
-		.filter((plugin) => plugin.hooks?.after)
-		.map((plugin) => plugin.hooks?.after!)
-		.flat();
+	const pluginBeforeHooks = plugins.flatMap((plugin) =>
+		(plugin.hooks?.before ?? []).map((h) => {
+			hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
+			return h;
+		}),
+	);
+	const pluginAfterHooks = plugins.flatMap((plugin) =>
+		(plugin.hooks?.after ?? []).map((h) => {
+			hooksSourceWeakMap.set(h.handler, `plugin:${plugin.id}`);
+			return h;
+		}),
+	);
 
 	/**
 	 * Add plugin added hooks at last
