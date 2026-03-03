@@ -27,7 +27,9 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
-				if (!endpoints.some((endpoint) => request.url.includes(endpoint)))
+				// Must be `startsWith` not `includes` otherwise it might match endpoints unintentionaly.
+				// E.g. `/sign-in/email` could match `/sign-in/email-otp`
+				if (!endpoints.some((endpoint) => request.url.startsWith(endpoint)))
 					return undefined;
 
 				if (!options.secretKey) {
