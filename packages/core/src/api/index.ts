@@ -7,6 +7,7 @@ import type {
 	Middleware,
 	ResolveBodyInput,
 	ResolveErrorInput,
+	ResolveMetaInput,
 	ResolveQueryInput,
 	StandardSchemaV1,
 } from "better-call";
@@ -112,7 +113,7 @@ export function createAuthEndpoint<
 	ResolveQueryInput<QuerySchema, Meta>,
 	any,
 	R,
-	Meta,
+	ResolveMetaInput<Meta>,
 	ResolveErrorInput<ErrorSchema, Meta>
 >;
 
@@ -158,7 +159,7 @@ export function createAuthEndpoint<
 	ResolveQueryInput<QuerySchema, Meta>,
 	any,
 	R,
-	Meta,
+	ResolveMetaInput<Meta>,
 	ResolveErrorInput<ErrorSchema, Meta>
 >;
 
