@@ -117,8 +117,8 @@ async function ensureAgentClientExists(
 			storeMethod,
 			ctx.context.secret,
 		);
-		await ctx.context.adapter
-			.create({
+		try {
+			await ctx.context.adapter.create({
 				model: modelName,
 				data: {
 					clientId: agent.clientId,
@@ -131,10 +131,21 @@ async function ensureAgentClientExists(
 					createdAt: new Date(),
 					updatedAt: new Date(),
 				},
-			})
-			.catch(() => {
-				// Already exists (race condition) — fine
 			});
+		} catch {
+			// Unique constraint violation (race condition) is expected —
+			// verify the record actually exists before caching.
+			const check = await ctx.context.adapter
+				.findOne<MinimalClient>({
+					model: modelName,
+					where: [{ field: "clientId", value: agent.clientId }],
+				})
+				.catch(() => null);
+			if (!check)
+				throw new Error(
+					`Failed to create agent client record for ${agent.clientId}`,
+				);
+		}
 	}
 
 	ensuredAgents.add(agent.clientId);
