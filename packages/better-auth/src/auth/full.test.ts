@@ -73,10 +73,10 @@ describe("auth type", () => {
 
 describe("additionalFields config typing", () => {
 	test("should reject extraneous keys in user.additionalFields", () => {
-		// @ts-expect-error - unknown key should not be allowed
 		betterAuth({
 			user: {
 				additionalFields: {
+					// @ts-expect-error - unknown key should not be allowed
 					test: {
 						type: "boolean",
 						abc: "def",
@@ -85,13 +85,43 @@ describe("additionalFields config typing", () => {
 			},
 		});
 
-		// @ts-expect-error - misspelled required should not be allowed
 		betterAuth({
 			user: {
 				additionalFields: {
+					// @ts-expect-error - misspelled required should not be allowed
 					test: {
 						type: "boolean",
 						require: true,
+					},
+				},
+			},
+		});
+	});
+
+	test("should reject extraneous keys when passed as a variable (structural strictness)", () => {
+		const badConfig = {
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean" as const,
+						abc: "def",
+					},
+				},
+			},
+		};
+
+		// @ts-expect-error - extraneous keys should fail even when structurally typed
+		betterAuth(badConfig);
+	});
+
+	test("should reject extraneous keys in session.additionalFields", () => {
+		betterAuth({
+			session: {
+				additionalFields: {
+					// @ts-expect-error - unknown key should not be allowed
+					test: {
+						type: "string",
+						abc: "def",
 					},
 				},
 			},
@@ -114,6 +144,23 @@ describe("additionalFields config typing", () => {
 
 		expectTypeOf<
 			typeof auth.$Infer.Session.user.role
+		>().toEqualTypeOf<string>();
+
+		const authWithSessionField = betterAuth({
+			session: {
+				additionalFields: {
+					deviceId: {
+						type: "string",
+						required: true,
+						input: true,
+						returned: true,
+					},
+				},
+			},
+		});
+
+		expectTypeOf<
+			typeof authWithSessionField.$Infer.Session.session.deviceId
 		>().toEqualTypeOf<string>();
 	});
 });

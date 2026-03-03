@@ -6,13 +6,15 @@ import type { StrictAdditionalFieldsOptions } from "./strict-additional-fields";
 
 export type { BetterAuthOptions };
 
+type NormalizeOptions<Options extends BetterAuthOptions> =
+	keyof Options extends never ? BetterAuthOptions : Options;
+
 /**
  * Better Auth initializer for minimal mode (without Kysely)
  */
-export function betterAuth(options: Record<string, never>): Auth;
 export function betterAuth<Options extends BetterAuthOptions>(
 	options: Options & StrictAdditionalFieldsOptions<Options>,
-): Auth<Options>;
+): Auth<NormalizeOptions<Options>>;
 export function betterAuth(options: BetterAuthOptions): Auth {
 	return createBetterAuth(options, initMinimal);
 }
