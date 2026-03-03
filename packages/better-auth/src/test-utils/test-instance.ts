@@ -8,6 +8,7 @@ import type { SuccessContext } from "@better-fetch/fetch";
 import { sql } from "kysely";
 import { afterAll } from "vitest";
 import { betterAuth } from "../auth/full";
+import type { StrictAdditionalFieldsOptions } from "../auth/strict-additional-fields";
 import { createAuthClient } from "../client";
 import { parseSetCookieHeader, setCookieToHeader } from "../cookies";
 import { getAdapter } from "../db/adapter-kysely";
@@ -21,6 +22,20 @@ const cleanupSet = new Set<Function>();
 type CurrentUserContext = {
 	headers: Headers;
 };
+
+type TestDynamicBaseURLConfig = {
+	allowedHosts: string[];
+	fallback?: string | undefined;
+	protocol?: "http" | "https" | "auto" | undefined;
+};
+
+type TestInstanceOptions<O extends Partial<BetterAuthOptions>> = Omit<
+	O,
+	"baseURL"
+> & {
+	baseURL?: O["baseURL"] | TestDynamicBaseURLConfig;
+};
+
 const currentUserContextStorage = new AsyncLocalStorage<CurrentUserContext>();
 
 afterAll(async () => {
@@ -34,7 +49,7 @@ export async function getTestInstance<
 	O extends Partial<BetterAuthOptions>,
 	C extends BetterAuthClientOptions,
 >(
-	options?: O | undefined,
+	options?: TestInstanceOptions<O> | undefined,
 	config?:
 		| {
 				clientOptions?: C;
@@ -124,12 +139,12 @@ export async function getTestInstance<
 		},
 	} satisfies BetterAuthOptions;
 
-	const auth = betterAuth({
+	const auth = betterAuth<O>({
 		baseURL: "http://localhost:" + (config?.port || 3000),
 		...opts,
 		...options,
 		plugins: [bearer(), ...(options?.plugins || [])],
-	} as unknown as O);
+	} as unknown as O & StrictAdditionalFieldsOptions<O>);
 
 	const testUser = {
 		email: "test@test.com",
@@ -141,8 +156,11 @@ export async function getTestInstance<
 		if (config?.disableTestUser) {
 			return;
 		}
-		//@ts-expect-error
-		await auth.api.signUpEmail({
+		const signUpEmail = (auth.api as Record<string, unknown>).signUpEmail;
+		if (typeof signUpEmail !== "function") {
+			throw new Error("signUpEmail endpoint is not available");
+		}
+		await signUpEmail({
 			body: testUser,
 		});
 	}

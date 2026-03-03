@@ -69,3 +69,50 @@ describe("auth-minimal", () => {
 		sqliteDB.close();
 	});
 });
+
+describe("minimal additionalFields config typing", () => {
+	it("should reject extraneous keys in user.additionalFields", () => {
+		// @ts-expect-error - unknown key should not be allowed
+		betterAuth({
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean",
+						abc: "def",
+					},
+				},
+			},
+		});
+
+		// @ts-expect-error - misspelled required should not be allowed
+		betterAuth({
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean",
+						require: true,
+					},
+				},
+			},
+		});
+	});
+
+	it("should allow valid additionalFields keys and preserve inference", () => {
+		const auth = betterAuth({
+			user: {
+				additionalFields: {
+					role: {
+						type: "string",
+						required: true,
+						input: true,
+						returned: true,
+					},
+				},
+			},
+		});
+
+		expectTypeOf<
+			typeof auth.$Infer.Session.user.role
+		>().toEqualTypeOf<string>();
+	});
+});
