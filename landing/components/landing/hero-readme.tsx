@@ -519,10 +519,10 @@ function InstallBlock() {
 										style={{ fontFamily: "var(--font-geist-pixel-square)" }}
 									>
 										<span className="text-purple-600/90 dark:text-purple-400/90">
-											{mcpCommands[0].command.split(" ")[0]}
+											npx
 										</span>{" "}
 										<span className="text-neutral-700 dark:text-neutral-300">
-											{mcpCommands[0].command.split(" ").slice(1).join(" ")}
+											auth mcp
 										</span>
 									</code>
 									<div className="relative">
