@@ -114,10 +114,16 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			}
 
 			// Determine delivery mode from client metadata
-			const clientMetadata: Record<string, unknown> =
-				typeof client.metadata === "string"
-					? JSON.parse(client.metadata)
-					: (client.metadata ?? {});
+			let clientMetadata: Record<string, unknown> = {};
+			if (typeof client.metadata === "string") {
+				try {
+					clientMetadata = JSON.parse(client.metadata);
+				} catch {
+					// Malformed metadata — treat as empty
+				}
+			} else if (client.metadata) {
+				clientMetadata = client.metadata;
+			}
 
 			let deliveryMode: CibaDeliveryMode = opts.deliveryMode;
 			let clientNotificationEndpoint: string | undefined;
@@ -175,66 +181,70 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			let user = null;
 
 			if (ctx.body.id_token_hint) {
-				// Verify the ID token and extract the subject
 				const oidcOpts = pluginContext.oidcOpts as OIDCOptions;
 				let validatedUserId: string | null = null;
 
 				try {
 					if (oidcOpts.useJWTPlugin) {
 						const jwtPlugin = ctx.context.getPlugin("jwt");
-						if (jwtPlugin?.options) {
-							const verified = await verifyJWT(
-								ctx.body.id_token_hint,
-								jwtPlugin.options,
-							);
-							if (verified?.sub) {
-								validatedUserId = verified.sub;
-							}
+						if (!jwtPlugin?.options) {
+							throw new APIError("INTERNAL_SERVER_ERROR", {
+								error: "server_error",
+								error_description:
+									"useJWTPlugin is enabled but the JWT plugin is not available",
+							});
 						}
+						// verifyJWT checks signature + expiry but validates aud
+						// against the JWT plugin's own audience (baseURL), not clientId.
+						// We check aud explicitly after signature verification.
+						const verified = await verifyJWT(
+							ctx.body.id_token_hint,
+							jwtPlugin.options,
+						);
+						if (!verified?.sub) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint does not contain a valid subject",
+							});
+						}
+						const aud =
+							typeof verified.aud === "string"
+								? verified.aud
+								: verified.aud?.[0];
+						if (aud !== credentials.clientId) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint audience does not match client_id",
+							});
+						}
+						validatedUserId = verified.sub;
 					} else {
-						// HS256 fallback — verify with the server secret
+						// HS256 path — jose validates audience + issuer natively
 						const { payload } = await jwtVerify(
 							ctx.body.id_token_hint,
 							new TextEncoder().encode(ctx.context.secret),
+							{
+								audience: credentials.clientId,
+								issuer: ctx.context.baseURL,
+							},
 						);
-						if (payload.sub) {
-							validatedUserId = payload.sub as string;
+						if (!payload.sub) {
+							throw new APIError("BAD_REQUEST", {
+								error: "invalid_request",
+								error_description:
+									"id_token_hint does not contain a valid subject",
+							});
 						}
+						validatedUserId = payload.sub as string;
 					}
-				} catch {
+				} catch (e) {
+					if (e instanceof APIError) throw e;
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
 						error_description: "id_token_hint is invalid or expired",
 					});
-				}
-
-				if (!validatedUserId) {
-					throw new APIError("BAD_REQUEST", {
-						error: "invalid_request",
-						error_description: "id_token_hint does not contain a valid subject",
-					});
-				}
-
-				// Verify the token was issued to this client
-				try {
-					const decoded = JSON.parse(
-						new TextDecoder().decode(
-							Uint8Array.from(
-								atob(ctx.body.id_token_hint.split(".")[1]!),
-								(c) => c.charCodeAt(0),
-							),
-						),
-					);
-					if (decoded.aud && decoded.aud !== credentials.clientId) {
-						throw new APIError("BAD_REQUEST", {
-							error: "invalid_request",
-							error_description:
-								"id_token_hint audience does not match client_id",
-						});
-					}
-				} catch (e) {
-					if (e instanceof APIError) throw e;
-					// If we can't decode the payload, the token was already verified above
 				}
 
 				user = await ctx.context.internalAdapter.findUserById(validatedUserId);

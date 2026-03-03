@@ -1,3 +1,4 @@
+import { decodeJwt } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from "../oidc-provider";
@@ -257,6 +258,67 @@ describe("CIBA plugin", async () => {
 				},
 			});
 		});
+
+		it("should reject missing auth_req_id", async () => {
+			await expect(
+				auth.api.oAuth2token({
+					body: {
+						grant_type: "urn:openid:params:grant-type:ciba",
+						client_id: testClientId,
+						client_secret: testClientSecret,
+					},
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+				},
+			});
+		});
+
+		it("should clean up request after tokens are issued (no double-issuance)", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaAuthorize({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			// First poll — should succeed and issue tokens
+			const tokenResponse = await auth.api.oAuth2token({
+				body: {
+					grant_type: "urn:openid:params:grant-type:ciba",
+					auth_req_id: bcResponse.auth_req_id,
+					client_id: testClientId,
+					client_secret: testClientSecret,
+				},
+			});
+			expect(tokenResponse.access_token).toBeDefined();
+
+			// Second poll — request was deleted, should fail
+			await expect(
+				auth.api.oAuth2token({
+					body: {
+						grant_type: "urn:openid:params:grant-type:ciba",
+						auth_req_id: bcResponse.auth_req_id,
+						client_id: testClientId,
+						client_secret: testClientSecret,
+					},
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_grant",
+				},
+			});
+		});
 	});
 
 	describe("verify endpoint", () => {
@@ -292,6 +354,52 @@ describe("CIBA plugin", async () => {
 					error: "invalid_request",
 				},
 			});
+		});
+
+		it("should reflect approved status after user approves", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaAuthorize({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			const verifyResponse = await auth.api.cibaVerify({
+				query: { auth_req_id: bcResponse.auth_req_id },
+			});
+			expect(verifyResponse.status).toBe("approved");
+		});
+
+		it("should reflect rejected status after user rejects", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaReject({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			const verifyResponse = await auth.api.cibaVerify({
+				query: { auth_req_id: bcResponse.auth_req_id },
+			});
+			expect(verifyResponse.status).toBe("rejected");
 		});
 	});
 
@@ -397,6 +505,78 @@ describe("CIBA plugin", async () => {
 
 			// refresh_token should be undefined when offline_access not requested
 			expect(tokenResponse.refresh_token).toBeUndefined();
+		});
+
+		it("should produce ID token with correct claims", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid profile email",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaAuthorize({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			const tokenResponse = await auth.api.oAuth2token({
+				body: {
+					grant_type: "urn:openid:params:grant-type:ciba",
+					auth_req_id: bcResponse.auth_req_id,
+					client_id: testClientId,
+					client_secret: testClientSecret,
+				},
+			});
+
+			const idToken = (tokenResponse as Record<string, unknown>)
+				.id_token as string;
+			expect(idToken).toBeDefined();
+
+			const claims = decodeJwt(idToken);
+			expect(claims.sub).toBeDefined();
+			expect(claims.aud).toBe(testClientId);
+			expect(claims.iss).toBeDefined();
+			expect(claims.iat).toBeDefined();
+			expect(claims.exp).toBeDefined();
+			expect(claims.at_hash).toBeDefined();
+			expect(claims.auth_req_id).toBe(bcResponse.auth_req_id);
+			// Profile claims
+			expect(claims.email).toBe("test@test.com");
+		});
+
+		it("should reject approve with invalid auth_req_id", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.cibaAuthorize({
+					body: { auth_req_id: "nonexistent-id" },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+				},
+			});
+		});
+
+		it("should reject reject with invalid auth_req_id", async () => {
+			const { headers } = await signInWithTestUser();
+
+			await expect(
+				auth.api.cibaReject({
+					body: { auth_req_id: "nonexistent-id" },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+				},
+			});
 		});
 
 		it("should reject approval if different user is logged in", async () => {
@@ -571,6 +751,35 @@ describe("CIBA plugin", async () => {
 			// Try to approve again
 			await expect(
 				auth.api.cibaAuthorize({
+					body: { auth_req_id: bcResponse.auth_req_id },
+					headers,
+				}),
+			).rejects.toMatchObject({
+				body: {
+					error: "invalid_request",
+				},
+			});
+		});
+
+		it("should not allow rejecting already rejected request", async () => {
+			const { headers } = await signInWithTestUser();
+
+			const bcResponse = await auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			});
+
+			await auth.api.cibaReject({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			});
+
+			await expect(
+				auth.api.cibaReject({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers,
 				}),
@@ -800,6 +1009,237 @@ describe("CIBA push delivery mode", async () => {
 	});
 });
 
+describe("CIBA request expiration", async () => {
+	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
+
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				oidcProvider({
+					loginPage: "/sign-in",
+					allowDynamicClientRegistration: true,
+				}),
+				ciba({
+					sendNotification: mockSendNotification,
+					requestLifetime: "1s",
+					pollingInterval: "0s",
+				}),
+			],
+		},
+		{
+			disableTestUser: false,
+		},
+	);
+
+	let testClientId: string;
+	let testClientSecret: string;
+
+	beforeEach(async () => {
+		mockSendNotification.mockClear();
+		const registration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "Expiry Test Client",
+			},
+		});
+		testClientId = registration.client_id;
+		testClientSecret = registration.client_secret!;
+	});
+
+	it("should reject polling for an expired request", async () => {
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		// Wait for the request to expire (1s lifetime + buffer)
+		await new Promise((resolve) => setTimeout(resolve, 1200));
+
+		// Storage layer cleans up expired records, so the token endpoint
+		// sees a missing request (invalid_grant) rather than expired_token.
+		// Both are valid CIBA spec responses for expired requests.
+		await expect(
+			auth.api.oAuth2token({
+				body: {
+					grant_type: "urn:openid:params:grant-type:ciba",
+					auth_req_id: bcResponse.auth_req_id,
+					client_id: testClientId,
+					client_secret: testClientSecret,
+				},
+			}),
+		).rejects.toBeDefined();
+	});
+
+	it("should reject verify for an expired request", async () => {
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 1200));
+
+		await expect(
+			auth.api.cibaVerify({
+				query: { auth_req_id: bcResponse.auth_req_id },
+			}),
+		).rejects.toBeDefined();
+	});
+
+	it("should reject approval of expired request", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 1200));
+
+		await expect(
+			auth.api.cibaAuthorize({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			}),
+		).rejects.toBeDefined();
+	});
+
+	it("should reject rejection of expired request", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await new Promise((resolve) => setTimeout(resolve, 1200));
+
+		await expect(
+			auth.api.cibaReject({
+				body: { auth_req_id: bcResponse.auth_req_id },
+				headers,
+			}),
+		).rejects.toBeDefined();
+	});
+});
+
+describe("CIBA push HTTPS enforcement", async () => {
+	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
+
+	const { auth } = await getTestInstance(
+		{
+			plugins: [
+				oidcProvider({
+					loginPage: "/sign-in",
+					allowDynamicClientRegistration: true,
+				}),
+				ciba({
+					sendNotification: mockSendNotification,
+				}),
+			],
+		},
+		{
+			disableTestUser: false,
+		},
+	);
+
+	it("should reject non-HTTPS notification endpoint on non-loopback host", async () => {
+		const registration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "Insecure Push Client",
+				metadata: {
+					backchannel_token_delivery_mode: "push",
+					client_notification_endpoint: "http://example.com/ciba/callback",
+				},
+			},
+		});
+
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: registration.client_id,
+					client_secret: registration.client_secret!,
+					scope: "openid",
+					login_hint: "test@test.com",
+					client_notification_token: "my-token",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+				error_description:
+					"client_notification_endpoint must use HTTPS per CIBA spec §10.3",
+			},
+		});
+	});
+
+	it("should allow HTTPS notification endpoint", async () => {
+		const registration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "Secure Push Client",
+				metadata: {
+					backchannel_token_delivery_mode: "push",
+					client_notification_endpoint: "https://example.com/ciba/callback",
+				},
+			},
+		});
+
+		const response = await auth.api.bcAuthorize({
+			body: {
+				client_id: registration.client_id,
+				client_secret: registration.client_secret!,
+				scope: "openid",
+				login_hint: "test@test.com",
+				client_notification_token: "my-token",
+			},
+		});
+
+		expect(response.auth_req_id).toBeDefined();
+	});
+
+	it("should allow HTTP on localhost (loopback exemption)", async () => {
+		const registration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "Local Push Client",
+				metadata: {
+					backchannel_token_delivery_mode: "push",
+					client_notification_endpoint: "http://localhost:9999/ciba/callback",
+				},
+			},
+		});
+
+		const response = await auth.api.bcAuthorize({
+			body: {
+				client_id: registration.client_id,
+				client_secret: registration.client_secret!,
+				scope: "openid",
+				login_hint: "test@test.com",
+				client_notification_token: "my-token",
+			},
+		});
+
+		expect(response.auth_req_id).toBeDefined();
+	});
+});
+
 describe("CIBA with sendVerificationEmail", async () => {
 	const mockSendEmail = vi.fn().mockResolvedValue(undefined);
 
@@ -954,8 +1394,9 @@ describe("CIBA with id_token_hint", async () => {
 			},
 		});
 
-		expect(tokenResponse.id_token).toBeDefined();
-		const idToken = tokenResponse.id_token!;
+		const idToken = (tokenResponse as Record<string, unknown>)
+			.id_token as string;
+		expect(idToken).toBeDefined();
 
 		// Now use id_token_hint instead of login_hint
 		const bcResponse2 = await auth.api.bcAuthorize({
@@ -976,6 +1417,60 @@ describe("CIBA with id_token_hint", async () => {
 				mockSendNotification.mock.calls.length - 1
 			]?.[0];
 		expect(lastCall.user.email).toBe("test@test.com");
+	});
+
+	it("should reject id_token_hint with wrong audience (different client)", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// Obtain an ID token issued to testClientId
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await auth.api.cibaAuthorize({
+			body: { auth_req_id: bcResponse.auth_req_id },
+			headers,
+		});
+
+		const tokenResponse = await auth.api.oAuth2token({
+			body: {
+				grant_type: "urn:openid:params:grant-type:ciba",
+				auth_req_id: bcResponse.auth_req_id,
+				client_id: testClientId,
+				client_secret: testClientSecret,
+			},
+		});
+
+		const idToken = (tokenResponse as Record<string, unknown>)
+			.id_token as string;
+
+		// Register a DIFFERENT client and try to use the first client's ID token
+		const otherRegistration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "Other Client",
+			},
+		});
+
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: otherRegistration.client_id,
+					client_secret: otherRegistration.client_secret!,
+					scope: "openid",
+					id_token_hint: idToken,
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+			},
+		});
 	});
 
 	it("should reject invalid id_token_hint", async () => {
