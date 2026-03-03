@@ -1,16 +1,14 @@
 import { createAuthEndpoint } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
+import { jwtVerify } from "jose";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api/routes/session";
 import { generateRandomString } from "../../crypto";
 import type { TimeString } from "../../utils/time";
 import { ms } from "../../utils/time";
+import { verifyJWT } from "../jwt";
 import type { OIDCOptions } from "../oidc-provider/types";
-import type { StoreClientSecretOption } from "../oidc-provider/utils";
-import {
-	parseClientCredentials,
-	verifyClientSecret,
-} from "../oidc-provider/utils";
+import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
 import { CIBA_ERROR_CODES } from "./error-codes";
 import { pushTokensToClient } from "./push-delivery";
 import {
@@ -30,14 +28,21 @@ import type {
  * Backchannel Authentication Request - Agent initiates auth request
  */
 
-const bcAuthorizeBodySchema = z.object({
-	client_id: z.string().optional(),
-	client_secret: z.string().optional(),
-	scope: z.string().default("openid"),
-	login_hint: z.string(),
-	binding_message: z.string().optional(),
-	client_notification_token: z.string().optional(),
-});
+const bcAuthorizeBodySchema = z
+	.object({
+		client_id: z.string().optional(),
+		client_secret: z.string().optional(),
+		scope: z.string().default("openid"),
+		login_hint: z.string().optional(),
+		id_token_hint: z.string().optional(),
+		binding_message: z.string().optional(),
+		client_notification_token: z.string().optional(),
+	})
+	.refine((data) => !!data.login_hint !== !!data.id_token_hint, {
+		message:
+			"Exactly one of login_hint or id_token_hint must be provided (CIBA spec §7.1)",
+		path: ["login_hint"],
+	});
 
 export const bcAuthorize = (opts: CibaInternalOptions) =>
 	createAuthEndpoint(
@@ -92,113 +97,12 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			},
 		},
 		async (ctx) => {
-			// Check that OIDC provider is enabled
-			const oidcPlugin =
-				ctx.context.getPlugin("oidc-provider") ||
-				ctx.context.getPlugin("oauth-provider");
-			if (!oidcPlugin) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					error: "server_error",
-					error_description: CIBA_ERROR_CODES.OIDC_PROVIDER_REQUIRED.message,
-				});
-			}
-			const oidcOpts = (oidcPlugin.options || {}) as OIDCOptions;
-			const isOAuthProvider = oidcPlugin.id === "oauth-provider";
-			const defaultStoreMethod = isOAuthProvider
-				? (oidcOpts as { disableJwtPlugin?: boolean }).disableJwtPlugin
-					? "encrypted"
-					: "hashed"
-				: "plain";
-			const storeMethod: StoreClientSecretOption =
-				oidcOpts.storeClientSecret ?? defaultStoreMethod;
-			const trustedClients = oidcOpts.trustedClients ?? [];
-
-			// Parse client credentials
-			const credentials = parseClientCredentials(
+			const pluginContext = getOidcPluginContext(ctx);
+			const { client, credentials } = await validateClientCredentials(
+				ctx,
 				ctx.body as Record<string, unknown>,
-				ctx.request?.headers.get("authorization") || null,
+				pluginContext,
 			);
-
-			if (!credentials) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
-
-			// Validate client (check trusted clients first, then database)
-			type MinimalClient = {
-				clientId: string;
-				clientSecret: string | null | undefined;
-				disabled?: boolean;
-				metadata?: string | Record<string, unknown> | null;
-			};
-
-			// Check trusted clients first
-			const trustedClient = trustedClients?.find(
-				(c) => c.clientId === credentials.clientId,
-			);
-			let client: MinimalClient | undefined = trustedClient
-				? {
-						clientId: trustedClient.clientId,
-						clientSecret: trustedClient.clientSecret,
-						disabled: trustedClient.disabled,
-						metadata: trustedClient.metadata,
-					}
-				: undefined;
-
-			// If not in trusted clients, check database
-			if (!client) {
-				const pluginId = oidcPlugin.id;
-				const modelName =
-					pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
-				const dbClient = await ctx.context.adapter
-					.findOne<MinimalClient>({
-						model: modelName,
-						where: [{ field: "clientId", value: credentials.clientId }],
-					})
-					.catch(() => null);
-				if (dbClient && !dbClient.disabled) {
-					client = dbClient;
-				}
-			}
-
-			if (!client) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
-
-			// Check if client is disabled (before expensive secret verification)
-			if (client.disabled) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "Client is disabled",
-				});
-			}
-
-			// Confidential clients must have a secret
-			if (!client.clientSecret) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "Client secret is required",
-				});
-			}
-
-			// Verify client secret using proper method
-			const isValidSecret = await verifyClientSecret(
-				client.clientSecret,
-				credentials.clientSecret,
-				storeMethod,
-				ctx.context.secret,
-			);
-			if (!isValidSecret) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
 
 			// Validate scope includes openid
 			const requestedScopes = ctx.body.scope.split(" ");
@@ -235,6 +139,29 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 							CIBA_ERROR_CODES.MISSING_NOTIFICATION_ENDPOINT.message,
 					});
 				}
+				// CIBA spec §10.3: notification endpoint MUST use TLS.
+				// Loopback addresses are exempt (standard for local development).
+				try {
+					const endpointUrl = new URL(clientNotificationEndpoint);
+					const isLoopback =
+						endpointUrl.hostname === "localhost" ||
+						endpointUrl.hostname === "127.0.0.1" ||
+						endpointUrl.hostname === "::1";
+					if (endpointUrl.protocol !== "https:" && !isLoopback) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description:
+								"client_notification_endpoint must use HTTPS per CIBA spec §10.3",
+						});
+					}
+				} catch (e) {
+					if (e instanceof APIError) throw e;
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description:
+							"client_notification_endpoint is not a valid URL",
+					});
+				}
 				if (!ctx.body.client_notification_token) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
@@ -244,59 +171,122 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				}
 			}
 
-			// Resolve user from login_hint
-			const loginHint = ctx.body.login_hint;
+			// Resolve user from login_hint or id_token_hint
 			let user = null;
 
-			if (opts.resolveUser) {
-				user = await opts.resolveUser(loginHint, ctx);
+			if (ctx.body.id_token_hint) {
+				// Verify the ID token and extract the subject
+				const oidcOpts = pluginContext.oidcOpts as OIDCOptions;
+				let validatedUserId: string | null = null;
+
+				try {
+					if (oidcOpts.useJWTPlugin) {
+						const jwtPlugin = ctx.context.getPlugin("jwt");
+						if (jwtPlugin?.options) {
+							const verified = await verifyJWT(
+								ctx.body.id_token_hint,
+								jwtPlugin.options,
+							);
+							if (verified?.sub) {
+								validatedUserId = verified.sub;
+							}
+						}
+					} else {
+						// HS256 fallback — verify with the server secret
+						const { payload } = await jwtVerify(
+							ctx.body.id_token_hint,
+							new TextEncoder().encode(ctx.context.secret),
+						);
+						if (payload.sub) {
+							validatedUserId = payload.sub as string;
+						}
+					}
+				} catch {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description: "id_token_hint is invalid or expired",
+					});
+				}
+
+				if (!validatedUserId) {
+					throw new APIError("BAD_REQUEST", {
+						error: "invalid_request",
+						error_description: "id_token_hint does not contain a valid subject",
+					});
+				}
+
+				// Verify the token was issued to this client
+				try {
+					const decoded = JSON.parse(
+						new TextDecoder().decode(
+							Uint8Array.from(
+								atob(ctx.body.id_token_hint.split(".")[1]!),
+								(c) => c.charCodeAt(0),
+							),
+						),
+					);
+					if (decoded.aud && decoded.aud !== credentials.clientId) {
+						throw new APIError("BAD_REQUEST", {
+							error: "invalid_request",
+							error_description:
+								"id_token_hint audience does not match client_id",
+						});
+					}
+				} catch (e) {
+					if (e instanceof APIError) throw e;
+					// If we can't decode the payload, the token was already verified above
+				}
+
+				user = await ctx.context.internalAdapter.findUserById(validatedUserId);
 			} else {
-				// Default: try email, then phone, then username
-				const result =
-					await ctx.context.internalAdapter.findUserByEmail(loginHint);
-				if (result) {
-					user = "user" in result ? result.user : result;
-				}
+				const loginHint = ctx.body.login_hint!;
 
-				let userId: string | null = null;
-
-				if (!user) {
-					// Try as phone number (if phone-number plugin is enabled)
-					try {
-						const phoneUser = await ctx.context.adapter.findOne<{
-							id: string;
-						}>({
-							model: "user",
-							where: [{ field: "phoneNumber", value: loginHint }],
-						});
-						if (phoneUser) {
-							userId = phoneUser.id;
-						}
-					} catch {
-						// Phone number field doesn't exist, skip
+				if (opts.resolveUser) {
+					user = await opts.resolveUser(loginHint, ctx);
+				} else {
+					const result =
+						await ctx.context.internalAdapter.findUserByEmail(loginHint);
+					if (result) {
+						user = "user" in result ? result.user : result;
 					}
-				}
 
-				if (!user && !userId) {
-					// Try as username (if username plugin is enabled)
-					try {
-						const usernameUser = await ctx.context.adapter.findOne<{
-							id: string;
-						}>({
-							model: "user",
-							where: [{ field: "username", value: loginHint }],
-						});
-						if (usernameUser) {
-							userId = usernameUser.id;
+					let userId: string | null = null;
+
+					if (!user) {
+						try {
+							const phoneUser = await ctx.context.adapter.findOne<{
+								id: string;
+							}>({
+								model: "user",
+								where: [{ field: "phoneNumber", value: loginHint }],
+							});
+							if (phoneUser) {
+								userId = phoneUser.id;
+							}
+						} catch {
+							// Phone number field doesn't exist, skip
 						}
-					} catch {
-						// Username field doesn't exist, skip
 					}
-				}
 
-				// If we found a user by phone/username, look up the full user object
-				if (!user && userId) {
-					user = await ctx.context.internalAdapter.findUserById(userId);
+					if (!user && !userId) {
+						try {
+							const usernameUser = await ctx.context.adapter.findOne<{
+								id: string;
+							}>({
+								model: "user",
+								where: [{ field: "username", value: loginHint }],
+							});
+							if (usernameUser) {
+								userId = usernameUser.id;
+							}
+						} catch {
+							// Username field doesn't exist, skip
+						}
+					}
+
+					if (!user && userId) {
+						user = await ctx.context.internalAdapter.findUserById(userId);
+					}
 				}
 			}
 
@@ -375,7 +365,15 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 
 /**
  * GET /ciba/verify
- * Get CIBA request details for the approval UI
+ * Get CIBA request details for the approval UI.
+ *
+ * Security note: This endpoint is intentionally unauthenticated. The
+ * auth_req_id acts as an unguessable bearer token (32 cryptographically
+ * random alphanumeric characters ≈ 190 bits of entropy). This is consistent
+ * with CIBA spec — the auth_req_id is a secret shared between the AS and
+ * the client, and this endpoint only exposes non-sensitive metadata
+ * (client_id, scope, binding_message, status). No tokens or user PII
+ * beyond what the client already knows are returned.
  */
 
 const verifyQuerySchema = z.object({
