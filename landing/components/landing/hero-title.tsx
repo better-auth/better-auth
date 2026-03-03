@@ -21,7 +21,7 @@ export function HeroTitle() {
 			initial={{ opacity: 0, y: 12 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5, ease: "easeOut" }}
-			className="relative z-[2] w-full py-8 sm:pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center h-full pointer-events-none"
+			className="relative z-[2] w-full py-16 flex flex-col justify-center h-full pointer-events-none"
 		>
 			<div className="space-y-2 sm:space-y-1">
 				<div className="flex items-center gap-1.5">
