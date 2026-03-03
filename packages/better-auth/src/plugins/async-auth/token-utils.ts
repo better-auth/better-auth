@@ -66,6 +66,8 @@ export async function generateTokensForAsyncAuthRequest(
 	const requestedScopes = asyncAuthRequest.scope.split(" ");
 	const needsRefreshToken = requestedScopes.includes("offline_access");
 
+	// DB schema requires refreshToken to be non-null, so always generate one
+	// for storage. Only expose it in the response when offline_access is requested.
 	const refreshToken = generateRandomString(32, "a-z", "A-Z", "0-9");
 	const refreshTokenExpiresAt = new Date(now + refreshTokenExpiresIn * 1000);
 

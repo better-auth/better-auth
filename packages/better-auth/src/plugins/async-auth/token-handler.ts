@@ -15,7 +15,7 @@ import {
 	updateAsyncAuthRequest,
 } from "./storage";
 import { generateTokensForAsyncAuthRequest } from "./token-utils";
-import type { AsyncAuthAgent } from "./types";
+import type { AsyncAuthInternalOptions } from "./types";
 
 const CIBA_GRANT_TYPE = "urn:openid:params:grant-type:ciba";
 const SLOW_DOWN_INTERVAL_INCREASE = 5000; // 5 seconds in ms per CIBA spec
@@ -24,7 +24,7 @@ const SLOW_DOWN_INTERVAL_INCREASE = 5000; // 5 seconds in ms per CIBA spec
  * Creates the hook handler for the CIBA grant type on /oauth2/token.
  * Intercepts token requests with grant_type=urn:openid:params:grant-type:ciba
  */
-export function createAsyncAuthTokenHandler(agents?: AsyncAuthAgent[]) {
+export function createAsyncAuthTokenHandler(opts: AsyncAuthInternalOptions) {
 	return {
 		matcher(context: { path?: string }) {
 			return context.path === "/oauth2/token";
@@ -61,7 +61,8 @@ export function createAsyncAuthTokenHandler(agents?: AsyncAuthAgent[]) {
 				ctx,
 				body,
 				pluginContext,
-				agents,
+				opts.agents,
+				opts.ensuredAgents,
 			);
 
 			// Find async auth request

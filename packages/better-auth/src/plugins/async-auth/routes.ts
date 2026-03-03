@@ -106,6 +106,7 @@ export const bcAuthorize = (opts: AsyncAuthInternalOptions) =>
 				ctx.body as Record<string, unknown>,
 				pluginContext,
 				opts.agents,
+				opts.ensuredAgents,
 			);
 
 			// Validate scope includes openid
