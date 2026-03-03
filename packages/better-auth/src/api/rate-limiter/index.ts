@@ -164,6 +164,7 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 	const path = normalizePathname(req.url, basePath);
 	let currentWindow = ctx.rateLimit.window;
 	let currentMax = ctx.rateLimit.max;
+	let currentCountOn: "all" | "error" = ctx.rateLimit.countOn ?? "all";
 	const ip = getIp(req, ctx.options);
 	if (!ip) {
 		if (!ipWarningLogged) {
@@ -207,25 +208,22 @@ async function resolveRateLimitConfig(req: Request, ctx: AuthContext) {
 		});
 		if (_path) {
 			const customRule = ctx.rateLimit.customRules[_path];
-			const resolved =
-				typeof customRule === "function"
-					? await customRule(req, {
-							window: currentWindow,
-							max: currentMax,
-						})
-					: customRule;
-			if (resolved) {
-				currentWindow = resolved.window;
-				currentMax = resolved.max;
+
+			if (customRule === false) {
+				return null;
 			}
 
-			if (resolved === false) {
-				return null;
+			if (customRule) {
+				currentWindow = customRule.window;
+				currentMax = customRule.max;
+				if (customRule.countOn) {
+					currentCountOn = customRule.countOn;
+				}
 			}
 		}
 	}
 
-	return { key, currentWindow, currentMax };
+	return { key, currentWindow, currentMax, currentCountOn };
 }
 
 export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
@@ -249,7 +247,11 @@ export async function onRequestRateLimit(req: Request, ctx: AuthContext) {
 	}
 }
 
-export async function onResponseRateLimit(req: Request, ctx: AuthContext) {
+export async function onResponseRateLimit(
+	res: Response,
+	req: Request,
+	ctx: AuthContext,
+) {
 	if (!ctx.rateLimit.enabled) {
 		return;
 	}
@@ -257,7 +259,11 @@ export async function onResponseRateLimit(req: Request, ctx: AuthContext) {
 	if (!config) {
 		return;
 	}
-	const { key, currentWindow } = config;
+	const { key, currentWindow, currentCountOn } = config;
+
+	if (currentCountOn === "error" && res.status < 400) {
+		return;
+	}
 
 	const storage = getRateLimitStorage(ctx, {
 		window: currentWindow,

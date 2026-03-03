@@ -305,7 +305,7 @@ export const router = <Option extends BetterAuthOptions>(
 			return currentRequest;
 		},
 		async onResponse(res, req) {
-			await onResponseRateLimit(req, ctx);
+			await onResponseRateLimit(res, req, ctx);
 			for (const plugin of ctx.options.plugins || []) {
 				if (plugin.onResponse) {
 					const response = await plugin.onResponse(res, ctx);

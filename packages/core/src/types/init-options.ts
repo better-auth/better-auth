@@ -117,6 +117,16 @@ export type BetterAuthRateLimitRule = {
 	 * @default 100 requests
 	 */
 	max: number;
+	/**
+	 * When to count a request against the rate limit.
+	 *
+	 * - "all" — count every request (default)
+	 * - "error" — only count requests that result in
+	 *   error responses (status >= 400)
+	 *
+	 * @default "all"
+	 */
+	countOn?: "all" | "error";
 };
 
 export type BetterAuthDBOptions<
@@ -153,17 +163,7 @@ export type BetterAuthRateLimitOptions = Optional<BetterAuthRateLimitRule> &
 		 * Custom rate limit rules to apply to
 		 * specific paths.
 		 */
-		customRules?:
-			| {
-					[key: string]:
-						| BetterAuthRateLimitRule
-						| false
-						| ((
-								request: Request,
-								currentRule: BetterAuthRateLimitRule,
-						  ) => Awaitable<false | BetterAuthRateLimitRule>);
-			  }
-			| undefined;
+		customRules?: Record<string, BetterAuthRateLimitRule | false> | undefined;
 		/**
 		 * Storage configuration
 		 *
