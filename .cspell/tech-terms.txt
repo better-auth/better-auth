@@ -41,8 +41,12 @@ ABCDEFGHJKLMNPQRSTUVWXYZ23456789
 siwx
 nacl
 setex
-kxeyPrefix
 dyld
 nsis
 ftyp
 heix
+sessionMiddleware
+SIEM
+sess
+reactivations
+whsec

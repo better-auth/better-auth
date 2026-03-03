@@ -22,6 +22,11 @@
 				"!src/adapters/**/test/auth.ts"
 			],
 			"ignoreDependencies": [
+				// adapter re-export packages (optional peer deps)
+				"@better-auth/drizzle-adapter",
+				"@better-auth/mongo-adapter",
+				"@better-auth/prisma-adapter",
+
 				// implicit adapter dependencies
 				"drizzle-kit",
 				"drizzle-orm",
@@ -147,5 +152,5 @@
 		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
 }
