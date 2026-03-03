@@ -7,6 +7,31 @@ Better Auth supports a wide range of database dialects out of the box thanks to 
 
 Any dialect supported by Kysely can be utilized with Better Auth, including capabilities for generating and migrating database schemas through the <Link href="/docs/concepts/cli">CLI</Link>.
 
+## Installation
+
+To use the Kysely adapter, you need to install the `@better-auth/kysely-adapter` package:
+
+```package-install
+@better-auth/kysely-adapter
+```
+
+## Example Usage
+
+You can use the Kysely adapter to connect to your database as follows.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth/minimal";
+import { kyselyAdapter } from "@better-auth/kysely-adapter";
+import { db } from "./database.ts";
+
+export const auth = betterAuth({
+  database: kyselyAdapter(db, { // [!code highlight]
+    type: "postgres", // [!code highlight]
+  }), // [!code highlight]
+  //... the rest of your config
+});
+```
+
 ## Core Dialects
 
 - [MySQL](/docs/adapters/mysql)
