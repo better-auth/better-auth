@@ -116,7 +116,7 @@ type createApiKey = {
     organizationId?: string = "org-id"
     /**
      * Prefix of the Api Key.
-     * Can be disabled via `disableCustomPrefix` plugin option.
+     * Requires `enableCustomPrefix: true` in the plugin options.
      */
     prefix?: string = 'project-api-key'
     /**

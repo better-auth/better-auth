@@ -1150,7 +1150,7 @@ describe("api-key", async () => {
 				},
 				headers,
 			})
-			.catch((e) => {
+			.catch((e: any) => {
 				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
@@ -1172,7 +1172,7 @@ describe("api-key", async () => {
 				},
 				headers,
 			})
-			.catch((e) => {
+			.catch((e: any) => {
 				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
@@ -1193,7 +1193,7 @@ describe("api-key", async () => {
 				},
 				headers,
 			})
-			.catch((e) => {
+			.catch((e: any) => {
 				if (isAPIError(e)) {
 					error = e;
 					expect(error?.status).toEqual("BAD_REQUEST");
@@ -1705,7 +1705,7 @@ describe("api-key", async () => {
 
 		expect(apiKeys).not.toBeNull();
 		expect(apiKeys.apiKeys.length).toBeGreaterThan(0);
-		apiKeys.apiKeys.map((apiKey) => {
+		apiKeys.apiKeys.map((apiKey: ApiKey) => {
 			if (apiKey.metadata) {
 				expect(apiKey.metadata).toBeInstanceOf(Object);
 			}
@@ -1786,9 +1786,9 @@ describe("api-key", async () => {
 			expect(page2.offset).toBe(2);
 
 			// Ensure no overlap between pages
-			const page1Ids = page1.apiKeys.map((k) => k.id);
-			const page2Ids = page2.apiKeys.map((k) => k.id);
-			const overlap = page1Ids.filter((id) => page2Ids.includes(id));
+			const page1Ids = page1.apiKeys.map((k: ApiKey) => k.id);
+			const page2Ids = page2.apiKeys.map((k: ApiKey) => k.id);
+			const overlap = page1Ids.filter((id: string) => page2Ids.includes(id));
 			expect(overlap.length).toBe(0);
 		});
 
@@ -1842,10 +1842,10 @@ describe("api-key", async () => {
 			});
 
 			// Filter to only named keys for comparison
-			const ascNamed = ascResult.apiKeys.filter((k) =>
+			const ascNamed = ascResult.apiKeys.filter((k: ApiKey) =>
 				k.name?.includes("-sort-test"),
 			);
-			const descNamed = descResult.apiKeys.filter((k) =>
+			const descNamed = descResult.apiKeys.filter((k: ApiKey) =>
 				k.name?.includes("-sort-test"),
 			);
 
@@ -2544,8 +2544,8 @@ describe("api-key", async () => {
 
 			expect(keys).not.toBeNull();
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
-			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === key1?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === key2?.id)).toBe(true);
 		});
 
 		it("should update API key in secondary storage", async () => {
@@ -2779,9 +2779,9 @@ describe("api-key", async () => {
 			});
 
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(3);
-			expect(keys?.apiKeys?.some((k) => k.id === key1?.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === key2?.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === key3?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === key1?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === key2?.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === key3?.id)).toBe(true);
 
 			// Delete one key
 			await client.apiKey.delete({ keyId: key2!.id }, { headers: headers });
@@ -2792,9 +2792,9 @@ describe("api-key", async () => {
 			});
 
 			expect(keysAfterDelete?.apiKeys?.length).toBe(keys!.apiKeys!.length - 1);
-			expect(keysAfterDelete?.apiKeys?.some((k) => k.id === key2?.id)).toBe(
-				false,
-			);
+			expect(
+				keysAfterDelete?.apiKeys?.some((k: ApiKey) => k.id === key2?.id),
+			).toBe(false);
 		});
 	});
 
@@ -3023,8 +3023,12 @@ describe("api-key", async () => {
 
 			expect(keys).not.toBeNull();
 			expect(keys?.apiKeys?.length).toBeGreaterThanOrEqual(2);
-			expect(keys?.apiKeys?.some((k) => k.id === dbKey1!.id)).toBe(true);
-			expect(keys?.apiKeys?.some((k) => k.id === dbKey2!.id)).toBe(true);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === dbKey1!.id)).toBe(
+				true,
+			);
+			expect(keys?.apiKeys?.some((k: ApiKey) => k.id === dbKey2!.id)).toBe(
+				true,
+			);
 
 			// Verify keys are now in storage (auto-populated)
 			expect(store.has(`api-key:by-id:${dbKey1!.id}`)).toBe(true);
@@ -3766,7 +3770,9 @@ describe("api-key", async () => {
 				{ headers },
 			);
 			expect(
-				publicKeys.data?.apiKeys.every((k) => k.configId === "public-api"),
+				publicKeys.data?.apiKeys.every(
+					(k: ApiKey) => k.configId === "public-api",
+				),
 			).toBe(true);
 
 			// List only internal-api keys
@@ -3775,7 +3781,9 @@ describe("api-key", async () => {
 				{ headers },
 			);
 			expect(
-				internalKeys.data?.apiKeys.every((k) => k.configId === "internal-api"),
+				internalKeys.data?.apiKeys.every(
+					(k: ApiKey) => k.configId === "internal-api",
+				),
 			).toBe(true);
 		});
 
@@ -4034,7 +4042,7 @@ describe("api-key", async () => {
 
 			expect(result.data?.apiKeys).toBeDefined();
 			// All returned keys should be user-owned (from user-keys config)
-			result.data?.apiKeys.forEach((key) => {
+			result.data?.apiKeys.forEach((key: ApiKey) => {
 				expect(key.configId).toBe("user-keys");
 				expect(key.referenceId).toBe(user.id);
 			});
@@ -4082,13 +4090,15 @@ describe("api-key", async () => {
 			expect(result.apiKeys).toBeDefined();
 			expect(result.apiKeys.length).toBe(2);
 			// All returned keys should be org-owned
-			result.apiKeys.forEach((key) => {
+			result.apiKeys.forEach((key: ApiKey) => {
 				expect(key.configId).toBe("org-keys");
 				expect(key.referenceId).toBe(org.id);
 			});
 
 			// Verify user key is not in the list
-			const userKeyInList = result.apiKeys.find((k) => k.id === userKey.id);
+			const userKeyInList = result.apiKeys.find(
+				(k: ApiKey) => k.id === userKey.id,
+			);
 			expect(userKeyInList).toBeUndefined();
 		});
 
@@ -4433,6 +4443,77 @@ describe("api-key", async () => {
 			expect(updatedKey.enabled).toBe(false);
 			expect(updatedKey.configId).toBe("org-keys");
 			expect(updatedKey.referenceId).toBe(org.id);
+		});
+	});
+
+	// =========================================================================
+	// ENABLE CUSTOM PREFIX
+	// =========================================================================
+
+	describe("enableCustomPrefix", async () => {
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [
+				apiKey({
+					defaultPrefix: "default_",
+				}),
+			],
+		});
+
+		const {
+			auth: authWithCustomPrefix,
+			signInWithTestUser: signInWithCustomPrefixEnabled,
+		} = await getTestInstance({
+			plugins: [
+				apiKey({
+					defaultPrefix: "default_",
+					enableCustomPrefix: true,
+				}),
+			],
+		});
+
+		it("should ignore client-provided prefix and use defaultPrefix when enableCustomPrefix is false (default)", async () => {
+			const { user } = await signInWithTestUser();
+
+			const apiKeyResult = await auth.api.createApiKey({
+				body: {
+					prefix: "custom_",
+					userId: user.id,
+				},
+			});
+
+			expect(apiKeyResult).not.toBeNull();
+			expect(apiKeyResult.prefix).toBe("default_");
+			expect(apiKeyResult.key.startsWith("default_")).toBe(true);
+			expect(apiKeyResult.key.startsWith("custom_")).toBe(false);
+		});
+
+		it("should allow client-provided prefix when enableCustomPrefix is true", async () => {
+			const { user } = await signInWithCustomPrefixEnabled();
+
+			const apiKeyResult = await authWithCustomPrefix.api.createApiKey({
+				body: {
+					prefix: "custom_",
+					userId: user.id,
+				},
+			});
+
+			expect(apiKeyResult).not.toBeNull();
+			expect(apiKeyResult.prefix).toBe("custom_");
+			expect(apiKeyResult.key.startsWith("custom_")).toBe(true);
+		});
+
+		it("should use defaultPrefix when no prefix is provided and enableCustomPrefix is true", async () => {
+			const { user } = await signInWithCustomPrefixEnabled();
+
+			const apiKeyResult = await authWithCustomPrefix.api.createApiKey({
+				body: {
+					userId: user.id,
+				},
+			});
+
+			expect(apiKeyResult).not.toBeNull();
+			expect(apiKeyResult.prefix).toBe("default_");
+			expect(apiKeyResult.key.startsWith("default_")).toBe(true);
 		});
 	});
 });

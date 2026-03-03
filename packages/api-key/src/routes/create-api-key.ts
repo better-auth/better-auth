@@ -400,11 +400,11 @@ export function createApiKey({
 				}
 			}
 
-			const effectivePrefix = opts.disableCustomPrefix
-				? opts.defaultPrefix
-				: (prefix ?? opts.defaultPrefix);
+			const effectivePrefix = opts.enableCustomPrefix
+				? (prefix ?? opts.defaultPrefix)
+				: opts.defaultPrefix;
 
-			if (prefix && !opts.disableCustomPrefix) {
+			if (prefix && opts.enableCustomPrefix) {
 				if (prefix.length < opts.minimumPrefixLength) {
 					throw APIError.from("BAD_REQUEST", ERROR_CODES.INVALID_PREFIX_LENGTH);
 				}
