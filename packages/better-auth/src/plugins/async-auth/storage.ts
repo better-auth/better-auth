@@ -151,10 +151,8 @@ export async function deleteAsyncAuthRequest(
 	if (ctx.context.secondaryStorage) {
 		await ctx.context.secondaryStorage.delete(key);
 	} else {
-		const verification =
-			await ctx.context.internalAdapter.findVerificationValue(key);
-		if (verification) {
-			await ctx.context.internalAdapter.deleteVerificationByIdentifier(key);
-		}
+		await ctx.context.internalAdapter
+			.deleteVerificationByIdentifier(key)
+			.catch(() => {});
 	}
 }

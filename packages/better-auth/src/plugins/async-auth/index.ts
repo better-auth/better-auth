@@ -152,6 +152,9 @@ export const asyncAuth = (options: AsyncAuthOptions) => {
 	const effectiveSendNotification =
 		opts.sendNotification ?? opts.sendVerificationEmail!;
 
+	// Per-instance Set so multi-instance tests don't share state
+	const ensuredAgents = new Set<string>();
+
 	const internalOpts: AsyncAuthInternalOptions = {
 		sendNotification: effectiveSendNotification,
 		requestLifetime: opts.requestLifetime,
@@ -160,6 +163,7 @@ export const asyncAuth = (options: AsyncAuthOptions) => {
 		resolveUser: opts.resolveUser,
 		deliveryMode: opts.deliveryMode,
 		agents: opts.agents ?? [],
+		ensuredAgents,
 	};
 
 	return {
@@ -180,7 +184,7 @@ export const asyncAuth = (options: AsyncAuthOptions) => {
 			asyncAuthReject,
 		},
 		hooks: {
-			before: [createAsyncAuthTokenHandler(internalOpts.agents)],
+			before: [createAsyncAuthTokenHandler(internalOpts)],
 		},
 		$ERROR_CODES: ASYNC_AUTH_ERROR_CODES,
 		options,

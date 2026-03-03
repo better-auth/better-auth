@@ -5,14 +5,25 @@
 
 import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
+import { symmetricEncrypt } from "../../crypto";
 import type { OIDCOptions } from "../oidc-provider/types";
 import type { StoreClientSecretOption } from "../oidc-provider/utils";
 import {
+	defaultClientSecretHasher,
 	parseClientCredentials,
 	verifyClientSecret,
 } from "../oidc-provider/utils";
 import { ASYNC_AUTH_ERROR_CODES } from "./error-codes";
 import type { AsyncAuthAgent } from "./types";
+
+function constantTimeEqual(a: string, b: string): boolean {
+	if (a.length !== b.length) return false;
+	let result = 0;
+	for (let i = 0; i < a.length; i++) {
+		result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	}
+	return result === 0;
+}
 
 export type MinimalClient = {
 	clientId: string;
@@ -58,7 +69,25 @@ export function getOidcPluginContext(
 	return { oidcOpts, storeMethod, trustedClients, pluginId: oidcPlugin.id };
 }
 
-const ensuredAgents = new Set<string>();
+async function storeSecret(
+	secret: string,
+	storeMethod: StoreClientSecretOption,
+	serverSecret: string,
+): Promise<string> {
+	if (storeMethod === "hashed") {
+		return defaultClientSecretHasher(secret);
+	}
+	if (storeMethod === "encrypted") {
+		return symmetricEncrypt({ key: serverSecret, data: secret });
+	}
+	if (typeof storeMethod === "object" && "hash" in storeMethod) {
+		return storeMethod.hash(secret);
+	}
+	if (typeof storeMethod === "object" && "encrypt" in storeMethod) {
+		return storeMethod.encrypt(secret);
+	}
+	return secret;
+}
 
 /**
  * Lazily creates a DB record for an inline agent so FK constraints pass
@@ -68,6 +97,8 @@ async function ensureAgentClientExists(
 	ctx: GenericEndpointContext,
 	agent: AsyncAuthAgent,
 	pluginId: string,
+	storeMethod: StoreClientSecretOption,
+	ensuredAgents: Set<string>,
 ): Promise<void> {
 	if (ensuredAgents.has(agent.clientId)) return;
 
@@ -81,12 +112,17 @@ async function ensureAgentClientExists(
 		.catch(() => null);
 
 	if (!existing) {
+		const storedSecret = await storeSecret(
+			agent.clientSecret,
+			storeMethod,
+			ctx.context.secret,
+		);
 		await ctx.context.adapter
 			.create({
 				model: modelName,
 				data: {
 					clientId: agent.clientId,
-					clientSecret: agent.clientSecret,
+					clientSecret: storedSecret,
 					name: agent.name ?? agent.clientId,
 					type: "web",
 					redirectUrls: "http://localhost",
@@ -114,6 +150,7 @@ export async function validateClientCredentials(
 	body: Record<string, unknown>,
 	pluginContext: OidcPluginContext,
 	agents?: AsyncAuthAgent[],
+	ensuredAgents?: Set<string>,
 ): Promise<{
 	client: MinimalClient & { clientSecret: string };
 	credentials: { clientId: string; clientSecret: string };
@@ -133,10 +170,19 @@ export async function validateClientCredentials(
 	// 1. Check inline agents (plain-text secret comparison)
 	if (agents?.length) {
 		const agent = agents.find((a) => a.clientId === credentials.clientId);
-		if (agent && agent.clientSecret === credentials.clientSecret) {
-			// Ensure the agent exists as a DB record so FK constraints pass
-			// when storing access tokens. This is lazy — only runs on first use.
-			await ensureAgentClientExists(ctx, agent, pluginContext.pluginId);
+		if (
+			agent &&
+			constantTimeEqual(agent.clientSecret, credentials.clientSecret)
+		) {
+			if (ensuredAgents) {
+				await ensureAgentClientExists(
+					ctx,
+					agent,
+					pluginContext.pluginId,
+					pluginContext.storeMethod,
+					ensuredAgents,
+				);
+			}
 			return {
 				client: {
 					clientId: agent.clientId,

@@ -11,11 +11,7 @@ export type AsyncAuthDeliveryMode = "poll" | "push";
 /**
  * Request status
  */
-export type AsyncAuthRequestStatus =
-	| "pending"
-	| "approved"
-	| "rejected"
-	| "expired";
+export type AsyncAuthRequestStatus = "pending" | "approved" | "rejected";
 
 /**
  * Request data stored in verification table or secondary storage
@@ -106,6 +102,8 @@ export interface AsyncAuthInternalOptions {
 	deliveryMode: AsyncAuthDeliveryMode;
 	/** Inline agent clients — checked first during authentication */
 	agents: AsyncAuthAgent[];
+	/** Per-instance tracking of which agent DB records have been created */
+	ensuredAgents: Set<string>;
 }
 
 /**
