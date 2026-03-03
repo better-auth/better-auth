@@ -277,19 +277,40 @@ export async function generateMetadata({
 	}
 	const page = blogs.getPage(slug);
 	if (!page || page.data.draft) return notFound();
-	const { title, description, image } = page.data;
+	const { title, description, image, date } = page.data;
+
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", title);
+	if (description) ogSearchParams.set("description", description);
+	if (date) {
+		ogSearchParams.set(
+			"date",
+			new Date(date).toLocaleDateString("en-US", {
+				month: "short",
+				day: "numeric",
+				year: "numeric",
+			}),
+		);
+	}
+	const ogUrl = `/api/og-release?${ogSearchParams.toString()}`;
+
+	const ogImage = image || ogUrl;
+
 	return {
 		title,
 		description,
-		...(image && {
-			openGraph: {
-				images: [image],
-			},
-			twitter: {
-				card: "summary_large_image" as const,
-				images: [image],
-			},
-		}),
+		openGraph: {
+			title,
+			description,
+			type: "article",
+			images: [ogImage],
+		},
+		twitter: {
+			card: "summary_large_image" as const,
+			title,
+			description,
+			images: [ogImage],
+		},
 	};
 }
 
