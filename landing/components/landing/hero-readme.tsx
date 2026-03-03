@@ -1397,7 +1397,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1425,7 +1425,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1456,7 +1456,7 @@ function ReadmeFooter({
 							<span key={link.label} className="flex items-center">
 								<Link
 									href={link.href}
-									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/35 hover:text-foreground/70 transition-colors"
+									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/50 hover:text-foreground/80 transition-colors"
 								>
 									{link.label}
 								</Link>
@@ -1470,7 +1470,7 @@ function ReadmeFooter({
 					</div>
 
 					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground font-mono">
+						<span className="text-[10px] text-foreground/50 font-mono">
 							© {new Date().getFullYear()} Better Auth Inc.
 						</span>
 						<div className="flex items-center gap-3 sm:gap-4">
@@ -1480,14 +1480,14 @@ function ReadmeFooter({
 							<Link
 								href="https://x.com/better_auth"
 								aria-label="Twitter/X"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Icons.XIcon className="h-3 w-3" />
 							</Link>
 							<Link
 								href="https://github.com/better-auth"
 								aria-label="GitHub"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Github className="h-4 w-4" />
 							</Link>
@@ -1545,7 +1545,7 @@ export function HeroReadMe({
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
@@ -1553,7 +1553,7 @@ export function HeroReadMe({
 						<TrustedBy />
 
 						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Features
 							</span>
 							<div className="flex-1 border-t border-foreground/10"></div>
@@ -2203,10 +2203,10 @@ export function HeroReadMe({
 
 						<div className="my-6">
 							<div className="flex items-center gap-3 mb-5">
-								<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+								<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 									Declarative Config
 								</span>
-								<div className="flex-1 border-t border-foreground/[0.06]" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 							<ServerClientTabs />
 						</div>
@@ -2234,10 +2234,10 @@ export function HeroReadMe({
 						{/* Infrastructure transition */}
 						<div className="mt-16 mb-8">
 							<div className="flex items-center gap-4">
-								<span className="text-lg sm:text-xl font-bold text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 									Infrastructure
 								</span>
-								<div className="flex-1 border-t border-foreground/15" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
 								Managed infrastructure on top of the open-source framework.

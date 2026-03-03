@@ -893,7 +893,7 @@ export function DatabaseSection() {
 					Bring Your Own{" "}
 					<span className="text-amber-600 dark:text-amber-400">Database</span>
 				</span>
-				<div className="h-px flex-1 bg-foreground/[0.08]" />
+				<div className="h-px flex-1 bg-foreground/10" />
 			</div>
 
 			<p className="text-[13px] text-foreground/55 dark:text-foreground/45 mb-5 max-w-xl leading-relaxed">
@@ -1073,7 +1073,7 @@ export function SocialProvidersSection() {
 			</div>
 
 			<div
-				className="relative flex-1 overflow-hidden border border-dashed border-foreground/[0.08]"
+				className="relative flex-1 overflow-hidden border border-dashed border-foreground/10"
 				style={{ height: `${visibleRows * rowHeight}px` }}
 			>
 				<motion.div
@@ -1123,7 +1123,7 @@ export function PluginEcosystem() {
 					<span className="text-base text-foreground/85 dark:text-foreground/75">
 						Plugin Ecosystem
 					</span>
-					<span className="text-[11px] font-mono text-foreground/35 dark:text-foreground/50">
+					<span className="text-[11px] font-mono text-foreground/50">
 						{plugins.length} official
 					</span>
 				</div>
@@ -1192,8 +1192,8 @@ export function AiNativeSection() {
 	return (
 		<div className="mt-8">
 			<div className="flex items-center gap-3 mb-3">
-				<div className="flex-1 border-t border-foreground/[0.06]" />
-				<span className="text-[10px] text-foreground/70 dark:text-foreground/55 font-mono tracking-wider uppercase shrink-0">
+				<div className="flex-1 border-t border-foreground/10" />
+				<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 					AI Native
 				</span>
 			</div>
