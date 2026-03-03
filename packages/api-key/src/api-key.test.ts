@@ -12,6 +12,7 @@ describe("api-key", async () => {
 			plugins: [
 				apiKey({
 					enableMetadata: true,
+					enableCustomPrefix: true,
 					permissions: {
 						defaultPermissions: {
 							files: ["read"],
