@@ -66,10 +66,7 @@ const hooksSourceWeakMap = new WeakMap<
 	`user` | `plugin:${string}`
 >();
 
-function getOperationId(
-	endpoint: Endpoint | undefined,
-	key: string,
-): string {
+function getOperationId(endpoint: Endpoint | undefined, key: string): string {
 	if (!endpoint?.options) return key;
 	const opts = endpoint.options as {
 		operationId?: string;
