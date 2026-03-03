@@ -1,5 +1,5 @@
 import type { AuthContext, HookEndpointContext } from "@better-auth/core";
-import type { AuthEndpoint, AuthMiddleware } from "@better-auth/core/api";
+import type { AuthMiddleware } from "@better-auth/core/api";
 import {
 	hasRequestState,
 	runWithEndpointContext,
@@ -8,8 +8,9 @@ import {
 import { shouldPublishLog } from "@better-auth/core/env";
 import { APIError } from "@better-auth/core/error";
 import type {
+	Endpoint,
 	EndpointContext,
-	EndpointOptions,
+	EndpointRuntimeOptions,
 	InputContext,
 } from "better-call";
 import { kAPIErrorHeaderSymbol, toResponse } from "better-call";
@@ -17,7 +18,20 @@ import { createDefu } from "defu";
 import { isAPIError } from "../utils/is-api-error";
 
 type InternalContext = Partial<
-	InputContext<string, any> & EndpointContext<string, any>
+	InputContext<string, any, any, any, any, any> &
+		EndpointContext<
+			string,
+			any,
+			any,
+			any,
+			any,
+			any,
+			any,
+			AuthContext & {
+				returned?: unknown | undefined;
+				responseHeaders?: Headers | undefined;
+			}
+		>
 > & {
 	path: string;
 	asResponse?: boolean | undefined;
@@ -35,28 +49,33 @@ const defuReplaceArrays = createDefu((obj, key, value) => {
 	}
 });
 
+type Hook = {
+	matcher: (context: HookEndpointContext) => boolean;
+	handler: AuthMiddleware;
+};
+
 const hooksSourceWeakMap = new WeakMap<
 	AuthMiddleware,
 	`user` | `plugin:${string}`
 >();
 
 type UserInputContext = Partial<
-	InputContext<string, any> & EndpointContext<string, any>
+	InputContext<string, any, any, any, any, any> &
+		EndpointContext<string, any, any, any, any, any, any, any>
 >;
 
-export function toAuthEndpoints<
-	const E extends Record<
-		string,
-		Omit<AuthEndpoint<string, EndpointOptions, any>, "wrap">
-	>,
->(endpoints: E, ctx: AuthContext | Promise<AuthContext>): E {
+export function toAuthEndpoints<const E extends Record<string, Endpoint>>(
+	endpoints: E,
+	ctx: AuthContext | Promise<AuthContext>,
+): E {
 	const api: Record<
 		string,
 		((
-			context: EndpointContext<string, any> & InputContext<string, any>,
+			context: EndpointContext<string, any, any, any, any, any, any, any> &
+				InputContext<string, any, any, any, any, any>,
 		) => Promise<any>) & {
 			path?: string | undefined;
-			options?: EndpointOptions | undefined;
+			options?: EndpointRuntimeOptions | undefined;
 		}
 	> = {};
 
@@ -200,13 +219,7 @@ export function toAuthEndpoints<
 	return api as unknown as E;
 }
 
-async function runBeforeHooks(
-	context: InternalContext,
-	hooks: {
-		matcher: (context: HookEndpointContext) => boolean;
-		handler: AuthMiddleware;
-	}[],
-) {
+async function runBeforeHooks(context: InternalContext, hooks: Hook[]) {
 	let modifiedContext: Partial<InternalContext> = {};
 
 	for (const hook of hooks) {
@@ -265,13 +278,7 @@ async function runBeforeHooks(
 	return { context: modifiedContext };
 }
 
-async function runAfterHooks(
-	context: InternalContext,
-	hooks: {
-		matcher: (context: HookEndpointContext) => boolean;
-		handler: AuthMiddleware;
-	}[],
-) {
+async function runAfterHooks(context: InternalContext, hooks: Hook[]) {
 	for (const hook of hooks) {
 		if (hook.matcher(context)) {
 			const result = (await hook.handler(context).catch((e) => {
@@ -325,14 +332,8 @@ async function runAfterHooks(
 
 function getHooks(authContext: AuthContext) {
 	const plugins = authContext.options.plugins || [];
-	const beforeHooks: {
-		matcher: (context: HookEndpointContext) => boolean;
-		handler: AuthMiddleware;
-	}[] = [];
-	const afterHooks: {
-		matcher: (context: HookEndpointContext) => boolean;
-		handler: AuthMiddleware;
-	}[] = [];
+	const beforeHooks: Hook[] = [];
+	const afterHooks: Hook[] = [];
 	const beforeHookHandler = authContext.options.hooks?.before;
 	if (beforeHookHandler) {
 		hooksSourceWeakMap.set(beforeHookHandler, "user");
