@@ -1,0 +1,398 @@
+---
+title: Async Auth
+description: Client Initiated Backchannel Authentication (CIBA) for AI agents, CLI tools, and headless services
+---
+
+`CIBA` `AI Agents` `CLI` `Headless`
+
+The Async Auth plugin implements [Client Initiated Backchannel Authentication (CIBA)](https://openid.net/specs/openid-client-initiated-backchannel-authentication-core-1_0.html), enabling authentication flows where an agent or service authenticates on behalf of a user who approves out-of-band — via email, SMS, push notification, or any custom channel.
+
+This is ideal for:
+- **AI agents** that need to act on behalf of a user
+- **CLI tools** that authenticate without a browser redirect
+- **Headless services** that request user authorization asynchronously
+
+## How It Works
+
+1. **Agent requests auth**: The agent calls `/oauth/bc-authorize` with client credentials and a `login_hint` (e.g. user's email)
+2. **User is notified**: Your `sendNotification` callback delivers an approval link to the user (email, SMS, push, etc.)
+3. **User approves/denies**: The user visits the approval page and approves or rejects the request
+4. **Agent gets tokens**: The agent polls `/oauth2/token` (poll mode) or receives tokens at a callback URL (push mode)
+
+## Installation
+
+<Steps>
+    <Step>
+        ### Add the plugins to your auth config
+
+        Async Auth requires the `oidcProvider` plugin for OAuth client and token infrastructure.
+
+        ```ts title="auth.ts"
+        import { betterAuth } from "better-auth";
+        import { oidcProvider, asyncAuth } from "better-auth/plugins"; // [!code highlight]
+
+        export const auth = betterAuth({
+          // ... other config
+          plugins: [
+            oidcProvider({ // [!code highlight]
+              loginPage: "/sign-in", // [!code highlight]
+            }), // [!code highlight]
+            asyncAuth({ // [!code highlight]
+              sendNotification: async (data) => { // [!code highlight]
+                await sendEmail({ // [!code highlight]
+                  to: data.user.email, // [!code highlight]
+                  subject: "Approve sign-in request", // [!code highlight]
+                  body: `Click to approve: ${data.approvalUrl}`, // [!code highlight]
+                }); // [!code highlight]
+              }, // [!code highlight]
+              agents: [ // [!code highlight]
+                { name: "My CLI", clientId: "cli-agent", clientSecret: "your-secret" }, // [!code highlight]
+              ], // [!code highlight]
+            }), // [!code highlight]
+          ],
+        });
+        ```
+    </Step>
+
+    <Step>
+        ### Migrate the database
+
+        Run the migration or generate the schema to add the necessary tables.
+
+        <Tabs items={["migrate", "generate"]}>
+            <Tab value="migrate">
+            ```package-install
+            npx auth migrate
+            ```
+            </Tab>
+            <Tab value="generate">
+            ```package-install
+            npx auth generate
+            ```
+            </Tab>
+        </Tabs>
+        See the [Schema](#schema) section to add the fields manually.
+    </Step>
+
+    <Step>
+        ### Add the client plugin
+
+        ```ts title="auth-client.ts"
+        import { createAuthClient } from "better-auth/client";
+        import { asyncAuthClient } from "better-auth/client/plugins"; // [!code highlight]
+
+        export const authClient = createAuthClient({
+          plugins: [
+            asyncAuthClient(), // [!code highlight]
+          ],
+        });
+        ```
+    </Step>
+</Steps>
+
+## Basic Usage
+
+### Agent: Initiate Authentication
+
+The agent sends a backchannel authorize request with its client credentials and the user to authenticate:
+
+<APIMethod
+  path="/oauth/bc-authorize"
+  method="POST"
+>
+```ts
+type bcAuthorize = {
+    /** Client ID (body or HTTP Basic) */
+    client_id?: string;
+    /** Client secret (body or HTTP Basic) */
+    client_secret?: string;
+    /** Space-separated scopes (must include "openid") */
+    scope: string;
+    /** User identifier — email, phone, or username */
+    login_hint?: string;
+    /** Previously issued ID token to identify the user */
+    id_token_hint?: string;
+    /** Message shown to user in approval UI */
+    binding_message?: string;
+    /** Token for push mode notification correlation */
+    client_notification_token?: string;
+}
+```
+</APIMethod>
+
+```ts
+const response = await fetch("https://your-app.com/api/auth/oauth/bc-authorize", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Basic ${btoa("cli-agent:your-secret")}`,
+  },
+  body: JSON.stringify({
+    scope: "openid profile",
+    login_hint: "user@example.com",
+    binding_message: "Sign in to My CLI Tool",
+  }),
+});
+
+const { auth_req_id, expires_in, interval } = await response.json();
+```
+
+### User: Approve the Request
+
+When the user clicks the approval link in their notification, your app shows an approval page. Use the `auth_req_id` from the URL to fetch request details and let the user approve or reject:
+
+```tsx title="app/async-auth/approve/page.tsx"
+export default function ApprovalPage() {
+  const searchParams = useSearchParams();
+  const authReqId = searchParams.get("auth_req_id");
+
+  // Fetch request details
+  const { data: request } = await authClient.asyncAuth.verify({
+    query: { auth_req_id: authReqId },
+  });
+
+  const handleApprove = async () => {
+    await authClient.asyncAuth.authorize({
+      auth_req_id: authReqId,
+    });
+  };
+
+  const handleReject = async () => {
+    await authClient.asyncAuth.reject({
+      auth_req_id: authReqId,
+    });
+  };
+
+  return (
+    <div>
+      <h2>Sign-in Request</h2>
+      <p>Client: {request.client_id}</p>
+      <p>Message: {request.binding_message}</p>
+      <p>Scopes: {request.scope}</p>
+      <button onClick={handleApprove}>Approve</button>
+      <button onClick={handleReject}>Deny</button>
+    </div>
+  );
+}
+```
+
+<Callout type="warn">
+  Users must be authenticated before they can approve or deny requests. If not authenticated, redirect them to the login page with a return URL back to the approval page.
+</Callout>
+
+### Agent: Poll for Tokens
+
+After initiating the request, the agent polls until the user approves:
+
+```ts
+async function pollForToken(authReqId: string, interval: number) {
+  let pollingInterval = interval;
+
+  while (true) {
+    await new Promise((r) => setTimeout(r, pollingInterval * 1000));
+
+    const response = await fetch("https://your-app.com/api/auth/oauth2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "Authorization": `Basic ${btoa("cli-agent:your-secret")}`,
+      },
+      body: new URLSearchParams({
+        grant_type: "urn:openid:params:grant-type:ciba",
+        auth_req_id: authReqId,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.access_token) {
+      console.log("Authenticated!");
+      return data;
+    }
+
+    switch (data.error) {
+      case "authorization_pending":
+        break; // Continue polling
+      case "slow_down":
+        pollingInterval += 5;
+        break;
+      case "access_denied":
+        throw new Error("User denied the request");
+      case "expired_token":
+        throw new Error("Request expired");
+    }
+  }
+}
+```
+
+## Inline Agents
+
+The `agents` option lets you define client credentials directly in the plugin config — no separate client registration needed:
+
+```ts title="auth.ts"
+asyncAuth({
+  sendNotification: async (data) => { /* ... */ },
+  agents: [
+    { name: "CLI Tool",    clientId: "cli-agent",  clientSecret: "cli-secret" },
+    { name: "Slack Bot",   clientId: "slack-bot",  clientSecret: "bot-secret" },
+    { name: "MCP Server",  clientId: "mcp-server", clientSecret: "mcp-secret" },
+  ],
+})
+```
+
+Inline agents are checked first during authentication, before looking up registered OAuth clients. A minimal database record is created automatically on first use to support token storage.
+
+If you need dynamic client registration (e.g. third parties registering their own agents), use `oidcProvider`'s `allowDynamicClientRegistration` or `trustedClients` instead.
+
+## Push Mode
+
+By default, agents poll for tokens (poll mode). Push mode delivers tokens directly to the agent's callback URL when the user approves.
+
+To enable push mode, set `backchannel_token_delivery_mode` and `client_notification_endpoint` in the client metadata:
+
+```ts
+asyncAuth({
+  sendNotification: async (data) => { /* ... */ },
+  agents: [
+    {
+      name: "Push Bot",
+      clientId: "push-bot",
+      clientSecret: "push-secret",
+      metadata: {
+        backchannel_token_delivery_mode: "push",
+        client_notification_endpoint: "https://my-bot.example.com/async-auth/callback",
+      },
+    },
+  ],
+})
+```
+
+The agent must include a `client_notification_token` in the backchannel authorize request. When approved, the server POSTs tokens to the `client_notification_endpoint` with the notification token in the `Authorization` header.
+
+<Callout type="warn">
+  Push mode endpoints must use HTTPS (except `localhost` for local development).
+</Callout>
+
+## Notification Callback
+
+The `sendNotification` callback is how you deliver the approval link to the user. You decide the channel — email, SMS, push notification, Slack message, etc.
+
+```ts
+asyncAuth({
+  sendNotification: async (data, request) => {
+    // data.user         — the user to notify
+    // data.approvalUrl  — URL the user visits to approve/deny
+    // data.bindingMessage — optional context message
+    // data.clientId     — which agent is requesting access
+    // data.scope        — requested scopes
+    // data.expiresAt    — when the request expires
+    // data.authReqId    — unique request ID
+
+    await sendEmail({
+      to: data.user.email,
+      subject: `${data.bindingMessage || "Sign-in request"}`,
+      body: `
+        An application is requesting access to your account.
+        
+        ${data.bindingMessage ? `Message: ${data.bindingMessage}` : ""}
+        Scopes: ${data.scope}
+        Expires: ${data.expiresAt.toLocaleString()}
+        
+        Approve: ${data.approvalUrl}
+      `,
+    });
+  },
+})
+```
+
+You can also use the `sendVerificationEmail` alias if you prefer — it works identically. When both are provided, `sendNotification` takes precedence.
+
+## User Resolution
+
+By default, the plugin resolves users from `login_hint` by searching email, then phone number, then username. You can customize this:
+
+```ts
+asyncAuth({
+  sendNotification: async (data) => { /* ... */ },
+  resolveUser: async (loginHint, ctx) => {
+    // Custom lookup logic
+    const user = await db.users.findOne({ externalId: loginHint });
+    return user;
+  },
+})
+```
+
+## ID Token Hint
+
+Instead of `login_hint`, agents can pass a previously issued `id_token_hint` to identify the user. The plugin validates the token's signature, audience (must match the client ID), issuer, and expiry before extracting the subject.
+
+```ts
+const response = await fetch("/api/auth/oauth/bc-authorize", {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Basic ${btoa("cli-agent:your-secret")}`,
+  },
+  body: JSON.stringify({
+    scope: "openid",
+    id_token_hint: previousIdToken,
+  }),
+});
+```
+
+<Callout type="info">
+  The `id_token_hint` supports both HS256 (default) and asymmetric signing via the JWT plugin. When using the JWT plugin, ensure it's configured with `useJWTPlugin: true` in your oidcProvider options.
+</Callout>
+
+## Error Handling
+
+The plugin returns standard CIBA/OAuth error codes:
+
+| Error Code | Description |
+|---|---|
+| `authorization_pending` | User hasn't approved yet (continue polling) |
+| `slow_down` | Polling too frequently (increase interval by 5s) |
+| `expired_token` | The auth request has expired |
+| `access_denied` | User denied the request |
+| `invalid_client` | Invalid client credentials |
+| `unknown_user_id` | Could not find user from login_hint |
+| `invalid_request` | Malformed request or missing required fields |
+
+## Options
+
+### Server
+
+**sendNotification** (required): Callback to notify the user about the pending auth request. Receives notification data and the original request.
+
+**sendVerificationEmail**: Alias for `sendNotification`. Used as fallback when `sendNotification` is not provided.
+
+**agents**: Array of inline agent definitions. Each agent has `clientId` (required), `clientSecret` (required), `name` (optional), and `metadata` (optional, for push mode configuration).
+
+**deliveryMode**: Default token delivery mode. `"poll"` (default) or `"push"`. Per-client override via client metadata.
+
+**requestLifetime**: How long auth requests are valid. Default: `"5m"`.
+
+**pollingInterval**: Minimum time between agent polls. Default: `"5s"`.
+
+**approvalUri**: URL path for the approval page. Default: `"/async-auth/approve"`. The `auth_req_id` is appended as a query parameter.
+
+**resolveUser**: Custom function to resolve a user from `login_hint`. By default, searches by email, phone, then username.
+
+### Client
+
+No client-specific configuration. The plugin adds these methods:
+
+- **asyncAuth.verify()**: Get request details for the approval UI (GET)
+- **asyncAuth.authorize()**: Approve a request (POST, requires session)
+- **asyncAuth.reject()**: Reject a request (POST, requires session)
+- **bcAuthorize()**: Initiate a backchannel auth request (POST)
+
+## Security Considerations
+
+1. **TLS Required**: Push mode notification endpoints must use HTTPS (localhost exempted for development)
+2. **Client Authentication**: Agents authenticate via client credentials (HTTP Basic or body parameters)
+3. **Unguessable Request IDs**: The `auth_req_id` is 32 cryptographically random alphanumeric characters (~190 bits of entropy)
+4. **Session Required**: Only authenticated users can approve or reject requests
+5. **User Matching**: The authenticated user must match the user specified in the original request
+6. **Request Expiry**: Requests automatically expire after `requestLifetime` (default 5 minutes)
+7. **Polling Rate Limiting**: The server enforces minimum polling intervals and responds with `slow_down` if violated
