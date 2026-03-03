@@ -45,7 +45,7 @@ export const schema = {
 				type: "date",
 				required: false,
 			},
-			lastUsedAt: {
+			updatedAt: {
 				type: "date",
 				required: false,
 			},

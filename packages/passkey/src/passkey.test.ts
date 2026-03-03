@@ -87,7 +87,7 @@ describe("passkey", async () => {
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		const lastUsedAt = new Date();
+		const updatedAt = new Date();
 		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
 			model: "passkey",
 			data: {
@@ -98,7 +98,7 @@ describe("passkey", async () => {
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
 				createdAt: new Date(),
-				lastUsedAt,
+				updatedAt,
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
@@ -115,16 +115,16 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("publicKey");
 		expect(passkeys[0]).toHaveProperty("credentialID");
 		expect(passkeys[0]).toHaveProperty("aaguid");
-		expect(passkeys[0]).toHaveProperty("lastUsedAt");
-		expect(new Date(passkeys[0]!.lastUsedAt!).toISOString()).toBe(
-			lastUsedAt.toISOString(),
+		expect(passkeys[0]).toHaveProperty("updatedAt");
+		expect(new Date(passkeys[0]!.updatedAt!).toISOString()).toBe(
+			updatedAt.toISOString(),
 		);
 	});
 
-	it("should update passkey lastUsedAt after successful authentication", async () => {
+	it("should update passkey updatedAt after successful authentication", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		const previousLastUsedAt = new Date(Date.now() - 60_000);
+		const previousUpdatedAt = new Date(Date.now() - 60_000);
 		const passkeyRecord = await context.adapter.create<
 			Omit<Passkey, "id">,
 			Passkey
@@ -138,7 +138,7 @@ describe("passkey", async () => {
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID-auth",
 				createdAt: new Date(),
-				lastUsedAt: previousLastUsedAt,
+				updatedAt: previousUpdatedAt,
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
@@ -208,9 +208,9 @@ describe("passkey", async () => {
 
 		expect(updatedPasskey).toBeDefined();
 		expect(updatedPasskey?.counter).toBe(42);
-		expect(updatedPasskey?.lastUsedAt).toBeDefined();
-		expect(new Date(updatedPasskey!.lastUsedAt!).getTime()).toBeGreaterThan(
-			previousLastUsedAt.getTime(),
+		expect(updatedPasskey?.updatedAt).toBeDefined();
+		expect(new Date(updatedPasskey!.updatedAt!).getTime()).toBeGreaterThan(
+			previousUpdatedAt.getTime(),
 		);
 	});
 

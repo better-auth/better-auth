@@ -672,7 +672,7 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 					],
 					update: {
 						counter: verification.authenticationInfo.newCounter,
-						lastUsedAt: new Date(),
+						updatedAt: new Date(),
 					},
 				});
 				const s = await ctx.context.internalAdapter.createSession(
