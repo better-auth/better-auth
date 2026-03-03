@@ -1,3 +1,11 @@
+function tryDecode(str: string): string {
+	try {
+		return decodeURIComponent(str);
+	} catch {
+		return str;
+	}
+}
+
 export interface CookieAttributes {
 	value: string;
 	"max-age"?: number | undefined;
@@ -85,7 +93,8 @@ export function parseSetCookieHeader(
 			return;
 		}
 
-		const attrObj: CookieAttributes = { value };
+		const decodedValue = value.includes("%") ? tryDecode(value) : value;
+		const attrObj: CookieAttributes = { value: decodedValue };
 
 		attributes.forEach((attribute) => {
 			const [attrName, ...attrValueParts] = attribute!.split("=");

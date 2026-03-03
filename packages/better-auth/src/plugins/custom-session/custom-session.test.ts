@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import { createAuthClient } from "../../client";
+import { parseSetCookieHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import type { BetterAuthOptions } from "../../types";
 import { admin } from "../admin";
@@ -79,6 +80,37 @@ describe("Custom Session Plugin Tests", async () => {
 				},
 			},
 		});
+	});
+
+	it("should not double-encode session cookie during get-session refresh", async () => {
+		const { headers } = await signInWithTestUser();
+		const signedInCookie = headers.get("cookie");
+		const signedInSessionToken = signedInCookie?.match(
+			/better-auth\.session_token=([^;]+)/,
+		)?.[1];
+		expect(signedInSessionToken).toBeDefined();
+
+		let refreshedSessionToken: string | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onResponse(context) {
+					const setCookies = context.response.headers.getSetCookie();
+					for (const cookieStr of setCookies) {
+						const parsed = parseSetCookieHeader(cookieStr);
+						const token = parsed.get("better-auth.session_token")?.value;
+						if (token) {
+							refreshedSessionToken = token;
+							break;
+						}
+					}
+				},
+			},
+		});
+
+		expect(refreshedSessionToken).toBeDefined();
+		expect(refreshedSessionToken).toBe(signedInSessionToken);
+		expect(refreshedSessionToken).not.toContain("%25");
 	});
 
 	it("should return the custom session for multi-session", async () => {

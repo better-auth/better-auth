@@ -78,7 +78,7 @@ export const sveltekitCookies = (
 
 							for (const [name, { value, ...ops }] of parsed) {
 								try {
-									event.cookies.set(name, decodeURIComponent(value), {
+									event.cookies.set(name, value, {
 										sameSite: ops.samesite,
 										path: ops.path || "/",
 										expires: ops.expires,

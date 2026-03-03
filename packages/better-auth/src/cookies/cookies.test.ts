@@ -226,6 +226,12 @@ describe("cookie-utils parseSetCookieHeader", () => {
 		);
 	});
 
+	it("decodes URI-encoded cookie values", () => {
+		const header = "token=hello%20world%3Dfoo; Path=/";
+		const map = parseSetCookieHeader(header);
+		expect(map.get("token")?.value).toBe("hello world=foo");
+	});
+
 	it("handles cookie with Expires followed by cookie without Expires", () => {
 		const map = parseSetCookieHeader(
 			"session=xyz; Expires=Mon, 01 Jan 2026 00:00:00 GMT, token=abc",
