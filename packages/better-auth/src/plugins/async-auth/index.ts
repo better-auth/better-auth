@@ -15,7 +15,6 @@ import {
 } from "./routes";
 import { createAsyncAuthTokenHandler } from "./token-handler";
 import type {
-	AsyncAuthAgent,
 	AsyncAuthInternalOptions,
 	AsyncAuthNotificationData,
 } from "./types";
@@ -106,18 +105,13 @@ export const asyncAuthOptionsSchema = z
 				"Custom function to resolve user from login_hint. By default, searches by email, then phone, then username.",
 			),
 		agents: z
-			.custom<AsyncAuthAgent[]>(
-				(val) =>
-					val === undefined ||
-					(Array.isArray(val) &&
-						val.every(
-							(a: unknown) =>
-								typeof a === "object" &&
-								a !== null &&
-								"clientId" in a &&
-								"clientSecret" in a,
-						)),
-				{ message: "agents must be an array of { clientId, clientSecret }" },
+			.array(
+				z.object({
+					clientId: z.string(),
+					clientSecret: z.string(),
+					name: z.string().optional(),
+					metadata: z.record(z.string(), z.unknown()).optional(),
+				}),
 			)
 			.optional()
 			.describe(

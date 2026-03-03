@@ -145,11 +145,13 @@ When the user clicks the approval link in their notification, your app shows an 
 export default function ApprovalPage() {
   const searchParams = useSearchParams();
   const authReqId = searchParams.get("auth_req_id");
+  const [request, setRequest] = useState(null);
 
-  // Fetch request details
-  const { data: request } = await authClient.asyncAuth.verify({
-    query: { auth_req_id: authReqId },
-  });
+  useEffect(() => {
+    authClient.asyncAuth.verify({
+      query: { auth_req_id: authReqId },
+    }).then(({ data }) => setRequest(data));
+  }, [authReqId]);
 
   const handleApprove = async () => {
     await authClient.asyncAuth.authorize({
@@ -162,6 +164,8 @@ export default function ApprovalPage() {
       auth_req_id: authReqId,
     });
   };
+
+  if (!request) return <p>Loading...</p>;
 
   return (
     <div>
