@@ -1,5 +1,5 @@
 /**
- * CIBA Token Handler
+ * Async Auth Token Handler
  *
  * Handles poll-mode token requests with grant_type=urn:openid:params:grant-type:ciba.
  * Token generation logic is shared with push-delivery via token-utils.ts.
@@ -8,22 +8,23 @@
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
 import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
-import { CIBA_ERROR_CODES } from "./error-codes";
+import { ASYNC_AUTH_ERROR_CODES } from "./error-codes";
 import {
-	deleteCibaRequest,
-	findCibaRequest,
-	updateCibaRequest,
+	deleteAsyncAuthRequest,
+	findAsyncAuthRequest,
+	updateAsyncAuthRequest,
 } from "./storage";
-import { generateTokensForCibaRequest } from "./token-utils";
+import { generateTokensForAsyncAuthRequest } from "./token-utils";
+import type { AsyncAuthAgent } from "./types";
 
 const CIBA_GRANT_TYPE = "urn:openid:params:grant-type:ciba";
 const SLOW_DOWN_INTERVAL_INCREASE = 5000; // 5 seconds in ms per CIBA spec
 
 /**
- * Creates the hook handler for CIBA grant type on /oauth2/token.
+ * Creates the hook handler for the CIBA grant type on /oauth2/token.
  * Intercepts token requests with grant_type=urn:openid:params:grant-type:ciba
  */
-export function createCibaTokenHandler() {
+export function createAsyncAuthTokenHandler(agents?: AsyncAuthAgent[]) {
 	return {
 		matcher(context: { path?: string }) {
 			return context.path === "/oauth2/token";
@@ -60,19 +61,20 @@ export function createCibaTokenHandler() {
 				ctx,
 				body,
 				pluginContext,
+				agents,
 			);
 
-			// Find CIBA request
-			const cibaRequest = await findCibaRequest(ctx, authReqId);
-			if (!cibaRequest) {
+			// Find async auth request
+			const asyncAuthRequest = await findAsyncAuthRequest(ctx, authReqId);
+			if (!asyncAuthRequest) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
-					error_description: CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
 				});
 			}
 
 			// Verify client matches
-			if (cibaRequest.clientId !== credentials.clientId) {
+			if (asyncAuthRequest.clientId !== credentials.clientId) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_grant",
 					error_description: "Client ID mismatch",
@@ -80,7 +82,7 @@ export function createCibaTokenHandler() {
 			}
 
 			// Reject polling for push-mode requests
-			const deliveryMode = cibaRequest.deliveryMode ?? "poll";
+			const deliveryMode = asyncAuthRequest.deliveryMode ?? "poll";
 			if (deliveryMode === "push") {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_request",
@@ -90,60 +92,61 @@ export function createCibaTokenHandler() {
 			}
 
 			// Check if expired first (before rate limit check)
-			if (cibaRequest.expiresAt < Date.now()) {
-				await deleteCibaRequest(ctx, authReqId);
+			if (asyncAuthRequest.expiresAt < Date.now()) {
+				await deleteAsyncAuthRequest(ctx, authReqId);
 				throw new APIError("BAD_REQUEST", {
 					error: "expired_token",
-					error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
 				});
 			}
 
 			// Check rate limiting
-			if (cibaRequest.lastPolledAt) {
-				const timeSinceLastPoll = Date.now() - cibaRequest.lastPolledAt;
-				if (timeSinceLastPoll < cibaRequest.pollingInterval) {
+			if (asyncAuthRequest.lastPolledAt) {
+				const timeSinceLastPoll = Date.now() - asyncAuthRequest.lastPolledAt;
+				if (timeSinceLastPoll < asyncAuthRequest.pollingInterval) {
 					// Per CIBA spec: slow_down should increase the interval by 5 seconds
-					await updateCibaRequest(ctx, authReqId, {
+					await updateAsyncAuthRequest(ctx, authReqId, {
 						lastPolledAt: Date.now(),
 						pollingInterval:
-							cibaRequest.pollingInterval + SLOW_DOWN_INTERVAL_INCREASE,
+							asyncAuthRequest.pollingInterval + SLOW_DOWN_INTERVAL_INCREASE,
 					});
 					throw new APIError("BAD_REQUEST", {
 						error: "slow_down",
-						error_description: CIBA_ERROR_CODES.SLOW_DOWN.message,
+						error_description: ASYNC_AUTH_ERROR_CODES.SLOW_DOWN.message,
 					});
 				}
 			}
 
 			// Update last polled time
-			await updateCibaRequest(ctx, authReqId, {
+			await updateAsyncAuthRequest(ctx, authReqId, {
 				lastPolledAt: Date.now(),
 			});
 
 			// Check status
-			if (cibaRequest.status === "pending") {
+			if (asyncAuthRequest.status === "pending") {
 				throw new APIError("BAD_REQUEST", {
 					error: "authorization_pending",
-					error_description: CIBA_ERROR_CODES.AUTHORIZATION_PENDING.message,
+					error_description:
+						ASYNC_AUTH_ERROR_CODES.AUTHORIZATION_PENDING.message,
 				});
 			}
 
-			if (cibaRequest.status === "rejected") {
-				await deleteCibaRequest(ctx, authReqId);
+			if (asyncAuthRequest.status === "rejected") {
+				await deleteAsyncAuthRequest(ctx, authReqId);
 				throw new APIError("BAD_REQUEST", {
 					error: "access_denied",
-					error_description: CIBA_ERROR_CODES.ACCESS_DENIED.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.ACCESS_DENIED.message,
 				});
 			}
 
 			// Status is "approved" - issue tokens using shared utility
-			const tokenResponse = await generateTokensForCibaRequest(
+			const tokenResponse = await generateTokensForAsyncAuthRequest(
 				ctx,
-				cibaRequest,
+				asyncAuthRequest,
 			);
 
-			// Delete the CIBA request
-			await deleteCibaRequest(ctx, authReqId);
+			// Delete the async auth request
+			await deleteAsyncAuthRequest(ctx, authReqId);
 
 			// Return OIDC-compliant token response
 			return ctx.json(tokenResponse, {

@@ -1,5 +1,5 @@
 /**
- * Shared client credential validation for CIBA endpoints.
+ * Shared client credential validation for async auth endpoints.
  * Used by both bc-authorize (routes.ts) and the token handler (token-handler.ts).
  */
 
@@ -11,7 +11,8 @@ import {
 	parseClientCredentials,
 	verifyClientSecret,
 } from "../oidc-provider/utils";
-import { CIBA_ERROR_CODES } from "./error-codes";
+import { ASYNC_AUTH_ERROR_CODES } from "./error-codes";
+import type { AsyncAuthAgent } from "./types";
 
 export type MinimalClient = {
 	clientId: string;
@@ -40,7 +41,7 @@ export function getOidcPluginContext(
 	if (!oidcPlugin) {
 		throw new APIError("INTERNAL_SERVER_ERROR", {
 			error: "server_error",
-			error_description: CIBA_ERROR_CODES.OIDC_PROVIDER_REQUIRED.message,
+			error_description: ASYNC_AUTH_ERROR_CODES.OIDC_PROVIDER_REQUIRED.message,
 		});
 	}
 	const oidcOpts = (oidcPlugin.options || {}) as OIDCOptions;
@@ -57,14 +58,62 @@ export function getOidcPluginContext(
 	return { oidcOpts, storeMethod, trustedClients, pluginId: oidcPlugin.id };
 }
 
+const ensuredAgents = new Set<string>();
+
+/**
+ * Lazily creates a DB record for an inline agent so FK constraints pass
+ * when storing oauthAccessToken. Only runs once per clientId per process.
+ */
+async function ensureAgentClientExists(
+	ctx: GenericEndpointContext,
+	agent: AsyncAuthAgent,
+	pluginId: string,
+): Promise<void> {
+	if (ensuredAgents.has(agent.clientId)) return;
+
+	const modelName =
+		pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
+	const existing = await ctx.context.adapter
+		.findOne<MinimalClient>({
+			model: modelName,
+			where: [{ field: "clientId", value: agent.clientId }],
+		})
+		.catch(() => null);
+
+	if (!existing) {
+		await ctx.context.adapter
+			.create({
+				model: modelName,
+				data: {
+					clientId: agent.clientId,
+					clientSecret: agent.clientSecret,
+					name: agent.name ?? agent.clientId,
+					type: "web",
+					redirectUrls: "http://localhost",
+					metadata: agent.metadata ? JSON.stringify(agent.metadata) : undefined,
+					disabled: false,
+					createdAt: new Date(),
+					updatedAt: new Date(),
+				},
+			})
+			.catch(() => {
+				// Already exists (race condition) — fine
+			});
+	}
+
+	ensuredAgents.add(agent.clientId);
+}
+
 /**
  * Authenticate a client from request body/headers and verify its secret.
- * Returns the validated client and parsed credentials.
+ * Checks inline agents first (plain-text comparison), then falls back
+ * to oidcProvider's trusted clients and database.
  */
 export async function validateClientCredentials(
 	ctx: GenericEndpointContext,
 	body: Record<string, unknown>,
 	pluginContext: OidcPluginContext,
+	agents?: AsyncAuthAgent[],
 ): Promise<{
 	client: MinimalClient & { clientSecret: string };
 	credentials: { clientId: string; clientSecret: string };
@@ -77,13 +126,37 @@ export async function validateClientCredentials(
 	if (!credentials) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_client",
-			error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+			error_description: ASYNC_AUTH_ERROR_CODES.INVALID_CLIENT.message,
 		});
 	}
 
+	// 1. Check inline agents (plain-text secret comparison)
+	if (agents?.length) {
+		const agent = agents.find((a) => a.clientId === credentials.clientId);
+		if (agent && agent.clientSecret === credentials.clientSecret) {
+			// Ensure the agent exists as a DB record so FK constraints pass
+			// when storing access tokens. This is lazy — only runs on first use.
+			await ensureAgentClientExists(ctx, agent, pluginContext.pluginId);
+			return {
+				client: {
+					clientId: agent.clientId,
+					clientSecret: agent.clientSecret,
+					metadata: agent.metadata,
+				},
+				credentials,
+			};
+		}
+		if (agent) {
+			throw new APIError("UNAUTHORIZED", {
+				error: "invalid_client",
+				error_description: ASYNC_AUTH_ERROR_CODES.INVALID_CLIENT.message,
+			});
+		}
+	}
+
+	// 2. Check oidcProvider trusted clients
 	const { storeMethod, trustedClients, pluginId } = pluginContext;
 
-	// Check trusted clients first
 	const trustedClient = trustedClients?.find(
 		(c) => c.clientId === credentials.clientId,
 	);
@@ -96,7 +169,7 @@ export async function validateClientCredentials(
 			}
 		: undefined;
 
-	// If not in trusted clients, check database
+	// 3. Check database
 	if (!client) {
 		const modelName =
 			pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
@@ -114,7 +187,7 @@ export async function validateClientCredentials(
 	if (!client) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_client",
-			error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+			error_description: ASYNC_AUTH_ERROR_CODES.INVALID_CLIENT.message,
 		});
 	}
 
@@ -141,7 +214,7 @@ export async function validateClientCredentials(
 	if (!isValidSecret) {
 		throw new APIError("UNAUTHORIZED", {
 			error: "invalid_client",
-			error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
+			error_description: ASYNC_AUTH_ERROR_CODES.INVALID_CLIENT.message,
 		});
 	}
 

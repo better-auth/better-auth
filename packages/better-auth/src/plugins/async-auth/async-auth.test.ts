@@ -2,9 +2,9 @@ import { decodeJwt } from "jose";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { oidcProvider } from "../oidc-provider";
-import { ciba } from ".";
+import { asyncAuth } from ".";
 
-describe("CIBA plugin", async () => {
+describe("async-auth plugin", async () => {
 	// Mock notification callback
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
@@ -15,7 +15,7 @@ describe("CIBA plugin", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 					requestLifetime: "5m",
 					pollingInterval: "5s",
@@ -46,7 +46,7 @@ describe("CIBA plugin", async () => {
 	});
 
 	describe("bc-authorize endpoint", () => {
-		it("should initiate CIBA request with valid credentials", async () => {
+		it("should initiate async auth request with valid credentials", async () => {
 			const response = await auth.api.bcAuthorize({
 				body: {
 					client_id: testClientId,
@@ -287,7 +287,7 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -333,7 +333,7 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			const verifyResponse = await auth.api.cibaVerify({
+			const verifyResponse = await auth.api.asyncAuthVerify({
 				query: { auth_req_id: bcResponse.auth_req_id },
 			});
 
@@ -346,7 +346,7 @@ describe("CIBA plugin", async () => {
 
 		it("should reject invalid auth_req_id", async () => {
 			await expect(
-				auth.api.cibaVerify({
+				auth.api.asyncAuthVerify({
 					query: { auth_req_id: "invalid-id" },
 				}),
 			).rejects.toMatchObject({
@@ -368,12 +368,12 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
 
-			const verifyResponse = await auth.api.cibaVerify({
+			const verifyResponse = await auth.api.asyncAuthVerify({
 				query: { auth_req_id: bcResponse.auth_req_id },
 			});
 			expect(verifyResponse.status).toBe("approved");
@@ -391,12 +391,12 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaReject({
+			await auth.api.asyncAuthReject({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
 
-			const verifyResponse = await auth.api.cibaVerify({
+			const verifyResponse = await auth.api.asyncAuthVerify({
 				query: { auth_req_id: bcResponse.auth_req_id },
 			});
 			expect(verifyResponse.status).toBe("rejected");
@@ -408,7 +408,7 @@ describe("CIBA plugin", async () => {
 			// Sign in as the user
 			const { headers } = await signInWithTestUser();
 
-			// Initiate CIBA request
+			// Initiate async auth request
 			const bcResponse = await auth.api.bcAuthorize({
 				body: {
 					client_id: testClientId,
@@ -419,7 +419,7 @@ describe("CIBA plugin", async () => {
 			});
 
 			// User approves
-			const approveResponse = await auth.api.cibaAuthorize({
+			const approveResponse = await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -459,7 +459,7 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -489,7 +489,7 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -519,7 +519,7 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -553,7 +553,7 @@ describe("CIBA plugin", async () => {
 			const { headers } = await signInWithTestUser();
 
 			await expect(
-				auth.api.cibaAuthorize({
+				auth.api.asyncAuthAuthorize({
 					body: { auth_req_id: "nonexistent-id" },
 					headers,
 				}),
@@ -568,7 +568,7 @@ describe("CIBA plugin", async () => {
 			const { headers } = await signInWithTestUser();
 
 			await expect(
-				auth.api.cibaReject({
+				auth.api.asyncAuthReject({
 					body: { auth_req_id: "nonexistent-id" },
 					headers,
 				}),
@@ -593,7 +593,7 @@ describe("CIBA plugin", async () => {
 				"password123",
 			);
 
-			// Initiate CIBA request for test@test.com (the default test user)
+			// Initiate async auth request for test@test.com (the default test user)
 			const bcResponse = await auth.api.bcAuthorize({
 				body: {
 					client_id: testClientId,
@@ -605,7 +605,7 @@ describe("CIBA plugin", async () => {
 
 			// Other user tries to approve - should fail
 			await expect(
-				auth.api.cibaAuthorize({
+				auth.api.asyncAuthAuthorize({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers: otherHeaders, // Logged in as other-user@test.com
 				}),
@@ -630,7 +630,7 @@ describe("CIBA plugin", async () => {
 				"password123",
 			);
 
-			// Initiate CIBA request for test@test.com
+			// Initiate async auth request for test@test.com
 			const bcResponse = await auth.api.bcAuthorize({
 				body: {
 					client_id: testClientId,
@@ -642,7 +642,7 @@ describe("CIBA plugin", async () => {
 
 			// Other user tries to reject - should fail
 			await expect(
-				auth.api.cibaReject({
+				auth.api.asyncAuthReject({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers: otherHeaders,
 				}),
@@ -664,7 +664,7 @@ describe("CIBA plugin", async () => {
 			});
 
 			await expect(
-				auth.api.cibaAuthorize({
+				auth.api.asyncAuthAuthorize({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers: new Headers(),
 				}),
@@ -690,7 +690,7 @@ describe("CIBA plugin", async () => {
 			});
 
 			// User rejects
-			const rejectResponse = await auth.api.cibaReject({
+			const rejectResponse = await auth.api.asyncAuthReject({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
@@ -724,7 +724,7 @@ describe("CIBA plugin", async () => {
 			});
 
 			await expect(
-				auth.api.cibaReject({
+				auth.api.asyncAuthReject({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers: new Headers(),
 				}),
@@ -750,14 +750,14 @@ describe("CIBA plugin", async () => {
 			});
 
 			// Approve once
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
 
 			// Try to approve again
 			await expect(
-				auth.api.cibaAuthorize({
+				auth.api.asyncAuthAuthorize({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers,
 				}),
@@ -780,13 +780,13 @@ describe("CIBA plugin", async () => {
 				},
 			});
 
-			await auth.api.cibaReject({
+			await auth.api.asyncAuthReject({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
 
 			await expect(
-				auth.api.cibaReject({
+				auth.api.asyncAuthReject({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers,
 				}),
@@ -810,14 +810,14 @@ describe("CIBA plugin", async () => {
 			});
 
 			// Approve
-			await auth.api.cibaAuthorize({
+			await auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			});
 
 			// Try to reject
 			await expect(
-				auth.api.cibaReject({
+				auth.api.asyncAuthReject({
 					body: { auth_req_id: bcResponse.auth_req_id },
 					headers,
 				}),
@@ -830,7 +830,7 @@ describe("CIBA plugin", async () => {
 	});
 });
 
-describe("CIBA with hashed client secrets", async () => {
+describe("async-auth with hashed client secrets", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
 	const { auth } = await getTestInstance({
@@ -840,7 +840,7 @@ describe("CIBA with hashed client secrets", async () => {
 				storeClientSecret: "hashed",
 				allowDynamicClientRegistration: true,
 			}),
-			ciba({
+			asyncAuth({
 				sendNotification: mockSendNotification,
 			}),
 		],
@@ -858,7 +858,7 @@ describe("CIBA with hashed client secrets", async () => {
 		const clientId = registrationResponse.client_id;
 		const clientSecret = registrationResponse.client_secret!;
 
-		// Now use CIBA with the returned credentials
+		// Now use async auth with the returned credentials
 		const bcResponse = await auth.api.bcAuthorize({
 			body: {
 				client_id: clientId,
@@ -872,7 +872,7 @@ describe("CIBA with hashed client secrets", async () => {
 	});
 });
 
-describe("CIBA push delivery mode", async () => {
+describe("async-auth push delivery mode", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 	// Track push delivery requests
 	const pushRequests: Array<{ url: string; headers: Headers; body: unknown }> =
@@ -885,7 +885,7 @@ describe("CIBA push delivery mode", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 					deliveryMode: "poll", // Default poll, clients can override via metadata
 				}),
@@ -912,7 +912,8 @@ describe("CIBA push delivery mode", async () => {
 				client_name: "Push Agent",
 				metadata: {
 					backchannel_token_delivery_mode: "push",
-					client_notification_endpoint: "http://localhost:9999/ciba/callback",
+					client_notification_endpoint:
+						"http://localhost:9999/async-auth/callback",
 				},
 			},
 		});
@@ -993,7 +994,7 @@ describe("CIBA push delivery mode", async () => {
 		});
 
 		// Approve the request
-		await auth.api.cibaAuthorize({
+		await auth.api.asyncAuthAuthorize({
 			body: { auth_req_id: bcResponse.auth_req_id },
 			headers,
 		});
@@ -1016,7 +1017,7 @@ describe("CIBA push delivery mode", async () => {
 	});
 });
 
-describe("CIBA request expiration", async () => {
+describe("async-auth request expiration", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
 	const { auth, signInWithTestUser } = await getTestInstance(
@@ -1026,7 +1027,7 @@ describe("CIBA request expiration", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 					requestLifetime: "1s",
 					pollingInterval: "0s",
@@ -1094,7 +1095,7 @@ describe("CIBA request expiration", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 1200));
 
 		await expect(
-			auth.api.cibaVerify({
+			auth.api.asyncAuthVerify({
 				query: { auth_req_id: bcResponse.auth_req_id },
 			}),
 		).rejects.toBeDefined();
@@ -1115,7 +1116,7 @@ describe("CIBA request expiration", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 1200));
 
 		await expect(
-			auth.api.cibaAuthorize({
+			auth.api.asyncAuthAuthorize({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			}),
@@ -1137,7 +1138,7 @@ describe("CIBA request expiration", async () => {
 		await new Promise((resolve) => setTimeout(resolve, 1200));
 
 		await expect(
-			auth.api.cibaReject({
+			auth.api.asyncAuthReject({
 				body: { auth_req_id: bcResponse.auth_req_id },
 				headers,
 			}),
@@ -1145,7 +1146,7 @@ describe("CIBA request expiration", async () => {
 	});
 });
 
-describe("CIBA push HTTPS enforcement", async () => {
+describe("async-auth push HTTPS enforcement", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
 	const { auth } = await getTestInstance(
@@ -1155,7 +1156,7 @@ describe("CIBA push HTTPS enforcement", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 				}),
 			],
@@ -1172,7 +1173,8 @@ describe("CIBA push HTTPS enforcement", async () => {
 				client_name: "Insecure Push Client",
 				metadata: {
 					backchannel_token_delivery_mode: "push",
-					client_notification_endpoint: "http://example.com/ciba/callback",
+					client_notification_endpoint:
+						"http://example.com/async-auth/callback",
 				},
 			},
 		});
@@ -1203,7 +1205,8 @@ describe("CIBA push HTTPS enforcement", async () => {
 				client_name: "Secure Push Client",
 				metadata: {
 					backchannel_token_delivery_mode: "push",
-					client_notification_endpoint: "https://example.com/ciba/callback",
+					client_notification_endpoint:
+						"https://example.com/async-auth/callback",
 				},
 			},
 		});
@@ -1228,7 +1231,8 @@ describe("CIBA push HTTPS enforcement", async () => {
 				client_name: "Local Push Client",
 				metadata: {
 					backchannel_token_delivery_mode: "push",
-					client_notification_endpoint: "http://localhost:9999/ciba/callback",
+					client_notification_endpoint:
+						"http://localhost:9999/async-auth/callback",
 				},
 			},
 		});
@@ -1247,7 +1251,7 @@ describe("CIBA push HTTPS enforcement", async () => {
 	});
 });
 
-describe("CIBA with sendVerificationEmail", async () => {
+describe("async-auth with sendVerificationEmail", async () => {
 	const mockSendEmail = vi.fn().mockResolvedValue(undefined);
 
 	const { auth } = await getTestInstance(
@@ -1257,7 +1261,7 @@ describe("CIBA with sendVerificationEmail", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendVerificationEmail: mockSendEmail,
 				}),
 			],
@@ -1292,7 +1296,7 @@ describe("CIBA with sendVerificationEmail", async () => {
 	});
 });
 
-describe("CIBA with sendNotification takes precedence", async () => {
+describe("async-auth with sendNotification takes precedence", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 	const mockSendEmail = vi.fn().mockResolvedValue(undefined);
 
@@ -1303,7 +1307,7 @@ describe("CIBA with sendNotification takes precedence", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 					sendVerificationEmail: mockSendEmail,
 				}),
@@ -1337,7 +1341,7 @@ describe("CIBA with sendNotification takes precedence", async () => {
 	});
 });
 
-describe("CIBA with id_token_hint", async () => {
+describe("async-auth with id_token_hint", async () => {
 	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
 
 	const { auth, signInWithTestUser } = await getTestInstance(
@@ -1347,7 +1351,7 @@ describe("CIBA with id_token_hint", async () => {
 					loginPage: "/sign-in",
 					allowDynamicClientRegistration: true,
 				}),
-				ciba({
+				asyncAuth({
 					sendNotification: mockSendNotification,
 					requestLifetime: "5m",
 					pollingInterval: "5s",
@@ -1387,7 +1391,7 @@ describe("CIBA with id_token_hint", async () => {
 			},
 		});
 
-		await auth.api.cibaAuthorize({
+		await auth.api.asyncAuthAuthorize({
 			body: { auth_req_id: bcResponse.auth_req_id },
 			headers,
 		});
@@ -1439,7 +1443,7 @@ describe("CIBA with id_token_hint", async () => {
 			},
 		});
 
-		await auth.api.cibaAuthorize({
+		await auth.api.asyncAuthAuthorize({
 			body: { auth_req_id: bcResponse.auth_req_id },
 			headers,
 		});
@@ -1524,10 +1528,178 @@ describe("CIBA with id_token_hint", async () => {
 	});
 });
 
-describe("CIBA config validation", () => {
+describe("async-auth config validation", () => {
 	it("should reject config when neither sendNotification nor sendVerificationEmail is provided", async () => {
 		expect(() => {
-			ciba({} as any);
+			asyncAuth({} as any);
 		}).toThrow();
+	});
+});
+
+describe("async-auth with inline agents", async () => {
+	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
+
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				oidcProvider({
+					loginPage: "/sign-in",
+				}),
+				asyncAuth({
+					sendNotification: mockSendNotification,
+					agents: [
+						{
+							name: "My CLI Tool",
+							clientId: "cli-agent",
+							clientSecret: "cli-secret-123",
+						},
+						{
+							name: "My Bot",
+							clientId: "bot-agent",
+							clientSecret: "bot-secret-456",
+						},
+					],
+				}),
+			],
+		},
+		{
+			disableTestUser: false,
+		},
+	);
+
+	beforeEach(() => {
+		mockSendNotification.mockClear();
+	});
+
+	it("should authenticate with inline agent credentials", async () => {
+		const response = await auth.api.bcAuthorize({
+			body: {
+				client_id: "cli-agent",
+				client_secret: "cli-secret-123",
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		expect(response.auth_req_id).toBeDefined();
+		expect(response.expires_in).toBeGreaterThan(0);
+	});
+
+	it("should reject wrong secret for inline agent", async () => {
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: "cli-agent",
+					client_secret: "wrong-secret",
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+			},
+		});
+	});
+
+	it("should work with multiple agents", async () => {
+		const response = await auth.api.bcAuthorize({
+			body: {
+				client_id: "bot-agent",
+				client_secret: "bot-secret-456",
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		expect(response.auth_req_id).toBeDefined();
+	});
+
+	it("should complete full flow with inline agent credentials", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: "cli-agent",
+				client_secret: "cli-secret-123",
+				scope: "openid",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await auth.api.asyncAuthAuthorize({
+			body: { auth_req_id: bcResponse.auth_req_id },
+			headers,
+		});
+
+		const tokenResponse = await auth.api.oAuth2token({
+			body: {
+				grant_type: "urn:openid:params:grant-type:ciba",
+				auth_req_id: bcResponse.auth_req_id,
+				client_id: "cli-agent",
+				client_secret: "cli-secret-123",
+			},
+		});
+
+		expect(tokenResponse.access_token).toBeDefined();
+		expect(tokenResponse.token_type).toBe("Bearer");
+	});
+
+	it("should reject unknown client even with agents configured", async () => {
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: "unknown-agent",
+					client_secret: "any-secret",
+					scope: "openid",
+					login_hint: "test@test.com",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_client",
+			},
+		});
+	});
+
+	it("should pass agent metadata through to client", async () => {
+		const mockNotification = vi.fn().mockResolvedValue(undefined);
+
+		const { auth: metaAuth } = await getTestInstance(
+			{
+				plugins: [
+					oidcProvider({ loginPage: "/sign-in" }),
+					asyncAuth({
+						sendNotification: mockNotification,
+						agents: [
+							{
+								name: "Push Bot",
+								clientId: "push-bot",
+								clientSecret: "push-secret",
+								metadata: {
+									backchannel_token_delivery_mode: "push",
+									client_notification_endpoint: "http://localhost:9999/notify",
+								},
+							},
+						],
+					}),
+				],
+			},
+			{ disableTestUser: false },
+		);
+
+		const response = await metaAuth.api.bcAuthorize({
+			body: {
+				client_id: "push-bot",
+				client_secret: "push-secret",
+				scope: "openid",
+				login_hint: "test@test.com",
+				client_notification_token: "my-push-token",
+			},
+		});
+
+		// Push mode should NOT include interval
+		expect(response.auth_req_id).toBeDefined();
+		expect(response.interval).toBeUndefined();
 	});
 });

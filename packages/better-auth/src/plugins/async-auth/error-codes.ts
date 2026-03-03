@@ -1,6 +1,6 @@
 import { defineErrorCodes } from "@better-auth/core/utils/error-codes";
 
-export const CIBA_ERROR_CODES = defineErrorCodes({
+export const ASYNC_AUTH_ERROR_CODES = defineErrorCodes({
 	// Client/Request errors
 	INVALID_REQUEST: "Invalid request",
 	INVALID_CLIENT: "Invalid client credentials",
@@ -31,5 +31,6 @@ export const CIBA_ERROR_CODES = defineErrorCodes({
 		"Client does not have a client_notification_endpoint configured",
 
 	// Plugin errors
-	OIDC_PROVIDER_REQUIRED: "CIBA requires the oidcProvider plugin to be enabled",
+	OIDC_PROVIDER_REQUIRED:
+		"Async Auth requires the oidcProvider plugin to be enabled",
 });

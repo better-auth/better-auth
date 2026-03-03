@@ -9,18 +9,18 @@ import { ms } from "../../utils/time";
 import { verifyJWT } from "../jwt";
 import type { OIDCOptions } from "../oidc-provider/types";
 import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
-import { CIBA_ERROR_CODES } from "./error-codes";
+import { ASYNC_AUTH_ERROR_CODES } from "./error-codes";
 import { isSecureEndpoint, pushTokensToClient } from "./push-delivery";
 import {
-	deleteCibaRequest,
-	findCibaRequest,
-	storeCibaRequest,
-	updateCibaRequest,
+	deleteAsyncAuthRequest,
+	findAsyncAuthRequest,
+	storeAsyncAuthRequest,
+	updateAsyncAuthRequest,
 } from "./storage";
 import type {
-	CibaDeliveryMode,
-	CibaInternalOptions,
-	CibaRequestData,
+	AsyncAuthDeliveryMode,
+	AsyncAuthInternalOptions,
+	AsyncAuthRequestData,
 } from "./types";
 
 /**
@@ -47,7 +47,7 @@ const bcAuthorizeBodySchema = z
 		path: ["login_hint"],
 	});
 
-export const bcAuthorize = (opts: CibaInternalOptions) =>
+export const bcAuthorize = (opts: AsyncAuthInternalOptions) =>
 	createAuthEndpoint(
 		"/oauth/bc-authorize",
 		{
@@ -56,7 +56,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			metadata: {
 				openapi: {
 					description:
-						"Initiate a CIBA (Client-Initiated Backchannel Authentication) request",
+						"Initiate an async auth (CIBA) backchannel authentication request",
 					responses: {
 						200: {
 							description: "Authentication request initiated",
@@ -105,6 +105,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				ctx,
 				ctx.body as Record<string, unknown>,
 				pluginContext,
+				opts.agents,
 			);
 
 			// Validate scope includes openid
@@ -128,7 +129,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				clientMetadata = client.metadata;
 			}
 
-			let deliveryMode: CibaDeliveryMode = opts.deliveryMode;
+			let deliveryMode: AsyncAuthDeliveryMode = opts.deliveryMode;
 			let clientNotificationEndpoint: string | undefined;
 
 			if (clientMetadata.backchannel_token_delivery_mode === "push") {
@@ -145,7 +146,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
 						error_description:
-							CIBA_ERROR_CODES.MISSING_NOTIFICATION_ENDPOINT.message,
+							ASYNC_AUTH_ERROR_CODES.MISSING_NOTIFICATION_ENDPOINT.message,
 					});
 				}
 				// CIBA spec §10.3: notification endpoint MUST use TLS.
@@ -160,7 +161,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
 						error_description:
-							CIBA_ERROR_CODES.MISSING_NOTIFICATION_TOKEN.message,
+							ASYNC_AUTH_ERROR_CODES.MISSING_NOTIFICATION_TOKEN.message,
 					});
 				}
 			}
@@ -291,7 +292,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			if (!user) {
 				throw new APIError("BAD_REQUEST", {
 					error: "unknown_user_id",
-					error_description: CIBA_ERROR_CODES.UNKNOWN_USER_ID.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.UNKNOWN_USER_ID.message,
 				});
 			}
 
@@ -303,8 +304,8 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 			const pollingIntervalMs = ms(opts.pollingInterval as TimeString);
 			const expiresAt = Date.now() + requestLifetimeMs;
 
-			// Store CIBA request
-			const cibaRequest: CibaRequestData = {
+			// Store async auth request
+			const asyncAuthRequest: AsyncAuthRequestData = {
 				authReqId,
 				clientId: credentials.clientId,
 				userId: user.id,
@@ -319,7 +320,7 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 				clientNotificationEndpoint,
 			};
 
-			await storeCibaRequest(ctx, cibaRequest);
+			await storeAsyncAuthRequest(ctx, asyncAuthRequest);
 
 			// Build approval URL
 			const approvalUrl = new URL(opts.approvalUri, ctx.context.baseURL);
@@ -362,13 +363,13 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 	);
 
 /**
- * GET /ciba/verify
- * Get CIBA request details for the approval UI.
+ * GET /async-auth/verify
+ * Get async auth request details for the approval UI.
  *
  * Security note: This endpoint is intentionally unauthenticated. The
  * auth_req_id acts as an unguessable bearer token (32 cryptographically
  * random alphanumeric characters ≈ 190 bits of entropy). This is consistent
- * with CIBA spec — the auth_req_id is a secret shared between the AS and
+ * with the CIBA spec — the auth_req_id is a secret shared between the AS and
  * the client, and this endpoint only exposes non-sensitive metadata
  * (client_id, scope, binding_message, status). No tokens or user PII
  * beyond what the client already knows are returned.
@@ -378,14 +379,14 @@ const verifyQuerySchema = z.object({
 	auth_req_id: z.string(),
 });
 
-export const cibaVerify = createAuthEndpoint(
-	"/ciba/verify",
+export const asyncAuthVerify = createAuthEndpoint(
+	"/async-auth/verify",
 	{
 		method: "GET",
 		query: verifyQuerySchema,
 		metadata: {
 			openapi: {
-				description: "Get CIBA request details for the approval UI",
+				description: "Get async auth request details for the approval UI",
 				responses: {
 					200: {
 						description: "Request details",
@@ -415,36 +416,36 @@ export const cibaVerify = createAuthEndpoint(
 	async (ctx) => {
 		const { auth_req_id } = ctx.query;
 
-		const cibaRequest = await findCibaRequest(ctx, auth_req_id);
-		if (!cibaRequest) {
+		const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+		if (!asyncAuthRequest) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
-				error_description: CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+				error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
 			});
 		}
 
 		// Check if expired
-		if (cibaRequest.expiresAt < Date.now()) {
-			await deleteCibaRequest(ctx, auth_req_id);
+		if (asyncAuthRequest.expiresAt < Date.now()) {
+			await deleteAsyncAuthRequest(ctx, auth_req_id);
 			throw new APIError("BAD_REQUEST", {
 				error: "expired_token",
-				error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
+				error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
 			});
 		}
 
 		return ctx.json({
-			auth_req_id: cibaRequest.authReqId,
-			client_id: cibaRequest.clientId,
-			scope: cibaRequest.scope,
-			binding_message: cibaRequest.bindingMessage,
-			status: cibaRequest.status,
-			expires_at: new Date(cibaRequest.expiresAt).toISOString(),
+			auth_req_id: asyncAuthRequest.authReqId,
+			client_id: asyncAuthRequest.clientId,
+			scope: asyncAuthRequest.scope,
+			binding_message: asyncAuthRequest.bindingMessage,
+			status: asyncAuthRequest.status,
+			expires_at: new Date(asyncAuthRequest.expiresAt).toISOString(),
 		});
 	},
 );
 
 /**
- * POST /ciba/authorize
+ * POST /async-auth/authorize
  * User approves the request (requires session)
  * For push mode: triggers token delivery to client's notification endpoint
  */
@@ -453,17 +454,16 @@ const authorizeBodySchema = z.object({
 	auth_req_id: z.string(),
 });
 
-export const cibaAuthorize = (opts: CibaInternalOptions) =>
+export const asyncAuthAuthorize = (opts: AsyncAuthInternalOptions) =>
 	createAuthEndpoint(
-		"/ciba/authorize",
+		"/async-auth/authorize",
 		{
 			method: "POST",
 			body: authorizeBodySchema,
 			requireHeaders: true,
 			metadata: {
 				openapi: {
-					description:
-						"Approve a CIBA authentication request (requires user session)",
+					description: "Approve an async auth request (requires user session)",
 					responses: {
 						200: {
 							description: "Request approved",
@@ -494,53 +494,55 @@ export const cibaAuthorize = (opts: CibaInternalOptions) =>
 			if (!session) {
 				throw new APIError("UNAUTHORIZED", {
 					error: "unauthorized",
-					error_description: CIBA_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+					error_description:
+						ASYNC_AUTH_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
 				});
 			}
 
 			const { auth_req_id } = ctx.body;
 
-			const cibaRequest = await findCibaRequest(ctx, auth_req_id);
-			if (!cibaRequest) {
+			const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+			if (!asyncAuthRequest) {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_request",
-					error_description: CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
 				});
 			}
 
 			// Check if expired
-			if (cibaRequest.expiresAt < Date.now()) {
-				await deleteCibaRequest(ctx, auth_req_id);
+			if (asyncAuthRequest.expiresAt < Date.now()) {
+				await deleteAsyncAuthRequest(ctx, auth_req_id);
 				throw new APIError("BAD_REQUEST", {
 					error: "expired_token",
-					error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
 				});
 			}
 
 			// Check if already processed
-			if (cibaRequest.status !== "pending") {
+			if (asyncAuthRequest.status !== "pending") {
 				throw new APIError("BAD_REQUEST", {
 					error: "invalid_request",
-					error_description: CIBA_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
+					error_description:
+						ASYNC_AUTH_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
 				});
 			}
 
 			// Verify the authenticated user matches the requested user
-			if (session.user.id !== cibaRequest.userId) {
+			if (session.user.id !== asyncAuthRequest.userId) {
 				throw new APIError("BAD_REQUEST", {
 					error: "access_denied",
-					error_description: CIBA_ERROR_CODES.USER_MISMATCH.message,
+					error_description: ASYNC_AUTH_ERROR_CODES.USER_MISMATCH.message,
 				});
 			}
 
 			// Update status to approved
-			await updateCibaRequest(ctx, auth_req_id, { status: "approved" });
+			await updateAsyncAuthRequest(ctx, auth_req_id, { status: "approved" });
 
 			// For push mode: generate and deliver tokens to client
-			const deliveryMode = cibaRequest.deliveryMode ?? "poll";
+			const deliveryMode = asyncAuthRequest.deliveryMode ?? "poll";
 			if (deliveryMode === "push") {
 				await ctx.context.runInBackgroundOrAwait(
-					pushTokensToClient(ctx, cibaRequest),
+					pushTokensToClient(ctx, asyncAuthRequest),
 				);
 			}
 
@@ -549,7 +551,7 @@ export const cibaAuthorize = (opts: CibaInternalOptions) =>
 	);
 
 /**
- * POST /ciba/reject
+ * POST /async-auth/reject
  * User rejects the request (requires session)
  */
 
@@ -557,16 +559,15 @@ const rejectBodySchema = z.object({
 	auth_req_id: z.string(),
 });
 
-export const cibaReject = createAuthEndpoint(
-	"/ciba/reject",
+export const asyncAuthReject = createAuthEndpoint(
+	"/async-auth/reject",
 	{
 		method: "POST",
 		body: rejectBodySchema,
 		requireHeaders: true,
 		metadata: {
 			openapi: {
-				description:
-					"Reject a CIBA authentication request (requires user session)",
+				description: "Reject an async auth request (requires user session)",
 				responses: {
 					200: {
 						description: "Request rejected",
@@ -597,47 +598,49 @@ export const cibaReject = createAuthEndpoint(
 		if (!session) {
 			throw new APIError("UNAUTHORIZED", {
 				error: "unauthorized",
-				error_description: CIBA_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
+				error_description:
+					ASYNC_AUTH_ERROR_CODES.AUTHENTICATION_REQUIRED.message,
 			});
 		}
 
 		const { auth_req_id } = ctx.body;
 
-		const cibaRequest = await findCibaRequest(ctx, auth_req_id);
-		if (!cibaRequest) {
+		const asyncAuthRequest = await findAsyncAuthRequest(ctx, auth_req_id);
+		if (!asyncAuthRequest) {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
-				error_description: CIBA_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
+				error_description: ASYNC_AUTH_ERROR_CODES.INVALID_AUTH_REQ_ID.message,
 			});
 		}
 
 		// Check if expired
-		if (cibaRequest.expiresAt < Date.now()) {
-			await deleteCibaRequest(ctx, auth_req_id);
+		if (asyncAuthRequest.expiresAt < Date.now()) {
+			await deleteAsyncAuthRequest(ctx, auth_req_id);
 			throw new APIError("BAD_REQUEST", {
 				error: "expired_token",
-				error_description: CIBA_ERROR_CODES.EXPIRED_TOKEN.message,
+				error_description: ASYNC_AUTH_ERROR_CODES.EXPIRED_TOKEN.message,
 			});
 		}
 
 		// Check if already processed
-		if (cibaRequest.status !== "pending") {
+		if (asyncAuthRequest.status !== "pending") {
 			throw new APIError("BAD_REQUEST", {
 				error: "invalid_request",
-				error_description: CIBA_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
+				error_description:
+					ASYNC_AUTH_ERROR_CODES.REQUEST_ALREADY_PROCESSED.message,
 			});
 		}
 
 		// Verify the authenticated user matches the requested user
-		if (session.user.id !== cibaRequest.userId) {
+		if (session.user.id !== asyncAuthRequest.userId) {
 			throw new APIError("BAD_REQUEST", {
 				error: "access_denied",
-				error_description: CIBA_ERROR_CODES.USER_MISMATCH.message,
+				error_description: ASYNC_AUTH_ERROR_CODES.USER_MISMATCH.message,
 			});
 		}
 
 		// Update status to rejected
-		await updateCibaRequest(ctx, auth_req_id, { status: "rejected" });
+		await updateAsyncAuthRequest(ctx, auth_req_id, { status: "rejected" });
 
 		return ctx.json({ success: true });
 	},

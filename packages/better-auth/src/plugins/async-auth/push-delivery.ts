@@ -1,5 +1,5 @@
 /**
- * CIBA Push Token Delivery
+ * Push Token Delivery (CIBA spec)
  *
  * Per CIBA spec Section 10.3.1:
  * - POST to client_notification_endpoint
@@ -13,9 +13,9 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { betterFetch } from "@better-fetch/fetch";
 import type { MinimalClient } from "./client-auth";
 import { getOidcPluginContext } from "./client-auth";
-import { deleteCibaRequest } from "./storage";
-import { generateTokensForCibaRequest } from "./token-utils";
-import type { CibaRequestData } from "./types";
+import { deleteAsyncAuthRequest } from "./storage";
+import { generateTokensForAsyncAuthRequest } from "./token-utils";
+import type { AsyncAuthRequestData } from "./types";
 
 /**
  * Validate that a URL uses HTTPS (CIBA spec §10.3).
@@ -65,56 +65,62 @@ async function verifyClientStillValid(
 
 /**
  * Push tokens to the client's notification endpoint.
- * Called after user approves a CIBA request in push mode.
+ * Called after user approves an async auth request in push mode.
  *
- * If delivery fails, the error is logged but the CIBA request is NOT deleted —
+ * If delivery fails, the error is logged but the request is NOT deleted —
  * this is intentional. The tokens are lost and the client has no retry mechanism
  * per the CIBA spec (push mode is fire-and-forget from the AS perspective).
  * A retry/dead-letter mechanism could be added as a future enhancement.
  */
 export async function pushTokensToClient(
 	ctx: GenericEndpointContext,
-	cibaRequest: CibaRequestData,
+	asyncAuthRequest: AsyncAuthRequestData,
 ): Promise<void> {
 	if (
-		!cibaRequest.clientNotificationEndpoint ||
-		!cibaRequest.clientNotificationToken
+		!asyncAuthRequest.clientNotificationEndpoint ||
+		!asyncAuthRequest.clientNotificationToken
 	) {
 		ctx.context.logger.error(
-			"CIBA push delivery missing endpoint or notification token",
+			"Async auth push delivery missing endpoint or notification token",
 		);
 		return;
 	}
 
-	if (!isSecureEndpoint(cibaRequest.clientNotificationEndpoint)) {
+	if (!isSecureEndpoint(asyncAuthRequest.clientNotificationEndpoint)) {
 		ctx.context.logger.error(
-			`CIBA push delivery rejected: notification endpoint must use HTTPS (got ${cibaRequest.clientNotificationEndpoint})`,
+			`Async auth push delivery rejected: notification endpoint must use HTTPS (got ${asyncAuthRequest.clientNotificationEndpoint})`,
 		);
 		return;
 	}
 
-	const clientValid = await verifyClientStillValid(ctx, cibaRequest.clientId);
+	const clientValid = await verifyClientStillValid(
+		ctx,
+		asyncAuthRequest.clientId,
+	);
 	if (!clientValid) {
 		ctx.context.logger.error(
-			`CIBA push delivery aborted: client ${cibaRequest.clientId} is disabled or no longer exists`,
+			`Async auth push delivery aborted: client ${asyncAuthRequest.clientId} is disabled or no longer exists`,
 		);
-		await deleteCibaRequest(ctx, cibaRequest.authReqId);
+		await deleteAsyncAuthRequest(ctx, asyncAuthRequest.authReqId);
 		return;
 	}
 
 	try {
-		const tokenResponse = await generateTokensForCibaRequest(ctx, cibaRequest);
+		const tokenResponse = await generateTokensForAsyncAuthRequest(
+			ctx,
+			asyncAuthRequest,
+		);
 
 		const { error } = await betterFetch(
-			cibaRequest.clientNotificationEndpoint,
+			asyncAuthRequest.clientNotificationEndpoint,
 			{
 				method: "POST",
 				headers: {
 					"Content-Type": "application/json",
-					Authorization: `Bearer ${cibaRequest.clientNotificationToken}`,
+					Authorization: `Bearer ${asyncAuthRequest.clientNotificationToken}`,
 				},
 				body: {
-					auth_req_id: cibaRequest.authReqId,
+					auth_req_id: asyncAuthRequest.authReqId,
 					...tokenResponse,
 				},
 			},
@@ -122,16 +128,16 @@ export async function pushTokensToClient(
 
 		if (error) {
 			ctx.context.logger.error(
-				`CIBA push delivery failed for auth_req_id=${cibaRequest.authReqId}:`,
+				`Async auth push delivery failed for auth_req_id=${asyncAuthRequest.authReqId}:`,
 				error,
 			);
 			return;
 		}
 
-		await deleteCibaRequest(ctx, cibaRequest.authReqId);
+		await deleteAsyncAuthRequest(ctx, asyncAuthRequest.authReqId);
 	} catch (err) {
 		ctx.context.logger.error(
-			`CIBA push delivery error for auth_req_id=${cibaRequest.authReqId}:`,
+			`Async auth push delivery error for auth_req_id=${asyncAuthRequest.authReqId}:`,
 			err,
 		);
 	}
