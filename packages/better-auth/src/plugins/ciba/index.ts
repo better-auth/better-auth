@@ -174,4 +174,4 @@ export type {
  * Use this for AI agent authentication flows where the agent requests access
  * and the user approves via notification (email, SMS, push).
  */
-export const asyncAuth = ciba;
+export const asyncAuth = (options: CibaOptions) => ciba(options);

@@ -94,8 +94,8 @@ export interface BcAuthorizeResponse {
 	auth_req_id: string;
 	/** Lifetime of the auth_req_id in seconds */
 	expires_in: number;
-	/** Minimum time between polling requests in seconds */
-	interval: number;
+	/** Minimum time between polling requests in seconds (poll mode only) */
+	interval?: number;
 }
 
 /**

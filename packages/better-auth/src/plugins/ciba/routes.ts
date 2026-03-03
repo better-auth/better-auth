@@ -10,7 +10,7 @@ import { verifyJWT } from "../jwt";
 import type { OIDCOptions } from "../oidc-provider/types";
 import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
 import { CIBA_ERROR_CODES } from "./error-codes";
-import { pushTokensToClient } from "./push-delivery";
+import { isSecureEndpoint, pushTokensToClient } from "./push-delivery";
 import {
 	deleteCibaRequest,
 	findCibaRequest,
@@ -38,6 +38,9 @@ const bcAuthorizeBodySchema = z
 		binding_message: z.string().optional(),
 		client_notification_token: z.string().optional(),
 	})
+	// CIBA spec §7.1 requires exactly one of login_hint, login_hint_token,
+	// or id_token_hint. login_hint_token is not implemented (uncommon in
+	// practice); only login_hint and id_token_hint are supported.
 	.refine((data) => !!data.login_hint !== !!data.id_token_hint, {
 		message:
 			"Exactly one of login_hint or id_token_hint must be provided (CIBA spec §7.1)",
@@ -146,26 +149,11 @@ export const bcAuthorize = (opts: CibaInternalOptions) =>
 					});
 				}
 				// CIBA spec §10.3: notification endpoint MUST use TLS.
-				// Loopback addresses are exempt (standard for local development).
-				try {
-					const endpointUrl = new URL(clientNotificationEndpoint);
-					const isLoopback =
-						endpointUrl.hostname === "localhost" ||
-						endpointUrl.hostname === "127.0.0.1" ||
-						endpointUrl.hostname === "::1";
-					if (endpointUrl.protocol !== "https:" && !isLoopback) {
-						throw new APIError("BAD_REQUEST", {
-							error: "invalid_request",
-							error_description:
-								"client_notification_endpoint must use HTTPS per CIBA spec §10.3",
-						});
-					}
-				} catch (e) {
-					if (e instanceof APIError) throw e;
+				if (!isSecureEndpoint(clientNotificationEndpoint)) {
 					throw new APIError("BAD_REQUEST", {
 						error: "invalid_request",
 						error_description:
-							"client_notification_endpoint is not a valid URL",
+							"client_notification_endpoint must use HTTPS per CIBA spec §10.3",
 					});
 				}
 				if (!ctx.body.client_notification_token) {
