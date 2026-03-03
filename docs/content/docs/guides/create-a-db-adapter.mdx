@@ -359,59 +359,49 @@ createSchema: async ({ file, tables }) => {
 
 ## Test your adapter
 
-We've provided a test suite that you can use to test your adapter. It requires you to use `vitest`.
+We've provided a test suite via the `@better-auth/test-utils` package that you can use to test your adapter. It requires you to use `vitest`.
+
+First, install the test utilities:
+
+```bash
+npm install -D @better-auth/test-utils
+```
+
+Then create a test file using `testAdapter` and `createTestSuite`:
 
 ```ts title="my-adapter.test.ts"
-import { expect, test, describe } from "vitest";
-import { runAdapterTest } from "better-auth/adapters/test";
+import { testAdapter, createTestSuite } from "@better-auth/test-utils/adapter";
 import { myAdapter } from "./my-adapter";
 
-describe("My Adapter Tests", async () => {
-  afterAll(async () => {
-    // Run DB cleanup here...
-  });
-  const adapter = myAdapter({
-    debugLogs: {
-      // If your adapter config allows passing in debug logs, then pass this here.
-      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-    },
-  });
+const normalTestSuite = createTestSuite("Normal", ({ test, adapter }) => [
+  test("should create and find a user", async () => {
+    // Write your adapter tests here using the adapter instance
+  }),
+]);
 
-  runAdapterTest({
-    getAdapter: async (betterAuthOptions = {}) => {
-      return adapter(betterAuthOptions);
-    },
-  });
+const { execute } = await testAdapter({
+  adapter: (options) => {
+    return myAdapter(/* your adapter config */);
+  },
+  runMigrations: async (options) => {
+    // Run your database migrations here
+  },
+  tests: [
+    normalTestSuite(),
+  ],
+  async onFinish() {
+    // Optional: cleanup after all tests (e.g., delete a DB file)
+  },
 });
+
+execute();
 ```
 
-### Numeric ID tests
+The `testAdapter` function handles the test lifecycle for you, including running migrations before tests and cleaning up all tables after tests complete.
 
-If your database supports numeric IDs, then you should run this test as well:
-
-```ts title="my-adapter.number-id.test.ts"
-import { expect, test, describe } from "vitest";
-import { runNumberIdAdapterTest } from "better-auth/adapters/test";
-import { myAdapter } from "./my-adapter";
-
-describe("My Adapter Numeric ID Tests", async () => {
-  afterAll(async () => {
-    // Run DB cleanup here...
-  });
-  const adapter = myAdapter({
-    debugLogs: {
-      // If your adapter config allows passing in debug logs, then pass this here.
-      isRunningAdapterTests: true, // This is our super secret flag to let us know to only log debug logs if a test fails.
-    },
-  });
-
-  runNumberIdAdapterTest({
-    getAdapter: async (betterAuthOptions = {}) => {
-      return adapter(betterAuthOptions);
-    },
-  });
-});
-```
+<Callout type="info">
+  In v1.4, adapter tests used `runAdapterTest` and `runNumberIdAdapterTest` from `better-auth/adapters/test`. That export has been removed in v1.5. Use `@better-auth/test-utils/adapter` instead.
+</Callout>
 
 ## Config
 
