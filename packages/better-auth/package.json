@@ -505,6 +505,7 @@
   },
   "devDependencies": {
     "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/error-codes-extractor": "workspace:*",
     "@better-auth/mongo-adapter": "workspace:*",
     "@better-auth/prisma-adapter": "workspace:*",
     "@lynx-js/react": "^0.116.3",

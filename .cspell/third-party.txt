@@ -38,3 +38,5 @@ WorkOS
 authjs
 vite
 electronjs
+Authy
+grecaptcha
