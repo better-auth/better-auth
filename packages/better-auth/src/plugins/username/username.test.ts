@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { USERNAME_ERROR_CODES, username } from ".";
 import { usernameClient } from "./client";
@@ -521,6 +521,14 @@ describe("isUsernameAvailable with custom validator", async () => {
 			username: "invalid_user",
 			password: "password1234",
 		});
+
+		type Error = Exclude<typeof signInRes.error, null>;
+		expectTypeOf<Error>().toEqualTypeOf<{
+			message?: string | undefined;
+			code?: string;
+			statusText: string;
+			status: number;
+		}>();
 
 		expect(signInRes.error).toBeDefined();
 		expect(signInRes.error?.code).toBe(
