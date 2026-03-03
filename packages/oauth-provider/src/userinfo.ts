@@ -3,6 +3,7 @@ import { APIError } from "better-auth/api";
 import type { User } from "better-auth/types";
 import { validateAccessToken } from "./introspect";
 import type { OAuthOptions, Scope } from "./types";
+import { getClient, resolveSubjectIdentifier } from "./utils";
 
 /**
  * Provides shared /userinfo and id_token claims functionality
@@ -80,6 +81,21 @@ export async function userInfoEndpoint(
 	}
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
+
+	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
+	if (opts.pairwiseSecret) {
+		const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
+		if (clientId) {
+			const client = await getClient(ctx, opts, clientId);
+			if (client) {
+				baseUserClaims.sub = await resolveSubjectIdentifier(
+					user.id,
+					client,
+					opts,
+				);
+			}
+		}
+	}
 	const additionalInfoUserClaims =
 		opts.customUserInfoClaims && scopes?.length
 			? await opts.customUserInfoClaims({ user, scopes, jwt })

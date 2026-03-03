@@ -27,6 +27,10 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			subjectType: {
+				type: "string",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,

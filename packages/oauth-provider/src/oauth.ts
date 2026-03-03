@@ -118,6 +118,13 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 		clientRegistrationAllowedScopes,
 	};
 
+	// Validate pairwiseSecret minimum length
+	if (opts.pairwiseSecret && opts.pairwiseSecret.length < 32) {
+		throw new BetterAuthError(
+			"pairwiseSecret must be at least 32 characters long for adequate HMAC-SHA256 security",
+		);
+	}
+
 	// TODO: device_code grant also allows for refresh tokens
 	if (
 		opts.grantTypes &&
@@ -1131,6 +1138,7 @@ export const oauthProvider = <O extends OAuthOptions<Scope[]>>(options: O) => {
 							.default(["code"])
 							.optional(),
 						type: z.enum(["web", "native", "user-agent-based"]).optional(),
+						subject_type: z.enum(["public", "pairwise"]).optional(),
 					}),
 					metadata: {
 						openapi: {
