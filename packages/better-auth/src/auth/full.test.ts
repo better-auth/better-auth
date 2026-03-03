@@ -71,9 +71,6 @@ describe("auth type", () => {
 	});
 });
 
-/**
- * @see https://github.com/better-auth/better-auth/issues/8305
- */
 describe("additionalFields config typing", () => {
 	test("should reject extraneous keys in user.additionalFields", () => {
 		// @ts-expect-error - unknown key should not be allowed
