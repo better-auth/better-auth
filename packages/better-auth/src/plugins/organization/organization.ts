@@ -5,7 +5,7 @@ import { APIError } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../api";
 import { shimContext } from "../../utils/shim";
-import type { AccessControl } from "../access";
+import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { defaultRoles } from "./access";
 import { getOrgAdapter } from "./adapter";
@@ -183,7 +183,7 @@ const createHasPermission = <O extends OrganizationOptions>(options: O) => {
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};

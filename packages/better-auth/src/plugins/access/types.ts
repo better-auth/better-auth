@@ -1,6 +1,8 @@
 import type { LiteralString } from "@better-auth/core";
 import type { AuthorizeResponse, createAccessControl } from "./access";
 
+export type ArrayElement<T> = T extends readonly (infer E)[] ? E : never;
+
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
 	| T[number][]
 	| ReadonlyArray<T[number]>;

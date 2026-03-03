@@ -15,7 +15,7 @@ import {
 } from "../../cookies";
 import { parseSessionOutput, parseUserOutput } from "../../db/schema";
 import { getDate } from "../../utils/date";
-import type { AccessControl } from "../access";
+import type { AccessControl, ArrayElement } from "../access";
 import type { defaultStatements } from "./access";
 import { ADMIN_ERROR_CODES } from "./error-codes";
 import { hasPermission } from "./has-permission";
@@ -1603,7 +1603,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
