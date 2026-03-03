@@ -27,10 +27,19 @@ export const captcha = (options: CaptchaOptions) =>
 					? options.endpoints
 					: defaultEndpoints;
 
+				const url = new URL(request.url);
+				const basePath = ctx.options.basePath ?? "/api/auth";
+				let pathname = url.pathname.replace(basePath, "");
+
+				// remove trailing or leading slashes
+				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
+				if (pathname.startsWith("//")) pathname = pathname.slice(1);
+
 				// Must be `startsWith` not `includes` otherwise it might match endpoints unintentionally.
 				// E.g. `/sign-in/email` could match `/sign-in/email-otp`
-				if (!endpoints.some((endpoint) => request.url.startsWith(endpoint)))
+				if (!endpoints.some((endpoint) => pathname.startsWith(endpoint))) {
 					return undefined;
+				}
 
 				if (!options.secretKey) {
 					throw new Error(INTERNAL_ERROR_CODES.MISSING_SECRET_KEY.message);
