@@ -131,7 +131,9 @@ export class DiscoveryError extends Error {
 		super(message, options);
 		this.name = "DiscoveryError";
 		this.code = code;
-		this.details = details;
+		if (details !== undefined) {
+			this.details = details;
+		}
 
 		// Maintains proper stack trace for where the error was thrown
 		if (Error.captureStackTrace) {

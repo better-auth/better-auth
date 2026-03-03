@@ -48,6 +48,7 @@ export function createSP(
 	},
 ) {
 	const sloLocation = `${baseURL}/sso/saml2/sp/slo/${providerId}`;
+	const spPk = config.spMetadata?.privateKey ?? config.privateKey;
 	return saml.ServiceProvider({
 		entityID: config.spMetadata?.entityID || config.issuer,
 		assertionConsumerService: [
@@ -70,9 +71,13 @@ export function createSP(
 		wantMessageSigned: config.wantAssertionsSigned || false,
 		wantLogoutRequestSigned: sloOptions?.wantLogoutRequestSigned ?? false,
 		wantLogoutResponseSigned: sloOptions?.wantLogoutResponseSigned ?? false,
-		metadata: config.spMetadata?.metadata,
-		privateKey: config.spMetadata?.privateKey || config.privateKey,
-		privateKeyPass: config.spMetadata?.privateKeyPass,
+		...(config.spMetadata?.metadata !== undefined
+			? { metadata: config.spMetadata.metadata }
+			: {}),
+		...(spPk !== undefined ? { privateKey: spPk } : {}),
+		...(config.spMetadata?.privateKeyPass !== undefined
+			? { privateKeyPass: config.spMetadata.privateKeyPass }
+			: {}),
 	});
 }
 
@@ -81,10 +86,18 @@ export function createIdP(config: SAMLConfig) {
 	if (idpData?.metadata) {
 		return saml.IdentityProvider({
 			metadata: idpData.metadata,
-			privateKey: idpData.privateKey,
-			privateKeyPass: idpData.privateKeyPass,
-			encPrivateKey: idpData.encPrivateKey,
-			encPrivateKeyPass: idpData.encPrivateKeyPass,
+			...(idpData.privateKey !== undefined
+				? { privateKey: idpData.privateKey }
+				: {}),
+			...(idpData.privateKeyPass !== undefined
+				? { privateKeyPass: idpData.privateKeyPass }
+				: {}),
+			...(idpData.encPrivateKey !== undefined
+				? { encPrivateKey: idpData.encPrivateKey }
+				: {}),
+			...(idpData.encPrivateKeyPass !== undefined
+				? { encPrivateKeyPass: idpData.encPrivateKeyPass }
+				: {}),
 		});
 	}
 	return saml.IdentityProvider({
@@ -95,7 +108,9 @@ export function createIdP(config: SAMLConfig) {
 				Location: config.entryPoint,
 			},
 		],
-		singleLogoutService: idpData?.singleLogoutService,
+		...(idpData?.singleLogoutService !== undefined
+			? { singleLogoutService: idpData.singleLogoutService }
+			: {}),
 		signingCert: idpData?.cert || config.cert,
 	});
 }

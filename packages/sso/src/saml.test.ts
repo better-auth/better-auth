@@ -2668,7 +2668,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			params: {
 				providerId: "idp-initiated-provider",
 			},
-			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+			...(cookieHeader ? { headers: { cookie: cookieHeader } } : {}),
 			asResponse: true,
 		});
 
@@ -2852,7 +2852,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			params: {
 				providerId: "relaystate-provider",
 			},
-			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+			...(cookieHeader ? { headers: { cookie: cookieHeader } } : {}),
 			asResponse: true,
 		});
 
@@ -2940,7 +2940,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			params: {
 				providerId: "issue-6615-provider",
 			},
-			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+			...(cookieHeader ? { headers: { cookie: cookieHeader } } : {}),
 			asResponse: true,
 		});
 
@@ -3098,7 +3098,7 @@ describe("SAML SSO - IdP Initiated Flow", () => {
 			params: {
 				providerId: "open-redirect-get-provider",
 			},
-			headers: cookieHeader ? { cookie: cookieHeader } : undefined,
+			...(cookieHeader ? { headers: { cookie: cookieHeader } } : {}),
 			asResponse: true,
 		});
 

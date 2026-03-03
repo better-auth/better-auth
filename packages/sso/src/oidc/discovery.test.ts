@@ -325,10 +325,11 @@ describe("OIDC Discovery", () => {
 		});
 
 		it("should default to client_secret_basic if not specified in discovery", () => {
-			const doc = createMockDiscoveryDocument({
-				token_endpoint_auth_methods_supported: undefined,
-			});
-			expect(selectTokenEndpointAuthMethod(doc)).toBe("client_secret_basic");
+			const { token_endpoint_auth_methods_supported: _, ...rest } =
+				createMockDiscoveryDocument();
+			expect(selectTokenEndpointAuthMethod(rest as OIDCDiscoveryDocument)).toBe(
+				"client_secret_basic",
+			);
 		});
 
 		it("should default to client_secret_basic for empty array", () => {

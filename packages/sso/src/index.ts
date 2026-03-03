@@ -245,8 +245,14 @@ export function sso<O extends SSOOptions>(
 
 						await assignOrganizationByDomain(ctx, {
 							user: newSession.user,
-							provisioningOptions: options?.organizationProvisioning,
-							domainVerification: options?.domainVerification,
+							...(options?.organizationProvisioning !== undefined
+								? {
+										provisioningOptions: options.organizationProvisioning,
+									}
+								: {}),
+							...(options?.domainVerification !== undefined
+								? { domainVerification: options.domainVerification }
+								: {}),
 						});
 					}),
 				},

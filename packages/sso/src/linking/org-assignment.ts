@@ -60,7 +60,7 @@ export async function assignOrganizationFromProvider(
 		? await provisioningOptions.getRole({
 				user,
 				userInfo: profile.rawAttributes || {},
-				token,
+				...(token !== undefined ? { token } : {}),
 				provider,
 			})
 		: provisioningOptions?.defaultRole || "member";

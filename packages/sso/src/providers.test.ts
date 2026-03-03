@@ -153,7 +153,7 @@ describe("SSO provider read endpoints", () => {
 				issuer: "https://idp.example.com",
 				domain: "example.com",
 				userId,
-				organizationId,
+				...(organizationId !== undefined ? { organizationId } : {}),
 				oidcConfig: JSON.stringify({
 					clientId,
 					clientSecret: "super-secret-value",

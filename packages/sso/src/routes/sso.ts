@@ -276,12 +276,14 @@ export const spMetadata = (options?: SSOOptions) => {
 									`${ctx.context.baseURL}/sso/saml2/sp/acs/${provider.id}`,
 							},
 						],
-						singleLogoutService,
+						...(singleLogoutService !== undefined
+							? { singleLogoutService }
+							: {}),
 						wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
 						authnRequestsSigned: parsedSamlConfig.authnRequestsSigned || false,
-						nameIDFormat: parsedSamlConfig.identifierFormat
-							? [parsedSamlConfig.identifierFormat]
-							: undefined,
+						...(parsedSamlConfig.identifierFormat
+							? { nameIDFormat: [parsedSamlConfig.identifierFormat] }
+							: {}),
 					});
 			return new Response(sp.getMetadata(), {
 				headers: {
@@ -785,17 +787,26 @@ export const registerSSOProvider = <O extends SSOOptions>(options: O) => {
 			let hydratedOIDCConfig: HydratedOIDCConfig | null = null;
 			if (body.oidcConfig && !body.oidcConfig.skipDiscovery) {
 				try {
+					const existingConfig: Partial<import("../oidc").HydratedOIDCConfig> =
+						{};
+					if (body.oidcConfig.discoveryEndpoint !== undefined)
+						existingConfig.discoveryEndpoint =
+							body.oidcConfig.discoveryEndpoint;
+					if (body.oidcConfig.authorizationEndpoint !== undefined)
+						existingConfig.authorizationEndpoint =
+							body.oidcConfig.authorizationEndpoint;
+					if (body.oidcConfig.tokenEndpoint !== undefined)
+						existingConfig.tokenEndpoint = body.oidcConfig.tokenEndpoint;
+					if (body.oidcConfig.jwksEndpoint !== undefined)
+						existingConfig.jwksEndpoint = body.oidcConfig.jwksEndpoint;
+					if (body.oidcConfig.userInfoEndpoint !== undefined)
+						existingConfig.userInfoEndpoint = body.oidcConfig.userInfoEndpoint;
+					if (body.oidcConfig.tokenEndpointAuthentication !== undefined)
+						existingConfig.tokenEndpointAuthentication =
+							body.oidcConfig.tokenEndpointAuthentication;
 					hydratedOIDCConfig = await discoverOIDCConfig({
 						issuer: body.issuer,
-						existingConfig: {
-							discoveryEndpoint: body.oidcConfig.discoveryEndpoint,
-							authorizationEndpoint: body.oidcConfig.authorizationEndpoint,
-							tokenEndpoint: body.oidcConfig.tokenEndpoint,
-							jwksEndpoint: body.oidcConfig.jwksEndpoint,
-							userInfoEndpoint: body.oidcConfig.userInfoEndpoint,
-							tokenEndpointAuthentication:
-								body.oidcConfig.tokenEndpointAuthentication,
-						},
+						existingConfig,
 						isTrustedOrigin: (url: string) => ctx.context.isTrustedOrigin(url),
 					});
 				} catch (error) {
@@ -1358,20 +1369,23 @@ export const signInSSO = (options?: SSOOptions) => {
 									parsedSamlConfig.wantAssertionsSigned || false,
 								authnRequestsSigned:
 									parsedSamlConfig.authnRequestsSigned || false,
-								nameIDFormat: parsedSamlConfig.identifierFormat
-									? [parsedSamlConfig.identifierFormat]
-									: undefined,
+								...(parsedSamlConfig.identifierFormat
+									? { nameIDFormat: [parsedSamlConfig.identifierFormat] }
+									: {}),
 							})
 							.getMetadata() || "";
 				}
 
+				const spPrivateKey =
+					parsedSamlConfig.spMetadata?.privateKey ||
+					parsedSamlConfig.privateKey;
 				const sp = saml.ServiceProvider({
 					metadata: metadata,
 					allowCreate: true,
-					privateKey:
-						parsedSamlConfig.spMetadata?.privateKey ||
-						parsedSamlConfig.privateKey,
-					privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
+					...(spPrivateKey !== undefined ? { privateKey: spPrivateKey } : {}),
+					...(parsedSamlConfig.spMetadata?.privateKeyPass !== undefined
+						? { privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass }
+						: {}),
 				});
 
 				const idpData = parsedSamlConfig.idpMetadata;
@@ -1389,17 +1403,31 @@ export const signInSSO = (options?: SSOOptions) => {
 						wantAuthnRequestsSigned:
 							parsedSamlConfig.authnRequestsSigned || false,
 						isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-						encPrivateKey: idpData?.encPrivateKey,
-						encPrivateKeyPass: idpData?.encPrivateKeyPass,
+						...(idpData?.encPrivateKey !== undefined
+							? { encPrivateKey: idpData.encPrivateKey }
+							: {}),
+						...(idpData?.encPrivateKeyPass !== undefined
+							? { encPrivateKeyPass: idpData.encPrivateKeyPass }
+							: {}),
 					});
 				} else {
 					idp = saml.IdentityProvider({
 						metadata: idpData.metadata,
-						privateKey: idpData.privateKey,
-						privateKeyPass: idpData.privateKeyPass,
-						isAssertionEncrypted: idpData.isAssertionEncrypted,
-						encPrivateKey: idpData.encPrivateKey,
-						encPrivateKeyPass: idpData.encPrivateKeyPass,
+						...(idpData.privateKey !== undefined
+							? { privateKey: idpData.privateKey }
+							: {}),
+						...(idpData.privateKeyPass !== undefined
+							? { privateKeyPass: idpData.privateKeyPass }
+							: {}),
+						...(idpData.isAssertionEncrypted !== undefined
+							? { isAssertionEncrypted: idpData.isAssertionEncrypted }
+							: {}),
+						...(idpData.encPrivateKey !== undefined
+							? { encPrivateKey: idpData.encPrivateKey }
+							: {}),
+						...(idpData.encPrivateKeyPass !== undefined
+							? { encPrivateKeyPass: idpData.encPrivateKeyPass }
+							: {}),
 					});
 				}
 				const loginRequest = sp.createLoginRequest(
@@ -1622,14 +1650,15 @@ async function handleOIDCCallback(
 			}?error=invalid_provider&error_description=token_response_not_found`,
 		);
 	}
-	let userInfo: {
+	type UserInfoType = {
 		id?: string;
 		email?: string;
 		name?: string;
 		image?: string;
 		emailVerified?: boolean;
 		[key: string]: any;
-	} | null = null;
+	};
+	let userInfo: UserInfoType | null = null;
 	const mapping = config.mapping || {};
 
 	if (config.userInfoEndpoint) {
@@ -1649,22 +1678,34 @@ async function handleOIDCCallback(
 			);
 		}
 		const rawUserInfo = userInfoResponse.data;
+		const extraFields = Object.fromEntries(
+			Object.entries(mapping.extraFields || {}).map(([key, value]) => [
+				key,
+				rawUserInfo[value],
+			]),
+		);
+		const rawId = rawUserInfo[mapping.id || "sub"] as string | undefined;
+		const rawEmail = rawUserInfo[mapping.email || "email"] as
+			| string
+			| undefined;
+		const rawName = rawUserInfo[mapping.name || "name"] as string | undefined;
+		const rawImage = rawUserInfo[mapping.image || "picture"] as
+			| string
+			| undefined;
+		const rawEmailVerified = options?.trustEmailVerified
+			? (rawUserInfo[mapping.emailVerified || "email_verified"] as
+					| boolean
+					| undefined)
+			: false;
 		userInfo = {
-			...Object.fromEntries(
-				Object.entries(mapping.extraFields || {}).map(([key, value]) => [
-					key,
-					rawUserInfo[value],
-				]),
-			),
-			id: rawUserInfo[mapping.id || "sub"] as string | undefined,
-			email: rawUserInfo[mapping.email || "email"] as string | undefined,
-			emailVerified: options?.trustEmailVerified
-				? (rawUserInfo[mapping.emailVerified || "email_verified"] as
-						| boolean
-						| undefined)
-				: false,
-			name: rawUserInfo[mapping.name || "name"] as string | undefined,
-			image: rawUserInfo[mapping.image || "picture"] as string | undefined,
+			...extraFields,
+			...(rawId !== undefined ? { id: rawId } : {}),
+			...(rawEmail !== undefined ? { email: rawEmail } : {}),
+			...(rawEmailVerified !== undefined
+				? { emailVerified: rawEmailVerified }
+				: {}),
+			...(rawName !== undefined ? { name: rawName } : {}),
+			...(rawImage !== undefined ? { image: rawImage } : {}),
 		};
 	} else if (tokenResponse.idToken) {
 		const idToken = decodeJwt(tokenResponse.idToken);
@@ -1708,13 +1749,7 @@ async function handleOIDCCallback(
 				: false,
 			name: idToken[mapping.name || "name"],
 			image: idToken[mapping.image || "picture"],
-		} as {
-			id?: string;
-			email?: string;
-			name?: string;
-			image?: string;
-			emailVerified?: boolean;
-		};
+		} as UserInfoType;
 	} else {
 		throw ctx.redirect(
 			`${
@@ -1723,7 +1758,7 @@ async function handleOIDCCallback(
 		);
 	}
 
-	if (!userInfo.email || !userInfo.id) {
+	if (!userInfo || !userInfo.email || !userInfo.id) {
 		throw ctx.redirect(
 			`${
 				errorURL || callbackURL
@@ -1768,7 +1803,7 @@ async function handleOIDCCallback(
 	if (options?.provisionUser && linked.isRegister) {
 		await options.provisionUser({
 			user,
-			userInfo,
+			userInfo: userInfo as Record<string, any>,
 			token: tokenResponse,
 			provider,
 		});
@@ -1782,11 +1817,13 @@ async function handleOIDCCallback(
 			accountId: userInfo.id,
 			email: userInfo.email,
 			emailVerified: Boolean(userInfo.emailVerified),
-			rawAttributes: userInfo,
+			rawAttributes: userInfo as Record<string, unknown>,
 		},
 		provider,
 		token: tokenResponse,
-		provisioningOptions: options?.organizationProvisioning,
+		...(options?.organizationProvisioning !== undefined
+			? { provisioningOptions: options.organizationProvisioning }
+			: {}),
 	});
 
 	await setSessionCookie(ctx, {
@@ -2103,42 +2140,67 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					wantAuthnRequestsSigned:
 						parsedSamlConfig.authnRequestsSigned || false,
 					isAssertionEncrypted: idpData?.isAssertionEncrypted || false,
-					encPrivateKey: idpData?.encPrivateKey,
-					encPrivateKeyPass: idpData?.encPrivateKeyPass,
+					...(idpData?.encPrivateKey !== undefined
+						? { encPrivateKey: idpData.encPrivateKey }
+						: {}),
+					...(idpData?.encPrivateKeyPass !== undefined
+						? { encPrivateKeyPass: idpData.encPrivateKeyPass }
+						: {}),
 				});
 			} else {
 				idp = saml.IdentityProvider({
 					metadata: idpData.metadata,
-					privateKey: idpData.privateKey,
-					privateKeyPass: idpData.privateKeyPass,
-					isAssertionEncrypted: idpData.isAssertionEncrypted,
-					encPrivateKey: idpData.encPrivateKey,
-					encPrivateKeyPass: idpData.encPrivateKeyPass,
+					...(idpData.privateKey !== undefined
+						? { privateKey: idpData.privateKey }
+						: {}),
+					...(idpData.privateKeyPass !== undefined
+						? { privateKeyPass: idpData.privateKeyPass }
+						: {}),
+					...(idpData.isAssertionEncrypted !== undefined
+						? { isAssertionEncrypted: idpData.isAssertionEncrypted }
+						: {}),
+					...(idpData.encPrivateKey !== undefined
+						? { encPrivateKey: idpData.encPrivateKey }
+						: {}),
+					...(idpData.encPrivateKeyPass !== undefined
+						? { encPrivateKeyPass: idpData.encPrivateKeyPass }
+						: {}),
 				});
 			}
 
 			// Construct SP with fallback to manual configuration
 			const spData = parsedSamlConfig.spMetadata;
+			const spPk = spData?.privateKey || parsedSamlConfig.privateKey;
 			const sp = saml.ServiceProvider({
-				metadata: spData?.metadata,
+				...(spData?.metadata !== undefined
+					? { metadata: spData.metadata }
+					: {}),
 				entityID: spData?.entityID || parsedSamlConfig.issuer,
-				assertionConsumerService: spData?.metadata
-					? undefined
-					: [
-							{
-								Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
-								Location: parsedSamlConfig.callbackUrl,
-							},
-						],
-				privateKey: spData?.privateKey || parsedSamlConfig.privateKey,
-				privateKeyPass: spData?.privateKeyPass,
+				...(spData?.metadata
+					? {}
+					: {
+							assertionConsumerService: [
+								{
+									Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST",
+									Location: parsedSamlConfig.callbackUrl,
+								},
+							],
+						}),
+				...(spPk !== undefined ? { privateKey: spPk } : {}),
+				...(spData?.privateKeyPass !== undefined
+					? { privateKeyPass: spData.privateKeyPass }
+					: {}),
 				isAssertionEncrypted: spData?.isAssertionEncrypted || false,
-				encPrivateKey: spData?.encPrivateKey,
-				encPrivateKeyPass: spData?.encPrivateKeyPass,
+				...(spData?.encPrivateKey !== undefined
+					? { encPrivateKey: spData.encPrivateKey }
+					: {}),
+				...(spData?.encPrivateKeyPass !== undefined
+					? { encPrivateKeyPass: spData.encPrivateKeyPass }
+					: {}),
 				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
+				...(parsedSamlConfig.identifierFormat
+					? { nameIDFormat: [parsedSamlConfig.identifierFormat] }
+					: {}),
 			});
 
 			validateSingleAssertion(SAMLResponse);
@@ -2173,8 +2235,12 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
 			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
-				clockSkew: options?.saml?.clockSkew,
-				requireTimestamps: options?.saml?.requireTimestamps,
+				...(options?.saml?.clockSkew !== undefined
+					? { clockSkew: options.saml.clockSkew }
+					: {}),
+				...(options?.saml?.requireTimestamps !== undefined
+					? { requireTimestamps: options.saml.requireTimestamps }
+					: {}),
 				logger: ctx.context.logger,
 			});
 
@@ -2433,18 +2499,21 @@ export const callbackSSOSAML = (options?: SSOOptions) => {
 					rawAttributes: attributes,
 				},
 				provider,
-				provisioningOptions: options?.organizationProvisioning,
+				...(options?.organizationProvisioning !== undefined
+					? { provisioningOptions: options.organizationProvisioning }
+					: {}),
 			});
 
 			await setSessionCookie(ctx, { session, user });
 
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${provider.providerId}:${extract.nameID}`;
+				const sessionIdx = (extract as SAMLAssertionExtract).sessionIndex;
 				const samlSessionData: SAMLSessionRecord = {
 					sessionId: session.id,
 					providerId: provider.providerId,
 					nameID: extract.nameID,
-					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+					...(sessionIdx !== undefined ? { sessionIndex: sessionIdx } : {}),
 				};
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -2600,6 +2669,8 @@ export const acsEndpoint = (options?: SSOOptions) => {
 
 			const parsedSamlConfig = provider.samlConfig;
 			// Configure SP and IdP
+			const acsPk =
+				parsedSamlConfig.spMetadata?.privateKey || parsedSamlConfig.privateKey;
 			const sp = saml.ServiceProvider({
 				entityID:
 					parsedSamlConfig.spMetadata?.entityID || parsedSamlConfig.issuer,
@@ -2612,14 +2683,16 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					},
 				],
 				wantMessageSigned: parsedSamlConfig.wantAssertionsSigned || false,
-				metadata: parsedSamlConfig.spMetadata?.metadata,
-				privateKey:
-					parsedSamlConfig.spMetadata?.privateKey ||
-					parsedSamlConfig.privateKey,
-				privateKeyPass: parsedSamlConfig.spMetadata?.privateKeyPass,
-				nameIDFormat: parsedSamlConfig.identifierFormat
-					? [parsedSamlConfig.identifierFormat]
-					: undefined,
+				...(parsedSamlConfig.spMetadata?.metadata !== undefined
+					? { metadata: parsedSamlConfig.spMetadata.metadata }
+					: {}),
+				...(acsPk !== undefined ? { privateKey: acsPk } : {}),
+				...(parsedSamlConfig.spMetadata?.privateKeyPass !== undefined
+					? { privateKeyPass: parsedSamlConfig.spMetadata.privateKeyPass }
+					: {}),
+				...(parsedSamlConfig.identifierFormat
+					? { nameIDFormat: [parsedSamlConfig.identifierFormat] }
+					: {}),
 			});
 
 			// Update where we construct the IdP
@@ -2689,8 +2762,12 @@ export const acsEndpoint = (options?: SSOOptions) => {
 			validateSAMLAlgorithms(parsedResponse, options?.saml?.algorithms);
 
 			validateSAMLTimestamp((extract as SAMLAssertionExtract).conditions, {
-				clockSkew: options?.saml?.clockSkew,
-				requireTimestamps: options?.saml?.requireTimestamps,
+				...(options?.saml?.clockSkew !== undefined
+					? { clockSkew: options.saml.clockSkew }
+					: {}),
+				...(options?.saml?.requireTimestamps !== undefined
+					? { requireTimestamps: options.saml.requireTimestamps }
+					: {}),
 				logger: ctx.context.logger,
 			});
 
@@ -2949,17 +3026,22 @@ export const acsEndpoint = (options?: SSOOptions) => {
 					rawAttributes: attributes,
 				},
 				provider,
-				provisioningOptions: options?.organizationProvisioning,
+				...(options?.organizationProvisioning !== undefined
+					? { provisioningOptions: options.organizationProvisioning }
+					: {}),
 			});
 
 			await setSessionCookie(ctx, { session, user });
 			if (options?.saml?.enableSingleLogout && extract.nameID) {
 				const samlSessionKey = `${constants.SAML_SESSION_KEY_PREFIX}${providerId}:${extract.nameID}`;
+				const sessionIdxAcs = (extract as SAMLAssertionExtract).sessionIndex;
 				const samlSessionData: SAMLSessionRecord = {
 					sessionId: session.id,
 					providerId,
 					nameID: extract.nameID,
-					sessionIndex: (extract as SAMLAssertionExtract).sessionIndex,
+					...(sessionIdxAcs !== undefined
+						? { sessionIndex: sessionIdxAcs }
+						: {}),
 				};
 				await ctx.context.internalAdapter
 					.createVerificationValue({
@@ -3061,8 +3143,14 @@ export const sloEndpoint = (options?: SSOOptions) => {
 
 			const config = provider.samlConfig as SAMLConfig;
 			const sp = createSP(config, ctx.context.baseURL, providerId, {
-				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
-				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				...(options?.saml?.wantLogoutRequestSigned !== undefined
+					? { wantLogoutRequestSigned: options.saml.wantLogoutRequestSigned }
+					: {}),
+				...(options?.saml?.wantLogoutResponseSigned !== undefined
+					? {
+							wantLogoutResponseSigned: options.saml.wantLogoutResponseSigned,
+						}
+					: {}),
 			});
 			const idp = createIdP(config);
 
@@ -3303,8 +3391,14 @@ export const initiateSLO = (options?: SSOOptions) => {
 			}
 
 			const sp = createSP(config, ctx.context.baseURL, providerId, {
-				wantLogoutRequestSigned: options?.saml?.wantLogoutRequestSigned,
-				wantLogoutResponseSigned: options?.saml?.wantLogoutResponseSigned,
+				...(options?.saml?.wantLogoutRequestSigned !== undefined
+					? { wantLogoutRequestSigned: options.saml.wantLogoutRequestSigned }
+					: {}),
+				...(options?.saml?.wantLogoutResponseSigned !== undefined
+					? {
+							wantLogoutResponseSigned: options.saml.wantLogoutResponseSigned,
+						}
+					: {}),
 			});
 			const idp = createIdP(config);
 

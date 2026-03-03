@@ -473,7 +473,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 				const updatedSamlConfig = mergeSAMLConfig(
 					currentSamlConfig,
-					body.samlConfig,
+					body.samlConfig as Partial<SAMLConfig>,
 					updateData.issuer ||
 						currentSamlConfig.issuer ||
 						existingProvider.issuer,
@@ -490,7 +490,7 @@ export const updateSSOProvider = (options: SSOOptions) => {
 
 				const updatedOidcConfig = mergeOIDCConfig(
 					currentOidcConfig,
-					body.oidcConfig,
+					body.oidcConfig as Partial<OIDCConfig>,
 					updateData.issuer ||
 						currentOidcConfig.issuer ||
 						existingProvider.issuer,

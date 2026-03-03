@@ -68,6 +68,11 @@ export async function discoverOIDCConfig(
 		existingConfig?.tokenEndpointAuthentication,
 	);
 
+	const userInfoEndpoint =
+		existingConfig?.userInfoEndpoint ?? normalizedDoc.userinfo_endpoint;
+	const scopesSupported =
+		existingConfig?.scopesSupported ?? normalizedDoc.scopes_supported;
+
 	const hydratedConfig: HydratedOIDCConfig = {
 		issuer: existingConfig?.issuer ?? normalizedDoc.issuer,
 		discoveryEndpoint: existingConfig?.discoveryEndpoint ?? discoveryUrl,
@@ -77,12 +82,10 @@ export async function discoverOIDCConfig(
 		tokenEndpoint:
 			existingConfig?.tokenEndpoint ?? normalizedDoc.token_endpoint,
 		jwksEndpoint: existingConfig?.jwksEndpoint ?? normalizedDoc.jwks_uri,
-		userInfoEndpoint:
-			existingConfig?.userInfoEndpoint ?? normalizedDoc.userinfo_endpoint,
+		...(userInfoEndpoint !== undefined ? { userInfoEndpoint } : {}),
 		tokenEndpointAuthentication:
 			existingConfig?.tokenEndpointAuthentication ?? tokenEndpointAuth,
-		scopesSupported:
-			existingConfig?.scopesSupported ?? normalizedDoc.scopes_supported,
+		...(scopesSupported !== undefined ? { scopesSupported } : {}),
 	};
 
 	return hydratedConfig;
@@ -506,12 +509,38 @@ export async function ensureRuntimeDiscovery(
 	issuer: string,
 	isTrustedOrigin: (url: string) => boolean,
 ): Promise<OIDCConfig> {
-	if (!needsRuntimeDiscovery(config)) {
+	const partialCheck: Partial<HydratedOIDCConfig> = {};
+	if (config.tokenEndpoint !== undefined)
+		partialCheck.tokenEndpoint = config.tokenEndpoint;
+	if (config.jwksEndpoint !== undefined)
+		partialCheck.jwksEndpoint = config.jwksEndpoint;
+	if (config.authorizationEndpoint !== undefined)
+		partialCheck.authorizationEndpoint = config.authorizationEndpoint;
+	if (!needsRuntimeDiscovery(partialCheck)) {
 		return config;
 	}
 	const hydrated = await discoverOIDCConfig({
 		issuer,
-		existingConfig: config,
+		existingConfig: {
+			...(config.discoveryEndpoint !== undefined
+				? { discoveryEndpoint: config.discoveryEndpoint }
+				: {}),
+			...(config.authorizationEndpoint !== undefined
+				? { authorizationEndpoint: config.authorizationEndpoint }
+				: {}),
+			...(config.tokenEndpoint !== undefined
+				? { tokenEndpoint: config.tokenEndpoint }
+				: {}),
+			...(config.jwksEndpoint !== undefined
+				? { jwksEndpoint: config.jwksEndpoint }
+				: {}),
+			...(config.userInfoEndpoint !== undefined
+				? { userInfoEndpoint: config.userInfoEndpoint }
+				: {}),
+			...(config.tokenEndpointAuthentication !== undefined
+				? { tokenEndpointAuthentication: config.tokenEndpointAuthentication }
+				: {}),
+		},
 		isTrustedOrigin,
 	});
 	return {
