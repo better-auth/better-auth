@@ -10,10 +10,10 @@ import { getEndpoints } from "./index";
 
 describe("getEndpoints", () => {
 	it("should await promise-based context before passing to middleware", async () => {
-		const mockContext: AuthContext = {
+		const mockContext = {
 			baseURL: "http://localhost:3000",
 			options: {},
-		} as any;
+		} as AuthContext;
 
 		const middlewareFn = vi.fn().mockResolvedValue({});
 
@@ -45,6 +45,7 @@ describe("getEndpoints", () => {
 			context: { customProp: "value" },
 		};
 
+		// @ts-expect-error testCtx is a partial mock
 		await middlewares[0]!.middleware(testCtx);
 
 		expect(middlewareFn).toHaveBeenCalled();

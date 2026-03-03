@@ -167,10 +167,10 @@ const createHasPermissionBodySchema = z
 		z.union([
 			z.object({
 				permission: z.record(z.string(), z.array(z.string())),
-				permissions: z.undefined(),
+				permissions: z.record(z.string(), z.array(z.string())).optional(),
 			}),
 			z.object({
-				permission: z.undefined(),
+				permission: z.record(z.string(), z.array(z.string())).optional(),
 				permissions: z.record(z.string(), z.array(z.string())),
 			}),
 		]),

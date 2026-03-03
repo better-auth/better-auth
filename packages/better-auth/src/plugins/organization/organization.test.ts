@@ -3419,11 +3419,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(org.data).toBeDefined();
-		// Note: publicField and secretField use `as any` because endpoint response types
-		// are inferred from adapter return values which include all fields.
-		// The runtime correctly filters returned: false fields.
-		expect((org.data as any).publicField).toBe("public-value");
-		expect((org.data as any).secretField).toBeUndefined();
+		expect(org.data?.publicField).toBe("public-value");
+		// @ts-expect-error secretField has returned: false
+		expect(org.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg).toBeDefined();
@@ -3456,8 +3454,9 @@ describe("organization additionalFields with returned: false", async () => {
 		expect(orgs.data!.length).toBeGreaterThan(0);
 
 		for (const org of orgs.data!) {
-			expect((org as any).secretField).toBeUndefined();
-			expect((org as any).publicField).toBeDefined();
+			// @ts-expect-error secretField has returned: false
+			expect(org.secretField).toBeUndefined();
+			expect(org.publicField).toBeDefined();
 		}
 	});
 
@@ -3561,8 +3560,9 @@ describe("organization additionalFields with returned: false", async () => {
 		});
 
 		expect(updated.data).toBeDefined();
-		expect((updated.data as any).publicField).toBe("updated-public");
-		expect((updated.data as any).secretField).toBeUndefined();
+		expect(updated.data?.publicField).toBe("updated-public");
+		// @ts-expect-error secretField has returned: false
+		expect(updated.data?.secretField).toBeUndefined();
 
 		const dbOrg = db.organization.find((o) => o.id === org.data?.id);
 		expect(dbOrg?.secretField).toBe("updated-secret");

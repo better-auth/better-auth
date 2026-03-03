@@ -52,9 +52,12 @@ export interface AnonymousOptions {
 		| ((
 				ctx: EndpointContext<
 					"/sign-in/anonymous",
-					{
-						method: "POST";
-					},
+					"POST",
+					any,
+					any,
+					any,
+					any,
+					any,
 					AuthContext
 				>,
 		  ) => Awaitable<string>)

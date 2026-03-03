@@ -531,7 +531,7 @@ describe("inviteMember role validation", async () => {
 		// Attempt to invite with a fake role
 		const { error } = await client.organization.inviteMember({
 			email: "fake-role@test.com",
-			// @ts-expect-error - testing invalid role validation
+			// @ts-expect-error invalid role not in base type
 			role: "super-invalid-role-123",
 			organizationId: org.data?.id as string,
 			fetchOptions: {

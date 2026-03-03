@@ -158,7 +158,7 @@ describe("sign-up with custom fields", async () => {
 					email: "input-false@test.com",
 					password: "password",
 					name: "Input False Test",
-					//@ts-expect-error
+					// @ts-expect-error role has input: false
 					role: "admin",
 				},
 			}),

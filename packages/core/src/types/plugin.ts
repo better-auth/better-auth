@@ -19,7 +19,20 @@ type DeepPartial<T> = T extends Function
 		: T;
 
 export type HookEndpointContext = Partial<
-	EndpointContext<string, any> & Omit<InputContext<string, any>, "method">
+	EndpointContext<
+		string,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		AuthContext & {
+			returned?: unknown | undefined;
+			responseHeaders?: Headers | undefined;
+		}
+	> &
+		Omit<InputContext<string, any, any, any, any, any>, "method">
 > & {
 	path?: string;
 	context: AuthContext & {

@@ -27,7 +27,4 @@ export {
 export type * from "better-call";
 export type { JSONWebKeySet, JWTPayload } from "jose";
 export type * from "zod";
-export type * from "zod/v4";
-// @ts-expect-error
-export type * from "zod/v4/core";
 export { APIError } from "./api";
