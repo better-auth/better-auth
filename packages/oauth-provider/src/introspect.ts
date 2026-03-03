@@ -383,11 +383,12 @@ async function resolveIntrospectionSub(
 	client: SchemaClient<Scope[]>,
 ): Promise<JWTPayload> {
 	if (payload.active && payload.sub) {
-		payload.sub = await resolveSubjectIdentifier(
+		const resolvedSub = await resolveSubjectIdentifier(
 			payload.sub as string,
 			client,
 			opts,
 		);
+		return { ...payload, sub: resolvedSub };
 	}
 	return payload;
 }

@@ -82,16 +82,18 @@ export async function userInfoEndpoint(
 
 	const baseUserClaims = userNormalClaims(user, scopes ?? []);
 
-	// Resolve pairwise sub if client is configured for it
-	const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
-	if (clientId) {
-		const client = await getClient(ctx, opts, clientId);
-		if (client) {
-			baseUserClaims.sub = await resolveSubjectIdentifier(
-				user.id,
-				client,
-				opts,
-			);
+	// Resolve pairwise sub if server has pairwise enabled and client is configured for it
+	if (opts.pairwiseSecret) {
+		const clientId = (jwt.client_id ?? jwt.azp) as string | undefined;
+		if (clientId) {
+			const client = await getClient(ctx, opts, clientId);
+			if (client) {
+				baseUserClaims.sub = await resolveSubjectIdentifier(
+					user.id,
+					client,
+					opts,
+				);
+			}
 		}
 	}
 	const additionalInfoUserClaims =
