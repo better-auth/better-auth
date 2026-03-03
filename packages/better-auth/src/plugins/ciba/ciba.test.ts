@@ -890,6 +890,138 @@ describe("CIBA with sendNotification takes precedence", async () => {
 	});
 });
 
+describe("CIBA with id_token_hint", async () => {
+	const mockSendNotification = vi.fn().mockResolvedValue(undefined);
+
+	const { auth, signInWithTestUser } = await getTestInstance(
+		{
+			plugins: [
+				oidcProvider({
+					loginPage: "/sign-in",
+					allowDynamicClientRegistration: true,
+				}),
+				ciba({
+					sendNotification: mockSendNotification,
+					requestLifetime: "5m",
+					pollingInterval: "5s",
+				}),
+			],
+		},
+		{
+			disableTestUser: false,
+		},
+	);
+
+	let testClientId: string;
+	let testClientSecret: string;
+
+	beforeEach(async () => {
+		mockSendNotification.mockClear();
+		const registration = await auth.api.registerOAuthApplication({
+			body: {
+				redirect_uris: ["http://localhost:3000/callback"],
+				client_name: "ID Token Hint Test Client",
+			},
+		});
+		testClientId = registration.client_id;
+		testClientSecret = registration.client_secret!;
+	});
+
+	it("should accept id_token_hint and resolve user from sub claim", async () => {
+		const { headers } = await signInWithTestUser();
+
+		// First, complete a full flow to obtain a real ID token
+		const bcResponse = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid profile",
+				login_hint: "test@test.com",
+			},
+		});
+
+		await auth.api.cibaAuthorize({
+			body: { auth_req_id: bcResponse.auth_req_id },
+			headers,
+		});
+
+		const tokenResponse = await auth.api.oAuth2token({
+			body: {
+				grant_type: "urn:openid:params:grant-type:ciba",
+				auth_req_id: bcResponse.auth_req_id,
+				client_id: testClientId,
+				client_secret: testClientSecret,
+			},
+		});
+
+		expect(tokenResponse.id_token).toBeDefined();
+		const idToken = tokenResponse.id_token!;
+
+		// Now use id_token_hint instead of login_hint
+		const bcResponse2 = await auth.api.bcAuthorize({
+			body: {
+				client_id: testClientId,
+				client_secret: testClientSecret,
+				scope: "openid",
+				id_token_hint: idToken,
+			},
+		});
+
+		expect(bcResponse2.auth_req_id).toBeDefined();
+		expect(bcResponse2.expires_in).toBe(300);
+
+		// Verify the notification was sent with the correct user
+		const lastCall =
+			mockSendNotification.mock.calls[
+				mockSendNotification.mock.calls.length - 1
+			]?.[0];
+		expect(lastCall.user.email).toBe("test@test.com");
+	});
+
+	it("should reject invalid id_token_hint", async () => {
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					id_token_hint: "invalid.jwt.token",
+				},
+			}),
+		).rejects.toMatchObject({
+			body: {
+				error: "invalid_request",
+			},
+		});
+	});
+
+	it("should reject when both login_hint and id_token_hint are provided", async () => {
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+					login_hint: "test@test.com",
+					id_token_hint: "some.jwt.token",
+				},
+			}),
+		).rejects.toBeDefined();
+	});
+
+	it("should reject when neither login_hint nor id_token_hint is provided", async () => {
+		await expect(
+			auth.api.bcAuthorize({
+				body: {
+					client_id: testClientId,
+					client_secret: testClientSecret,
+					scope: "openid",
+				},
+			}),
+		).rejects.toBeDefined();
+	});
+});
+
 describe("CIBA config validation", () => {
 	it("should reject config when neither sendNotification nor sendVerificationEmail is provided", async () => {
 		expect(() => {

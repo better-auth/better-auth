@@ -7,12 +7,7 @@
 
 import { createAuthMiddleware } from "@better-auth/core/api";
 import { APIError } from "@better-auth/core/error";
-import type { OIDCOptions } from "../oidc-provider/types";
-import type { StoreClientSecretOption } from "../oidc-provider/utils";
-import {
-	parseClientCredentials,
-	verifyClientSecret,
-} from "../oidc-provider/utils";
+import { getOidcPluginContext, validateClientCredentials } from "./client-auth";
 import { CIBA_ERROR_CODES } from "./error-codes";
 import {
 	deleteCibaRequest,
@@ -51,21 +46,6 @@ export function createCibaTokenHandler() {
 				return;
 			}
 
-			// Get OIDC provider options
-			const oidcPlugin =
-				ctx.context.getPlugin("oidc-provider") ||
-				ctx.context.getPlugin("oauth-provider");
-			const oidcOpts = (oidcPlugin?.options || {}) as OIDCOptions;
-			const isOAuthProvider = oidcPlugin?.id === "oauth-provider";
-			const defaultStoreMethod = isOAuthProvider
-				? (oidcOpts as { disableJwtPlugin?: boolean }).disableJwtPlugin
-					? "encrypted"
-					: "hashed"
-				: "plain";
-			const storeMethod: StoreClientSecretOption =
-				oidcOpts.storeClientSecret ?? defaultStoreMethod;
-			const trustedClients = oidcOpts.trustedClients ?? [];
-
 			const authReqId = body.auth_req_id as string | undefined;
 
 			if (!authReqId) {
@@ -75,90 +55,12 @@ export function createCibaTokenHandler() {
 				});
 			}
 
-			// Parse client credentials (supports Basic Auth and body params)
-			const credentials = parseClientCredentials(
+			const pluginContext = getOidcPluginContext(ctx);
+			const { credentials } = await validateClientCredentials(
+				ctx,
 				body,
-				ctx.request?.headers.get("authorization") || null,
+				pluginContext,
 			);
-
-			if (!credentials) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "client_id and client_secret are required",
-				});
-			}
-
-			// Validate client (check trusted clients first, then database)
-			type MinimalClient = {
-				clientId: string;
-				clientSecret: string | null | undefined;
-				disabled?: boolean;
-			};
-
-			// Check trusted clients first
-			const trustedClient = trustedClients?.find(
-				(c) => c.clientId === credentials.clientId,
-			);
-			let client: MinimalClient | undefined = trustedClient
-				? {
-						clientId: trustedClient.clientId,
-						clientSecret: trustedClient.clientSecret,
-						disabled: trustedClient.disabled,
-					}
-				: undefined;
-
-			// If not in trusted clients, check database
-			if (!client) {
-				const pluginId = oidcPlugin?.id;
-				const modelName =
-					pluginId === "oidc-provider" ? "oauthApplication" : "oauthClient";
-				const dbClient = await ctx.context.adapter
-					.findOne<MinimalClient>({
-						model: modelName,
-						where: [{ field: "clientId", value: credentials.clientId }],
-					})
-					.catch(() => null);
-				if (dbClient && !dbClient.disabled) {
-					client = dbClient;
-				}
-			}
-
-			if (!client) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
-
-			// Confidential clients must have a secret
-			if (!client.clientSecret) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "Client secret is required",
-				});
-			}
-
-			// Check if client is disabled (before expensive secret verification)
-			if (client.disabled) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: "Client is disabled",
-				});
-			}
-
-			// Verify client secret
-			const isValidSecret = await verifyClientSecret(
-				client.clientSecret,
-				credentials.clientSecret,
-				storeMethod,
-				ctx.context.secret,
-			);
-			if (!isValidSecret) {
-				throw new APIError("UNAUTHORIZED", {
-					error: "invalid_client",
-					error_description: CIBA_ERROR_CODES.INVALID_CLIENT.message,
-				});
-			}
 
 			// Find CIBA request
 			const cibaRequest = await findCibaRequest(ctx, authReqId);
