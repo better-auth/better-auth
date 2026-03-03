@@ -1,4 +1,5 @@
 import type { BetterAuthPlugin, SecretConfig } from "@better-auth/core";
+import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import {
 	parseEnvelope,
 	symmetricDecrypt,
@@ -96,25 +97,10 @@ export const fieldEncryption = (options: FieldEncryptionOptions) => {
 	};
 
 	// Build schema with transforms for each configured field
-	const schema: Record<
-		string,
-		{
-			fields: Record<
-				string,
-				{
-					type: "string";
-					required: false;
-					transform: {
-						input: (value: unknown) => Promise<unknown>;
-						output: (value: unknown) => Promise<unknown>;
-					};
-				}
-			>;
-		}
-	> = {};
+	const schema: BetterAuthPluginDBSchema = {};
 
 	for (const [model, fieldNames] of Object.entries(options.fields)) {
-		const fields: (typeof schema)[string]["fields"] = {};
+		const fields: BetterAuthPluginDBSchema[string]["fields"] = {};
 
 		for (const fieldName of fieldNames) {
 			fields[fieldName] = {
