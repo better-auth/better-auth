@@ -18,10 +18,11 @@ import { generateTokensForCibaRequest } from "./token-utils";
 import type { CibaRequestData } from "./types";
 
 /**
- * Validate that the notification endpoint uses HTTPS (CIBA spec §10.3).
- * Loopback addresses (localhost, 127.0.0.1, ::1) are exempt.
+ * Validate that a URL uses HTTPS (CIBA spec §10.3).
+ * Loopback addresses (localhost, 127.0.0.1, ::1) are exempt per standard
+ * practice for local development.
  */
-function isSecureEndpoint(endpoint: string): boolean {
+export function isSecureEndpoint(endpoint: string): boolean {
 	try {
 		const url = new URL(endpoint);
 		const isLoopback =
@@ -65,6 +66,11 @@ async function verifyClientStillValid(
 /**
  * Push tokens to the client's notification endpoint.
  * Called after user approves a CIBA request in push mode.
+ *
+ * If delivery fails, the error is logged but the CIBA request is NOT deleted —
+ * this is intentional. The tokens are lost and the client has no retry mechanism
+ * per the CIBA spec (push mode is fire-and-forget from the AS perspective).
+ * A retry/dead-letter mechanism could be added as a future enhancement.
  */
 export async function pushTokensToClient(
 	ctx: GenericEndpointContext,
