@@ -711,6 +711,11 @@ html:not([data-anchor-scrolling]) {
 	}
 }
 
+/* Prevent scroll-chaining between the TOC scroll area and the page */
+.docs-layout #nd-toc > div {
+	overscroll-behavior-y: contain;
+}
+
 /* Blog layout: matches docs pattern with narrow left pane + TOC sidebar */
 .blog-layout {
 	padding-top: 44px;
