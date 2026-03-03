@@ -1233,7 +1233,7 @@ function ContributorsSection({
 	];
 
 	return (
-		<div className="mt-10 pt-8 border-foreground/[0.06]">
+		<div className="mt-10 pt-8">
 			<div className="flex items-center gap-3 mb-2">
 				<span className="text-base text-foreground/85 dark:text-foreground/75">
 					Contributors
