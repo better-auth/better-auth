@@ -8,7 +8,7 @@ import { API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { getApiKeyById, migrateDoubleStringifiedMetadata } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
 
@@ -25,7 +25,7 @@ const getApiKeyQuerySchema = z.object({
 	}),
 });
 
-export function getApiKey({
+export function getApiKey<O extends ApiKeyOptions>({
 	configurations,
 	schema,
 	deleteAllExpiredApiKeys,
@@ -244,7 +244,7 @@ export function getApiKey({
 							[key: string]: string[];
 						}>(returningApiKey.permissions)
 					: null,
-			});
+			} as Omit<InferApiKey<O>, "key">);
 		},
 	);
 }

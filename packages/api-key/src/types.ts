@@ -5,6 +5,7 @@ import type {
 	LiteralString,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
 import type { Statements } from "better-auth/plugins/access";
 import type { InferOptionSchema } from "better-auth/types";
 import type { apiKeySchema } from "./schema";
@@ -20,6 +21,11 @@ export type ApiKeySchema = InferOptionSchema<
 export interface ApiKeyOptions {
 	schema?: ApiKeySchema | undefined;
 }
+
+export type InferApiKey<
+	O extends ApiKeyOptions,
+	isClientSide extends boolean = true,
+> = ApiKey & InferAdditionalFieldsFromPluginOptions<"apikey", O, isClientSide>;
 
 export interface ApiKeyConfigurationOptions {
 	/**

@@ -1,6 +1,14 @@
 import type { APIError } from "@better-auth/core/error";
 import { getTestInstance } from "better-auth/test";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { apiKey, API_KEY_ERROR_CODES as ERROR_CODES } from ".";
 import { apiKeyClient } from "./client";
 import type { ApiKey } from "./types";
@@ -3437,11 +3445,41 @@ describe("api-key", async () => {
 		);
 
 		const { headers } = await signInWithTestUser();
-		type AdditionalFields = {
-			organizationId?: string;
-			projectId?: string;
-			serverOnlyField?: string;
-		};
+
+		it("should infer additional fields in request and response types", () => {
+			type CreateBody = Parameters<typeof auth.api.createApiKey>[0]["body"];
+			type CreateBodyHasServerOnly = "serverOnlyField" extends keyof CreateBody
+				? true
+				: false;
+			expectTypeOf<CreateBody>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string;
+			}>();
+			expectTypeOf<CreateBodyHasServerOnly>().toEqualTypeOf<false>();
+
+			type UpdateBody = Parameters<typeof auth.api.updateApiKey>[0]["body"];
+			type UpdateBodyHasServerOnly = "serverOnlyField" extends keyof UpdateBody
+				? true
+				: false;
+			expectTypeOf<UpdateBody>().toMatchTypeOf<{
+				keyId: string;
+				organizationId?: string;
+				projectId?: string;
+			}>();
+			expectTypeOf<UpdateBodyHasServerOnly>().toEqualTypeOf<false>();
+
+			type CreateResponse = Awaited<ReturnType<typeof auth.api.createApiKey>>;
+			expectTypeOf<CreateResponse>().toMatchTypeOf<{
+				organizationId: string;
+				projectId?: string;
+			}>();
+
+			type UpdateResponse = Awaited<ReturnType<typeof auth.api.updateApiKey>>;
+			expectTypeOf<UpdateResponse>().toMatchTypeOf<{
+				organizationId?: string;
+				projectId?: string;
+			}>();
+		});
 
 		it("should require required additional fields on create", async () => {
 			const result = await client.apiKey.create({}, { headers });
@@ -3457,13 +3495,12 @@ describe("api-key", async () => {
 				projectId: "project-create",
 			};
 			const createdKey = await auth.api.createApiKey({
-				body: body as never,
+				body,
 				headers,
 			});
-			const fields = createdKey as unknown as AdditionalFields;
 
-			expect(fields.organizationId).toBe("org-create");
-			expect(fields.projectId).toBe("project-create");
+			expect(createdKey.organizationId).toBe("org-create");
+			expect(createdKey.projectId).toBe("project-create");
 
 			const dbKey = await (await auth.$context).adapter.findOne<{
 				id: string;
@@ -3483,13 +3520,12 @@ describe("api-key", async () => {
 				organizationId: "org-optional",
 			};
 			const createdKey = await auth.api.createApiKey({
-				body: body as never,
+				body,
 				headers,
 			});
-			const fields = createdKey as unknown as AdditionalFields;
 
-			expect(fields.organizationId).toBe("org-optional");
-			expect(fields.projectId).toBeNull();
+			expect(createdKey.organizationId).toBe("org-optional");
+			expect(createdKey.projectId).toBeNull();
 		});
 
 		it("should persist additional fields on update", async () => {
@@ -3498,7 +3534,7 @@ describe("api-key", async () => {
 				projectId: "project-update-1",
 			};
 			const createdKey = await auth.api.createApiKey({
-				body: createBody as never,
+				body: createBody,
 				headers,
 			});
 
@@ -3511,10 +3547,9 @@ describe("api-key", async () => {
 				body: updateBody,
 				headers,
 			});
-			const fields = updatedKey as unknown as AdditionalFields;
 
-			expect(fields.organizationId).toBe("org-update-2");
-			expect(fields.projectId).toBe("project-update-2");
+			expect(updatedKey.organizationId).toBe("org-update-2");
+			expect(updatedKey.projectId).toBe("project-update-2");
 
 			const dbKey = await (await auth.$context).adapter.findOne<{
 				id: string;
@@ -3534,7 +3569,7 @@ describe("api-key", async () => {
 				organizationId: "org-partial",
 			};
 			const createdKey = await auth.api.createApiKey({
-				body: createBody as never,
+				body: createBody,
 				headers,
 			});
 
@@ -3546,10 +3581,9 @@ describe("api-key", async () => {
 				body: updateBody,
 				headers,
 			});
-			const fields = updatedKey as unknown as AdditionalFields;
 
-			expect(fields.organizationId).toBe("org-partial");
-			expect(fields.projectId).toBe("project-partial");
+			expect(updatedKey.organizationId).toBe("org-partial");
+			expect(updatedKey.projectId).toBe("project-partial");
 		});
 
 		it("should ignore fields with input false", async () => {
@@ -3561,9 +3595,8 @@ describe("api-key", async () => {
 				body: createBody as never,
 				headers,
 			});
-			const createFields = createdKey as unknown as AdditionalFields;
 
-			expect(createFields.serverOnlyField).toBeNull();
+			expect(createdKey.serverOnlyField).toBeNull();
 
 			const createDbKey = await (await auth.$context).adapter.findOne<{
 				id: string;
@@ -3581,13 +3614,12 @@ describe("api-key", async () => {
 				serverOnlyField: "hidden-update",
 			};
 			const updatedKey = await auth.api.updateApiKey({
-				body: updateBody,
+				body: updateBody as never,
 				headers,
 			});
-			const updateFields = updatedKey as unknown as AdditionalFields;
 
-			expect(updateFields.projectId).toBe("project-input-false");
-			expect(updateFields.serverOnlyField).toBeNull();
+			expect(updatedKey.projectId).toBe("project-input-false");
+			expect(updatedKey.serverOnlyField).toBeNull();
 
 			const updateDbKey = await (await auth.$context).adapter.findOne<{
 				id: string;

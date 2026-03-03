@@ -7,17 +7,36 @@ import { APIError } from "better-auth/api";
 import { generateRandomString } from "better-auth/crypto";
 import { mergeSchema } from "better-auth/db";
 import { API_KEY_ERROR_CODES } from "./error-codes";
-import type { PredefinedApiKeyOptions } from "./routes";
+import type { ApiKeyEndpoints, PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
 import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
 import { getDate, getIp } from "./utils";
 
+export type DefaultApiKeyPlugin<O extends ApiKeyOptions> = {
+	id: "api-key";
+	$ERROR_CODES: typeof API_KEY_ERROR_CODES;
+	hooks: BetterAuthPlugin["hooks"];
+	endpoints: ApiKeyEndpoints<O>;
+	schema: ReturnType<typeof apiKeySchema>;
+	configurations: PredefinedApiKeyOptions[];
+};
+
+export interface ApiKeyCreator {
+	<O extends ApiKeyOptions>(
+		_configurations?: (ApiKeyConfigurationOptions & O) | undefined,
+	): DefaultApiKeyPlugin<O>;
+	<O extends ApiKeyOptions>(
+		_configurations: ApiKeyConfigurationOptions[],
+		_options?: O | undefined,
+	): DefaultApiKeyPlugin<O>;
+}
+
 declare module "@better-auth/core" {
 	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"api-key": {
-			creator: typeof apiKey;
+			creator: ApiKeyCreator;
 		};
 	}
 }
@@ -36,13 +55,21 @@ export { API_KEY_ERROR_CODES } from "./error-codes";
 
 export const API_KEY_TABLE_NAME = "apikey";
 
-export function apiKey(
+export function apiKey<O extends ApiKeyOptions>(
+	_configurations?: (ApiKeyConfigurationOptions & O) | undefined,
+	_options?: O | undefined,
+): DefaultApiKeyPlugin<O>;
+export function apiKey<O extends ApiKeyOptions>(
+	_configurations: ApiKeyConfigurationOptions[],
+	_options?: O | undefined,
+): DefaultApiKeyPlugin<O>;
+export function apiKey<O extends ApiKeyOptions>(
 	_configurations?:
-		| (ApiKeyConfigurationOptions & ApiKeyOptions)
-		| ApiKeyConfigurationOptions[]
+		| (ApiKeyConfigurationOptions & O)
+		| (ApiKeyConfigurationOptions & O)[]
 		| undefined,
-	_options?: ApiKeyOptions | undefined,
-) {
+	_options?: O | undefined,
+): DefaultApiKeyPlugin<O> {
 	if (Array.isArray(_configurations) && _configurations.length > 0) {
 		if (!_configurations.every((option) => option.configId)) {
 			throw new BetterAuthError(
@@ -57,11 +84,11 @@ export function apiKey(
 		}
 	}
 
-	const options: ApiKeyOptions = _options ?? {
+	const options: O = (_options ?? {
 		schema: Array.isArray(_configurations)
 			? undefined
-			: (_configurations as ApiKeyOptions | undefined)?.schema,
-	};
+			: (_configurations as O | undefined)?.schema,
+	}) as O;
 
 	const configurations = [
 		...(Array.isArray(_configurations)
@@ -156,7 +183,7 @@ export function apiKey(
 		return null;
 	}
 
-	const routes = createApiKeyRoutes({
+	const routes = createApiKeyRoutes<O>({
 		defaultKeyGenerator,
 		configurations,
 		schema,

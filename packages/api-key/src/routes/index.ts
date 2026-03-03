@@ -3,7 +3,11 @@ import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "better-auth/api";
 import { API_KEY_ERROR_CODES, API_KEY_TABLE_NAME } from "..";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey, ApiKeyConfigurationOptions } from "../types";
+import type {
+	ApiKey,
+	ApiKeyConfigurationOptions,
+	ApiKeyOptions,
+} from "../types";
 import { createApiKey } from "./create-api-key";
 import { deleteAllExpiredApiKeysEndpoint } from "./delete-all-expired-api-keys";
 import { deleteApiKey } from "./delete-api-key";
@@ -11,6 +15,16 @@ import { getApiKey } from "./get-api-key";
 import { listApiKeys } from "./list-api-keys";
 import { updateApiKey } from "./update-api-key";
 import { verifyApiKey } from "./verify-api-key";
+
+export type ApiKeyEndpoints<O extends ApiKeyOptions> = {
+	createApiKey: ReturnType<typeof createApiKey<O>>;
+	verifyApiKey: ReturnType<typeof verifyApiKey<O>>;
+	getApiKey: ReturnType<typeof getApiKey<O>>;
+	updateApiKey: ReturnType<typeof updateApiKey<O>>;
+	deleteApiKey: ReturnType<typeof deleteApiKey>;
+	listApiKeys: ReturnType<typeof listApiKeys<O>>;
+	deleteAllExpiredApiKeys: ReturnType<typeof deleteAllExpiredApiKeysEndpoint>;
+};
 
 export type PredefinedApiKeyOptions = ApiKeyConfigurationOptions &
 	Required<
@@ -131,7 +145,7 @@ export async function deleteAllExpiredApiKeys(
 		});
 }
 
-export function createApiKeyRoutes({
+export function createApiKeyRoutes<O extends ApiKeyOptions>({
 	defaultKeyGenerator,
 	configurations,
 	schema,
@@ -146,20 +160,24 @@ export function createApiKeyRoutes({
 	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 }) {
 	return {
-		createApiKey: createApiKey({
+		createApiKey: createApiKey<O>({
 			defaultKeyGenerator,
 			configurations,
 			schema,
 			additionalFields,
 			deleteAllExpiredApiKeys,
 		}),
-		verifyApiKey: verifyApiKey({
+		verifyApiKey: verifyApiKey<O>({
 			configurations,
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		getApiKey: getApiKey({ configurations, schema, deleteAllExpiredApiKeys }),
-		updateApiKey: updateApiKey({
+		getApiKey: getApiKey<O>({
+			configurations,
+			schema,
+			deleteAllExpiredApiKeys,
+		}),
+		updateApiKey: updateApiKey<O>({
 			configurations,
 			schema,
 			additionalFields,
@@ -170,7 +188,7 @@ export function createApiKeyRoutes({
 			schema,
 			deleteAllExpiredApiKeys,
 		}),
-		listApiKeys: listApiKeys({
+		listApiKeys: listApiKeys<O>({
 			configurations,
 			schema,
 			deleteAllExpiredApiKeys,
@@ -178,5 +196,5 @@ export function createApiKeyRoutes({
 		deleteAllExpiredApiKeys: deleteAllExpiredApiKeysEndpoint({
 			deleteAllExpiredApiKeys,
 		}),
-	};
+	} satisfies ApiKeyEndpoints<O>;
 }
