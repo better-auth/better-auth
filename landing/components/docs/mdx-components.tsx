@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DynamicCodeBlock } from "@/components/ui/dynamic-code-block";
 import type {
 	DBFieldAttribute,
 	DBSchema,
@@ -251,30 +252,10 @@ function generateSchema(
 	return "";
 }
 
-function SchemaCodeBlock({
-	code,
-	onCopy,
-}: {
-	code: string;
-	onCopy: () => void;
-}) {
-	const [copied, setCopied] = useState(false);
+function SchemaCodeBlock({ code, lang }: { code: string; lang: string }) {
 	return (
-		<div className="relative">
-			<button
-				type="button"
-				className="absolute top-2 right-2 font-mono text-[10px] text-foreground/40 hover:text-foreground/65 transition-colors"
-				onClick={() => {
-					void navigator.clipboard.writeText(code);
-					setCopied(true);
-					setTimeout(() => setCopied(false), 2000);
-				}}
-			>
-				{copied ? "copied" : "copy"}
-			</button>
-			<pre className="overflow-x-auto p-4 font-mono text-[12px] leading-relaxed text-foreground/80 whitespace-pre">
-				{code}
-			</pre>
+		<div className="[&_figure]:my-0 [&_figure]:border-0 [&_figure]:rounded-none">
+			<DynamicCodeBlock code={code} lang={lang} allowCopy />
 		</div>
 	);
 }
@@ -479,7 +460,9 @@ export function DatabaseTable({
 						sqlDialect,
 						drizzleProvider,
 					)}
-					onCopy={() => {}}
+					lang={
+						view === "sql" ? "sql" : view === "prisma" ? "prisma" : "typescript"
+					}
 				/>
 			)}
 		</div>
