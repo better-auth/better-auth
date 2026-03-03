@@ -22,7 +22,9 @@ export const metadata: Metadata = {
 	metadataBase: new URL(
 		process.env.VERCEL_URL
 			? `https://${process.env.VERCEL_URL}`
-			: "http://localhost:3000",
+			: process.env.NODE_ENV === "production"
+				? "https://docs.better-auth.com"
+				: (process.env.NEXT_PUBLIC_URL ?? "http://localhost:3000"),
 	),
 	title: {
 		template: "%s | Better Auth",
