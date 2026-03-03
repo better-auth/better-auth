@@ -1,5 +1,5 @@
 /**
- * Shared token generation for CIBA requests.
+ * Shared token generation for async auth requests.
  * Used by both poll mode (token-handler) and push mode (push-delivery).
  *
  * ID token signing:
@@ -8,7 +8,7 @@
  * - Otherwise falls back to HS256 symmetric signing using the server secret.
  *   HS256 means clients cannot verify ID tokens independently; they must
  *   trust the authorization server. This matches the oidc-provider's own
- *   fallback behaviour.
+ *   fallback behavior.
  */
 
 import type { GenericEndpointContext } from "@better-auth/core";
@@ -18,7 +18,7 @@ import { SignJWT } from "jose";
 import { generateRandomString } from "../../crypto";
 import { getJwtToken } from "../jwt";
 import type { OIDCOptions } from "../oidc-provider/types";
-import type { CibaRequestData, CibaTokenResponse } from "./types";
+import type { AsyncAuthRequestData, AsyncAuthTokenResponse } from "./types";
 
 const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = 3600;
 const DEFAULT_REFRESH_TOKEN_EXPIRES_IN = 604800;
@@ -35,13 +35,13 @@ async function computeAtHash(accessToken: string): Promise<string> {
 }
 
 /**
- * Generate tokens for an approved CIBA request.
+ * Generate tokens for an approved async auth request.
  * Shared between poll mode (token-handler) and push mode (push-delivery).
  */
-export async function generateTokensForCibaRequest(
+export async function generateTokensForAsyncAuthRequest(
 	ctx: GenericEndpointContext,
-	cibaRequest: CibaRequestData,
-): Promise<CibaTokenResponse> {
+	asyncAuthRequest: AsyncAuthRequestData,
+): Promise<AsyncAuthTokenResponse> {
 	const oidcPlugin =
 		ctx.context.getPlugin("oidc-provider") ||
 		ctx.context.getPlugin("oauth-provider");
@@ -52,7 +52,7 @@ export async function generateTokensForCibaRequest(
 		oidcOpts.refreshTokenExpiresIn ?? DEFAULT_REFRESH_TOKEN_EXPIRES_IN;
 
 	const user = await ctx.context.internalAdapter.findUserById(
-		cibaRequest.userId,
+		asyncAuthRequest.userId,
 	);
 	if (!user) {
 		throw new Error("User not found");
@@ -63,7 +63,7 @@ export async function generateTokensForCibaRequest(
 	const iat = Math.floor(now / 1000);
 	const accessTokenExpiresAt = new Date(now + accessTokenExpiresIn * 1000);
 
-	const requestedScopes = cibaRequest.scope.split(" ");
+	const requestedScopes = asyncAuthRequest.scope.split(" ");
 	const needsRefreshToken = requestedScopes.includes("offline_access");
 
 	const refreshToken = generateRandomString(32, "a-z", "A-Z", "0-9");
@@ -76,7 +76,7 @@ export async function generateTokensForCibaRequest(
 			refreshToken,
 			accessTokenExpiresAt,
 			refreshTokenExpiresAt,
-			clientId: cibaRequest.clientId,
+			clientId: asyncAuthRequest.clientId,
 			userId: user.id,
 			scopes: requestedScopes.join(" "),
 			createdAt: new Date(iat * 1000),
@@ -105,9 +105,9 @@ export async function generateTokensForCibaRequest(
 
 	const idTokenPayload = {
 		sub: user.id,
-		aud: cibaRequest.clientId,
+		aud: asyncAuthRequest.clientId,
 		iat,
-		auth_req_id: cibaRequest.authReqId,
+		auth_req_id: asyncAuthRequest.authReqId,
 		at_hash: atHash,
 		...profile,
 		...email,
@@ -144,7 +144,7 @@ export async function generateTokensForCibaRequest(
 						jwt: {
 							...jwtPlugin.options?.jwt,
 							getSubject: () => user.id,
-							audience: cibaRequest.clientId,
+							audience: asyncAuthRequest.clientId,
 							issuer:
 								jwtPlugin.options?.jwt?.issuer ??
 								(typeof ctx.context.options.baseURL === "string"
@@ -172,7 +172,7 @@ export async function generateTokensForCibaRequest(
 		token_type: "Bearer",
 		expires_in: accessTokenExpiresIn,
 		refresh_token: needsRefreshToken ? refreshToken : undefined,
-		scope: cibaRequest.scope,
+		scope: asyncAuthRequest.scope,
 		id_token: idToken,
 	};
 }

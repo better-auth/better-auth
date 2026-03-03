@@ -2,21 +2,25 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import type { User } from "../../types";
 
 /**
- * CIBA token delivery mode
+ * Token delivery mode (CIBA spec)
  * - poll: Client polls the token endpoint (default)
  * - push: Server pushes tokens to client's notification endpoint
  */
-export type CibaDeliveryMode = "poll" | "push";
+export type AsyncAuthDeliveryMode = "poll" | "push";
 
 /**
- * CIBA request status
+ * Request status
  */
-export type CibaRequestStatus = "pending" | "approved" | "rejected" | "expired";
+export type AsyncAuthRequestStatus =
+	| "pending"
+	| "approved"
+	| "rejected"
+	| "expired";
 
 /**
- * CIBA request data stored in verification table or secondary storage
+ * Request data stored in verification table or secondary storage
  */
-export interface CibaRequestData {
+export interface AsyncAuthRequestData {
 	/** Unique auth request ID */
 	authReqId: string;
 	/** Client ID that initiated the request */
@@ -28,7 +32,7 @@ export interface CibaRequestData {
 	/** Optional binding message shown to user */
 	bindingMessage?: string;
 	/** Request status */
-	status: CibaRequestStatus;
+	status: AsyncAuthRequestStatus;
 	/** When the request expires */
 	expiresAt: number;
 	/** Last time agent polled for this request */
@@ -38,7 +42,7 @@ export interface CibaRequestData {
 	/** When the request was created */
 	createdAt: number;
 	/** Token delivery mode for this request */
-	deliveryMode: CibaDeliveryMode;
+	deliveryMode: AsyncAuthDeliveryMode;
 	/** Client notification token (required for push mode) */
 	clientNotificationToken?: string;
 	/** Client notification endpoint URL (required for push mode) */
@@ -48,7 +52,7 @@ export interface CibaRequestData {
 /**
  * Notification data passed to sendNotification callback
  */
-export interface CibaNotificationData {
+export interface AsyncAuthNotificationData {
 	/** The user to notify */
 	user: User;
 	/** Unique auth request ID */
@@ -66,11 +70,27 @@ export interface CibaNotificationData {
 }
 
 /**
+ * An agent/client that can initiate async auth requests.
+ * Define these directly in the asyncAuth config — no separate
+ * client registration step needed.
+ */
+export interface AsyncAuthAgent {
+	/** Display name for the agent (shown in approval UI) */
+	name?: string;
+	/** Unique client identifier the agent uses to authenticate */
+	clientId: string;
+	/** Secret the agent uses to authenticate */
+	clientSecret: string;
+	/** Optional metadata (e.g. push delivery settings) */
+	metadata?: Record<string, unknown>;
+}
+
+/**
  * Internal options with defaults applied (after zod validation)
  */
-export interface CibaInternalOptions {
+export interface AsyncAuthInternalOptions {
 	sendNotification: (
-		data: CibaNotificationData,
+		data: AsyncAuthNotificationData,
 		request?: Request,
 	) => Promise<void>;
 	/** Request lifetime as TimeString */
@@ -83,11 +103,13 @@ export interface CibaInternalOptions {
 		ctx: GenericEndpointContext,
 	) => Promise<User | null>;
 	/** Default delivery mode */
-	deliveryMode: CibaDeliveryMode;
+	deliveryMode: AsyncAuthDeliveryMode;
+	/** Inline agent clients — checked first during authentication */
+	agents: AsyncAuthAgent[];
 }
 
 /**
- * CIBA backchannel authorize response
+ * Backchannel authorize response (CIBA spec)
  */
 export interface BcAuthorizeResponse {
 	/** Unique identifier for the authentication request */
@@ -99,9 +121,9 @@ export interface BcAuthorizeResponse {
 }
 
 /**
- * CIBA token error response (while pending)
+ * Token error response (while pending)
  */
-export interface CibaTokenPendingError {
+export interface AsyncAuthTokenPendingError {
 	error:
 		| "authorization_pending"
 		| "slow_down"
@@ -113,7 +135,7 @@ export interface CibaTokenPendingError {
 /**
  * Token response pushed to client_notification_endpoint per CIBA spec Section 10.3.1
  */
-export interface CibaPushTokenResponse {
+export interface AsyncAuthPushTokenResponse {
 	/** Auth request ID for correlation */
 	auth_req_id: string;
 	access_token: string;
@@ -125,9 +147,9 @@ export interface CibaPushTokenResponse {
 }
 
 /**
- * Token response generated for a CIBA request
+ * Token response generated for an async auth request
  */
-export interface CibaTokenResponse {
+export interface AsyncAuthTokenResponse {
 	access_token: string;
 	token_type: "Bearer";
 	expires_in: number;

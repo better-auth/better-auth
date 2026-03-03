@@ -7,6 +7,7 @@ aaguid
 unionid
 appleid
 ciam
+ciba
 nameid
 otpauth
 algs

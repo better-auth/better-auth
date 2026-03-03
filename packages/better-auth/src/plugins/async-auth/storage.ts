@@ -1,23 +1,20 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { safeJSONParse } from "@better-auth/core/utils/json";
-import type { CibaRequestData } from "./types";
+import type { AsyncAuthRequestData } from "./types";
 
-const CIBA_PREFIX = "ciba:";
+const ASYNC_AUTH_PREFIX = "async-auth:";
 
-/**
- * Get storage key for a CIBA request
- */
 function getStorageKey(authReqId: string): string {
-	return `${CIBA_PREFIX}${authReqId}`;
+	return `${ASYNC_AUTH_PREFIX}${authReqId}`;
 }
 
 /**
- * Store a new CIBA request.
+ * Store a new async auth request.
  * Uses secondary storage (Redis) if available, otherwise falls back to verification table.
  */
-export async function storeCibaRequest(
+export async function storeAsyncAuthRequest(
 	ctx: GenericEndpointContext,
-	data: CibaRequestData,
+	data: AsyncAuthRequestData,
 ): Promise<void> {
 	const key = getStorageKey(data.authReqId);
 	const value = JSON.stringify(data);
@@ -35,18 +32,18 @@ export async function storeCibaRequest(
 }
 
 /**
- * Find a CIBA request by auth_req_id.
+ * Find an async auth request by auth_req_id.
  */
-export async function findCibaRequest(
+export async function findAsyncAuthRequest(
 	ctx: GenericEndpointContext,
 	authReqId: string,
-): Promise<CibaRequestData | null> {
+): Promise<AsyncAuthRequestData | null> {
 	const key = getStorageKey(authReqId);
 
 	if (ctx.context.secondaryStorage) {
 		const value = await ctx.context.secondaryStorage.get(key);
 		if (!value) return null;
-		return safeJSONParse<CibaRequestData>(value);
+		return safeJSONParse<AsyncAuthRequestData>(value);
 	}
 
 	const verification =
@@ -58,16 +55,16 @@ export async function findCibaRequest(
 		return null;
 	}
 
-	return safeJSONParse<CibaRequestData>(verification.value);
+	return safeJSONParse<AsyncAuthRequestData>(verification.value);
 }
 
 /**
- * Persist a CIBA request value to the backing store.
+ * Persist an async auth request value to the backing store.
  */
 async function writeRequest(
 	ctx: GenericEndpointContext,
 	key: string,
-	data: CibaRequestData,
+	data: AsyncAuthRequestData,
 ): Promise<void> {
 	const value = JSON.stringify(data);
 	const ttlSeconds = Math.floor((data.expiresAt - Date.now()) / 1000);
@@ -86,7 +83,7 @@ async function writeRequest(
 }
 
 /**
- * Update a CIBA request.
+ * Update an async auth request.
  * Used for:
  * - Updating `lastPolledAt` and `pollingInterval` when agent polls (rate limiting)
  * - Updating `status` to "approved" or "rejected" when user responds
@@ -103,36 +100,36 @@ async function writeRequest(
  * 4. For production deployments with high concurrency, configuring
  *    secondaryStorage (Redis) is recommended — Redis SET is atomic.
  */
-export async function updateCibaRequest(
+export async function updateAsyncAuthRequest(
 	ctx: GenericEndpointContext,
 	authReqId: string,
-	updates: Partial<CibaRequestData>,
-): Promise<CibaRequestData | null> {
+	updates: Partial<AsyncAuthRequestData>,
+): Promise<AsyncAuthRequestData | null> {
 	const key = getStorageKey(authReqId);
 
-	const existing = await findCibaRequest(ctx, authReqId);
+	const existing = await findAsyncAuthRequest(ctx, authReqId);
 	if (!existing) return null;
 
 	// Status transitions are one-way: once approved/rejected, polls cannot revert.
 	if (existing.status !== "pending" && !updates.status) {
-		const safeUpdates: Partial<CibaRequestData> = {
+		const safeUpdates: Partial<AsyncAuthRequestData> = {
 			lastPolledAt: updates.lastPolledAt,
 			pollingInterval: updates.pollingInterval,
 		};
-		const updated: CibaRequestData = { ...existing, ...safeUpdates };
+		const updated: AsyncAuthRequestData = { ...existing, ...safeUpdates };
 		await writeRequest(ctx, key, updated);
 		return updated;
 	}
 
-	const updated: CibaRequestData = { ...existing, ...updates };
+	const updated: AsyncAuthRequestData = { ...existing, ...updates };
 	await writeRequest(ctx, key, updated);
 
 	// For status transitions, verify the write wasn't clobbered by a concurrent poll.
 	if (updates.status && updates.status !== existing.status) {
-		const verification = await findCibaRequest(ctx, authReqId);
+		const verification = await findAsyncAuthRequest(ctx, authReqId);
 		if (verification && verification.status !== updates.status) {
 			// Concurrent poll overwrote us — re-apply the status transition.
-			const retried: CibaRequestData = { ...verification, ...updates };
+			const retried: AsyncAuthRequestData = { ...verification, ...updates };
 			await writeRequest(ctx, key, retried);
 			return retried;
 		}
@@ -142,10 +139,10 @@ export async function updateCibaRequest(
 }
 
 /**
- * Delete a CIBA request.
+ * Delete an async auth request.
  * Called after tokens are issued or request is denied/expired.
  */
-export async function deleteCibaRequest(
+export async function deleteAsyncAuthRequest(
 	ctx: GenericEndpointContext,
 	authReqId: string,
 ): Promise<void> {
