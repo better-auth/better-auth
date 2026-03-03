@@ -1134,6 +1134,143 @@ describe("oauth token - client_credentials", async () => {
 	});
 });
 
+describe("oauth token - customIdTokenClaims precedence", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+		await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customIdTokenClaims: () => ({
+						given_name: "CustomFirst",
+						family_name: "CustomLast",
+						custom_field: "custom_value",
+					}),
+				}),
+			],
+		});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
+		oauthClient = response;
+
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	it("custom claims should override standard profile claims in id_token", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
+
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		const idToken = await jwtVerify(tokens.data?.id_token!, jwks);
+
+		// Custom claims must override the auto-derived profile claims
+		expect(idToken.payload.given_name).toBe("CustomFirst");
+		expect(idToken.payload.family_name).toBe("CustomLast");
+		expect(idToken.payload.custom_field).toBe("custom_value");
+
+		// Standard name should still come from the user record (not overridden)
+		expect(idToken.payload.name).toBe(testUser.name);
+		expect(idToken.payload.sub).toBeDefined();
+	});
+});
+
 describe("oauth token - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
