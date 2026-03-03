@@ -199,9 +199,28 @@ type ViewMode = "table" | "sql" | "prisma" | "drizzle";
 type SQLDialect = DefaultDialects;
 type DrizzleProvider = "pg" | "mysql" | "sqlite";
 
+function normalizeFieldType(raw: string): {
+	type: DBFieldAttribute["type"];
+	bigint?: boolean;
+} {
+	const t = raw.toLowerCase();
+	switch (t) {
+		case "text":
+			return { type: "string" };
+		case "integer":
+		case "int":
+			return { type: "number" };
+		case "bigint":
+			return { type: "number", bigint: true };
+		case "object":
+			return { type: "json" };
+		default:
+			return { type: t as DBFieldAttribute["type"] };
+	}
+}
+
 function fieldToDBField(field: Field): DBFieldAttribute {
-	const t = field.type.toLowerCase();
-	const type = (t === "text" ? "string" : t) as DBFieldAttribute["type"];
+	const { type, bigint } = normalizeFieldType(field.type);
 
 	let references: DBFieldAttribute["references"] | undefined;
 	if (field.isForeignKey && field.name.endsWith("Id")) {
@@ -218,6 +237,7 @@ function fieldToDBField(field: Field): DBFieldAttribute {
 		required: field.isPrimaryKey ? true : !field.isOptional,
 		references,
 		unique: false,
+		bigint,
 	};
 }
 

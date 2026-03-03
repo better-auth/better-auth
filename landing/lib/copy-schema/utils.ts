@@ -34,7 +34,7 @@ export function getTypeFactory(
 		if (Array.isArray(type)) {
 			return "text";
 		}
-		return typeMap[type as keyof typeof typeMap]!;
+		return typeMap[type as keyof typeof typeMap] ?? typeMap.string;
 	};
 }
 
