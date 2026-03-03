@@ -200,7 +200,7 @@ export async function authorizeMCPOAuth(
 				codeChallengeMethod: query.code_challenge_method,
 				nonce: query.nonce,
 			}),
-			identifier: code,
+			identifier: `mcp-code:${code}`,
 			expiresAt,
 		});
 	} catch {

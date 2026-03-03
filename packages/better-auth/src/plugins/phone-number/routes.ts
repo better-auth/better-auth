@@ -121,7 +121,7 @@ export const signInPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 					const otp = generateOTP(opts.otpLength);
 					await ctx.context.internalAdapter.createVerificationValue({
 						value: otp,
-						identifier: phoneNumber,
+						identifier: `phone-number:${phoneNumber}`,
 						expiresAt: getDate(opts.expiresIn, "sec"),
 					});
 					if (opts.sendOTP) {
@@ -277,7 +277,7 @@ export const sendPhoneNumberOTP = (opts: RequiredPhoneNumberOptions) =>
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
-				identifier: ctx.body.phoneNumber,
+				identifier: `phone-number:${ctx.body.phoneNumber}`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 			await ctx.context.runInBackgroundOrAwait(
@@ -470,17 +470,17 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 
 				// Clean up verification value
 				const otp = await ctx.context.internalAdapter.findVerificationValue(
-					ctx.body.phoneNumber,
+					`phone-number:${ctx.body.phoneNumber}`,
 				);
 				if (otp) {
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						ctx.body.phoneNumber,
+						`phone-number:${ctx.body.phoneNumber}`,
 					);
 				}
 			} else {
 				// Default internal verification logic
 				const otp = await ctx.context.internalAdapter.findVerificationValue(
-					ctx.body.phoneNumber,
+					`phone-number:${ctx.body.phoneNumber}`,
 				);
 
 				if (!otp || otp.expiresAt < new Date()) {
@@ -499,7 +499,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				const allowedAttempts = opts?.allowedAttempts || 3;
 				if (attempts && parseInt(attempts) >= allowedAttempts) {
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						ctx.body.phoneNumber,
+						`phone-number:${ctx.body.phoneNumber}`,
 					);
 					throw APIError.from(
 						"FORBIDDEN",
@@ -508,7 +508,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				}
 				if (otpValue !== ctx.body.code) {
 					await ctx.context.internalAdapter.updateVerificationByIdentifier(
-						ctx.body.phoneNumber,
+						`phone-number:${ctx.body.phoneNumber}`,
 						{
 							value: `${otpValue}:${parseInt(attempts || "0") + 1}`,
 						},
@@ -520,7 +520,7 @@ export const verifyPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 				}
 
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-					ctx.body.phoneNumber,
+					`phone-number:${ctx.body.phoneNumber}`,
 				);
 			}
 
@@ -707,7 +707,7 @@ export const requestPasswordResetPhoneNumber = (
 			const code = generateOTP(opts.otpLength);
 			await ctx.context.internalAdapter.createVerificationValue({
 				value: `${code}:0`,
-				identifier: `${ctx.body.phoneNumber}-request-password-reset`,
+				identifier: `phone-number:${ctx.body.phoneNumber}:request-password-reset`,
 				expiresAt: getDate(opts.expiresIn, "sec"),
 			});
 			// to avoid leaking the existence of the phone number
@@ -782,7 +782,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 		async (ctx) => {
 			const verification =
 				await ctx.context.internalAdapter.findVerificationValue(
-					`${ctx.body.phoneNumber}-request-password-reset`,
+					`phone-number:${ctx.body.phoneNumber}:request-password-reset`,
 				);
 			if (!verification) {
 				throw APIError.from(
@@ -798,7 +798,7 @@ export const resetPasswordPhoneNumber = (opts: RequiredPhoneNumberOptions) =>
 			}
 			const [otpValue, attempts] = verification.value.split(":");
 			const allowedAttempts = opts?.allowedAttempts || 3;
-			const phoneResetIdentifier = `${ctx.body.phoneNumber}-request-password-reset`;
+			const phoneResetIdentifier = `phone-number:${ctx.body.phoneNumber}:request-password-reset`;
 			if (attempts && parseInt(attempts) >= allowedAttempts) {
 				await ctx.context.internalAdapter.deleteVerificationByIdentifier(
 					phoneResetIdentifier,

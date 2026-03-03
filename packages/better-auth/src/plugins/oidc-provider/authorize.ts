@@ -294,7 +294,7 @@ export async function authorize(
 				codeChallengeMethod: query.code_challenge_method,
 				nonce: query.nonce,
 			}),
-			identifier: code,
+			identifier: `oidc-code:${code}`,
 			expiresAt,
 		});
 	} catch {

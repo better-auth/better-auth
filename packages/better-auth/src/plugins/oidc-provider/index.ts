@@ -564,7 +564,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const verification =
 						await ctx.context.internalAdapter.findVerificationValue(
-							consentCode,
+							`oidc-code:${consentCode}`,
 						);
 					if (!verification) {
 						throw new APIError("UNAUTHORIZED", {
@@ -595,7 +595,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					if (!ctx.body.accept) {
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							consentCode,
+							`oidc-code:${consentCode}`,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -606,13 +606,13 @@ export const oidcProvider = (options: OIDCOptions) => {
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
 					await ctx.context.internalAdapter.updateVerificationByIdentifier(
-						consentCode,
+						`oidc-code:${consentCode}`,
 						{
 							value: JSON.stringify({
 								...value,
 								requireConsent: false,
 							}),
-							identifier: code,
+							identifier: `oidc-code:${code}`,
 							expiresAt,
 						},
 					);
@@ -797,7 +797,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					 */
 					const verificationValue =
 						await ctx.context.internalAdapter.findVerificationValue(
-							code.toString(),
+							`oidc-code:${code.toString()}`,
 						);
 					if (!verificationValue) {
 						throw new APIError("UNAUTHORIZED", {
@@ -813,7 +813,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
+						`oidc-code:${code.toString()}`,
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -922,7 +922,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 
 					const requestedScopes = value.scope;
 					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-						code.toString(),
+						`oidc-code:${code.toString()}`,
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
