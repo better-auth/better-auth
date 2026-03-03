@@ -71,6 +71,56 @@ describe("auth type", () => {
 	});
 });
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8305
+ */
+describe("additionalFields config typing", () => {
+	test("should reject extraneous keys in user.additionalFields", () => {
+		// @ts-expect-error - unknown key should not be allowed
+		betterAuth({
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean",
+						abc: "def",
+					},
+				},
+			},
+		});
+
+		// @ts-expect-error - misspelled required should not be allowed
+		betterAuth({
+			user: {
+				additionalFields: {
+					test: {
+						type: "boolean",
+						require: true,
+					},
+				},
+			},
+		});
+	});
+
+	test("should allow valid additionalFields keys and preserve inference", () => {
+		const auth = betterAuth({
+			user: {
+				additionalFields: {
+					role: {
+						type: "string",
+						required: true,
+						input: true,
+						returned: true,
+					},
+				},
+			},
+		});
+
+		expectTypeOf<
+			typeof auth.$Infer.Session.user.role
+		>().toEqualTypeOf<string>();
+	});
+});
+
 describe("auth with trusted proxy headers", () => {
 	test("shouldn't infer base url from proxy headers if trusted", async () => {
 		let baseURL: string | undefined;

@@ -2,6 +2,7 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import { init } from "../context/init";
 import type { Auth } from "../types";
 import { createBetterAuth } from "./base";
+import type { StrictAdditionalFieldsOptions } from "./strict-additional-fields";
 
 /**
  * Better Auth initializer for full mode (with Kysely)
@@ -24,8 +25,10 @@ import { createBetterAuth } from "./base";
  *	  database: drizzleAdapter(db, { provider: "pg" }),
  * });
  */
-export const betterAuth = <Options extends BetterAuthOptions>(
-	options: Options & {},
-): Auth<Options> => {
+export function betterAuth(options: Record<string, never>): Auth;
+export function betterAuth<Options extends BetterAuthOptions>(
+	options: Options & StrictAdditionalFieldsOptions<Options>,
+): Auth<Options>;
+export function betterAuth(options: BetterAuthOptions): Auth {
 	return createBetterAuth(options, init);
-};
+}
