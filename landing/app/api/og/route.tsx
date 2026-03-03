@@ -102,7 +102,7 @@ export async function GET(req: Request) {
 					</svg>
 					<div tw="flex flex-col flex-1 py-10">
 						<svg
-							width="120"
+							width="130"
 							height="95"
 							viewBox="0 0 60 45"
 							fill="none"
