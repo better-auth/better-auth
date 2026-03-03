@@ -24,6 +24,7 @@ import {
 	getStorageOption,
 	processIdentifier,
 } from "./verification-token-storage";
+import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
 
 function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
@@ -37,7 +38,7 @@ export const createInternalAdapter = (
 	ctx: {
 		options: Omit<BetterAuthOptions, "logger">;
 		logger: InternalLogger;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		hooks: DatabaseHooksEntry[];
 		generateId: AuthContext["generateId"];
 	},
 ): InternalAdapter => {
