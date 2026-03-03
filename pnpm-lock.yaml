@@ -984,21 +984,12 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
-      '@better-auth/drizzle-adapter':
-        specifier: workspace:*
-        version: link:../drizzle-adapter
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../kysely-adapter
       '@better-auth/memory-adapter':
         specifier: workspace:*
         version: link:../memory-adapter
-      '@better-auth/mongo-adapter':
-        specifier: workspace:*
-        version: link:../mongo-adapter
-      '@better-auth/prisma-adapter':
-        specifier: workspace:*
-        version: link:../prisma-adapter
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1057,6 +1048,15 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
+      '@better-auth/drizzle-adapter':
+        specifier: workspace:*
+        version: link:../drizzle-adapter
+      '@better-auth/mongo-adapter':
+        specifier: workspace:*
+        version: link:../mongo-adapter
+      '@better-auth/prisma-adapter':
+        specifier: workspace:*
+        version: link:../prisma-adapter
       '@lynx-js/react':
         specifier: ^0.116.3
         version: 0.116.3(@types/react@19.2.14)
