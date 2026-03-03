@@ -161,7 +161,6 @@ export async function generateTokensForCibaRequest(
 		if (!idToken) {
 			idToken = await new SignJWT(idTokenPayload)
 				.setProtectedHeader({ alg: "HS256" })
-				.setIssuedAt()
 				.setExpirationTime(iat + accessTokenExpiresIn)
 				.setIssuer(ctx.context.baseURL)
 				.sign(new TextEncoder().encode(ctx.context.secret));

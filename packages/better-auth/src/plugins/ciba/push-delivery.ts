@@ -122,15 +122,17 @@ export async function pushTokensToClient(
 
 		if (error) {
 			ctx.context.logger.error(
-				`CIBA push delivery failed for auth_req_id=${cibaRequest.authReqId}`,
+				`CIBA push delivery failed for auth_req_id=${cibaRequest.authReqId}:`,
+				error,
 			);
 			return;
 		}
 
 		await deleteCibaRequest(ctx, cibaRequest.authReqId);
-	} catch (_err) {
+	} catch (err) {
 		ctx.context.logger.error(
-			`CIBA push delivery error for auth_req_id=${cibaRequest.authReqId}`,
+			`CIBA push delivery error for auth_req_id=${cibaRequest.authReqId}:`,
+			err,
 		);
 	}
 }
