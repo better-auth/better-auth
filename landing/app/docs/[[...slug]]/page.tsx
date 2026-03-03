@@ -157,8 +157,34 @@ export async function generateMetadata({
 	const page = source.getPage(slug);
 	if (!page) return notFound();
 
+	const ogSearchParams = new URLSearchParams();
+	ogSearchParams.set("heading", page.data.title);
+	ogSearchParams.set("type", "documentation");
+	ogSearchParams.set("mode", "dark");
+
+	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
+
 	return {
 		title: page.data.title,
 		description: page.data.description,
+		openGraph: {
+			title: page.data.title,
+			description: page.data.description,
+			type: "article",
+			images: [
+				{
+					url: ogUrl,
+					width: 1200,
+					height: 630,
+					alt: page.data.title,
+				},
+			],
+		},
+		twitter: {
+			card: "summary_large_image",
+			title: page.data.title,
+			description: page.data.description,
+			images: [ogUrl],
+		},
 	};
 }
