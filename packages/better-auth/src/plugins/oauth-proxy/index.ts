@@ -172,7 +172,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 					let decryptedPayload: string;
 					try {
 						decryptedPayload = await symmetricDecrypt({
-							key: ctx.context.secret,
+							key: ctx.context.secretConfig,
 							data: encryptedProfile,
 						});
 					} catch (e) {
@@ -302,7 +302,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let statePackage: OAuthProxyStatePackage | undefined;
 						try {
 							const decryptedPackage = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: state,
 							});
 							statePackage =
@@ -335,7 +335,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						let stateData: StateData;
 						try {
 							const decryptedState = await symmetricDecrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: statePackage.stateCookie,
 							});
 							stateData = parseJSON<StateData>(decryptedState);
@@ -449,7 +449,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 						};
 
 						const encryptedPayload = await symmetricEncrypt({
-							key: ctx.context.secret,
+							key: ctx.context.secretConfig,
 							data: JSON.stringify(payload),
 						});
 
@@ -518,7 +518,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							if (verification) {
 								// Encrypt the verification value so it matches cookie mode format
 								stateCookieValue = await symmetricEncrypt({
-									key: ctx.context.secret,
+									key: ctx.context.secretConfig,
 									data: verification.value,
 								});
 							}
@@ -536,7 +536,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 								isOAuthProxy: true,
 							};
 							const encryptedPackage = await symmetricEncrypt({
-								key: ctx.context.secret,
+								key: ctx.context.secretConfig,
 								data: JSON.stringify(statePackage),
 							});
 

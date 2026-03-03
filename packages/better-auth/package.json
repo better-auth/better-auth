@@ -1,6 +1,6 @@
 {
   "name": "better-auth",
-  "version": "1.5.0-beta.20",
+  "version": "1.5.1-beta.3",
   "description": "The most comprehensive authentication framework for TypeScript.",
   "type": "module",
   "license": "MIT",
@@ -489,11 +489,8 @@
   },
   "dependencies": {
     "@better-auth/core": "workspace:*",
-    "@better-auth/drizzle-adapter": "workspace:*",
     "@better-auth/kysely-adapter": "workspace:*",
     "@better-auth/memory-adapter": "workspace:*",
-    "@better-auth/mongo-adapter": "workspace:*",
-    "@better-auth/prisma-adapter": "workspace:*",
     "@better-auth/telemetry": "workspace:*",
     "@better-auth/utils": "catalog:",
     "@better-fetch/fetch": "catalog:",
@@ -507,6 +504,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
     "@lynx-js/react": "^0.116.3",
     "@sveltejs/kit": "^2.53.3",
     "@tanstack/react-start": "^1.163.2",
@@ -535,6 +535,9 @@
     "vue": "^3.5.29"
   },
   "peerDependencies": {
+    "@better-auth/drizzle-adapter": "workspace:*",
+    "@better-auth/mongo-adapter": "workspace:*",
+    "@better-auth/prisma-adapter": "workspace:*",
     "@lynx-js/react": "*",
     "@prisma/client": "^5.0.0 || ^6.0.0 || ^7.0.0",
     "@sveltejs/kit": "^2.0.0",
@@ -556,6 +559,15 @@
     "vue": "^3.0.0"
   },
   "peerDependenciesMeta": {
+    "@better-auth/drizzle-adapter": {
+      "optional": true
+    },
+    "@better-auth/mongo-adapter": {
+      "optional": true
+    },
+    "@better-auth/prisma-adapter": {
+      "optional": true
+    },
     "@lynx-js/react": {
       "optional": true
     },

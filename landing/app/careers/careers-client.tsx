@@ -377,7 +377,7 @@ function RoleCard({
 								key={req}
 								className="flex items-start gap-2 text-[11px] text-foreground/45 group-hover:text-foreground/55 transition-colors duration-300"
 							>
-								<span className="text-foreground/25 mt-px font-mono text-[9px] leading-none select-none shrink-0">
+								<span className="text-foreground/50 mt-px font-mono text-[9px] leading-none select-none shrink-0">
 									+
 								</span>
 								<span>{req}</span>

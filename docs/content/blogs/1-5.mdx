@@ -1,13 +1,14 @@
 ---
 title: "Better Auth 1.5"
-description: "Auth CLI, MCP Auth, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, and more!"
+description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, secret key rotation, and more!"
 date: 2026-02-28
+draft: true
 author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
   twitter: "himseIf_65"
-  image: "/release-og/1-5.png"
-tags: ["1.5", "CLI", "MCP", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
+image: "https://docs.better-auth.com/release-og/v1.5-release.png"
+tags: ["1.5", "CLI", "MCP", "oauth-provider", "electron", "i18n", "adapters", "cloudflare", "d1", "stripe", "SSO", "SCIM", "test-utils"]
 ---
 
 ## Better Auth 1.5 Release
@@ -18,9 +19,11 @@ This is our biggest release yet, with over 600 commits, 70 new features, 200 bug
 
 We’re also announcing our new Infrastructure product. It lets you use a full user management and analytics dashboard, security and protection tooling, audit logs, a self-service SSO UI, and more, all with your own Better Auth instance.
 
+Starting with this release, the self-service SSO dashboard — which lets your enterprise customers onboard their own SAML providers without support tickets — is powered by Better Auth Infrastructure. If you’re using the SSO plugin in production, we recommend upgrading to the Pro or Business tier to get access to the dashboard and streamline your enterprise onboarding.
+
 And soon, you’ll be able to host your Better Auth instance on our infrastructure as well, so you can own your auth at scale without worrying about infrastructure needs.
 
-Sign up now: [https://better-auth.com/sign-in](https://beta.better-auth.com/sign-in) 🚀
+Sign up now: [https://better-auth.com/sign-in](https://better-auth.com/sign-in) 🚀
 
 To upgrade, run:
 
@@ -50,11 +53,18 @@ npx auth generate  # Generate auth schema
 npx auth upgrade   # Upgrade Better Auth to the latest version
 ```
 
+The `generate` command now also supports a `--adapter` flag, letting you generate schema output tailored to your specific database adapter without needing a full Better Auth config file:
+
+```bash
+npx auth generate --adapter prisma
+npx auth generate --adapter drizzle
+```
+
 ### Remote MCP Auth Client
 
 The MCP plugin now ships a framework-agnostic remote auth client. If your MCP server is separate from your Better Auth instance, you can verify tokens and protect resources without duplicating auth logic.
 
-[👉 Read more about MCP authentication](https://www.notion.so/docs/plugins/mcp)
+[👉 Read more about MCP authentication](https://www.better-auth.com/docs/plugins/mcp)
 
 ```tsx
 import { createMcpAuthClient } from "better-auth/plugins/mcp/client";
@@ -83,11 +93,49 @@ const middleware = mcpAuthHono(mcpAuth);
 
 ---
 
+### OAuth 2.1 Provider
+
+The new `@better-auth/oauth-provider` plugin turns your Better Auth instance into a full OAuth 2.1 authorization server with OIDC compatibility. Issue access tokens, manage client registrations, and let third-party apps authenticate against your API — including MCP agents.
+
+[👉 Read more about the OAuth Provider](https://www.better-auth.com/docs/plugins/oauth-provider)
+
+```tsx
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+
+export const auth = betterAuth({
+    plugins: [
+        jwt(),
+        oauthProvider({
+            loginPage: "/sign-in",
+            consentPage: "/consent",
+        }),
+    ],
+});
+```
+
+Key features:
+
+- **OAuth 2.1 with OIDC**: Supports `authorization_code`, `refresh_token`, and `client_credentials` grants with `openid` scope support.
+- **MCP-ready**: Works out of the box as an authorization server for MCP tools and agents.
+- **Dynamic Client Registration**: Allow clients to register dynamically, with support for both public and confidential clients.
+- **JWT & JWKS verification**: Sign access tokens as JWTs and verify them remotely via the `/jwks` endpoint.
+- **Consent & authorization flows**: Built-in consent, account selection, and post-login redirect screens.
+- **Token introspection & revocation**: RFC 7662 and RFC 7009 compliant endpoints.
+- **Per-endpoint rate limiting**: Configurable rate limits for each OAuth endpoint.
+
+<Callout type="info">
+The OAuth 2.1 Provider replaces the previous OIDC Provider plugin, which will be deprecated in a future release. The MCP plugin will also transition to use the OAuth 2.1 Provider as its foundation. See the [migration guide](https://www.better-auth.com/docs/plugins/oauth-provider#from-oidc-provider-plugin) for upgrading from the OIDC Provider plugin.
+</Callout>
+
+---
+
 ### Electron Integration
 
 Full desktop authentication support for Electron apps. The plugin handles the complete OAuth flow — opening the system browser, exchanging authorization codes via custom protocol, and managing cookies securely.
 
-[👉 Read more about Electron integration](https://www.notion.so/docs/integrations/electron)
+[👉 Read more about Electron integration](https://www.better-auth.com/docs/integrations/electron)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -120,7 +168,7 @@ await client.requestAuth();
 
 The new i18n plugin provides type-safe error message translations with automatic locale detection from headers, cookies, or sessions.
 
-[👉 Read more about i18n](https://www.notion.so/docs/plugins/i18n)
+[👉 Read more about i18n](https://www.better-auth.com/docs/plugins/i18n)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -178,6 +226,18 @@ This is the foundation that the i18n plugin builds on — every error code from 
 
 The SSO plugin has received extensive hardening to be production-ready, with 23+ commits improving security and compliance.
 
+### Self-Service SSO Dashboard
+
+As part of our new Infrastructure product, the SSO plugin is now accompanied by a self-service dashboard for onboarding enterprise customers. Organization admins can generate a shareable link that walks enterprise customers through configuring their SAML identity provider — no back-and-forth support tickets required.
+
+The dashboard is available at:
+
+```
+https://better-auth.com/dashboard/[project]/organization/[orgId]/enterprise
+```
+
+From there, you can generate onboarding links, monitor SSO connection status, and manage provider configurations for each organization.
+
 ### SAML Single Logout (SLO)
 
 Full support for both SP-initiated and IdP-initiated SAML Single Logout:
@@ -209,6 +269,87 @@ export const auth = betterAuth({
 - **OIDC ID token `aud` claim validation**: Verify audience in OpenID Connect flows.
 - **Provider CRUD endpoints**: List, get, update, and delete SSO providers via API.
 - **Shared OIDC redirect URI**: Single redirect URI for all OIDC providers.
+
+---
+
+### API Key Plugin
+
+The API Key plugin has received some major improvements.
+
+We've extracted the plugin into it's own package, install it via:
+
+```package-install
+npm install @better-auth/api-key
+```
+
+And update your imports!
+
+```diff title="auth.ts"
+- import { apiKey } from "better-auth/plugins";
++ import { apiKey } from "@better-auth/api-key";
+```
+
+```diff title="auth-client.ts"
+- import { apiKeyClient } from "better-auth/client/plugins";
++ import { apiKeyClient } from "@better-auth/api-key/client";
+```
+
+#### Organization owned API Keys
+
+Long awaited support for organization-owned API keys has been added.
+You can now create API keys that are owned by organizations instead of users.
+
+```ts
+import { apiKey } from "@better-auth/api-key";
+
+export const auth = betterAuth({
+    plugins: [apiKey({ references: "organization" })],
+});
+```
+
+And creating a organization-owned API key:
+
+```ts
+import { auth } from "@/lib/auth";
+
+const apiKey = await auth.api.createApiKey({
+    body: { organizationId: "org_123" },
+});
+```
+
+#### Multiple configurations for API Keys
+
+You can now support multiple api-key use-cases within your app!
+
+```ts
+export const auth = betterAuth({
+    plugins: [
+        apiKey([
+            {
+                configId: "user-keys",
+                prefix: "usr_"
+            },
+            {
+                configId: "org-keys",
+                prefix: "org_",
+                references: "organization"
+            }
+        ])
+    ]
+});
+```
+
+To create an API Key for a given configuration, call:
+
+```ts
+const key = auth.api.createApiKey({
+    body: {
+        configId: "user-keys",
+        //...
+    }
+});
+```
+
 
 ---
 
@@ -251,7 +392,7 @@ hooks: {
 
 Better Auth can now resolve the base URL dynamically from incoming requests, making it work seamlessly with Vercel preview deployments, multi-domain setups, and reverse proxies.
 
-[👉 Read more about dynamic base URL](https://www.notion.so/docs/concepts/dynamic-base-url)
+[👉 Read more about dynamic base URL](https://www.better-auth.com/docs/concepts/dynamic-base-url)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -329,6 +470,31 @@ export const auth = betterAuth({
 
 ---
 
+### Non-Destructive Secret Key Rotation
+
+Better Auth now supports rotating `BETTER_AUTH_SECRET` without invalidating existing sessions, tokens, or encrypted data. When you need to rotate your secret — whether for scheduled rotation or incident response — you can introduce a new key while keeping old keys available for decryption.
+
+```tsx
+import { betterAuth } from "better-auth";
+
+export const auth = betterAuth({
+    secrets: [
+        { version: 2, value: "new-secret-key-at-least-32-chars" },   // current (first = active)
+        { version: 1, value: "old-secret-key-still-used-to-decrypt" }, // previous
+    ],
+});
+```
+
+Or via environment variable:
+
+```bash
+BETTER_AUTH_SECRETS="2:new-secret-key,1:old-secret-key"
+```
+
+New data is always encrypted with the latest key (first in the array), while decryption automatically tries all configured keys. This lets you roll secrets gradually without downtime or data loss.
+
+---
+
 ### Seat-Based Billing (Stripe)
 
 The Stripe plugin now supports per-seat billing for organizations. Member changes automatically sync seat quantity with Stripe.
@@ -368,7 +534,7 @@ The plugin also adds support for usage-based billing via `lineItems`, subscripti
 
 A new `testUtils` plugin provides factories, database helpers, and auth utilities for integration and E2E testing.
 
-[👉 Read more about test utilities](https://www.notion.so/docs/plugins/test-utils)
+[👉 Read more about test utilities](https://www.better-auth.com/docs/plugins/test-utils)
 
 ```tsx
 import { betterAuth } from "better-auth";
@@ -467,7 +633,9 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 - **`deferSessionRefresh`**: Support for read-replica database setups.
 - **Awaitable social provider config**: Provider configuration can now be async.
 - **Limit enumeration on sign-up**: When email verification is required, sign-up no longer reveals existing accounts.
+- **`customSyntheticUser` option**: Support plugin fields in enumeration-protected responses ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
 - **Form data support for email sign-in/sign-up**: In addition to JSON bodies.
+- **Automatic base URL detection from `VERCEL_URL` and `NEXTAUTH_URL`**: The client now falls back to `VERCEL_URL` and `NEXTAUTH_URL` environment variables when no explicit `baseURL` is configured, making server-side rendering on Vercel work out of the box.
 
 ### OAuth & Providers
 
@@ -502,6 +670,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 ### Plugin Improvements
 
 - **`magic-link`: `allowedAttempts` option**: Limit verification attempts.
+- **`email-otp`: Change email flow with OTP**: Users can change their email address via OTP verification, with optional current-email confirmation for added security.
 - **`email-otp`: Name, image, and additional fields in sign-in**: Richer OTP sign-in.
 - **`phone-number`: Additional fields in `signUpOnVerification`**: Pass extra data.
 - **`two-factor`: `twoFactorCookieMaxAge` and server-side trust device expiration**.
@@ -524,6 +693,7 @@ The built-in D1 dialect handles query execution, batch operations, and introspec
 
 - **Prevent OTP reuse via race condition**: Atomically invalidate OTPs on use.
 - **Prevent user enumeration**: In email-otp when sign-up is disabled, and on sign-up with required email verification.
+- **Prevent email enumeration on `/change-email`**: Always returns `{ status: true }` and simulates token generation for timing safety ([#8097](https://github.com/better-auth/better-auth/pull/8097)).
 - **Stricter default rate limits**: For password reset and phone number verification endpoints.
 - **Separate CSRF and origin checks**: More granular request validation.
 - **Prevent trial abuse**: Check all user subscriptions before granting a free trial.
@@ -543,7 +713,60 @@ The `/forget-password/email-otp` endpoint has been removed. Use the standard pas
 
 ### Adapter Imports
 
-The `better-auth/adapters/test` export has been removed. Use the `testUtils` plugin instead.
+The `better-auth/adapters/test` export has been removed. Use `testAdapter` and `createTestSuite` from `@better-auth/test-utils/adapter` instead. See the [Create a Database Adapter](/docs/guides/create-a-db-adapter#test-your-adapter) guide for details.
+
+### API Key Plugin Moved to `@better-auth/api-key`
+
+The api-key plugin has been extracted into its own package. Install it separately:
+
+```bash
+npm install @better-auth/api-key
+```
+
+```diff
+- import { apiKey } from "better-auth/plugins";
++ import { apiKey } from "@better-auth/api-key";
+```
+
+**Schema changes:**
+
+- The `userId` field on the `ApiKey` table has been renamed to `referenceId`.
+- A new `configId` field has been added (defaults to `"default"`).
+
+**Plugin options changes:**
+
+The `permissions.defaultPermissions` callback's first argument is now `referenceId` instead of `userId`:
+
+```diff
+export const auth = betterAuth({
+    plugins: [
+        apiKey({
+            permissions: {
+-               defaultPermissions: async (userId, ctx) => {
++               defaultPermissions: async (referenceId, ctx) => {
+                    return {
+                        files: ["read"],
+                        users: ["read"],
+                    };
+                },
+            }
+        })
+    ]
+})
+```
+
+**Client SDK changes:**
+
+```diff
+- const ownerId = apiKey.userId;
++ const ownerId = apiKey.referenceId;
++ const ownerType = apiKey.references; // "user" or "organization"
++ const configId = apiKey.configId;
+```
+
+**Permission changes:**
+The `updateApiKey` endpoint now requires at least a `userId` parameter or headers to be passed on the server side.
+If you didn't provide this in previous version, you're now required to pass them.
 
 ---
 
@@ -670,7 +893,12 @@ This release includes over 220 bug fixes addressing issues across all areas:
 - **Prisma Adapter**: Fixed null condition handling and unique where field detection.
 - **OAuth**: Fixed `refresh_token_expires_in` handling, callback routing, and token encryption.
 - **Organization**: Fixed role deletion prevention, active member refetch, and dynamic access control inference.
-- **Expo**: Fixed immutable headers on Cloudflare Workers and cookie injection wildcards.
+- **Expo**: Fixed immutable headers on Cloudflare Workers, cookie injection wildcards, and skipped cookie/expo-origin headers for ID token requests.
+- **Kysely Adapter**: Fixed edge case with aliased joined table names.
+- **Last Login Method**: Fixed handling of multiple Set-Cookie headers.
+- **Session Listing**: Fixed endpoints returning empty arrays when more than 100 inactive sessions exist.
+- **Organization**: Fixed path matching for active member signals.
+- **OAuth**: Fixed preserving refresh tokens when provider omits them on refresh.
 - **Secondary Storage**: Synced `updateSession` changes and removed duplicate writes.
 - And many more!
 

@@ -495,9 +495,6 @@
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-ring: var(--sidebar-ring);
 
-	--font-sans: var(--font-geist-sans);
-	--font-mono: var(--font-geist-mono);
-
 	--radius-sm: calc(var(--radius) - 4px);
 	--radius-md: calc(var(--radius) - 2px);
 	--radius-lg: var(--radius);
@@ -633,7 +630,8 @@ html:not([data-anchor-scrolling]) {
 	--fd-layout-width: 100vw;
 	--fd-layout-offset: 0px;
 	--fd-page-width: 100%;
-	--landing-left-pane-width: 22vw;
+	--fd-banner-height: 44px;
+	--landing-left-pane-width: min(22vw, 300px);
 	--staggered-nav-cta-width: 128px;
 	padding-top: 44px;
 }
@@ -643,6 +641,7 @@ html:not([data-anchor-scrolling]) {
 	width: 100%;
 	margin-inline: auto;
 	padding-inline-end: 0;
+	padding-block-start: 2rem;
 	transition:
 		width 280ms ease-out,
 		max-width 280ms ease-out,
@@ -657,7 +656,11 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.docs-layout {
-		--fd-page-width: calc(78vw - var(--staggered-nav-cta-width));
+		--fd-page-width: calc(
+			100vw -
+			var(--landing-left-pane-width) -
+			var(--staggered-nav-cta-width)
+		);
 	}
 
 	.docs-layout #nd-page {
@@ -684,6 +687,30 @@ html:not([data-anchor-scrolling]) {
 	}
 }
 
+@media (min-width: 80rem) {
+	.docs-layout {
+		--fd-toc-width: 280px;
+		--fd-layout-width: calc(100vw - var(--landing-left-pane-width));
+		padding-inline-start: var(--landing-left-pane-width);
+	}
+
+	.docs-layout #nd-page {
+		width: auto;
+		max-width: none;
+		margin-inline-start: 0;
+		margin-inline-end: 0;
+	}
+
+	.docs-layout #nd-page > article {
+		width: auto;
+		max-width: 900px;
+	}
+
+	.docs-layout #nd-toc {
+		padding-inline-start: 2rem;
+	}
+}
+
 /* Blog layout: matches docs pattern with narrow left pane + TOC sidebar */
 .blog-layout {
 	padding-top: 44px;
@@ -691,7 +718,7 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.blog-layout {
-		margin-inline-start: 22vw;
+		margin-inline-start: var(--landing-left-pane-width);
 	}
 
 	.blog-layout::before {
@@ -699,7 +726,7 @@ html:not([data-anchor-scrolling]) {
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: 22vw;
+		inset-inline-start: var(--landing-left-pane-width);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;
@@ -759,17 +786,17 @@ html:not([data-anchor-scrolling]) {
 .docs-layout #nd-page article > div.\@container > a div svg {
 	width: 12px;
 	height: 12px;
-	opacity: 0.3;
+	opacity: 0.45;
 	transition: opacity 200ms ease;
 }
 
 .docs-layout #nd-page article > div.\@container > a:hover div svg {
-	opacity: 0.7;
+	opacity: 0.8;
 }
 
 .docs-layout #nd-page article > div.\@container > a > p {
 	font-size: 11px;
-	opacity: 0.35;
+	opacity: 0.5;
 	font-family: var(--font-sans);
 	letter-spacing: 0;
 }

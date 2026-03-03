@@ -1,4 +1,3 @@
-import type { TOCItemType } from "fumadocs-core/toc";
 import { Accordion, Accordions } from "fumadocs-ui/components/accordion";
 import { File, Files, Folder } from "fumadocs-ui/components/files";
 import { Step, Steps } from "fumadocs-ui/components/steps";
@@ -14,34 +13,20 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { APIMethod } from "@/components/api-method";
+import { Features } from "@/components/docs/features";
 import {
 	AddToCursor,
 	DatabaseTable,
 	DividerText,
 	Endpoint,
-	Features,
 	ForkButton,
 	GenerateAppleJwt,
 	GenerateSecret,
 } from "@/components/docs/mdx-components";
-import type { StepperTOCItem } from "@/components/docs/stepper-toc";
-import { StepperTOC } from "@/components/docs/stepper-toc";
 import { Callout } from "@/components/ui/callout";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
-
-function groupTocItems(toc: TOCItemType[]): StepperTOCItem[] {
-	const grouped: StepperTOCItem[] = [];
-	for (const item of toc) {
-		if (item.depth <= 2) {
-			grouped.push({ ...item, subheadings: [] });
-		} else if (grouped.length > 0) {
-			grouped[grouped.length - 1].subheadings.push(item);
-		}
-	}
-	return grouped;
-}
 
 export default async function Page({
 	params,
@@ -59,16 +44,16 @@ export default async function Page({
 		return notFound();
 	}
 
-	const MDX = page.data.body;
-	const groupedToc = groupTocItems(page.data.toc);
+	const { body: MDX, toc } = await page.data.load();
 	const gitBranch = branch === "canary" ? "canary" : "main";
 
 	return (
 		<DocsPage
-			toc={page.data.toc}
+			toc={toc}
 			full={false}
-			tableOfContent={{ enabled: false }}
-			tableOfContentPopover={{ enabled: false }}
+			tableOfContent={{
+				style: "clerk",
+			}}
 			breadcrumb={{ enabled: false }}
 			editOnGithub={{
 				owner: "better-auth",
@@ -77,14 +62,18 @@ export default async function Page({
 				path: `docs/content/docs/${page.path}`,
 			}}
 		>
-			<StepperTOC items={groupedToc}>
-				<LLMCopyButton />
-				<ViewOptions
-					markdownUrl={`${page.url}.mdx`}
-					githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
-				/>
-			</StepperTOC>
-			<DocsTitle>{page.data.title}</DocsTitle>
+			<div className="flex items-center justify-between gap-4">
+				<DocsTitle className="mb-0">{page.data.title}</DocsTitle>
+				<div className="flex items-center gap-2 not-prose shrink-0">
+					<LLMCopyButton
+						rawUrl={`https://raw.githubusercontent.com/better-auth/better-auth/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+					<ViewOptions
+						markdownUrl={`${page.url}.mdx`}
+						githubUrl={`https://github.com/better-auth/better-auth/blob/${gitBranch}/docs/content/docs/${page.path}`}
+					/>
+				</div>
+			</div>
 			{page.data.description && (
 				<DocsDescription>{page.data.description}</DocsDescription>
 			)}

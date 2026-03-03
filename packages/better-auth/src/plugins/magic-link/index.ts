@@ -354,8 +354,8 @@ export const magicLink = (options: MagicLinkOptions) => {
 						redirectWithError("INVALID_TOKEN");
 					}
 					if (tokenValue.expiresAt < new Date()) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							tokenValue.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							storedToken,
 						);
 						redirectWithError("EXPIRED_TOKEN");
 					}
@@ -369,13 +369,13 @@ export const magicLink = (options: MagicLinkOptions) => {
 						attempt?: number | undefined;
 					};
 					if (attempt >= opts.allowedAttempts) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							tokenValue.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							storedToken,
 						);
 						redirectWithError("ATTEMPTS_EXCEEDED");
 					}
-					await ctx.context.internalAdapter.updateVerificationValue(
-						tokenValue.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						storedToken,
 						{
 							value: JSON.stringify({
 								email,

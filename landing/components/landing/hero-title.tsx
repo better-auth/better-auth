@@ -21,7 +21,7 @@ export function HeroTitle() {
 			initial={{ opacity: 0, y: 12 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5, ease: "easeOut" }}
-			className="relative w-full py-8 sm:pt-6 md:pt-10 pb-6 lg:pb-0 flex flex-col justify-center h-full pointer-events-none"
+			className="relative z-[2] w-full py-16 flex flex-col justify-center h-full pointer-events-none"
 		>
 			<div className="space-y-2 sm:space-y-1">
 				<div className="flex items-center gap-1.5">
@@ -63,13 +63,13 @@ export function HeroTitle() {
 				{/* CTA Buttons */}
 				<div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 sm:pt-4 lg:mt-5 pointer-events-auto">
 					<Link
-						href="/sign-in"
+						href="/docs/installation"
 						className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 bg-neutral-900 text-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 text-xs sm:text-sm font-medium hover:opacity-90 transition-colors"
 					>
 						Get Started
 					</Link>
 					<Link
-						href="/docs"
+						href="/sign-in"
 						className="relative inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 text-neutral-600 dark:text-neutral-300 text-xs sm:text-sm font-medium transition-colors group"
 					>
 						{/* Diagonal lines background */}
@@ -93,8 +93,10 @@ export function HeroTitle() {
 						<span className="absolute left-0 -top-[6px] -bottom-[6px] w-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
 						{/* Right border */}
 						<span className="absolute right-0 -top-[6px] -bottom-[6px] w-px bg-foreground/20 group-hover:bg-foreground/30 transition-colors" />
-
-						<span className="relative">Read Docs</span>
+						<span className="absolute -bottom-[6px] -right-[6px] font-mono text-[8px] text-foreground/40 dark:text-foreground/50 leading-none select-none translate-x-1/2 translate-y-1/2">
+							+
+						</span>
+						<span className="relative">Sign In </span>
 					</Link>
 				</div>
 			</div>

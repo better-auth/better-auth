@@ -219,10 +219,10 @@ export function sso<O extends SSOOptions>(
 							);
 						if (sessionLookup?.value) {
 							await ctx.context.internalAdapter
-								.deleteVerificationValue(sessionLookup.value)
+								.deleteVerificationByIdentifier(sessionLookup.value)
 								.catch(() => {});
 							await ctx.context.internalAdapter
-								.deleteVerificationValue(sessionLookupKey)
+								.deleteVerificationByIdentifier(sessionLookupKey)
 								.catch(() => {});
 						}
 					}),
