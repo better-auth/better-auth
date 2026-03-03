@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/api-key",
-  "version": "1.5.1-beta.1",
+  "version": "1.5.1-beta.3",
   "description": "API Key plugin for Better Auth.",
   "type": "module",
   "license": "MIT",

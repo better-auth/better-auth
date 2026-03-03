@@ -188,6 +188,12 @@ function InstallBlock() {
 		setOverflow("hidden");
 	}, [mode]);
 
+	useLayoutEffect(() => {
+		if (pmOpen) {
+			setOverflow("visible");
+		}
+	}, [pmOpen]);
+
 	const copy = (text: string) => {
 		navigator.clipboard.writeText(text);
 		setCopied(true);
@@ -519,10 +525,10 @@ function InstallBlock() {
 										style={{ fontFamily: "var(--font-geist-pixel-square)" }}
 									>
 										<span className="text-purple-600/90 dark:text-purple-400/90">
-											{mcpCommands[0].command.split(" ")[0]}
+											npx
 										</span>{" "}
 										<span className="text-neutral-700 dark:text-neutral-300">
-											{mcpCommands[0].command.split(" ").slice(1).join(" ")}
+											auth mcp
 										</span>
 									</code>
 									<div className="relative">
@@ -597,8 +603,8 @@ function InstallBlock() {
 																{mc.name === "Claude Code" && (
 																	<svg
 																		xmlns="http://www.w3.org/2000/svg"
-																		className="h-[18px] w-[18px]"
-																		viewBox="0 0 24 24"
+																		className="h-3.5 w-3.5"
+																		viewBox="0 0 16 16"
 																	>
 																		<path
 																			fill="currentColor"
@@ -1229,7 +1235,7 @@ function ContributorsSection({
 	];
 
 	return (
-		<div className="mt-10 pt-8 border-t border-foreground/[0.06]">
+		<div className="mt-10 pt-8">
 			<div className="flex items-center gap-3 mb-2">
 				<span className="text-base text-foreground/85 dark:text-foreground/75">
 					Contributors
@@ -1397,7 +1403,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1425,7 +1431,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1449,14 +1455,14 @@ function ReadmeFooter({
 			</div>
 
 			{/* Footer */}
-			<div className="relative mt-10 pt-6 border-t border-dashed border-foreground/6">
+			<div className="relative mt-10 pt-6">
 				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
 						{footerLinks.map((link, i) => (
 							<span key={link.label} className="flex items-center">
 								<Link
 									href={link.href}
-									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/35 hover:text-foreground/70 transition-colors"
+									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/50 hover:text-foreground/80 transition-colors"
 								>
 									{link.label}
 								</Link>
@@ -1470,7 +1476,7 @@ function ReadmeFooter({
 					</div>
 
 					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground font-mono">
+						<span className="text-[10px] text-foreground/50 font-mono">
 							© {new Date().getFullYear()} Better Auth Inc.
 						</span>
 						<div className="flex items-center gap-3 sm:gap-4">
@@ -1480,14 +1486,14 @@ function ReadmeFooter({
 							<Link
 								href="https://x.com/better_auth"
 								aria-label="Twitter/X"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Icons.XIcon className="h-3 w-3" />
 							</Link>
 							<Link
 								href="https://github.com/better-auth"
 								aria-label="GitHub"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Github className="h-4 w-4" />
 							</Link>
@@ -1523,7 +1529,7 @@ export function HeroReadMe({
 		>
 			{/* Markdown content */}
 			<div className="flex-1 overflow-y-auto no-scrollbar">
-				<div className="p-5 lg:p-5 pt-8 lg:pt-16 pb-0">
+				<div className="p-5 lg:p-5 pt-8 lg:pt-16">
 					<motion.article
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
@@ -1545,7 +1551,7 @@ export function HeroReadMe({
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
@@ -1553,7 +1559,7 @@ export function HeroReadMe({
 						<TrustedBy />
 
 						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/70 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Features
 							</span>
 							<div className="flex-1 border-t border-foreground/10"></div>
@@ -1615,7 +1621,7 @@ export function HeroReadMe({
 									headline: "Security & observability.",
 									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
 									security: true,
-									href: "/products?tab=infrastructure",
+									href: "/products/infrastructure",
 									managed: true,
 								},
 								{
@@ -1623,7 +1629,7 @@ export function HeroReadMe({
 									headline: "User management.",
 									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
 									dashboard: true,
-									href: "/products?tab=infrastructure",
+									href: "/products/infrastructure",
 									managed: true,
 								},
 							].map((feature, i) => (
@@ -2203,10 +2209,10 @@ export function HeroReadMe({
 
 						<div className="my-6">
 							<div className="flex items-center gap-3 mb-5">
-								<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+								<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 									Declarative Config
 								</span>
-								<div className="flex-1 border-t border-foreground/[0.06]" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 							<ServerClientTabs />
 						</div>
@@ -2234,10 +2240,10 @@ export function HeroReadMe({
 						{/* Infrastructure transition */}
 						<div className="mt-16 mb-8">
 							<div className="flex items-center gap-4">
-								<span className="text-lg sm:text-xl font-bold text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
 									Infrastructure
 								</span>
-								<div className="flex-1 border-t border-foreground/15" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
 								Managed infrastructure on top of the open-source framework.
@@ -2495,7 +2501,7 @@ export function HeroReadMe({
 									</p>
 								</div>
 								<Link
-									href="/products?tab=infrastructure"
+									href="/products/infrastructure"
 									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
 								>
 									<span className="font-mono text-[11px] uppercase tracking-widest">

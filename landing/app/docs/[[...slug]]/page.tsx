@@ -44,12 +44,12 @@ export default async function Page({
 		return notFound();
 	}
 
-	const MDX = page.data.body;
+	const { body: MDX, toc } = await page.data.load();
 	const gitBranch = branch === "canary" ? "canary" : "main";
 
 	return (
 		<DocsPage
-			toc={page.data.toc}
+			toc={toc}
 			full={false}
 			tableOfContent={{
 				style: "clerk",

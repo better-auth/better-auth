@@ -1,6 +1,6 @@
 // This is a temporary plugin config file until we support actually using the plugin config files.
 
-import * as z from "zod/v4";
+import * as z from "zod";
 import type { GetArgumentsOptions } from "../generate-auth";
 import type { ImportGroup } from "../utility/imports";
 import { createImport } from "../utility/imports";

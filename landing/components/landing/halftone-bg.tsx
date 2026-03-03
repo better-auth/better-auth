@@ -193,7 +193,7 @@ export function HalftoneBackground() {
 
 	return (
 		<div
-			className="absolute inset-0 overflow-hidden bg-background"
+			className="absolute inset-0 overflow-hidden bg-background pointer-events-none"
 			aria-hidden="true"
 		>
 			<canvas
