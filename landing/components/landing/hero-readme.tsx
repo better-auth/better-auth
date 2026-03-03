@@ -1449,7 +1449,7 @@ function ReadmeFooter({
 			</div>
 
 			{/* Footer */}
-			<div className="relative mt-10 pt-6 border-t border-dashed border-foreground/6">
+			<div className="relative mt-10 pt-6">
 				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
 						{footerLinks.map((link, i) => (
