@@ -1404,7 +1404,7 @@ describe("oauth - prompt", async () => {
 				headers,
 				onResponse(context) {
 					consentRedirectUri = context.response.headers.get("Location") || "";
-					cookieSetter(headers);
+					cookieSetter(headers)(context);
 				},
 			},
 		);
