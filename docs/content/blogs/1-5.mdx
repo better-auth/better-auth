@@ -2,6 +2,7 @@
 title: "Better Auth 1.5"
 description: "Auth CLI, MCP Auth, OAuth 2.1 Provider, Electron integration, i18n, adapter extraction, dynamic base URL, Cloudflare D1 support, CLI init wizard, seat-based billing, SAML Single Logout, test utilities, secret key rotation, and more!"
 date: 2026-02-28
+draft: true
 author:
   name: "Alex Yang"
   avatar: "/avatars/alex.png"
@@ -712,7 +713,7 @@ The `/forget-password/email-otp` endpoint has been removed. Use the standard pas
 
 ### Adapter Imports
 
-The `better-auth/adapters/test` export has been removed. Use the `testUtils` plugin instead.
+The `better-auth/adapters/test` export has been removed. Use `testAdapter` and `createTestSuite` from `@better-auth/test-utils/adapter` instead. See the [Create a Database Adapter](/docs/guides/create-a-db-adapter#test-your-adapter) guide for details.
 
 ### API Key Plugin Moved to `@better-auth/api-key`
 
