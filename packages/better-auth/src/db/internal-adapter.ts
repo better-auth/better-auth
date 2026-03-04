@@ -1109,6 +1109,20 @@ export const createInternalAdapter = (
 
 			const currentAdapter = await getCurrentAdapter(adapter);
 
+			if (!options.verification?.disableCleanup) {
+				await deleteManyWithHooks(
+					[
+						{
+							field: "expiresAt",
+							value: new Date(),
+							operator: "lt",
+						},
+					],
+					"verification",
+					undefined,
+				);
+			}
+
 			async function findByIdentifier(id: string) {
 				return currentAdapter.findMany<Verification>({
 					model: "verification",
@@ -1122,20 +1136,6 @@ export const createInternalAdapter = (
 
 			if (!verification.length && storageOption && storageOption !== "plain") {
 				verification = await findByIdentifier(identifier);
-			}
-
-			if (!options.verification?.disableCleanup) {
-				await deleteManyWithHooks(
-					[
-						{
-							field: "expiresAt",
-							value: new Date(),
-							operator: "lt",
-						},
-					],
-					"verification",
-					undefined,
-				);
 			}
 
 			return (verification[0] as Verification) || null;

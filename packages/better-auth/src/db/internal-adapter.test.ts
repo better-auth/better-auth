@@ -209,14 +209,10 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
 
 		const value = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value).toMatchObject({
-			identifier: "test-id-1",
-		});
+		expect(value).toBeNull();
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
-		const value2 = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value2).toBeNull();
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
