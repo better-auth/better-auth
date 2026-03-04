@@ -1591,7 +1591,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1604,7 +1603,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
@@ -1735,7 +1737,6 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
             "content": {
               "application/json": {
                 "schema": {
-                  "nullable": true,
                   "properties": {
                     "session": {
                       "$ref": "#/components/schemas/Session",
@@ -1748,7 +1749,10 @@ exports[`open-api > should generate OpenAPI schema > openAPISchema 1`] = `
                     "session",
                     "user",
                   ],
-                  "type": "object",
+                  "type": [
+                    "object",
+                    "null",
+                  ],
                 },
               },
             },
