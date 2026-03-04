@@ -445,7 +445,7 @@ export function StaggeredNavFiles() {
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: -4 }}
 									transition={{ duration: 0.12, ease: "easeOut" }}
-									className={`absolute top-full left-0 z-50 w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
+									className={`absolute top-full left-0 z-50 min-w-fit w-full border ${dropdownBorderClass} bg-background shadow-2xl shadow-black/20 dark:shadow-black/60 py-1`}
 								>
 									{resourceFiles.map((item, i) => (
 										<motion.div
