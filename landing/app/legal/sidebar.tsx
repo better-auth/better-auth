@@ -19,7 +19,7 @@ export function LegalSidebar() {
 	const pathname = usePathname();
 
 	return (
-		<aside className="w-full md:w-[250px] shrink-0 border-foreground/6 px-5 md:px-7 pt-12 md:py-40 md:sticky md:top-0 md:h-dvh">
+		<aside className="w-full md:w-[250px] shrink-0 px-5 md:px-7 pt-12 md:py-40 md:sticky md:top-0 md:h-dvh">
 			<p className="font-mono text-xs uppercase tracking-wider text-foreground/50 mb-2">
 				Legal
 			</p>
