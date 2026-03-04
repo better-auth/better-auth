@@ -33,6 +33,7 @@ export interface RobloxOptions extends ProviderOptions<RobloxProfile> {
 }
 
 export const roblox = (options: RobloxOptions) => {
+	const tokenEndpoint = "https://apis.roblox.com/oauth/v1/token";
 	return {
 		id: "roblox",
 		name: "Roblox",
@@ -55,7 +56,7 @@ export const roblox = (options: RobloxOptions) => {
 				code,
 				redirectURI: options.redirectURI || redirectURI,
 				options,
-				tokenEndpoint: "https://apis.roblox.com/oauth/v1/token",
+				tokenEndpoint,
 				authentication: "post",
 			});
 		},
@@ -69,7 +70,7 @@ export const roblox = (options: RobloxOptions) => {
 							clientKey: options.clientKey,
 							clientSecret: options.clientSecret,
 						},
-						tokenEndpoint: "https://apis.roblox.com/oauth/v1/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
