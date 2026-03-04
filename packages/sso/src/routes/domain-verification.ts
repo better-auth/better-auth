@@ -9,6 +9,7 @@ import type { SSOOptions, SSOProvider } from "../types";
 
 const DNS_LABEL_MAX_LENGTH = 63;
 const DEFAULT_TOKEN_PREFIX = "better-auth-token";
+const SCHEME_REGEX = /^[a-zA-Z][a-zA-Z\d+.-]*:\/\//;
 
 const domainVerificationBodySchema = z.object({
 	providerId: z.string(),
@@ -21,6 +22,15 @@ export function getVerificationIdentifier(
 	const tokenPrefix =
 		options.domainVerification?.tokenPrefix || DEFAULT_TOKEN_PREFIX;
 	return `_${tokenPrefix}-${providerId}`;
+}
+
+function getHostnameFromDomainInput(domain: string): string {
+	const trimmedDomain = domain.trim();
+	const normalizedDomain = SCHEME_REGEX.test(trimmedDomain)
+		? trimmedDomain
+		: `https://${trimmedDomain}`;
+
+	return new URL(normalizedDomain).hostname;
 }
 
 export const requestDomainVerification = (options: SSOOptions) => {
@@ -242,7 +252,7 @@ export const verifyDomain = (options: SSOOptions) => {
 			}
 
 			try {
-				const hostname = new URL(provider.domain).hostname;
+				const hostname = getHostnameFromDomainInput(provider.domain);
 				const dnsRecords = await dns.resolveTxt(`${identifier}.${hostname}`);
 				records = dnsRecords.flat();
 			} catch (error) {

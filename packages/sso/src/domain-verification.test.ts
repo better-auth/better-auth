@@ -122,12 +122,13 @@ describe("Domain verification", async () => {
 		async function registerSSOProvider(
 			headers: Headers,
 			organizationId?: string,
+			domain = "hello.com",
 		) {
 			return auth.api.registerSSOProvider({
 				body: {
 					providerId: "saml-provider-1",
 					issuer: "http://hello.com:8081",
-					domain: "http://hello.com:8081",
+					domain,
 					samlConfig: {
 						entryPoint: "http://idp.com:",
 						cert: "the-cert",
@@ -472,6 +473,43 @@ describe("Domain verification", async () => {
 			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
 			const headers = await getAuthHeaders(testUser);
 			const provider = await registerSSOProvider(headers);
+
+			expect(provider.domain).toBe("hello.com");
+			expect(provider.domainVerified).toBe(false);
+			expect(provider.domainVerificationToken).toBeTypeOf("string");
+
+			dnsMock.resolveTxt.mockResolvedValue([
+				["google-site-verification=the-token"],
+				[
+					"v=spf1 ip4:50.242.118.232/29 include:_spf.google.com include:mail.zendesk.com ~all",
+				],
+				[
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+				],
+			]);
+
+			const response = await auth.api.verifyDomain({
+				body: {
+					providerId: provider.providerId,
+				},
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(204);
+			expect(dnsMock.resolveTxt).toHaveBeenCalledWith(
+				"_better-auth-token-saml-provider-1.hello.com",
+			);
+		});
+
+		it("should verify a provider domain ownership when provider domain is a URL", async () => {
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth();
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(
+				headers,
+				undefined,
+				"http://hello.com:8081",
+			);
 
 			expect(provider.domain).toBe("http://hello.com:8081");
 			expect(provider.domainVerified).toBe(false);
