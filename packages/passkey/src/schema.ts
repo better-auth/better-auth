@@ -48,6 +48,7 @@ export const schema = {
 			updatedAt: {
 				type: "date",
 				required: false,
+				onUpdate: () => new Date(),
 			},
 			aaguid: {
 				type: "string",
