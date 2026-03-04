@@ -37,6 +37,26 @@ describe("forget password", async () => {
 		expect(token.length).toBeGreaterThan(10);
 	});
 
+	it("should reject untrusted redirectTo", async () => {
+		const { client, testUser } = await getTestInstance({
+			emailAndPassword: {
+				enabled: true,
+				async sendResetPassword() {},
+			},
+			trustedOrigins: ["http://localhost:3000"],
+			advanced: {
+				disableOriginCheck: false,
+			},
+		});
+		const res = await client.requestPasswordReset({
+			email: testUser.email,
+			redirectTo: "http://malicious.com",
+		});
+		
+		expect(res.error?.status).toBe(403);
+		expect(res.error?.message).toBe("Invalid redirectURL");
+	});
+
 	it("should fail on invalid password", async () => {
 		const res = await client.resetPassword(
 			{
