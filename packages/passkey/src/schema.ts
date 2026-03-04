@@ -44,6 +44,7 @@ export const schema = {
 			createdAt: {
 				type: "date",
 				required: false,
+				defaultValue: () => new Date(),
 			},
 			updatedAt: {
 				type: "date",
