@@ -602,6 +602,62 @@ describe("internal adapter test", async () => {
 		expect(finalTTL).toBeGreaterThanOrEqual(7198); // Allow for test execution time
 	});
 
+	it("should refresh sessions when secondary storage returns objects with string dates", async () => {
+		const objectStore = new Map<string, unknown>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string) {
+					objectStore.set(key, JSON.parse(value));
+				},
+				get(key: string) {
+					return objectStore.get(key) ?? null;
+				},
+				delete(key: string) {
+					objectStore.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const testAdapter = testCtx.internalAdapter;
+
+		const user = await testAdapter.createUser({
+			name: "Object Return User",
+			email: `object-return-${Date.now()}@example.com`,
+		});
+		const session = await testAdapter.createSession(user.id);
+
+		const cachedBefore = objectStore.get(session.token) as
+			| { session?: { expiresAt?: unknown } }
+			| undefined;
+		expect(typeof cachedBefore?.session?.expiresAt).toBe("string");
+
+		await expect(
+			testAdapter.updateUser(user.id, {
+				name: "Updated Name",
+			}),
+		).resolves.toBeDefined();
+
+		const afterUpdateById = objectStore.get(session.token) as
+			| { user?: { name?: string } }
+			| undefined;
+		expect(afterUpdateById?.user?.name).toBe("Updated Name");
+
+		await expect(
+			testAdapter.updateUserByEmail(user.email, {
+				name: "Updated By Email",
+			}),
+		).resolves.toBeDefined();
+
+		const afterUpdateByEmail = objectStore.get(session.token) as
+			| { user?: { name?: string } }
+			| undefined;
+		expect(afterUpdateByEmail?.user?.name).toBe("Updated By Email");
+	});
+
 	it("should create on secondary storage", async () => {
 		// Create session
 		const now = Date.now();

@@ -27,9 +27,26 @@ import {
 import type { DatabaseHooksEntry } from "./with-hooks";
 import { getWithHooks } from "./with-hooks";
 
-function getTTLSeconds(expiresAt: Date | number, now = Date.now()): number {
-	const expiresMs =
-		typeof expiresAt === "number" ? expiresAt : expiresAt.getTime();
+function getExpirationMs(expiresAt: unknown): number | null {
+	if (typeof expiresAt === "number") {
+		return Number.isFinite(expiresAt) ? expiresAt : null;
+	}
+	if (expiresAt instanceof Date) {
+		const time = expiresAt.getTime();
+		return Number.isFinite(time) ? time : null;
+	}
+	if (typeof expiresAt === "string") {
+		const parsed = Date.parse(expiresAt);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+	return null;
+}
+
+function getTTLSeconds(expiresAt: unknown, now = Date.now()): number {
+	const expiresMs = getExpirationMs(expiresAt);
+	if (expiresMs === null) {
+		return 0;
+	}
 	return Math.max(Math.floor((expiresMs - now) / 1000), 0);
 }
 

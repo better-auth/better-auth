@@ -366,6 +366,62 @@ describe("updateUser", async () => {
 		expect(firstSession?.user.name).toBe("updatedName");
 	});
 
+	it("should propagate updates when secondaryStorage returns parsed objects with string dates", async () => {
+		const store = new Map<string, unknown>();
+		const { client: authClient, signInWithTestUser: signIn } =
+			await getTestInstance({
+				secondaryStorage: {
+					set(key, value) {
+						store.set(key, JSON.parse(value));
+					},
+					get(key) {
+						return store.get(key) ?? null;
+					},
+					delete(key) {
+						store.delete(key);
+					},
+				},
+			});
+
+		const { headers: headers1 } = await signIn();
+		const { headers: headers2 } = await signIn();
+
+		const firstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers1,
+				throw: true,
+			},
+		});
+		const cachedSession = store.get(firstSession!.session.token) as
+			| { session?: { expiresAt?: unknown } }
+			| undefined;
+		expect(typeof cachedSession?.session?.expiresAt).toBe("string");
+
+		await authClient.updateUser({
+			name: "updatedName",
+			fetchOptions: {
+				headers: headers1,
+				throw: true,
+			},
+		});
+
+		const secondSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers2,
+				throw: true,
+			},
+		});
+		expect(secondSession?.user.name).toBe("updatedName");
+
+		const refreshedFirstSession = await authClient.getSession({
+			fetchOptions: {
+				headers: headers1,
+				throw: true,
+			},
+		});
+		expect(refreshedFirstSession?.user.name).toBe("updatedName");
+	});
+
 	it("should not write to secondary storage multiple times for the same session token during updateUser", async () => {
 		const store = new Map<string, string>();
 		const writeLog: { key: string; timestamp: number }[] = [];
