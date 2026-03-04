@@ -5,6 +5,10 @@ export type BetterAuthPluginDBSchema = {
 		fields: {
 			[field: string]: DBFieldAttribute;
 		};
+		/**
+		 * Whether to disable migrations for this table
+		 * @default false
+		 */
 		disableMigration?: boolean | undefined;
 		modelName?: string | undefined;
 	};
