@@ -27,6 +27,12 @@ const nextConfig = {
 	},
 	async redirects() {
 		return [
+			// Infrastructure backwards compatibility redirects
+			{
+				source: "/dashboard/:path*",
+				destination: "https://dash.better-auth.com",
+				permanent: true,
+			},
 			{
 				source: "/docs",
 				destination: "/docs/introduction",
