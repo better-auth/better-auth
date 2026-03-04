@@ -193,6 +193,39 @@ describe("account", async () => {
 		});
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8345
+	 */
+	it("should get account info using provider accountId (not internal id)", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			const googleAccount = accounts.data?.find(
+				(a) => a.providerId === "google",
+			);
+			expect(googleAccount).toBeDefined();
+
+			// The internal DB id must differ from the provider-issued accountId
+			expect(googleAccount!.id).not.toBe(googleAccount!.accountId);
+
+			// accountInfo internally calls getAccessToken with account.accountId.
+			// Before the fix, it incorrectly passed account.id (internal DB id),
+			// causing getAccessToken to fail the account lookup.
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: googleAccount!.accountId },
+				method: "GET",
+			});
+
+			expect(info.data).toMatchObject({
+				user: expect.objectContaining({
+					id: expect.any(String),
+					email: expect.any(String),
+				}),
+				data: expect.any(Object),
+			});
+		});
+	});
+
 	it("should pass custom scopes to authorization URL", async () => {
 		const { runWithUser: runWithClient2 } = await signInWithTestUser();
 		await runWithClient2(async () => {
