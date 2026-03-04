@@ -911,7 +911,7 @@ export const accountInfo = createAuthEndpoint(
 			...ctx,
 			method: "POST",
 			body: {
-				accountId: account.id,
+				accountId: account.accountId,
 				providerId: account.providerId,
 			},
 			returnHeaders: false,
