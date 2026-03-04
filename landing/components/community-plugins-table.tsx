@@ -296,7 +296,7 @@ export const communityPlugins: CommunityPlugin[] = [
 		description:
 			"Easily create and manage user invitations, allowing you to invite users with customizable settings and track usage.",
 		author: {
-			name: "0-Sandy",
+			name: "Sandy",
 			github: "0-Sandy",
 			avatar: "https://github.com/0-Sandy.png",
 		},
