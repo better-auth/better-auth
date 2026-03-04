@@ -820,6 +820,13 @@ const accountInfoQuerySchema = z.optional(
 					"The provider given account id for which to get the account info",
 			})
 			.optional(),
+		userId: z
+			.string()
+			.meta({
+				description:
+					"The user ID associated with the account. Optional — only needed for server-side calls without session headers.",
+			})
+			.optional(),
 	}),
 );
 
@@ -827,7 +834,6 @@ export const accountInfo = createAuthEndpoint(
 	"/account-info",
 	{
 		method: "GET",
-		use: [sessionMiddleware],
 		metadata: {
 			openapi: {
 				description: "Get the account info provided by the provider",
@@ -878,7 +884,17 @@ export const accountInfo = createAuthEndpoint(
 		query: accountInfoQuerySchema,
 	},
 	async (ctx) => {
-		const providedAccountId = ctx.query?.accountId;
+		const { accountId: providedAccountId, userId } = ctx.query || {};
+		const req = ctx.request;
+		const session = await getSessionFromCtx(ctx);
+		if (req && !session) {
+			throw ctx.error("UNAUTHORIZED");
+		}
+		const resolvedUserId = session?.user?.id || userId;
+		if (!resolvedUserId) {
+			throw ctx.error("UNAUTHORIZED");
+		}
+
 		let account: Account | undefined = undefined;
 		if (!providedAccountId) {
 			if (ctx.context.options.account?.storeAccountCookie) {
@@ -895,7 +911,7 @@ export const accountInfo = createAuthEndpoint(
 			}
 		}
 
-		if (!account || account.userId !== ctx.context.session.user.id) {
+		if (!account || account.userId !== resolvedUserId) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
 

@@ -108,7 +108,10 @@ server-side usage:
 
 ```ts
 await auth.api.accountInfo({
-  query: { accountId: "accountId" },
+  query: {
+    accountId: "accountId",
+    userId: "userId", // optional, if you don't provide headers with authenticated token
+  },
   headers: await headers() // headers containing the user's session token
 });
 ```
