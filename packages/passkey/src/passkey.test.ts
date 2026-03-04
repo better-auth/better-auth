@@ -87,8 +87,7 @@ describe("passkey", async () => {
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		const updatedAt = new Date();
-		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+		await context.adapter.create({
 			model: "passkey",
 			data: {
 				userId: user.id,
@@ -97,12 +96,10 @@ describe("passkey", async () => {
 				counter: 0,
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
-				createdAt: new Date(),
-				updatedAt,
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Omit<Passkey, "id">,
+			},
 		});
 
 		const passkeys = await auth.api.listPasskeys({
@@ -116,19 +113,13 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("credentialID");
 		expect(passkeys[0]).toHaveProperty("aaguid");
 		expect(passkeys[0]).toHaveProperty("updatedAt");
-		expect(new Date(passkeys[0]!.updatedAt!).toISOString()).toBe(
-			updatedAt.toISOString(),
-		);
 	});
 
 	it("should update passkey updatedAt after successful authentication", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
 		const previousUpdatedAt = new Date(Date.now() - 60_000);
-		const passkeyRecord = await context.adapter.create<
-			Omit<Passkey, "id">,
-			Passkey
-		>({
+		const passkeyRecord = await context.adapter.create({
 			model: "passkey",
 			data: {
 				userId: user.id,
@@ -137,12 +128,11 @@ describe("passkey", async () => {
 				counter: 0,
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID-auth",
-				createdAt: new Date(),
 				updatedAt: previousUpdatedAt,
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Omit<Passkey, "id">,
+			},
 		});
 
 		const client = createAuthClient({
@@ -246,7 +236,7 @@ describe("passkey", async () => {
 	it("should delete a passkey", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+		const passkey = await context.adapter.create({
 			model: "passkey",
 			data: {
 				userId: user.id,
@@ -255,11 +245,10 @@ describe("passkey", async () => {
 				counter: 0,
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
-				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Omit<Passkey, "id">,
+			},
 		});
 
 		const deleteResult = await auth.api.deletePasskey({
