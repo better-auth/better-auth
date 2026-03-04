@@ -104,9 +104,9 @@ export const passkey = sqliteTable(
     createdAt: integer("created_at", { mode: "timestamp_ms" }).default(
       sql`(cast(unixepoch('subsecond') * 1000 as integer))`,
     ),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$onUpdate(
-      () => /* @__PURE__ */ new Date(),
-    ),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date()),
     aaguid: text("aaguid"),
   },
   (table) => [
