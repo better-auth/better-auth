@@ -20,8 +20,8 @@ To use the Drizzle adapter, you need to install the `@better-auth/drizzle-adapte
 You can use the Drizzle adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth/minimal";
-import { drizzleAdapter } from "@better-auth/drizzle-adapter";
+import { betterAuth } from "better-auth";
+import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./database.ts";
 
 export const auth = betterAuth({
