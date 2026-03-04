@@ -1,7 +1,8 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
+import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
+import { InvalidClient, InvalidRequest } from "./error";
 import { getClient } from "./index";
 import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
@@ -62,34 +63,28 @@ export async function authorize(
 	if (!session) {
 		// Handle prompt=none per OIDC spec - must return error instead of redirecting
 		const promptSet = parsePrompt(query.prompt ?? "");
-		if (promptSet.has("none") && query.redirect_uri) {
-			if (!query.client_id) {
-				const errorURL = getErrorURL(
-					ctx,
-					"invalid_client",
-					"client_id is required",
+		if (promptSet.has("none")) {
+			if (!query.redirect_uri) {
+				throw new InvalidRequest(
+					"redirect_uri is required when prompt=none and must be usable to return errors without displaying UI",
 				);
-				throw ctx.redirect(errorURL);
+			}
+			if (!query.client_id) {
+				throw new InvalidClient("client_id is required");
 			}
 			const client = await getClient(
 				query.client_id,
 				options.trustedClients || [],
 			);
 			if (!client) {
-				const errorURL = getErrorURL(
-					ctx,
-					"invalid_client",
-					"client_id is required",
-				);
-				throw ctx.redirect(errorURL);
+				throw new InvalidClient("client_id is required");
 			}
 			const validRedirectURI = client.redirectUrls.find(
 				(url) => url === query.redirect_uri,
 			);
 			if (!validRedirectURI) {
-				throw APIError.from(
-					"BAD_REQUEST",
-					BASE_ERROR_CODES.INVALID_REDIRECT_URL,
+				throw new InvalidRequest(
+					"redirect_uri is invalid or not registered for this client",
 				);
 			}
 			return handleRedirect(

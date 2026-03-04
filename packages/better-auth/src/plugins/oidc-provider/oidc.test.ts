@@ -519,6 +519,31 @@ describe("oidc", async () => {
 			expect([400, 302]).toContain(response.status);
 		});
 
+		it("should return 400 invalid_request when prompt=none without redirect_uri", async ({
+			expect,
+		}) => {
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", application.clientId);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("state", "x");
+			authUrl.searchParams.set("prompt", "none");
+			// No redirect_uri - must not fall through to login page
+
+			const response = await customFetchImpl(authUrl.toString(), {
+				method: "GET",
+				redirect: "manual",
+			});
+
+			expect(response.status).toBe(400);
+			const location = response.headers.get("Location") || "";
+			expect(location).not.toContain("/login");
+			const body = await response.json().catch(() => ({}));
+			expect(body.error ?? body.code).toBe("invalid_request");
+		});
+
 		it("should return consent_required error when prompt=none and consent needed", async ({
 			expect,
 		}) => {
