@@ -31,9 +31,10 @@ export const captcha = (options: CaptchaOptions) =>
 				const basePath = ctx.options.basePath ?? "/api/auth";
 				let pathname = url.pathname.replace(basePath, "");
 
-				// remove trailing or leading slashes
+				// remove trailing or leading slashes & add leading slash if not present
 				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
 				if (pathname.startsWith("//")) pathname = pathname.slice(1);
+				if (!pathname.startsWith("/")) pathname = "/" + pathname;
 
 				// we don't want to accidentally block email-otp endpoint.
 				const blockedPaths = ["/sign-in/email-otp"].reduce<string[]>(
