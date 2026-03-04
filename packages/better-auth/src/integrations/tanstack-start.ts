@@ -51,7 +51,7 @@ export const tanstackStartCookies = () => {
 									path: value.path,
 								} as const;
 								try {
-									setCookie(key, decodeURIComponent(value.value), opts);
+									setCookie(key, value.value, opts);
 								} catch {
 									// this will fail if the cookie is being set on server component
 								}
