@@ -5,7 +5,8 @@ import type { AuthContext } from "../types";
 import { __getBetterAuthGlobal } from "./global";
 
 export type AuthEndpointContext = Partial<
-	InputContext<string, any> & EndpointContext<string, any>
+	InputContext<string, any, any, any, any, any> &
+		EndpointContext<string, any, any, any, any, any, any, AuthContext>
 > & {
 	context: AuthContext;
 };

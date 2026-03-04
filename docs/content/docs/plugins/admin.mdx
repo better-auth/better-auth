@@ -437,6 +437,19 @@ type impersonateUser = {
 ```
 </APIMethod>
 
+By default, admins cannot impersonate other admin users. To allow this, grant the `impersonate-admins` permission to a role:
+
+```ts title="auth.ts"
+const superAdmin = ac.newRole({
+  ...adminAc.statements,
+  user: ["impersonate-admins", ...adminAc.statements.user],
+});
+```
+
+<Callout type="info">
+  The legacy `allowImpersonatingAdmins` option is still supported, but is deprecated and will be removed in a future version.
+</Callout>
+
 ### Stop Impersonating User
 
 To stop impersonating a user and continue with the admin account, you can use `stopImpersonating`
@@ -489,7 +502,7 @@ By default, there are two roles:
 By default, there are two resources with up to six permissions.
 
 **user**:
-  `create` `list` `set-role` `ban` `impersonate` `delete` `set-password`
+  `create` `list` `set-role` `ban` `impersonate` `impersonate-admins` `delete` `set-password`
 
 **session**:
   `list` `revoke` `delete`
@@ -783,6 +796,30 @@ And adds one field in the `session` table:
   ]}
 />
 
+### Email Enumeration Protection
+
+If you use [email enumeration protection](/docs/authentication/email-password#email-enumeration-protection) (`requireEmailVerification` or `autoSignIn: false`), you need to configure `customSyntheticUser` to include the admin plugin fields in the fake sign-up response:
+
+```ts title="auth.ts"
+export const auth = betterAuth({
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+    customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+      ...coreFields,
+      // Admin plugin fields (in schema order)
+      role: "user", // or your configured defaultRole
+      banned: false,
+      banReason: null,
+      banExpires: null,
+      ...additionalFields,
+      id,
+    }),
+  },
+  plugins: [admin()],
+});
+```
+
 ## Options
 
 ### Default Role
@@ -865,12 +902,3 @@ admin({
 });
 ```
 
-### allowImpersonatingAdmins
-
-Whether to allow impersonating other admin users. Defaults to `false`.
-
-```ts title="auth.ts"
-admin({
-  allowImpersonatingAdmins: true,
-});
-```

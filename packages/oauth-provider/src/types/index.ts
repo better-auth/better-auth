@@ -664,6 +664,14 @@ export interface OAuthOptions<
 		 */
 		userinfo?: { window: number; max: number } | false;
 	};
+	/**
+	 * Secret used to compute pairwise subject identifiers (HMAC-SHA256).
+	 * When set, clients with `subject_type: "pairwise"` receive unique,
+	 * unlinkable `sub` values per sector identifier.
+	 *
+	 * @see https://openid.net/specs/openid-connect-core-1_0.html#PairwiseAlg
+	 */
+	pairwiseSecret?: string;
 }
 
 export interface OAuthAuthorizationQuery {
@@ -789,6 +797,7 @@ export interface VerificationValue {
 	sessionId: string;
 	userId: string;
 	referenceId?: string;
+	authTime?: number;
 }
 
 /**
@@ -906,6 +915,8 @@ export interface SchemaClient<
 	skipConsent?: boolean;
 	/** Used to enable client to logout via the `/oauth2/end-session` endpoint */
 	enableEndSession?: boolean;
+	/** Subject identifier type: "public" (default) or "pairwise" */
+	subjectType?: "public" | "pairwise";
 	/** Reference to the owner of this client. Eg. Organization, Team, Profile */
 	referenceId?: string;
 	/**
@@ -981,6 +992,11 @@ export interface OAuthRefreshToken<
 	 * When token was revoked. If set, token is considered a replay attack.
 	 */
 	revoked?: Date;
+	/**
+	 * The time the user originally authenticated.
+	 * Persisted so refreshed ID tokens can include a correct `auth_time` claim.
+	 */
+	authTime?: Date;
 	/**
 	 * Scopes granted for this refresh token.
 	 *
