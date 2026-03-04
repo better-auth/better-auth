@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Check, Minus } from "lucide-react";
 
-const ctaHref = `https://dash.better-auth.com/sign-in?callbackUrl=${encodeURIComponent("/dashboard?redirectTo=/settings/billing")}`;
+const ctaHref = `https://dash.better-auth.com/sign-in?callbackUrl=${encodeURIComponent("/?redirectTo=/settings/billing")}`;
 
 const pricingTiers = [
 	{

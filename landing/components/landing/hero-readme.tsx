@@ -2336,7 +2336,7 @@ export function HeroReadMe({
 												<span className="size-2 rounded-full bg-foreground/10" />
 											</div>
 											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												better-auth.com/dashboard/the-next-big-thing
+												dash.better-auth.com/the-next-big-thing
 											</span>
 										</div>
 										<div className="flex items-center gap-3">
