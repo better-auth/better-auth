@@ -1,0 +1,579 @@
+---
+title: Openfort
+description: Better Auth Plugin for Openfort Web3 Wallet Infrastructure
+---
+
+[Openfort](https://www.openfort.io/) is an infrastructure provider for integrating blockchain wallets into applications. 
+It enables seamless wallet creation, management, and blockchain interactions with embedded wallets.
+
+This plugin is maintained by the Openfort team. For bugs, issues or feature requests, please visit the [Openfort Adapters GitHub repo](https://github.com/openfort-xyz/openfort-adapters).
+
+<Card href="https://t.me/openfort" title="Get help on Openfort's Telegram">
+  Join the Openfort community for support and questions.
+</Card>
+
+## Features
+
+- Embedded wallet creation and management.
+- Seamless integration with Better Auth authentication.
+- Multi-chain support (Ethereum, Polygon, and more).
+- Gas sponsorship for user transactions.
+- Multiple recovery methods (passkey, password, automatic).
+- Sign messages and execute smart contract interactions.
+
+## Installation
+
+<Steps>
+  <Step>
+    ### Install the Openfort SDK
+
+    #### Server
+
+    ```package-install
+    @openfort/openfort-node
+    ```
+
+    #### Client
+
+    ```package-install
+    @openfort/react wagmi viem @tanstack/react-query
+    ```
+
+    <Callout>
+      The `@openfort/react` package only supports **EVM chains** (Ethereum, Polygon, etc.). The React SDK integrates with Wagmi for blockchain interactions.
+      If you need support for non-EVM chains, use the Openfort JS SDK directly.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Install the Bearer Plugin
+
+    The Openfort integration requires the Bearer plugin for token-based authentication.
+
+    ```package-install
+    better-auth @openfort/better-auth 
+    ```
+
+    The Bearer plugin is included in the Better Auth core package.
+  </Step>
+
+  <Step>
+    ### Configure environment variables
+
+    #### Server (.env)
+
+    ```bash title=".env"
+    # Better Auth
+    BETTER_AUTH_SECRET=your-random-secret-here  # Generate with: openssl rand -base64 32
+    BETTER_AUTH_URL=http://localhost:3000
+
+    # Openfort
+    OPENFORT_SECRET_KEY=sk_test_...
+
+    # Shield Encryption (for embedded wallets)
+    SHIELD_PUBLISHABLE_KEY=your-shield-api-key
+    SHIELD_ENCRYPTION_SHARE=your-shield-encryption-share
+    SHIELD_SECRET_KEY=your-shield-secret-key
+
+    # Frontend URL (for CORS)
+    FRONTEND_URL=http://localhost:5173
+    ```
+
+    #### Client (.env.local)
+
+    ```bash title=".env.local"
+    # Openfort
+    VITE_OPENFORT_PUBLISHABLE_KEY=pk_test_...
+    VITE_SHIELD_PUBLISHABLE_KEY=...
+    VITE_POLICY_ID=pol_...  # Transaction policy ID from Openfort dashboard
+
+    # Better Auth
+    VITE_BETTERAUTH_URL=http://localhost:3000
+    VITE_BETTERAUTH_BASE_PATH=/api/auth
+    ```
+
+    <Callout>
+      Get your Openfort API keys from the [Openfort Dashboard](https://dashboard.openfort.io/). Shield credentials are required for embedded wallet encryption.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Initialize Openfort SDK (Server)
+
+    Create an Openfort client instance on your server:
+
+    ```ts title="openfort.ts"
+    import Openfort from "@openfort/openfort-node";
+
+    export const openfortSDK = new Openfort(process.env.OPENFORT_SECRET_KEY);
+    ```
+  </Step>
+
+  <Step>
+    ### Add plugins to your Better Auth config
+
+    ```ts title="auth.ts"
+    import { betterAuth } from "better-auth";
+    import { bearer } from "better-auth/plugins";
+    import { openfort, encryptionSession } from "@openfort/better-auth";
+    import { openfortSDK } from "./openfort";
+
+    export const auth = betterAuth({
+      database: {
+        // your database config
+      },
+      emailAndPassword: {
+        enabled: true,
+      },
+      plugins: [
+        bearer(), // Required for token-based authentication
+        openfort({
+          client: openfortSDK,
+          use: [
+            encryptionSession({
+              config: {
+                apiKey: process.env.SHIELD_PUBLISHABLE_KEY,
+                secretKey: process.env.SHIELD_SECRET_KEY,
+                encryptionPart: process.env.SHIELD_ENCRYPTION_SHARE,
+              },
+            }),
+          ],
+        }),
+      ],
+    });
+    ```
+
+    <Callout>
+      The `bearer` plugin must be added before the `openfort` plugin to enable token-based authentication.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Create Better Auth client
+
+    ```ts title="auth-client.ts"
+    import { createAuthClient } from 'better-auth/react';
+    import { bearer } from "better-auth/plugins/bearer/client";
+
+    export const authClient = createAuthClient({
+      baseURL: import.meta.env.VITE_BETTERAUTH_URL,
+      plugins: [bearer()],
+    });
+    ```
+  </Step>
+
+  <Step>
+    ### Add OpenfortProvider to your app
+
+    Wrap your application with the OpenfortProvider, WagmiProvider, and QueryClientProvider:
+
+    ```tsx title="app/providers.tsx"
+    import { OpenfortProvider, ThirdPartyOAuthProvider, getDefaultConfig } from "@openfort/react";
+    import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+    import { polygonAmoy, sepolia } from "viem/chains";
+    import { WagmiProvider, createConfig } from "wagmi";
+    import { authClient } from "./auth-client";
+
+    const wagmiConfig = createConfig(
+      getDefaultConfig({
+        appName: "Your App Name",
+        chains: [polygonAmoy, sepolia]
+      })
+    );
+
+    const queryClient = new QueryClient();
+
+    export function OpenfortProviders({ children }: { children: React.ReactNode }) {
+      return (
+        <WagmiProvider config={wagmiConfig}>
+          <QueryClientProvider client={queryClient}>
+            <OpenfortProvider
+              publishableKey={import.meta.env.VITE_OPENFORT_PUBLISHABLE_KEY}
+              walletConfig={{
+                shieldPublishableKey: import.meta.env.VITE_SHIELD_PUBLISHABLE_KEY,
+                ethereumProviderPolicyId: import.meta.env.VITE_POLICY_ID,
+                getEncryptionSession: async () => {
+                  const session = await authClient.getSession();
+                  const token = session?.data?.session?.token;
+
+                  if (!token) return null;
+
+                  const response = await fetch(
+                    import.meta.env.VITE_BETTERAUTH_URL +
+                    import.meta.env.VITE_BETTERAUTH_BASE_PATH +
+                    "/encryption-session",
+                    {
+                      method: "POST",
+                      headers: {
+                        Authorization: `Bearer ${token}`,
+                        "Content-Type": "application/json",
+                      },
+                    }
+                  );
+
+                  if (!response.ok) return null;
+
+                  const data = await response.json();
+                  return data.sessionId;
+                },
+                recoverWalletAutomaticallyAfterAuth: false,
+              }}
+              thirdPartyAuth={{
+                getAccessToken: async () => {
+                  const session = await authClient.getSession();
+                  return session?.data?.session?.token ?? null;
+                },
+                provider: ThirdPartyOAuthProvider.BETTER_AUTH,
+              }}
+            >
+              {children}
+            </OpenfortProvider>
+          </QueryClientProvider>
+        </WagmiProvider>
+      );
+    }
+    ```
+
+    <Callout>
+      The OpenfortProvider requires Wagmi and React Query providers. Set `recoverWalletAutomaticallyAfterAuth` to `false` if you want to handle wallet creation manually.
+    </Callout>
+  </Step>
+
+  <Step>
+    ### Configure Openfort Dashboard
+
+    In the [Openfort Dashboard](https://dashboard.openfort.io/):
+
+    1. Navigate to **Authentication Providers**
+    2. Add **Better Auth** as a provider
+    3. Set the **Base URL** to your backend endpoint (use ngrok or similar for local development)
+    4. (optional) Create a **Policy** for transaction sponsorship
+    5. (optional) Copy the **Policy ID** to your environment variables
+
+    <Callout type="warn">
+      For local development, use a tunneling service like ngrok to expose your backend to Openfort.
+    </Callout>
+  </Step>
+</Steps>
+
+## Usage
+
+### Wallet Creation
+
+Create an embedded wallet for authenticated users using the `useWallets` hook:
+
+```tsx
+import { RecoveryMethod, useWallets } from "@openfort/react";
+
+export default function CreateWallet() {
+  const { isCreating, createWallet, error } = useWallets({
+    onSuccess: () => {
+      console.log("Wallet created successfully!");
+    },
+  });
+
+  if (isCreating) {
+    return <div>Creating wallet...</div>;
+  }
+
+  return (
+    <div>
+      <button
+        onClick={() =>
+          createWallet({
+            recovery: {
+              recoveryMethod: RecoveryMethod.PASSKEY,
+            },
+          })
+        }
+      >
+        Create with Passkey
+      </button>
+
+      <button
+        onClick={() =>
+          createWallet({
+            recovery: {
+              recoveryMethod: RecoveryMethod.AUTOMATIC,
+            },
+          })
+        }
+      >
+        Create with Automatic Recovery
+      </button>
+
+      <button
+        onClick={() =>
+          createWallet({
+            recovery: {
+              recoveryMethod: RecoveryMethod.PASSWORD,
+              password: "your-secure-password",
+            },
+          })
+        }
+      >
+        Create with Password
+      </button>
+
+      {error && <p className="text-red-500">Error: {error.message}</p>}
+    </div>
+  );
+}
+```
+
+### Sign Messages
+
+Sign messages using Wagmi hooks:
+
+```tsx
+import { useSignMessage } from "wagmi";
+
+export default function SignMessage() {
+  const { data, signMessage, error } = useSignMessage();
+
+  return (
+    <div>
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const formData = new FormData(event.target as HTMLFormElement);
+          signMessage({ message: formData.get("message") as string });
+        }}
+      >
+        <input name="message" placeholder="Message to sign" />
+        <button type="submit">Sign Message</button>
+      </form>
+
+      {data && <p>Signature: {data}</p>}
+      {error && <p className="text-red-500">{error.message}</p>}
+    </div>
+  );
+}
+```
+
+### Execute Transactions
+
+Execute smart contract transactions using Wagmi:
+
+```tsx
+import { parseAbi } from "viem";
+import { useAccount, useWriteContract } from "wagmi";
+
+const CONTRACT_ADDRESS = "0x...";
+
+export default function MintTokens() {
+  const { address } = useAccount();
+  const { data: hash, isPending, writeContract, error } = useWriteContract();
+
+  const handleMint = (amount: string) => {
+    if (!address) return;
+
+    writeContract({
+      address: CONTRACT_ADDRESS,
+      abi: parseAbi(["function mint(address to, uint256 amount)"]),
+      functionName: "mint",
+      args: [address, BigInt(amount)],
+    });
+  };
+
+  return (
+    <div>
+      <button
+        onClick={() => handleMint("1000")}
+        disabled={isPending || !address}
+      >
+        {isPending ? "Minting..." : "Mint Tokens"}
+      </button>
+
+      {hash && <p>Transaction hash: {hash}</p>}
+      {error && <p className="text-red-500">{error.message}</p>}
+    </div>
+  );
+}
+```
+
+### Access User Information
+
+Get user and wallet information:
+
+```tsx
+import { useUser } from "@openfort/react";
+import { useAccount } from "wagmi";
+
+export default function UserProfile() {
+  const { user } = useUser();
+  const { address, isConnected } = useAccount();
+
+  if (!isConnected) {
+    return <p>No wallet connected</p>;
+  }
+
+  return (
+    <div>
+      <h2>Welcome, {user?.player?.name || user?.linkedAccounts[0]?.email}</h2>
+      <p>Wallet Address: {address}</p>
+    </div>
+  );
+}
+```
+
+## Configuration Options
+
+### Server-Side Plugin Options
+
+```ts
+interface OpenfortPluginOptions {
+  client: Openfort; // Openfort SDK instance (from @openfort/openfort-node)
+  use?: Array<EncryptionSession>; // Encryption session configuration
+}
+```
+
+### Encryption Session Configuration
+
+```ts
+interface EncryptionSessionConfig {
+  config: {
+    apiKey: string; // Shield API key
+    secretKey: string; // Shield secret key
+    encryptionPart: string; // Shield encryption share
+  };
+}
+```
+
+### Client-Side OpenfortProvider Props
+
+```ts
+interface OpenfortProviderProps {
+  publishableKey: string; // Openfort publishable key
+  walletConfig: {
+    shieldPublishableKey: string; // Shield publishable key
+    ethereumProviderPolicyId?: string; // Policy ID for gas sponsorship
+    getEncryptionSession: () => Promise<string | null>; // Retrieve encryption session ID
+    recoverWalletAutomaticallyAfterAuth?: boolean; // Auto-recover wallet after auth (default: false)
+  };
+  thirdPartyAuth: {
+    getAccessToken: () => Promise<string | null>; // Retrieve Better Auth token
+    provider: ThirdPartyOAuthProvider; // Authentication provider type
+  };
+  debugMode?: boolean; // Enable debug logging
+  children: React.ReactNode;
+}
+```
+
+## Advanced Usage
+
+### Recovery Methods
+
+Openfort supports three wallet recovery methods:
+
+- **Automatic**: Shield encryption-based recovery (no user interaction required)
+- **Passkey**: Biometric authentication (Face ID, Touch ID, Windows Hello)
+- **Password**: User-defined password for recovery
+
+```tsx
+import { RecoveryMethod, useWallets } from "@openfort/react";
+
+const { createWallet } = useWallets();
+
+// Passkey recovery
+createWallet({
+  recovery: {
+    recoveryMethod: RecoveryMethod.PASSKEY,
+  },
+});
+
+// Automatic recovery
+createWallet({
+  recovery: {
+    recoveryMethod: RecoveryMethod.AUTOMATIC,
+  },
+});
+
+// Password recovery
+createWallet({
+  recovery: {
+    recoveryMethod: RecoveryMethod.PASSWORD,
+    password: "your-secure-password",
+  },
+});
+```
+
+### Reading Contract Data
+
+Use Wagmi's `useReadContract` hook to read data from smart contracts:
+
+```tsx
+import { useReadContract } from "wagmi";
+
+export default function TokenBalance() {
+  const { data: balance, isLoading, error } = useReadContract({
+    address: "0x...",
+    abi: [
+      {
+        type: "function",
+        name: "balanceOf",
+        stateMutability: "view",
+        inputs: [{ name: "account", type: "address" }],
+        outputs: [{ type: "uint256" }],
+      },
+    ],
+    functionName: "balanceOf",
+    args: ["0x..."],
+  });
+
+  if (isLoading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error.message}</div>;
+
+  return <div>Balance: {balance?.toString()}</div>;
+}
+```
+
+## Troubleshooting
+
+### Encryption Session Errors
+
+If you encounter errors retrieving the encryption session:
+
+1. Ensure the Bearer plugin is enabled in your Better Auth config
+2. Verify that `SHIELD_PUBLISHABLE_KEY`, `SHIELD_SECRET_KEY`, and `SHIELD_ENCRYPTION_SHARE` are set correctly
+3. Confirm that the Better Auth session is active before calling `getEncryptionSession()`
+
+### CORS Issues
+
+If you encounter CORS errors:
+
+1. Add your frontend URL to `trustedOrigins` in your Better Auth config:
+
+```ts
+export const auth = betterAuth({
+  trustedOrigins: [process.env.FRONTEND_URL],
+  // ...
+});
+```
+
+2. Ensure your Express server has CORS configured:
+
+```ts
+import cors from "cors";
+
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  })
+);
+```
+
+### Authentication Provider Configuration
+
+If Openfort cannot verify tokens:
+
+1. Verify the **Base URL** in the Openfort Dashboard matches your backend
+2. For local development, use a tunneling service (ngrok, localtunnel)
+3. Ensure the `/api/auth/encryption-session` endpoint is accessible. The path `encryption-session` is introduced by the Openfort Better Auth plugin.
+
+## Resources
+
+- [Openfort Documentation](https://www.openfort.io/docs)
+- [Openfort Dashboard](https://dashboard.openfort.io/)
+- [Example Implementation](https://github.com/openfort-xyz/fortkit/tree/main/examples/quickstarts/betterauth)
