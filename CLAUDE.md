@@ -28,6 +28,12 @@ pnpm lint:fix
 
 # Type check
 pnpm typecheck
+
+# Format code
+pnpm format
+
+# Check formatting
+pnpm format:check
 ```
 
 Do not run `pnpm test` directly because it runs tests in all packages,
@@ -41,7 +47,10 @@ run specific tests.
 * `packages/better-auth` - Main authentication library
 * `packages/core` - Core utilities and types
 * `packages/cli` - Command-line interface
-* `packages/*` - Various plugins and integrations
+* `packages/*` - Database adapters, plugins, and integrations
+* `docs/` - Documentation site (Next.js + Fumadocs)
+* `demo/` - Demo apps
+* `e2e/` - End-to-end tests (smoke, adapter, integration)
 
 ## Code Style
 
@@ -54,16 +63,28 @@ run specific tests.
 ## Testing
 
 * Most of the tests use Vitest
-* Some tests under `e2e` directory use playwright
+* Some tests under `e2e/` directory use Playwright
 * Adapter tests require Docker containers running (`docker compose up -d`)
 * Consider using test helpers like `getTestInstance()` from
   `better-auth/test` first
+* If a test is to prevent regression of a specific numbered GitHub issue,
+  add a JSDoc `@see` comment with the issue URL above the `it()` or `describe()`:
+  ```typescript
+  /**
+   * @see https://github.com/better-auth/better-auth/issues/{issue_number}
+   */
+  it("should handle the previously broken behavior", async () => {
+    // ...
+  });
+  ```
 
 ## Documentation
 
 * Please update the documentation when you make changes to the public API
 * Documentation is located in the `docs/` directory, built with
   [Next.js](https://nextjs.org/docs/llms.txt) + [Fumadocs](https://www.fumadocs.dev/llms.txt)
+* Content lives in `docs/content/docs/` organized by topic (authentication,
+  adapters, concepts, guides, plugins, examples, reference)
 
 ## Git Workflow
 

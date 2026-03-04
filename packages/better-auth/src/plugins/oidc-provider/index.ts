@@ -316,7 +316,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 	) {
 		if (opts.storeClientSecret === "encrypted") {
 			return await symmetricEncrypt({
-				key: ctx.context.secret,
+				key: ctx.context.secretConfig,
 				data: clientSecret,
 			});
 		}
@@ -350,7 +350,7 @@ export const oidcProvider = (options: OIDCOptions) => {
 		if (opts.storeClientSecret === "encrypted") {
 			return (
 				(await symmetricDecrypt({
-					key: ctx.context.secret,
+					key: ctx.context.secretConfig,
 					data: storedClientSecret,
 				})) === clientSecret
 			);
@@ -594,8 +594,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					if (!ctx.body.accept) {
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							consentCode,
 						);
 						return ctx.json({
 							redirectURI: `${value.redirectURI}?error=access_denied&error_description=User denied access`,
@@ -605,8 +605,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					const codeExpiresInMs =
 						(opts?.codeExpiresIn ?? DEFAULT_CODE_EXPIRES_IN) * 1000;
 					const expiresAt = new Date(Date.now() + codeExpiresInMs);
-					await ctx.context.internalAdapter.updateVerificationValue(
-						verification.id,
+					await ctx.context.internalAdapter.updateVerificationByIdentifier(
+						consentCode,
 						{
 							value: JSON.stringify({
 								...value,
@@ -812,8 +812,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					if (!client_id) {
 						throw new APIError("UNAUTHORIZED", {
@@ -921,8 +921,8 @@ export const oidcProvider = (options: OIDCOptions) => {
 					}
 
 					const requestedScopes = value.scope;
-					await ctx.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+						code.toString(),
 					);
 					const accessToken = generateRandomString(32, "a-z", "A-Z");
 					const refreshToken = generateRandomString(32, "A-Z", "a-z");
@@ -950,10 +950,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 
-					const nameParts = user.name?.split(" ") ?? [];
 					const profile = {
-						given_name: nameParts[0],
-						family_name: nameParts[1],
+						given_name: user.name.split(" ")[0]!,
+						family_name: user.name.split(" ")[1]!,
 						name: user.name,
 						profile: user.image,
 						updated_at: new Date(user.updatedAt).toISOString(),
@@ -1032,7 +1031,9 @@ export const oidcProvider = (options: OIDCOptions) => {
 									audience: client_id.toString(),
 									issuer:
 										jwtPlugin.options?.jwt?.issuer ??
-										ctx.context.options.baseURL,
+										(typeof ctx.context.options.baseURL === "string"
+											? ctx.context.options.baseURL
+											: undefined),
 									expirationTime,
 									definePayload: () => payload,
 								},
@@ -1195,7 +1196,6 @@ export const oidcProvider = (options: OIDCOptions) => {
 						});
 					}
 					const requestedScopes = accessToken.scopes.split(" ");
-					const nameParts = user.name?.split(" ") ?? [];
 					const baseUserClaims = {
 						sub: user.id,
 						email: requestedScopes.includes("email") ? user.email : undefined,
@@ -1204,10 +1204,10 @@ export const oidcProvider = (options: OIDCOptions) => {
 							? user.image
 							: undefined,
 						given_name: requestedScopes.includes("profile")
-							? nameParts[0]
+							? user.name.split(" ")[0]!
 							: undefined,
 						family_name: requestedScopes.includes("profile")
-							? nameParts[1]
+							? user.name.split(" ")[1]!
 							: undefined,
 						email_verified: requestedScopes.includes("email")
 							? user.emailVerified

@@ -6,10 +6,12 @@ import { getEndpointResponse } from "../../utils/plugin-helper";
 import { EMAIL_OTP_ERROR_CODES } from "./error-codes";
 import { storeOTP } from "./otp-token";
 import {
+	changeEmailEmailOTP,
 	checkVerificationOTP,
 	createVerificationOTP,
 	forgetPasswordEmailOTP,
 	getVerificationOTP,
+	requestEmailChangeEmailOTP,
 	requestPasswordResetEmailOTP,
 	resetPasswordEmailOTP,
 	sendVerificationOTP,
@@ -53,13 +55,13 @@ export const emailOTP = (options: EmailOTPOptions) => {
 						async sendVerificationEmail(data, request) {
 							await ctx.runInBackgroundOrAwait(
 								sendVerificationOTPAction({
-									//@ts-expect-error - we need to pass the context
 									context: ctx,
 									request: request,
 									body: {
 										email: data.user.email,
 										type: "email-verification",
 									},
+									//@ts-expect-error
 									ctx,
 								}),
 							);
@@ -78,6 +80,8 @@ export const emailOTP = (options: EmailOTPOptions) => {
 			requestPasswordResetEmailOTP: requestPasswordResetEmailOTP(opts),
 			forgetPasswordEmailOTP: forgetPasswordEmailOTP(opts),
 			resetPasswordEmailOTP: resetPasswordEmailOTP(opts),
+			requestEmailChangeEmailOTP: requestEmailChangeEmailOTP(opts),
+			changeEmailEmailOTP: changeEmailEmailOTP(opts),
 		},
 		hooks: {
 			after: [
@@ -125,50 +129,64 @@ export const emailOTP = (options: EmailOTPOptions) => {
 				pathMatcher(path) {
 					return path === "/email-otp/send-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/check-verification-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/verify-email";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/sign-in/email-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/request-password-reset";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/email-otp/reset-password";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 			{
 				pathMatcher(path) {
 					return path === "/forget-password/email-otp";
 				},
-				window: 60,
-				max: 3,
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/request-email-change";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
+			},
+			{
+				pathMatcher(path) {
+					return path === "/email-otp/change-email";
+				},
+				window: opts.rateLimit?.window || 60,
+				max: opts.rateLimit?.max || 3,
 			},
 		],
 		options,

@@ -71,31 +71,29 @@ interface StoredCookie {
 
 export function getSetCookie(header: string, prevCookie?: string | undefined) {
 	const parsed = parseSetCookieHeader(header);
-	let toSetCookie: Record<string, StoredCookie> = {};
+	const toSetCookie =
+		safeJSONParse<Record<string, StoredCookie>>(prevCookie) ?? {};
 	parsed.forEach((cookie, key) => {
 		const expiresAt = cookie["expires"];
 		const maxAge = cookie["max-age"];
+		if (maxAge !== undefined && Number(maxAge) <= 0) {
+			delete toSetCookie[key];
+			return;
+		}
 		const expires = maxAge
 			? new Date(Date.now() + Number(maxAge) * 1000)
 			: expiresAt
 				? new Date(String(expiresAt))
 				: null;
+		if (expires && expires.getTime() <= Date.now()) {
+			delete toSetCookie[key];
+			return;
+		}
 		toSetCookie[key] = {
 			value: cookie["value"],
 			expires: expires ? expires.toISOString() : null,
 		};
 	});
-	if (prevCookie) {
-		try {
-			const prevCookieParsed = JSON.parse(prevCookie);
-			toSetCookie = {
-				...prevCookieParsed,
-				...toSetCookie,
-			};
-		} catch {
-			//
-		}
-	}
 	return JSON.stringify(toSetCookie);
 }
 
@@ -108,7 +106,7 @@ export function getCookie(cookie: string) {
 		if (value.expires && new Date(value.expires) < new Date()) {
 			return acc;
 		}
-		return `${acc}; ${key}=${value.value}`;
+		return acc ? `${acc}; ${key}=${value.value}` : `${key}=${value.value}`;
 	}, "");
 	return toSend;
 }
@@ -362,18 +360,22 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								undefined;
 							try {
 								Browser = await import("expo-web-browser");
-							} catch (error) {
-								throw new Error(
-									'"expo-web-browser" is not installed as a dependency!',
-									{
-										cause: error,
-									},
-								);
+							} catch {
+								try {
+									Browser = require("expo-web-browser");
+								} catch (error) {
+									throw new Error(
+										'"expo-web-browser" is not installed as a dependency!',
+										{
+											cause: error,
+										},
+									);
+								}
 							}
 
 							if (Platform.OS === "android") {
 								try {
-									Browser.dismissAuthSession();
+									Browser!.dismissAuthSession();
 								} catch {}
 							}
 
@@ -389,7 +391,7 @@ export const expoClient = (opts: ExpoClientOptions) => {
 								params.append("oauthState", oauthStateValue);
 							}
 							const proxyURL = `${context.request.baseURL}/expo-authorization-proxy?${params.toString()}`;
-							const result = await Browser.openAuthSessionAsync(
+							const result = await Browser!.openAuthSessionAsync(
 								proxyURL,
 								to,
 								opts?.webBrowserOptions,
@@ -413,48 +415,60 @@ export const expoClient = (opts: ExpoClientOptions) => {
 						};
 					}
 					options = options || {};
-					const storedCookie = storage.getItem(cookieName);
-					const cookie = getCookie(storedCookie || "{}");
 					options.credentials = "omit";
-					options.headers = {
-						...options.headers,
-						cookie,
-						"expo-origin": getOrigin(scheme!),
-						"x-skip-oauth-proxy": "true", // skip oauth proxy for expo
-					};
-					if (options.body?.callbackURL) {
-						if (options.body.callbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.callbackURL, {
-								scheme,
-							});
-							options.body.callbackURL = url;
+					/**
+					 * ID token flow (native sign-in) doesn't need cookie-based auth.
+					 * The ID token itself is cryptographically signed by the provider
+					 * and validated server-side, so no session cookies or origin
+					 * validation is required.
+					 *
+					 * Sending cookie/expo-origin headers for ID token requests triggers
+					 * unnecessary origin checks that fail for custom URL schemes.
+					 */
+					const isIdTokenRequest = options.body?.idToken !== undefined;
+
+					if (isIdTokenRequest) {
+						options.headers = {
+							...options.headers,
+							"x-skip-oauth-proxy": "true",
+						};
+					} else {
+						const storedCookie = storage.getItem(cookieName);
+						const cookie = getCookie(storedCookie || "{}");
+						options.headers = {
+							...options.headers,
+							...(cookie ? { cookie } : {}),
+							"expo-origin": getOrigin(scheme!),
+							"x-skip-oauth-proxy": "true",
+						};
+						if (options.body?.callbackURL) {
+							if (options.body.callbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.callbackURL);
+								options.body.callbackURL = url;
+							}
 						}
-					}
-					if (options.body?.newUserCallbackURL) {
-						if (options.body.newUserCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.newUserCallbackURL, {
-								scheme,
-							});
-							options.body.newUserCallbackURL = url;
+						if (options.body?.newUserCallbackURL) {
+							if (options.body.newUserCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.newUserCallbackURL);
+								options.body.newUserCallbackURL = url;
+							}
 						}
-					}
-					if (options.body?.errorCallbackURL) {
-						if (options.body.errorCallbackURL.startsWith("/")) {
-							const url = Linking.createURL(options.body.errorCallbackURL, {
-								scheme,
-							});
-							options.body.errorCallbackURL = url;
+						if (options.body?.errorCallbackURL) {
+							if (options.body.errorCallbackURL.startsWith("/")) {
+								const url = Linking.createURL(options.body.errorCallbackURL);
+								options.body.errorCallbackURL = url;
+							}
 						}
-					}
-					if (url.includes("/sign-out")) {
-						storage.setItem(cookieName, "{}");
-						store?.atoms.session?.set({
-							...store.atoms.session.get(),
-							data: null,
-							error: null,
-							isPending: false,
-						});
-						storage.setItem(localCacheName, "{}");
+						if (url.includes("/sign-out")) {
+							storage.setItem(cookieName, "{}");
+							store?.atoms.session?.set({
+								...store.atoms.session.get(),
+								data: null,
+								error: null,
+								isPending: false,
+							});
+							storage.setItem(localCacheName, "{}");
+						}
 					}
 					return {
 						url,

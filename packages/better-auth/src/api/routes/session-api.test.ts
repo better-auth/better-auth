@@ -2,7 +2,15 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { runWithEndpointContext } from "@better-auth/core/context";
 import type { MemoryDB } from "@better-auth/memory-adapter";
 import { memoryAdapter } from "@better-auth/memory-adapter";
-import { beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
+import {
+	afterEach,
+	beforeEach,
+	describe,
+	expect,
+	expectTypeOf,
+	it,
+	vi,
+} from "vitest";
 import { parseCookies, parseSetCookieHeader } from "../../cookies";
 import { signJWT, verifyJWT } from "../../crypto";
 import { getTestInstance } from "../../test-utils/test-instance";
@@ -11,6 +19,10 @@ import { getDate } from "../../utils/date";
 describe("session", async () => {
 	const { client, testUser, sessionSetter, cookieSetter, auth } =
 		await getTestInstance();
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should set cookies correctly on sign in", async () => {
 		const headers = new Headers();
@@ -491,6 +503,10 @@ describe("cookie cache", async () => {
 	});
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should cache cookies", async () => {});
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
@@ -599,6 +615,10 @@ describe("cookie cache with JWT strategy", async () => {
 	});
 	const ctx = await auth.$context;
 
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
 	const headers = new Headers();
@@ -692,7 +712,7 @@ describe("cookie cache with JWT strategy", async () => {
 		}
 		const payload = await verifyJWT(jwt, ctx.secret);
 		//should be greater than 299 seconds from now - (default max age is 300 seconds)
-		expect(payload.exp).toBeGreaterThan(Date.now() / 1000 + 299);
+		expect(payload.exp).toBeGreaterThanOrEqual(Date.now() / 1000 + 299);
 	});
 
 	it("should handle multiple concurrent requests with JWT cache", async () => {
@@ -747,6 +767,10 @@ describe("cookie cache with JWE strategy", async () => {
 		},
 	});
 	const ctx = await auth.$context;
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	const fn = vi.spyOn(ctx.adapter, "findOne");
 
@@ -881,6 +905,10 @@ describe("cookie cache refreshCache", async () => {
 	});
 	const ctx = await auth.$context;
 	const fn = vi.spyOn(ctx.adapter, "findOne");
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	const headers = new Headers();
 
@@ -1112,6 +1140,75 @@ describe("cookie cache refreshCache", async () => {
 		expect(sessionFromCache.data?.user.email).toBe(testUser.email);
 		expect(sessionFromCache.data?.session).toBeDefined();
 		expect(sessionFromCache.data?.session?.token).toBe(sessionToken);
+
+		vi.useRealTimers();
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/7994
+	 */
+	it("should extend session_token cookie expiry when refreshCache threshold is reached", async () => {
+		const expiresIn = 60 * 5; // 5 minutes
+		const { client, testUser, cookieSetter, auth } = await getTestInstance({
+			database: undefined as any,
+			session: {
+				expiresIn,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300, // 5 minutes
+					refreshCache: {
+						updateAge: 60, // Refresh when 60 seconds remain
+					},
+				},
+			},
+		});
+
+		const headers = new Headers();
+
+		await client.signIn.email(
+			{
+				email: testUser.email,
+				password: testUser.password,
+			},
+			{
+				onSuccess: cookieSetter(headers),
+			},
+		);
+
+		const ctx = await auth.$context;
+		const firstSession = await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+		await ctx.internalAdapter.deleteSession(sessionToken!);
+
+		vi.useFakeTimers();
+		// Advance time to trigger refresh (300 - 60 = 240, so at 241 we're in refresh window)
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		let sessionTokenMaxAge: number | undefined;
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const parsed = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					sessionTokenMaxAge = parsed.get("better-auth.session_token")?.[
+						"max-age"
+					];
+				},
+			},
+		});
+
+		// The session_token cookie should have its maxAge extended to expiresIn
+		expect(sessionTokenMaxAge).toBe(expiresIn);
 
 		vi.useRealTimers();
 	});
@@ -1417,6 +1514,10 @@ describe("cookie cache versioning", async () => {
 });
 
 describe("deferSessionRefresh", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should return needsRefresh flag on GET when enabled", async () => {
 		const { auth, testUser } = await getTestInstance({
 			session: {
@@ -1696,6 +1797,10 @@ describe("deferSessionRefresh", async () => {
 });
 
 describe("date field type consistency", async () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should have consistent date types between cookie cache and refresh paths", async () => {
 		const { auth, testUser } = await getTestInstance({
 			database: undefined, // stateless mode
@@ -1738,5 +1843,101 @@ describe("date field type consistency", async () => {
 		expect(typeof refreshed!.session.createdAt).toBe(
 			typeof initial!.session.createdAt,
 		);
+	});
+});
+
+describe("updateSession", async () => {
+	const { client, signInWithTestUser } = await getTestInstance({
+		session: {
+			additionalFields: {
+				theme: {
+					type: "string",
+					defaultValue: "light",
+				},
+				language: {
+					type: "string",
+					required: false,
+				},
+				internalNote: {
+					type: "string",
+					input: false,
+					required: false,
+				},
+			},
+		},
+	});
+
+	it("should update a custom additional field on a session", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data).not.toBeNull();
+
+			const res = await client.updateSession({
+				theme: "dark",
+			} as any);
+			expect(res.data?.session).toBeDefined();
+			expect((res.data?.session as any).theme).toBe("dark");
+
+			// Verify the session is updated when fetching again
+			const updatedSession = await client.getSession();
+			expect((updatedSession.data?.session as any).theme).toBe("dark");
+		});
+	});
+
+	it("should ignore core session fields", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				token: "malicious-token",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should ignore core field userId", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				userId: "another-user",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should reject input: false fields", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				internalNote: "should-fail",
+			} as any);
+			expect(res.error?.status).toBe(400);
+		});
+	});
+
+	it("should return error when no fields to update", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.updateSession({
+				unknownField: "value",
+			} as any);
+			expect(res.error?.status).toBe(400);
+			expect(res.error?.message).toContain("No fields to update");
+		});
+	});
+
+	it("should update session cookie after mutation", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			await client.updateSession({
+				theme: "blue",
+			} as any);
+
+			// Verify the session cookie is updated by getting the session again
+			const session = await client.getSession();
+			expect((session.data?.session as any).theme).toBe("blue");
+		});
 	});
 });

@@ -111,9 +111,7 @@ export const createOrganization = <O extends OrganizationOptions>(
 				user = await ctx.context.internalAdapter.findUserById(ctx.body.userId);
 			}
 			if (!user) {
-				return ctx.json(null, {
-					status: 401,
-				});
+				throw APIError.fromStatus("UNAUTHORIZED");
 			}
 			const options = ctx.context.orgOptions;
 			const canCreateOrg =
@@ -562,12 +560,10 @@ export const deleteOrganization = <O extends OrganizationOptions>(
 
 			const organizationId = ctx.body.organizationId;
 			if (!organizationId) {
-				return ctx.json(null, {
-					status: 400,
-					body: {
-						message: ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.message,
-					},
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+				);
 			}
 			const adapter = getOrgAdapter<O>(ctx.context, options);
 			const member = await adapter.findMemberByOrgId({
@@ -713,11 +709,10 @@ export const getFullOrganization = <O extends OrganizationOptions>(
 			});
 			if (!isMember) {
 				await adapter.setActiveOrganization(session.session.token, null, ctx);
-				throw new APIError("FORBIDDEN", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION
-							.message,
-				});
+				throw APIError.from(
+					"FORBIDDEN",
+					ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+				);
 			}
 
 			type OrganizationReturn = O["teams"] extends { enabled: true }

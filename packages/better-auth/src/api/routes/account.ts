@@ -5,6 +5,7 @@ import type { OAuth2Tokens } from "@better-auth/core/oauth2";
 import { SocialProviderListEnum } from "@better-auth/core/social-providers";
 
 import * as z from "zod";
+import { getAwaitableValue } from "../../context/helpers";
 import {
 	getAccountCookie,
 	setAccountCookie,
@@ -211,10 +212,9 @@ export const linkSocialAccount = createAuthEndpoint(
 	},
 	async (c) => {
 		const session = c.context.session;
-
-		const provider = c.context.socialProviders.find(
-			(p) => p.id === c.body.provider,
-		);
+		const provider = await getAwaitableValue(c.context.socialProviders, {
+			value: c.body.provider,
+		});
 
 		if (!provider) {
 			c.context.logger.error(
@@ -294,10 +294,9 @@ export const linkSocialAccount = createAuthEndpoint(
 				});
 			}
 
-			const trustedProviders =
-				c.context.options.account?.accountLinking?.trustedProviders;
-
-			const isTrustedProvider = trustedProviders?.includes(provider.id);
+			const isTrustedProvider = c.context.trustedProviders.includes(
+				provider.id,
+			);
 			if (
 				(!isTrustedProvider && !linkingUserInfo.user.emailVerified) ||
 				c.context.options.account?.accountLinking?.enabled === false
@@ -309,7 +308,8 @@ export const linkSocialAccount = createAuthEndpoint(
 			}
 
 			if (
-				linkingUserInfo.user.email !== session.user.email &&
+				linkingUserInfo.user.email?.toLowerCase() !==
+					session.user.email.toLowerCase() &&
 				c.context.options.account?.accountLinking?.allowDifferentEmails !== true
 			) {
 				throw APIError.from("UNAUTHORIZED", {
@@ -511,7 +511,10 @@ export const getAccessToken = createAuthEndpoint(
 		if (!resolvedUserId) {
 			throw ctx.error("UNAUTHORIZED");
 		}
-		if (!ctx.context.socialProviders.find((p) => p.id === providerId)) {
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: providerId,
+		});
+		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
 				message: `Provider ${providerId} is not supported.`,
 				code: "PROVIDER_NOT_SUPPORTED",
@@ -538,12 +541,6 @@ export const getAccessToken = createAuthEndpoint(
 		if (!account) {
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === providerId,
-		);
-		if (!provider) {
-			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PROVIDER_NOT_FOUND);
-		}
 
 		try {
 			let newTokens: OAuth2Tokens | null = null;
@@ -561,10 +558,14 @@ export const getAccessToken = createAuthEndpoint(
 				);
 				newTokens = await provider.refreshAccessToken(refreshToken);
 				const updatedData = {
-					accessToken: await setTokenUtil(newTokens.accessToken, ctx.context),
-					accessTokenExpiresAt: newTokens.accessTokenExpiresAt,
-					refreshToken: await setTokenUtil(newTokens.refreshToken, ctx.context),
-					refreshTokenExpiresAt: newTokens.refreshTokenExpiresAt,
+					accessToken: await setTokenUtil(newTokens?.accessToken, ctx.context),
+					accessTokenExpiresAt: newTokens?.accessTokenExpiresAt,
+					refreshToken: newTokens?.refreshToken
+						? await setTokenUtil(newTokens.refreshToken, ctx.context)
+						: account.refreshToken,
+					refreshTokenExpiresAt:
+						newTokens?.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt,
+					idToken: newTokens?.idToken || account.idToken,
 				};
 				let updatedAccount: Record<string, any> | null = null;
 				if (account.id) {
@@ -693,13 +694,13 @@ export const refreshToken = createAuthEndpoint(
 				code: "USER_ID_OR_SESSION_REQUIRED",
 			});
 		}
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === providerId,
-		);
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: providerId,
+		});
 		if (!provider) {
 			throw APIError.from("BAD_REQUEST", {
-				message: `Provider ${providerId} not found.`,
-				code: "PROVIDER_NOT_FOUND",
+				message: `Provider ${providerId} is not supported.`,
+				code: "PROVIDER_NOT_SUPPORTED",
 			});
 		}
 		if (!provider.refreshAccessToken) {
@@ -754,13 +755,19 @@ export const refreshToken = createAuthEndpoint(
 				decryptedRefreshToken,
 			);
 
+			const resolvedRefreshToken = tokens.refreshToken
+				? await setTokenUtil(tokens.refreshToken, ctx.context)
+				: refreshToken;
+			const resolvedRefreshTokenExpiresAt =
+				tokens.refreshTokenExpiresAt ?? account.refreshTokenExpiresAt;
+
 			if (account.id) {
 				const updateData = {
 					...(account || {}),
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || account.scope,
 					idToken: tokens.idToken || account.idToken,
 				};
@@ -775,9 +782,9 @@ export const refreshToken = createAuthEndpoint(
 				const updateData = {
 					...accountData,
 					accessToken: await setTokenUtil(tokens.accessToken, ctx.context),
-					refreshToken: await setTokenUtil(tokens.refreshToken, ctx.context),
+					refreshToken: resolvedRefreshToken,
 					accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-					refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+					refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 					scope: tokens.scopes?.join(",") || accountData.scope,
 					idToken: tokens.idToken || accountData.idToken,
 				};
@@ -785,9 +792,9 @@ export const refreshToken = createAuthEndpoint(
 			}
 			return ctx.json({
 				accessToken: tokens.accessToken,
-				refreshToken: tokens.refreshToken,
+				refreshToken: tokens.refreshToken ?? decryptedRefreshToken,
 				accessTokenExpiresAt: tokens.accessTokenExpiresAt,
-				refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+				refreshTokenExpiresAt: resolvedRefreshTokenExpiresAt,
 				scope: tokens.scopes?.join(",") || account.scope,
 				idToken: tokens.idToken || account.idToken,
 				providerId: account.providerId,
@@ -890,9 +897,9 @@ export const accountInfo = createAuthEndpoint(
 			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.ACCOUNT_NOT_FOUND);
 		}
 
-		const provider = ctx.context.socialProviders.find(
-			(p) => p.id === account.providerId,
-		);
+		const provider = await getAwaitableValue(ctx.context.socialProviders, {
+			value: account.providerId,
+		});
 
 		if (!provider) {
 			throw APIError.from("INTERNAL_SERVER_ERROR", {
@@ -904,7 +911,7 @@ export const accountInfo = createAuthEndpoint(
 			...ctx,
 			method: "POST",
 			body: {
-				accountId: account.id,
+				accountId: account.accountId,
 				providerId: account.providerId,
 			},
 			returnHeaders: false,

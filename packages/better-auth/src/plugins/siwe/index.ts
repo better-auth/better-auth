@@ -40,7 +40,7 @@ const getSiweNonceBodySchema = z.object({
 		.string()
 		.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 		.length(42),
-	chainId: z.number().int().positive().max(2147483647).optional().default(1),
+	chainId: z.number().int().positive().optional().default(1),
 });
 
 export const siwe = (options: SIWEPluginOptions) =>
@@ -81,13 +81,7 @@ export const siwe = (options: SIWEPluginOptions) =>
 								.string()
 								.regex(/^0[xX][a-fA-F0-9]{40}$/i)
 								.length(42),
-							chainId: z
-								.number()
-								.int()
-								.positive()
-								.max(2147483647)
-								.optional()
-								.default(1),
+							chainId: z.number().int().positive().optional().default(1),
 							email: z.email().optional(),
 						})
 						.refine((data) => options.anonymous !== false || !!data.email, {
@@ -159,8 +153,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 						}
 
 						// Clean up used nonce
-						await ctx.context.internalAdapter.deleteVerificationValue(
-							verification.id,
+						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+							`siwe:${walletAddress}:${chainId}`,
 						);
 
 						// Look for existing user by their wallet addresses

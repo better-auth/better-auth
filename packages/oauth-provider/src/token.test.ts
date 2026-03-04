@@ -576,6 +576,49 @@ describe("oauth token - refresh_token", async () => {
 		expect(tokens?.refresh_token).not.toEqual(newTokens.data?.refresh_token);
 	});
 
+	it("should preserve auth_time in id_token after refresh (OIDC Core 1.0 Section 12.2)", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile", "offline_access"];
+		const tokens = await authorizeForRefreshToken(scopes);
+		expect(tokens?.id_token).toBeDefined();
+		expect(tokens?.refresh_token).toBeDefined();
+
+		const originalIdToken = decodeJwt(tokens!.id_token!);
+		expect(originalIdToken.auth_time).toBeDefined();
+
+		// Refresh tokens
+		const { body, headers } = createRefreshAccessTokenRequest({
+			refreshToken: tokens?.refresh_token!,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			extraParams: {
+				scope: scopes.join(" "),
+			},
+		});
+		const newTokens = await client.$fetch<{
+			access_token?: string;
+			id_token?: string;
+			refresh_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body: body,
+			headers: headers,
+		});
+		expect(newTokens.data?.id_token).toBeDefined();
+
+		const refreshedIdToken = decodeJwt(newTokens.data!.id_token!);
+		expect(refreshedIdToken.auth_time).toBe(originalIdToken.auth_time);
+	});
+
 	it("should refresh token with same scopes, JWT access token", async ({
 		expect,
 	}) => {
@@ -1091,6 +1134,143 @@ describe("oauth token - client_credentials", async () => {
 	});
 });
 
+describe("oauth token - customIdTokenClaims precedence", async () => {
+	const authServerBaseUrl = "http://localhost:3000";
+	const rpBaseUrl = "http://localhost:5000";
+	const { auth, signInWithTestUser, customFetchImpl, testUser } =
+		await getTestInstance({
+			baseURL: authServerBaseUrl,
+			plugins: [
+				jwt({
+					jwt: {
+						issuer: authServerBaseUrl,
+					},
+				}),
+				oauthProvider({
+					loginPage: "/login",
+					consentPage: "/consent",
+					silenceWarnings: {
+						oauthAuthServerConfig: true,
+						openidConfig: true,
+					},
+					customIdTokenClaims: () => ({
+						given_name: "CustomFirst",
+						family_name: "CustomLast",
+						custom_field: "custom_value",
+					}),
+				}),
+			],
+		});
+
+	const { headers } = await signInWithTestUser();
+	const client = createAuthClient({
+		plugins: [oauthProviderClient(), jwtClient()],
+		baseURL: authServerBaseUrl,
+		fetchOptions: {
+			customFetchImpl,
+			headers,
+		},
+	});
+
+	let oauthClient: OAuthClient | null;
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const state = "123";
+	let jwks: ReturnType<typeof createLocalJWKSet>;
+
+	beforeAll(async () => {
+		const response = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+		expect(response?.client_id).toBeDefined();
+		expect(response?.client_secret).toBeDefined();
+		expect(response?.redirect_uris).toBeDefined();
+		oauthClient = response;
+
+		const jwksResult = await client.jwks();
+		if (!jwksResult.data) {
+			throw new Error("Unable to fetch jwks");
+		}
+		jwks = createLocalJWKSet(jwksResult.data);
+	});
+
+	it("custom claims should override standard profile claims in id_token", async ({
+		expect,
+	}) => {
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		const scopes = ["openid", "profile"];
+		const codeVerifier = generateRandomString(32);
+		const url = await createAuthorizationURL({
+			id: providerId,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+			redirectURI: "",
+			authorizationEndpoint: `${authServerBaseUrl}/api/auth/oauth2/authorize`,
+			state,
+			scopes,
+			codeVerifier,
+		});
+
+		let callbackRedirectUrl = "";
+		await client.$fetch(url.toString(), {
+			onError(context) {
+				callbackRedirectUrl = context.response.headers.get("Location") || "";
+			},
+		});
+		expect(callbackRedirectUrl).not.toBe("");
+		expect(callbackRedirectUrl).toContain(redirectUri);
+
+		const callbackUrl = new URL(callbackRedirectUrl);
+		const code = callbackUrl.searchParams.get("code");
+		const returnedState = callbackUrl.searchParams.get("state");
+
+		expect(code).toBeTruthy();
+		expect(returnedState).toBe(state);
+
+		const { body, headers: reqHeaders } = createAuthorizationCodeRequest({
+			code: code!,
+			codeVerifier,
+			redirectURI: redirectUri,
+			options: {
+				clientId: oauthClient.client_id,
+				clientSecret: oauthClient.client_secret,
+				redirectURI: redirectUri,
+			},
+		});
+
+		const tokens = await client.$fetch<{
+			id_token?: string;
+			[key: string]: unknown;
+		}>("/oauth2/token", {
+			method: "POST",
+			body,
+			headers: reqHeaders,
+		});
+
+		expect(tokens.data?.id_token).toBeDefined();
+		const idToken = await jwtVerify(tokens.data?.id_token!, jwks);
+
+		// Custom claims must override the auto-derived profile claims
+		expect(idToken.payload.given_name).toBe("CustomFirst");
+		expect(idToken.payload.family_name).toBe("CustomLast");
+		expect(idToken.payload.custom_field).toBe("custom_value");
+
+		// Standard name should still come from the user record (not overridden)
+		expect(idToken.payload.name).toBe(testUser.name);
+		expect(idToken.payload.sub).toBeDefined();
+	});
+});
+
 describe("oauth token - config", async () => {
 	const authServerBaseUrl = "http://localhost:3000";
 	const rpBaseUrl = "http://localhost:5000";
@@ -1188,7 +1368,7 @@ describe("oauth token - config", async () => {
 	}
 
 	// Client Credentials Grant
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments"],
 			result: 1800, // 30m lowest
@@ -1237,7 +1417,7 @@ describe("oauth token - config", async () => {
 	});
 
 	// Authorization Code and Refresh Token grants
-	it.each([
+	it.for([
 		{
 			testScopes: ["read:payments", "offline_access"],
 			result: 1800, // 30m lowest
@@ -1476,5 +1656,154 @@ describe("oauth token - config", async () => {
 		);
 		expect(tokens.error?.status).toBeUndefined();
 		expect(tokens.data?.access_token).toBeDefined();
+	});
+});
+
+describe("oauth token - client secret validation", async () => {
+	const authServerBaseUrl = "http://localhost:3010";
+	const rpBaseUrl = "http://localhost:5010";
+	const validAudience = "https://myapi.example.com";
+	const providerId = "test";
+	const redirectUri = `${rpBaseUrl}/api/auth/oauth2/callback/${providerId}`;
+	const scopes = [
+		"openid",
+		"email",
+		"profile",
+		"offline_access",
+		"read:profile",
+	];
+
+	async function createValidationInstance(opts?: {
+		oauthProviderConfig?: Omit<
+			OAuthOptions<Scope[]>,
+			"loginPage" | "consentPage"
+		>;
+	}) {
+		const { auth, customFetchImpl, signInWithTestUser, db } =
+			await getTestInstance({
+				baseURL: authServerBaseUrl,
+				plugins: [
+					oauthProvider({
+						loginPage: "/login",
+						consentPage: "/consent",
+						validAudiences: [validAudience],
+						scopes,
+						silenceWarnings: {
+							oauthAuthServerConfig: true,
+							openidConfig: true,
+						},
+						...opts?.oauthProviderConfig,
+					}),
+					...(opts?.oauthProviderConfig?.disableJwtPlugin
+						? []
+						: [
+								jwt({
+									jwt: {
+										issuer: authServerBaseUrl,
+									},
+								}),
+							]),
+				],
+			});
+		const { headers } = await signInWithTestUser();
+		const client = createAuthClient({
+			plugins: [oauthProviderClient()],
+			baseURL: authServerBaseUrl,
+			fetchOptions: {
+				customFetchImpl,
+				headers,
+			},
+		});
+		const oauthClient = await auth.api.adminCreateOAuthClient({
+			headers,
+			body: {
+				redirect_uris: [redirectUri],
+				skip_consent: true,
+			},
+		});
+
+		return { client, oauthClient, db };
+	}
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8016
+	 */
+	it("should return invalid_client for encrypted client secret format mismatch", async () => {
+		const storedClientSecret = "Mda8BIefhR8eFkYfFq8H7XAW-fj8GNjQYKPfN8LZ6u8";
+		const { client, oauthClient, db } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: "encrypted",
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+		await db.update({
+			model: "oauthClient",
+			where: [{ field: "clientId", value: oauthClient.client_id }],
+			update: { clientSecret: storedClientSecret },
+		});
+
+		let responseStatus = 0;
+		const tokenResponse = await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(401);
+		expect(tokenResponse.error).toMatchObject({
+			error: "invalid_client",
+			error_description: "invalid client_secret",
+		});
+	});
+
+	it("should propagate custom decrypt storage errors during client secret verification", async () => {
+		const { client, oauthClient } = await createValidationInstance({
+			oauthProviderConfig: {
+				storeClientSecret: {
+					encrypt: async (clientSecret) => clientSecret,
+					decrypt: async () => {
+						throw new Error("decrypt service unavailable");
+					},
+				},
+				disableJwtPlugin: true,
+			},
+		});
+		if (!oauthClient?.client_id || !oauthClient?.client_secret) {
+			throw Error("beforeAll not run properly");
+		}
+
+		let responseStatus = 0;
+		await client.oauth2.token(
+			{
+				grant_type: "client_credentials",
+				client_id: oauthClient.client_id,
+				client_secret: oauthClient.client_secret,
+				scope: "read:profile",
+			},
+			{
+				headers: {
+					accept: "application/json",
+					"content-type": "application/x-www-form-urlencoded",
+				},
+				onError(context) {
+					responseStatus = context.response.status;
+				},
+			},
+		);
+		expect(responseStatus).toBe(500);
 	});
 });

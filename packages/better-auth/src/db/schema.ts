@@ -189,9 +189,24 @@ export function parseAccountInput(
 export function parseSessionInput(
 	options: BetterAuthOptions,
 	session: Partial<Session>,
+	action?: "create" | "update",
 ) {
 	const schema = getFields(options, "session", "input");
-	return parseInputData(session, { fields: schema });
+	return parseInputData(session, { fields: schema, action });
+}
+
+export function getSessionDefaultFields(options: BetterAuthOptions) {
+	const fields = getFields(options, "session", "input");
+	const defaults: Record<string, any> = {};
+	for (const key in fields) {
+		if (fields[key]!.defaultValue !== undefined) {
+			defaults[key] =
+				typeof fields[key]!.defaultValue === "function"
+					? fields[key]!.defaultValue()
+					: fields[key]!.defaultValue;
+		}
+	}
+	return defaults;
 }
 
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(
