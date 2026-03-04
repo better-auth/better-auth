@@ -646,12 +646,17 @@ html:not([data-anchor-scrolling]) {
 		padding-inline-start: var(--landing-left-pane-width);
 	}
 
+	.docs-layout #nd-page > article {
+		width: auto;
+		max-width: 900px;
+	}
+
 	.docs-layout::before {
 		content: "";
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: var(--landing-left-pane-width);
+		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;
@@ -704,7 +709,7 @@ html:not([data-anchor-scrolling]) {
 		position: fixed;
 		inset-block-start: 0;
 		height: 44px;
-		inset-inline-start: var(--landing-left-pane-width);
+		inset-inline-start: calc(var(--landing-left-pane-width) - 1px);
 		width: 1px;
 		background: var(--color-border);
 		opacity: 0.55;

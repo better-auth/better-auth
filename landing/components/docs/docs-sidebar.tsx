@@ -68,7 +68,7 @@ export function DocsSidebar() {
 			initial={{ x: -24, opacity: 0 }}
 			animate={{ x: 0, opacity: 1 }}
 			transition={{ duration: 0.28, ease: "easeOut" }}
-			className="fixed left-0 top-[44px] bottom-0 w-[22vw] max-w-[300px] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
+			className="fixed left-0 top-[42px] bottom-0 w-[22vw] max-w-[300px] hidden lg:flex flex-col z-30 bg-background border-r border-foreground/5 transition-[width] duration-300 ease-out"
 		>
 			{/* Branch switcher */}
 			<BranchSwitcher />
