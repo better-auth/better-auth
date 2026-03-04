@@ -460,24 +460,22 @@ describe("oidc", async () => {
 		it("should return login_required error when prompt=none and user not authenticated", async ({
 			expect,
 		}) => {
-			// Create an unauthenticated client
-			const unauthClient = createAuthClient({
-				plugins: [oidcClient()],
-				baseURL: "http://localhost:3000",
-				fetchOptions: {
-					customFetchImpl,
-				},
+			// Create an OAuth client
+			const testClient = await serverClient.oauth2.register({
+				client_name: "test-login-required-prompt-none",
+				redirect_uris: [
+					"http://localhost:3000/api/auth/oauth2/callback/login-required",
+				],
 			});
+			const clientId = testClient.data?.client_id ?? "";
+			const redirectUri = testClient.data?.redirect_uris?.[0] ?? "";
 
 			// Try to authorize with prompt=none
 			const authUrl = new URL(
 				"http://localhost:3000/api/auth/oauth2/authorize",
 			);
-			authUrl.searchParams.set("client_id", application.clientId);
-			authUrl.searchParams.set(
-				"redirect_uri",
-				application.redirectUrls[0] || "",
-			);
+			authUrl.searchParams.set("client_id", clientId);
+			authUrl.searchParams.set("redirect_uri", redirectUri);
 			authUrl.searchParams.set("response_type", "code");
 			authUrl.searchParams.set("scope", "openid profile email");
 			authUrl.searchParams.set("state", "test-state");
@@ -485,18 +483,40 @@ describe("oidc", async () => {
 			authUrl.searchParams.set("code_challenge", "test-challenge");
 			authUrl.searchParams.set("code_challenge_method", "S256");
 
-			let redirectURI = "";
-			await unauthClient.$fetch(authUrl.toString(), {
+			const response = await customFetchImpl(authUrl.toString(), {
 				method: "GET",
-				onError(context) {
-					redirectURI = context.response.headers.get("Location") || "";
-				},
+				redirect: "manual",
 			});
+			const redirectURI = response.headers.get("Location") || "";
 
 			expect(redirectURI).toContain("error=login_required");
 			expect(redirectURI).toContain("error_description=Authentication");
 			expect(redirectURI).toContain("prompt");
 			expect(redirectURI).toContain("none");
+		});
+
+		it("should not redirect to unvalidated redirect_uri when prompt=none", async ({
+			expect,
+		}) => {
+			const attackerRedirect = "https://malicious.com/callback";
+			const authUrl = new URL(
+				"http://localhost:3000/api/auth/oauth2/authorize",
+			);
+			authUrl.searchParams.set("client_id", application.clientId);
+			authUrl.searchParams.set("redirect_uri", attackerRedirect);
+			authUrl.searchParams.set("response_type", "code");
+			authUrl.searchParams.set("scope", "openid");
+			authUrl.searchParams.set("state", "x");
+			authUrl.searchParams.set("prompt", "none");
+
+			const response = await customFetchImpl(authUrl.toString(), {
+				method: "GET",
+				redirect: "manual",
+			});
+
+			const location = response.headers.get("Location") || "";
+			expect(location).not.toContain("malicious.com");
+			expect([400, 302]).toContain(response.status);
 		});
 
 		it("should return consent_required error when prompt=none and consent needed", async ({

@@ -57,15 +57,43 @@ export async function authorize(
 			error: "invalid_request",
 		});
 	}
+	const query = ctx.query as AuthorizationQuery;
 	const session = await getSessionFromCtx(ctx);
 	if (!session) {
 		// Handle prompt=none per OIDC spec - must return error instead of redirecting
-		const query = ctx.query as AuthorizationQuery;
 		const promptSet = parsePrompt(query.prompt ?? "");
 		if (promptSet.has("none") && query.redirect_uri) {
+			if (!query.client_id) {
+				const errorURL = getErrorURL(
+					ctx,
+					"invalid_client",
+					"client_id is required",
+				);
+				throw ctx.redirect(errorURL);
+			}
+			const client = await getClient(
+				query.client_id,
+				options.trustedClients || [],
+			);
+			if (!client) {
+				const errorURL = getErrorURL(
+					ctx,
+					"invalid_client",
+					"client_id is required",
+				);
+				throw ctx.redirect(errorURL);
+			}
+			const validRedirectURI = client.redirectUrls.find(
+				(url) => url === query.redirect_uri,
+			);
+			if (!validRedirectURI) {
+				throw new APIError("BAD_REQUEST", {
+					message: "Invalid redirect URI",
+				});
+			}
 			return handleRedirect(
 				formatErrorURL(
-					query.redirect_uri,
+					validRedirectURI,
 					"login_required",
 					"Authentication required but prompt is none",
 				),
@@ -90,7 +118,6 @@ export async function authorize(
 		return handleRedirect(`${options.loginPage}?${queryFromURL}`);
 	}
 
-	const query = ctx.query as AuthorizationQuery;
 	if (!query.client_id) {
 		const errorURL = getErrorURL(
 			ctx,
