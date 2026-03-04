@@ -25,7 +25,6 @@ const nextConfig = {
 			},
 		],
 	},
-	assetPrefix: "/docs-assets",
 	async redirects() {
 		return [
 			{
@@ -47,16 +46,6 @@ const nextConfig = {
 				permanent: true,
 			},
 		];
-	},
-	async rewrites() {
-		return {
-			beforeFiles: [
-				{
-					source: "/docs-assets/_next/:path*",
-					destination: "/_next/:path*",
-				},
-			],
-		};
 	},
 };
 

@@ -1383,7 +1383,7 @@ function ReadmeFooter({
 
 				<div className="flex items-center justify-center gap-4 mt-4">
 					<a
-						href="/sign-in"
+						href="https://dash.better-auth.com/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
@@ -2359,7 +2359,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={"https://docs.better-auth.com/demo-dark.mp4"}
+											src={"/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2368,7 +2368,7 @@ export function HeroReadMe({
 											suppressHydrationWarning
 										/>
 										<video
-											src={"https://docs.better-auth.com/demo-light.mp4"}
+											src={"/demo-light.mp4"}
 											autoPlay
 											loop
 											muted

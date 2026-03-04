@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import { Check, Minus } from "lucide-react";
 
-const ctaHref = `/sign-in?callbackUrl=${encodeURIComponent("/dashboard?redirectTo=/settings/billing")}`;
+const ctaHref = `https://dash.better-auth.com/sign-in?callbackUrl=${encodeURIComponent("/dashboard?redirectTo=/settings/billing")}`;
 
 const pricingTiers = [
 	{
@@ -23,7 +23,7 @@ const pricingTiers = [
 			"10k audit logs/mo included",
 		],
 		cta: "Get Started",
-		ctaHref: "/sign-in",
+		ctaHref: "https://dash.better-auth.com/sign-in",
 		ctaStyle: "outline" as const,
 		highlighted: false,
 		isFree: true,
