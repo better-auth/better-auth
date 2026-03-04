@@ -638,21 +638,12 @@ html:not([data-anchor-scrolling]) {
 
 @media (min-width: 64rem) {
 	.docs-layout {
-		--fd-layout-width: calc(100vw - var(--landing-left-pane-width));
+		--fd-layout-width: min(
+			calc(100vw - var(--landing-left-pane-width)),
+			1200px
+		);
 		--fd-header-height: -1px;
 		padding-inline-start: var(--landing-left-pane-width);
-	}
-
-	.docs-layout #nd-page {
-		width: auto;
-		max-width: none;
-		margin-inline-start: 0;
-		margin-inline-end: 0;
-	}
-
-	.docs-layout #nd-page > article {
-		width: auto;
-		max-width: 900px;
 	}
 
 	.docs-layout::before {
@@ -679,7 +670,8 @@ html:not([data-anchor-scrolling]) {
 
 	.docs-layout #nd-toc {
 		padding-inline-start: 2rem;
-		padding-top: 2.8rem;
+		padding-top: 4rem;
+		padding-bottom: 4rem;
 	}
 }
 
