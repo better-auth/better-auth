@@ -229,6 +229,10 @@ async function pollForToken(authReqId: string, interval: number) {
 }
 ```
 
+<Callout type="info">
+  **Why two path prefixes?** Async auth only defines `/oauth/bc-authorize` and the `/async-auth/*` endpoints (verify, authorize, reject). The `/oauth2/token` endpoint is the existing OAuth provider token endpoint — async auth doesn't create it, it hooks into it when the grant type is `urn:openid:params:grant-type:ciba`. The `/oauth2/` prefix is the OAuth provider's own route naming; the CIBA flow reuses that token endpoint for polling.
+</Callout>
+
 ## Inline Agents
 
 The `agents` option lets you define client credentials directly in the plugin config — no separate client registration needed:
