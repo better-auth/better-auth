@@ -495,7 +495,7 @@ describe("oidc", async () => {
 			expect(redirectURI).toContain("none");
 		});
 
-		it("should not redirect to unvalidated redirect_uri when prompt=none", async ({
+		it("should not redirect to invalid redirect_uri when prompt=none", async ({
 			expect,
 		}) => {
 			const attackerRedirect = "https://malicious.com/callback";
