@@ -14,3 +14,4 @@ uncompromised
 myapp
 Neue
 CCPA
+CPRA
