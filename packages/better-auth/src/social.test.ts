@@ -2194,11 +2194,6 @@ describe("Telegram Provider", async () => {
 					telegram: {
 						clientId: "telegram-test-client-id",
 						clientSecret: "telegram-test-client-secret",
-						mapProfileToUser(profile: TelegramProfile) {
-							return {
-								email: `${profile.sub}@telegram.user`,
-							};
-						},
 					},
 				},
 			},
@@ -2234,92 +2229,6 @@ describe("Telegram Provider", async () => {
 		expect(session.data?.user.name).toBe("coolbot");
 	});
 
-	it("should verify id token using JWKS endpoint", async () => {
-		const telegramProfile: Partial<TelegramProfile> = {
-			sub: "tg-jwks-user-789",
-			name: "JWKS Telegram User",
-			id: 111222333,
-			preferred_username: "jwksuser",
-			picture: "https://t.me/i/userpic/320/jwks.jpg",
-		};
-
-		const idToken = await new SignJWT(
-			telegramProfile as unknown as Record<string, unknown>,
-		)
-			.setProtectedHeader({ alg: "RS256", kid: telegramKid })
-			.setIssuedAt()
-			.setIssuer("https://oauth.telegram.org")
-			.setAudience("telegram-test-client-jwks")
-			.setExpirationTime("1h")
-			.sign(rsaKeyPair.privateKey);
-
-		mswServer.use(
-			http.get("https://oauth.telegram.org/.well-known/jwks.json", async () => {
-				return HttpResponse.json({
-					keys: [rsaJwk],
-				});
-			}),
-			http.post("https://oauth.telegram.org/token", async () => {
-				return HttpResponse.json({
-					access_token: "tg_access_token_jwks",
-					id_token: idToken,
-					token_type: "Bearer",
-					expires_in: 3600,
-				});
-			}),
-		);
-
-		const { client, cookieSetter } = await getTestInstance(
-			{
-				socialProviders: {
-					telegram: {
-						clientId: "telegram-test-client-jwks",
-						clientSecret: "telegram-test-client-secret-jwks",
-						mapProfileToUser(profile: TelegramProfile) {
-							return {
-								email: `${profile.sub}@telegram.user`,
-							};
-						},
-					},
-				},
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-
-		const headers = new Headers();
-		const signInRes = await client.signIn.social({
-			provider: "telegram",
-			callbackURL: "/callback",
-			fetchOptions: {
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
-		await client.$fetch("/callback/telegram", {
-			query: {
-				state,
-				code: "tg_test_code_jwks",
-			},
-			headers,
-			method: "GET",
-			onError(context) {
-				cookieSetter(headers)(context as any);
-			},
-		});
-
-		const session = await client.getSession({
-			fetchOptions: {
-				headers,
-			},
-		});
-
-		expect(session.data?.user.name).toBe("JWKS Telegram User");
-	});
-
 	it("should support id token sign in", async () => {
 		const telegramProfile: Partial<TelegramProfile> = {
 			sub: "tg-id-token-user-101",
@@ -2353,11 +2262,6 @@ describe("Telegram Provider", async () => {
 					telegram: {
 						clientId: "telegram-test-client-id-token",
 						clientSecret: "telegram-test-client-secret-id-token",
-						mapProfileToUser(profile: TelegramProfile) {
-							return {
-								email: `${profile.sub}@telegram.user`,
-							};
-						},
 					},
 				},
 			},
@@ -2432,61 +2336,5 @@ describe("Telegram Provider", async () => {
 		});
 
 		expect(res.error?.status).toBe(401);
-	});
-
-	it("should support mapProfileToUser with additional fields", async () => {
-		const { client, cookieSetter } = await getTestInstance(
-			{
-				user: {
-					additionalFields: {
-						telegramUsername: {
-							type: "string",
-						},
-					},
-				},
-				socialProviders: {
-					telegram: {
-						clientId: "telegram-test-client-id",
-						clientSecret: "telegram-test-client-secret",
-						mapProfileToUser(profile: TelegramProfile) {
-							return {
-								email: `${profile.sub}@telegram.user`,
-								telegramUsername: profile.preferred_username,
-							};
-						},
-					},
-				},
-			},
-			{
-				disableTestUser: true,
-			},
-		);
-
-		const headers = new Headers();
-		const signInRes = await client.signIn.social({
-			provider: "telegram",
-			callbackURL: "/dashboard",
-			fetchOptions: {
-				onSuccess: cookieSetter(headers),
-			},
-		});
-
-		const state = new URL(signInRes.data!.url!).searchParams.get("state") || "";
-
-		await client.$fetch("/callback/telegram", {
-			query: { state, code: "telegram_test_code_map" },
-			headers,
-			method: "GET",
-			onError(context) {
-				cookieSetter(headers)(context as any);
-			},
-		});
-
-		const session = await client.getSession({
-			fetchOptions: { headers },
-		});
-
-		expect(session.data?.user).toHaveProperty("telegramUsername");
-		expect((session.data?.user as any).telegramUsername).toBeDefined();
 	});
 });

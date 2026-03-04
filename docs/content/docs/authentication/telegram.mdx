@@ -10,10 +10,12 @@ description: Telegram provider setup and usage.
 
         Once you have a bot, open the [@BotFather](https://t.me/botfather?startapp) mini app and navigate to **Bot Settings > Web Login**. Add your allowed URLs, including the redirect URI for your OIDC flow. BotFather will display your **Client ID** and **Client Secret** — save these securely.
 
-        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/telegram` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+        Telegram does not support `http://` redirect URLs. Use a `https://` callback URL in BotFather. For local development, use a public HTTPS URL (for example via `ngrok`).
+
+        For production, use your application domain as the redirect URL. If you change the base path of the auth routes, update the redirect URL accordingly.
 
         <Callout type="info">
-            Telegram does not provide user email addresses. By default, Better Auth uses the Telegram username (`preferred_username`) as the email field. If you need a proper email format, you can use `mapProfileToUser` to supply a synthetic email (e.g., derived from the user's Telegram ID). You can also request the user's verified phone number by adding the `phone` scope.
+            Telegram does not provide user email addresses. By default, Better Auth generates a synthetic email using the user's Telegram ID (e.g., `123456@telegram.user`). You can override this with `mapProfileToUser` if needed. You can also request the user's verified phone number by adding the `phone` scope.
         </Callout>
     </Step>
 
@@ -34,7 +36,7 @@ description: Telegram provider setup and usage.
         })
         ```
 
-        By default, the Telegram username is used as the email field. If you'd prefer a synthetic email address, use `mapProfileToUser`:
+        By default, Better Auth generates a synthetic email from the Telegram user ID. If you want to customize the user profile (e.g., override the name or add extra fields), use `mapProfileToUser`:
 
         ```ts title="auth.ts"  
         import { betterAuth } from "better-auth" 
@@ -46,7 +48,7 @@ description: Telegram provider setup and usage.
                     clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string,
                     mapProfileToUser(profile) { // [!code highlight]
                         return { // [!code highlight]
-                            email: `${profile.sub}@telegram.user`, // [!code highlight]
+                            name: profile.preferred_username, // [!code highlight]
                         }; // [!code highlight]
                     }, // [!code highlight]
                 },
@@ -111,3 +113,7 @@ export const auth = betterAuth({
     },
 })
 ```
+
+<Callout type="info">
+    For more information about Telegram's OAuth implementation, refer to the [official Telegram documentation](https://core.telegram.org/bots/telegram-login).
+</Callout>

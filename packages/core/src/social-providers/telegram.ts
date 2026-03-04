@@ -113,7 +113,7 @@ export const telegram = (options: TelegramOptions) => {
 					id: profile.sub,
 					name: profile.name || profile.preferred_username || "",
 					image: profile.picture,
-					email: profile.preferred_username || null, // Telegram does not provide email
+					email: `${profile.sub}@telegram.user`, // Telegram does not provide email
 					emailVerified: false,
 					...userMap,
 				},
