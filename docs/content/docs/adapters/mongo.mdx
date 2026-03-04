@@ -20,9 +20,9 @@ To use the MongoDB adapter, you need to install the `@better-auth/mongo-adapter`
 You can use the MongoDB adapter to connect to your database as follows.
 
 ```ts title="auth.ts"
-import { betterAuth } from "better-auth/minimal";
+import { betterAuth } from "better-auth";
 import { MongoClient } from "mongodb";
-import { mongodbAdapter } from "@better-auth/mongo-adapter";
+import { mongodbAdapter } from "better-auth/adapters/mongodb";
 
 const client = new MongoClient("mongodb://localhost:27017/database");
 const db = client.db();
