@@ -93,10 +93,7 @@ export function createSessionRefreshManager(opts: SessionRefreshOptions) {
 						} catch {}
 					}
 
-					const sessionData =
-						data?.session && data?.user
-							? { session: data.session, user: data.user }
-							: null;
+					const sessionData = data?.session && data?.user ? data : null;
 
 					sessionAtom.set({
 						...currentSession,
