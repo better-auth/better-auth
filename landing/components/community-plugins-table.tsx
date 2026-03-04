@@ -290,6 +290,17 @@ export const communityPlugins: CommunityPlugin[] = [
 			avatar: "https://github.com/iamjasonkendrick.png",
 		},
 	},
+	{
+        name: "better-auth-vercel-geolocation",
+        url: "https://github.com/weepaho3/better-auth-vercel-geolocation",
+        description:
+            "Enriches sessions with Vercel Edge geolocation data from x-vercel-ip-* headers — e.g. city, country, region, timezone and more. Optionally updates on session refresh.",
+        author: {
+            name: "weepaho3",
+            github: "weepaho3",
+            avatar: "https://github.com/weepaho3.png",
+        },
+    },
 ];
 export function CommunityPluginsTable() {
 	const [sorting, setSorting] = useState<SortingState>([]);
