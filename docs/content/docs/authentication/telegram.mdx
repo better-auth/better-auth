@@ -1,0 +1,113 @@
+---
+title: Telegram
+description: Telegram provider setup and usage.
+---
+
+<Steps>
+    <Step> 
+        ### Get your Telegram Credentials
+        To use Telegram sign in, you need a Telegram bot to represent your application. If you don't have one already, [create a bot](https://core.telegram.org/bots#how-do-i-create-a-bot) using [@BotFather](https://t.me/BotFather).
+
+        Once you have a bot, open the [@BotFather](https://t.me/botfather?startapp) mini app and navigate to **Bot Settings > Web Login**. Add your allowed URLs, including the redirect URI for your OIDC flow. BotFather will display your **Client ID** and **Client Secret** — save these securely.
+
+        Make sure to set the redirect URL to `http://localhost:3000/api/auth/callback/telegram` for local development. For production, you should set it to the URL of your application. If you change the base path of the auth routes, you should update the redirect URL accordingly.
+
+        <Callout type="info">
+            Telegram does not provide user email addresses. By default, Better Auth uses the Telegram username (`preferred_username`) as the email field. If you need a proper email format, you can use `mapProfileToUser` to supply a synthetic email (e.g., derived from the user's Telegram ID). You can also request the user's verified phone number by adding the `phone` scope.
+        </Callout>
+    </Step>
+
+    <Step>
+        ### Configure the provider
+        To configure the provider, you need to import the provider and pass it to the `socialProviders` option of the auth instance.
+
+        ```ts title="auth.ts"  
+        import { betterAuth } from "better-auth" 
+        
+        export const auth = betterAuth({
+            socialProviders: {
+                telegram: { // [!code highlight]
+                    clientId: process.env.TELEGRAM_CLIENT_ID as string, // [!code highlight]
+                    clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string, // [!code highlight]
+                }, // [!code highlight]
+            },
+        })
+        ```
+
+        By default, the Telegram username is used as the email field. If you'd prefer a synthetic email address, use `mapProfileToUser`:
+
+        ```ts title="auth.ts"  
+        import { betterAuth } from "better-auth" 
+        
+        export const auth = betterAuth({
+            socialProviders: {
+                telegram: {
+                    clientId: process.env.TELEGRAM_CLIENT_ID as string,
+                    clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string,
+                    mapProfileToUser(profile) { // [!code highlight]
+                        return { // [!code highlight]
+                            email: `${profile.sub}@telegram.user`, // [!code highlight]
+                        }; // [!code highlight]
+                    }, // [!code highlight]
+                },
+            },
+        })
+        ```
+    </Step>
+    <Step>
+        ### Sign In with Telegram 
+        To sign in with Telegram, you can use the `signIn.social` function provided by the client. The `signIn` function takes an object with the following properties:
+        - `provider`: The provider to use. It should be set to `telegram`.
+
+        ```ts title="auth-client.ts"  
+        import { createAuthClient } from "better-auth/client"
+        const authClient = createAuthClient()
+        
+        const signIn = async () => {
+            const data = await authClient.signIn.social({
+                provider: "telegram"
+            })
+        }
+        ```
+    </Step>
+</Steps>
+
+## Options
+
+For the full list of options supported by all social providers, check the [Provider Options](/docs/concepts/oauth#provider-options).
+
+### Phone Number (Optional)
+
+You can request the user's verified phone number by adding the `phone` scope:
+
+```ts title="auth.ts"  
+import { betterAuth } from "better-auth" 
+
+export const auth = betterAuth({
+    socialProviders: {
+        telegram: {
+            clientId: process.env.TELEGRAM_CLIENT_ID as string,
+            clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string,
+            scope: ["phone"], // [!code highlight]
+        }, 
+    },
+})
+```
+
+### Bot Messaging (Optional)
+
+To allow your bot to send direct messages to logged-in users, add the `telegram:bot_access` scope:
+
+```ts title="auth.ts"  
+import { betterAuth } from "better-auth" 
+
+export const auth = betterAuth({
+    socialProviders: {
+        telegram: {
+            clientId: process.env.TELEGRAM_CLIENT_ID as string,
+            clientSecret: process.env.TELEGRAM_CLIENT_SECRET as string,
+            scope: ["telegram:bot_access"], // [!code highlight]
+        }, 
+    },
+})
+```

@@ -28,6 +28,7 @@ import { roblox } from "./roblox";
 import { salesforce } from "./salesforce";
 import { slack } from "./slack";
 import { spotify } from "./spotify";
+import { telegram } from "./telegram";
 import { tiktok } from "./tiktok";
 import { twitch } from "./twitch";
 import { twitter } from "./twitter";
@@ -69,6 +70,7 @@ export const socialProviders = {
 	paypal,
 	polar,
 	railway,
+	telegram,
 	vercel,
 };
 
@@ -121,6 +123,7 @@ export * from "./roblox";
 export * from "./salesforce";
 export * from "./slack";
 export * from "./spotify";
+export * from "./telegram";
 export * from "./tiktok";
 export * from "./twitch";
 export * from "./twitter";
