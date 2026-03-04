@@ -515,7 +515,9 @@ describe("oidc", async () => {
 			});
 
 			const location = response.headers.get("Location") || "";
-			expect(location === null || location === "").not.toContain("malicious.com");
+			expect(location === null || location === "").not.toContain(
+				"malicious.com",
+			);
 			expect([400, 302]).toContain(response.status);
 		});
 
