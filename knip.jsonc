@@ -11,6 +11,9 @@
 			"project": ["src/**/*.ts!"],
 			"ignoreDependencies": ["@better-auth/core"]
 		},
+		"packages/prisma-adapter": {
+			"ignoreDependencies": ["@prisma/client", "prisma"]
+		},
 		"packages/better-auth": {
 			"project": [
 				"src/**/*.ts!",
@@ -19,6 +22,11 @@
 				"!src/adapters/**/test/auth.ts"
 			],
 			"ignoreDependencies": [
+				// adapter re-export packages (optional peer deps)
+				"@better-auth/drizzle-adapter",
+				"@better-auth/mongo-adapter",
+				"@better-auth/prisma-adapter",
+
 				// implicit adapter dependencies
 				"drizzle-kit",
 				"drizzle-orm",
@@ -35,7 +43,8 @@
 				// implicit integrations dependencies
 				"@lynx-js/react",
 				"@sveltejs/kit",
-				"@tanstack/start-server-core",
+				"@tanstack/react-start",
+				"@tanstack/solid-start",
 				"next",
 				"react",
 				"react-dom",
@@ -62,8 +71,25 @@
 				"@types/pg",
 				"drizzle-orm",
 				"pg",
-				"prisma"
-			]
+				"prisma",
+				// implicit dependencies
+				"semver",
+				"@babel/core",
+				"@babel/preset-react",
+				"@babel/preset-typescript",
+				"@better-auth/telemetry",
+				"@clack/prompts",
+				"@mrleebo/prisma-ast",
+				"better-auth",
+				"c12",
+				"chalk",
+				"open",
+				"prettier",
+				"prompts",
+				"yocto-spinner",
+				"zod"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
 		},
 		"packages/expo": {
 			"ignoreDependencies": [
@@ -77,6 +103,16 @@
 				"react-native"
 			]
 		},
+		"packages/electron": {
+			"ignoreDependencies": [
+				// loading of optional peers
+				"conf",
+
+				// implicit dependencies
+				"electron"
+			],
+			"project": ["src/**/*.ts", "test/**/*.ts"]
+		},
 		"packages/stripe": {
 			"ignoreDependencies": [
 				// implicit dependencies
@@ -89,6 +125,15 @@
 				"@better-auth/core",
 				"better-call"
 			]
+		},
+		"packages/test-utils": {
+			"ignoreDependencies": ["@better-auth/core", "better-auth", "vitest"]
+		},
+		"packages/redis-storage": {
+			"ignoreDependencies": [
+				// type-only dependencies
+				"ioredis"
+			]
 		}
 	},
 	"vitest": {
@@ -100,5 +145,5 @@
 		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
 }

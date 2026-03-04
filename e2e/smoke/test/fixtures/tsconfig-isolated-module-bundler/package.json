@@ -1,5 +1,5 @@
 {
-  "name": "tsconfig-isolated-module-bundler",
+  "name": "@better-auth-test/fixtures-tsconfig-isolated-module-bundler",
   "private": true,
   "type": "module",
   "scripts": {
@@ -7,6 +7,6 @@
   },
   "dependencies": {
     "better-auth": "workspace:*",
-    "better-auth-harmony": "^1.2.5"
+    "better-auth-harmony": "^1.3.0"
   }
 }

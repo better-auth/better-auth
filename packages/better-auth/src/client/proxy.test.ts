@@ -1,7 +1,11 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDynamicPathProxy } from "./proxy";
 
 describe("createDynamicPathProxy", () => {
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should avoid duplicate signal processing", async () => {
 		const client = vi.fn(async (path, options) => {
 			if (options?.onSuccess) {

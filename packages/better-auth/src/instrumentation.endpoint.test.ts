@@ -1,0 +1,180 @@
+import type { BetterAuthPlugin } from "@better-auth/core";
+import {
+	ATTR_CONTEXT,
+	ATTR_HOOK_TYPE,
+	ATTR_HTTP_RESPONSE_STATUS_CODE,
+	ATTR_HTTP_ROUTE,
+	ATTR_OPERATION_ID,
+} from "@better-auth/core/instrumentation";
+import { trace } from "@opentelemetry/api";
+import type { ReadableSpan } from "@opentelemetry/sdk-trace-base";
+import {
+	InMemorySpanExporter,
+	SimpleSpanProcessor,
+} from "@opentelemetry/sdk-trace-base";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { createAuthMiddleware } from "./api";
+import { getTestInstance } from "./test-utils";
+
+let exporter: InMemorySpanExporter;
+let provider: NodeTracerProvider;
+
+const PLUGIN_ID = "test-plugin";
+
+async function createTestInstance() {
+	const otelPlugin: BetterAuthPlugin = {
+		id: PLUGIN_ID,
+		middlewares: [
+			{
+				path: "/**",
+				middleware: createAuthMiddleware(async () => {}),
+			},
+		],
+		async onRequest() {
+			return;
+		},
+		async onResponse() {
+			return;
+		},
+	};
+
+	return await getTestInstance({
+		hooks: {
+			before: createAuthMiddleware(async () => {}),
+			after: createAuthMiddleware(async () => {}),
+		},
+		plugins: [otelPlugin],
+	});
+}
+
+const findSpan = (predicate: (s: ReadableSpan) => boolean) =>
+	exporter.getFinishedSpans().find(predicate);
+
+describe("endpoints instrumentation", () => {
+	beforeAll(() => {
+		exporter = new InMemorySpanExporter();
+		provider = new NodeTracerProvider({
+			spanProcessors: [new SimpleSpanProcessor(exporter)],
+		});
+		trace.setGlobalTracerProvider(provider);
+	});
+
+	afterAll(async () => {
+		await provider.shutdown();
+	});
+
+	beforeEach(() => {
+		exporter.reset();
+	});
+
+	it("emits a parent span for each endpoint", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const span = findSpan((s) => s.name === "GET /get-session");
+		expect(span).toBeDefined();
+		expect(span?.attributes).toMatchObject({
+			[ATTR_OPERATION_ID]: "getSession",
+			[ATTR_HTTP_ROUTE]: expect.any(String),
+		});
+	});
+
+	it("emits a span for the endpoint handler", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const span = findSpan((s) => s.name === "handler /get-session");
+		expect(span).toBeDefined();
+		expect(span?.attributes).toMatchObject({
+			[ATTR_HTTP_ROUTE]: expect.any(String),
+			[ATTR_OPERATION_ID]: "getSession",
+		});
+	});
+
+	it("emits spans for plugin-originated hooks", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const afterHookSpan = findSpan(
+			(s) => s.name === "hook after /get-session plugin:bearer",
+		);
+		expect(afterHookSpan).toBeDefined();
+		expect(afterHookSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "after",
+			[ATTR_CONTEXT]: "plugin:bearer",
+			[ATTR_OPERATION_ID]: "getSession",
+		});
+	});
+
+	it("emits spans for global hooks", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const beforeHookSpan = findSpan(
+			(s) => s.name === "hook before /get-session user",
+		);
+		expect(beforeHookSpan).toBeDefined();
+		expect(beforeHookSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "before",
+			[ATTR_CONTEXT]: "user",
+			[ATTR_OPERATION_ID]: "getSession",
+		});
+
+		const afterHookSpan = findSpan(
+			(s) => s.name === "hook after /get-session user",
+		);
+		expect(afterHookSpan).toBeDefined();
+		expect(afterHookSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "after",
+			[ATTR_CONTEXT]: "user",
+			[ATTR_OPERATION_ID]: "getSession",
+		});
+	});
+
+	it("emits a span for each middleware", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const middlewareSpan = findSpan(
+			(s) => s.name === "middleware /** test-plugin",
+		);
+		expect(middlewareSpan).toBeDefined();
+		expect(middlewareSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "middleware",
+			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
+			[ATTR_HTTP_ROUTE]: expect.any(String),
+		});
+	});
+
+	it("emits a span for onRequest hooks", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const onRequestSpan = findSpan(
+			(s) => s.name === "onRequest /get-session test-plugin",
+		);
+		expect(onRequestSpan).toBeDefined();
+		expect(onRequestSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "onRequest",
+			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
+			[ATTR_HTTP_ROUTE]: expect.any(String),
+		});
+	});
+
+	it("emits a span for onResponse hooks", async () => {
+		const instance = await createTestInstance();
+		await instance.client.getSession();
+
+		const onResponseSpan = findSpan(
+			(s) => s.name === "onResponse /get-session test-plugin",
+		);
+		expect(onResponseSpan).toBeDefined();
+		expect(onResponseSpan?.attributes).toMatchObject({
+			[ATTR_HOOK_TYPE]: "onResponse",
+			[ATTR_CONTEXT]: `plugin:${PLUGIN_ID}`,
+			[ATTR_HTTP_ROUTE]: expect.any(String),
+			[ATTR_HTTP_RESPONSE_STATUS_CODE]: expect.any(Number),
+		});
+	});
+});

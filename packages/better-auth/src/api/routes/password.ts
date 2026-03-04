@@ -308,7 +308,7 @@ export const resetPassword = createAuthEndpoint(
 		} else {
 			await ctx.context.internalAdapter.updatePassword(userId, hashedPassword);
 		}
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(id);
 
 		if (ctx.context.options.emailAndPassword?.onPasswordReset) {
 			const user = await ctx.context.internalAdapter.findUserById(userId);
@@ -378,7 +378,7 @@ export const verifyPassword = createAuthEndpoint(
 		});
 
 		if (!isValid) {
-			throw new APIError("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
 
 		return ctx.json({

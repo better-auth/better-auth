@@ -120,7 +120,10 @@ function getPathAliasesRecursive(
 }
 
 function getPathAliases(cwd: string): Record<string, string> | null {
-	const tsConfigPath = path.join(cwd, "tsconfig.json");
+	let tsConfigPath = path.join(cwd, "tsconfig.json");
+	if (!fs.existsSync(tsConfigPath)) {
+		tsConfigPath = path.join(cwd, "jsconfig.json");
+	}
 	if (!fs.existsSync(tsConfigPath)) {
 		return null;
 	}
@@ -195,7 +198,9 @@ export async function getConfig({
 				  }
 			>({
 				configFile: resolvedPath,
-				dotenv: true,
+				dotenv: {
+					fileName: [".env", ".env.local"],
+				},
 				jitiOptions: jitiOptions(cwd),
 				cwd,
 			});
@@ -225,6 +230,9 @@ export async function getConfig({
 						};
 					}>({
 						configFile: possiblePath,
+						dotenv: {
+							fileName: [".env", ".env.local"],
+						},
 						jitiOptions: jitiOptions(cwd),
 						cwd,
 					});

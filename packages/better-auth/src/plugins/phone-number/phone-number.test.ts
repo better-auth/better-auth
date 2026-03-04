@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { bearer } from "../bearer";
 import { phoneNumber } from ".";
 import { phoneNumberClient } from "./client";
 
-describe("phone-number", async (it) => {
+describe("phone-number", async () => {
 	let otp = "";
 
 	const { client, sessionSetter } = await getTestInstance(
@@ -32,6 +32,11 @@ describe("phone-number", async (it) => {
 	const headers = new Headers();
 
 	const testPhoneNumber = "+251911121314";
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
 	it("should send verification code", async () => {
 		const res = await client.phoneNumber.sendOtp({
 			phoneNumber: testPhoneNumber,
@@ -159,7 +164,7 @@ describe("phone auth flow", async () => {
 		expect(session?.session.token).toBeDefined();
 	});
 
-	let headers = new Headers();
+	const headers = new Headers();
 	it("should go through send-verify and sign-in the user", async () => {
 		await client.phoneNumber.sendOtp({
 			phoneNumber: "+251911121314",
@@ -212,7 +217,7 @@ describe("phone auth flow", async () => {
 	});
 });
 
-describe("verify phone-number", async (it) => {
+describe("verify phone-number", async () => {
 	let otp = "";
 
 	const { client, sessionSetter } = await getTestInstance(
@@ -241,6 +246,10 @@ describe("verify phone-number", async (it) => {
 	const headers = new Headers();
 
 	const testPhoneNumber = "+251911121314";
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
 
 	it("should verify the last code", async () => {
 		await client.phoneNumber.sendOtp({
@@ -292,11 +301,11 @@ describe("verify phone-number", async (it) => {
 	});
 });
 
-describe("reset password flow attempts", async (it) => {
+describe("reset password flow attempts", async () => {
 	let otp = "";
 	let resetOtp = "";
 
-	const { client } = await getTestInstance(
+	const { client, db } = await getTestInstance(
 		{
 			plugins: [
 				phoneNumber({
@@ -373,6 +382,37 @@ describe("reset password flow attempts", async (it) => {
 		expect(resetPasswordRes.data?.status).toBe(true);
 	});
 
+	it("should reset password and create credential account", async () => {
+		const testUser2 = {
+			email: "test-user2@email.com",
+			phoneNumber: "+2519111213142",
+		};
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testUser2.phoneNumber,
+		});
+		await db.create({
+			model: "user",
+			data: {
+				name: "Test User",
+				email: testUser2.email,
+				phoneNumber: testUser2.phoneNumber,
+			},
+		});
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: testUser2.phoneNumber,
+		});
+		await client.phoneNumber.resetPassword({
+			phoneNumber: testUser2.phoneNumber,
+			otp: resetOtp,
+			newPassword: "password",
+		});
+		const res = await client.signIn.email({
+			email: testUser2.email,
+			password: "password",
+		});
+		expect(res.data?.token).toBeDefined();
+	});
+
 	it("shouldn't allow to re-use the same OTP code", async () => {
 		const res = await client.phoneNumber.resetPassword({
 			phoneNumber: testPhoneNumber,
@@ -383,7 +423,7 @@ describe("reset password flow attempts", async (it) => {
 	});
 });
 
-describe("reset password session revocation", async (it) => {
+describe("reset password session revocation", async () => {
 	let otp = "";
 	let resetOtp = "";
 
@@ -463,6 +503,82 @@ describe("reset password session revocation", async (it) => {
 			},
 		});
 		expect(sessionAfter.data).toBe(null);
+	});
+});
+
+describe("reset password onPasswordReset callback", async () => {
+	let otp = "";
+	let resetOtp = "";
+	const onPasswordReset = vi.fn();
+
+	const { client, sessionSetter } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				onPasswordReset,
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					sendPasswordResetOTP(data) {
+						resetOtp = data.code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const testPhoneNumber = "+251911999888";
+
+	it("should call onPasswordReset after phone number password reset", async () => {
+		const headers = new Headers();
+
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+		await client.phoneNumber.verify(
+			{
+				phoneNumber: testPhoneNumber,
+				code: otp,
+			},
+			{
+				onSuccess: sessionSetter(headers),
+			},
+		);
+
+		await client.phoneNumber.requestPasswordReset({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const res = await client.phoneNumber.resetPassword({
+			phoneNumber: testPhoneNumber,
+			otp: resetOtp,
+			newPassword: "new-password-123",
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+		expect(onPasswordReset).toHaveBeenCalledOnce();
+		expect(onPasswordReset).toHaveBeenCalledWith(
+			expect.objectContaining({
+				user: expect.objectContaining({
+					phoneNumber: testPhoneNumber,
+				}),
+			}),
+			expect.anything(),
+		);
 	});
 });
 
@@ -591,6 +707,65 @@ describe("updateUser phone number update prevention", async () => {
 		});
 		expect(sessionAfterUpdate.data?.user.phoneNumberVerified).toBe(true);
 		expect(sessionAfterUpdate.data?.user.phoneNumber).toBe(initialPhoneNumber);
+	});
+});
+
+describe("signUpOnVerification with additionalFields", async () => {
+	let otp = "";
+
+	const { client } = await getTestInstance(
+		{
+			user: {
+				additionalFields: {
+					lastName: {
+						type: "string",
+						required: true,
+					},
+					dateOfBirth: {
+						type: "date",
+						required: false,
+					},
+				},
+			},
+			plugins: [
+				phoneNumber({
+					async sendOTP({ code }) {
+						otp = code;
+					},
+					signUpOnVerification: {
+						getTempEmail(phoneNumber) {
+							return `temp-${phoneNumber}@example.com`;
+						},
+					},
+				}),
+			],
+		},
+		{
+			disableTestUser: true,
+			clientOptions: {
+				plugins: [phoneNumberClient()],
+			},
+		},
+	);
+
+	const testPhoneNumber = "+1234567890";
+
+	it("should create user with additional fields from body", async () => {
+		await client.phoneNumber.sendOtp({
+			phoneNumber: testPhoneNumber,
+		});
+
+		const res = await client.phoneNumber.verify({
+			phoneNumber: testPhoneNumber,
+			code: otp,
+			lastName: "Doe",
+		});
+
+		expect(res.error).toBe(null);
+		expect(res.data?.status).toBe(true);
+		expect(res.data?.user).not.toBe(null);
+		// @ts-expect-error - additionalFields not yet inferred in plugin response type
+		expect(res.data?.user.lastName).toBe("Doe");
 	});
 });
 

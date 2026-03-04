@@ -14,8 +14,7 @@ import type { Session, User } from "../../types";
 import { defaultKeyHasher } from "./utils";
 
 declare module "@better-auth/core" {
-	// biome-ignore lint/correctness/noUnusedVariables: Auth and Context need to be same as declared in the module
-	interface BetterAuthPluginRegistry<Auth, Context> {
+	interface BetterAuthPluginRegistry<AuthOptions, Options> {
 		"one-time-token": {
 			creator: typeof oneTimeToken;
 		};
@@ -184,8 +183,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 							message: "Invalid token",
 						});
 					}
-					await c.context.internalAdapter.deleteVerificationValue(
-						verificationValue.id,
+					await c.context.internalAdapter.deleteVerificationByIdentifier(
+						`one-time-token:${storedToken}`,
 					);
 					if (verificationValue.expiresAt < new Date()) {
 						throw c.error("BAD_REQUEST", {

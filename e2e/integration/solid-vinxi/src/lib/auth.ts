@@ -1,8 +1,8 @@
+import { DatabaseSync } from "node:sqlite";
 import { betterAuth } from "better-auth";
-import { getMigrations } from "better-auth/db";
-import Database from "better-sqlite3";
+import { getMigrations } from "better-auth/db/migration";
 
-const database = new Database(":memory:");
+const database = new DatabaseSync(":memory:");
 const baseURL = process.env.BASE_URL || "http://localhost:3000";
 
 export const auth = betterAuth({

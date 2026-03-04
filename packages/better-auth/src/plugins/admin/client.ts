@@ -4,7 +4,7 @@ import type {
 	BetterAuthPlugin,
 } from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
-import type { AccessControl, Role } from "../access";
+import type { AccessControl, ArrayElement, Role } from "../access";
 import type { defaultStatements } from "./access";
 import { adminAc, defaultRoles, userAc } from "./access";
 import type { admin } from "./admin";
@@ -63,22 +63,13 @@ export const adminClient = <O extends AdminClientOptions>(
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	const roles = {
 		admin: adminAc,
@@ -129,7 +120,7 @@ export const adminClient = <O extends AdminClientOptions>(
 							ac: options?.ac,
 							roles: roles,
 						},
-						permissions: (data.permissions ?? data.permission) as any,
+						permissions: data.permissions as any,
 					});
 					return isAuthorized;
 				},

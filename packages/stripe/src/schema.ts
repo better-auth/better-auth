@@ -62,6 +62,14 @@ export const subscriptions = {
 				type: "number",
 				required: false,
 			},
+			billingInterval: {
+				type: "string",
+				required: false,
+			},
+			stripeScheduleId: {
+				type: "string",
+				required: false,
+			},
 		},
 	},
 } satisfies BetterAuthPluginDBSchema;
@@ -88,8 +96,14 @@ export const organization = {
 	},
 } satisfies BetterAuthPluginDBSchema;
 
-export const getSchema = (options: StripeOptions) => {
-	let baseSchema = {};
+type GetSchemaResult<O extends StripeOptions> = typeof user &
+	(O["subscription"] extends { enabled: true } ? typeof subscriptions : {}) &
+	(O["organization"] extends { enabled: true } ? typeof organization : {});
+
+export const getSchema = <O extends StripeOptions>(
+	options: O,
+): GetSchemaResult<O> => {
+	let baseSchema: BetterAuthPluginDBSchema = {};
 
 	if (options.subscription?.enabled) {
 		baseSchema = {
@@ -115,8 +129,8 @@ export const getSchema = (options: StripeOptions) => {
 		"subscription" in options.schema
 	) {
 		const { subscription: _subscription, ...restSchema } = options.schema;
-		return mergeSchema(baseSchema, restSchema);
+		return mergeSchema(baseSchema, restSchema) as GetSchemaResult<O>;
 	}
 
-	return mergeSchema(baseSchema, options.schema);
+	return mergeSchema(baseSchema, options.schema) as GetSchemaResult<O>;
 };

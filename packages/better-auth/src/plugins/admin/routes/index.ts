@@ -1,13 +1,18 @@
 import type { LiteralString } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
 import type { Where } from "@better-auth/core/db/adapter";
+import { whereOperators } from "@better-auth/core/db/adapter";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { getSessionFromCtx } from "../../../api";
-import { deleteSessionCookie, setSessionCookie } from "../../../cookies";
-import { parseUserOutput } from "../../../db/schema";
+import {
+	deleteSessionCookie,
+	expireCookie,
+	setSessionCookie,
+} from "../../../cookies";
+import { parseSessionOutput, parseUserOutput } from "../../../db/schema";
 import { getDate } from "../../../utils/date";
-import type { AccessControl } from "../../access";
+import type { AccessControl, ArrayElement } from "../../access";
 import type { defaultStatements } from "../access";
 import { adminMiddleware } from "../call";
 import { ADMIN_ERROR_CODES } from "../error-codes";
@@ -169,7 +174,7 @@ export const setRole = <O extends AdminOptions>(opts: O) =>
 				},
 			);
 			return ctx.json({
-				user: updatedUser as UserWithRole,
+				user: parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
 			});
 		},
 	);
@@ -240,7 +245,7 @@ export const getUser = (opts: AdminOptions) =>
 				throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.USER_NOT_FOUND);
 			}
 
-			return parseUserOutput(ctx.context.options, user);
+			return parseUserOutput(ctx.context.options, user) as UserWithRole;
 		},
 	);
 
@@ -248,8 +253,9 @@ const createUserBodySchema = z.object({
 	email: z.string().meta({
 		description: "The email of the user",
 	}),
-	password: z.string().meta({
-		description: "The password of the user",
+	password: z.string().optional().meta({
+		description:
+			"The password of the user. If not provided, the user will be created without a credential account (useful for magic link or social login only users).",
 	}),
 	name: z.string().meta({
 		description: "The name of the user",
@@ -325,7 +331,7 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 				$Infer: {
 					body: {} as {
 						email: string;
-						password: string;
+						password?: string | undefined;
 						name: string;
 						role?:
 							| (InferAdminRolesFromOption<O> | InferAdminRolesFromOption<O>[])
@@ -390,15 +396,20 @@ export const createUser = <O extends AdminOptions>(opts: O) =>
 					ADMIN_ERROR_CODES.FAILED_TO_CREATE_USER,
 				);
 			}
-			const hashedPassword = await ctx.context.password.hash(ctx.body.password);
-			await ctx.context.internalAdapter.linkAccount({
-				accountId: user.id,
-				providerId: "credential",
-				password: hashedPassword,
-				userId: user.id,
-			});
+			// Only create credential account if password is provided
+			if (ctx.body.password) {
+				const hashedPassword = await ctx.context.password.hash(
+					ctx.body.password,
+				);
+				await ctx.context.internalAdapter.linkAccount({
+					accountId: user.id,
+					providerId: "credential",
+					password: hashedPassword,
+					userId: user.id,
+				});
+			}
 			return ctx.json({
-				user: user as UserWithRole,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -527,7 +538,9 @@ export const adminUpdateUser = (opts: AdminOptions) =>
 				ctx.body.data,
 			);
 
-			return ctx.json(updatedUser as UserWithRole);
+			return ctx.json(
+				parseUserOutput(ctx.context.options, updatedUser) as UserWithRole,
+			);
 		},
 	);
 
@@ -588,9 +601,11 @@ const listUsersQuerySchema = z.object({
 		})
 		.or(z.number())
 		.or(z.boolean())
+		.or(z.array(z.string()))
+		.or(z.array(z.number()))
 		.optional(),
 	filterOperator: z
-		.enum(["eq", "ne", "lt", "lte", "gt", "gte", "contains"])
+		.enum(whereOperators)
 		.meta({
 			description: "The operator to use for the filter",
 		})
@@ -672,7 +687,7 @@ export const listUsers = (opts: AdminOptions) =>
 				});
 			}
 
-			if (ctx.query?.filterValue) {
+			if (ctx.query?.filterValue !== undefined) {
 				where.push({
 					field: ctx.query.filterField || "email",
 					operator: ctx.query.filterOperator || "eq",
@@ -696,14 +711,16 @@ export const listUsers = (opts: AdminOptions) =>
 					where.length ? where : undefined,
 				);
 				return ctx.json({
-					users: users as UserWithRole[],
+					users: users.map((user) =>
+						parseUserOutput(ctx.context.options, user),
+					) as UserWithRole[],
 					total: total,
 					limit: Number(ctx.query?.limit) || undefined,
 					offset: Number(ctx.query?.offset) || undefined,
 				});
 			} catch {
 				return ctx.json({
-					users: [],
+					users: [] as UserWithRole[],
 					total: 0,
 				});
 			}
@@ -788,9 +805,11 @@ export const listUserSessions = (opts: AdminOptions) =>
 
 			const sessions: SessionWithImpersonatedBy[] =
 				await ctx.context.internalAdapter.listSessions(ctx.body.userId);
-			return {
-				sessions: sessions,
-			};
+			return ctx.json({
+				sessions: sessions.map((s) =>
+					parseSessionOutput(ctx.context.options, s),
+				),
+			});
 		},
 	);
 
@@ -877,7 +896,7 @@ export const unbanUser = (opts: AdminOptions) =>
 				},
 			);
 			return ctx.json({
-				user: user,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -1004,7 +1023,7 @@ export const banUser = (opts: AdminOptions) =>
 			//revoke all sessions
 			await ctx.context.internalAdapter.deleteSessions(ctx.body.userId);
 			return ctx.json({
-				user: user,
+				user: parseUserOutput(ctx.context.options, user) as UserWithRole,
 			});
 		},
 	);
@@ -1101,15 +1120,29 @@ export const impersonateUser = (opts: AdminOptions) =>
 				opts.defaultRole ||
 				"user"
 			).split(",");
-			if (
-				opts.allowImpersonatingAdmins !== true &&
-				(targetUserRole.some((role) => adminRoles.includes(role)) ||
-					opts.adminUserIds?.includes(targetUser.id))
-			) {
-				throw APIError.from(
-					"FORBIDDEN",
-					ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
-				);
+			const isTargetAdmin =
+				targetUserRole.some((role) => adminRoles.includes(role)) ||
+				!!opts.adminUserIds?.includes(targetUser.id);
+			if (isTargetAdmin) {
+				const canImpersonateAdmins =
+					opts.allowImpersonatingAdmins === true ||
+					(await hasPermission(
+						{
+							userId: ctx.context.session.user.id,
+							role: ctx.context.session.user.role,
+							options: opts,
+							permissions: {
+								user: ["impersonate-admins"],
+							},
+						},
+						ctx,
+					));
+				if (!canImpersonateAdmins) {
+					throw APIError.from(
+						"FORBIDDEN",
+						ADMIN_ERROR_CODES.YOU_CANNOT_IMPERSONATE_ADMINS,
+					);
+				}
 			}
 
 			const session = await ctx.context.internalAdapter.createSession(
@@ -1140,7 +1173,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 				adminCookieProp.name,
 				`${ctx.context.session.session.token}:${dontRememberMeCookie || ""}`,
 				ctx.context.secret,
-				authCookies.sessionToken.options,
+				authCookies.sessionToken.attributes,
 			);
 			await setSessionCookie(
 				ctx,
@@ -1152,7 +1185,7 @@ export const impersonateUser = (opts: AdminOptions) =>
 			);
 			return ctx.json({
 				session: session,
-				user: targetUser,
+				user: parseUserOutput(ctx.context.options, targetUser) as UserWithRole,
 			});
 		},
 	);
@@ -1202,10 +1235,10 @@ export const stopImpersonating = () =>
 					message: "Failed to find user",
 				});
 			}
-			const adminCookieName =
-				ctx.context.createAuthCookie("admin_session").name;
+			const adminSessionCookie = ctx.context.createAuthCookie("admin_session");
+
 			const adminCookie = await ctx.getSignedCookie(
-				adminCookieName,
+				adminSessionCookie.name,
 				ctx.context.secret,
 			);
 
@@ -1225,11 +1258,11 @@ export const stopImpersonating = () =>
 			}
 			await ctx.context.internalAdapter.deleteSession(session.session.token);
 			await setSessionCookie(ctx, adminSession, !!dontRememberMeCookie);
-			await ctx.setSignedCookie(adminCookieName, "", ctx.context.secret, {
-				...ctx.context.authCookies.sessionToken.options,
-				maxAge: 0,
+			expireCookie(ctx, adminSessionCookie);
+			return ctx.json({
+				session: parseSessionOutput(ctx.context.options, adminSession.session),
+				user: parseUserOutput(ctx.context.options, adminSession.user),
 			});
-			return ctx.json(adminSession);
 		},
 	);
 
@@ -1626,22 +1659,13 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 	type PermissionType = {
 		[key in keyof Statements]?: Array<
 			Statements[key] extends readonly unknown[]
-				? Statements[key][number]
+				? ArrayElement<Statements[key]>
 				: never
 		>;
 	};
-	type PermissionExclusive =
-		| {
-				/**
-				 * @deprecated Use `permissions` instead
-				 */
-				permission: PermissionType;
-				permissions?: never | undefined;
-		  }
-		| {
-				permissions: PermissionType;
-				permission?: never | undefined;
-		  };
+	type PermissionExclusive = {
+		permissions: PermissionType;
+	};
 
 	return createAuthEndpoint(
 		"/admin/has-permission",
@@ -1657,11 +1681,6 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 								schema: {
 									type: "object",
 									properties: {
-										permission: {
-											type: "object",
-											description: "The permission to check",
-											deprecated: true,
-										},
 										permissions: {
 											type: "object",
 											description: "The permission to check",
@@ -1703,7 +1722,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 			},
 		},
 		async (ctx) => {
-			if (!ctx.body?.permission && !ctx.body?.permissions) {
+			if (!ctx.body?.permissions) {
 				throw new APIError("BAD_REQUEST", {
 					message: "invalid permission check. no permission(s) were passed.",
 				});
@@ -1738,7 +1757,7 @@ export const userHasPermission = <O extends AdminOptions>(opts: O) => {
 					userId: user.id,
 					role: user.role,
 					options: opts as AdminOptions,
-					permissions: (ctx.body.permissions ?? ctx.body.permission) as any,
+					permissions: ctx.body.permissions as any,
 				},
 				ctx,
 			);

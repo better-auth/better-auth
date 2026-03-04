@@ -1,6 +1,8 @@
 import type { LiteralString } from "@better-auth/core";
 import type { AuthorizeResponse, createAccessControl } from "./access";
 
+export type ArrayElement<T> = T extends readonly (infer E)[] ? E : never;
+
 export type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	? T extends {} // is assignable to {}
 		? {} extends T
@@ -10,7 +12,8 @@ export type IsExactlyEmptyObject<T> = keyof T extends never // no keys
 	: false;
 
 export type SubArray<T extends unknown[] | readonly unknown[] | any[]> =
-	T[number][];
+	| T[number][]
+	| ReadonlyArray<T[number]>;
 
 export type Subset<
 	K extends keyof R,

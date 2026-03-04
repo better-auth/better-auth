@@ -20,7 +20,9 @@ import {
 	decryptStoredClientSecret,
 	getJwtPlugin,
 	getStoredToken,
+	isPKCERequired,
 	parseClientMetadata,
+	resolveSubjectIdentifier,
 	storeToken,
 	validateClientCredentials,
 } from "./utils";
@@ -126,14 +128,14 @@ async function createIdToken(
 	scopes: string[],
 	nonce?: string,
 	sessionId?: string,
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const exp = iat + (opts.idTokenExpiresIn ?? 36000);
 	const userClaims = userNormalClaims(user, scopes);
-	const authTime = Math.floor(
-		(ctx.context.session?.session.createdAt ?? new Date(iat * 1000)).getTime() /
-			1000,
-	);
+	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+	const authTimeSec =
+		authTime != null ? Math.floor(authTime.getTime() / 1000) : undefined;
 	// TODO: this should be validated against the login process
 	// - bronze : password only
 	// - silver : mfa
@@ -152,12 +154,12 @@ async function createIdToken(
 		: getJwtPlugin(ctx.context).options;
 
 	const payload: JWTPayload = {
-		...customClaims,
 		...userClaims,
-		auth_time: authTime,
+		...customClaims,
+		auth_time: authTimeSec,
 		acr,
 		iss: jwtPluginOptions?.jwt?.issuer ?? ctx.context.baseURL,
-		sub: user.id,
+		sub: resolvedSub,
 		aud: client.clientId,
 		nonce,
 		iat,
@@ -271,6 +273,7 @@ async function createRefreshToken(
 	scopes: string[],
 	payload: JWTPayload,
 	originalRefresh?: OAuthRefreshToken<Scope[]> & { id: string },
+	authTime?: Date,
 ) {
 	const iat = payload.iat ?? Math.floor(Date.now() / 1000);
 	const exp = payload?.exp ?? iat + (opts.refreshTokenExpiresIn ?? 2592000);
@@ -303,6 +306,7 @@ async function createRefreshToken(
 			sessionId,
 			userId: user.id,
 			referenceId,
+			authTime,
 			scopes,
 			createdAt: new Date(iat * 1000),
 			expiresAt: new Date(exp * 1000),
@@ -323,7 +327,7 @@ async function checkResource(
 	opts: OAuthOptions<Scope[]>,
 	scopes: string[],
 ) {
-	let resource: string | string[] | undefined = ctx.body.resource;
+	const resource: string | string[] | undefined = ctx.body.resource;
 	const audience =
 		typeof resource === "string"
 			? [resource]
@@ -370,6 +374,7 @@ async function createUserTokens(
 	additional?: {
 		refreshToken?: OAuthRefreshToken<Scope[]> & { id: string };
 	},
+	authTime?: Date,
 ) {
 	const iat = Math.floor(Date.now() / 1000);
 	const defaultExp = iat + (opts.accessTokenExpiresIn ?? 3600);
@@ -409,6 +414,7 @@ async function createUserTokens(
 						sid: sessionId,
 					},
 					additional?.refreshToken,
+					authTime,
 				)
 			: undefined;
 
@@ -459,10 +465,20 @@ async function createUserTokens(
 							sid: sessionId,
 						},
 						additional?.refreshToken,
+						authTime,
 					)
 				: undefined,
 		isIdToken
-			? createIdToken(ctx, opts, user, client, scopes, nonce, sessionId)
+			? createIdToken(
+					ctx,
+					opts,
+					user,
+					client,
+					scopes,
+					nonce,
+					sessionId,
+					authTime,
+				)
 			: undefined,
 	]);
 
@@ -508,9 +524,9 @@ async function checkVerificationValue(
 	}
 
 	// Delete used code
-	if (verification?.id) {
-		await ctx.context.internalAdapter.deleteVerificationValue(verification.id);
-	}
+	await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+		await storeToken(opts.storeTokens, code, "authorization_code"),
+	);
 
 	// Check verification
 	if (!verification.expiresAt || verification.expiresAt < new Date()) {
@@ -609,10 +625,9 @@ async function handleAuthorizationCodeGrant(
 	const isAuthCodeWithSecret = client_id && client_secret;
 	const isAuthCodeWithPkce = client_id && code && code_verifier;
 
-	if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+	if (!isAuthCodeWithSecret && !isAuthCodeWithPkce) {
 		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"Missing a required credential value for authorization_code grant",
+			error_description: "Either code_verifier or client_secret is required",
 			error: "invalid_request",
 		});
 	}
@@ -642,31 +657,70 @@ async function handleAuthorizationCodeGrant(
 		scopes,
 	);
 
-	/** Check challenge */
-	const challenge =
-		code_verifier && verificationValue.query?.code_challenge_method === "S256"
-			? await generateCodeChallenge(code_verifier)
-			: undefined;
-	if (
-		// AuthCodeWithSecret - Required if sent
-		isAuthCodeWithSecret &&
-		(challenge || verificationValue?.query?.code_challenge) &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+	// Parse scopes from the authorization request
+	const requestedScopes =
+		(verificationValue.query?.scope as string)?.split(" ") || [];
+
+	// Check if PKCE is required for this client
+	const pkceRequired = isPKCERequired(client, requestedScopes);
+
+	// Validate credentials based on requirements
+	if (pkceRequired) {
+		// PKCE is required - must have code_verifier
+		if (!isAuthCodeWithPkce) {
+			throw new APIError("BAD_REQUEST", {
+				error_description: "PKCE is required for this client",
+				error: "invalid_request",
+			});
+		}
+	} else {
+		// PKCE is optional - must have either PKCE or client_secret
+		if (!(isAuthCodeWithPkce || isAuthCodeWithSecret)) {
+			throw new APIError("BAD_REQUEST", {
+				error_description:
+					"Either PKCE (code_verifier) or client authentication (client_secret) is required",
+				error: "invalid_request",
+			});
+		}
 	}
-	if (
-		// AuthCodeWithPkce - Always required
-		isAuthCodeWithPkce &&
-		challenge !== verificationValue.query?.code_challenge
-	) {
-		throw new APIError("UNAUTHORIZED", {
-			error_description: "code verification failed",
-			error: "invalid_request",
-		});
+
+	/** Check PKCE challenge if verifier is provided */
+	const pkceUsedInAuth = !!verificationValue.query?.code_challenge;
+	const pkceUsedInToken = !!code_verifier;
+
+	if (pkceUsedInAuth || pkceUsedInToken) {
+		// PKCE was used - must verify consistency
+
+		if (pkceUsedInAuth && !pkceUsedInToken) {
+			// PKCE was used in authorization but not in token exchange
+			throw new APIError("UNAUTHORIZED", {
+				error_description:
+					"code_verifier required because PKCE was used in authorization",
+				error: "invalid_request",
+			});
+		}
+
+		if (!pkceUsedInAuth && pkceUsedInToken) {
+			// PKCE was not used in authorization but verifier provided
+			throw new APIError("UNAUTHORIZED", {
+				error_description:
+					"code_verifier provided but PKCE was not used in authorization",
+				error: "invalid_request",
+			});
+		}
+
+		// Both sides used PKCE - verify the challenge
+		const challenge =
+			verificationValue.query?.code_challenge_method === "S256"
+				? await generateCodeChallenge(code_verifier!)
+				: undefined;
+
+		if (challenge !== verificationValue.query?.code_challenge) {
+			throw new APIError("UNAUTHORIZED", {
+				error_description: "code verification failed",
+				error: "invalid_request",
+			});
+		}
 	}
 
 	/** Get user */
@@ -703,6 +757,11 @@ async function handleAuthorizationCodeGrant(
 		});
 	}
 
+	const authTime =
+		verificationValue.authTime != null
+			? new Date(verificationValue.authTime)
+			: new Date(session.createdAt);
+
 	return createUserTokens(
 		ctx,
 		opts,
@@ -712,6 +771,8 @@ async function handleAuthorizationCodeGrant(
 		verificationValue.referenceId,
 		session.id,
 		verificationValue.query?.nonce,
+		undefined,
+		authTime,
 	);
 }
 
@@ -932,7 +993,7 @@ async function handleRefreshTokenGrant(
 	if (!refreshToken) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "session not found",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	if (refreshToken.clientId !== client_id) {
@@ -944,7 +1005,7 @@ async function handleRefreshTokenGrant(
 	if (refreshToken.expiresAt < new Date()) {
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 	// Replay revoke (delete all tokens for that user-client)
@@ -964,7 +1025,7 @@ async function handleRefreshTokenGrant(
 		});
 		throw new APIError("BAD_REQUEST", {
 			error_description: "invalid refresh token",
-			error: "invalid_request",
+			error: "invalid_grant",
 		});
 	}
 
@@ -1001,6 +1062,9 @@ async function handleRefreshTokenGrant(
 		});
 	}
 
+	const authTime =
+		refreshToken.authTime != null ? new Date(refreshToken.authTime) : undefined;
+
 	// Generate new tokens
 	return createUserTokens(
 		ctx,
@@ -1014,5 +1078,6 @@ async function handleRefreshTokenGrant(
 		{
 			refreshToken,
 		},
+		authTime,
 	);
 }

@@ -65,7 +65,7 @@ const cleanDoubleSlashes = (input: string = "") => {
 };
 
 const issuerToEndpoints = (issuer?: string | undefined) => {
-	let baseUrl = issuer || "https://gitlab.com";
+	const baseUrl = issuer || "https://gitlab.com";
 	return {
 		authorizationEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/authorize`),
 		tokenEndpoint: cleanDoubleSlashes(`${baseUrl}/oauth/token`),
@@ -141,7 +141,7 @@ export const gitlab = (options: GitlabOptions) => {
 			return {
 				user: {
 					id: profile.id,
-					name: profile.name ?? profile.username,
+					name: profile.name ?? profile.username ?? "",
 					email: profile.email,
 					image: profile.avatar_url,
 					emailVerified: profile.email_verified ?? false,

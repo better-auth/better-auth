@@ -57,6 +57,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+	vi.useRealTimers();
 	server.resetHandlers();
 	server.use(...handlers);
 });
@@ -91,6 +92,7 @@ describe("account", async () => {
 		googleVerifyIdTokenMock = vi.spyOn(googleProvider, "verifyIdToken");
 		googleGetUserInfoMock = vi.spyOn(googleProvider, "getUserInfo");
 	});
+
 	afterEach(() => {
 		googleVerifyIdTokenMock.mockClear();
 		googleGetUserInfoMock.mockClear();
@@ -188,6 +190,39 @@ describe("account", async () => {
 
 			expect(accessToken.error).toBeNull();
 			expect(accessToken.data?.accessToken).toBe("test");
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8345
+	 */
+	it("should get account info using provider accountId (not internal id)", async () => {
+		const { runWithUser: runWithClient2 } = await signInWithTestUser();
+		await runWithClient2(async () => {
+			const accounts = await client.listAccounts();
+			const googleAccount = accounts.data?.find(
+				(a) => a.providerId === "google",
+			);
+			expect(googleAccount).toBeDefined();
+
+			// The internal DB id must differ from the provider-issued accountId
+			expect(googleAccount!.id).not.toBe(googleAccount!.accountId);
+
+			// accountInfo internally calls getAccessToken with account.accountId.
+			// Before the fix, it incorrectly passed account.id (internal DB id),
+			// causing getAccessToken to fail the account lookup.
+			const info = await client.$fetch("/account-info", {
+				query: { accountId: googleAccount!.accountId },
+				method: "GET",
+			});
+
+			expect(info.data).toMatchObject({
+				user: expect.objectContaining({
+					id: expect.any(String),
+					email: expect.any(String),
+				}),
+				data: expect.any(Object),
+			});
 		});
 	});
 
@@ -512,6 +547,315 @@ describe("account", async () => {
 
 		expect(accessTokenRes.data).toBeDefined();
 		expect(accessTokenRes.data?.accessToken).toBe("test");
+	});
+
+	it("should persist refreshed idToken in database during getAccessToken auto-refresh", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: false,
+			},
+		});
+
+		const ctx = await auth.$context;
+		const headers = new Headers();
+		email = "persist-id-token-db@test.com";
+
+		const now = Math.floor(Date.now() / 1000);
+		const oldIdToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: now + 3600,
+				sub: "persist-id-token-db",
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: "old-id-token",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+		const newIdToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: now + 7200,
+				sub: "persist-id-token-db",
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: "new-id-token",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+		let refreshTokenCalls = 0;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const body = await request.text();
+				const grantType = new URLSearchParams(body).get("grant_type");
+
+				if (grantType === "refresh_token") {
+					refreshTokenCalls += 1;
+					return HttpResponse.json({
+						access_token: "refreshed-access-token",
+						refresh_token: "refreshed-refresh-token",
+						expires_in: 3600,
+						id_token: newIdToken,
+					});
+				}
+
+				return HttpResponse.json({
+					access_token: "initial-access-token",
+					refresh_token: "initial-refresh-token",
+					expires_in: 1,
+					id_token: oldIdToken,
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		const firstAccessToken = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+				onSuccess: cookieSetter(headers),
+			},
+		);
+		expect(firstAccessToken.error).toBeFalsy();
+		expect(firstAccessToken.data?.idToken).toBe(newIdToken);
+
+		const secondAccessToken = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+		expect(secondAccessToken.error).toBeFalsy();
+		expect(secondAccessToken.data?.idToken).toBe(newIdToken);
+		expect(refreshTokenCalls).toBe(1);
+
+		const account = await ctx.adapter.findOne<Account>({
+			model: "account",
+			where: [{ field: "providerId", value: "google" }],
+		});
+		expect(account).toBeTruthy();
+		expect(account?.idToken).toBe(newIdToken);
+	});
+
+	it("should persist refreshed idToken in account cookie during getAccessToken auto-refresh in stateless mode", async () => {
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+		});
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+
+		const headers = new Headers();
+		email = "persist-id-token-cookie@test.com";
+
+		const now = Math.floor(Date.now() / 1000);
+		const oldIdToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: now + 3600,
+				sub: "persist-id-token-cookie",
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: "old-cookie-id-token",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+		const newIdToken = await signJWT(
+			{
+				email,
+				email_verified: true,
+				name: "First Last",
+				picture: "https://lh3.googleusercontent.com/a-/AOh14GjQ4Z7Vw",
+				exp: now + 7200,
+				sub: "persist-id-token-cookie",
+				iat: now,
+				aud: "test",
+				azp: "test",
+				nbf: now,
+				iss: "test",
+				locale: "en",
+				jti: "new-cookie-id-token",
+				given_name: "First",
+				family_name: "Last",
+			} satisfies GoogleProfile,
+			DEFAULT_SECRET,
+		);
+
+		let refreshTokenCalls = 0;
+		server.use(
+			http.post("https://oauth2.googleapis.com/token", async ({ request }) => {
+				const body = await request.text();
+				const grantType = new URLSearchParams(body).get("grant_type");
+
+				if (grantType === "refresh_token") {
+					refreshTokenCalls += 1;
+					return HttpResponse.json({
+						access_token: "refreshed-cookie-access-token",
+						refresh_token: "refreshed-cookie-refresh-token",
+						expires_in: 3600,
+						id_token: newIdToken,
+					});
+				}
+
+				return HttpResponse.json({
+					access_token: "initial-cookie-access-token",
+					refresh_token: "initial-cookie-refresh-token",
+					expires_in: 1,
+					id_token: oldIdToken,
+				});
+			}),
+		);
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		expect(signInRes.data).toMatchObject({
+			url: expect.stringContaining("google.com"),
+			redirect: true,
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		await client.$fetch("/callback/google", {
+			query: {
+				state,
+				code: "test",
+			},
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		let refreshedAccountCookie: string | undefined;
+		const firstAccessToken = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+				onSuccess(context) {
+					cookieSetter(headers)(context);
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie =
+						cookies.get(accountDataCookieName)?.value || undefined;
+				},
+			},
+		);
+		expect(firstAccessToken.error).toBeFalsy();
+		expect(firstAccessToken.data?.idToken).toBe(newIdToken);
+		expect(refreshedAccountCookie).toBeDefined();
+		await expect(
+			symmetricDecodeJWT(
+				refreshedAccountCookie!,
+				ctx.secret,
+				"better-auth-account",
+			),
+		).resolves.toMatchObject({
+			idToken: newIdToken,
+		});
+
+		const secondAccessToken = await client.getAccessToken(
+			{
+				providerId: "google",
+			},
+			{
+				headers,
+			},
+		);
+		expect(secondAccessToken.error).toBeFalsy();
+		expect(secondAccessToken.data?.idToken).toBe(newIdToken);
+		expect(refreshTokenCalls).toBeGreaterThan(0);
 	});
 
 	it("should NOT chunk account data cookies when exceeding 4KB", async () => {
@@ -853,5 +1197,209 @@ describe("account", async () => {
 
 		expect(reLoginAccessToken.error).toBeFalsy();
 		expect(reLoginAccessToken.data?.accessToken).toBe("test");
+	});
+
+	it("should refresh account_data cookie when session is refreshed", async () => {
+		const sessionExpiresIn = 60 * 60 * 24 * 7;
+		const sessionUpdateAge = 10;
+
+		const { auth, client, cookieSetter } = await getTestInstance({
+			socialProviders: {
+				google: {
+					clientId: "test",
+					clientSecret: "test",
+					enabled: true,
+				},
+			},
+			account: {
+				storeAccountCookie: true,
+			},
+			session: {
+				expiresIn: sessionExpiresIn,
+				updateAge: sessionUpdateAge,
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+		const sessionDataCookieName = ctx.authCookies.sessionData.name;
+
+		const headers = new Headers();
+		email = "refresh-account-cookie-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: {
+				onSuccess: cookieSetter(headers),
+			},
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		let initialAccountCookieSet = false;
+		let initialSessionCookieSet = false;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				initialAccountCookieSet = !!cookies.get(accountDataCookieName)?.value;
+				initialSessionCookieSet = !!cookies.get(sessionDataCookieName)?.value;
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		expect(initialAccountCookieSet).toBe(true);
+		expect(initialSessionCookieSet).toBe(true);
+
+		const currentSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(currentSession.data).not.toBeNull();
+		const sessionToken = currentSession.data?.session?.token;
+
+		// Make session due for refresh
+		const pastExpiresAt = new Date(
+			Date.now() + sessionExpiresIn * 1000 - sessionUpdateAge * 1000 - 1000,
+		);
+		if (sessionToken) {
+			await ctx.adapter.update({
+				model: "session",
+				where: [{ field: "token", value: sessionToken }],
+				update: { expiresAt: pastExpiresAt },
+			});
+		}
+
+		let refreshedAccountCookie = false;
+		let refreshedSessionCookie = false;
+
+		await client.getSession({
+			query: { disableCookieCache: true },
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie = !!cookies.get(accountDataCookieName)?.value;
+					refreshedSessionCookie = !!cookies.get(sessionDataCookieName)?.value;
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		expect(refreshedSessionCookie).toBe(true);
+		expect(refreshedAccountCookie).toBe(true);
+	});
+
+	it("should refresh account_data cookie in stateless mode", async () => {
+		const refreshUpdateAge = 60;
+
+		const { auth, client, cookieSetter } = await getTestInstance({
+			database: undefined as any,
+			socialProviders: {
+				google: { clientId: "test", clientSecret: "test", enabled: true },
+			},
+			session: {
+				cookieCache: {
+					enabled: true,
+					strategy: "jwe",
+					maxAge: 300,
+					refreshCache: { updateAge: refreshUpdateAge },
+				},
+			},
+		});
+
+		const ctx = await auth.$context;
+		const accountDataCookieName = ctx.authCookies.accountData.name;
+		const sessionDataCookieName = ctx.authCookies.sessionData.name;
+
+		expect(
+			(ctx.options as { account?: { storeAccountCookie?: boolean } }).account
+				?.storeAccountCookie,
+		).toBe(true);
+
+		const headers = new Headers();
+		email = "stateless-refresh-test@test.com";
+
+		const signInRes = await client.signIn.social({
+			provider: "google",
+			callbackURL: "/callback",
+			fetchOptions: { onSuccess: cookieSetter(headers) },
+		});
+
+		const state =
+			signInRes.data && "url" in signInRes.data && signInRes.data.url
+				? new URL(signInRes.data.url).searchParams.get("state") || ""
+				: "";
+
+		let initialAccountCookieSet = false;
+		let initialSessionCookieSet = false;
+
+		await client.$fetch("/callback/google", {
+			query: { state, code: "test" },
+			headers,
+			method: "GET",
+			onError(context) {
+				expect(context.response.status).toBe(302);
+				const cookies = parseSetCookieHeader(
+					context.response.headers.get("set-cookie") || "",
+				);
+				initialAccountCookieSet = !!cookies.get(accountDataCookieName)?.value;
+				initialSessionCookieSet = !!cookies.get(sessionDataCookieName)?.value;
+				cookieSetter(headers)({ response: context.response });
+			},
+		});
+
+		expect(initialAccountCookieSet).toBe(true);
+		expect(initialSessionCookieSet).toBe(true);
+
+		const firstSession = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(firstSession.data).not.toBeNull();
+		const sessionToken = firstSession.data?.session?.token;
+
+		if (sessionToken) {
+			await ctx.internalAdapter.deleteSession(sessionToken);
+		}
+
+		vi.useFakeTimers();
+		await vi.advanceTimersByTimeAsync(1000 * 241);
+
+		let refreshedAccountCookie = false;
+		let refreshedSessionCookie = false;
+
+		await client.getSession({
+			fetchOptions: {
+				headers,
+				onSuccess(context) {
+					const cookies = parseSetCookieHeader(
+						context.response.headers.get("set-cookie") || "",
+					);
+					refreshedAccountCookie = !!cookies.get(accountDataCookieName)?.value;
+					refreshedSessionCookie = !!cookies.get(sessionDataCookieName)?.value;
+					cookieSetter(headers)(context);
+				},
+			},
+		});
+
+		vi.useRealTimers();
+
+		expect(refreshedSessionCookie).toBe(true);
+		expect(refreshedAccountCookie).toBe(true);
 	});
 });

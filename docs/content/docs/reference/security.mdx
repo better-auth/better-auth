@@ -10,6 +10,14 @@ This page contains information about security features of Better Auth.
 
 Better Auth uses the `scrypt` algorithm to hash passwords by default. This algorithm is designed to be memory-hard and CPU-intensive, making it resistant to brute-force attacks. You can customize the password hashing function by setting the `password` option in the configuration. This option should include a `hash` function to hash passwords and a `verify` function to verify them.
 
+## Secret Rotation
+
+Better Auth supports non-destructive rotation of `BETTER_AUTH_SECRET`. When you configure versioned secrets via the `secrets` option or the `BETTER_AUTH_SECRETS` environment variable, all new encrypted data includes a key version identifier. Decryption performs a direct key lookup by version — no trial decryption.
+
+Legacy data encrypted before rotation (bare-hex format) is still decryptable using the original `BETTER_AUTH_SECRET` as a fallback. No database migrations or downtime are required. Data is lazily re-encrypted with the current key when it is next written.
+
+See the [`secrets` option](/docs/reference/options#secrets) for configuration details.
+
 ## Session Management
 
 ### Session Expiration
@@ -156,6 +164,36 @@ This ensures that Better Auth only accepts IP addresses from your trusted proxy'
 - In dev/test environments, if the IP cannot be retrieved from headers, 127.0.0.1 is used as a fallback.
 </Callout>
 
+## Trusted Proxy Headers
+
+If your application runs behind a reverse proxy or load balancer, Better Auth can derive the base URL from the inbound request's `X-Forwarded-Host` and `X-Forwarded-Proto` headers. This is useful when your app is accessible from multiple domains (e.g. `example.com` and `app.example.dev`) and you don't want to hardcode a single `baseURL` in the configuration.
+
+When `trustedProxyHeaders` is enabled and no `baseURL` is set in the configuration (or via environment variables), Better Auth uses the forwarded headers to construct the base URL on each request. This means OAuth callbacks, email verification links, and redirects will automatically use whichever domain the user loaded the app on.
+
+```typescript
+{
+  advanced: {
+    trustedProxyHeaders: true
+  }
+}
+```
+
+<Callout type="warning">
+Only enable this option if you trust the proxy headers reaching your application. Your reverse proxy or load balancer must be configured to set `X-Forwarded-Host` and `X-Forwarded-Proto` correctly, and end users must not be able to set these headers directly. If untrusted clients can forge these headers, they could manipulate redirects and callback URLs.
+</Callout>
+
+When enabled, the base URL resolution follows this priority:
+
+1. Static `baseURL` from the configuration (if set, proxy headers are ignored)
+2. Environment variables (`BETTER_AUTH_URL`, `NEXT_PUBLIC_BETTER_AUTH_URL`, etc.)
+3. `X-Forwarded-Host` + `X-Forwarded-Proto` headers (when `trustedProxyHeaders` is `true`)
+4. The request URL origin as a final fallback
+
+If you're serving your app from multiple approved domains, you'll typically want to:
+- **Omit `baseURL`** from the configuration so it's derived per-request from the proxy headers
+- Set **`trustedOrigins`** to an allowlist of your approved domains (see below)
+- Leave `crossSubDomainCookies` disabled — cookies are host-only by default, which means each domain gets its own independent session
+
 ## Trusted Origins
 
 Trusted origins prevent CSRF attacks and block open redirects. You can set a list of trusted origins in the `trustedOrigins` configuration option. Requests from origins not on this list are automatically blocked.
@@ -232,6 +270,12 @@ You can also dynamically set the list of trusted origins by providing a function
 <Callout>
 **Important**: This function will be invoked per incoming request, so be careful if you decide to dynamically fetch your list of trusted domains.
 </Callout>
+
+## Email Enumeration Protection
+
+Better Auth prevents email enumeration on the sign-up and change-email endpoints. When `requireEmailVerification` is enabled or `autoSignIn` is set to `false`, the sign-up endpoint returns the same `200` response whether the email is already registered or not, following [OWASP authentication best practices](https://cheatsheetseries.owasp.org/cheatsheets/Authentication_Cheat_Sheet.html#authentication-and-error-messages). Timing attacks are mitigated by simulating password hashing on duplicate sign-up attempts.
+
+See [Email and Password — Email Enumeration Protection](/docs/authentication/email-password#email-enumeration-protection) for configuration details.
 
 ## Reporting Vulnerabilities
 
