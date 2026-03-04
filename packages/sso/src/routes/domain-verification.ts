@@ -1,4 +1,3 @@
-import type { Verification } from "better-auth";
 import {
 	APIError,
 	createAuthEndpoint,
@@ -101,32 +100,21 @@ export const requestDomainVerification = (options: SSOOptions) => {
 			);
 
 			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: identifier,
-						},
-						{ field: "expiresAt", value: new Date(), operator: "gt" },
-					],
-				});
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
 
-			if (activeVerification) {
+			if (
+				activeVerification &&
+				new Date(activeVerification.expiresAt) > new Date()
+			) {
 				ctx.setStatus(201);
 				return ctx.json({ domainVerificationToken: activeVerification.value });
 			}
 
 			const domainVerificationToken = generateRandomString(24);
-			await ctx.context.adapter.create<Verification>({
-				model: "verification",
-				data: {
-					identifier,
-					createdAt: new Date(),
-					updatedAt: new Date(),
-					value: domainVerificationToken,
-					expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
-				},
+			await ctx.context.internalAdapter.createVerificationValue({
+				identifier,
+				value: domainVerificationToken,
+				expiresAt: new Date(Date.now() + 3600 * 24 * 7 * 1000), // 1 week
 			});
 
 			ctx.setStatus(201);
@@ -225,18 +213,12 @@ export const verifyDomain = (options: SSOOptions) => {
 			}
 
 			const activeVerification =
-				await ctx.context.adapter.findOne<Verification>({
-					model: "verification",
-					where: [
-						{
-							field: "identifier",
-							value: identifier,
-						},
-						{ field: "expiresAt", value: new Date(), operator: "gt" },
-					],
-				});
+				await ctx.context.internalAdapter.findVerificationValue(identifier);
 
-			if (!activeVerification) {
+			if (
+				!activeVerification ||
+				new Date(activeVerification.expiresAt) <= new Date()
+			) {
 				throw new APIError("NOT_FOUND", {
 					message: "No pending domain verification exists",
 					code: "NO_PENDING_VERIFICATION",
