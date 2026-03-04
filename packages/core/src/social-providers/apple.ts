@@ -147,7 +147,7 @@ export const apple = (options: AppleOptions) => {
 					return refreshAccessToken({
 						refreshToken,
 						options,
-						tokenEndpoint: "https://appleid.apple.com/auth/token",
+						tokenEndpoint,
 					});
 				},
 		async getUserInfo(token) {
