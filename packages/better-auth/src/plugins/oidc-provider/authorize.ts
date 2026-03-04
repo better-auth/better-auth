@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "@better-auth/core/error";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
@@ -87,9 +87,10 @@ export async function authorize(
 				(url) => url === query.redirect_uri,
 			);
 			if (!validRedirectURI) {
-				throw new APIError("BAD_REQUEST", {
-					message: "Invalid redirect URI",
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.INVALID_REDIRECT_URL,
+				);
 			}
 			return handleRedirect(
 				formatErrorURL(
