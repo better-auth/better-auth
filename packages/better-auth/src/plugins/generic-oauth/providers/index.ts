@@ -8,6 +8,7 @@
  * import { betterAuth } from 'better-auth';
  * import {
  *  genericOAuth,
+ *  asgardeo,
  *  auth0,
  *  gumroad,
  *  hubspot,
@@ -23,6 +24,7 @@
  *   plugins: [
  *     genericOAuth({
  *       config: [
+ *		   asgardeo({ clientId, clientSecret, issuer }),
  *         okta({ clientId, clientSecret, issuer }),
  *         auth0({ clientId, clientSecret, domain }),
  *         microsoftEntraId({ clientId, clientSecret, tenantId }),
@@ -36,6 +38,7 @@
  * ```
  */
 
+export { type AsgardeoOptions, asgardeo } from "./asgardeo";
 export { type Auth0Options, auth0 } from "./auth0";
 export { type GumroadOptions, gumroad } from "./gumroad";
 export { type HubSpotOptions, hubspot } from "./hubspot";
