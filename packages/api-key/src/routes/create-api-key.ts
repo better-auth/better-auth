@@ -139,7 +139,7 @@ export function createApiKey<O extends ApiKeyOptions>({
 		additionalFieldsSchema.shape,
 	);
 	type AdditionalFields = InferAdditionalFieldsFromPluginOptions<"apikey", O>;
-	type CreateApiKeyBody = z.infer<typeof createApiKeyBodySchema> &
+	type CreateApiKeyBody = z.input<typeof createApiKeyBodySchema> &
 		AdditionalFields;
 	return createAuthEndpoint(
 		"/api-key/create",

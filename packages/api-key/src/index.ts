@@ -11,16 +11,23 @@ import type { ApiKeyEndpoints, PredefinedApiKeyOptions } from "./routes";
 import { createApiKeyRoutes, deleteAllExpiredApiKeys } from "./routes";
 import { validateApiKey } from "./routes/verify-api-key";
 import { apiKeySchema } from "./schema";
-import type { ApiKeyConfigurationOptions, ApiKeyOptions } from "./types";
+import type {
+	ApiKeyConfigurationOptions,
+	ApiKeyOptions,
+	InferApiKey,
+} from "./types";
 import { getDate, getIp } from "./utils";
 
 export type DefaultApiKeyPlugin<O extends ApiKeyOptions> = {
 	id: "api-key";
 	$ERROR_CODES: typeof API_KEY_ERROR_CODES;
-	hooks: BetterAuthPlugin["hooks"];
 	endpoints: ApiKeyEndpoints<O>;
 	schema: ReturnType<typeof apiKeySchema>;
 	configurations: PredefinedApiKeyOptions[];
+	$Infer: {
+		ApiKey: InferApiKey<O>;
+	};
+	options: NoInfer<O>;
 };
 
 export interface ApiKeyCreator {
@@ -190,7 +197,7 @@ export function apiKey<O extends ApiKeyOptions>(
 		additionalFields,
 	});
 
-	return {
+	const plugin = {
 		id: "api-key",
 		$ERROR_CODES: API_KEY_ERROR_CODES,
 		hooks: {
@@ -411,7 +418,12 @@ export function apiKey<O extends ApiKeyOptions>(
 		},
 		schema,
 		configurations,
+		$Infer: {} as {
+			ApiKey: InferApiKey<O>;
+		},
+		options,
 	} satisfies BetterAuthPlugin & { configurations: PredefinedApiKeyOptions[] };
+	return plugin;
 }
 
 export type * from "./types";

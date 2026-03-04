@@ -1,13 +1,30 @@
 import type { BetterAuthClientPlugin } from "@better-auth/core";
-import type { apiKey } from ".";
+import type { DBFieldAttribute } from "@better-auth/core/db";
+import type { DefaultApiKeyPlugin } from ".";
 import { API_KEY_ERROR_CODES } from "./error-codes";
 
 export * from "./error-codes";
 
-export const apiKeyClient = () => {
+interface ApiKeyClientOptions {
+	schema?:
+		| {
+				apikey?: {
+					additionalFields?: {
+						[key: string]: DBFieldAttribute;
+					};
+				};
+		  }
+		| undefined;
+}
+
+export const apiKeyClient = <CO extends ApiKeyClientOptions>(
+	_options?: CO | undefined,
+) => {
 	return {
 		id: "api-key",
-		$InferServerPlugin: {} as ReturnType<typeof apiKey>,
+		$InferServerPlugin: {} as DefaultApiKeyPlugin<{
+			schema: CO["schema"];
+		}>,
 		pathMethods: {
 			"/api-key/create": "POST",
 			"/api-key/delete": "POST",

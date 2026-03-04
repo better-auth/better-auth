@@ -131,7 +131,7 @@ export function updateApiKey<O extends ApiKeyOptions>({
 	type AdditionalFields = Partial<
 		InferAdditionalFieldsFromPluginOptions<"apikey", O>
 	>;
-	type UpdateApiKeyBody = z.infer<typeof updateApiKeyBodySchema> &
+	type UpdateApiKeyBody = z.input<typeof updateApiKeyBodySchema> &
 		AdditionalFields;
 	return createAuthEndpoint(
 		"/api-key/update",
