@@ -52,7 +52,7 @@ describe("forget password", async () => {
 			email: testUser.email,
 			redirectTo: "http://malicious.com",
 		});
-		
+
 		expect(res.error?.status).toBe(403);
 		expect(res.error?.message).toBe("Invalid redirectURL");
 	});
