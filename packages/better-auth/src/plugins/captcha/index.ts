@@ -35,9 +35,24 @@ export const captcha = (options: CaptchaOptions) =>
 				if (pathname.endsWith("//")) pathname = pathname.slice(0, -1);
 				if (pathname.startsWith("//")) pathname = pathname.slice(1);
 
-				// Must be `startsWith` not `includes` otherwise it might match endpoints unintentionally.
-				// E.g. `/sign-in/email` could match `/sign-in/email-otp`
-				if (!endpoints.some((endpoint) => pathname.startsWith(endpoint))) {
+				// we don't want to accidentally block email-otp endpoint.
+				const blockedPaths = ["/sign-in/email-otp"].reduce<string[]>(
+					(acc, curr) => {
+						// if custom endpoints includes a blocked path, we dont include the blocked path in the blocked paths array
+						if (options.endpoints?.length && options.endpoints.includes(curr)) {
+							return acc;
+						}
+						return [...acc, curr];
+					},
+					[],
+				);
+				const match = endpoints.some((endpoint) => {
+					return (
+						pathname.includes(endpoint) && !blockedPaths.includes(endpoint)
+					);
+				});
+
+				if (!match) {
 					return undefined;
 				}
 
