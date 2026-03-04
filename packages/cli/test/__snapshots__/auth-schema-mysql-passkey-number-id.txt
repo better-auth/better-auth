@@ -96,7 +96,9 @@ export const passkey = mysqlTable(
     backedUp: boolean("backed_up").notNull(),
     transports: text("transports"),
     createdAt: timestamp("created_at", { fsp: 3 }),
-    updatedAt: timestamp("updated_at", { fsp: 3 }),
+    updatedAt: timestamp("updated_at", { fsp: 3 }).$onUpdate(
+      () => /* @__PURE__ */ new Date(),
+    ),
     aaguid: text("aaguid"),
   },
   (table) => [

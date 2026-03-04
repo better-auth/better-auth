@@ -102,7 +102,9 @@ export const passkey = sqliteTable(
     backedUp: integer("backed_up", { mode: "boolean" }).notNull(),
     transports: text("transports"),
     createdAt: integer("created_at", { mode: "timestamp_ms" }),
-    updatedAt: integer("updated_at", { mode: "timestamp_ms" }),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" }).$onUpdate(
+      () => /* @__PURE__ */ new Date(),
+    ),
     aaguid: text("aaguid"),
   },
   (table) => [
