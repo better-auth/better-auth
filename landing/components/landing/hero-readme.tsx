@@ -1328,8 +1328,8 @@ function formatCount(num: number | null | undefined): string {
 }
 
 const footerLinks = [
-	{ label: "Terms", href: "/terms" },
-	{ label: "Privacy", href: "/privacy" },
+	{ label: "Terms", href: "/legal/terms" },
+	{ label: "Privacy", href: "/legal/privacy" },
 	{ label: "Blog", href: "/blog" },
 	{ label: "Community", href: "/community" },
 	{ label: "Changelog", href: "/changelog" },
