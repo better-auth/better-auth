@@ -987,12 +987,21 @@ importers:
       '@better-auth/core':
         specifier: workspace:*
         version: link:../core
+      '@better-auth/drizzle-adapter':
+        specifier: workspace:*
+        version: link:../drizzle-adapter
       '@better-auth/kysely-adapter':
         specifier: workspace:*
         version: link:../kysely-adapter
       '@better-auth/memory-adapter':
         specifier: workspace:*
         version: link:../memory-adapter
+      '@better-auth/mongo-adapter':
+        specifier: workspace:*
+        version: link:../mongo-adapter
+      '@better-auth/prisma-adapter':
+        specifier: workspace:*
+        version: link:../prisma-adapter
       '@better-auth/telemetry':
         specifier: workspace:*
         version: link:../telemetry
@@ -1051,15 +1060,6 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
     devDependencies:
-      '@better-auth/drizzle-adapter':
-        specifier: workspace:*
-        version: link:../drizzle-adapter
-      '@better-auth/mongo-adapter':
-        specifier: workspace:*
-        version: link:../mongo-adapter
-      '@better-auth/prisma-adapter':
-        specifier: workspace:*
-        version: link:../prisma-adapter
       '@lynx-js/react':
         specifier: ^0.116.3
         version: 0.116.3(@types/react@19.2.14)
@@ -1508,7 +1508,7 @@ importers:
   packages/prisma-adapter:
     dependencies:
       '@prisma/client':
-        specifier: ^7.4.1
+        specifier: ^5.0.0 || ^6.0.0 || ^7.0.0
         version: 7.4.1(prisma@7.4.1(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.3.5)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(typescript@5.9.3))(typescript@5.9.3)
     devDependencies:
       '@better-auth/core':
