@@ -1128,9 +1128,9 @@ export const createInternalAdapter = (
 						},
 					],
 					"verification",
-						undefined,
-					);
-				}
+					undefined,
+				);
+			}
 
 			let verification = await findByIdentifier(storedIdentifier);
 
