@@ -20,7 +20,7 @@ export default async function HomePage() {
 							{/* Dark mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-60">
 								<Image
-									src="https://docs.better-auth.com/left-3d-logo.svg"
+									src="/left-3d-logo.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -29,7 +29,7 @@ export default async function HomePage() {
 									draggable={false}
 								/>
 								<Image
-									src="https://docs.better-auth.com/right-3d-logo.svg"
+									src="/right-3d-logo.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -41,7 +41,7 @@ export default async function HomePage() {
 							{/* Light mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] flex dark:hidden justify-center opacity-60">
 								<Image
-									src="https://docs.better-auth.com/left-3d-logo-light.svg"
+									src="/left-3d-logo-light.svg"
 									alt=""
 									width={518}
 									height={667}
@@ -50,7 +50,7 @@ export default async function HomePage() {
 									draggable={false}
 								/>
 								<Image
-									src="https://docs.better-auth.com/right-3d-logo-light.svg"
+									src="/right-3d-logo-light.svg"
 									alt=""
 									width={518}
 									height={667}

@@ -25,9 +25,14 @@ const nextConfig = {
 			},
 		],
 	},
-	assetPrefix: "/docs-assets",
 	async redirects() {
 		return [
+			// Infrastructure backwards compatibility redirects
+			{
+				source: "/dashboard/:path*",
+				destination: "https://dash.better-auth.com",
+				permanent: true,
+			},
 			{
 				source: "/docs",
 				destination: "/docs/introduction",
@@ -47,16 +52,6 @@ const nextConfig = {
 				permanent: true,
 			},
 		];
-	},
-	async rewrites() {
-		return {
-			beforeFiles: [
-				{
-					source: "/docs-assets/_next/:path*",
-					destination: "/_next/:path*",
-				},
-			],
-		};
 	},
 };
 
