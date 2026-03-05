@@ -127,11 +127,11 @@ const socialSignInBodySchema = z.object({
 						.optional(),
 					email: z.string().optional(),
 				})
-				.optional()
 				.meta({
 					description:
 						"The user object from the provider. Only available for some providers like Apple.",
-				}),
+				})
+				.optional(),
 		}),
 	),
 	scopes: z
