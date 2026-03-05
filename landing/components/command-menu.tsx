@@ -59,6 +59,7 @@ const suggestions = [
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 const initialModeRef = { current: "search" as Mode };
+const initialAiQueryRef = { current: null as string | null };
 
 export function CommandMenuProvider({
 	children,
@@ -88,6 +89,9 @@ export function CommandMenuProvider({
 		const params = new URLSearchParams(window.location.search);
 		const aiQuery = params.get("askai");
 		if (aiQuery) {
+			// Store the query before cleaning URL so dialog can access it
+			initialAiQueryRef.current = decodeURIComponent(aiQuery);
+			initialModeRef.current = "ai";
 			setOpen(true);
 			// Clean up URL
 			const newParams = new URLSearchParams(window.location.search);
@@ -131,17 +135,14 @@ function CommandMenuDialog() {
 		transport: new DefaultChatTransport({ api: "/api/docs/chat" }),
 	});
 
-	// Handle initial ?askai= param
+	// Handle initial ?askai= param (read from ref since URL is cleaned by provider)
 	const initialAiQueryHandled = useRef(false);
 	useEffect(() => {
-		if (open && !initialAiQueryHandled.current) {
-			const params = new URLSearchParams(window.location.search);
-			const aiQuery = params.get("askai");
-			if (aiQuery) {
-				setMode("ai");
-				void chat.sendMessage({ text: decodeURIComponent(aiQuery) });
-				initialAiQueryHandled.current = true;
-			}
+		if (open && !initialAiQueryHandled.current && initialAiQueryRef.current) {
+			setMode("ai");
+			void chat.sendMessage({ text: initialAiQueryRef.current });
+			initialAiQueryHandled.current = true;
+			initialAiQueryRef.current = null;
 		}
 	}, [open]);
 
