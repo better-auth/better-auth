@@ -113,6 +113,21 @@ const socialSignInBodySchema = z.object({
 					description: "Expiry date of the token",
 				})
 				.optional(),
+			/**
+			 * The user object from the provider.
+			 * This is only available for some providers like Apple.
+			 */
+			user: z
+				.object({
+					name: z
+						.object({
+							firstName: z.string().optional(),
+							lastName: z.string().optional(),
+						})
+						.optional(),
+					email: z.string().optional(),
+				})
+				.optional(),
 		}),
 	),
 	scopes: z
@@ -257,6 +272,7 @@ export const signInSocial = <O extends BetterAuthOptions>() =>
 					idToken: token,
 					accessToken: c.body.idToken.accessToken,
 					refreshToken: c.body.idToken.refreshToken,
+					user: c.body.idToken.user,
 				});
 				if (!userInfo || !userInfo?.user) {
 					c.context.logger.error("Failed to get user info", {
