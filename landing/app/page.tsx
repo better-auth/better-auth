@@ -13,10 +13,10 @@ export default async function HomePage() {
 			<div className="relative text-foreground">
 				<div className="flex flex-col lg:flex-row">
 					{/* Left side — Hero title */}
-					<div className="relative w-full lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] px-5 sm:px-6 lg:px-7 sticky top-[45px] lg:top-0 z-10 bg-background lg:overflow-clip">
+					<div className="relative w-full lg:w-[40%] lg:h-dvh border-b lg:border-b-0 lg:border-r border-foreground/[0.06] px-5 sm:px-6 lg:px-7 lg:sticky lg:top-0 z-10 bg-background lg:overflow-clip">
 						<HalftoneBackground />
 						{/* 3D Logo */}
-						<div className="hidden lg:flex justify-center h-full absolute items-center left-1/2 -translate-x-1/2 w-full pointer-events-auto select-none animate-logo-reveal z-0">
+						<div className="hidden lg:flex justify-center h-full absolute items-center left-1/2 -translate-x-1/2 w-full pointer-events-auto select-none animate-logo-reveal z-[1]">
 							{/* Dark mode logos */}
 							<div className="group max-w-[300px] w-full max-h-[200px] -mt-[30%] hidden dark:flex justify-center opacity-60">
 								<Image

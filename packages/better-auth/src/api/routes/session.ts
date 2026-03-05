@@ -119,7 +119,11 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 							updatedAt: number;
 							version?: string;
 							exp?: number;
-						}>(sessionDataCookie, ctx.context.secret, "better-auth-session");
+						}>(
+							sessionDataCookie,
+							ctx.context.secretConfig,
+							"better-auth-session",
+						);
 
 						if (payload && payload.session && payload.user) {
 							sessionDataPayload = {
@@ -288,6 +292,22 @@ export const getSession = <Option extends BetterAuthOptions>() =>
 
 								// Set the refreshed cookie cache
 								await setCookieCache(ctx, refreshedSession, false);
+
+								// Also refresh the session_token cookie expiry
+								const sessionTokenOptions =
+									ctx.context.authCookies.sessionToken.attributes;
+								const sessionTokenMaxAge = dontRememberMe
+									? undefined
+									: ctx.context.sessionConfig.expiresIn;
+								await ctx.setSignedCookie(
+									ctx.context.authCookies.sessionToken.name,
+									session.session.token,
+									ctx.context.secret,
+									{
+										...sessionTokenOptions,
+										maxAge: sessionTokenMaxAge,
+									},
+								);
 
 								// Parse session and user to ensure additionalFields are included
 								// Rehydrate date fields from JSON strings before parsing
@@ -663,6 +683,7 @@ export const listSessions = <Option extends BetterAuthOptions>() =>
 			try {
 				const sessions = await ctx.context.internalAdapter.listSessions(
 					ctx.context.session.user.id,
+					{ onlyActiveSessions: true },
 				);
 				const activeSessions = sessions.filter((session) => {
 					return session.expiresAt > new Date();

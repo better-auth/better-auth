@@ -442,7 +442,7 @@ describe("updateUser", async () => {
 		const { headers } = await signInWithTestUser();
 		const res = await client.updateUser(
 			{
-				//@ts-expect-error - newField is not available in the user input
+				// @ts-expect-error newField has input: false
 				newField: "new",
 			},
 			{
@@ -680,5 +680,88 @@ describe("delete user", async () => {
 		});
 
 		expect(sessionAfterPasswordChange.data).toBeNull();
+	});
+});
+
+describe("change-email enumeration protection", async () => {
+	const { client, signInWithTestUser, testUser, sessionSetter } =
+		await getTestInstance({
+			emailVerification: {
+				async sendVerificationEmail() {},
+			},
+			user: {
+				changeEmail: {
+					enabled: true,
+				},
+			},
+		});
+
+	it("should return 200 when target email already exists", async () => {
+		// Create a second user to be the "existing" target
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Other User",
+			email: "other-user@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		// Sign in as test user and try to change email to the existing one
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const res = await client.changeEmail({
+				newEmail: "other-user@test.com",
+			});
+			// Should return success, not throw
+			expect(res.data?.status).toBe(true);
+		});
+	});
+
+	it("should not change the user's email", async () => {
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const session = await client.getSession();
+			expect(session.data?.user.email).toBe(testUser.email);
+		});
+	});
+});
+
+describe("change-email without sendVerificationEmail", async () => {
+	const { client, signInWithTestUser, sessionSetter } = await getTestInstance({
+		user: {
+			changeEmail: {
+				enabled: true,
+			},
+		},
+	});
+
+	it("should return the same error for existing and non-existing emails", async () => {
+		// Create a second user
+		const headers2 = new Headers();
+		await client.signUp.email({
+			name: "Existing User",
+			email: "existing-no-verif@test.com",
+			password: "password123",
+			fetchOptions: {
+				onSuccess: sessionSetter(headers2),
+			},
+		});
+
+		const { runWithUser } = await signInWithTestUser();
+		await runWithUser(async () => {
+			const resExisting = await client.changeEmail({
+				newEmail: "existing-no-verif@test.com",
+			});
+			const resNonExisting = await client.changeEmail({
+				newEmail: "does-not-exist@test.com",
+			});
+
+			// Both should fail with the same error
+			expect(resExisting.error?.status).toBe(400);
+			expect(resNonExisting.error?.status).toBe(400);
+			expect(resExisting.error?.message).toBe(resNonExisting.error?.message);
+		});
 	});
 });

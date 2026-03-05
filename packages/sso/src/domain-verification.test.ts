@@ -29,16 +29,28 @@ describe("Domain verification", async () => {
 		name: "Test User",
 	};
 
-	const createTestAuth = (options?: SSOOptions) => {
-		const data = {
+	const createTestAuth = (
+		options?: SSOOptions,
+		betterAuthOptions?: {
+			secondaryStorage?: {
+				set: (key: string, value: string, ttl?: number) => void;
+				get: (key: string) => string | null;
+				delete: (key: string) => void;
+			};
+		},
+	) => {
+		const data: Record<string, any[]> = {
 			user: [],
 			session: [],
-			verification: [],
 			account: [],
 			ssoProvider: [],
 			member: [],
 			organization: [],
 		};
+
+		if (!betterAuthOptions?.secondaryStorage) {
+			data.verification = [];
+		}
 
 		const memory = memoryAdapter(data);
 
@@ -56,6 +68,7 @@ describe("Domain verification", async () => {
 			emailAndPassword: {
 				enabled: true,
 			},
+			secondaryStorage: betterAuthOptions?.secondaryStorage,
 			plugins: [sso(ssoOptions), organization()],
 		});
 
@@ -587,6 +600,63 @@ describe("Domain verification", async () => {
 				message: "Domain has already been verified",
 				code: "DOMAIN_VERIFIED",
 			});
+		});
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8348
+	 */
+	describe("with secondaryStorage (no storeInDatabase)", () => {
+		it("should request and verify domain verification via secondary storage", async () => {
+			const store = new Map<string, string>();
+			const { auth, getAuthHeaders, registerSSOProvider } = createTestAuth(
+				undefined,
+				{
+					secondaryStorage: {
+						set(key, value, ttl) {
+							store.set(key, value);
+						},
+						get(key) {
+							return store.get(key) || null;
+						},
+						delete(key) {
+							store.delete(key);
+						},
+					},
+				},
+			);
+
+			const headers = await getAuthHeaders(testUser);
+			const provider = await registerSSOProvider(headers);
+
+			expect(provider.domainVerificationToken).toBeTypeOf("string");
+
+			// Re-request should return the existing token from secondary storage
+			const response = await auth.api.requestDomainVerification({
+				body: { providerId: provider.providerId },
+				headers,
+				asResponse: true,
+			});
+
+			expect(response.status).toBe(201);
+			expect(await response.json()).toEqual({
+				domainVerificationToken: provider.domainVerificationToken,
+			});
+
+			// Verify domain via DNS
+			dnsMock.resolveTxt.mockResolvedValue([
+				[
+					`_better-auth-token-saml-provider-1=${provider.domainVerificationToken}`,
+				],
+			]);
+
+			const verifyResponse = await auth.api.verifyDomain({
+				body: { providerId: provider.providerId },
+				headers,
+				asResponse: true,
+			});
+
+			expect(verifyResponse.status).toBe(204);
 		});
 	});
 });

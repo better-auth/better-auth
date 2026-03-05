@@ -49,9 +49,6 @@ export const hasPermission = async (
 		});
 
 		for (const { role, permission: permissionsString } of roles) {
-			// If it's for an existing role, skip as we shouldn't override hard-coded roles.
-			if (role in acRoles) continue;
-
 			const result = z
 				.record(z.string(), z.array(z.string()))
 				.safeParse(JSON.parse(permissionsString));
@@ -68,7 +65,11 @@ export const hasPermission = async (
 				});
 			}
 
-			acRoles[role] = input.options.ac.newRole(result.data);
+			const merged: Record<string, string[]> = { ...acRoles[role]?.statements };
+			for (const [key, actions] of Object.entries(result.data)) {
+				merged[key] = [...new Set([...(merged[key] ?? []), ...actions])];
+			}
+			acRoles[role] = input.options.ac.newRole(merged);
 		}
 	}
 

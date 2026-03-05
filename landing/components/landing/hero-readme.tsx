@@ -13,7 +13,7 @@ import {
 import { Icons } from "@/components/icons";
 import { ThemeToggle } from "@/components/theme-toggle";
 import type { ContributorInfo } from "@/lib/community-stats";
-import { cn, getSrc } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import {
 	AiNativeSection,
 	DatabaseSection,
@@ -187,6 +187,12 @@ function InstallBlock() {
 	useLayoutEffect(() => {
 		setOverflow("hidden");
 	}, [mode]);
+
+	useLayoutEffect(() => {
+		if (pmOpen) {
+			setOverflow("visible");
+		}
+	}, [pmOpen]);
 
 	const copy = (text: string) => {
 		navigator.clipboard.writeText(text);
@@ -519,10 +525,10 @@ function InstallBlock() {
 										style={{ fontFamily: "var(--font-geist-pixel-square)" }}
 									>
 										<span className="text-purple-600/90 dark:text-purple-400/90">
-											{mcpCommands[0].command.split(" ")[0]}
+											npx
 										</span>{" "}
 										<span className="text-neutral-700 dark:text-neutral-300">
-											{mcpCommands[0].command.split(" ").slice(1).join(" ")}
+											auth mcp
 										</span>
 									</code>
 									<div className="relative">
@@ -597,8 +603,8 @@ function InstallBlock() {
 																{mc.name === "Claude Code" && (
 																	<svg
 																		xmlns="http://www.w3.org/2000/svg"
-																		className="h-[18px] w-[18px]"
-																		viewBox="0 0 24 24"
+																		className="h-3.5 w-3.5"
+																		viewBox="0 0 16 16"
 																	>
 																		<path
 																			fill="currentColor"
@@ -894,7 +900,7 @@ function SentinelSection() {
 			</div>
 
 			<div className="mb-5">
-				<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+				<h3 className="text-base sm:text-lg  text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
 					Security infrastructure for your app.
 				</h3>
 				<p className="text-[14px] text-foreground/70 dark:text-foreground/55 leading-relaxed max-w-2xl">
@@ -963,7 +969,7 @@ function SentinelSection() {
 							<span className="text-[11px] font-medium text-foreground/60 dark:text-foreground/45">
 								Sentinel
 							</span>
-							<span className="text-[10px] font-mono text-foreground/25 dark:text-foreground/15 ml-1">
+							<span className="text-[10px] font-mono text-foreground/50  ml-1">
 								Monitor and analyze security events
 							</span>
 						</div>
@@ -1000,22 +1006,22 @@ function SentinelSection() {
 
 					{/* Table header */}
 					<div className="grid grid-cols-[70px_1fr_100px_70px_80px] sm:grid-cols-[70px_1fr_110px_80px_70px_80px] gap-0 px-4 py-2 border-b border-foreground/[0.06] bg-foreground/[0.01]">
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Action
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Identifier
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Reason
 						</span>
-						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="hidden sm:block text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Location
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50">
 							Path
 						</span>
-						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/25 text-right">
+						<span className="text-[9px] font-mono uppercase tracking-wider text-foreground/35 dark:text-foreground/50 text-right">
 							Time
 						</span>
 					</div>
@@ -1046,7 +1052,7 @@ function SentinelSection() {
 									{event.identifier}
 								</span>
 								{event.ip && (
-									<span className="text-[9px] font-mono text-foreground/25 dark:text-foreground/15 block truncate">
+									<span className="text-[9px] font-mono text-foreground/50  block truncate">
 										{event.ip}
 									</span>
 								)}
@@ -1054,10 +1060,10 @@ function SentinelSection() {
 							<span className="text-[10px] font-mono text-foreground/40 dark:text-foreground/30 truncate">
 								{event.reason}
 							</span>
-							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/25 truncate">
+							<span className="hidden sm:block text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
 								{event.location}
 							</span>
-							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/25 truncate">
+							<span className="text-[10px] font-mono text-foreground/35 dark:text-foreground/50 truncate">
 								{event.path}
 							</span>
 							<span className="text-[10px] font-mono text-foreground/30 dark:text-foreground/20 text-right">
@@ -1184,7 +1190,7 @@ function SentinelSection() {
 				).map(({ tag, icon }) => (
 					<span
 						key={tag}
-						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/55 dark:text-foreground/40 border border-foreground/[0.1] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/75 dark:hover:text-foreground/60 transition-colors"
+						className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-[10px] font-mono uppercase tracking-wider text-foreground/70 dark:text-foreground/55 border border-foreground/[0.14] bg-foreground/[0.03] hover:bg-foreground/[0.06] hover:text-foreground/85 dark:hover:text-foreground/75 transition-colors"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
@@ -1196,7 +1202,7 @@ function SentinelSection() {
 							strokeWidth="2"
 							strokeLinecap="round"
 							strokeLinejoin="round"
-							className="opacity-70 shrink-0"
+							className="opacity-80 shrink-0"
 						>
 							{icon}
 						</svg>
@@ -1229,7 +1235,7 @@ function ContributorsSection({
 	];
 
 	return (
-		<div className="mt-10 pt-8 border-t border-foreground/[0.06]">
+		<div className="mt-10 pt-8">
 			<div className="flex items-center gap-3 mb-2">
 				<span className="text-base text-foreground/85 dark:text-foreground/75">
 					Contributors
@@ -1322,8 +1328,8 @@ function formatCount(num: number | null | undefined): string {
 }
 
 const footerLinks = [
-	{ label: "Terms", href: "/terms" },
-	{ label: "Privacy", href: "/privacy" },
+	{ label: "Terms", href: "/legal/terms" },
+	{ label: "Privacy", href: "/legal/privacy" },
 	{ label: "Blog", href: "/blog" },
 	{ label: "Community", href: "/community" },
 	{ label: "Changelog", href: "/changelog" },
@@ -1376,12 +1382,12 @@ function ReadmeFooter({
 				</p>
 
 				<div className="flex items-center justify-center gap-4 mt-4">
-					<Link
-						href="/sign-in"
+					<a
+						href="https://dash.better-auth.com/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
-					</Link>
+					</a>
 					<Link
 						href="/docs"
 						className="inline-flex items-center gap-1.5 px-4 py-2 border border-foreground/12 text-foreground/50 dark:text-foreground/40 hover:text-foreground/70 hover:border-foreground/25 text-[11px] font-mono uppercase tracking-wider transition-all"
@@ -1397,7 +1403,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1411,7 +1417,7 @@ function ReadmeFooter({
 									/>
 								</svg>
 								<span className="text-[9px] font-mono">
-									{formatCount(stats.npmDownloads)} / week
+									{formatCount(stats.npmDownloads)} / year
 								</span>
 							</div>
 						</a>
@@ -1425,7 +1431,7 @@ function ReadmeFooter({
 							target="_blank"
 							rel="noopener noreferrer"
 						>
-							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/40 dark:text-foreground/30">
+							<div className="flex items-center gap-1.5 px-2.5 py-1 hover:bg-foreground/4 rounded-sm transition-colors text-foreground/50 dark:text-foreground/50">
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
 									width="11"
@@ -1449,14 +1455,14 @@ function ReadmeFooter({
 			</div>
 
 			{/* Footer */}
-			<div className="relative mt-10 pt-6 border-t border-dashed border-foreground/6">
+			<div className="relative mt-10 pt-6">
 				<div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 					<div className="flex flex-wrap items-center gap-x-1 gap-y-1.5">
 						{footerLinks.map((link, i) => (
 							<span key={link.label} className="flex items-center">
 								<Link
 									href={link.href}
-									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/35 hover:text-foreground/70 transition-colors"
+									className="group inline-flex items-center gap-1 text-[11px] font-mono text-foreground/50 hover:text-foreground/80 transition-colors"
 								>
 									{link.label}
 								</Link>
@@ -1470,7 +1476,7 @@ function ReadmeFooter({
 					</div>
 
 					<div className="flex items-center justify-between w-full sm:w-auto sm:gap-4 shrink-0">
-						<span className="text-[10px] text-foreground/20 font-mono">
+						<span className="text-[10px] text-foreground/50 font-mono">
 							© {new Date().getFullYear()} Better Auth Inc.
 						</span>
 						<div className="flex items-center gap-3 sm:gap-4">
@@ -1480,14 +1486,14 @@ function ReadmeFooter({
 							<Link
 								href="https://x.com/better_auth"
 								aria-label="Twitter/X"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Icons.XIcon className="h-3 w-3" />
 							</Link>
 							<Link
 								href="https://github.com/better-auth"
 								aria-label="GitHub"
-								className="text-foreground/30 hover:text-foreground/60 transition-colors"
+								className="text-foreground/50 hover:text-foreground/80 transition-colors"
 							>
 								<Github className="h-4 w-4" />
 							</Link>
@@ -1523,29 +1529,29 @@ export function HeroReadMe({
 		>
 			{/* Markdown content */}
 			<div className="flex-1 overflow-y-auto no-scrollbar">
-				<div className="p-5 lg:p-5 pt-8 lg:pt-16 pb-0">
+				<div className="p-5 lg:p-5 pt-8 lg:pt-16">
 					<motion.article
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						transition={{ duration: 0.4, delay: 0.3 }}
 						className="overflow-y-auto overflow-x-hidden no-scrollbar pt-[30px] pb-0"
 					>
-						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-800 dark:text-neutral-200 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/10">
+						<h1 className="flex items-center gap-2 text-sm sm:text-[15px] font-mono text-neutral-900 dark:text-neutral-100 pb-2 sm:pb-3 mb-4 sm:mb-5 border-b border-foreground/15">
 							README
 						</h1>
 
-						<p className="text-sm sm:text-[14px] text-neutral-700 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
-							Better Auth is an authentication and authorization framework. It
-							provides a comprehensive set of features out of the box and
-							includes a Plugin ecosystem that simplifies adding advanced
-							functionalities.
+						<p className="text-sm sm:text-[14px] text-neutral-600 dark:text-neutral-300 leading-[1.8] sm:leading-[1.9] mb-5 sm:mb-6">
+							Better Auth is an authentication framework. It provides a
+							comprehensive set of features out of the box and includes a Plugin
+							ecosystem that simplifies adding advanced functionalities and
+							infrastructure to help own your auth at scale.
 						</p>
 
 						<InstallBlock />
 
 						<div className="flex items-center gap-3 my-4">
 							<div className="flex-1 border-t border-foreground/6"></div>
-							<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Trusted By
 							</span>
 						</div>
@@ -1553,13 +1559,13 @@ export function HeroReadMe({
 						<TrustedBy />
 
 						<div className="flex items-center gap-3 my-4">
-							<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+							<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 								Features
 							</span>
-							<div className="flex-1 border-t border-foreground/6"></div>
+							<div className="flex-1 border-t border-foreground/10"></div>
 						</div>
 
-						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/10 overflow-hidden">
+						<div className="relative grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 mb-2 border border-foreground/15 overflow-hidden">
 							{[
 								{
 									label: "Framework Agnostic",
@@ -1615,14 +1621,16 @@ export function HeroReadMe({
 									headline: "Security & observability.",
 									desc: "Bot detection, real-time behavior analysis, IP blocking, email validation, and more.",
 									security: true,
-									href: "/docs",
+									href: "/products/infrastructure",
+									managed: true,
 								},
 								{
 									label: "Dashboard",
 									headline: "User management.",
 									desc: "Manage users, sessions, and organizations. Track sign-ups, active users, and growth.",
 									dashboard: true,
-									href: "/docs",
+									href: "/products/infrastructure",
+									managed: true,
 								},
 							].map((feature, i) => (
 								<Link
@@ -1646,7 +1654,7 @@ export function HeroReadMe({
 											}
 										}}
 										className={cn(
-											"group/card relative p-4 lg:p-5 border-foreground/[0.1] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
+											"group/card relative p-4 lg:p-5 border-foreground/[0.15] min-h-[180px] transition-all duration-200 hover:bg-foreground/[0.02] hover:shadow-[inset_0_1px_0_0_rgba(128,128,128,0.1)] hover:z-10",
 											// Bottom border: all except last; 3-col last row starts at 6
 											i < 8 && "border-b",
 											i >= 6 && "md:border-b-0",
@@ -1670,22 +1678,27 @@ export function HeroReadMe({
 												strokeWidth="2"
 												strokeLinecap="round"
 												strokeLinejoin="round"
-												className="text-foreground/40 dark:text-foreground/25"
+												className="text-foreground/40 dark:text-foreground/50"
 											>
 												<line x1="7" y1="17" x2="17" y2="7" />
 												<polyline points="7 7 17 7 17 17" />
 											</svg>
 										</span>
-										<div className="text-[11px] font-mono text-neutral-500 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-400">
-											<span className="text-foreground/35 dark:text-foreground/20 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/50 dark:group-hover/card:text-foreground/30">
+										<div className="text-[11px] font-mono text-neutral-500 dark:text-neutral-400 mb-2 uppercase tracking-wider transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
+											<span className="text-foreground/45 dark:text-foreground/30 mr-1.5 transition-colors duration-200 group-hover/card:text-foreground/60 dark:group-hover/card:text-foreground/40">
 												{String(i + 1).padStart(2, "0")}
 											</span>
 											{feature.label}
+											{"managed" in feature && feature.managed && (
+												<span className="ml-1.5 text-[8px] normal-case tracking-widest text-foreground/40 dark:text-foreground/30 border border-dashed border-foreground/10 px-1 py-px">
+													managed
+												</span>
+											)}
 										</div>
-										<div className="text-[13px] font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-900 dark:group-hover/card:text-neutral-100">
+										<div className="text-[13px] font-semibold text-neutral-900 dark:text-neutral-100 leading-snug mb-1.5 transition-colors duration-200 group-hover/card:text-neutral-950 dark:group-hover/card:text-white">
 											{feature.headline}
 										</div>
-										<div className="text-[11px] text-neutral-500 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-400">
+										<div className="text-[11px] text-neutral-500 dark:text-neutral-400 leading-relaxed transition-colors duration-200 group-hover/card:text-neutral-400 dark:group-hover/card:text-neutral-300">
 											{feature.desc}
 										</div>
 										{"logos" in feature && feature.logos && (
@@ -1939,7 +1952,7 @@ export function HeroReadMe({
 														</span>
 													</div>
 													<div className="relative size-5 rounded-full border border-foreground/[0.08] bg-neutral-100 dark:bg-neutral-900 flex items-center justify-center z-[1]">
-														<span className="text-[8px] font-mono text-foreground/40 dark:text-foreground/25 leading-none">
+														<span className="text-[8px] font-mono text-foreground/40 dark:text-foreground/50 leading-none">
 															C
 														</span>
 													</div>
@@ -1957,7 +1970,7 @@ export function HeroReadMe({
 													<span className="text-[8px] font-mono text-foreground/35 dark:text-foreground/20 px-1.5 py-0.5 border border-foreground/[0.06] bg-foreground/[0.015]">
 														admin
 													</span>
-													<span className="text-[8px] font-mono text-foreground/30 dark:text-foreground/15 px-1.5 py-0.5 border border-dashed border-foreground/[0.08]">
+													<span className="text-[8px] font-mono text-foreground/30  px-1.5 py-0.5 border border-dashed border-foreground/[0.08]">
 														member
 													</span>
 												</div>
@@ -1980,7 +1993,7 @@ export function HeroReadMe({
 													].map((plugin, i) => (
 														<span
 															key={plugin}
-															className={`text-[8px] font-mono whitespace-nowrap px-1.5 py-0.5 border shrink-0 ${i < 2 ? "text-foreground/50 dark:text-foreground/30 border-foreground/[0.08] bg-foreground/[0.02]" : i < 4 ? "text-foreground/40 dark:text-foreground/22 border-foreground/[0.06] bg-foreground/[0.015]" : "text-foreground/30 dark:text-foreground/15 border-foreground/[0.05]"}`}
+															className={`text-[8px] font-mono whitespace-nowrap px-1.5 py-0.5 border shrink-0 ${i < 2 ? "text-foreground/50 dark:text-foreground/30 border-foreground/[0.08] bg-foreground/[0.02]" : i < 4 ? "text-foreground/40 dark:text-foreground/22 border-foreground/[0.06] bg-foreground/[0.015]" : "text-foreground/30  border-foreground/[0.05]"}`}
 														>
 															{plugin}
 														</span>
@@ -2065,26 +2078,20 @@ export function HeroReadMe({
 										)}
 										{"agent" in feature && feature.agent && (
 											<div className="mt-3 flex items-center h-5 px-2.5 border border-foreground/[0.06] bg-foreground/[0.015] font-mono text-[8px] gap-1">
-												<span className="text-foreground/30 dark:text-foreground/15">
-													$
-												</span>
+												<span className="text-foreground/30 ">$</span>
 												<span className="text-foreground/50 dark:text-foreground/30">
 													agent
-													<span className="text-foreground/30 dark:text-foreground/15">
-														.
-													</span>
+													<span className="text-foreground/30 ">.</span>
 													auth
-													<span className="text-foreground/30 dark:text-foreground/15">
-														()
-													</span>
+													<span className="text-foreground/30 ">()</span>
 												</span>
-												<span className="text-foreground/25 dark:text-foreground/10 mx-0.5">
+												<span className="text-foreground/50 dark:text-foreground/10 mx-0.5">
 													→
 												</span>
 												<span className="text-foreground/35 dark:text-foreground/20">
 													sk-<span className="tracking-[0.08em]">••••</span>
 												</span>
-												<span className="text-foreground/40 dark:text-foreground/25">
+												<span className="text-foreground/40 dark:text-foreground/50">
 													✓
 												</span>
 												<span className="inline-block w-px h-2.5 bg-foreground/30 animate-[blink_1s_steps(2)_infinite]" />
@@ -2165,7 +2172,7 @@ export function HeroReadMe({
 																	key={`${setIdx}-${event.time}-${event.user}`}
 																	className="flex items-center gap-1.5 shrink-0 h-5 whitespace-nowrap"
 																>
-																	<span className="text-[8px] font-mono text-foreground/30 dark:text-foreground/15">
+																	<span className="text-[8px] font-mono text-foreground/30 ">
 																		{event.time}
 																	</span>
 																	<span className="text-[8px] font-mono text-foreground/50 dark:text-foreground/30 border-b border-dashed border-foreground/20">
@@ -2202,10 +2209,10 @@ export function HeroReadMe({
 
 						<div className="my-6">
 							<div className="flex items-center gap-3 mb-5">
-								<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
+								<span className="text-[10px] text-foreground/50 dark:text-foreground/50 font-mono tracking-wider uppercase shrink-0">
 									Declarative Config
 								</span>
-								<div className="flex-1 border-t border-foreground/[0.06]" />
+								<div className="flex-1 border-t border-foreground/10" />
 							</div>
 							<ServerClientTabs />
 						</div>
@@ -2230,18 +2237,24 @@ export function HeroReadMe({
 							<PluginEcosystem />
 						</div>
 
+						{/* Infrastructure transition */}
+						<div className="mt-16 mb-8">
+							<div className="flex items-center gap-4">
+								<span className="text-lg sm:text-xl font-medium text-foreground/90 dark:text-foreground/80 tracking-tight shrink-0">
+									Infrastructure
+								</span>
+								<div className="flex-1 border-t border-foreground/10" />
+							</div>
+							<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-xl">
+								Managed infrastructure on top of the open-source framework.
+							</p>
+						</div>
+
 						{/* Dashboard */}
 						<div className="mt-10 mb-4">
-							<div className="flex items-center gap-3 mb-6">
-								<span className="text-[10px] text-foreground/60 dark:text-foreground/40 font-mono tracking-wider uppercase shrink-0">
-									Monitoring & Agentic Dashboard
-								</span>
-								<div className="flex-1 border-t border-foreground/[0.06]" />
-							</div>
-
 							<div className="mb-5">
-								<h3 className="text-base sm:text-lg font-semibold text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
-									The best user management and monitoring platform.
+								<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+									User management and monitoring platform.
 								</h3>
 								<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
 									Monitor sign-ups, manage users, track sessions, and surface
@@ -2323,7 +2336,7 @@ export function HeroReadMe({
 												<span className="size-2 rounded-full bg-foreground/10" />
 											</div>
 											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												better-auth.com/dashboard/the-next-big-thing
+												dash.better-auth.com/the-next-big-thing
 											</span>
 										</div>
 										<div className="flex items-center gap-3">
@@ -2344,22 +2357,24 @@ export function HeroReadMe({
 									</div>
 
 									{/* Dashboard demo video — crop top border from video */}
-									<div className="overflow-hidden">
+									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={getSrc("/demo-dark.mp4")}
+											src={"/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:block hidden"
+											suppressHydrationWarning
 										/>
 										<video
-											src={getSrc("/demo-light.mp4")}
+											src={"/demo-light.mp4"}
 											autoPlay
 											loop
 											muted
 											playsInline
 											className="w-full h-auto -mt-[2px] dark:hidden"
+											suppressHydrationWarning
 										/>
 									</div>
 								</div>
@@ -2389,10 +2404,123 @@ export function HeroReadMe({
 									</div>
 								))}
 							</div>
+
+							{/* Audit Logs */}
+							<div className="mt-10">
+								<div className="mb-4">
+									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+										Audit Logs
+									</h3>
+									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
+										Every auth event captured automatically — sign-ins, password
+										resets, MFA challenges, session changes, and more. Filter,
+										search, and export with configurable retention and log drain
+										to your SIEM.
+									</p>
+								</div>
+								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
+									{[
+										{ label: "Auto Capture", desc: "Every auth event logged" },
+										{ label: "Log Explorer", desc: "Filter & search events" },
+										{ label: "Retention", desc: "1 day to custom" },
+										{ label: "Log Drain", desc: "Export to your SIEM" },
+									].map((item, i) => (
+										<div
+											key={item.label}
+											className={cn(
+												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												i > 0 && "-ml-px",
+											)}
+										>
+											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
+												{item.label}
+											</div>
+											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
+												{item.desc}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+
+							{/* Transactional Comms */}
+							<div className="mt-10">
+								<div className="mb-4">
+									<h3 className="text-base sm:text-lg text-neutral-800 dark:text-neutral-200 leading-snug mb-2">
+										Transactional Comms
+									</h3>
+									<p className="text-[12px] sm:text-[13px] text-neutral-500 dark:text-neutral-400 leading-relaxed max-w-2xl">
+										Built-in email and SMS delivery for verification codes,
+										magic links, password resets, and MFA. Customizable
+										templates, abuse protection, and delivery tracking — no
+										third-party setup required.
+									</p>
+								</div>
+								<div className="grid grid-cols-2 sm:grid-cols-4 gap-0">
+									{[
+										{ label: "Email & SMS", desc: "Built-in delivery" },
+										{ label: "Templates", desc: "Fully customizable" },
+										{
+											label: "Abuse Protection",
+											desc: "Rate limits & blocking",
+										},
+										{ label: "Delivery Tracking", desc: "Status & analytics" },
+									].map((item, i) => (
+										<div
+											key={item.label}
+											className={cn(
+												"px-3 py-3 border border-dashed border-foreground/[0.06] bg-foreground/[0.02]",
+												i > 0 && "-ml-px",
+											)}
+										>
+											<div className="text-[11px] font-mono text-foreground/65 dark:text-foreground/50 uppercase tracking-wider mb-0.5">
+												{item.label}
+											</div>
+											<div className="text-[11px] font-mono text-foreground/40 dark:text-foreground/28">
+												{item.desc}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
 						</div>
 
 						{/* Sentinel */}
 						<SentinelSection />
+
+						{/* Infrastructure CTA */}
+						<div className="mt-8 mb-4">
+							<div className="border border-dashed border-foreground/[0.10] p-5 flex items-center justify-between">
+								<div>
+									<p className="text-[11px] font-mono uppercase tracking-widest text-foreground/80 dark:text-foreground/80 mb-1">
+										Explore plans
+									</p>
+									<p className="text-[12px] text-foreground/50 dark:text-foreground/40 leading-relaxed">
+										Dashboard, audit logs, security detection, transactional
+										comms, and more.
+									</p>
+								</div>
+								<Link
+									href="/products/infrastructure"
+									className="inline-flex items-center gap-1.5 shrink-0 ml-4 px-4 py-2 border border-dashed border-foreground/[0.14] text-foreground dark:text-foreground/80 hover:text-foreground hover:border-foreground/25 hover:bg-foreground/[0.02] transition-all"
+								>
+									<span className="font-mono text-[11px] uppercase tracking-widest">
+										View Plans
+									</span>
+									<svg
+										className="h-2.5 w-2.5 opacity-50"
+										viewBox="0 0 10 10"
+										fill="none"
+									>
+										<path
+											d="M1 9L9 1M9 1H3M9 1V7"
+											stroke="currentColor"
+											strokeWidth="1.2"
+										/>
+									</svg>
+								</Link>
+							</div>
+						</div>
 
 						<ContributorsSection contributors={contributors} />
 

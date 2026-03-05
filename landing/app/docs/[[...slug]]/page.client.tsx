@@ -51,30 +51,34 @@ function useCopyButton(
 const cache = new Map<string, string>();
 
 const tocAction =
-	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/50 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
+	"inline-flex items-center gap-1.5 px-2 py-1 text-[11px] uppercase tracking-wider whitespace-nowrap transition-all duration-200 text-foreground/60 hover:text-foreground border border-transparent hover:border-foreground/10 hover:bg-foreground/5 cursor-pointer select-none [&_svg]:size-3";
 
-export function LLMCopyButton() {
+export function LLMCopyButton({ rawUrl }: { rawUrl: string }) {
 	const [isLoading, startTransition] = useTransition();
 	const [checked, onClick] = useCopyButton(async () => {
-		startTransition(async () => {
-			const url = window.location.pathname + ".mdx";
-			const cached = cache.get(url);
+		const cached = cache.get(rawUrl);
 
-			if (cached) {
-				await navigator.clipboard.writeText(cached);
-			} else {
-				await navigator.clipboard.write([
-					new ClipboardItem({
-						"text/plain": fetch(url).then(async (res) => {
-							const content = await res.text();
-							cache.set(url, content);
+		if (cached) {
+			await navigator.clipboard.writeText(cached);
+			return;
+		}
 
-							return content;
-						}),
-					}),
-				]);
-			}
+		const fetchPromise = fetch(rawUrl).then(async (res) => {
+			const text = await res.text();
+			cache.set(rawUrl, text);
+			return text;
 		});
+
+		startTransition(async () => {
+			await fetchPromise;
+		});
+
+		const item = new ClipboardItem({
+			"text/plain": fetchPromise.then(
+				(text) => new Blob([text], { type: "text/plain" }),
+			),
+		});
+		await navigator.clipboard.write([item]);
 	});
 
 	return (
@@ -211,11 +215,11 @@ export function ViewOptions(props: { markdownUrl: string; githubUrl: string }) {
 						href={item.href}
 						rel="noreferrer noopener"
 						target="_blank"
-						className="flex items-center gap-2.5 px-2.5 py-2 text-[12px] text-foreground/50 hover:text-foreground hover:bg-foreground/5 transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0"
+						className="flex items-center gap-2.5 px-2.5 py-2 text-[12px] text-foreground/60 hover:text-foreground hover:bg-foreground/5 transition-colors duration-150 [&_svg]:size-3.5 [&_svg]:shrink-0"
 					>
 						{item.icon}
 						{item.title}
-						<ExternalLink className="size-3 text-foreground/20 ms-auto" />
+						<ExternalLink className="size-3 text-foreground/30 ms-auto" />
 					</a>
 				))}
 			</PopoverContent>

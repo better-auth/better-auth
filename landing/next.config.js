@@ -25,25 +25,33 @@ const nextConfig = {
 			},
 		],
 	},
-	assetPrefix: "/docs-assets",
 	async redirects() {
 		return [
+			// Infrastructure backwards compatibility redirects
+			{
+				source: "/dashboard/:path*",
+				destination: "https://dash.better-auth.com",
+				permanent: true,
+			},
 			{
 				source: "/docs",
 				destination: "/docs/introduction",
 				permanent: false,
 			},
+			// Legacy query string based redirects
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "framework" }],
+				destination: "/products/framework",
+				permanent: true,
+			},
+			{
+				source: "/products",
+				has: [{ type: "query", key: "tab", value: "infrastructure" }],
+				destination: "/products/infrastructure",
+				permanent: true,
+			},
 		];
-	},
-	async rewrites() {
-		return {
-			beforeFiles: [
-				{
-					source: "/docs-assets/_next/:path*",
-					destination: "/_next/:path*",
-				},
-			],
-		};
 	},
 };
 
