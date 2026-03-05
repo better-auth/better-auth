@@ -44,12 +44,17 @@ export const expo = (options?: ExpoOptions | undefined) => {
 				return;
 			}
 
-			// Mutate headers in-place instead of cloning via new Request(),
-			// which breaks route matching on Bun.
-			request.headers.set("origin", expoOrigin);
-			return {
-				request,
-			};
+			try {
+				// Prefer in-place mutation (works on Bun, Node, Deno).
+				request.headers.set("origin", expoOrigin);
+				return { request };
+			} catch {
+				// Cloudflare Workers has immutable headers on incoming requests,
+				// so fall back to constructing a new Request.
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("origin", expoOrigin);
+				return { request: new Request(request, { headers: newHeaders }) };
+			}
 		},
 		hooks: {
 			after: [
