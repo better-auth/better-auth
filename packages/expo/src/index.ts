@@ -44,14 +44,17 @@ export const expo = (options?: ExpoOptions | undefined) => {
 				return;
 			}
 
-			// Construct new Headers with new Request to avoid mutating the original request
-			const newHeaders = new Headers(request.headers);
-			newHeaders.set("origin", expoOrigin);
-			const req = new Request(request, { headers: newHeaders });
-
-			return {
-				request: req,
-			};
+			try {
+				// Prefer in-place mutation (works on Bun, Node, Deno).
+				request.headers.set("origin", expoOrigin);
+				return { request };
+			} catch {
+				// Cloudflare Workers has immutable headers on incoming requests,
+				// so fall back to constructing a new Request.
+				const newHeaders = new Headers(request.headers);
+				newHeaders.set("origin", expoOrigin);
+				return { request: new Request(request, { headers: newHeaders }) };
+			}
 		},
 		hooks: {
 			after: [
