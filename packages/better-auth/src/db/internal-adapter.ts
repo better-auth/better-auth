@@ -1125,12 +1125,6 @@ export const createInternalAdapter = (
 				});
 			}
 
-			let verification = await findByIdentifier(storedIdentifier);
-
-			if (!verification.length && storageOption && storageOption !== "plain") {
-				verification = await findByIdentifier(identifier);
-			}
-
 			if (!options.verification?.disableCleanup) {
 				await deleteManyWithHooks(
 					[
@@ -1141,8 +1135,14 @@ export const createInternalAdapter = (
 						},
 					],
 					"verification",
-					undefined,
-				);
+						undefined,
+					);
+				}
+
+			let verification = await findByIdentifier(storedIdentifier);
+
+			if (!verification.length && storageOption && storageOption !== "plain") {
+				verification = await findByIdentifier(identifier);
 			}
 
 			return (verification[0] as Verification) || null;

@@ -199,7 +199,7 @@ describe("internal adapter test", async () => {
 		expect(session.data?.session).toBeDefined();
 	});
 
-	it("should delete expired verification values on find", async () => {
+	it("should not return expired verification values on find", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
@@ -209,9 +209,7 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
 
 		const value = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value).toMatchObject({
-			identifier: "test-id-1",
-		});
+		expect(value).toBeNull();
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
