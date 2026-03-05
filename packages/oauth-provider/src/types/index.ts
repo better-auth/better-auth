@@ -118,12 +118,12 @@ export interface OAuthOptions<
 	/**
 	 * Allow unauthenticated dynamic client registration.
 	 *
-	 * Support for `allowUnauthenticatedClientRegistration` **will be deprecated**
-	 * when the MCP protocol standardizes unauthenticated dynamic client registration.
-	 * As of writing, both [Client ID Metadata Documents](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/991)
-	 * and [`software_statement` and `jwks_uri`](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1032) are under debate.
+	 * Support for `allowUnauthenticatedClientRegistration` **is deprecated**.
 	 *
 	 * @default false
+	 * @deprecated use `cimd`.
+	 * MCP protocol standardizes unauthenticated dynamic client registration
+	 * with [Client ID Metadata Documents](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents)
 	 */
 	allowUnauthenticatedClientRegistration?: boolean;
 	/**
@@ -132,6 +132,40 @@ export interface OAuthOptions<
 	 * @default false
 	 */
 	allowDynamicClientRegistration?: boolean;
+	/**
+	 * [CIMD dynamic client registration](https://datatracker.ietf.org/doc/draft-ietf-oauth-client-id-metadata-document/).
+	 *
+	 * Useful for unauthenticated dynamic client registration specifically such as for [MCP servers](https://modelcontextprotocol.io/specification/draft/basic/authorization#client-id-metadata-documents-flow).
+	 * @see https://client.dev/clients
+	 */
+	cimd?: {
+		/**
+		 * Enable unauthenticated dynamic client registration using CIMD.
+		 */
+		enable: true;
+		/**
+		 * How frequently CIMD should refetch metadata documents to update.
+		 *
+		 * @default 60m
+		 */
+		refreshRate?: string;
+		/**
+		 * By default, CIMD restricts urls to have the same origin
+		 * across URLs (eg. 'redirect_uris', 'post_logout_redirect_uris').
+		 *
+		 * In development, you may wish to set this to false.
+		 * Without these restrictions, there are potential trust and safety issues
+		 * where the client attempts to impersonate a more well-known client
+		 * or otherwise act in a way which is malicious or puts the end-user at risk.
+		 *
+		 * @default ['redirect_uris', 'post_logout_redirect_uris', 'client_uri']
+		 */
+		restrictOrigins?: (
+			| "redirect_uris"
+			| "post_logout_redirect_uris"
+			| "client_uri"
+		)[];
+	};
 	/**
 	 * List of scopes for newly registered clients
 	 * if not requested.
