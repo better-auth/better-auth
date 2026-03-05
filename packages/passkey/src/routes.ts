@@ -558,10 +558,10 @@ export const verifyPasskeyRegistration = (options: RequiredPassKeyOptions) => {
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				{ cleanupBeforeFind: true },
+			);
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",
@@ -734,10 +734,10 @@ export const verifyPasskeyAuthentication = (options: RequiredPassKeyOptions) =>
 				);
 			}
 
-			const data =
-				await ctx.context.internalAdapter.findVerificationValue(
-					verificationToken,
-				);
+			const data = await ctx.context.internalAdapter.findVerificationValue(
+				verificationToken,
+				{ cleanupBeforeFind: true },
+			);
 			if (!data) {
 				throw APIError.from(
 					"BAD_REQUEST",
