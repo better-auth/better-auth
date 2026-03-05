@@ -1,0 +1,37 @@
+{
+	"name": "@anthropic/better-auth-graph",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"exports": {
+		".": {
+			"dev-source": "./src/index.ts",
+			"types": "./dist/index.d.mts",
+			"default": "./dist/index.mjs"
+		},
+		"./client": {
+			"dev-source": "./src/client.ts",
+			"types": "./dist/client.d.mts",
+			"default": "./dist/client.mjs"
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch"
+	},
+	"peerDependencies": {
+		"@better-auth/core": "workspace:*",
+		"better-auth": "workspace:*",
+		"better-call": "catalog:"
+	},
+	"dependencies": {
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@better-auth/core": "workspace:*",
+		"better-auth": "workspace:*",
+		"better-call": "catalog:",
+		"tsdown": "catalog:",
+		"typescript": "catalog:"
+	}
+}
