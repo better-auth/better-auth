@@ -44,13 +44,11 @@ export const expo = (options?: ExpoOptions | undefined) => {
 				return;
 			}
 
-			// Construct new Headers with new Request to avoid mutating the original request
-			const newHeaders = new Headers(request.headers);
-			newHeaders.set("origin", expoOrigin);
-			const req = new Request(request, { headers: newHeaders });
-
+			// Mutate headers in-place instead of cloning via new Request(),
+			// which breaks route matching on Bun.
+			request.headers.set("origin", expoOrigin);
 			return {
-				request: req,
+				request,
 			};
 		},
 		hooks: {
