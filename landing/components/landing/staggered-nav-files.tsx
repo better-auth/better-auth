@@ -151,7 +151,7 @@ export function StaggeredNavFiles() {
 	const _router = useRouter();
 	return (
 		<>
-			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
+			<div className="fixed top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
 				{/* Left — Logo */}
 				<motion.div
 					initial={{ x: -20, opacity: 0 }}
