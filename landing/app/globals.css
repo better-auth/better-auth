@@ -536,9 +536,8 @@
 		@apply border-border outline-ring/50;
 	}
 
-	html,
 	body {
-		@apply overflow-x-clip;
+		@apply overflow-x-hidden;
 		max-width: 100vw;
 	}
 

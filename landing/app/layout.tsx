@@ -92,7 +92,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				)}
 			</head>
 			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-clip`}
+				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased`}
 				suppressHydrationWarning
 			>
 				<Providers>
