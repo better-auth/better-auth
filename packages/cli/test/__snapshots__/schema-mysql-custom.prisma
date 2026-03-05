@@ -1,11 +1,10 @@
 
 generator client {
-  provider = "prisma-client-js"
+  provider = "prisma-client"
 }
 
 datasource db {
   provider = "mysql"
-  url      = env("DATABASE_URL")
 }
 
 model User {
@@ -24,7 +23,6 @@ model User {
   twofactors           TwoFactor[]
   members              Member[]
   workspaceinvitations WorkspaceInvitation[]
-  teammembers          TeamMember[]
 
   @@unique([email])
   @@unique([username])
@@ -42,7 +40,6 @@ model Session {
   userId               String
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   activeOrganizationId String?  @db.Text
-  activeTeamId         String?  @db.Text
 
   @@unique([token])
   @@index([userId(length: 191)])
@@ -102,21 +99,19 @@ model Workspace {
   metadata             String?               @db.Text
   members              Member[]
   workspaceinvitations WorkspaceInvitation[]
-  organizationroles    OrganizationRole[]
-  teams                Team[]
 
   @@unique([slug])
   @@map("workspace")
 }
 
 model Member {
-  id                      String                   @id
-  organizationId          String
-  workspace               Workspace                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId                  String
-  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt               DateTime
-  memberorganizationroles MemberOrganizationRole[]
+  id             String    @id
+  organizationId String
+  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           String    @db.Text
+  createdAt      DateTime
 
   @@index([organizationId(length: 191)])
   @@index([userId(length: 191)])
@@ -124,110 +119,18 @@ model Member {
 }
 
 model WorkspaceInvitation {
-  id                String    @id
-  organizationId    String
-  workspace         Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  email             String    @db.Text
-  organizationRoles Json?
-  teamRoles         Json?
-  teamId            String?   @db.Text
-  status            String    @db.Text
-  expiresAt         DateTime
-  createdAt         DateTime  @default(now())
-  inviterId         String
-  user              User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
+  id             String    @id
+  organizationId String
+  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String    @db.Text
+  role           String?   @db.Text
+  status         String    @db.Text
+  expiresAt      DateTime
+  createdAt      DateTime  @default(now())
+  inviterId      String
+  user           User      @relation(fields: [inviterId], references: [id], onDelete: Cascade)
 
   @@index([organizationId(length: 191)])
   @@index([email(length: 191)])
   @@map("workspaceInvitation")
-}
-
-model OrganizationRole {
-  id             String    @id
-  organizationId String
-  workspace      Workspace @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  type           String    @db.Text
-  name           String    @db.Text
-  description    String?   @db.Text
-  isBuiltIn      Boolean   @default(false)
-  permissions    Json?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime? @updatedAt
-
-  @@index([organizationId(length: 191)])
-  @@index([type(length: 191)])
-  @@map("organizationRole")
-}
-
-model TeamRole {
-  id          String    @id
-  teamId      String
-  team        Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  type        String    @db.Text
-  name        String    @db.Text
-  description String?   @db.Text
-  isBuiltIn   Boolean   @default(false)
-  permissions Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime? @updatedAt
-
-  @@index([teamId(length: 191)])
-  @@index([type(length: 191)])
-  @@map("teamRole")
-}
-
-model MemberOrganizationRole {
-  id             String   @id
-  memberId       String
-  member         Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
-  organizationId String   @db.Text
-  role           String   @db.Text
-  createdAt      DateTime @default(now())
-
-  @@index([memberId(length: 191)])
-  @@index([organizationId(length: 191)])
-  @@index([role(length: 191)])
-  @@map("memberOrganizationRole")
-}
-
-model MemberTeamRole {
-  id             String     @id
-  team_member_id String
-  teammember     TeamMember @relation(fields: [team_member_id], references: [id], onDelete: Cascade)
-  teamId         String     @db.Text
-  role           String     @db.Text
-  createdAt      DateTime   @default(now())
-
-  @@index([team_member_id(length: 191)])
-  @@index([teamId(length: 191)])
-  @@index([role(length: 191)])
-  @@map("memberTeamRole")
-}
-
-model Team {
-  id             String       @id
-  name           String       @db.Text
-  organizationId String
-  workspace      Workspace    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdAt      DateTime
-  updatedAt      DateTime?    @updatedAt
-  teamroles      TeamRole[]
-  teammembers    TeamMember[]
-
-  @@index([organizationId(length: 191)])
-  @@map("team")
-}
-
-model TeamMember {
-  id              String           @id
-  teamId          String
-  team            Team             @relation(fields: [teamId], references: [id], onDelete: Cascade)
-  userId          String
-  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt       DateTime?
-  memberteamroles MemberTeamRole[]
-
-  @@index([teamId(length: 191)])
-  @@index([userId(length: 191)])
-  @@map("teamMember")
 }

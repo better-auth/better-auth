@@ -4,8 +4,32 @@ import type {
 	Session,
 	User,
 } from "better-auth";
+import type { Organization } from "better-auth/plugins/organization";
 import type Stripe from "stripe";
-import type { subscriptions, user } from "./schema";
+import type { organization, subscriptions, user } from "./schema";
+
+export type AuthorizeReferenceAction =
+	| "upgrade-subscription"
+	| "list-subscription"
+	| "cancel-subscription"
+	| "restore-subscription"
+	| "billing-portal";
+
+export type CustomerType = "user" | "organization";
+
+export type WithStripeCustomerId = {
+	stripeCustomerId?: string;
+};
+
+// TODO: Types extended by a plugin should be moved into that plugin.
+export type WithActiveOrganizationId = {
+	activeOrganizationId?: string;
+};
+
+export type StripeCtxSession = {
+	session: Session & WithActiveOrganizationId;
+	user: User & WithStripeCustomerId;
+};
 
 export type StripePlan = {
 	/**
@@ -50,6 +74,22 @@ export type StripePlan = {
 	 * when a user can subscribe to multiple plans.
 	 */
 	group?: string | undefined;
+	/**
+	 * Per-seat billing price ID
+	 *
+	 * Requires the `organization` plugin. Member changes
+	 * automatically sync the seat quantity in Stripe.
+	 */
+	seatPriceId?: string | undefined;
+	/**
+	 * Additional line items to include in the checkout session.
+	 *
+	 * All line items must use the same billing interval as the base price (e.g. all monthly or all yearly).
+	 * Stripe does not support mixed-interval subscriptions via Checkout Sessions.
+	 *
+	 * @see https://docs.stripe.com/billing/subscriptions/mixed-interval#limitations
+	 */
+	lineItems?: Stripe.Checkout.SessionCreateParams.LineItem[] | undefined;
 	/**
 	 * Free trial days
 	 */
@@ -154,9 +194,26 @@ export interface Subscription {
 	 */
 	periodEnd?: Date | undefined;
 	/**
-	 * Cancel at period end
+	 * Whether this subscription will (if status=active)
+	 * or did (if status=canceled) cancel at the end of the current billing period.
 	 */
 	cancelAtPeriodEnd?: boolean | undefined;
+	/**
+	 * If the subscription is scheduled to be canceled,
+	 * this is the time at which the cancellation will take effect.
+	 */
+	cancelAt?: Date | undefined;
+	/**
+	 * If the subscription has been canceled, this is the time when it was canceled.
+	 *
+	 * Note: If the subscription was canceled with `cancel_at_period_end`,
+	 * this reflects the cancellation request time, not when the subscription actually ends.
+	 */
+	canceledAt?: Date | undefined;
+	/**
+	 * If the subscription has ended, the date the subscription ended.
+	 */
+	endedAt?: Date | undefined;
 	/**
 	 * A field to group subscriptions so you can have multiple subscriptions
 	 * for one reference id
@@ -166,6 +223,17 @@ export interface Subscription {
 	 * Number of seats for the subscription (useful for team plans)
 	 */
 	seats?: number | undefined;
+	/**
+	 * The billing interval for this subscription.
+	 * Indicates how often the subscription is billed.
+	 * @see https://docs.stripe.com/api/plans/object#plan_object-interval
+	 */
+	billingInterval?: "day" | "week" | "month" | "year" | undefined;
+	/**
+	 * Stripe Subscription Schedule ID, present when a scheduled
+	 * plan change is pending for this subscription.
+	 */
+	stripeScheduleId?: string | undefined;
 }
 
 export type SubscriptionOptions = {
@@ -236,12 +304,7 @@ export type SubscriptionOptions = {
 					user: User & Record<string, any>;
 					session: Session & Record<string, any>;
 					referenceId: string;
-					action:
-						| "upgrade-subscription"
-						| "list-subscription"
-						| "cancel-subscription"
-						| "restore-subscription"
-						| "billing-portal";
+					action: AuthorizeReferenceAction;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<boolean>)
@@ -255,6 +318,18 @@ export type SubscriptionOptions = {
 				event: Stripe.Event;
 				stripeSubscription: Stripe.Subscription;
 				subscription: Subscription;
+		  }) => Promise<void>)
+		| undefined;
+	/**
+	 * A callback to run when a subscription is created
+	 * @returns
+	 */
+	onSubscriptionCreated?:
+		| ((data: {
+				event: Stripe.Event;
+				stripeSubscription: Stripe.Subscription;
+				subscription: Subscription;
+				plan: StripePlan;
 		  }) => Promise<void>)
 		| undefined;
 	/**
@@ -284,14 +359,6 @@ export type SubscriptionOptions = {
 						options?: Stripe.RequestOptions;
 				  })
 		| undefined;
-	/**
-	 * Enable organization subscription
-	 */
-	organization?:
-		| {
-				enabled: boolean;
-		  }
-		| undefined;
 };
 
 export interface StripeOptions {
@@ -319,7 +386,7 @@ export interface StripeOptions {
 		| ((
 				data: {
 					stripeCustomer: Stripe.Customer;
-					user: User & { stripeCustomerId: string };
+					user: User & WithStripeCustomerId;
 				},
 				ctx: GenericEndpointContext,
 		  ) => Promise<void>)
@@ -350,6 +417,49 @@ export interface StripeOptions {
 		  )
 		| undefined;
 	/**
+	 * Organization Stripe integration
+	 *
+	 * Enable organizations to have their own Stripe customer ID
+	 */
+	organization?:
+		| {
+				/**
+				 * Enable organization Stripe customer
+				 */
+				enabled: true;
+				/**
+				 * A custom function to get the customer create params
+				 * for organization customers.
+				 *
+				 * @param organization - the organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				getCustomerCreateParams?:
+					| ((
+							organization: Organization,
+							ctx: GenericEndpointContext,
+					  ) => Promise<Partial<Stripe.CustomerCreateParams>>)
+					| undefined;
+				/**
+				 * A callback to run after an organization customer has been created
+				 *
+				 * @param data - data containing stripeCustomer and organization
+				 * @param ctx - the context object
+				 * @returns
+				 */
+				onCustomerCreate?:
+					| ((
+							data: {
+								stripeCustomer: Stripe.Customer;
+								organization: Organization & WithStripeCustomerId;
+							},
+							ctx: GenericEndpointContext,
+					  ) => Promise<void>)
+					| undefined;
+		  }
+		| undefined;
+	/**
 	 * A callback to run after a stripe event is received
 	 * @param event - Stripe Event
 	 * @returns
@@ -358,7 +468,9 @@ export interface StripeOptions {
 	/**
 	 * Schema for the stripe plugin
 	 */
-	schema?: InferOptionSchema<typeof subscriptions & typeof user> | undefined;
+	schema?:
+		| InferOptionSchema<
+				typeof subscriptions & typeof user & typeof organization
+		  >
+		| undefined;
 }
-
-export interface InputSubscription extends Omit<Subscription, "id"> {}

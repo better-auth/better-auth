@@ -45,19 +45,24 @@ your database schema based on your Better Auth configuration and plugins.
   </thead>
   <tbody>
     <tr className="h-10">
-      <td>✅ Supported</td>
-      <td>✅ Supported</td>
+      <td>&#9989; Supported</td>
+      <td>&#9989; Supported</td>
     </tr>
   </tbody>
 </table>
 
-```bash title="Schema Generation"
-npx @better-auth/cli@latest generate
-```
-
-```bash title="Schema Migration"
-npx @better-auth/cli@latest migrate
-```
+   <Tabs items={["migrate", "generate"]}>
+      <Tab value="migrate">
+      ```package-install
+      npx auth@latest migrate
+      ```
+      </Tab>
+      <Tab value="generate">
+      ```package-install
+      npx auth@latest generate
+      ```
+      </Tab>
+    </Tabs>
 
 ## Joins (Experimental)
 
@@ -69,6 +74,8 @@ The Kysely PostgreSQL dialect supports joins out of the box since version `1.4.0
 To enable this feature, you need to set the `experimental.joins` option to `true` in your auth configuration.
 
 ```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+
 export const auth = betterAuth({
   experimental: { joins: true }
 });
@@ -111,7 +118,7 @@ export const auth = betterAuth({
     port: 5432,
     user: "postgres",
     password: "password",
-    database: "mydb",
+    database: "my-db",
     options: "-c search_path=auth",
   }),
 });
@@ -147,7 +154,7 @@ Before using a non-default schema, ensure:
 
 The Better Auth CLI migration system automatically detects your configured `search_path`:
 
-- When running `npx @better-auth/cli migrate`, it inspects only the tables in your configured schema
+- When running `npx auth migrate`, it inspects only the tables in your configured schema
 - Tables in other schemas (e.g., `public`) are ignored, preventing conflicts
 - All new tables are created in your specified schema
 
@@ -176,4 +183,3 @@ This should return your custom schema (e.g., `auth`) as the first value.
 PostgreSQL is supported under the hood via the [Kysely](https://kysely.dev/) adapter, any database supported by Kysely would also be supported. (<Link href="/docs/adapters/other-relational-databases">Read more here</Link>)
 
 If you're looking for performance improvements or tips, take a look at our guide to <Link href="/docs/guides/optimizing-for-performance">performance optimizations</Link>.
-

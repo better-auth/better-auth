@@ -3,6 +3,11 @@ import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 export const schema = {
 	user: {
 		fields: {
+			role: {
+				type: "string",
+				required: false,
+				input: false,
+			},
 			banned: {
 				type: "boolean",
 				defaultValue: false,
@@ -25,26 +30,6 @@ export const schema = {
 		fields: {
 			impersonatedBy: {
 				type: "string",
-				required: false,
-			},
-		},
-	},
-	platformRole: {
-		fields: {
-			role: {
-				type: "string",
-				required: true,
-			},
-			name: {
-				type: "string",
-				required: true,
-			},
-			description: {
-				type: "string",
-				required: true,
-			},
-			metadata: {
-				type: "json",
 				required: false,
 			},
 		},

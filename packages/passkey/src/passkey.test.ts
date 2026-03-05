@@ -1,9 +1,27 @@
+import { APIError } from "@better-auth/core/error";
+import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
 import { getTestInstance } from "better-auth/test";
-import { describe, expect, it } from "vitest";
+import {
+	afterEach,
+	assert,
+	beforeEach,
+	describe,
+	expect,
+	it,
+	vi,
+} from "vitest";
 import type { Passkey } from ".";
 import { passkey } from ".";
 import { passkeyClient } from "./client";
+
+vi.mock("@simplewebauthn/server", async (importOriginal) => {
+	const mod = await importOriginal<typeof import("@simplewebauthn/server")>();
+	return {
+		...mod,
+		verifyAuthenticationResponse: vi.fn(mod.verifyAuthenticationResponse),
+	};
+});
 
 describe("passkey", async () => {
 	const { auth, signInWithTestUser, customFetchImpl } = await getTestInstance({
@@ -111,14 +129,110 @@ describe("passkey", async () => {
 		expect(updateResult.passkey.name).toBe("newName");
 	});
 
-	it("should delete a passkey", async () => {
+	it("should not delete a passkey that doesn't exist", async () => {
 		const { headers } = await signInWithTestUser();
+		await expect(
+			auth.api.deletePasskey({
+				headers: headers,
+				body: {
+					id: "mockPasskeyId",
+				},
+			}),
+		).rejects.toThrowError(APIError);
+	});
+
+	it("should delete a passkey", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID",
+				createdAt: new Date(),
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			} satisfies Omit<Passkey, "id">,
+		});
+
 		const deleteResult = await auth.api.deletePasskey({
 			headers: headers,
 			body: {
-				id: "mockPasskeyId",
+				id: passkey.id,
 			},
 		});
-		expect(deleteResult).toBe(null);
+		expect(deleteResult.status).toBe(true);
+	});
+});
+
+describe("passkey expirationTime per-request", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it("should compute expirationTime per-request, not at init time", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth, signInWithTestUser } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
+
+		const { headers } = await signInWithTestUser();
+		await auth.api.generatePasskeyRegistrationOptions({
+			headers,
+		});
+
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
+
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
+
+		expect(expiresAt).toBeGreaterThan(currentTime);
+	});
+
+	it("should compute expirationTime per-request for authentication options", async () => {
+		const initTime = Date.now();
+		vi.setSystemTime(initTime);
+
+		const { auth } = await getTestInstance({
+			plugins: [passkey()],
+		});
+
+		// Advance time by 6 minutes
+		vi.advanceTimersByTime(6 * 60 * 1000);
+
+		await auth.api.generatePasskeyAuthenticationOptions({});
+
+		const context = await auth.$context;
+		const verifications = await context.adapter.findMany<Verification>({
+			model: "verification",
+		});
+
+		const passkeyVerification = verifications[verifications.length - 1];
+		assert(passkeyVerification);
+
+		const currentTime = Date.now();
+		const expiresAt = new Date(passkeyVerification.expiresAt).getTime();
+
+		expect(expiresAt).toBeGreaterThan(currentTime);
 	});
 });

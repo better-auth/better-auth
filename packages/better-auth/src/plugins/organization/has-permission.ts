@@ -1,127 +1,79 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
-import z from "zod";
-import { orgSessionMiddleware } from "./call";
-import { APIError } from "better-call";
-import { ORGANIZATION_ERROR_CODES } from "./error-codes";
-import { getOrgAdapter } from "./adapter";
-import { createAuthEndpoint } from "@better-auth/core/api";
-import type { OrganizationOptions } from "./types";
+import type { GenericEndpointContext } from "@better-auth/core";
+import * as z from "zod";
+import { APIError } from "../../api";
+import type { Role } from "../access";
+import { defaultRoles } from "./access";
+import type { HasPermissionBaseInput } from "./permission";
+import { cacheAllRoles, hasPermissionFn } from "./permission";
+import type { OrganizationRole } from "./schema";
 
-export function createHasPermission<O extends OrganizationOptions>(options: O) {
-	return createAuthEndpoint(
-		"/organization/has-permission",
-		{
-			method: "POST",
-			requireHeaders: true,
-			body: z.object({
-				permission: z.string(),
-				resourceType: z.string(),
-				resourceId: z.string(),
-			}),
-			use: [orgSessionMiddleware],
-			metadata: {
-				$Infer: {
-					body: {} as {
-						permission: string;
-						resourceType: string;
-						resourceId: string;
-					},
-				},
-				openapi: {
-					description: "Check if the user has permission",
-					requestBody: {
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										permission: {
-											type: "object",
-											description: "The permission to check",
-											deprecated: true,
-										},
-										permissions: {
-											type: "object",
-											description: "The permission to check",
-										},
-									},
-									required: ["permissions"],
-								},
-							},
-						},
-					},
-					responses: {
-						"200": {
-							description: "Success",
-							content: {
-								"application/json": {
-									schema: {
-										type: "object",
-										properties: {
-											error: {
-												type: "string",
-											},
-											success: {
-												type: "boolean",
-											},
-										},
-										required: ["success"],
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		async (ctx) => {
-			const activeOrganizationId =
-				ctx.context.session.session.activeOrganizationId;
-			if (!activeOrganizationId) {
-				throw new APIError("BAD_REQUEST", {
-					message: ORGANIZATION_ERROR_CODES.NO_ACTIVE_ORGANIZATION,
-				});
-			}
-			const adapter = getOrgAdapter<O>(ctx.context, options);
-			const member = await adapter.findMemberByOrgId({
-				userId: ctx.context.session.user.id,
-				organizationId: activeOrganizationId,
-			});
-			if (!member) {
-				throw new APIError("UNAUTHORIZED", {
-					message:
-						ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
-				});
-			}
-			const result = await hasPermission(ctx, {
-				userId: member.userId,
-				permission: ctx.body.permission,
-				resourceType: ctx.body.resourceType,
-				resourceId: ctx.body.resourceId,
-			});
-
-			return ctx.json({
-				error: null,
-				success: result,
-			});
-		},
-	);
-}
-
-export async function hasPermission<TContext extends GenericEndpointContext>(
-	ctx: TContext,
+export const hasPermission = async (
 	input: {
-		resourceId: string;
-		resourceType: string;
-		permission: string;
-		userId: string;
-	},
-): Promise<boolean> {
-	return await ctx.context.graphAdapter.check(
-		"user",
-		input.userId,
-		input.permission,
-		input.resourceType,
-		input.resourceId,
-	);
-}
+		organizationId: string;
+		/**
+		 * If true, will use the in-memory cache of the roles.
+		 * Keep in mind to use this in a stateless mindset, the purpose of this is to avoid unnecessary database calls when running multiple
+		 * hasPermission calls in a row.
+		 *
+		 * @default false
+		 */
+		useMemoryCache?: boolean | undefined;
+	} & HasPermissionBaseInput,
+	ctx: GenericEndpointContext,
+) => {
+	let acRoles: {
+		[x: string]: Role<any> | undefined;
+	} = { ...(input.options.roles || defaultRoles) };
+
+	if (
+		ctx &&
+		input.organizationId &&
+		input.options.dynamicAccessControl?.enabled &&
+		input.options.ac &&
+		!input.useMemoryCache
+	) {
+		// Load roles from database
+		const roles = await ctx.context.adapter.findMany<
+			OrganizationRole & { permission: string }
+		>({
+			model: "organizationRole",
+			where: [
+				{
+					field: "organizationId",
+					value: input.organizationId,
+				},
+			],
+		});
+
+		for (const { role, permission: permissionsString } of roles) {
+			const result = z
+				.record(z.string(), z.array(z.string()))
+				.safeParse(JSON.parse(permissionsString));
+
+			if (!result.success) {
+				ctx.context.logger.error(
+					"[hasPermission] Invalid permissions for role " + role,
+					{
+						permissions: JSON.parse(permissionsString),
+					},
+				);
+				throw new APIError("INTERNAL_SERVER_ERROR", {
+					message: "Invalid permissions for role " + role,
+				});
+			}
+
+			const merged: Record<string, string[]> = { ...acRoles[role]?.statements };
+			for (const [key, actions] of Object.entries(result.data)) {
+				merged[key] = [...new Set([...(merged[key] ?? []), ...actions])];
+			}
+			acRoles[role] = input.options.ac.newRole(merged);
+		}
+	}
+
+	if (input.useMemoryCache) {
+		acRoles = cacheAllRoles.get(input.organizationId) || acRoles;
+	}
+	cacheAllRoles.set(input.organizationId, acRoles);
+
+	return hasPermissionFn(input, acRoles);
+};

@@ -1,11 +1,10 @@
 import type { BetterAuthOptions } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
-import { BASE_ERROR_CODES } from "@better-auth/core/error";
-import { APIError } from "better-call";
+import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
 import * as z from "zod";
 import { deleteSessionCookie, setSessionCookie } from "../../cookies";
 import { generateRandomString } from "../../crypto";
-import { parseUserInput } from "../../db/schema";
+import { parseUserInput, parseUserOutput } from "../../db/schema";
 import type { AdditionalUserFieldsInput } from "../../types";
 import { originCheck } from "../middlewares";
 import { createEmailVerificationToken } from "./email-verification";
@@ -15,24 +14,26 @@ import {
 	sessionMiddleware,
 } from "./session";
 
+const updateUserBodySchema = z.record(
+	z.string().meta({
+		description: "Field name must be a string",
+	}),
+	z.any(),
+);
+
 export const updateUser = <O extends BetterAuthOptions>() =>
 	createAuthEndpoint(
 		"/update-user",
 		{
 			method: "POST",
 			operationId: "updateUser",
-			body: z.record(
-				z.string().meta({
-					description: "Field name must be a string",
-				}),
-				z.any(),
-			),
+			body: updateUserBodySchema,
 			use: [sessionMiddleware],
 			metadata: {
 				$Infer: {
 					body: {} as Partial<AdditionalUserFieldsInput<O>> & {
 						name?: string | undefined;
-						image?: string | undefined;
+						image?: string | undefined | null;
 					},
 				},
 				openapi: {
@@ -51,6 +52,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 										image: {
 											type: "string",
 											description: "The image of the user",
+											nullable: true,
 										},
 									},
 								},
@@ -85,10 +87,18 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				[key: string]: any;
 			};
 
+			if (typeof body !== "object" || Array.isArray(body)) {
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.BODY_MUST_BE_AN_OBJECT,
+				);
+			}
+
 			if (body.email) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.EMAIL_CAN_NOT_BE_UPDATED,
+				);
 			}
 			const { name, image, ...rest } = body;
 			const session = ctx.context.session;
@@ -102,7 +112,7 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 				name === undefined &&
 				Object.keys(additionalFields).length === 0
 			) {
-				throw new APIError("BAD_REQUEST", {
+				throw APIError.fromStatus("BAD_REQUEST", {
 					message: "No fields to update",
 				});
 			}
@@ -114,12 +124,18 @@ export const updateUser = <O extends BetterAuthOptions>() =>
 					...additionalFields,
 				},
 			);
+			const updatedUser = user ?? {
+				...session.user,
+				...(name !== undefined && { name }),
+				...(image !== undefined && { image }),
+				...additionalFields,
+			};
 			/**
 			 * Update the session cookie with the new user data
 			 */
 			await setSessionCookie(ctx, {
 				session: session.session,
-				user,
+				user: updatedUser,
 			});
 			return ctx.json({
 				status: true,
@@ -237,18 +253,14 @@ export const changePassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -258,9 +270,10 @@ export const changePassword = createAuthEndpoint(
 			(account) => account.providerId === "credential" && account.password,
 		);
 		if (!account || !account.password) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-			});
+			throw APIError.from(
+				"BAD_REQUEST",
+				BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+			);
 		}
 		const passwordHash = await ctx.context.password.hash(newPassword);
 		const verify = await ctx.context.password.verify({
@@ -268,9 +281,7 @@ export const changePassword = createAuthEndpoint(
 			password: currentPassword,
 		});
 		if (!verify) {
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.INVALID_PASSWORD,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 		}
 		await ctx.context.internalAdapter.updateAccount(account.id, {
 			password: passwordHash,
@@ -282,9 +293,10 @@ export const changePassword = createAuthEndpoint(
 				session.user.id,
 			);
 			if (!newSession) {
-				throw new APIError("INTERNAL_SERVER_ERROR", {
-					message: BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
-				});
+				throw APIError.from(
+					"INTERNAL_SERVER_ERROR",
+					BASE_ERROR_CODES.FAILED_TO_GET_SESSION,
+				);
 			}
 			// set the new session cookie
 			await setSessionCookie(ctx, {
@@ -296,21 +308,12 @@ export const changePassword = createAuthEndpoint(
 
 		return ctx.json({
 			token,
-			user: {
-				id: session.user.id,
-				email: session.user.email,
-				name: session.user.name,
-				image: session.user.image,
-				emailVerified: session.user.emailVerified,
-				createdAt: session.user.createdAt,
-				updatedAt: session.user.updatedAt,
-			},
+			user: parseUserOutput(ctx.context.options, session.user),
 		});
 	},
 );
 
 export const setPassword = createAuthEndpoint(
-	"/set-password",
 	{
 		method: "POST",
 		body: z.object({
@@ -321,9 +324,6 @@ export const setPassword = createAuthEndpoint(
 				description: "The new password to set is required",
 			}),
 		}),
-		metadata: {
-			SERVER_ONLY: true,
-		},
 		use: [sensitiveSessionMiddleware],
 	},
 	async (ctx) => {
@@ -332,18 +332,14 @@ export const setPassword = createAuthEndpoint(
 		const minPasswordLength = ctx.context.password.config.minPasswordLength;
 		if (newPassword.length < minPasswordLength) {
 			ctx.context.logger.error("Password is too short");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_SHORT,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_SHORT);
 		}
 
 		const maxPasswordLength = ctx.context.password.config.maxPasswordLength;
 
 		if (newPassword.length > maxPasswordLength) {
 			ctx.context.logger.error("Password is too long");
-			throw new APIError("BAD_REQUEST", {
-				message: BASE_ERROR_CODES.PASSWORD_TOO_LONG,
-			});
+			throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_TOO_LONG);
 		}
 
 		const accounts = await ctx.context.internalAdapter.findAccounts(
@@ -364,9 +360,7 @@ export const setPassword = createAuthEndpoint(
 				status: true,
 			});
 		}
-		throw new APIError("BAD_REQUEST", {
-			message: "user already has a password",
-		});
+		throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.PASSWORD_ALREADY_SET);
 	},
 );
 
@@ -469,7 +463,7 @@ export const deleteUser = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
 			);
-			throw new APIError("NOT_FOUND");
+			throw APIError.fromStatus("NOT_FOUND");
 		}
 		const session = ctx.context.session;
 
@@ -481,23 +475,22 @@ export const deleteUser = createAuthEndpoint(
 				(account) => account.providerId === "credential" && account.password,
 			);
 			if (!account || !account.password) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
-				});
+				throw APIError.from(
+					"BAD_REQUEST",
+					BASE_ERROR_CODES.CREDENTIAL_ACCOUNT_NOT_FOUND,
+				);
 			}
 			const verify = await ctx.context.password.verify({
 				hash: account.password,
 				password: ctx.body.password,
 			});
 			if (!verify) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.INVALID_PASSWORD,
-				});
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.INVALID_PASSWORD);
 			}
 		}
 
 		if (ctx.body.token) {
-			//@ts-expect-error
+			// @ts-expect-error
 			await deleteUserCallback({
 				...ctx,
 				query: {
@@ -524,16 +517,18 @@ export const deleteUser = createAuthEndpoint(
 			});
 			const url = `${
 				ctx.context.baseURL
-			}/delete-user/callback?token=${token}&callbackURL=${
-				ctx.body.callbackURL || "/"
-			}`;
-			await ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
-				{
-					user: session.user,
-					url,
-					token,
-				},
-				ctx.request,
+			}/delete-user/callback?token=${token}&callbackURL=${encodeURIComponent(
+				ctx.body.callbackURL || "/",
+			)}`;
+			await ctx.context.runInBackgroundOrAwait(
+				ctx.context.options.user.deleteUser.sendDeleteAccountVerification(
+					{
+						user: session.user,
+						url,
+						token,
+					},
+					ctx.request,
+				),
 			);
 			return ctx.json({
 				success: true,
@@ -545,10 +540,8 @@ export const deleteUser = createAuthEndpoint(
 			const currentAge = new Date(session.session.createdAt).getTime();
 			const freshAge = ctx.context.sessionConfig.freshAge * 1000;
 			const now = Date.now();
-			if (now - currentAge > freshAge * 1000) {
-				throw new APIError("BAD_REQUEST", {
-					message: BASE_ERROR_CODES.SESSION_EXPIRED,
-				});
+			if (now - currentAge > freshAge) {
+				throw APIError.from("BAD_REQUEST", BASE_ERROR_CODES.SESSION_EXPIRED);
 			}
 		}
 
@@ -622,26 +615,26 @@ export const deleteUserCallback = createAuthEndpoint(
 			ctx.context.logger.error(
 				"Delete user is disabled. Enable it in the options",
 			);
-			throw new APIError("NOT_FOUND");
+			throw APIError.from("NOT_FOUND", {
+				message: "Not found",
+				code: "NOT_FOUND",
+			});
 		}
 		const session = await getSessionFromCtx(ctx);
 		if (!session) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
-			});
+			throw APIError.from(
+				"NOT_FOUND",
+				BASE_ERROR_CODES.FAILED_TO_GET_USER_INFO,
+			);
 		}
 		const token = await ctx.context.internalAdapter.findVerificationValue(
 			`delete-account-${ctx.query.token}`,
 		);
 		if (!token || token.expiresAt < new Date()) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		if (token.value !== session.user.id) {
-			throw new APIError("NOT_FOUND", {
-				message: BASE_ERROR_CODES.INVALID_TOKEN,
-			});
+			throw APIError.from("NOT_FOUND", BASE_ERROR_CODES.INVALID_TOKEN);
 		}
 		const beforeDelete = ctx.context.options.user.deleteUser?.beforeDelete;
 		if (beforeDelete) {
@@ -650,7 +643,9 @@ export const deleteUserCallback = createAuthEndpoint(
 		await ctx.context.internalAdapter.deleteUser(session.user.id);
 		await ctx.context.internalAdapter.deleteSessions(session.user.id);
 		await ctx.context.internalAdapter.deleteAccounts(session.user.id);
-		await ctx.context.internalAdapter.deleteVerificationValue(token.id);
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(
+			`delete-account-${ctx.query.token}`,
+		);
 
 		deleteSessionCookie(ctx);
 
@@ -716,21 +711,6 @@ export const changeEmail = createAuthEndpoint(
 							},
 						},
 					},
-					"422": {
-						description: "Unprocessable Entity. Email already exists",
-						content: {
-							"application/json": {
-								schema: {
-									type: "object",
-									properties: {
-										message: {
-											type: "string",
-										},
-									},
-								},
-							},
-						},
-					},
 				},
 			},
 		},
@@ -738,7 +718,7 @@ export const changeEmail = createAuthEndpoint(
 	async (ctx) => {
 		if (!ctx.context.options.user?.changeEmail?.enabled) {
 			ctx.context.logger.error("Change email is disabled.");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Change email is disabled",
 			});
 		}
@@ -747,26 +727,57 @@ export const changeEmail = createAuthEndpoint(
 
 		if (newEmail === ctx.context.session.user.email) {
 			ctx.context.logger.error("Email is the same");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Email is the same",
 			});
 		}
+
+		/**
+		 * Early config check: ensure at least one email-change flow is
+		 * available for the current session state. Without this, an
+		 * existing-email lookup would return 200 while a non-existing
+		 * email would later throw 400, leaking email existence.
+		 */
+		const canUpdateWithoutVerification =
+			ctx.context.session.user.emailVerified !== true &&
+			ctx.context.options.user.changeEmail.updateEmailWithoutVerification;
+		const canSendConfirmation =
+			ctx.context.session.user.emailVerified &&
+			ctx.context.options.user.changeEmail.sendChangeEmailConfirmation;
+		const canSendVerification =
+			ctx.context.options.emailVerification?.sendVerificationEmail;
+
+		if (
+			!canUpdateWithoutVerification &&
+			!canSendConfirmation &&
+			!canSendVerification
+		) {
+			ctx.context.logger.error("Verification email isn't enabled.");
+			throw APIError.fromStatus("BAD_REQUEST", {
+				message: "Verification email isn't enabled",
+			});
+		}
+
 		const existingUser =
 			await ctx.context.internalAdapter.findUserByEmail(newEmail);
 		if (existingUser) {
-			ctx.context.logger.error("Email already exists");
-			throw new APIError("UNPROCESSABLE_ENTITY", {
-				message: BASE_ERROR_CODES.USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL,
-			});
+			// Simulate token generation to prevent timing attacks
+			await createEmailVerificationToken(
+				ctx.context.secret,
+				ctx.context.session.user.email,
+				newEmail,
+				ctx.context.options.emailVerification?.expiresIn,
+			);
+
+			ctx.context.logger.info("Change email attempt for existing email");
+
+			return ctx.json({ status: true });
 		}
 
 		/**
 		 * If the email is not verified, we can update the email if the option is enabled
 		 */
-		if (
-			ctx.context.session.user.emailVerified !== true &&
-			ctx.context.options.user.changeEmail.updateEmailWithoutVerification
-		) {
+		if (canUpdateWithoutVerification) {
 			await ctx.context.internalAdapter.updateUserByEmail(
 				ctx.context.session.user.email,
 				{
@@ -780,7 +791,7 @@ export const changeEmail = createAuthEndpoint(
 					email: newEmail,
 				},
 			});
-			if (ctx.context.options.emailVerification?.sendVerificationEmail) {
+			if (canSendVerification) {
 				const token = await createEmailVerificationToken(
 					ctx.context.secret,
 					newEmail,
@@ -792,16 +803,18 @@ export const changeEmail = createAuthEndpoint(
 				}/verify-email?token=${token}&callbackURL=${
 					ctx.body.callbackURL || "/"
 				}`;
-				await ctx.context.options.emailVerification.sendVerificationEmail(
-					{
-						user: {
-							...ctx.context.session.user,
-							email: newEmail,
+				await ctx.context.runInBackgroundOrAwait(
+					canSendVerification(
+						{
+							user: {
+								...ctx.context.session.user,
+								email: newEmail,
+							},
+							url,
+							token,
 						},
-						url,
-						token,
-					},
-					ctx.request,
+						ctx.request,
+					),
 				);
 			}
 
@@ -813,12 +826,7 @@ export const changeEmail = createAuthEndpoint(
 		/**
 		 * If the email is verified, we need to send a verification email
 		 */
-		const sendConfirmationToOldEmail =
-			ctx.context.session.user.emailVerified &&
-			(ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification);
-
-		if (sendConfirmationToOldEmail) {
+		if (canSendConfirmation) {
 			const token = await createEmailVerificationToken(
 				ctx.context.secret,
 				ctx.context.session.user.email,
@@ -831,11 +839,8 @@ export const changeEmail = createAuthEndpoint(
 			const url = `${
 				ctx.context.baseURL
 			}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-			const sendFn =
-				ctx.context.options.user.changeEmail.sendChangeEmailConfirmation ||
-				ctx.context.options.user.changeEmail.sendChangeEmailVerification;
-			if (sendFn) {
-				await sendFn(
+			await ctx.context.runInBackgroundOrAwait(
+				canSendConfirmation(
 					{
 						user: ctx.context.session.user,
 						newEmail: newEmail,
@@ -843,16 +848,16 @@ export const changeEmail = createAuthEndpoint(
 						token,
 					},
 					ctx.request,
-				);
-			}
+				),
+			);
 			return ctx.json({
 				status: true,
 			});
 		}
 
-		if (!ctx.context.options.emailVerification?.sendVerificationEmail) {
+		if (!canSendVerification) {
 			ctx.context.logger.error("Verification email isn't enabled.");
-			throw new APIError("BAD_REQUEST", {
+			throw APIError.fromStatus("BAD_REQUEST", {
 				message: "Verification email isn't enabled",
 			});
 		}
@@ -869,16 +874,18 @@ export const changeEmail = createAuthEndpoint(
 		const url = `${
 			ctx.context.baseURL
 		}/verify-email?token=${token}&callbackURL=${ctx.body.callbackURL || "/"}`;
-		await ctx.context.options.emailVerification.sendVerificationEmail(
-			{
-				user: {
-					...ctx.context.session.user,
-					email: newEmail,
+		await ctx.context.runInBackgroundOrAwait(
+			canSendVerification(
+				{
+					user: {
+						...ctx.context.session.user,
+						email: newEmail,
+					},
+					url,
+					token,
 				},
-				url,
-				token,
-			},
-			ctx.request,
+				ctx.request,
+			),
 		);
 		return ctx.json({
 			status: true,

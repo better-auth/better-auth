@@ -1,11 +1,11 @@
-import { describe, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createAuthClient } from "../../client";
 import { setCookieToHeader } from "../../cookies";
 import { getTestInstance } from "../../test-utils/test-instance";
 import { organizationClient } from "./client";
 import { organization } from "./organization";
 
-describe("team", async (it) => {
+describe("team", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		user: {
 			modelName: "users",
@@ -25,7 +25,13 @@ describe("team", async (it) => {
 
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
-		plugins: [organizationClient({})],
+		plugins: [
+			organizationClient({
+				teams: {
+					enabled: true,
+				},
+			}),
+		],
 		baseURL: "http://localhost:3000/api/auth",
 		fetchOptions: {
 			customFetchImpl: async (url, init) => {
@@ -103,10 +109,9 @@ describe("team", async (it) => {
 
 		const res = await client.organization.inviteMember(
 			{
+				teamId,
 				email: invitedUser.email,
-				organizationRoles: ["member"],
-				teamRoles: ["member"],
-				teamIds: [teamId],
+				role: "member",
 			},
 			{
 				headers,
@@ -115,7 +120,8 @@ describe("team", async (it) => {
 
 		expect(res.data).toMatchObject({
 			email: invitedUser.email,
-			teamIds: [teamId],
+			role: "member",
+			teamId,
 		});
 
 		const invitation = await client.organization.acceptInvitation(
@@ -128,6 +134,7 @@ describe("team", async (it) => {
 		);
 
 		expect(invitation.data?.member).toMatchObject({
+			role: "member",
 			userId: signUpRes.data?.user.id,
 		});
 	});
@@ -261,7 +268,13 @@ describe("team", async (it) => {
 
 		const { headers } = await signInWithTestUser();
 		const client = createAuthClient({
-			plugins: [organizationClient()],
+			plugins: [
+				organizationClient({
+					teams: {
+						enabled: true,
+					},
+				}),
+			],
 			baseURL: "http://localhost:3000/api/auth",
 			fetchOptions: {
 				customFetchImpl: async (url, init) => {
@@ -294,11 +307,9 @@ describe("team", async (it) => {
 
 		const res = await client.organization.inviteMember(
 			{
-				teamIds: createTeamResponse.data?.id
-					? [createTeamResponse.data?.id]
-					: undefined,
+				teamId: createTeamResponse.data?.id,
 				email: invitedUser.email,
-				organizationRoles: ["member"],
+				role: "member",
 			},
 			{
 				headers,
@@ -324,11 +335,9 @@ describe("team", async (it) => {
 
 		const res2 = await client.organization.inviteMember(
 			{
-				teamIds: createTeamResponse.data?.id
-					? [createTeamResponse.data?.id]
-					: undefined,
+				teamId: createTeamResponse.data?.id,
 				email: "test2@test.com",
-				organizationRoles: ["member"],
+				role: "member",
 			},
 			{
 				headers,
@@ -339,8 +348,8 @@ describe("team", async (it) => {
 	});
 });
 
-describe("mulit team support", async (it) => {
-	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance(
+describe("multi team support", async () => {
+	const { auth, signInWithTestUser } = await getTestInstance(
 		{
 			plugins: [
 				organization({
@@ -456,15 +465,16 @@ describe("mulit team support", async (it) => {
 			headers: admin.headers,
 			body: {
 				email: invitedUser.response.user.email,
-				organizationRoles: ["member"],
-				teamRoles: ["member"],
+				role: "member",
 				organizationId,
-				teamIds: [team1Id, team2Id, team3Id],
+				teamId: [team1Id, team2Id, team3Id],
 			},
 		});
 
 		expect(invitation.id).toBeDefined();
-		expect(invitation.teamIds).toEqual([team1Id, team2Id, team3Id]);
+		expect((invitation as any).teamId).toBe(
+			[team1Id, team2Id, team3Id].join(","),
+		);
 
 		invitationId = invitation.id!;
 	});
@@ -587,8 +597,9 @@ describe("mulit team support", async (it) => {
 			headers: { cookie: invitedUser.headers.getSetCookie()[0]! },
 		});
 
-		team4Id = team.id;
 		expect(teams).toHaveLength(4);
+
+		team4Id = team.id;
 	});
 
 	it("should remove a member from a team", async () => {
@@ -618,14 +629,14 @@ describe("mulit team support", async (it) => {
 			headers: admin.headers,
 			body: {
 				email: "noteam@email.com",
-				organizationRoles: ["member"],
+				role: "member",
 				organizationId,
 			},
 		});
 
 		expect(invitation.id).toBeDefined();
-		expect(invitation.teamIds).toBeNull();
-		expect(invitation.teamIds).not.toBe("");
+		expect((invitation as any).teamId).toBeNull();
+		expect((invitation as any).teamId).not.toBe("");
 	});
 
 	it("should remove a member from the organization and all their teams when calling removeMember", async () => {
@@ -644,12 +655,12 @@ describe("mulit team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,
 				userId: newUser.user.id,
-				organizationRoles: ["member"],
+				role: "member",
 			},
 		});
 
@@ -740,12 +751,12 @@ describe("mulit team support", async (it) => {
 		const newUser = await response.json();
 
 		// Add the user as a member to the organization
-		const member = await auth.api.addMember({
+		await auth.api.addMember({
 			headers: admin.headers,
 			body: {
 				organizationId: organizationId!,
 				userId: newUser.user.id,
-				organizationRoles: ["member"],
+				role: "member",
 			},
 		});
 

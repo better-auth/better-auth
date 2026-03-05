@@ -1,6 +1,11 @@
-import type { AuthContext, GenericEndpointContext } from "@better-auth/core";
+import type {
+	AuthContext,
+	Awaitable,
+	GenericEndpointContext,
+} from "@better-auth/core";
 import type { DBFieldAttribute } from "@better-auth/core/db";
 import type { Session, User } from "../../types";
+import type { AccessControl, Role } from "../access";
 import type {
 	Invitation,
 	Member,
@@ -25,18 +30,25 @@ export interface OrganizationOptions {
 	 * @default true
 	 */
 	allowUserToCreateOrganization?:
-		| (
-				| boolean
-				| ((user: User & Record<string, any>) => Promise<boolean> | boolean)
-		  )
+		| (boolean | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The maximum number of organizations a user can create.
 	 *
-	 * You can also pass a function that returns a boolean
+	 * You can also pass a function that returns a boolean. The function should return `true` if the user has reached their organization limit, and `false` otherwise.
+	 *
+	 * @default unlimited
+	 * @example
+	 * ```ts
+	 * organizationLimit: async (user) => {
+	 *   const plan = await getUserPlan(user);
+	 *   // Return true if the user has reached their organization limit, false otherwise
+	 *   return plan.name === "pro";
+	 * }
+	 * ```
 	 */
 	organizationLimit?:
-		| (number | ((user: User) => Promise<boolean> | boolean))
+		| (number | ((user: User & Record<string, any>) => Awaitable<boolean>))
 		| undefined;
 	/**
 	 * The role that is assigned to the creator of the
@@ -45,21 +57,51 @@ export interface OrganizationOptions {
 	 * @default "owner"
 	 */
 	creatorRole?: string | undefined;
-
-	builtInOrganizationRoles?:
-		| {
-				type: string;
-				name: string;
-				description: string;
-				relationships?: string[];
-		  }[]
-		| undefined;
 	/**
 	 * The maximum number of members allowed in an organization.
 	 *
+	 * You can also pass a function that returns the limit number
+	 *
 	 * @default 100
 	 */
-	membershipLimit?: number | undefined;
+	membershipLimit?:
+		| number
+		| ((user: User, organization: Organization) => Promise<number> | number)
+		| undefined;
+	/**
+	 * Configure the roles and permissions for the
+	 * organization plugin.
+	 */
+	ac?: AccessControl | undefined;
+	/**
+	 * Custom permissions for roles.
+	 */
+	roles?:
+		| {
+				[key in string]?: Role<any>;
+		  }
+		| undefined;
+	/**
+	 * Dynamic access control for the organization plugin.
+	 */
+	dynamicAccessControl?:
+		| {
+				/**
+				 * Whether to enable dynamic access control for the organization plugin.
+				 *
+				 * @default false
+				 */
+				enabled?: boolean;
+				/**
+				 * The maximum number of roles that can be created for an organization.
+				 *
+				 * @default Infinite
+				 */
+				maximumRolesPerOrganization?:
+					| number
+					| ((organizationId: string) => Awaitable<number>);
+		  }
+		| undefined;
 	/**
 	 * Support for team.
 	 */
@@ -107,7 +149,7 @@ export interface OrganizationOptions {
 						} | null;
 					},
 					ctx?: GenericEndpointContext,
-			  ) => number | Promise<number>)
+			  ) => Awaitable<number>)
 			| number;
 
 		/**
@@ -123,7 +165,7 @@ export interface OrganizationOptions {
 					teamId: string;
 					session: { user: User; session: Session };
 					organizationId: string;
-			  }) => Promise<number> | number)
+			  }) => Awaitable<number>)
 			| undefined;
 		/**
 		 * By default, if an organization does only have one team, they'll not be able to remove it.
@@ -154,7 +196,7 @@ export interface OrganizationOptions {
 					member: Member & Record<string, any>;
 				},
 				ctx: AuthContext,
-		  ) => Promise<number> | number)
+		  ) => Awaitable<number>)
 		| undefined;
 	/**
 	 * Cancel pending invitations on re-invite.
@@ -186,7 +228,7 @@ export interface OrganizationOptions {
 	 * sendInvitationEmail: async (data) => {
 	 * 	const url = `https://yourapp.com/organization/
 	 * accept-invitation?id=${data.id}`;
-	 * 	await sendEmail(data.email, "Invitation to join
+	 * 	 sendEmail(data.email, "Invitation to join
 	 * organization", `Click the link to join the
 	 * organization: ${url}`);
 	 * }
@@ -200,13 +242,9 @@ export interface OrganizationOptions {
 					 */
 					id: string;
 					/**
-					 * the organization roles assigned to the user
+					 * the role of the user
 					 */
-					organizationRoles: string[];
-					/**
-					 * the team roles assigned to the user
-					 */
-					teamRoles: string[];
+					role: string;
 					/**
 					 * the email of the user
 					 */
@@ -294,39 +332,6 @@ export interface OrganizationOptions {
 						[key in string]: DBFieldAttribute;
 					};
 				};
-				teamRole?: {
-					modelName?: string;
-					fields?: {
-						[key in keyof Omit<import("./schema").TeamRole, "id">]?: string;
-					};
-					additionalFields?: {
-						[key in string]: DBFieldAttribute;
-					};
-				};
-				memberOrganizationRole?: {
-					modelName?: string;
-					fields?: {
-						[key in keyof Omit<
-							import("./schema").MemberOrganizationRole,
-							"id"
-						>]?: string;
-					};
-					additionalFields?: {
-						[key in string]: DBFieldAttribute;
-					};
-				};
-				memberTeamRole?: {
-					modelName?: string;
-					fields?: {
-						[key in keyof Omit<
-							import("./schema").MemberTeamRole,
-							"id"
-						>]?: string;
-					};
-					additionalFields?: {
-						[key in string]: DBFieldAttribute;
-					};
-				};
 		  }
 		| undefined;
 	/**
@@ -335,78 +340,6 @@ export interface OrganizationOptions {
 	 * @default false
 	 */
 	disableOrganizationDeletion?: boolean | undefined;
-	/**
-	 * Configure how organization deletion is handled
-	 *
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationDeletion?:
-		| {
-				/**
-				 * disable deleting organization
-				 *
-				 * @deprecated Use `disableOrganizationDeletion` instead
-				 */
-				disabled?: boolean;
-				/**
-				 * A callback that runs before the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				beforeDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-				/**
-				 * A callback that runs after the organization is
-				 * deleted
-				 *
-				 * @deprecated Use `organizationHooks` instead
-				 * @param data - organization and user object
-				 * @param request - the request object
-				 * @returns
-				 */
-				afterDelete?: (
-					data: {
-						organization: Organization;
-						user: User;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
-	/**
-	 * @deprecated Use `organizationHooks` instead
-	 */
-	organizationCreation?:
-		| {
-				disabled?: boolean;
-				beforeCreate?: (
-					data: {
-						organization: Omit<Organization, "id"> & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void | {
-					data: Record<string, any>;
-				}>;
-				afterCreate?: (
-					data: {
-						organization: Organization & Record<string, any>;
-						member: Member & Record<string, any>;
-						user: User & Record<string, any>;
-					},
-					request?: Request,
-				) => Promise<void>;
-		  }
-		| undefined;
 	/**
 	 * Hooks for organization
 	 */
@@ -537,7 +470,7 @@ export interface OrganizationOptions {
 				 * 	return {
 				 * 		data: {
 				 * 			...data.member,
-				 * 			organizationRoles: ["admin", "member"]
+				 * 			role: "custom-role"
 				 * 		}
 				 * 	};
 				 * }
@@ -547,7 +480,7 @@ export interface OrganizationOptions {
 					member: {
 						userId: string;
 						organizationId: string;
-						organizationRoles: string[];
+						role: string;
 						[key: string]: any;
 					};
 					user: User & Record<string, any>;
@@ -584,28 +517,28 @@ export interface OrganizationOptions {
 				}) => Promise<void>;
 
 				/**
-				 * A callback that runs before a member's roles are updated
+				 * A callback that runs before a member's role is updated
 				 *
 				 * You can return a `data` object to override the default data.
 				 */
 				beforeUpdateMemberRole?: (data: {
 					member: Member & Record<string, any>;
-					newRoles: string[];
+					newRole: string;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void | {
 					data: {
-						organizationRoles: string[];
+						role: string;
 						[key: string]: any;
 					};
 				}>;
 
 				/**
-				 * A callback that runs after a member's roles are updated
+				 * A callback that runs after a member's role is updated
 				 */
 				afterUpdateMemberRole?: (data: {
 					member: Member & Record<string, any>;
-					previousRoles: string[];
+					previousRole: string;
 					user: User & Record<string, any>;
 					organization: Organization & Record<string, any>;
 				}) => Promise<void>;
@@ -634,8 +567,7 @@ export interface OrganizationOptions {
 				beforeCreateInvitation?: (data: {
 					invitation: {
 						email: string;
-						organizationRoles: string[];
-						teamRoles: string[];
+						role: string;
 						organizationId: string;
 						inviterId: string;
 						teamId?: string;

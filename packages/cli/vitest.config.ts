@@ -2,6 +2,7 @@ import { defineProject } from "vitest/config";
 
 export default defineProject({
 	test: {
-		maxConcurrency: 1,
+		clearMocks: true,
+		restoreMocks: true,
 	},
 });

@@ -1,4 +1,16 @@
-import type { EndpointContext, EndpointOptions } from "better-call";
+import type {
+	Endpoint,
+	EndpointContext,
+	EndpointMetadata,
+	EndpointRuntimeOptions,
+	HTTPMethod,
+	Middleware,
+	ResolveBodyInput,
+	ResolveErrorInput,
+	ResolveMetaInput,
+	ResolveQueryInput,
+	StandardSchemaV1,
+} from "better-call";
 import { createEndpoint, createMiddleware } from "better-call";
 import { runWithEndpointContext } from "../context";
 import type { AuthContext } from "../types";
@@ -29,25 +41,170 @@ export const createAuthMiddleware = createMiddleware.create({
 
 const use = [optionsMiddleware];
 
-export const createAuthEndpoint = <
+type BodyOption<M, B extends object | undefined = undefined> = M extends
+	| "GET"
+	| "HEAD"
+	| ("GET" | "HEAD")[]
+	? { body?: never }
+	: { body?: B };
+
+type AuthEndpointOptions<
+	Method extends HTTPMethod | HTTPMethod[] | "*",
+	BodySchema extends object | undefined,
+	QuerySchema extends object | undefined,
+	Use extends Middleware[],
+	ReqHeaders extends boolean,
+	ReqRequest extends boolean,
+	Meta extends EndpointMetadata | undefined,
+	ErrorSchema extends StandardSchemaV1 | undefined = undefined,
+> = { method: Method } & BodyOption<Method, BodySchema> & {
+		query?: QuerySchema;
+		use?: [...Use];
+		requireHeaders?: ReqHeaders;
+		requireRequest?: ReqRequest;
+		error?: ErrorSchema;
+		cloneRequest?: boolean;
+		disableBody?: boolean;
+		metadata?: Meta;
+		[key: string]: any;
+	};
+
+// Path + options + handler overload
+export function createAuthEndpoint<
 	Path extends string,
-	Opts extends EndpointOptions,
-	R,
+	Method extends HTTPMethod | HTTPMethod[] | "*",
+	BodySchema extends object | undefined = undefined,
+	QuerySchema extends object | undefined = undefined,
+	Use extends Middleware[] = [],
+	ReqHeaders extends boolean = false,
+	ReqRequest extends boolean = false,
+	R = unknown,
+	Meta extends EndpointMetadata | undefined = undefined,
+	ErrorSchema extends StandardSchemaV1 | undefined = undefined,
 >(
 	path: Path,
-	options: Opts,
-	handler: (ctx: EndpointContext<Path, Opts, AuthContext>) => Promise<R>,
-) => {
+	options: AuthEndpointOptions<
+		Method,
+		BodySchema,
+		QuerySchema,
+		Use,
+		ReqHeaders,
+		ReqRequest,
+		Meta,
+		ErrorSchema
+	>,
+	handler: (
+		ctx: EndpointContext<
+			Path,
+			Method,
+			BodySchema,
+			QuerySchema,
+			Use,
+			ReqHeaders,
+			ReqRequest,
+			AuthContext,
+			Meta
+		>,
+	) => Promise<R>,
+): Endpoint<
+	Path,
+	any,
+	ResolveBodyInput<BodySchema, Meta>,
+	ResolveQueryInput<QuerySchema, Meta>,
+	any,
+	R,
+	ResolveMetaInput<Meta>,
+	ResolveErrorInput<ErrorSchema, Meta>
+>;
+
+// Options-only (virtual/path-less) overload
+export function createAuthEndpoint<
+	Method extends HTTPMethod | HTTPMethod[] | "*",
+	BodySchema extends object | undefined = undefined,
+	QuerySchema extends object | undefined = undefined,
+	Use extends Middleware[] = [],
+	ReqHeaders extends boolean = false,
+	ReqRequest extends boolean = false,
+	R = unknown,
+	Meta extends EndpointMetadata | undefined = undefined,
+	ErrorSchema extends StandardSchemaV1 | undefined = undefined,
+>(
+	options: AuthEndpointOptions<
+		Method,
+		BodySchema,
+		QuerySchema,
+		Use,
+		ReqHeaders,
+		ReqRequest,
+		Meta,
+		ErrorSchema
+	>,
+	handler: (
+		ctx: EndpointContext<
+			string,
+			Method,
+			BodySchema,
+			QuerySchema,
+			Use,
+			ReqHeaders,
+			ReqRequest,
+			AuthContext,
+			Meta
+		>,
+	) => Promise<R>,
+): Endpoint<
+	string,
+	any,
+	ResolveBodyInput<BodySchema, Meta>,
+	ResolveQueryInput<QuerySchema, Meta>,
+	any,
+	R,
+	ResolveMetaInput<Meta>,
+	ResolveErrorInput<ErrorSchema, Meta>
+>;
+
+// Implementation
+export function createAuthEndpoint(
+	pathOrOptions: any,
+	handlerOrOptions: any,
+	handlerOrNever?: any,
+) {
+	const path: string | undefined =
+		typeof pathOrOptions === "string" ? pathOrOptions : undefined;
+	const options: EndpointRuntimeOptions =
+		typeof handlerOrOptions === "object" ? handlerOrOptions : pathOrOptions;
+	const handler =
+		typeof handlerOrOptions === "function" ? handlerOrOptions : handlerOrNever;
+
+	if (path) {
+		return createEndpoint(
+			path,
+			{
+				...options,
+				use: [...(options?.use || []), ...use],
+			} as any,
+			// todo: prettify the code, we want to call `runWithEndpointContext` to top level
+			async (ctx: any) => runWithEndpointContext(ctx, () => handler(ctx)),
+		);
+	}
+
 	return createEndpoint(
-		path,
 		{
 			...options,
 			use: [...(options?.use || []), ...use],
-		},
+		} as any,
 		// todo: prettify the code, we want to call `runWithEndpointContext` to top level
-		async (ctx) => runWithEndpointContext(ctx as any, () => handler(ctx)),
+		async (ctx: any) => runWithEndpointContext(ctx, () => handler(ctx)),
 	);
-};
+}
 
 export type AuthEndpoint = ReturnType<typeof createAuthEndpoint>;
-export type AuthMiddleware = ReturnType<typeof createAuthMiddleware>;
+/**
+ * The handler type for plugin hooks.
+ *
+ * Accepts both `Middleware` instances (from `createAuthMiddleware`)
+ * and plain async functions for better-call v1/v2 compatibility.
+ */
+export type AuthMiddleware = (
+	inputContext: Record<string, any>,
+) => Promise<unknown>;

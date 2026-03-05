@@ -3,11 +3,12 @@ import type {
 	BetterAuthClientPlugin,
 } from "@better-auth/core";
 import type { BASE_ERROR_CODES } from "@better-auth/core/error";
+import { capitalizeFirstLetter } from "@better-auth/core/utils/string";
 import type {
 	BetterFetchError,
 	BetterFetchResponse,
 } from "@better-fetch/fetch";
-import type { PrettifyDeep, UnionToIntersection } from "../../types/helper";
+import type { UnionToIntersection } from "../../types/helper";
 import { getClientConfig } from "../config";
 import { createDynamicPathProxy } from "../proxy";
 import type {
@@ -21,10 +22,6 @@ import { useStore } from "./react-store";
 
 function getAtomKey(str: string) {
 	return `use${capitalizeFirstLetter(str)}`;
-}
-
-export function capitalizeFirstLetter(str: string) {
-	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 type InferResolvedHooks<O extends BetterAuthClientOptions> = O extends {
@@ -58,7 +55,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 		$store,
 		atomListeners,
 	} = getClientConfig(options);
-	let resolvedHooks: Record<string, any> = {};
+	const resolvedHooks: Record<string, any> = {};
 	for (const [key, value] of Object.entries(pluginsAtoms)) {
 		resolvedHooks[getAtomKey(key)] = () => useStore(value);
 	}
@@ -102,9 +99,7 @@ export function createAuthClient<Option extends BetterAuthClientOptions>(
 			};
 			$fetch: typeof $fetch;
 			$store: typeof $store;
-			$ERROR_CODES: PrettifyDeep<
-				InferErrorCodes<Option> & typeof BASE_ERROR_CODES
-			>;
+			$ERROR_CODES: InferErrorCodes<Option> & typeof BASE_ERROR_CODES;
 		};
 }
 

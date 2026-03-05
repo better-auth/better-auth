@@ -1,3 +1,4 @@
+import type { AwaitableFunction } from "../types";
 import type { ProviderOptions } from "./index";
 import { generateCodeChallenge } from "./utils";
 
@@ -22,12 +23,12 @@ export async function createAuthorizationURL({
 	scopeJoiner,
 }: {
 	id: string;
-	options: ProviderOptions;
+	options: AwaitableFunction<ProviderOptions>;
 	redirectURI: string;
 	authorizationEndpoint: string;
 	state: string;
 	codeVerifier?: string | undefined;
-	scopes: string[];
+	scopes?: string[] | undefined;
 	claims?: string[] | undefined;
 	duration?: string | undefined;
 	prompt?: string | undefined;
@@ -40,14 +41,17 @@ export async function createAuthorizationURL({
 	additionalParams?: Record<string, string> | undefined;
 	scopeJoiner?: string | undefined;
 }) {
-	const url = new URL(authorizationEndpoint);
+	options = typeof options === "function" ? await options() : options;
+	const url = new URL(options.authorizationEndpoint || authorizationEndpoint);
 	url.searchParams.set("response_type", responseType || "code");
 	const primaryClientId = Array.isArray(options.clientId)
 		? options.clientId[0]
 		: options.clientId;
 	url.searchParams.set("client_id", primaryClientId);
 	url.searchParams.set("state", state);
-	url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	if (scopes) {
+		url.searchParams.set("scope", scopes.join(scopeJoiner || " "));
+	}
 	url.searchParams.set("redirect_uri", options.redirectURI || redirectURI);
 	duration && url.searchParams.set("duration", duration);
 	display && url.searchParams.set("display", display);

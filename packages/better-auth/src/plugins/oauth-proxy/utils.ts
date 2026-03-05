@@ -1,12 +1,20 @@
+import type { GenericEndpointContext } from "@better-auth/core";
 import { env } from "@better-auth/core/env";
-import type { EndpointContext } from "better-call";
 import { getOrigin } from "../../utils/url";
 import type { OAuthProxyOptions } from "./index";
 
 /**
+ * Strip trailing slashes from URL to prevent double slashes
+ */
+export function stripTrailingSlash(url: string | undefined): string {
+	if (!url) return "";
+	return url.replace(/\/+$/, "");
+}
+
+/**
  * Get base URL from vendor-specific environment variables
  */
-export function getVendorBaseURL() {
+function getVendorBaseURL() {
 	const vercel = env.VERCEL_URL ? `https://${env.VERCEL_URL}` : undefined;
 	const netlify = env.NETLIFY_URL;
 	const render = env.RENDER_URL;
@@ -21,7 +29,7 @@ export function getVendorBaseURL() {
  * Resolve the current URL from various sources
  */
 export function resolveCurrentURL(
-	ctx: EndpointContext<string, any>,
+	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
 	return new URL(
@@ -36,7 +44,7 @@ export function resolveCurrentURL(
  * Check if the proxy should be skipped for this request
  */
 export function checkSkipProxy(
-	ctx: EndpointContext<string, any>,
+	ctx: GenericEndpointContext,
 	opts?: OAuthProxyOptions,
 ) {
 	// If skip proxy header is set, we don't need to proxy
@@ -45,21 +53,33 @@ export function checkSkipProxy(
 		return true;
 	}
 
-	const productionURL = opts?.productionURL || env.BETTER_AUTH_URL;
+	// Determine production URL (fallback to baseURL if not set)
+	const productionURL =
+		opts?.productionURL || env.BETTER_AUTH_URL || ctx.context.baseURL;
 	if (!productionURL) {
 		return false;
 	}
 
-	// Use request URL to determine current environment, not baseURL
-	// because baseURL is always the production URL
-	const currentURL = ctx.request?.url || getVendorBaseURL();
+	// Determine current URL from request or vendor env vars
+	const currentURL = opts?.currentURL || ctx.request?.url || getVendorBaseURL();
 	if (!currentURL) {
 		return false;
 	}
 
-	// Compare origins - if same, we're in production so skip proxy
 	const productionOrigin = getOrigin(productionURL);
 	const currentOrigin = getOrigin(currentURL);
 
 	return productionOrigin === currentOrigin;
+}
+
+/**
+ * Redirect to error URL with error code
+ */
+export function redirectOnError(
+	ctx: GenericEndpointContext,
+	errorURL: string,
+	error: string,
+): never {
+	const sep = errorURL.includes("?") ? "&" : "?";
+	throw ctx.redirect(`${errorURL}${sep}error=${error}`);
 }

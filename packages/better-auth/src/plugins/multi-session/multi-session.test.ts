@@ -20,7 +20,7 @@ describe("multi-session", async () => {
 		},
 	);
 
-	let headers = new Headers();
+	const headers = new Headers();
 	const testUser2 = {
 		email: "second-email@test.com",
 		password: "password",
@@ -80,6 +80,28 @@ describe("multi-session", async () => {
 		expect(res.data).toHaveLength(2);
 	});
 
+	it("should set active session when only multi-session cookies are present", async () => {
+		const existingCookieHeader = headers.get("cookie") || "";
+		const multiOnlyCookieHeader = existingCookieHeader
+			.split(";")
+			.map((cookie) => cookie.trim())
+			.filter(Boolean)
+			.filter((cookie) => !cookie.startsWith("better-auth.session_token="))
+			.join("; ");
+
+		const multiOnlyHeaders = new Headers();
+		multiOnlyHeaders.set("cookie", multiOnlyCookieHeader);
+
+		const res = await client.multiSession.setActive({
+			sessionToken,
+			fetchOptions: {
+				headers: multiOnlyHeaders,
+			},
+		});
+		expect(res.error).toBeNull();
+		expect(res.data?.user.email).toBe(testUser.email);
+	});
+
 	it("should set active session", async () => {
 		const res = await client.multiSession.setActive({
 			sessionToken,
@@ -97,7 +119,7 @@ describe("multi-session", async () => {
 			name: "Name",
 		};
 		let token = "";
-		const signUpRes = await client.signUp.email(testUser3, {
+		await client.signUp.email(testUser3, {
 			onSuccess: (ctx) => {
 				const header = ctx.response.headers.get("set-cookie");
 				expect(header).toContain("better-auth.session_token");
@@ -149,6 +171,66 @@ describe("multi-session", async () => {
 		expect(res2.data).toHaveLength(0);
 	});
 
+	it("should replace old multi-session cookie when same user signs in again", async () => {
+		const sameUserHeaders = new Headers();
+		const sameUser = {
+			email: "same-user@test.com",
+			password: "password",
+			name: "Same User",
+		};
+
+		let firstSessionToken = "";
+		await client.signUp.email(sameUser, {
+			onSuccess: cookieSetter(sameUserHeaders),
+			onResponse(context) {
+				const header = context.response.headers.get("set-cookie");
+				const cookies = parseSetCookieHeader(header || "");
+				firstSessionToken =
+					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+			},
+		});
+
+		const sessionsAfterFirst = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: sameUserHeaders },
+		});
+		const firstUserSessions = sessionsAfterFirst.data?.filter(
+			(s) => s.user.email === sameUser.email,
+		);
+		expect(firstUserSessions).toHaveLength(1);
+
+		let secondSessionToken = "";
+		await client.signIn.email(
+			{
+				email: sameUser.email,
+				password: sameUser.password,
+			},
+			{
+				onSuccess: cookieSetter(sameUserHeaders),
+				onResponse(context) {
+					const header = context.response.headers.get("set-cookie");
+					const cookies = parseSetCookieHeader(header || "");
+					secondSessionToken =
+						cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
+					// Verify old cookie is being deleted
+					const oldCookieName = `better-auth.session_token_multi-${firstSessionToken.toLowerCase()}`;
+					const oldCookie = cookies.get(oldCookieName);
+					expect(oldCookie?.["max-age"]).toBe(0);
+				},
+				headers: sameUserHeaders,
+			},
+		);
+
+		expect(secondSessionToken).not.toBe(firstSessionToken);
+		const sessionsAfterSecond = await client.multiSession.listDeviceSessions({
+			fetchOptions: { headers: sameUserHeaders },
+		});
+		const secondUserSessions = sessionsAfterSecond.data?.filter(
+			(s) => s.user.email === sameUser.email,
+		);
+		expect(secondUserSessions).toHaveLength(1);
+		expect(secondUserSessions?.[0]?.session.token).toBe(secondSessionToken);
+	});
+
 	it("should reject forged multi-session cookies on sign-out", async () => {
 		const attackerUser = {
 			email: "attacker@test.com",
@@ -162,15 +244,8 @@ describe("multi-session", async () => {
 		};
 
 		const attackerHeaders = new Headers();
-		let attackerSessionToken = "";
 		await client.signUp.email(attackerUser, {
 			onSuccess: cookieSetter(attackerHeaders),
-			onResponse(context) {
-				const header = context.response.headers.get("set-cookie");
-				const cookies = parseSetCookieHeader(header || "");
-				attackerSessionToken =
-					cookies.get("better-auth.session_token")?.value.split(".")[0] || "";
-			},
 		});
 
 		const victimHeaders = new Headers();

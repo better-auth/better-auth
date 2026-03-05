@@ -2,25 +2,33 @@ import type { BetterAuthOptions } from "@better-auth/core";
 import {
 	getCurrentAdapter,
 	getCurrentAuthContext,
+	queueAfterTransactionHook,
 } from "@better-auth/core/context";
-import type { DBPreservedModels } from "@better-auth/core/db";
+import type { BaseModelNames } from "@better-auth/core/db";
 import type { DBAdapter, Where } from "@better-auth/core/db/adapter";
+import {
+	ATTR_CONTEXT,
+	ATTR_DB_COLLECTION_NAME,
+	ATTR_HOOK_TYPE,
+	withSpan,
+} from "@better-auth/core/instrumentation";
+
+export type DatabaseHooksEntry = {
+	source: string;
+	hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>;
+};
 
 export function getWithHooks(
 	adapter: DBAdapter<BetterAuthOptions>,
 	ctx: {
 		options: BetterAuthOptions;
-		hooks: Exclude<BetterAuthOptions["databaseHooks"], undefined>[];
+		hooks: DatabaseHooksEntry[];
 	},
 ) {
-	const hooks = ctx.hooks;
-	type BaseModels = Extract<
-		DBPreservedModels,
-		"user" | "account" | "session" | "verification"
-	>;
+	const hooksEntries = ctx.hooks;
 	async function createWithHooks<T extends Record<string, any>>(
 		data: T,
-		model: BaseModels,
+		model: BaseModelNames,
 		customCreateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -28,13 +36,22 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.create?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.create?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(actualData as any, context);
+				const result = await withSpan(
+					`db create.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "create.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(actualData as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -48,23 +65,34 @@ export function getWithHooks(
 			}
 		}
 
-		const customCreated = customCreateFn
-			? await customCreateFn.fn(actualData)
-			: null;
-		const created =
-			!customCreateFn || customCreateFn.executeMainFn
-				? await (await getCurrentAdapter(adapter)).create<T>({
-						model,
-						data: actualData as any,
-						forceAllowId: true,
-					})
-				: customCreated;
+		let created: any = null;
+		if (!customCreateFn || customCreateFn.executeMainFn) {
+			created = await (await getCurrentAdapter(adapter)).create<T>({
+				model,
+				data: actualData as any,
+				forceAllowId: true,
+			});
+		}
+		if (customCreateFn?.fn) {
+			created = await customCreateFn.fn(created ?? actualData);
+		}
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.create?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.create?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(created as any, context);
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db create.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "create.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(created as any, context),
+					);
+				});
 			}
 		}
 
@@ -74,7 +102,7 @@ export function getWithHooks(
 	async function updateWithHooks<T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customUpdateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -82,14 +110,23 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(data as any, context);
+				const result = await withSpan(
+					`db update.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "update.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(data as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -116,20 +153,31 @@ export function getWithHooks(
 					})
 				: customUpdated;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(updated as any, context);
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db update.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "update.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(updated as any, context),
+					);
+				});
 			}
 		}
 		return updated;
 	}
 
-	async function updateManyWithHooks<T extends Record<string, any>>(
+	async function updateManyWithHooks<_T extends Record<string, any>>(
 		data: any,
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customUpdateFn?:
 			| {
 					fn: (data: Record<string, any>) => void | Promise<any>;
@@ -137,14 +185,23 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let actualData = data;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.before;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.before;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				const result = await toRun(data as any, context);
+				const result = await withSpan(
+					`db updateMany.before ${model}`,
+					{
+						[ATTR_HOOK_TYPE]: "updateMany.before",
+						[ATTR_DB_COLLECTION_NAME]: model,
+						[ATTR_CONTEXT]: source,
+					},
+					() =>
+						// @ts-expect-error context type mismatch
+						toRun(data as any, context),
+				);
 				if (result === false) {
 					return null;
 				}
@@ -171,11 +228,22 @@ export function getWithHooks(
 					})
 				: customUpdated;
 
-		for (const hook of hooks || []) {
-			const toRun = hook[model]?.update?.after;
+		for (const { source, hooks } of hooksEntries) {
+			const toRun = hooks[model]?.update?.after;
 			if (toRun) {
-				// @ts-expect-error context type mismatch
-				await toRun(updated as any, context);
+				await queueAfterTransactionHook(async () => {
+					await withSpan(
+						`db updateMany.after ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "updateMany.after",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(updated as any, context),
+					);
+				});
 			}
 		}
 
@@ -184,7 +252,7 @@ export function getWithHooks(
 
 	async function deleteWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customDeleteFn?:
 			| {
 					fn: (where: Where[]) => void | Promise<any>;
@@ -192,7 +260,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entityToDelete: T | null = null;
 
 		try {
@@ -202,16 +270,25 @@ export function getWithHooks(
 				limit: 1,
 			});
 			entityToDelete = entities[0] || null;
-		} catch (error) {
+		} catch {
 			// If we can't find the entity, we'll still proceed with deletion
 		}
 
 		if (entityToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.before;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.before;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(entityToDelete as any, context);
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(entityToDelete as any, context),
+					);
 					if (result === false) {
 						return null;
 					}
@@ -223,8 +300,10 @@ export function getWithHooks(
 			? await customDeleteFn.fn(where)
 			: null;
 
+		const shouldRunAdapterDelete =
+			!customDeleteFn || customDeleteFn.executeMainFn;
 		const deleted =
-			!customDeleteFn || customDeleteFn.executeMainFn
+			shouldRunAdapterDelete && entityToDelete
 				? await (await getCurrentAdapter(adapter)).delete({
 						model,
 						where,
@@ -232,11 +311,22 @@ export function getWithHooks(
 				: customDeleted;
 
 		if (entityToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.after;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.after;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					await toRun(entityToDelete as any, context);
+					await queueAfterTransactionHook(async () => {
+						await withSpan(
+							`db delete.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "delete.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(entityToDelete as any, context),
+						);
+					});
 				}
 			}
 		}
@@ -246,7 +336,7 @@ export function getWithHooks(
 
 	async function deleteManyWithHooks<T extends Record<string, any>>(
 		where: Where[],
-		model: BaseModels,
+		model: BaseModelNames,
 		customDeleteFn?:
 			| {
 					fn: (where: Where[]) => void | Promise<any>;
@@ -254,7 +344,7 @@ export function getWithHooks(
 			  }
 			| undefined,
 	) {
-		const context = await getCurrentAuthContext();
+		const context = await getCurrentAuthContext().catch(() => null);
 		let entitiesToDelete: T[] = [];
 
 		try {
@@ -262,16 +352,25 @@ export function getWithHooks(
 				model,
 				where,
 			});
-		} catch (error) {
+		} catch {
 			// If we can't find the entities, we'll still proceed with deletion
 		}
 
 		for (const entity of entitiesToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.before;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.before;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					const result = await toRun(entity as any, context);
+					const result = await withSpan(
+						`db delete.before ${model}`,
+						{
+							[ATTR_HOOK_TYPE]: "delete.before",
+							[ATTR_DB_COLLECTION_NAME]: model,
+							[ATTR_CONTEXT]: source,
+						},
+						() =>
+							// @ts-expect-error context type mismatch
+							toRun(entity as any, context),
+					);
 					if (result === false) {
 						return null;
 					}
@@ -292,11 +391,23 @@ export function getWithHooks(
 				: customDeleted;
 
 		for (const entity of entitiesToDelete) {
-			for (const hook of hooks || []) {
-				const toRun = hook[model]?.delete?.after;
+			for (const { source, hooks } of hooksEntries) {
+				const toRun = hooks[model]?.delete?.after;
 				if (toRun) {
-					// @ts-expect-error context type mismatch
-					await toRun(entity as any, context);
+					// Queue after hooks to run post-transaction
+					await queueAfterTransactionHook(async () => {
+						await withSpan(
+							`db delete.after ${model}`,
+							{
+								[ATTR_HOOK_TYPE]: "delete.after",
+								[ATTR_DB_COLLECTION_NAME]: model,
+								[ATTR_CONTEXT]: source,
+							},
+							() =>
+								// @ts-expect-error context type mismatch
+								toRun(entity as any, context),
+						);
+					});
 				}
 			}
 		}

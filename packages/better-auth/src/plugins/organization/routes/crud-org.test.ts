@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "../../../client";
-import { getTestInstance, schemaText } from "../../../test-utils/test-instance";
+import { getTestInstance } from "../../../test-utils/test-instance";
 import { organizationClient } from "../client";
 import { ORGANIZATION_ERROR_CODES } from "../error-codes";
 import { organization } from "../organization";
@@ -8,12 +8,6 @@ import { organization } from "../organization";
 describe("get-full-organization", async () => {
 	const { auth, signInWithTestUser, cookieSetter } = await getTestInstance({
 		plugins: [organization()],
-		graph: {
-			enabled: true,
-			authzed: {
-				schema: schemaText,
-			},
-		},
 	});
 	const { headers } = await signInWithTestUser();
 	const client = createAuthClient({
@@ -35,11 +29,6 @@ describe("get-full-organization", async () => {
 			headers,
 		},
 	});
-
-	if (org.error) {
-		throw new Error(org.error.message);
-	}
-
 	const secondOrg = await client.organization.create({
 		name: "test-second",
 		slug: "test-second",
@@ -70,8 +59,6 @@ describe("get-full-organization", async () => {
 				headers,
 			},
 		});
-
-		console.log(orgById);
 		expect(orgById.data?.name).toBe("test");
 	});
 
@@ -85,7 +72,6 @@ describe("get-full-organization", async () => {
 				headers,
 			},
 		});
-		console.log(orgBySlug);
 		expect(orgBySlug.data?.name).toBe("test");
 	});
 
@@ -126,8 +112,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(403);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.USER_IS_NOT_A_MEMBER_OF_THE_ORGANIZATION.code,
 		);
 	});
 
@@ -141,8 +127,8 @@ describe("get-full-organization", async () => {
 			},
 		});
 		expect(result.error?.status).toBe(400);
-		expect(result.error?.message).toContain(
-			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND,
+		expect(result.error?.code).toContain(
+			ORGANIZATION_ERROR_CODES.ORGANIZATION_NOT_FOUND.code,
 		);
 	});
 
@@ -157,7 +143,7 @@ describe("get-full-organization", async () => {
 		// Create an invitation
 		await client.organization.inviteMember({
 			email: "invited@test.com",
-			organizationRoles: ["member"],
+			role: "member",
 			fetchOptions: {
 				headers,
 			},
@@ -175,7 +161,7 @@ describe("get-full-organization", async () => {
 			(inv: any) => inv.email === "invited@test.com",
 		);
 		expect(invitation).toBeDefined();
-		expect(invitation?.organizationRoles).toMatchObject(["member"]);
+		expect(invitation?.role).toBe("member");
 	});
 
 	it("should prioritize organizationSlug over organizationId when both are provided", async () => {
@@ -210,7 +196,7 @@ describe("get-full-organization", async () => {
 		await auth.api.addMember({
 			body: {
 				userId: newUser.user.id,
-				organizationRoles: ["member"],
+				role: "member",
 				organizationId: org.data?.id as string,
 			},
 		});
@@ -250,7 +236,7 @@ describe("get-full-organization", async () => {
 			await auth.api.addMember({
 				body: {
 					userId: newUser.user.id,
-					organizationRoles: ["member"],
+					role: "member",
 					organizationId: org.data?.id as string,
 				},
 			});
@@ -326,7 +312,7 @@ describe("organization hooks", async () => {
 			],
 		});
 		const { headers } = await signInWithTestUser();
-		const result = await auth.api.createOrganization({
+		await auth.api.createOrganization({
 			body: {
 				name: "test",
 				slug: "test",
@@ -341,38 +327,12 @@ describe("organization hooks", async () => {
 		const { auth, signInWithTestUser } = await getTestInstance({
 			plugins: [
 				organization({
-					builtInOrganizationRoles: [
-						{
-							type: "owner",
-							name: "Owner",
-							description: "Full organization access",
-							relationships: [],
-						},
-						{
-							type: "admin",
-							name: "Admin",
-							description: "Administrative access",
-							relationships: [],
-						},
-						{
-							type: "member",
-							name: "Member",
-							description: "Basic member access",
-							relationships: [],
-						},
-						{
-							type: "changed-role",
-							name: "Changed role",
-							description: "Changed role",
-							relationships: [],
-						},
-					],
 					organizationHooks: {
 						beforeAddMember: async (data) => {
 							beforeAddMember();
 							return {
 								data: {
-									organizationRoles: ["changed-role"],
+									role: "changed-role",
 								},
 							};
 						},
@@ -392,7 +352,7 @@ describe("organization hooks", async () => {
 		const member = await auth.api.getActiveMember({
 			headers,
 		});
-		expect(member?.organizationRoles).toMatchObject(["changed-role"]);
+		expect(member?.role).toBe("changed-role");
 	});
 
 	it("should apply afterAddMember hook", async () => {
@@ -483,5 +443,33 @@ describe("organization hooks", async () => {
 			headers,
 		});
 		expect(afterCreateTeam).toHaveBeenCalled();
+	});
+
+	it("should allow internal organization creation when disabled for users", async () => {
+		const { auth } = await getTestInstance({
+			plugins: [
+				organization({
+					allowUserToCreateOrganization: false,
+				}),
+			],
+		});
+
+		const newUser = await auth.api.signUpEmail({
+			body: {
+				email: "internal@test.com",
+				password: "password",
+				name: "Internal User",
+			},
+		});
+
+		const internalOrg = await auth.api.createOrganization({
+			body: {
+				name: "Internal Org",
+				slug: "internal-org",
+				userId: newUser.user.id,
+			},
+		});
+		expect(internalOrg).toBeDefined();
+		expect(internalOrg?.name).toBe("Internal Org");
 	});
 });

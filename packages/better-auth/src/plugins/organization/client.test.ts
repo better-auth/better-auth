@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { betterAuth } from "../../auth";
+import { betterAuth } from "../../auth/full";
 import { createAuthClient } from "../../client";
 import { inferOrgAdditionalFields, organizationClient } from "./client";
 import { organization } from "./organization";
@@ -36,8 +36,8 @@ describe("organization", () => {
 			name: "Test",
 			slug: "test",
 			newField: "123", //this should be allowed
-			//@ts-expect-error - this field is not available
-			unavalibleField: "123", //this should be not allowed
+			// @ts-expect-error unavailableField is not in the schema
+			unavailableField: "123", //this should be not allowed
 		});
 	});
 
@@ -65,8 +65,8 @@ describe("organization", () => {
 			name: "Test",
 			slug: "test",
 			newField: "123", //this should be allowed
-			//@ts-expect-error - this field is not available
-			unavalibleField: "123", //this should be not allowed
+			// @ts-expect-error unavailableField is not in the schema
+			unavailableField: "123", //this should be not allowed
 		});
 	});
 });

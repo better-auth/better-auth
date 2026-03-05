@@ -1,5 +1,5 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-call";
+import { APIError } from "@better-auth/core/error";
 import { getSessionFromCtx } from "../../api";
 import { generateRandomString } from "../../crypto";
 import { getClient } from "./index";
@@ -7,7 +7,7 @@ import type { AuthorizationQuery, OIDCOptions } from "./types";
 import { parsePrompt } from "./utils/prompt";
 
 function formatErrorURL(url: string, error: string, description: string) {
-	return `${
+	return `${url}${
 		url.includes("?") ? "&" : "?"
 	}error=${error}&error_description=${description}`;
 }
@@ -148,7 +148,9 @@ export async function authorize(
 	}
 
 	const requestScope =
-		query.scope?.split(" ").filter((s) => s) || opts.defaultScope.split(" ");
+		query.scope?.split(" ").filter((s) => s) ||
+		opts.defaultScope?.split(" ") ||
+		[];
 	const invalidScopes = requestScope.filter((scope) => {
 		return !opts.scopes.includes(scope);
 	});
@@ -191,7 +193,7 @@ export async function authorize(
 	}
 
 	const code = generateRandomString(32, "a-z", "A-Z", "0-9");
-	const codeExpiresInMs = opts.codeExpiresIn * 1000;
+	const codeExpiresInMs = opts.codeExpiresIn! * 1000;
 	const expiresAt = new Date(Date.now() + codeExpiresInMs);
 
 	// Determine if consent is required
@@ -255,7 +257,7 @@ export async function authorize(
 			const sessionAge =
 				(Date.now() - new Date(session.session.createdAt).getTime()) / 1000;
 			if (sessionAge > maxAge) {
-				// Session is older than max_age, force reauthentication
+				// Session is older than max_age, force re-authentication
 				requireLogin = true;
 			}
 		}
@@ -295,7 +297,7 @@ export async function authorize(
 			identifier: code,
 			expiresAt,
 		});
-	} catch (e) {
+	} catch {
 		return handleRedirect(
 			formatErrorURL(
 				query.redirect_uri,

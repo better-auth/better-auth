@@ -1,35 +1,99 @@
-import type { AuthContext, BetterAuthOptions } from "@better-auth/core";
+import type {
+	AuthContext,
+	BetterAuthOptions,
+	SecretConfig,
+} from "@better-auth/core";
+import { getBetterAuthVersion } from "@better-auth/core/context";
+import { getAuthTables } from "@better-auth/core/db";
 import type { DBAdapter } from "@better-auth/core/db/adapter";
 import { createLogger, env, isProduction, isTest } from "@better-auth/core/env";
 import { BetterAuthError } from "@better-auth/core/error";
 import type { OAuthProvider } from "@better-auth/core/oauth2";
 import type { SocialProviders } from "@better-auth/core/social-providers";
 import { socialProviders } from "@better-auth/core/social-providers";
+import { generateId } from "@better-auth/core/utils/id";
 import { createTelemetry } from "@better-auth/telemetry";
 import defu from "defu";
 import type { Entries } from "type-fest";
 import { checkEndpointConflicts } from "../api";
+import { matchesOriginPattern } from "../auth/trusted-origins";
 import { createCookieGetter, getCookies } from "../cookies";
 import { hashPassword, verifyPassword } from "../crypto/password";
-import { getAuthTables } from "../db/get-tables";
 import { createInternalAdapter } from "../db/internal-adapter";
-import { generateId } from "../utils";
 import { DEFAULT_SECRET } from "../utils/constants";
 import { isPromise } from "../utils/is-promise";
 import { checkPassword } from "../utils/password";
-import { getBaseURL } from "../utils/url";
+import { getBaseURL, isDynamicBaseURLConfig } from "../utils/url";
 import {
 	getInternalPlugins,
 	getTrustedOrigins,
+	getTrustedProviders,
 	runPluginInit,
 } from "./helpers";
-import { createGraphAdapter } from "./graph-context";
+import {
+	buildSecretConfig,
+	parseSecretsEnv,
+	validateSecretsArray,
+} from "./secret-utils";
 
-export async function createAuthContext(
-	adapter: DBAdapter<BetterAuthOptions>,
-	options: BetterAuthOptions,
-	getDatabaseType: (database: BetterAuthOptions["database"]) => string,
-): Promise<AuthContext> {
+/**
+ * Estimates the entropy of a string in bits.
+ * This is a simple approximation that helps detect low-entropy secrets.
+ */
+function estimateEntropy(str: string): number {
+	const unique = new Set(str).size;
+	if (unique === 0) return 0;
+	return Math.log2(Math.pow(unique, str.length));
+}
+
+/**
+ * Validates that the secret meets minimum security requirements.
+ * Throws BetterAuthError if the secret is invalid.
+ * Skips validation for DEFAULT_SECRET in test environments only.
+ * Only throws for DEFAULT_SECRET in production environment.
+ */
+function validateSecret(
+	secret: string,
+	logger: ReturnType<typeof createLogger>,
+): void {
+	const isDefaultSecret = secret === DEFAULT_SECRET;
+
+	if (isTest()) {
+		return;
+	}
+
+	if (isDefaultSecret && isProduction) {
+		throw new BetterAuthError(
+			"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+		);
+	}
+
+	if (!secret) {
+		throw new BetterAuthError(
+			"BETTER_AUTH_SECRET is missing. Set it in your environment or pass `secret` to betterAuth({ secret }).",
+		);
+	}
+
+	if (secret.length < 32) {
+		logger.warn(
+			`[better-auth] Warning: your BETTER_AUTH_SECRET should be at least 32 characters long for adequate security. Generate one with \`npx auth secret\` or \`openssl rand -base64 32\`.`,
+		);
+	}
+
+	// Optional high-entropy check: warn if entropy appears low
+	const entropy = estimateEntropy(secret);
+	if (entropy < 120) {
+		logger.warn(
+			"[better-auth] Warning: your BETTER_AUTH_SECRET appears low-entropy. Use a randomly generated secret for production.",
+		);
+	}
+}
+
+export async function createAuthContext<Options extends BetterAuthOptions>(
+	adapter: DBAdapter,
+	options: Options,
+	getDatabaseType: (database: Options["database"]) => string,
+): Promise<AuthContext<Options>> {
 	//set default options for stateless mode
 	if (!options.database) {
 		options = defu(options, {
@@ -44,31 +108,76 @@ export async function createAuthContext(
 				storeStateStrategy: "cookie" as const,
 				storeAccountCookie: true,
 			},
-		});
+		}) as Options;
 	}
 	const plugins = options.plugins || [];
 	const internalPlugins = getInternalPlugins(options);
 	const logger = createLogger(options.logger);
-	const baseURL = getBaseURL(options.baseURL, options.basePath);
 
-	const secret =
-		options.secret ||
-		env.BETTER_AUTH_SECRET ||
-		env.AUTH_SECRET ||
-		DEFAULT_SECRET;
+	const isDynamicConfig = isDynamicBaseURLConfig(options.baseURL);
 
-	if (secret === DEFAULT_SECRET) {
-		if (isProduction) {
-			logger.error(
-				"You are using the default secret. Please set `BETTER_AUTH_SECRET` in your environment variables or pass `secret` in your auth config.",
+	if (isDynamicBaseURLConfig(options.baseURL)) {
+		const { allowedHosts } = options.baseURL;
+		if (!allowedHosts || allowedHosts.length === 0) {
+			throw new BetterAuthError(
+				"baseURL.allowedHosts cannot be empty. Provide at least one allowed host pattern " +
+					'(e.g., ["myapp.com", "*.vercel.app"]).',
 			);
 		}
+	}
+
+	const baseURL = isDynamicConfig
+		? undefined
+		: getBaseURL(
+				typeof options.baseURL === "string" ? options.baseURL : undefined,
+				options.basePath,
+			);
+
+	if (!baseURL && !isDynamicConfig) {
+		logger.warn(
+			`[better-auth] Base URL could not be determined. Please set a valid base URL using the baseURL config option or the BETTER_AUTH_URL environment variable. Without this, callbacks and redirects may not work correctly.`,
+		);
+	}
+
+	if (
+		adapter.id === "memory" &&
+		options.advanced?.database?.generateId === false
+	) {
+		logger.error(
+			`[better-auth] Misconfiguration detected.
+You are using the memory DB with generateId: false.
+This will cause no id to be generated for any model.
+Most of the features of Better Auth will not work correctly.`,
+		);
+	}
+
+	const secretsArray =
+		options.secrets ?? parseSecretsEnv(env.BETTER_AUTH_SECRETS);
+
+	const legacySecret =
+		options.secret || env.BETTER_AUTH_SECRET || env.AUTH_SECRET || "";
+
+	let secret: string;
+	let secretConfig: string | SecretConfig;
+
+	if (secretsArray) {
+		validateSecretsArray(secretsArray, logger);
+		secret = secretsArray[0]!.value;
+		secretConfig = buildSecretConfig(secretsArray, legacySecret);
+	} else {
+		secret = legacySecret || DEFAULT_SECRET;
+		validateSecret(secret, logger);
+		secretConfig = secret;
 	}
 
 	options = {
 		...options,
 		secret,
-		baseURL: baseURL ? new URL(baseURL).origin : "",
+		baseURL: isDynamicConfig
+			? options.baseURL
+			: baseURL
+				? new URL(baseURL).origin
+				: "",
 		basePath: options.basePath || "/api/auth",
 		plugins: plugins.concat(internalPlugins),
 	};
@@ -76,36 +185,49 @@ export async function createAuthContext(
 	checkEndpointConflicts(options, logger);
 	const cookies = getCookies(options);
 	const tables = getAuthTables(options);
-	const providers: OAuthProvider[] = (
-		Object.entries(
-			options.socialProviders || {},
-		) as unknown as Entries<SocialProviders>
-	)
-		.map(([key, config]) => {
-			if (config == null) {
-				return null;
-			}
-			if (config.enabled === false) {
-				return null;
-			}
-			if (!config.clientId) {
-				logger.warn(
-					`Social provider ${key} is missing clientId or clientSecret`,
-				);
-			}
-			const provider = socialProviders[key](config as never);
-			(provider as OAuthProvider).disableImplicitSignUp =
-				config.disableImplicitSignUp;
-			return provider;
-		})
-		.filter((x) => x !== null);
+	const providers = (
+		await Promise.all(
+			(
+				Object.entries(
+					options.socialProviders || {},
+				) as unknown as Entries<SocialProviders>
+			).map(async ([key, originalConfig]) => {
+				const config =
+					typeof originalConfig === "function"
+						? await originalConfig()
+						: originalConfig;
+				if (config == null) {
+					return null;
+				}
+				if (config.enabled === false) {
+					return null;
+				}
+				if (!config.clientId) {
+					logger.warn(
+						`Social provider ${key} is missing clientId or clientSecret`,
+					);
+				}
+				const provider = socialProviders[key](config as never);
+				(provider as OAuthProvider).disableImplicitSignUp =
+					config.disableImplicitSignUp;
+				return provider as OAuthProvider;
+			}),
+		)
+	).filter((x) => x !== null);
 
 	const generateIdFunc: AuthContext["generateId"] = ({ model, size }) => {
 		if (typeof (options.advanced as any)?.generateId === "function") {
 			return (options.advanced as any).generateId({ model, size });
 		}
-		if (typeof options?.advanced?.database?.generateId === "function") {
-			return options.advanced.database.generateId({ model, size });
+		const dbGenerateId = options?.advanced?.database?.generateId;
+		if (typeof dbGenerateId === "function") {
+			return dbGenerateId({ model, size });
+		}
+		if (dbGenerateId === "uuid") {
+			return crypto.randomUUID();
+		}
+		if (dbGenerateId === "serial" || dbGenerateId === false) {
+			return false;
 		}
 		return generateId(size);
 	};
@@ -118,19 +240,41 @@ export async function createAuthContext(
 				: getDatabaseType(options.database),
 	});
 
-	const graphAdapter = createGraphAdapter(adapter, options);
+	const pluginIds = new Set(options.plugins!.map((p) => p.id));
 
-	let ctx: AuthContext = {
+	const getPluginFn = (id: string) =>
+		(options.plugins!.find((p) => p.id === id) as never | undefined) ?? null;
+
+	const hasPluginFn = (id: string) => pluginIds.has(id);
+
+	const trustedOrigins = await getTrustedOrigins(options);
+	const trustedProviders = await getTrustedProviders(options);
+
+	const ctx: AuthContext = {
 		appName: options.appName || "Better Auth",
+		baseURL: baseURL || "",
+		version: getBetterAuthVersion(),
 		socialProviders: providers,
 		options,
 		oauthConfig: {
-			storeStateStrategy: options.account?.storeStateStrategy || "database",
+			storeStateStrategy:
+				options.account?.storeStateStrategy ||
+				(options.database ? "database" : "cookie"),
 			skipStateCookieCheck: !!options.account?.skipStateCookieCheck,
 		},
 		tables,
-		trustedOrigins: getTrustedOrigins(options),
-		baseURL: baseURL || "",
+		trustedOrigins,
+		trustedProviders,
+		isTrustedOrigin(
+			url: string,
+			settings?: {
+				allowRelativePaths: boolean;
+			},
+		) {
+			return this.trustedOrigins.some((origin) =>
+				matchesOriginPattern(url, origin, settings),
+			);
+		},
 		sessionConfig: {
 			updateAge:
 				options.session?.updateAge !== undefined
@@ -144,6 +288,17 @@ export async function createAuthContext(
 			cookieRefreshCache: (() => {
 				const refreshCache = options.session?.cookieCache?.refreshCache;
 				const maxAge = options.session?.cookieCache?.maxAge || 60 * 5;
+
+				// `refreshCache` is intended for fully stateless / DB-less setups.
+				// If a server-side store is configured, prefer fetching/refreshing from that source
+				// and disable stateless refresh behavior to avoid confusing/unsafe configurations.
+				const isStateful = !!options.database || !!options.secondaryStorage;
+				if (isStateful && refreshCache) {
+					logger.warn(
+						"[better-auth] `session.cookieCache.refreshCache` is enabled while `database` or `secondaryStorage` is configured. `refreshCache` is meant for stateless (DB-less) setups. Disabling `refreshCache` — remove it from your config to silence this warning.",
+					);
+					return false;
+				}
 
 				if (refreshCache === false || refreshCache === undefined) {
 					return false;
@@ -166,6 +321,7 @@ export async function createAuthContext(
 			})(),
 		},
 		secret,
+		secretConfig,
 		rateLimit: {
 			...options.rateLimit,
 			enabled: options.rateLimit?.enabled ?? isProduction,
@@ -197,11 +353,11 @@ export async function createAuthContext(
 		internalAdapter: createInternalAdapter(adapter, {
 			options,
 			logger,
-			hooks: options.databaseHooks ? [options.databaseHooks] : [],
+			hooks: options.databaseHooks
+				? [{ source: "user", hooks: options.databaseHooks }]
+				: [],
 			generateId: generateIdFunc,
-			graphAdapter,
 		}),
-		graphAdapter: graphAdapter,
 		createAuthCookie: createCookieGetter(options),
 		async runMigrations() {
 			throw new BetterAuthError(
@@ -216,15 +372,38 @@ export async function createAuthContext(
 				: isTest()
 					? true
 					: false,
+		runInBackground:
+			options.advanced?.backgroundTasks?.handler ??
+			((p) => {
+				p.catch(() => {});
+			}),
+		async runInBackgroundOrAwait(
+			promise: Promise<unknown> | Promise<void> | void | unknown,
+		) {
+			try {
+				if (options.advanced?.backgroundTasks?.handler) {
+					if (promise instanceof Promise) {
+						options.advanced.backgroundTasks.handler(
+							promise.catch((e) => {
+								logger.error("Failed to run background task:", e);
+							}),
+						);
+					}
+				} else {
+					await promise;
+				}
+			} catch (e) {
+				logger.error("Failed to run background task:", e);
+			}
+		},
+		getPlugin: getPluginFn,
+		hasPlugin: hasPluginFn as never,
 	};
 
 	const initOrPromise = runPluginInit(ctx);
-	let context: AuthContext;
 	if (isPromise(initOrPromise)) {
-		({ context } = await initOrPromise);
-	} else {
-		({ context } = initOrPromise);
+		await initOrPromise;
 	}
 
-	return context;
+	return ctx as unknown as AuthContext<Options>;
 }

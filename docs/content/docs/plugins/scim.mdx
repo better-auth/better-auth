@@ -12,8 +12,8 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
     <Step>
         ### Install the plugin
 
-        ```bash
-        npm install @better-auth/scim
+        ```package-install
+        @better-auth/scim
         ```
     </Step>
     <Step>
@@ -24,16 +24,16 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
         import { scim } from "@better-auth/scim"; // [!code highlight]
 
         const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [
                 scim() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
     <Step>
         ### Enable HTTP methods
 
-        SCIM requires the `POST`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
+        SCIM requires the `POST`, `GET`, `PUT`, `PATCH` and `DELETE` HTTP methods to be supported by your server.
         For most frameworks, this will work out of the box, but some frameworks may require additional configuration:
 
         <Tabs items={["Next.js", "Solid Start"]}>
@@ -62,13 +62,13 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
-            npx @better-auth/cli migrate
+            ```package-install
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
-            npx @better-auth/cli generate
+            ```package-install
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -78,10 +78,177 @@ This plugin exposes a [SCIM](https://simplecloud.info/#Specification) server tha
 
 ## Usage
 
-Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server.
-The following subset of the specification is currently supported:
+Upon registration, this plugin will expose compliant [SCIM 2.0](https://simplecloud.info/#Specification) server. Generally, this server is meant to be consumed by a third-party (your identity provider), and will require a:
+
+- **SCIM base URL**: This should be the fully qualified URL to the SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
+- **SCIM bearer token**: See [generating a SCIM token](#generating-a-scim-token)
+
+### Generating a SCIM token
+
+Before your identity provider can start syncing information to your SCIM server,
+you need to generate a SCIM token that your identity provider will use to authenticate against it.
+
+A SCIM token is a simple bearer token that you can generate:
+
+<APIMethod path="/scim/generate-token" method="POST" requireSession>
+```ts
+type generateSCIMToken = {
+  /**
+  * The provider id
+  */
+  providerId: string = "acme-corp"
+  /**
+   * Optional organization id. When specified, the organizations plugin must also be enabled
+  */
+  organizationId?: string = "the-org"
+}
+```
+</APIMethod>
+
+A `SCIM` token is always restricted to a provider, thus you are required to specify a `providerId`. This can be any provider your instance supports (e.g one of the built-in providers such as `credentials` or an external provider registered through an external plugin such as `@better-auth/sso`).
+Additionally, when the `organization` plugin is registered, you can optionally restrict the token to an organization via the `organizationId`.
+
+<Callout>
+**Important:** By default, any authenticated user with access to your better-auth instance will be able to generate a SCIM token. This can be an important security risk to your application, especially in multi-tenant scenarios.
+It is highly recommended that you implement [hooks](#hooks) to restrict this access to certain roles or users:
+</Callout>
+
+```ts
+const userRoles = new Set(["admin"]);
+const userAdminIds = new Set(["some-admin-user-id"]);
+
+scim({
+    beforeSCIMTokenGenerated: async ({ user, member, scimToken }) => {
+        // IMPORTANT: Use this hook to restrict access to certain roles or users
+        // At the very least access must be restricted to admin users (see example below)
+
+        const userHasAdmin = member?.role && userRoles.has(member.role);
+        const userIsAdmin = userAdminIds.size > 0 && userAdminIds.has(user.id);
+
+        if (!userHasAdmin && !userIsAdmin) {
+            throw new APIError("FORBIDDEN", { message: "User does not have enough permissions" });
+        }
+    },
+})
+```
+
+See the [hooks](#hooks) documentation for more details about supported hooks.
+
+#### Default SCIM token
+
+We also provide a way for you to specify a `SCIM` token to use by default. This allows you to test a SCIM connection without setting up providers in the database:
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth"
+import { scim } from "@better-auth/scim"; 
+
+const auth = betterAuth({
+    plugins: [
+        scim({
+            defaultSCIM: [
+                {
+                    providerId: "default-scim", // ID of the existing provider you want to provision
+                    scimToken: "some-scim-token", // SCIM plain token
+                    organizationId: "the-org" // Optional organization id
+                }
+            ]
+        })
+    ]
+});
+```
+
+<Callout type="info">
+**Important**: Please note that you must base64 encode your `scimToken` before you try to use as follows: `base64(scimToken:providerId[:organizationId])`.
+
+In our example above, you would need to encode the `some-scim-token:default-scim:the-org` text to base64, resulting in the following scimToken: `c29tZS1zY2ltLXRva2VuOmRlZmF1bHQtc2NpbTp0aGUtb3Jn`
+</Callout>
+
+### SCIM provider connection ownership
+
+SCIM provider connection ownership allows your application to track and restrict access to the SCIM management endpoints
+by linking each connection to the user who generated the token.
+
+```ts title="auth.ts"
+import { betterAuth } from "better-auth";
+import { scim } from "@better-auth/scim";
+
+const auth = betterAuth({
+    plugins: [
+        scim({ // [!code highlight]
+            providerOwnership: { // [!code highlight]
+                enabled: true // [!code highlight]
+            } // [!code highlight]
+        }) // [!code highlight]
+    ]
+});
+```
+
+Once enabled, make sure you migrate the database schema (again).
+
+<Tabs items={["migrate", "generate"]}>
+    <Tab value="migrate">
+    ```bash
+    npx @better-auth/cli migrate
+    ```
+    </Tab>
+    <Tab value="generate">
+    ```bash
+    npx @better-auth/cli generate
+    ```
+    </Tab>
+</Tabs>
+
+See the [Schema](#if-you-have-provider-ownership-enabled-via-providerownershipenabled) section to add the fields manually.
+
+
+### Managing SCIM provider connections
+
+You can manage SCIM provider connections from your application using the following endpoints:
+
+#### List SCIM provider connections
+
+List existing connections for organizations the current user is a member of or providers that are not associated to an organization.
+
+<APIMethod path="/scim/list-provider-connections" method="GET" requireSession>
+```ts
+type listSCIMProviderConnections = {
+}
+```
+</APIMethod>
+
+#### Get SCIM provider connection details
+
+Get a single connection by id. Access is allowed only if the user is a member of the connection's organization or the connection is not associated to an organization.
+
+<APIMethod path="/scim/get-provider-connection" method="GET" requireSession>
+```ts
+type getSCIMProviderConnection = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
+
+#### Delete SCIM provider connection
+
+Delete an existing connection. This will immediately invalidate the connection's associated token.
+
+<APIMethod path="/scim/delete-provider-connection" method="POST" requireSession>
+```ts
+type deleteSCIMProviderConnection = {
+  /**
+   * Unique provider identifier
+   */
+  providerId: string = "acme-corp"
+}
+```
+</APIMethod>
 
 ### SCIM endpoints
+
+The following subset of the specification is currently supported:
 
 #### List users
 
@@ -271,33 +438,6 @@ type getSCIMResourceType = {
 ```
 </APIMethod>
 
-Generally, this server is meant to be consumed by a third-party (your identity provider), which will require:
-
-- SCIM base url: This should be the fully qualified URL to be SCIM server (e.g `http://your-app.com/api/auth/scim/v2`)
-- SCIM bearer token: See [generating a SCIM token](#generating-a-scim-token)
-
-### Generating a SCIM token
-
-Before your identity provider can start syncing information to your SCIM server,
-you need to generate a SCIM token that your identity provider will use to authenticate against it.
-
-A SCIM token is a simple bearer token that you can generate:
-
-<APIMethod path="/scim/generate-token" method="POST" requireSession>
-```ts
-type generateSCIMToken = {
-  /**
-  * The provider id
-  */
-  providerId: string = "acme-corp"
-  /**
-   * Optional organization id. When specified, the organizations plugin must also be enabled
-  */
-  organizationId?: string = "the-org"
-}
-```
-</APIMethod>
-
 #### SCIM attribute mapping
 
 By default, the SCIM provisioning will automatically map the following fields:
@@ -323,11 +463,30 @@ The plugin requires additional fields in the `scimProvider` table to store the p
     ]}
 />
 
+### If you have provider ownership enabled via `providerOwnership.enabled`:
+
+The `scimProvider` schema is extended as follows:
+
+<DatabaseTable
+    fields={[
+        { name: "userId", type: "string", description: "The user id of the connection owner. Set automatically when generating a token via the API.", isRequired: false },
+    ]}
+/>
+
 
 ## Options
 
 ### Server
 
+- `providerOwnership`: `{ enabled: boolean }` — When enabled, links each provider connection to the user who generated its token. See [Connection ownership](#scim-provider-connection-ownership) for details. Default is `{ enabled: false }`.
+
+```ts title="Enable connection ownership (requires migration)"
+scim({
+    providerOwnership: { enabled: true },
+})
+```
+
+- `defaultSCIM`: Default list of SCIM tokens for testing.
 - `storeSCIMToken`: The method to store the SCIM token in your database, whether `encrypted`, `hashed` or `plain` text. Default is `plain` text.
 
 Alternatively, you can pass a custom encryptor or hasher to store the SCIM token in your database.

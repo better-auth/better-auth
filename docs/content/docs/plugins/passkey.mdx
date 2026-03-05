@@ -26,9 +26,9 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
         import { passkey } from "@better-auth/passkey" // [!code highlight]
 
         export const auth = betterAuth({
-            plugins: [ // [!code highlight]
+            plugins: [ 
                 passkey(), // [!code highlight]
-            ], // [!code highlight]
+            ],
         })
         ```
     </Step>
@@ -39,13 +39,13 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         <Tabs items={["migrate", "generate"]}>
             <Tab value="migrate">
-            ```bash
-            npx @better-auth/cli migrate
+            ```package-install
+            npx auth migrate
             ```
             </Tab>
             <Tab value="generate">
-            ```bash
-            npx @better-auth/cli generate
+            ```package-install
+            npx auth generate
             ```
             </Tab>
         </Tabs>
@@ -56,12 +56,12 @@ The passkey plugin implementation is powered by [SimpleWebAuthn](https://simplew
 
         ```ts title="auth-client.ts"
         import { createAuthClient } from "better-auth/client"
-        import { passkeyClient } from "@better-auth/passkey/client"
+        import { passkeyClient } from "@better-auth/passkey/client" // [!code highlight]
 
         export const authClient = createAuthClient({
-            plugins: [ // [!code highlight]
+            plugins: [
                 passkeyClient() // [!code highlight]
-            ] // [!code highlight]
+            ]
         })
         ```
     </Step>
@@ -112,6 +112,8 @@ type signInPasskey = {
 
 #### Example Usage
 ```ts
+import { authClient } from "@/lib/auth-client";
+
 // With post authentication redirect
 await authClient.signIn.passkey({
     autoFill: true,

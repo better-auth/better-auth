@@ -1,3 +1,5 @@
+import type { SecretConfig } from "@better-auth/core";
+import { getWebcryptoSubtle } from "@better-auth/utils";
 import { createHash } from "@better-auth/utils/hash";
 import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
 import {
@@ -7,23 +9,65 @@ import {
 	utf8ToBytes,
 } from "@noble/ciphers/utils.js";
 
+export type { SecretConfig };
+
+const algorithm = { name: "HMAC", hash: "SHA-256" };
+
+const ENVELOPE_PREFIX = "$ba$";
+
+export function parseEnvelope(
+	data: string,
+): { version: number; ciphertext: string } | null {
+	if (!data.startsWith(ENVELOPE_PREFIX)) return null;
+	const firstSep = ENVELOPE_PREFIX.length;
+	const secondSep = data.indexOf("$", firstSep);
+	if (secondSep === -1) return null;
+	const version = parseInt(data.slice(firstSep, secondSep), 10);
+	if (!Number.isInteger(version) || version < 0) return null;
+	const ciphertext = data.slice(secondSep + 1);
+	return { version, ciphertext };
+}
+
+export function formatEnvelope(version: number, ciphertext: string): string {
+	return `${ENVELOPE_PREFIX}${version}$${ciphertext}`;
+}
+
 export type SymmetricEncryptOptions = {
-	key: string;
+	key: string | SecretConfig;
 	data: string;
 };
+
+async function rawEncrypt(secret: string, data: string): Promise<string> {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const dataAsBytes = utf8ToBytes(data);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return bytesToHex(chacha.encrypt(dataAsBytes));
+}
+
+async function rawDecrypt(secret: string, hex: string): Promise<string> {
+	const keyAsBytes = await createHash("SHA-256").digest(secret);
+	const dataAsBytes = hexToBytes(hex);
+	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
+	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+}
 
 export const symmetricEncrypt = async ({
 	key,
 	data,
 }: SymmetricEncryptOptions) => {
-	const keyAsBytes = await createHash("SHA-256").digest(key);
-	const dataAsBytes = utf8ToBytes(data);
-	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
-	return bytesToHex(chacha.encrypt(dataAsBytes));
+	if (typeof key === "string") {
+		return rawEncrypt(key, data);
+	}
+	const secret = key.keys.get(key.currentVersion);
+	if (!secret) {
+		throw new Error(`Secret version ${key.currentVersion} not found in keys`);
+	}
+	const ciphertext = await rawEncrypt(secret, data);
+	return formatEnvelope(key.currentVersion, ciphertext);
 };
 
 export type SymmetricDecryptOptions = {
-	key: string;
+	key: string | SecretConfig;
 	data: string;
 };
 
@@ -31,10 +75,52 @@ export const symmetricDecrypt = async ({
 	key,
 	data,
 }: SymmetricDecryptOptions) => {
-	const keyAsBytes = await createHash("SHA-256").digest(key);
-	const dataAsBytes = hexToBytes(data);
-	const chacha = managedNonce(xchacha20poly1305)(new Uint8Array(keyAsBytes));
-	return new TextDecoder().decode(chacha.decrypt(dataAsBytes));
+	if (typeof key === "string") {
+		return rawDecrypt(key, data);
+	}
+	const envelope = parseEnvelope(data);
+	if (envelope) {
+		const secret = key.keys.get(envelope.version);
+		if (!secret) {
+			throw new Error(
+				`Secret version ${envelope.version} not found in keys (key may have been retired)`,
+			);
+		}
+		return rawDecrypt(secret, envelope.ciphertext);
+	}
+	// Legacy bare-hex payload
+	if (key.legacySecret) {
+		return rawDecrypt(key.legacySecret, data);
+	}
+	throw new Error(
+		"Cannot decrypt legacy bare-hex payload: no legacy secret available. Set BETTER_AUTH_SECRET for backwards compatibility.",
+	);
+};
+
+export const getCryptoKey = async (secret: string | BufferSource) => {
+	const secretBuf =
+		typeof secret === "string" ? new TextEncoder().encode(secret) : secret;
+	return await getWebcryptoSubtle().importKey(
+		"raw",
+		secretBuf,
+		algorithm,
+		false,
+		["sign", "verify"],
+	);
+};
+
+export const makeSignature = async (
+	value: string,
+	secret: string | BufferSource,
+): Promise<string> => {
+	const key = await getCryptoKey(secret);
+	const signature = await getWebcryptoSubtle().sign(
+		algorithm.name,
+		key,
+		new TextEncoder().encode(value),
+	);
+	// the returned base64 encoded signature will always be 44 characters long and end with one or two equal signs
+	return btoa(String.fromCharCode(...new Uint8Array(signature)));
 };
 
 export * from "./buffer";

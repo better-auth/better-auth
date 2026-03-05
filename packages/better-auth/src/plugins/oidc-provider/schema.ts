@@ -1,7 +1,7 @@
 import type { BetterAuthPluginDBSchema } from "@better-auth/core/db";
 import * as z from "zod";
 
-export const oAuthApplicationSchema = z.object({
+const oAuthApplicationSchema = z.object({
 	/**
 	 * Client ID
 	 *

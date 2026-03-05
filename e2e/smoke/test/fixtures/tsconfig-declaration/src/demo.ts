@@ -5,6 +5,7 @@ import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import {
 	admin,
+	anonymous,
 	bearer,
 	customSession,
 	deviceAuthorization,
@@ -21,11 +22,13 @@ import { Stripe } from "stripe";
 export const auth = betterAuth({
 	appName: "Better Auth Demo",
 	plugins: [
+		anonymous({}),
 		organization({}),
 		twoFactor({}),
 		passkey(),
 		openAPI(),
 		bearer(),
+		/* cspell:disable-next-line */
 		admin({ adminUserIds: ["EXD5zjob2SD6CBWcEQ6OpLRHcyoUbnaB"] }),
 		multiSession(),
 		oAuthProxy(),
