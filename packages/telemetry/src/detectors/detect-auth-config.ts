@@ -124,6 +124,7 @@ export async function getTelemetryAuthConfig(
 			},
 			database: {
 				generateId: options.advanced?.database?.generateId,
+				useNumberId: options.advanced?.database?.useNumberId,
 				defaultFindManyLimit: options.advanced?.database?.defaultFindManyLimit,
 			},
 			useSecureCookies: options.advanced?.useSecureCookies,

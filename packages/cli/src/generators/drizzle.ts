@@ -1,5 +1,11 @@
 import { existsSync } from "node:fs";
-import { initGetFieldName, initGetModelName } from "better-auth/adapters";
+import {
+	anyModelUsesNumberId,
+	createIsNumberIdModel,
+	initGetDefaultModelName,
+	initGetFieldName,
+	initGetModelName,
+} from "better-auth/adapters";
 import type { BetterAuthDBSchema, DBFieldAttribute } from "better-auth/db";
 import { getAuthTables } from "better-auth/db";
 import type { BetterAuthOptions } from "better-auth/types";
@@ -50,6 +56,13 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 		usePlural: adapter.options?.adapterConfig?.usePlural,
 	});
 
+	const getDefaultModelName = initGetDefaultModelName({
+		schema: tables,
+		usePlural: adapter.options?.adapterConfig?.usePlural,
+	});
+
+	const isNumberIdModel = createIsNumberIdModel(options);
+
 	for (const tableKey in tables) {
 		const table = tables[tableKey]!;
 		const modelName = getModelName(tableKey);
@@ -64,9 +77,15 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 			}
 			name = convertToSnakeCase(name, adapter.options?.camelCase);
 			if (field.references?.field === "id") {
-				const useNumberId = options.advanced?.database?.generateId === "serial";
+				let refModel: string;
+				try {
+					refModel = getDefaultModelName(field.references.model);
+				} catch {
+					refModel = field.references.model;
+				}
+				const useNumberIdForRef = isNumberIdModel(refModel);
 				const useUUIDs = options.advanced?.database?.generateId === "uuid";
-				if (useNumberId) {
+				if (useNumberIdForRef) {
 					if (databaseType === "pg") {
 						return `integer('${name}')`;
 					} else if (databaseType === "mysql") {
@@ -167,12 +186,12 @@ export const generateDrizzleSchema: SchemaGenerator = async ({
 
 		let id: string = "";
 
-		const useNumberId = options.advanced?.database?.generateId === "serial";
+		const useNumberIdForTable = isNumberIdModel(tableKey);
 		const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
-		if (useUUIDs && databaseType === "pg") {
+		if (useUUIDs && !useNumberIdForTable && databaseType === "pg") {
 			id = `uuid("id").default(sql\`pg_catalog.gen_random_uuid()\`).primaryKey()`;
-		} else if (useNumberId) {
+		} else if (useNumberIdForTable) {
 			if (databaseType === "pg") {
 				id = `integer("id").generatedByDefaultAsIdentity().primaryKey()`;
 			} else if (databaseType === "sqlite") {
@@ -547,7 +566,7 @@ function generateImport({
 		if (hasJson && hasBigint) break;
 	}
 
-	const useNumberId = options.advanced?.database?.generateId === "serial";
+	const hasAnyNumberId = anyModelUsesNumberId(options);
 
 	const useUUIDs = options.advanced?.database?.generateId === "uuid";
 
@@ -572,7 +591,7 @@ function generateImport({
 					!field.bigint,
 			),
 		);
-		const needsInt = useNumberId || hasNonBigintNumber;
+		const needsInt = hasAnyNumberId || hasNonBigintNumber;
 		if (needsInt) {
 			coreImports.push("int");
 		}
@@ -606,9 +625,7 @@ function generateImport({
 			),
 		);
 		// handles the references field with useNumberId
-		const needsInteger =
-			hasNonBigintNumber ||
-			(options.advanced?.database?.generateId === "serial" && hasFkToId);
+		const needsInteger = hasNonBigintNumber || (hasAnyNumberId && hasFkToId);
 		if (needsInteger) {
 			coreImports.push("integer");
 		}

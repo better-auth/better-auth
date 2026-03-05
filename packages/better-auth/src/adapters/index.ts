@@ -7,7 +7,9 @@ import type {
 	CustomAdapter,
 } from "@better-auth/core/db/adapter";
 import {
+	anyModelUsesNumberId,
 	createAdapterFactory,
+	createIsNumberIdModel,
 	initGetDefaultFieldName,
 	initGetDefaultModelName,
 	initGetFieldAttributes,
@@ -28,6 +30,8 @@ export type {
 };
 export {
 	createAdapterFactory,
+	createIsNumberIdModel,
+	anyModelUsesNumberId,
 	initGetDefaultFieldName,
 	initGetDefaultModelName,
 	initGetFieldName,
