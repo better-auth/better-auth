@@ -90,7 +90,8 @@ export function CommandMenuProvider({
 		const aiQuery = params.get("askai");
 		if (aiQuery) {
 			// Store the query before cleaning URL so dialog can access it
-			initialAiQueryRef.current = decodeURIComponent(aiQuery);
+			// Note: URLSearchParams.get() already returns a decoded string
+			initialAiQueryRef.current = aiQuery;
 			initialModeRef.current = "ai";
 			setOpen(true);
 			// Clean up URL
