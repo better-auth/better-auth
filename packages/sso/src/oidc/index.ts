@@ -9,6 +9,7 @@
 export {
 	computeDiscoveryUrl,
 	discoverOIDCConfig,
+	ensureRuntimeDiscovery,
 	fetchDiscoveryDocument,
 	needsRuntimeDiscovery,
 	normalizeDiscoveryUrls,

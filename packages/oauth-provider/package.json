@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/oauth-provider",
-  "version": "1.5.0-beta.19",
+  "version": "1.5.1-beta.3",
   "description": "An oauth provider plugin for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -65,12 +65,12 @@
     }
   },
   "dependencies": {
-    "jose": "^6.1.0",
+    "jose": "^6.1.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.26.0",
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "better-auth": "workspace:*",
     "listhen": "^1.9.0",
     "tsdown": "catalog:"

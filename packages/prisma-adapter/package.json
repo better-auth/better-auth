@@ -1,6 +1,6 @@
 {
   "name": "@better-auth/prisma-adapter",
-  "version": "1.5.0-beta.19",
+  "version": "1.5.1-beta.3",
   "description": "Prisma adapter for Better Auth",
   "type": "module",
   "license": "MIT",
@@ -41,9 +41,6 @@
       "default": "./dist/index.mjs"
     }
   },
-  "dependencies": {
-    "@prisma/client": "^5.0.0"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
@@ -53,7 +50,7 @@
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.1",
-    "prisma": "^5.0.0",
+    "prisma": "^7.4.1",
     "tsdown": "catalog:",
     "typescript": "catalog:"
   }

@@ -352,6 +352,7 @@ export async function authorizeEndpoint(
 			clientId: client.clientId,
 			userId: session.user.id,
 			sessionId: session.session.id,
+			authTime: new Date(session.session.createdAt).getTime(),
 			referenceId,
 		});
 	}
@@ -389,6 +390,7 @@ export async function authorizeEndpoint(
 		clientId: client.clientId,
 		userId: session.user.id,
 		sessionId: session.session.id,
+		authTime: new Date(session.session.createdAt).getTime(),
 		referenceId,
 	});
 }
@@ -401,6 +403,7 @@ async function redirectWithAuthorizationCode(
 		clientId: string;
 		userId: string;
 		sessionId: string;
+		authTime: number;
 		referenceId?: string;
 	},
 ) {
@@ -418,17 +421,13 @@ async function redirectWithAuthorizationCode(
 			userId: verificationValue.userId,
 			sessionId: verificationValue?.sessionId,
 			referenceId: verificationValue.referenceId,
+			authTime: verificationValue.authTime,
 		} satisfies VerificationValue),
 	};
-	ctx.context.verification_id
-		? await ctx.context.internalAdapter.updateVerificationValue(
-				ctx.context.verification_id,
-				data,
-			)
-		: await ctx.context.internalAdapter.createVerificationValue({
-				...data,
-				createdAt: new Date(iat * 1000),
-			});
+	await ctx.context.internalAdapter.createVerificationValue({
+		...data,
+		createdAt: new Date(iat * 1000),
+	});
 
 	const redirectUriWithCode = new URL(verificationValue.query.redirect_uri);
 	redirectUriWithCode.searchParams.set("code", code);

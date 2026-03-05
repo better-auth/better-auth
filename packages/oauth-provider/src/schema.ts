@@ -27,6 +27,10 @@ export const schema = {
 				type: "boolean",
 				required: false,
 			},
+			subjectType: {
+				type: "string",
+				required: false,
+			},
 			scopes: {
 				type: "string[]",
 				required: false,
@@ -180,6 +184,10 @@ export const schema = {
 				type: "date",
 			},
 			revoked: {
+				type: "date",
+				required: false,
+			},
+			authTime: {
 				type: "date",
 				required: false,
 			},

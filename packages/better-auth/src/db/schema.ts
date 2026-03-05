@@ -195,6 +195,20 @@ export function parseSessionInput(
 	return parseInputData(session, { fields: schema, action });
 }
 
+export function getSessionDefaultFields(options: BetterAuthOptions) {
+	const fields = getFields(options, "session", "input");
+	const defaults: Record<string, any> = {};
+	for (const key in fields) {
+		if (fields[key]!.defaultValue !== undefined) {
+			defaults[key] =
+				typeof fields[key]!.defaultValue === "function"
+					? fields[key]!.defaultValue()
+					: fields[key]!.defaultValue;
+		}
+	}
+	return defaults;
+}
+
 export function mergeSchema<S extends BetterAuthPluginDBSchema>(
 	schema: S,
 	newSchema?:

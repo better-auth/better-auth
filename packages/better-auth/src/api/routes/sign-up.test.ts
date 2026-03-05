@@ -1,5 +1,6 @@
 import { BASE_ERROR_CODES } from "@better-auth/core/error";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { admin } from "../../plugins/admin/admin";
 import { getTestInstance } from "../../test-utils/test-instance";
 
 describe("sign-up with custom fields", async () => {
@@ -157,7 +158,7 @@ describe("sign-up with custom fields", async () => {
 					email: "input-false@test.com",
 					password: "password",
 					name: "Input False Test",
-					//@ts-expect-error
+					// @ts-expect-error role has input: false
 					role: "admin",
 				},
 			}),
@@ -670,5 +671,128 @@ describe("sign-up sendOnSignUp option behavior", async () => {
 		});
 
 		expect(sendVerificationEmail).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe("sign-up enumeration protection — indistinguishable response", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+			},
+			emailVerification: {
+				sendVerificationEmail: vi.fn(),
+			},
+			user: {
+				additionalFields: {
+					displayName: {
+						type: "string",
+						required: false,
+					},
+					isAdmin: {
+						type: "boolean",
+						defaultValue: false,
+						input: false,
+					},
+				},
+			},
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return same keys in same order for real and synthetic user", async () => {
+		const first = await auth.api.signUpEmail({
+			body: {
+				email: "indistinguishable@test.com",
+				password: "password123",
+				name: "First User",
+				displayName: "FirstDisplay",
+			},
+		});
+
+		const second = await auth.api.signUpEmail({
+			body: {
+				email: "indistinguishable@test.com",
+				password: "password456",
+				name: "Second Attempt",
+				displayName: "SecondDisplay",
+			},
+		});
+
+		// Same keys in same order
+		expect(Object.keys(second)).toEqual(Object.keys(first));
+		expect(Object.keys(second.user)).toEqual(Object.keys(first.user));
+
+		// Both return token: null (requireEmailVerification)
+		expect(second.token).toBeNull();
+
+		// Synthetic user reflects request body, not real DB user
+		expect(second.user.name).toBe("Second Attempt");
+		expect(second.user.id).not.toBe(first.user.id);
+
+		// Additional fields with defaults present in both
+		expect(second.user.isAdmin).toBe(false);
+		expect(second.user.displayName).toBe("SecondDisplay");
+	});
+});
+
+describe("sign-up enumeration protection — customSyntheticUser with admin plugin", async () => {
+	const { auth } = await getTestInstance(
+		{
+			emailAndPassword: {
+				enabled: true,
+				requireEmailVerification: true,
+				customSyntheticUser: ({ coreFields, additionalFields, id }) => ({
+					...coreFields,
+					// Admin plugin fields (in schema order)
+					role: "user",
+					banned: false,
+					banReason: null,
+					banExpires: null,
+					...additionalFields,
+					id,
+				}),
+			},
+			emailVerification: {
+				sendVerificationEmail: vi.fn(),
+			},
+			plugins: [admin()],
+		},
+		{
+			disableTestUser: true,
+		},
+	);
+
+	it("should return indistinguishable response with admin plugin fields", async () => {
+		const first = await auth.api.signUpEmail({
+			body: {
+				email: "admin-enum@test.com",
+				password: "password123",
+				name: "First",
+			},
+		});
+
+		const second = await auth.api.signUpEmail({
+			body: {
+				email: "admin-enum@test.com",
+				password: "password456",
+				name: "Second",
+			},
+		});
+
+		// Same keys in same order (including plugin fields)
+		expect(Object.keys(second.user)).toEqual(Object.keys(first.user));
+
+		// Plugin fields have correct values
+		const firstUser = first.user as Record<string, unknown>;
+		const secondUser = second.user as Record<string, unknown>;
+		expect(firstUser.role).toBe("user");
+		expect(secondUser.role).toBe("user");
+		expect(secondUser.banned).toBe(false);
+		expect(secondUser.banReason).toBeNull();
+		expect(secondUser.banExpires).toBeNull();
 	});
 });

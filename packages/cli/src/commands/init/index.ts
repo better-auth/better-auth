@@ -6,7 +6,7 @@ import { Command } from "commander";
 import open from "open";
 import prompts from "prompts";
 import yoctoSpinner from "yocto-spinner";
-import z from "zod";
+import * as z from "zod";
 import { cliVersion } from "../..";
 import { generateDrizzleSchema } from "../../generators/drizzle";
 import { generatePrismaSchema } from "../../generators/prisma";
@@ -1522,7 +1522,7 @@ export const auth = betterAuth({
 		return;
 	}
 	if (connectResponse.connect) {
-		await open("https://beta.better-auth.com/onboarding");
+		await open("https://dash.better-auth.com/onboarding");
 		console.log(
 			chalk.cyan("\n→ ") +
 				"Opening Better Auth onboarding in your browser...\n",

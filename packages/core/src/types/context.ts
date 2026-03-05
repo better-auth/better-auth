@@ -18,6 +18,7 @@ import type {
 	BetterAuthRateLimitOptions,
 } from "./init-options";
 import type { BetterAuthPlugin } from "./plugin";
+import type { SecretConfig } from "./secret";
 
 /**
  * @internal
@@ -78,8 +79,7 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any> & {
-	context: AuthContext<Options>;
+> = EndpointContext<string, any, any, any, any, any, any, AuthContext<Options>> & {
 	/**
 	 * The response headers accumulator that `setCookie` and `setHeader`
 	 * write to during handler execution. Provided by better-call's
@@ -116,7 +116,10 @@ export interface InternalAdapter<
 			T,
 	): Promise<T & Account>;
 
-	listSessions(userId: string): Promise<Session[]>;
+	listSessions(
+		userId: string,
+		options?: { onlyActiveSessions?: boolean | undefined } | undefined,
+	): Promise<Session[]>;
 
 	listUsers(
 		limit?: number | undefined,
@@ -143,6 +146,11 @@ export interface InternalAdapter<
 
 	findSessions(
 		sessionTokens: string[],
+		options?:
+			| {
+					onlyActiveSessions?: boolean | undefined;
+			  }
+			| undefined,
 	): Promise<{ session: Session; user: User }[]>;
 
 	updateSession(
@@ -212,12 +220,10 @@ export interface InternalAdapter<
 
 	findVerificationValue(identifier: string): Promise<Verification | null>;
 
-	deleteVerificationValue(id: string): Promise<void>;
-
 	deleteVerificationByIdentifier(identifier: string): Promise<void>;
 
-	updateVerificationValue(
-		id: string,
+	updateVerificationByIdentifier(
+		identifier: string,
 		data: Partial<Verification>,
 	): Promise<Verification>;
 }
@@ -344,6 +350,7 @@ export type AuthContext<Options extends BetterAuthOptions = BetterAuthOptions> =
 			internalAdapter: InternalAdapter<Options>;
 			createAuthCookie: CreateCookieGetterFn;
 			secret: string;
+			secretConfig: string | SecretConfig;
 			sessionConfig: {
 				updateAge: number;
 				expiresIn: number;

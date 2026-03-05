@@ -497,6 +497,20 @@ export const prismaAdapter = (prisma: PrismaClient, config: PrismaConfig) => {
 							`Model ${model} does not exist in the database. If you haven't generated the Prisma client, you need to run 'npx prisma generate'`,
 						);
 					}
+					// Prisma's delete() requires a WhereUniqueInput (unique/primary key field).
+					// When deleting by non-unique fields (e.g. identifier), fall back to deleteMany.
+					const hasIdField = where?.some((w) => w.field === "id");
+					if (!hasIdField) {
+						const whereClause = convertWhereClause({
+							model,
+							where,
+							action: "deleteMany",
+						});
+						await db[model]!.deleteMany({
+							where: whereClause,
+						});
+						return;
+					}
 					const whereClause = convertWhereClause({
 						model,
 						where,
