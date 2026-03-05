@@ -7,7 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { HalftoneBackground } from "@/components/landing/halftone-bg";
 
-const ctaHref = `/sign-in?callbackUrl=${encodeURIComponent("/dashboard?redirectTo=/settings/billing")}`;
+const ctaHref = `https://dash.better-auth.com/sign-in?callbackUrl=${encodeURIComponent("/?redirectTo=/settings/billing")}`;
 
 type Tab = "framework" | "infrastructure";
 
@@ -29,7 +29,7 @@ const pricingTiers = [
 			"10k audit logs/mo included",
 		],
 		cta: "Get Started",
-		ctaHref: "/sign-in",
+		ctaHref: "https://dash.better-auth.com/sign-in",
 		ctaStyle: "outline" as const,
 		highlighted: false,
 		isFree: true,
