@@ -92,16 +92,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
 				)}
 			</head>
 			<body
-				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-hidden`}
+				className={`${fontSans.variable} ${fontMono.variable} ${GeistPixelSquare.variable} font-sans antialiased overflow-x-clip`}
 				suppressHydrationWarning
 			>
 				<Providers>
 					<CommandMenuProvider>
-						<div className="relative h-dvh overflow-x-hidden">
+						<div className="relative min-h-dvh">
 							<StaggeredNavFiles />
-							<div className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-								{children}
-							</div>
+							{children}
 						</div>
 					</CommandMenuProvider>
 				</Providers>

@@ -538,7 +538,7 @@
 
 	html,
 	body {
-		@apply overflow-x-hidden;
+		@apply overflow-x-clip;
 		max-width: 100vw;
 	}
 
