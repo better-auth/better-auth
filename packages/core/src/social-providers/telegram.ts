@@ -1,3 +1,4 @@
+import { decodeJwt } from "jose";
 import type { OAuthProvider, ProviderOptions } from "../oauth2";
 import { createAuthorizationURL, validateAuthorizationCode } from "../oauth2";
 
@@ -67,19 +68,11 @@ export const telegram = (options: TelegramOptions) => {
 				return null;
 			}
 
-			// Decode the JWT payload (Telegram returns user info in the id_token)
-			const segments = idToken.split(".");
-			const payloadSegment = segments[1];
-			if (!payloadSegment) {
-				return null;
-			}
-
-			const base64 = payloadSegment
-				.replace(/-/g, "+")
-				.replace(/_/g, "/")
-				.padEnd(Math.ceil(payloadSegment.length / 4) * 4, "=");
-			const payloadJson = atob(base64);
-			const profile = JSON.parse(payloadJson) as TelegramProfile;
+			// Decode the JWT payload (Telegram returns user info in the id_token).
+			// Note: Telegram does not publish a JWKS endpoint, so full signature
+			// verification is not possible. This matches the pattern used by other
+			// providers without JWKS (Twitch, PayPal, Paybin).
+			const profile = decodeJwt(idToken) as TelegramProfile;
 
 			if (!profile.sub) {
 				return null;
