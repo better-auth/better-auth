@@ -602,6 +602,68 @@ describe("internal adapter test", async () => {
 		expect(finalTTL).toBeGreaterThanOrEqual(7198); // Allow for test execution time
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8156
+	 */
+	it("should handle secondaryStorage that auto-deserializes JSON (e.g. @vercel/kv)", async () => {
+		const objectStore = new Map<string, unknown>();
+
+		const testOpts = {
+			database: new DatabaseSync(":memory:"),
+			secondaryStorage: {
+				set(key: string, value: string, _ttl?: number) {
+					// Simulate @vercel/kv: stores string but get() returns parsed object
+					objectStore.set(key, JSON.parse(value));
+				},
+				get(key: string) {
+					return objectStore.get(key) ?? null;
+				},
+				delete(key: string) {
+					objectStore.delete(key);
+				},
+			},
+		} satisfies BetterAuthOptions;
+
+		(await getMigrations(testOpts)).runMigrations();
+		const testCtx = await init(testOpts);
+		const testAdapter = testCtx.internalAdapter;
+
+		const user = await testAdapter.createUser({
+			name: "KV User",
+			email: `kv-test-${Date.now()}@example.com`,
+		});
+		const session = await testAdapter.createSession(user.id);
+
+		// Verify store holds parsed objects with string dates (not Date instances)
+		const cachedBefore = objectStore.get(session.token) as
+			| { session?: { expiresAt?: unknown } }
+			| undefined;
+		expect(typeof cachedBefore?.session?.expiresAt).toBe("string");
+
+		// This was the crash in #8156: TypeError: expiresAt.getTime is not a function
+		// updateUser calls refreshUserSessions which reads from secondary storage
+		await expect(
+			testAdapter.updateUser(user.id, { name: "Updated Name" }),
+		).resolves.toBeDefined();
+
+		const afterUpdate = objectStore.get(session.token) as
+			| { user?: { name?: string } }
+			| undefined;
+		expect(afterUpdate?.user?.name).toBe("Updated Name");
+
+		// Also verify updateUserByEmail works
+		await expect(
+			testAdapter.updateUserByEmail(user.email, {
+				name: "Updated By Email",
+			}),
+		).resolves.toBeDefined();
+
+		const afterEmailUpdate = objectStore.get(session.token) as
+			| { user?: { name?: string } }
+			| undefined;
+		expect(afterEmailUpdate?.user?.name).toBe("Updated By Email");
+	});
+
 	it("should create on secondary storage", async () => {
 		// Create session
 		const now = Date.now();
