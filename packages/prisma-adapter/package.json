@@ -41,9 +41,6 @@
       "default": "./dist/index.mjs"
     }
   },
-  "dependencies": {
-    "@prisma/client": "^7.4.1"
-  },
   "peerDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.0",
