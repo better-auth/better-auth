@@ -199,7 +199,7 @@ describe("internal adapter test", async () => {
 		expect(session.data?.session).toBeDefined();
 	});
 
-	it("should not return expired verification values on find", async () => {
+	it("should delete expired verification values on find", async () => {
 		await internalAdapter.createVerificationValue({
 			identifier: `test-id-1`,
 			value: "test-id-1",
@@ -209,7 +209,9 @@ describe("internal adapter test", async () => {
 		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
 
 		const value = await internalAdapter.findVerificationValue("test-id-1");
-		expect(value).toBeNull();
+		expect(value).toMatchObject({
+			identifier: "test-id-1",
+		});
 		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
 		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 
@@ -228,6 +230,24 @@ describe("internal adapter test", async () => {
 		expect(value4).toMatchObject({
 			identifier: "test-id-1",
 		});
+	});
+
+	it("should not return expired verification values when cleanupBeforeFind is enabled", async () => {
+		await internalAdapter.createVerificationValue({
+			identifier: `test-id-cleanup-first`,
+			value: "test-id-cleanup-first",
+			expiresAt: new Date(Date.now() - 1000),
+		});
+		expect(hookVerificationCreateBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationCreateAfter).toHaveBeenCalledOnce();
+
+		const value = await internalAdapter.findVerificationValue(
+			"test-id-cleanup-first",
+			{ cleanupBeforeFind: true },
+		);
+		expect(value).toBeNull();
+		expect(hookVerificationDeleteBefore).toHaveBeenCalledOnce();
+		expect(hookVerificationDeleteAfter).toHaveBeenCalledOnce();
 	});
 
 	it("should delete verification by value with hooks", async () => {
