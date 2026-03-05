@@ -1328,8 +1328,8 @@ function formatCount(num: number | null | undefined): string {
 }
 
 const footerLinks = [
-	{ label: "Terms", href: "/terms" },
-	{ label: "Privacy", href: "/privacy" },
+	{ label: "Terms", href: "/legal/terms" },
+	{ label: "Privacy", href: "/legal/privacy" },
 	{ label: "Blog", href: "/blog" },
 	{ label: "Community", href: "/community" },
 	{ label: "Changelog", href: "/changelog" },
@@ -1383,7 +1383,7 @@ function ReadmeFooter({
 
 				<div className="flex items-center justify-center gap-4 mt-4">
 					<a
-						href="/sign-in"
+						href="https://dash.better-auth.com/sign-in"
 						className="inline-flex items-center gap-1.5 px-5 py-2 bg-foreground text-background text-[11px] font-mono uppercase tracking-wider hover:opacity-90 transition-opacity"
 					>
 						Get Started
@@ -2336,7 +2336,7 @@ export function HeroReadMe({
 												<span className="size-2 rounded-full bg-foreground/10" />
 											</div>
 											<span className="text-[10px] font-mono text-foreground/30 ml-2">
-												better-auth.com/dashboard/the-next-big-thing
+												dash.better-auth.com/the-next-big-thing
 											</span>
 										</div>
 										<div className="flex items-center gap-3">
@@ -2359,7 +2359,7 @@ export function HeroReadMe({
 									{/* Dashboard demo video — crop top border from video */}
 									<div className="overflow-hidden" suppressHydrationWarning>
 										<video
-											src={"https://docs.better-auth.com/demo-dark.mp4"}
+											src={"/demo-dark.mp4"}
 											autoPlay
 											loop
 											muted
@@ -2368,7 +2368,7 @@ export function HeroReadMe({
 											suppressHydrationWarning
 										/>
 										<video
-											src={"https://docs.better-auth.com/demo-light.mp4"}
+											src={"/demo-light.mp4"}
 											autoPlay
 											loop
 											muted
