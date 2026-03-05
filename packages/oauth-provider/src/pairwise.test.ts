@@ -286,7 +286,7 @@ describe("pairwise subject identifiers", async () => {
 		expect(refreshedIdToken.sub).toBe(originalIdToken.sub);
 	});
 
-	it("should keep user.id in JWT access token sub (not pairwise)", async () => {
+	it("should use pairwise sub in JWT access token (RFC 9068 §6)", async () => {
 		const tokens = await getTokensForClient(pairwiseClientA!, redirectUriA, {
 			resource: validAudience,
 		});
@@ -294,9 +294,36 @@ describe("pairwise subject identifiers", async () => {
 		const accessToken = decodeJwt(tokens.data!.access_token!);
 		const idToken = decodeJwt(tokens.data!.id_token!);
 
-		// JWT access token uses real user.id for user lookup
+		// JWT access token uses same pairwise sub as id_token per RFC 9068 §6
 		expect(accessToken.sub).toBeDefined();
-		expect(accessToken.sub).not.toBe(idToken.sub);
+		expect(accessToken.sub).toBe(idToken.sub);
+	});
+
+	it("should produce different JWT access token sub across pairwise clients", async () => {
+		const tokensA = await getTokensForClient(pairwiseClientA!, redirectUriA, {
+			resource: validAudience,
+		});
+		const tokensB = await getTokensForClient(pairwiseClientB!, redirectUriB, {
+			resource: validAudience,
+		});
+
+		const accessTokenA = decodeJwt(tokensA.data!.access_token!);
+		const accessTokenB = decodeJwt(tokensB.data!.access_token!);
+
+		// Different sectors → different pairwise sub in JWT access tokens too
+		expect(accessTokenA.sub).not.toBe(accessTokenB.sub);
+	});
+
+	it("should keep user.id in JWT access token for public clients", async () => {
+		const tokens = await getTokensForClient(publicClient!, redirectUriPublic, {
+			resource: validAudience,
+		});
+
+		const accessToken = decodeJwt(tokens.data!.access_token!);
+		const idToken = decodeJwt(tokens.data!.id_token!);
+
+		// Public client: both use real user.id
+		expect(accessToken.sub).toBe(idToken.sub);
 	});
 });
 

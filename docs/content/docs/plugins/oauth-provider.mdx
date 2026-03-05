@@ -1406,10 +1406,11 @@ Pairwise identifiers are computed using HMAC-SHA256 over the **sector identifier
 
 Pairwise `sub` appears in:
 - `id_token`
+- JWT access tokens (per [RFC 9068 §6](https://datatracker.ietf.org/doc/html/rfc9068#section-6))
 - `/oauth2/userinfo` response
 - Token introspection (`/oauth2/introspect`)
 
-JWT access tokens always use the real user ID as `sub`, since resource servers may need to look up users directly.
+Public clients always use the real user ID as `sub` across all token types.
 
 <Callout type="warn">
 **Limitations:**

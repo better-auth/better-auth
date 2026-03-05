@@ -94,12 +94,17 @@ async function createJwtAccessToken(
 
 	const jwtPluginOptions = getJwtPlugin(ctx.context).options;
 
+	// Resolve pairwise sub for JWT access tokens per RFC 9068 §6:
+	// "the authorization server SHOULD ensure that JWT access tokens meant
+	// for different resource servers have distinct sub values"
+	const resolvedSub = await resolveSubjectIdentifier(user.id, client, opts);
+
 	// Sign token
 	return signJWT(ctx, {
 		options: jwtPluginOptions,
 		payload: {
 			...customClaims,
-			sub: user.id,
+			sub: resolvedSub,
 			aud:
 				typeof audience === "string"
 					? audience
