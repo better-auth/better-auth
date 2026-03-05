@@ -79,7 +79,16 @@ export type BetterAuthPluginRegistryIdentifier = keyof BetterAuthPluginRegistry<
 
 export type GenericEndpointContext<
 	Options extends BetterAuthOptions = BetterAuthOptions,
-> = EndpointContext<string, any, any, any, any, any, any, AuthContext<Options>> & {
+> = EndpointContext<
+	string,
+	any,
+	any,
+	any,
+	any,
+	any,
+	any,
+	AuthContext<Options>
+> & {
 	/**
 	 * The response headers accumulator that `setCookie` and `setHeader`
 	 * write to during handler execution. Provided by better-call's
