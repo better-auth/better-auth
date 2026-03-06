@@ -175,6 +175,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                 accessToken?: string | undefined;
                 refreshToken?: string | undefined;
                 expiresAt?: number | undefined;
+                user?: {
+                    name?: {
+                        firstName?: string | undefined;
+                        lastName?: string | undefined;
+                    } | undefined;
+                    email?: string | undefined;
+                } | undefined;
             } | undefined;
             scopes?: string[] | undefined;
             requestSignUp?: boolean | undefined;
@@ -210,6 +217,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -1659,6 +1673,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                 accessToken?: string | undefined;
                 refreshToken?: string | undefined;
                 expiresAt?: number | undefined;
+                user?: {
+                    name?: {
+                        firstName?: string | undefined;
+                        lastName?: string | undefined;
+                    } | undefined;
+                    email?: string | undefined;
+                } | undefined;
             } | undefined;
             scopes?: string[] | undefined;
             requestSignUp?: boolean | undefined;
@@ -1694,6 +1715,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -3218,6 +3246,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -3253,6 +3288,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                                 accessToken?: string | undefined;
                                 refreshToken?: string | undefined;
                                 expiresAt?: number | undefined;
+                                user?: {
+                                    name?: {
+                                        firstName?: string | undefined;
+                                        lastName?: string | undefined;
+                                    } | undefined;
+                                    email?: string | undefined;
+                                } | undefined;
                             } | undefined;
                             scopes?: string[] | undefined;
                             requestSignUp?: boolean | undefined;
@@ -4702,6 +4744,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -4737,6 +4786,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                                 accessToken?: string | undefined;
                                 refreshToken?: string | undefined;
                                 expiresAt?: number | undefined;
+                                user?: {
+                                    name?: {
+                                        firstName?: string | undefined;
+                                        lastName?: string | undefined;
+                                    } | undefined;
+                                    email?: string | undefined;
+                                } | undefined;
                             } | undefined;
                             scopes?: string[] | undefined;
                             requestSignUp?: boolean | undefined;
@@ -6332,6 +6388,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -6367,6 +6430,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                                 accessToken?: string | undefined;
                                 refreshToken?: string | undefined;
                                 expiresAt?: number | undefined;
+                                user?: {
+                                    name?: {
+                                        firstName?: string | undefined;
+                                        lastName?: string | undefined;
+                                    } | undefined;
+                                    email?: string | undefined;
+                                } | undefined;
                             } | undefined;
                             scopes?: string[] | undefined;
                             requestSignUp?: boolean | undefined;
@@ -7816,6 +7886,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -7851,6 +7928,13 @@ export function getTestInstance<O extends Partial<BetterAuthOptions>, C extends 
                                 accessToken?: string | undefined;
                                 refreshToken?: string | undefined;
                                 expiresAt?: number | undefined;
+                                user?: {
+                                    name?: {
+                                        firstName?: string | undefined;
+                                        lastName?: string | undefined;
+                                    } | undefined;
+                                    email?: string | undefined;
+                                } | undefined;
                             } | undefined;
                             scopes?: string[] | undefined;
                             requestSignUp?: boolean | undefined;

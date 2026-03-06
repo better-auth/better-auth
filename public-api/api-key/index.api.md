@@ -1129,7 +1129,6 @@ export function apiKey(_configurations?: (ApiKeyConfigurationOptions & ApiKeyOpt
             };
         };
     };
-    configurations: PredefinedApiKeyOptions[];
 };
 
 // @public (undocumented)

@@ -505,6 +505,13 @@ export function getEndpoints<Option extends BetterAuthOptions>(ctx: Awaitable<Au
                 accessToken?: string | undefined;
                 refreshToken?: string | undefined;
                 expiresAt?: number | undefined;
+                user?: {
+                    name?: {
+                        firstName?: string | undefined;
+                        lastName?: string | undefined;
+                    } | undefined;
+                    email?: string | undefined;
+                } | undefined;
             } | undefined;
             scopes?: string[] | undefined;
             requestSignUp?: boolean | undefined;
@@ -540,6 +547,13 @@ export function getEndpoints<Option extends BetterAuthOptions>(ctx: Awaitable<Au
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -2544,6 +2558,13 @@ export const router: <Option extends BetterAuthOptions>(ctx: AuthContext, option
                 accessToken?: string | undefined;
                 refreshToken?: string | undefined;
                 expiresAt?: number | undefined;
+                user?: {
+                    name?: {
+                        firstName?: string | undefined;
+                        lastName?: string | undefined;
+                    } | undefined;
+                    email?: string | undefined;
+                } | undefined;
             } | undefined;
             scopes?: string[] | undefined;
             requestSignUp?: boolean | undefined;
@@ -2579,6 +2600,13 @@ export const router: <Option extends BetterAuthOptions>(ctx: AuthContext, option
                         accessToken?: string | undefined;
                         refreshToken?: string | undefined;
                         expiresAt?: number | undefined;
+                        user?: {
+                            name?: {
+                                firstName?: string | undefined;
+                                lastName?: string | undefined;
+                            } | undefined;
+                            email?: string | undefined;
+                        } | undefined;
                     } | undefined;
                     scopes?: string[] | undefined;
                     requestSignUp?: boolean | undefined;
@@ -4198,6 +4226,13 @@ export const signInSocial: <O extends BetterAuthOptions>() => better_call0.Endpo
         accessToken?: string | undefined;
         refreshToken?: string | undefined;
         expiresAt?: number | undefined;
+        user?: {
+            name?: {
+                firstName?: string | undefined;
+                lastName?: string | undefined;
+            } | undefined;
+            email?: string | undefined;
+        } | undefined;
     } | undefined;
     scopes?: string[] | undefined;
     requestSignUp?: boolean | undefined;
@@ -4225,6 +4260,13 @@ export const signInSocial: <O extends BetterAuthOptions>() => better_call0.Endpo
                 accessToken?: string | undefined;
                 refreshToken?: string | undefined;
                 expiresAt?: number | undefined;
+                user?: {
+                    name?: {
+                        firstName?: string | undefined;
+                        lastName?: string | undefined;
+                    } | undefined;
+                    email?: string | undefined;
+                } | undefined;
             } | undefined;
             scopes?: string[] | undefined;
             requestSignUp?: boolean | undefined;
