@@ -441,7 +441,15 @@ export const twoFactor = <O extends TwoFactorOptions>(options?: O) => {
 				},
 			],
 		},
-		schema: mergeSchema(schema, options?.schema),
+		schema: mergeSchema(schema, {
+			...options?.schema,
+			twoFactor: {
+				...options?.schema?.twoFactor,
+				...(options?.twoFactorTable
+					? { modelName: options.twoFactorTable }
+					: {}),
+			},
+		}),
 		rateLimit: [
 			{
 				pathMatcher(path) {
