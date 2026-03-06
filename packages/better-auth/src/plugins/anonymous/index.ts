@@ -62,7 +62,7 @@ export const anonymous = (options?: AnonymousOptions | undefined) => {
 			signInAnonymous: createAuthEndpoint(
 				"/sign-in/anonymous",
 				{
-					method: "POST",
+					method: "POST" as const,
 					metadata: {
 						openapi: {
 							description: "Sign in anonymously",
