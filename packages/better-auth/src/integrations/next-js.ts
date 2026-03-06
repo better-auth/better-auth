@@ -34,24 +34,21 @@ export const nextCookies = () => {
 						return ctx.path === "/get-session";
 					},
 					handler: createAuthMiddleware(async () => {
-						// Detect Server Component by testing if cookies can be modified.
-						// In Server Components, `cookies().set()` throws an error.
-						// In Server Actions or Route Handlers, it succeeds.
-						let cookieStore: Awaited<
-							ReturnType<typeof import("next/headers.js").cookies>
+						let headersStore: Awaited<
+							ReturnType<typeof import("next/headers.js").headers>
 						>;
 						try {
-							const { cookies } = await import("next/headers.js");
-							cookieStore = await cookies();
+							const { headers } = await import("next/headers.js");
+							headersStore = await headers();
 						} catch {
 							// import failed or not in request context
 							return;
 						}
-						try {
-							cookieStore.set("__better-auth-cookie-store", "1", { maxAge: 0 });
-							// If cookie was set successfully, we should clean up.
-							cookieStore.delete("__better-auth-cookie-store");
-						} catch {
+
+						const isServerAction = headersStore.get("next-action");
+						console.log({ isServerAction, headersStore });
+						// If it's not a server action than it's a server component, so we should skip session refresh.
+						if (!isServerAction) {
 							await setShouldSkipSessionRefresh(true);
 						}
 					}),
