@@ -7,6 +7,7 @@ export {
 	getEnvVar,
 	isDevelopment,
 	isProduction,
+	isSvelteKitBuilding,
 	isTest,
 	nodeENV,
 } from "./env-impl";
