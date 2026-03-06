@@ -685,6 +685,40 @@ describe("organization", async () => {
 		);
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8385
+	 */
+	it("should allow multi-role owner to invite with owner role", async () => {
+		const { headers, user } = await signInWithTestUser();
+		// Create a fresh org for this test
+		const org = await client.organization.create({
+			name: "multi-role-test-org",
+			slug: "multi-role-test-org",
+			fetchOptions: { headers },
+		});
+		const orgId = org.data!.id;
+		const memberId = org.data!.members[0].id;
+
+		// Set the member to have multiple roles including owner
+		await auth.api.updateMemberRole({
+			headers,
+			body: {
+				organizationId: orgId,
+				role: ["owner", "admin"],
+				memberId,
+			},
+		});
+
+		const invite = await client.organization.inviteMember({
+			organizationId: orgId,
+			email: "multi-role-invite-test@test.com",
+			role: "owner",
+			fetchOptions: { headers },
+		});
+		expect(invite.error).toBeNull();
+		expect(invite.data?.role).toBe("owner");
+	});
+
 	it("should allow leaving organization", async () => {
 		const newUser = {
 			email: "leave@org.com",

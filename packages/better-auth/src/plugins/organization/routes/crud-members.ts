@@ -324,7 +324,7 @@ export const removeMember = <O extends OrganizationOptions>(options: O) =>
 			const creatorRole = ctx.context.orgOptions?.creatorRole || "owner";
 			const isOwner = roles.includes(creatorRole);
 			if (isOwner) {
-				if (member.role !== creatorRole) {
+				if (!member.role.split(",").includes(creatorRole)) {
 					throw APIError.from(
 						"BAD_REQUEST",
 						ORGANIZATION_ERROR_CODES.YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER,
