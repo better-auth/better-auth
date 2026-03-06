@@ -1,0 +1,300 @@
+name: Package Size Report
+
+on:
+  pull_request:
+    branches:
+      - main
+      - canary
+
+env:
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM || github.repository_owner }}
+
+jobs:
+  pkg-size:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+
+      - name: Cache turbo build setup
+        uses: actions/cache@9255dc7a253b0ccc959486e2bca901246202afeb # v5.0.1
+        with:
+          path: .turbo
+          key: ${{ runner.os }}-turbo-pkg-size-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-pkg-size-
+            ${{ runner.os }}-turbo-
+
+      - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # v4.2.0
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f # v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          registry-url: 'https://registry.npmjs.org'
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+
+      - name: Get head publish size
+        run: npx pkg-size ./packages/better-auth --json > /tmp/head-size.json
+
+      - name: Get head install size
+        shell: bash
+        run: |
+          # Pack all workspace packages (pnpm pack resolves workspace:* to real versions)
+          TARBALLS_DIR=/tmp/head-tarballs
+          mkdir -p "$TARBALLS_DIR"
+          for pkg in packages/*/; do
+            [ -f "$pkg/package.json" ] && pnpm pack --pack-destination "$TARBALLS_DIR" -C "$pkg" 2>/dev/null | tail -1
+          done
+
+          # Install in isolated directory using local tarballs for workspace deps
+          INSTALL_DIR=/tmp/head-install
+          mkdir -p "$INSTALL_DIR"
+          cd "$INSTALL_DIR"
+          npm init -y > /dev/null 2>&1
+
+          # Pre-install workspace dependency tarballs so better-auth resolves them locally
+          for f in "$TARBALLS_DIR"/better-auth-{core,drizzle-adapter,kysely-adapter,memory-adapter,mongo-adapter,prisma-adapter,telemetry}-*.tgz; do
+            [ -f "$f" ] && npm install "$f" --ignore-scripts 2>/dev/null
+          done
+
+          # Install better-auth from local tarball
+          BA_TARBALL=$(ls "$TARBALLS_DIR"/better-auth-[0-9]*.tgz 2>/dev/null | head -1)
+          npm install "$BA_TARBALL" --ignore-scripts
+
+          # Measure per-dependency sizes
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            function dirSize(dir) {
+              let total = 0;
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) total += dirSize(full);
+                else total += fs.statSync(full).size;
+              }
+              return total;
+            }
+            const nm = './node_modules';
+            const deps = [];
+            for (const entry of fs.readdirSync(nm, { withFileTypes: true })) {
+              if (entry.name.startsWith('.')) continue;
+              const full = path.join(nm, entry.name);
+              if (entry.name.startsWith('@') && entry.isDirectory()) {
+                for (const sub of fs.readdirSync(full, { withFileTypes: true })) {
+                  deps.push({ name: entry.name + '/' + sub.name, size: dirSize(path.join(full, sub.name)) });
+                }
+              } else if (entry.isDirectory()) {
+                deps.push({ name: entry.name, size: dirSize(full) });
+              }
+            }
+            const totalSize = deps.reduce((a, d) => a + d.size, 0);
+            deps.sort((a, b) => b.size - a.size);
+            console.log(JSON.stringify({ totalSize, dependencies: deps }));
+          " > /tmp/head-install-size.json
+          rm -rf "$INSTALL_DIR" "$TARBALLS_DIR"
+
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          clean: false
+
+      - name: Install (base)
+        run: pnpm install
+
+      - name: Build (base)
+        run: pnpm build
+
+      - name: Get base publish size
+        run: npx pkg-size ./packages/better-auth --json > /tmp/base-size.json
+
+      - name: Get base install size
+        shell: bash
+        run: |
+          TARBALLS_DIR=/tmp/base-tarballs
+          mkdir -p "$TARBALLS_DIR"
+          for pkg in packages/*/; do
+            [ -f "$pkg/package.json" ] && pnpm pack --pack-destination "$TARBALLS_DIR" -C "$pkg" 2>/dev/null | tail -1
+          done
+
+          INSTALL_DIR=/tmp/base-install
+          mkdir -p "$INSTALL_DIR"
+          cd "$INSTALL_DIR"
+          npm init -y > /dev/null 2>&1
+
+          for f in "$TARBALLS_DIR"/better-auth-{core,drizzle-adapter,kysely-adapter,memory-adapter,mongo-adapter,prisma-adapter,telemetry}-*.tgz; do
+            [ -f "$f" ] && npm install "$f" --ignore-scripts 2>/dev/null
+          done
+
+          BA_TARBALL=$(ls "$TARBALLS_DIR"/better-auth-[0-9]*.tgz 2>/dev/null | head -1)
+          npm install "$BA_TARBALL" --ignore-scripts
+
+          node -e "
+            const fs = require('fs');
+            const path = require('path');
+            function dirSize(dir) {
+              let total = 0;
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const full = path.join(dir, entry.name);
+                if (entry.isDirectory()) total += dirSize(full);
+                else total += fs.statSync(full).size;
+              }
+              return total;
+            }
+            const nm = './node_modules';
+            const deps = [];
+            for (const entry of fs.readdirSync(nm, { withFileTypes: true })) {
+              if (entry.name.startsWith('.')) continue;
+              const full = path.join(nm, entry.name);
+              if (entry.name.startsWith('@') && entry.isDirectory()) {
+                for (const sub of fs.readdirSync(full, { withFileTypes: true })) {
+                  deps.push({ name: entry.name + '/' + sub.name, size: dirSize(path.join(full, sub.name)) });
+                }
+              } else if (entry.isDirectory()) {
+                deps.push({ name: entry.name, size: dirSize(full) });
+              }
+            }
+            const totalSize = deps.reduce((a, d) => a + d.size, 0);
+            deps.sort((a, b) => b.size - a.size);
+            console.log(JSON.stringify({ totalSize, dependencies: deps }));
+          " > /tmp/base-install-size.json
+          rm -rf "$INSTALL_DIR" "$TARBALLS_DIR"
+
+      - name: Generate size report
+        id: report
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const fs = require('fs');
+            const headData = JSON.parse(fs.readFileSync('/tmp/head-size.json', 'utf8'));
+            const baseData = JSON.parse(fs.readFileSync('/tmp/base-size.json', 'utf8'));
+            const headInstall = JSON.parse(fs.readFileSync('/tmp/head-install-size.json', 'utf8'));
+            const baseInstall = JSON.parse(fs.readFileSync('/tmp/base-install-size.json', 'utf8'));
+
+            function sum(files, key) {
+              return files.reduce((acc, f) => acc + f[key], 0);
+            }
+
+            function formatBytes(bytes) {
+              if (bytes === 0) return '0 B';
+              const k = 1024;
+              const sizes = ['B', 'KB', 'MB'];
+              const i = Math.min(Math.floor(Math.log(Math.abs(bytes)) / Math.log(k)), sizes.length - 1);
+              const val = bytes / Math.pow(k, i);
+              return `${val < 0 ? '-' : ''}${Math.abs(val).toFixed(2)} ${sizes[i]}`;
+            }
+
+            function formatDelta(head, base) {
+              const delta = head - base;
+              if (delta === 0) return '0 B';
+              const pct = base !== 0 ? ((delta / base) * 100).toFixed(2) : '∞';
+              const sign = delta > 0 ? '+' : '';
+              return `${sign}${formatBytes(delta)} (${sign}${pct}%)`;
+            }
+
+            // Publish size totals
+            const headTotal = sum(headData.files, 'size');
+            const baseTotal = sum(baseData.files, 'size');
+            const headGzip = sum(headData.files, 'sizeGzip');
+            const baseGzip = sum(baseData.files, 'sizeGzip');
+            const headBrotli = sum(headData.files, 'sizeBrotli');
+            const baseBrotli = sum(baseData.files, 'sizeBrotli');
+
+            // --- Summary table ---
+            let body = `## 📦 Package Size Report — \`better-auth\`\n\n`;
+            body += `| Metric | Base | Head | Delta |\n`;
+            body += `| --- | ---: | ---: | ---: |\n`;
+            body += `| **Tarball** | ${formatBytes(baseData.tarballSize)} | ${formatBytes(headData.tarballSize)} | ${formatDelta(headData.tarballSize, baseData.tarballSize)} |\n`;
+            body += `| **Uncompressed** | ${formatBytes(baseTotal)} | ${formatBytes(headTotal)} | ${formatDelta(headTotal, baseTotal)} |\n`;
+            body += `| **Gzip** | ${formatBytes(baseGzip)} | ${formatBytes(headGzip)} | ${formatDelta(headGzip, baseGzip)} |\n`;
+            body += `| **Brotli** | ${formatBytes(baseBrotli)} | ${formatBytes(headBrotli)} | ${formatDelta(headBrotli, baseBrotli)} |\n`;
+            body += `| **Install (node_modules)** | ${formatBytes(baseInstall.totalSize)} | ${formatBytes(headInstall.totalSize)} | ${formatDelta(headInstall.totalSize, baseInstall.totalSize)} |\n\n`;
+
+            // --- Publish file diff ---
+            const baseFiles = new Map(baseData.files.map(f => [f.path, f]));
+            const headFiles = new Map(headData.files.map(f => [f.path, f]));
+            let changedRows = '';
+            let unchangedCount = 0;
+            const allPaths = [...new Set([...baseFiles.keys(), ...headFiles.keys()])].sort();
+
+            for (const path of allPaths) {
+              const base = baseFiles.get(path);
+              const head = headFiles.get(path);
+              if (!head) {
+                changedRows += `| \`${path}\` | ${formatBytes(base.size)} | _removed_ | -${formatBytes(base.size)} |\n`;
+              } else if (!base) {
+                changedRows += `| \`${path}\` | _new_ | ${formatBytes(head.size)} | +${formatBytes(head.size)} |\n`;
+              } else if (head.size !== base.size) {
+                changedRows += `| \`${path}\` | ${formatBytes(base.size)} | ${formatBytes(head.size)} | ${formatDelta(head.size, base.size)} |\n`;
+              } else {
+                unchangedCount++;
+              }
+            }
+
+            if (changedRows) {
+              body += `### Changed Files (publish)\n\n`;
+              body += `| File | Base | Head | Delta |\n`;
+              body += `| --- | ---: | ---: | ---: |\n`;
+              body += changedRows + '\n';
+            }
+
+            if (unchangedCount > 0) {
+              body += `<details><summary>${unchangedCount} unchanged files</summary>\n\nAll other published files have identical sizes between base and head.\n</details>\n\n`;
+            }
+
+            // --- Install dependency diff ---
+            const baseDeps = new Map(baseInstall.dependencies.map(d => [d.name, d.size]));
+            const headDeps = new Map(headInstall.dependencies.map(d => [d.name, d.size]));
+            let depChangedRows = '';
+            let depUnchangedCount = 0;
+            const allDeps = [...new Set([...baseDeps.keys(), ...headDeps.keys()])].sort();
+
+            for (const name of allDeps) {
+              const base = baseDeps.get(name) ?? null;
+              const head = headDeps.get(name) ?? null;
+              if (head === null) {
+                depChangedRows += `| \`${name}\` | ${formatBytes(base)} | _removed_ | -${formatBytes(base)} |\n`;
+              } else if (base === null) {
+                depChangedRows += `| \`${name}\` | _new_ | ${formatBytes(head)} | +${formatBytes(head)} |\n`;
+              } else if (head !== base) {
+                depChangedRows += `| \`${name}\` | ${formatBytes(base)} | ${formatBytes(head)} | ${formatDelta(head, base)} |\n`;
+              } else {
+                depUnchangedCount++;
+              }
+            }
+
+            if (depChangedRows) {
+              body += `### Changed Dependencies (install)\n\n`;
+              body += `| Dependency | Base | Head | Delta |\n`;
+              body += `| --- | ---: | ---: | ---: |\n`;
+              body += depChangedRows + '\n';
+            }
+
+            if (depUnchangedCount > 0) {
+              body += `<details><summary>${depUnchangedCount} unchanged dependencies</summary>\n\nAll other installed dependencies have identical sizes between base and head.\n</details>\n`;
+            }
+
+            core.setOutput('body', body);
+
+      - name: Find existing comment
+        id: find-comment
+        uses: peter-evans/find-comment@v3
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: 'Package Size Report'
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find-comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body: ${{ steps.report.outputs.body }}
+          edit-mode: replace
