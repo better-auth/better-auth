@@ -11,8 +11,51 @@ const config = {
 	dkLen: 64,
 };
 
-async function generateKey(password: string, salt: string) {
-	return await scryptAsync(password.normalize("NFKC"), salt, {
+const nativeScryptFn: Promise<typeof import("node:crypto").scrypt | null> =
+	(async () => {
+		try {
+			const { scrypt } = await import("node:crypto");
+			if (typeof scrypt === "function") return scrypt;
+			return null;
+		} catch {
+			return null;
+		}
+	})();
+
+function nativeGenerateKey(
+	scryptFn: typeof import("node:crypto").scrypt,
+	password: string,
+	salt: string,
+): Promise<Uint8Array> {
+	return new Promise((resolve, reject) => {
+		scryptFn(
+			password,
+			salt,
+			config.dkLen,
+			{
+				N: config.N,
+				r: config.r,
+				p: config.p,
+				maxmem: 128 * config.N * config.r * 2,
+			},
+			(err, derivedKey) => {
+				if (err) reject(err);
+				else resolve(new Uint8Array(derivedKey));
+			},
+		);
+	});
+}
+
+async function generateKey(
+	password: string,
+	salt: string,
+): Promise<Uint8Array> {
+	const normalizedPassword = password.normalize("NFKC");
+	const scryptFn = await nativeScryptFn;
+	if (scryptFn) {
+		return nativeGenerateKey(scryptFn, normalizedPassword, salt);
+	}
+	return scryptAsync(normalizedPassword, salt, {
 		N: config.N,
 		p: config.p,
 		r: config.r,

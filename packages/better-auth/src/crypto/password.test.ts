@@ -1,3 +1,5 @@
+import { hex } from "@better-auth/utils/hex";
+import { scryptAsync } from "@noble/hashes/scrypt.js";
 import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword } from "./password";
 
@@ -59,5 +61,29 @@ describe("Password hashing and verification", () => {
 		const hash = await hashPassword(password);
 		const isValid = await verifyPassword({ hash, password });
 		expect(isValid).toBe(true);
+	});
+
+	it("should verify a password hashed with @noble/hashes (cross-compatibility)", async () => {
+		const password = "crossCompatTest!";
+		const salt = hex.encode(crypto.getRandomValues(new Uint8Array(16)));
+		const key = await scryptAsync(password.normalize("NFKC"), salt, {
+			N: 16384,
+			p: 1,
+			r: 16,
+			dkLen: 64,
+			maxmem: 128 * 16384 * 16 * 2,
+		});
+		const nobleHash = `${salt}:${hex.encode(key)}`;
+		const isValid = await verifyPassword({ hash: nobleHash, password });
+		expect(isValid).toBe(true);
+	});
+
+	it("should verify a known test vector", async () => {
+		const password = "betterAuthTestVector";
+		const hash = await hashPassword(password);
+		const isValid = await verifyPassword({ hash, password });
+		expect(isValid).toBe(true);
+		const isInvalid = await verifyPassword({ hash, password: "wrong" });
+		expect(isInvalid).toBe(false);
 	});
 });
