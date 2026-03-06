@@ -697,7 +697,7 @@ describe("organization", async () => {
 			fetchOptions: { headers },
 		});
 		const orgId = org.data!.id;
-		const memberId = org.data!.members[0].id;
+		const memberId = org.data!.members[0]!.id;
 
 		// Set the member to have multiple roles including owner
 		const updatedMember = await auth.api.updateMemberRole({
