@@ -36,6 +36,7 @@
     ".": {
       "dev-source": "./src/index.ts",
       "types": "./dist/index.d.mts",
+      "node": "./dist/node.mjs",
       "default": "./dist/index.mjs"
     }
   },

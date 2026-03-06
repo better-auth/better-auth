@@ -1,5 +1,4 @@
 import { env } from "@better-auth/core/env";
-import { importRuntime } from "../utils/import-util";
 
 function getVendor() {
 	const hasAny = (...keys: string[]) =>
@@ -73,131 +72,30 @@ function getVendor() {
 	return null;
 }
 
+// In the default (non-node) build, system info detection is not available.
+// The node build (src/node.ts) provides its own inline implementation
+// using static top-level imports of node:os and node:fs.
 export async function detectSystemInfo() {
-	try {
-		//check if it's cloudflare
-		if (getVendor() === "cloudflare") return "cloudflare";
-		const os = await importRuntime<typeof import("os")>("os");
-		const cpus = os.cpus();
-		return {
-			deploymentVendor: getVendor(),
-			systemPlatform: os.platform(),
-			systemRelease: os.release(),
-			systemArchitecture: os.arch(),
-			cpuCount: cpus.length,
-			cpuModel: cpus.length ? cpus[0]!.model : null,
-			cpuSpeed: cpus.length ? cpus[0]!.speed : null,
-			memory: os.totalmem(),
-			isWSL: await isWsl(),
-			isDocker: await isDocker(),
-			isTTY:
-				typeof process !== "undefined" && (process as any).stdout
-					? (process as any).stdout.isTTY
-					: null,
-		};
-	} catch {
-		return {
-			systemPlatform: null,
-			systemRelease: null,
-			systemArchitecture: null,
-			cpuCount: null,
-			cpuModel: null,
-			cpuSpeed: null,
-			memory: null,
-			isWSL: null,
-			isDocker: null,
-			isTTY: null,
-		};
-	}
-}
-
-let isDockerCached: boolean | undefined;
-
-async function hasDockerEnv() {
-	if (getVendor() === "cloudflare") return false;
-
-	try {
-		const fs = await importRuntime<typeof import("fs")>("fs");
-		fs.statSync("/.dockerenv");
-		return true;
-	} catch {
-		return false;
-	}
-}
-
-async function hasDockerCGroup() {
-	if (getVendor() === "cloudflare") return false;
-	try {
-		const fs = await importRuntime<typeof import("fs")>("fs");
-		return fs.readFileSync("/proc/self/cgroup", "utf8").includes("docker");
-	} catch {
-		return false;
-	}
-}
-
-async function isDocker() {
-	if (getVendor() === "cloudflare") return false;
-
-	if (isDockerCached === undefined) {
-		isDockerCached = (await hasDockerEnv()) || (await hasDockerCGroup());
-	}
-
-	return isDockerCached;
-}
-
-async function isWsl() {
-	try {
-		if (getVendor() === "cloudflare") return false;
-		if (typeof process === "undefined" || process?.platform !== "linux") {
-			return false;
-		}
-		const fs = await importRuntime<typeof import("fs")>("fs");
-		const os = await importRuntime<typeof import("os")>("os");
-		if (os.release().toLowerCase().includes("microsoft")) {
-			if (await isInsideContainer()) {
-				return false;
-			}
-
-			return true;
-		}
-
-		return fs
-			.readFileSync("/proc/version", "utf8")
-			.toLowerCase()
-			.includes("microsoft")
-			? !(await isInsideContainer())
-			: false;
-	} catch {
-		return false;
-	}
-}
-
-let isInsideContainerCached: boolean | undefined;
-
-const hasContainerEnv = async () => {
-	if (getVendor() === "cloudflare") return false;
-	try {
-		const fs = await importRuntime<typeof import("fs")>("fs");
-		fs.statSync("/run/.containerenv");
-		return true;
-	} catch {
-		return false;
-	}
-};
-
-async function isInsideContainer() {
-	if (isInsideContainerCached === undefined) {
-		isInsideContainerCached = (await hasContainerEnv()) || (await isDocker());
-	}
-
-	return isInsideContainerCached;
+	return {
+		deploymentVendor: getVendor(),
+		systemPlatform: null,
+		systemRelease: null,
+		systemArchitecture: null,
+		cpuCount: null,
+		cpuModel: null,
+		cpuSpeed: null,
+		memory: null,
+		isWSL: null,
+		isDocker: null,
+		isTTY: null,
+	};
 }
 
 export function isCI() {
 	return (
 		env.CI !== "false" &&
 		("BUILD_ID" in env || // Jenkins, Cloudbees
-			"BUILD_NUMBER" in env || // Jenkins, TeamCity (fixed typo: extra space removed)
+			"BUILD_NUMBER" in env || // Jenkins, TeamCity
 			"CI" in env || // Travis CI, CircleCI, Cirrus CI, Gitlab CI, Appveyor, CodeShip, dsari, Cloudflare
 			"CI_APP_ID" in env || // Appflow
 			"CI_BUILD_ID" in env || // Appflow
