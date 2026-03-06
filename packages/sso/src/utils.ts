@@ -1,4 +1,5 @@
 import { X509Certificate } from "node:crypto";
+import { getHostname } from "tldts";
 
 /**
  * Safely parses a value that might be a JSON string or already a parsed object.
@@ -71,6 +72,10 @@ export function parseCertificate(certPem: string) {
 		publicKeyAlgorithm:
 			cert.publicKey.asymmetricKeyType?.toUpperCase() || "UNKNOWN",
 	};
+}
+
+export function getHostnameFromDomain(domain: string): string | null {
+	return getHostname(domain) || null;
 }
 
 export function maskClientId(clientId: string): string {
