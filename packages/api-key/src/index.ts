@@ -172,17 +172,14 @@ export function apiKey(
 						const { key, config } = result;
 
 						if (typeof key !== "string") {
-							throw APIError.from(
-								"BAD_REQUEST",
-								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
-							);
+							const msg =
+								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE;
+							throw APIError.from("BAD_REQUEST", msg);
 						}
 
 						if (key.length < config.defaultKeyLength) {
-							throw APIError.from(
-								"FORBIDDEN",
-								API_KEY_ERROR_CODES.INVALID_API_KEY,
-							);
+							const msg = API_KEY_ERROR_CODES.INVALID_API_KEY;
+							throw APIError.from("FORBIDDEN", msg);
 						}
 
 						if (config.customAPIKeyValidator) {
@@ -191,10 +188,8 @@ export function apiKey(
 								key,
 							});
 							if (!isValid) {
-								throw APIError.from(
-									"FORBIDDEN",
-									API_KEY_ERROR_CODES.INVALID_API_KEY,
-								);
+								const msg = API_KEY_ERROR_CODES.INVALID_API_KEY;
+								throw APIError.from("FORBIDDEN", msg);
 							}
 						}
 
@@ -380,7 +375,7 @@ export function apiKey(
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
-	} satisfies BetterAuthPlugin
+	} satisfies BetterAuthPlugin;
 }
 
 export type * from "./types";

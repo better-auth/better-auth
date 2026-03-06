@@ -2,6 +2,7 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type { OrganizationOptions } from "better-auth/plugins/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
+import type { AuthContext } from "@better-auth/core";
 
 /**
  * API Key permission actions that can be configured in organization roles.
@@ -32,11 +33,12 @@ interface Member {
 function getOrgOptions(
 	ctx: GenericEndpointContext,
 ): OrganizationOptions | null {
-	if (ctx.context.orgOptions) {
-		return ctx.context.orgOptions as OrganizationOptions;
+	const context = ctx.context;
+	if ("orgOptions" in context && context.orgOptions) {
+		return context.orgOptions as OrganizationOptions;
 	}
 
-	const orgPlugin = ctx.context.getPlugin?.("organization");
+	const orgPlugin = context.getPlugin?.("organization");
 	if (orgPlugin && "options" in orgPlugin) {
 		return orgPlugin.options as OrganizationOptions;
 	}
