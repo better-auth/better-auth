@@ -93,6 +93,7 @@
 	],
 	"ignorePaths": [
 		"patches",
+		"public-api/**/*.api.md",
 		"pnpm-workspace.yaml",
 		"pnpm-lock.yaml",
 		"e2e/smoke/test/fixtures/cloudflare/worker-configuration.d.ts",
