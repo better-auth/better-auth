@@ -220,6 +220,7 @@ async function validateOpaqueAccessToken(
 				user,
 				scopes: accessToken.scopes,
 				referenceId: accessToken?.referenceId,
+				resources: accessToken?.resources,
 				metadata: parseClientMetadata(client?.metadata),
 			})
 		: {};
@@ -295,7 +296,7 @@ async function validateRefreshToken(
 			where: [
 				{
 					field: "id",
-					value: refreshToken.sessionId,
+					value: sessionId,
 				},
 			],
 		});
