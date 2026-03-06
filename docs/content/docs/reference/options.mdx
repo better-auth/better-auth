@@ -585,6 +585,9 @@ export const auth = betterAuth({
 			defaultFindManyLimit: 100,
 			experimentalJoins: false,
 		},
+		backgroundTasks: {
+			handler: (promise) => { /* e.g. waitUntil(promise) */ }
+		},
 		skipTrailingSlashes: true
 	},
 })
@@ -599,8 +602,54 @@ export const auth = betterAuth({
 - `defaultCookieAttributes`: Default attributes for all cookies
 - `cookiePrefix`: Prefix for cookies
 - `database`: Database configuration options
+- `backgroundTasks`: Configure background task handling for deferred operations
 - `skipTrailingSlashes`: Skip trailing slash validation in route matching. (default: `false`)
 - OAuth state configuration options (`storeStateStrategy`, `skipStateCookieCheck`) are now part of the `account` option
+
+### `backgroundTasks`
+
+Configure background task handling for deferred operations. Background tasks allow non-critical operations (like cleanup, analytics, timing-attack mitigation, or rate limit counter updates) to run after the response is sent. This can significantly improve response times on serverless platforms.
+
+Some examples are: `waitUntil` from `@vercel/functions` on Vercel, or `ctx.waitUntil` on Cloudflare Workers. See the examples below for more details.
+
+<Callout type="warn">
+  Enabling this introduces eventual consistency where the response returns optimistic data before the database is updated. Only enable if your application can tolerate this trade-off for improved latency.
+</Callout>
+
+<Tabs items={["Vercel", "Cloudflare Workers"]}>
+  <Tab value="Vercel">
+    ```ts
+    import { betterAuth } from "better-auth";
+    import { waitUntil } from "@vercel/functions";
+
+    export const auth = betterAuth({
+      advanced: {
+        backgroundTasks: {
+          handler: waitUntil,
+        },
+      },
+    });
+    ```
+  </Tab>
+  <Tab value="Cloudflare Workers">
+    ```ts
+    import { betterAuth } from "better-auth";
+    import { AsyncLocalStorage } from "node:async_hooks";
+
+    const execCtxStorage = new AsyncLocalStorage<ExecutionContext>();
+
+    export const auth = betterAuth({
+      advanced: {
+        backgroundTasks: {
+          handler: (p) => execCtxStorage.getStore()?.waitUntil(p),
+        },
+      },
+    });
+
+    // In your request handler, wrap with execCtxStorage.run(ctx, ...)
+    ```
+  </Tab>
+</Tabs>
 
 ## `logger`
 
