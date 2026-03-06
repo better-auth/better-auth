@@ -36,6 +36,7 @@ describe("secondary storage - get returns JSON string", async () => {
 		});
 		expect(s1.data).toMatchObject({
 			session: {
+				id: expect.any(String),
 				userId: expect.any(String),
 				token: expect.any(String),
 				expiresAt: expect.any(Date),
@@ -66,6 +67,101 @@ describe("secondary storage - get returns JSON string", async () => {
 		const after = await client.getSession({ fetchOptions: { headers } });
 		expect(after.data).toBeNull();
 		expect(store.size).toBe(0);
+	});
+});
+
+describe("secondary storage - session id in storage (secondary only)", async () => {
+	const store = new Map<string, string>();
+
+	const { client, signInWithTestUser } = await getTestInstance({
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+
+	beforeEach(() => {
+		store.clear();
+	});
+
+	it("should include session id in secondary storage data", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const s1 = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(s1.data).not.toBeNull();
+
+		const sessionId = s1.data!.session.id;
+		expect(sessionId).toBeDefined();
+		expect(typeof sessionId).toBe("string");
+		expect(sessionId.length).toBeGreaterThan(0);
+
+		// Verify the raw stored data also contains the id
+		const token = s1.data!.session.token;
+		const raw = store.get(token);
+		expect(raw).toBeDefined();
+		const parsed = JSON.parse(raw!);
+		expect(parsed.session.id).toBe(sessionId);
+	});
+});
+
+describe("secondary storage - session id in storage (both storages)", async () => {
+	const store = new Map<string, string>();
+
+	const { client, signInWithTestUser } = await getTestInstance({
+		session: {
+			storeSessionInDatabase: true,
+		},
+		secondaryStorage: {
+			set(key, value, ttl) {
+				store.set(key, value);
+			},
+			get(key) {
+				return store.get(key) || null;
+			},
+			delete(key) {
+				store.delete(key);
+			},
+		},
+		rateLimit: {
+			enabled: false,
+		},
+	});
+
+	beforeEach(() => {
+		store.clear();
+	});
+
+	it("should include session id in secondary storage data when storeSessionInDatabase is true", async () => {
+		const { headers } = await signInWithTestUser();
+
+		const s1 = await client.getSession({
+			fetchOptions: { headers },
+		});
+		expect(s1.data).not.toBeNull();
+
+		const sessionId = s1.data!.session.id;
+		expect(sessionId).toBeDefined();
+		expect(typeof sessionId).toBe("string");
+		expect(sessionId.length).toBeGreaterThan(0);
+
+		// Verify the raw stored data also contains the id
+		const token = s1.data!.session.token;
+		const raw = store.get(token);
+		expect(raw).toBeDefined();
+		const parsed = JSON.parse(raw!);
+		expect(parsed.session.id).toBe(sessionId);
 	});
 });
 
