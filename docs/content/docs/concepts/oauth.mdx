@@ -347,6 +347,12 @@ export const auth = betterAuth({
 });
 ```
 
+<Callout type="info">
+  You may want to pass additional fields into the user object in `mapProfileToUser`,
+  to do this, you must configure the `user.additionalFields` [option](/docs/concepts/database#extending-core-schema).
+  (The same applies for stateless auth setups)
+</Callout>
+
 ### refreshAccessToken
 
 A custom function to refresh the token. This feature is only supported for built-in social providers (Google, Facebook, GitHub, etc.) and is not currently supported for custom OAuth providers configured through the Generic OAuth Plugin. For built-in providers, you can provide a custom function to refresh the token if needed.
