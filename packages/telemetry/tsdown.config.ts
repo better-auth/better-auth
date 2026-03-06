@@ -3,6 +3,6 @@ import { defineConfig } from "tsdown";
 export default defineConfig({
 	dts: { build: true, incremental: true },
 	format: ["esm"],
-	entry: ["./src/index.ts"],
+	entry: ["./src/index.ts", "./src/node.ts"],
 	sourcemap: true,
 });
