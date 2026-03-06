@@ -263,7 +263,10 @@ export const createInvitation = <O extends OrganizationOptions>(option: O) => {
 			}
 
 			if (
-				member.role !== creatorRole &&
+				!member.role
+					.split(",")
+					.map((r) => r.trim())
+					.includes(creatorRole) &&
 				roles.split(",").includes(creatorRole)
 			) {
 				throw APIError.from(
