@@ -380,8 +380,7 @@ export function apiKey(
 			deleteAllExpiredApiKeys: routes.deleteAllExpiredApiKeys,
 		},
 		schema,
-		configurations,
-	} satisfies BetterAuthPlugin & { configurations: PredefinedApiKeyOptions[] };
+	} satisfies BetterAuthPlugin
 }
 
 export type * from "./types";
