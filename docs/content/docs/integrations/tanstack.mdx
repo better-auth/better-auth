@@ -93,7 +93,7 @@ To protect resources that require authentication, use `beforeLoad` with a server
 
 First, create server-side helpers to check the session:
 
-```ts title="src/lib/auth.server.ts"
+```ts title="src/lib/auth.functions.ts"
 import { createServerFn } from "@tanstack/react-start";
 import { getRequestHeaders } from "@tanstack/react-start/server";
 import { auth } from "@/lib/auth";
@@ -123,7 +123,7 @@ Use `beforeLoad` in your route definitions:
 
 ```tsx title="src/routes/dashboard.tsx"
 import { createFileRoute, redirect } from '@tanstack/react-router'
-import { getSession } from '@/lib/auth.server'
+import { getSession } from '@/lib/auth.functions'
 
 export const Route = createFileRoute('/dashboard')({
   beforeLoad: async () => {
@@ -151,7 +151,7 @@ For protecting multiple routes, use a pathless layout route:
 
 ```tsx title="src/routes/_protected.tsx"
 import { createFileRoute, redirect, Outlet } from '@tanstack/react-router'
-import { getSession } from '@/lib/auth.server'
+import { getSession } from '@/lib/auth.functions'
 
 export const Route = createFileRoute('/_protected')({
   beforeLoad: async ({ location }) => {
@@ -189,9 +189,9 @@ Then nest protected routes under `_protected`:
 
 Use `ensureSession` helper to protect server functions:
 
-```ts title="src/lib/posts.server.ts"
+```ts title="src/lib/posts.functions.ts"
 import { createServerFn } from "@tanstack/react-start";
-import { ensureSession } from "./auth.server";
+import { ensureSession } from "./auth.functions";
 
 export const createPost = createServerFn({ method: "POST" })
   .inputValidator((data: { title: string }) => data)
