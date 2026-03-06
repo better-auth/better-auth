@@ -689,7 +689,7 @@ describe("organization", async () => {
 	 * @see https://github.com/better-auth/better-auth/issues/8385
 	 */
 	it("should allow multi-role owner to invite with owner role", async () => {
-		const { headers, user } = await signInWithTestUser();
+		const { headers } = await signInWithTestUser();
 		// Create a fresh org for this test
 		const org = await client.organization.create({
 			name: "multi-role-test-org",
