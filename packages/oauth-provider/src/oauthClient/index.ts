@@ -1,5 +1,6 @@
 import { createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import * as z from "zod";
+import { publicSessionMiddleware } from "../middleware";
 import { createOAuthClientEndpoint } from "../register";
 import type { OAuthOptions, Scope } from "../types";
 import { SafeUrlSchema } from "../types/zod";
@@ -451,12 +452,35 @@ export const getOAuthClientPublic = (opts: OAuthOptions<Scope[]>) =>
 			}),
 			metadata: {
 				openapi: {
-					description: "Gets publically available client fields",
+					description: "Gets publicly available client fields",
 				},
 			},
 		},
 		async (ctx) => {
-			return getClientPublicEndpoint(ctx, opts);
+			const clientId = ctx.query.client_id;
+			return getClientPublicEndpoint(ctx, opts, clientId);
+		},
+	);
+
+export const getOAuthClientPublicPrelogin = (opts: OAuthOptions<Scope[]>) =>
+	createAuthEndpoint(
+		"/oauth2/public-client-prelogin",
+		{
+			method: "POST",
+			use: [publicSessionMiddleware(opts)],
+			body: z.object({
+				client_id: z.string(),
+				oauth_query: z.string().optional(),
+			}),
+			metadata: {
+				openapi: {
+					description: "Gets publicly available client fields (prior to login)",
+				},
+			},
+		},
+		async (ctx) => {
+			const clientId = ctx.body.client_id;
+			return getClientPublicEndpoint(ctx, opts, clientId);
 		},
 	);
 
