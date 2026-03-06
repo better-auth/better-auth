@@ -172,14 +172,17 @@ export function apiKey(
 						const { key, config } = result;
 
 						if (typeof key !== "string") {
-							const msg =
-								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE;
-							throw APIError.from("BAD_REQUEST", msg);
+							throw APIError.from(
+								"BAD_REQUEST",
+								API_KEY_ERROR_CODES.INVALID_API_KEY_GETTER_RETURN_TYPE,
+							);
 						}
 
 						if (key.length < config.defaultKeyLength) {
-							const msg = API_KEY_ERROR_CODES.INVALID_API_KEY;
-							throw APIError.from("FORBIDDEN", msg);
+							throw APIError.from(
+								"FORBIDDEN",
+								API_KEY_ERROR_CODES.INVALID_API_KEY,
+							);
 						}
 
 						if (config.customAPIKeyValidator) {
@@ -188,8 +191,10 @@ export function apiKey(
 								key,
 							});
 							if (!isValid) {
-								const msg = API_KEY_ERROR_CODES.INVALID_API_KEY;
-								throw APIError.from("FORBIDDEN", msg);
+								throw APIError.from(
+									"FORBIDDEN",
+									API_KEY_ERROR_CODES.INVALID_API_KEY,
+								);
 							}
 						}
 
