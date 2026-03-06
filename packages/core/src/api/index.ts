@@ -78,7 +78,7 @@ type NormalizeMethod<M> = M extends readonly (infer E)[] ? E[] : M;
 // Path + options + handler overload
 export function createAuthEndpoint<
 	Path extends string,
-	const Method extends HTTPMethod | HTTPMethod[] | "*",
+	Method extends HTTPMethod | HTTPMethod[] | "*",
 	BodySchema extends object | undefined = undefined,
 	QuerySchema extends object | undefined = undefined,
 	Use extends Middleware[] = [],
@@ -114,7 +114,7 @@ export function createAuthEndpoint<
 	) => Promise<R>,
 ): Endpoint<
 	Path,
-	NormalizeMethod<Method>,
+	Method,
 	ResolveBodyInput<BodySchema, Meta>,
 	ResolveQueryInput<QuerySchema, Meta>,
 	Use,
@@ -125,7 +125,7 @@ export function createAuthEndpoint<
 
 // Options-only (virtual/path-less) overload
 export function createAuthEndpoint<
-	const Method extends HTTPMethod | HTTPMethod[] | "*",
+	Method extends HTTPMethod | HTTPMethod[] | "*",
 	BodySchema extends object | undefined = undefined,
 	QuerySchema extends object | undefined = undefined,
 	Use extends Middleware[] = [],
@@ -160,7 +160,7 @@ export function createAuthEndpoint<
 	) => Promise<R>,
 ): Endpoint<
 	string,
-	NormalizeMethod<Method>,
+	Method,
 	ResolveBodyInput<BodySchema, Meta>,
 	ResolveQueryInput<QuerySchema, Meta>,
 	Use,
