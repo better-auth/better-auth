@@ -1,0 +1,371 @@
+---
+title: Multi-App SSO
+description: Use one Better Auth server for multiple apps with a single shared login experience.
+---
+
+This guide shows a simple setup with one central auth server and two consuming apps.
+
+- Auth server: `http://localhost:3000`
+- Consuming app one: `http://localhost:3001`
+- Consuming app two: `http://localhost:3002`
+
+The auth server is the only place where users authenticate directly (GitHub in this example). Each consuming app delegates sign-in to the auth server through OAuth.
+
+## Architecture
+
+1. The auth server runs Better Auth with `oauthProvider` and `jwt`.
+2. Each consuming app runs Better Auth with `genericOAuth`.
+3. A user clicks **Sign in** in a consuming app.
+4. The consuming app redirects to the auth server.
+5. The auth server signs in the user (or reuses an existing auth-server session).
+6. The user is redirected back to the consuming app callback route.
+7. The consuming app creates its local session.
+
+## Setup
+
+<Steps>
+<Step>
+### Configure the auth server
+
+Install the provider plugin:
+
+```npm
+npm install @better-auth/oauth-provider
+```
+
+Set auth server environment variables:
+
+```bash title=".env"
+BETTER_AUTH_SECRET=your-random-secret
+BETTER_AUTH_URL=http://localhost:3000
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+```
+
+Create your auth config:
+
+```ts title="lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { oauthProvider } from "@better-auth/oauth-provider";
+import Database from "better-sqlite3";
+
+export const auth = betterAuth({
+  database: new Database("./sqlite.db"),
+  advanced: {
+    cookiePrefix: "auth-server",
+  },
+  disabledPaths: ["/token"],
+  socialProviders: {
+    github: {
+      clientId: process.env.GITHUB_CLIENT_ID!,
+      clientSecret: process.env.GITHUB_CLIENT_SECRET!,
+    },
+  },
+  plugins: [
+    jwt(),
+    oauthProvider({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+    }),
+  ],
+});
+```
+
+<Callout type="warn">
+`disabledPaths: ["/token"]` is required to avoid a route conflict.
+</Callout>
+</Step>
+
+<Step>
+### Mount auth and metadata routes (auth server)
+
+Mount Better Auth in Next.js:
+
+```ts title="app/api/auth/[...all]/route.ts"
+import { auth } from "@/lib/auth";
+import { toNextJsHandler } from "better-auth/next-js";
+
+export const { GET, POST } = toNextJsHandler(auth);
+```
+
+Add OpenID configuration metadata:
+
+```ts title="app/.well-known/openid-configuration/route.ts"
+import { oauthProviderOpenIdConfigMetadata } from "@better-auth/oauth-provider";
+import { auth } from "@/lib/auth";
+
+export const GET = oauthProviderOpenIdConfigMetadata(auth);
+```
+
+Add OAuth authorization server metadata:
+
+```ts title="app/.well-known/openid-authorization-server/api/auth/route.ts"
+import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+import { auth } from "@/lib/auth";
+
+export const GET = oauthProviderAuthServerMetadata(auth);
+```
+</Step>
+
+<Step>
+### Create the auth server sign-in page
+
+Add the auth client for the auth server app:
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
+
+export const authClient = createAuthClient({
+  plugins: [oauthProviderClient()],
+});
+```
+
+Add a sign-in page used by `loginPage: "/sign-in"`:
+
+```tsx title="app/sign-in/page.tsx"
+"use client";
+
+import { useState } from "react";
+import { authClient } from "@/lib/auth-client";
+
+export default function SignInPage() {
+  const [loading, setLoading] = useState(false);
+
+  return (
+    <button
+      disabled={loading}
+      onClick={async () => {
+        setLoading(true);
+        await authClient.signIn.social({
+          provider: "github",
+          callbackURL: "/sign-in",
+          errorCallbackURL: "/sign-in?error=social",
+        });
+      }}
+    >
+      {loading ? "Redirecting..." : "Continue with GitHub"}
+    </button>
+  );
+}
+```
+</Step>
+
+<Step>
+### Run the auth server migration
+
+```npm
+npx @better-auth/cli migrate
+```
+</Step>
+
+<Step>
+### Register consuming apps as OAuth clients
+
+Create a seed script on the auth server:
+
+```ts title="scripts/seed-clients.ts"
+import { auth } from "@/lib/auth";
+
+async function main() {
+  const [appOne, appTwo] = await Promise.all([
+    auth.api.adminCreateOAuthClient({
+      headers: new Headers(),
+      body: {
+        client_name: "App One",
+        redirect_uris: [
+          "http://localhost:3001/api/auth/oauth2/callback/auth-server",
+        ],
+        skip_consent: true,
+        enable_end_session: true,
+        client_secret_expires_at: 0,
+      },
+    }),
+    auth.api.adminCreateOAuthClient({
+      headers: new Headers(),
+      body: {
+        client_name: "App Two",
+        redirect_uris: [
+          "http://localhost:3002/api/auth/oauth2/callback/auth-server",
+        ],
+        skip_consent: true,
+        enable_end_session: true,
+        client_secret_expires_at: 0,
+      },
+    }),
+  ]);
+
+  console.log({
+    appOne: {
+      clientId: appOne.client_id,
+      clientSecret: appOne.client_secret,
+    },
+    appTwo: {
+      clientId: appTwo.client_id,
+      clientSecret: appTwo.client_secret,
+    },
+  });
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+```
+
+Run the script and copy each app's `clientId` and `clientSecret` into that
+app's `.env`.
+
+```npm
+npm exec -- tsx scripts/seed-clients.ts
+```
+
+<Callout>
+This script creates both local consuming app clients in one run.
+</Callout>
+</Step>
+
+<Step>
+### Configure each consuming app
+
+Use this config in each consuming app:
+
+```ts title="lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { genericOAuth } from "better-auth/plugins";
+import Database from "better-sqlite3";
+
+export const auth = betterAuth({
+  database: new Database("./sqlite.db"),
+  advanced: {
+    cookiePrefix: "app-one",
+  },
+  plugins: [
+    genericOAuth({
+      config: [
+        {
+          providerId: "auth-server",
+          clientId: process.env.AUTH_SERVER_CLIENT_ID!,
+          clientSecret: process.env.AUTH_SERVER_CLIENT_SECRET!,
+          discoveryUrl:
+            "http://localhost:3000/.well-known/openid-configuration",
+          scopes: ["openid", "profile", "email"],
+          pkce: true,
+        },
+      ],
+    }),
+  ],
+});
+```
+
+Set consuming app environment variables:
+
+```bash title=".env"
+BETTER_AUTH_SECRET=your-random-secret
+BETTER_AUTH_URL=http://localhost:3001
+AUTH_SERVER_CLIENT_ID=from-seed-script
+AUTH_SERVER_CLIENT_SECRET=from-seed-script
+```
+
+Mount Better Auth in each consuming app:
+
+```ts title="app/api/auth/[...all]/route.ts"
+import { auth } from "@/lib/auth";
+import { toNextJsHandler } from "better-auth/next-js";
+
+export const { GET, POST } = toNextJsHandler(auth);
+```
+
+Create the consuming app auth client:
+
+```ts title="lib/auth-client.ts"
+import { createAuthClient } from "better-auth/react";
+import { genericOAuthClient } from "better-auth/client/plugins";
+
+export const authClient = createAuthClient({
+  plugins: [genericOAuthClient()],
+});
+```
+
+<Callout>
+For app two, set `cookiePrefix: "app-two"` and use app two credentials in `.env`.
+</Callout>
+</Step>
+
+<Step>
+### Add the consuming app sign-in page
+
+Put this in `app/page.tsx` for each consuming app:
+
+```tsx title="app/page.tsx"
+"use client";
+
+import { authClient } from "@/lib/auth-client";
+
+export default function Home() {
+  const { data: session, isPending } = authClient.useSession();
+
+  if (isPending) {
+    return <p>Loading...</p>;
+  }
+
+  if (session?.user) {
+    return <p>Hello, {session.user.name || session.user.email}!</p>;
+  }
+
+  return (
+    <button
+      onClick={() =>
+        authClient.signIn.oauth2({
+          providerId: "auth-server",
+          callbackURL: "/",
+        })
+      }
+    >
+      Sign in
+    </button>
+  );
+}
+```
+</Step>
+
+<Step>
+### Test the full flow
+
+1. Start all three apps.
+2. Open `http://localhost:3001` and click **Sign in**.
+3. Complete GitHub login on `http://localhost:3000`.
+4. Confirm app one shows `Hello, ...`.
+5. Open `http://localhost:3002` and click **Sign in**.
+6. Confirm you are redirected through the auth server and returned signed in.
+</Step>
+</Steps>
+
+## Common issues
+
+### `fetch failed` with `ENOTFOUND auth.example.com`
+
+Your `discoveryUrl` points to a non-local domain. For local dev, use: `http://localhost:3000/.well-known/openid-configuration`.
+
+### `pkce is required for this client`
+
+Set `pkce: true` in each consuming app `genericOAuth` config.
+
+### `/sign-in` returns 404 on the auth server
+
+Create `app/sign-in/page.tsx` on the auth server and make sure `loginPage: "/sign-in"` is set.
+
+### `state_mismatch`
+
+Clear cookies for `localhost:3000`, `localhost:3001`, and `localhost:3002`, then retry from a fresh tab.
+
+### `Base URL could not be determined` when running seed script
+
+Make sure `BETTER_AUTH_URL` is set in the auth server environment before running the script.
+
+## Related
+
+- [OAuth 2.1 Provider Plugin](/docs/plugins/oauth-provider)
+- [Generic OAuth Plugin](/docs/plugins/generic-oauth)
+- [Next.js integration](/docs/integrations/next)
