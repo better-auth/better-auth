@@ -1,19 +1,17 @@
 import type { GenericEndpointContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { User } from "@better-auth/core/db";
 import { APIError, BASE_ERROR_CODES } from "@better-auth/core/error";
-import type { JWTPayload, JWTVerifyResult } from "jose";
-import { jwtVerify } from "jose";
-import { JWTExpired } from "jose/errors";
+import { safeJSONParse } from "@better-auth/core/utils/json";
 import * as z from "zod";
 import { setSessionCookie } from "../../cookies";
-import { signJWT } from "../../crypto/jwt";
+import { generateRandomString } from "../../crypto/random";
 import { parseUserOutput } from "../../db/schema";
-import type { User } from "../../types";
-import { originCheck } from "../middlewares";
+import { originCheck } from "../middlewares/origin-check";
 import { getSessionFromCtx } from "./session";
 
 export async function createEmailVerificationToken(
-	secret: string,
+	ctx: GenericEndpointContext,
 	email: string,
 	/**
 	 * The email to update from
@@ -28,16 +26,17 @@ export async function createEmailVerificationToken(
 	 */
 	extraPayload?: Record<string, any>,
 ) {
-	const token = await signJWT(
-		{
+	const prefix = "email-verification:";
+	const data = await ctx.context.internalAdapter.createVerificationValue({
+		identifier: `${prefix}${generateRandomString(32, "A-Z", "a-z", "0-9")}`,
+		value: JSON.stringify({
 			email: email.toLowerCase(),
 			updateTo,
 			...extraPayload,
-		},
-		secret,
-		expiresIn,
-	);
-	return token;
+		}),
+		expiresAt: new Date(Date.now() + expiresIn * 1000),
+	});
+	return data.identifier.substring(prefix.length);
 }
 
 /**
@@ -55,7 +54,7 @@ export async function sendVerificationEmailFn(
 		);
 	}
 	const token = await createEmailVerificationToken(
-		ctx.context.secret,
+		ctx,
 		user.email,
 		undefined,
 		ctx.context.options.emailVerification?.expiresIn,
@@ -173,7 +172,7 @@ export const sendVerificationEmail = createAuthEndpoint(
 			const user = await ctx.context.internalAdapter.findUserByEmail(email);
 			if (!user || user.user.emailVerified) {
 				await createEmailVerificationToken(
-					ctx.context.secret,
+					ctx,
 					email,
 					undefined,
 					ctx.context.options.emailVerification?.expiresIn,
@@ -281,28 +280,23 @@ export const verifyEmail = createAuthEndpoint(
 			}
 			throw APIError.from("UNAUTHORIZED", error);
 		}
-		const { token } = ctx.query;
-		let jwt: JWTVerifyResult<JWTPayload>;
-		try {
-			jwt = await jwtVerify(
-				token,
-				new TextEncoder().encode(ctx.context.secret),
-				{
-					algorithms: ["HS256"],
-				},
-			);
-		} catch (e) {
-			if (e instanceof JWTExpired) {
-				return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
-			}
+
+		const token = await ctx.context.internalAdapter.findVerificationValue(
+			`email-verification:${ctx.query.token}`,
+		);
+		if (!token) {
 			return redirectOnError(BASE_ERROR_CODES.INVALID_TOKEN);
+		}
+		await ctx.context.internalAdapter.deleteVerificationByIdentifier(token.id);
+		if (token.expiresAt <= new Date()) {
+			return redirectOnError(BASE_ERROR_CODES.TOKEN_EXPIRED);
 		}
 		const schema = z.object({
 			email: z.email(),
 			updateTo: z.string().optional(),
 			requestType: z.string().optional(),
 		});
-		const parsed = schema.parse(jwt.payload);
+		const parsed = schema.parse(safeJSONParse(token.value));
 		const user = await ctx.context.internalAdapter.findUserByEmail(
 			parsed.email,
 		);
@@ -320,7 +314,7 @@ export const verifyEmail = createAuthEndpoint(
 				 */
 				case "change-email-confirmation": {
 					const newToken = await createEmailVerificationToken(
-						ctx.context.secret,
+						ctx,
 						parsed.email,
 						parsed.updateTo,
 						ctx.context.options.emailVerification?.expiresIn,
@@ -423,7 +417,7 @@ export const verifyEmail = createAuthEndpoint(
 							emailVerified: false,
 						});
 					const newToken = await createEmailVerificationToken(
-						ctx.context.secret,
+						ctx,
 						parsed.updateTo,
 					);
 					const updateCallbackURL = ctx.query.callbackURL

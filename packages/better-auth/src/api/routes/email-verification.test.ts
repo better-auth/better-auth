@@ -267,7 +267,9 @@ describe("Email Verification", async () => {
 			{
 				onError: (ctx) => {
 					const location = ctx.response.headers.get("location");
-					expect(location).toBe(`/sign-in?verifiedEmail=${encodedEmail}`);
+					expect(location).toBe(
+						`/sign-in?verifiedEmail=${encodedEmail}&error=INVALID_TOKEN`,
+					);
 					const url = new URL(location!, "http://localhost:3000");
 					expect(url.searchParams.get("verifiedEmail")).toBe(testEmail);
 				},
