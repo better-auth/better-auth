@@ -4,6 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAuthClient } from "./solid";
 import { testClientPlugin } from "./test-plugin";
 
+/**
+ * @see https://github.com/better-auth/better-auth/issues/8420
+ */
 describe("useAuthQuery - error handling", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
