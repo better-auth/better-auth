@@ -24,8 +24,8 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsdown",
-    "dev": "tsdown --watch",
+    "build": "rollup -c rollup.config.ts --configPlugin typescript && tsc --project tsconfig.build.json && node scripts/rename-dts.mjs",
+    "dev": "rollup -c rollup.config.ts --configPlugin typescript --watch",
     "test": "vitest",
     "coverage": "vitest run --coverage --coverage.provider=istanbul",
     "lint:package": "publint run --strict",
@@ -531,7 +531,11 @@
     "solid-js": "^1.9.11",
     "tarn": "^3.0.2",
     "tedious": "^18.6.2",
-    "tsdown": "catalog:",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-typescript": "^12.1.2",
+    "rollup": "^4.40.0",
+    "rollup-plugin-swc3": "^0.12.1",
+    "tslib": "^2.8.1",
     "type-fest": "^5.4.4",
     "typescript": "catalog:",
     "vitest": "^4.0.18",
