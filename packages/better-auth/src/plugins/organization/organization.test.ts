@@ -700,7 +700,7 @@ describe("organization", async () => {
 		const memberId = org.data!.members[0].id;
 
 		// Set the member to have multiple roles including owner
-		await auth.api.updateMemberRole({
+		const updatedMember = await auth.api.updateMemberRole({
 			headers,
 			body: {
 				organizationId: orgId,
@@ -708,6 +708,7 @@ describe("organization", async () => {
 				memberId,
 			},
 		});
+		expect(updatedMember?.role).toBe("owner,admin");
 
 		const invite = await client.organization.inviteMember({
 			organizationId: orgId,
