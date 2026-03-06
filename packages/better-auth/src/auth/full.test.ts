@@ -192,6 +192,20 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		).rejects.toThrow('Host "evil.com" is not in the allowed hosts list');
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8447
+	 */
+	test("should use fallback as initial baseURL for non-request contexts", async () => {
+		const { auth } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["localhost:*"],
+				fallback: "http://localhost:5173",
+			},
+		});
+		const ctx = await auth.$context;
+		expect(ctx.baseURL).toBe("http://localhost:5173/api/auth");
+	});
+
 	test("should use fallback for disallowed host", async () => {
 		let baseURL: string | undefined;
 		const { customFetchImpl } = await getTestInstance({
