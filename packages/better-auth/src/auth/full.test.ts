@@ -206,6 +206,62 @@ describe("auth with dynamic baseURL (allowedHosts)", () => {
 		expect(ctx.baseURL).toBe("http://localhost:5173/api/auth");
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8447
+	 */
+	test("should resolve baseURL in direct API calls with request", async () => {
+		const endpoints = {
+			getBaseURL: createAuthEndpoint(
+				"/get-base-url",
+				{ method: "GET" },
+				async (ctx) => {
+					return ctx.json({ baseURL: ctx.context.baseURL });
+				},
+			),
+		};
+		const { auth } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com", "localhost:*"],
+				fallback: "http://localhost:5173",
+			},
+			plugins: [{ id: "test-plugin", endpoints }],
+		});
+
+		const result = await auth.api.getBaseURL({
+			request: new Request("https://myapp.com/api/auth/get-base-url", {
+				headers: {
+					host: "myapp.com",
+				},
+			}),
+		});
+		expect(result.baseURL).toBe("https://myapp.com/api/auth");
+	});
+
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8447
+	 */
+	test("should use fallback baseURL in direct API calls without request", async () => {
+		const endpoints = {
+			getBaseURL: createAuthEndpoint(
+				"/get-base-url",
+				{ method: "GET" },
+				async (ctx) => {
+					return ctx.json({ baseURL: ctx.context.baseURL });
+				},
+			),
+		};
+		const { auth } = await getTestInstance({
+			baseURL: {
+				allowedHosts: ["myapp.com", "localhost:*"],
+				fallback: "http://localhost:5173",
+			},
+			plugins: [{ id: "test-plugin", endpoints }],
+		});
+
+		const result = await auth.api.getBaseURL();
+		expect(result.baseURL).toBe("http://localhost:5173/api/auth");
+	});
+
 	test("should use fallback for disallowed host", async () => {
 		let baseURL: string | undefined;
 		const { customFetchImpl } = await getTestInstance({
