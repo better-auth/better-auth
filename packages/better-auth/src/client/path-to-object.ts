@@ -41,6 +41,18 @@ type ReplaceAuthUserAndSession<
 	InferSessionFromClient<ClientOpts>
 >;
 
+type MergeCustomSessionWithInferred<
+	R,
+	ClientOpts extends BetterAuthClientOptions,
+> = Omit<R, "user" | "session"> & {
+	user: R extends { user: infer U }
+		? U & InferUserFromClient<ClientOpts>
+		: InferUserFromClient<ClientOpts>;
+	session: R extends { session: infer S }
+		? S & InferSessionFromClient<ClientOpts>
+		: InferSessionFromClient<ClientOpts>;
+};
+
 type RefineAuthResponse<
 	Data,
 	ClientOpts extends BetterAuthClientOptions,
@@ -194,7 +206,10 @@ export type InferRoute<API, COpts extends BetterAuthClientOptions> =
 											Meta extends {
 												CUSTOM_SESSION: boolean;
 											}
-												? NonNullable<Awaited<R>>
+												? MergeCustomSessionWithInferred<
+														NonNullable<Awaited<R>>,
+														COpts
+													>
 												: T["path"] extends "/get-session"
 													? {
 															user: InferUserFromClient<COpts>;
