@@ -1,16 +1,19 @@
 import type { AuthContext, Awaitable } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { generateId } from "@better-auth/core/utils/id";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import { defaultKeyHasher } from "../";
 import { setApiKey } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { resolveConfiguration } from ".";
@@ -109,10 +112,11 @@ const createApiKeyBodySchema = z.object({
 		.optional(),
 });
 
-export function createApiKey({
+export function createApiKey<O extends ApiKeyOptions>({
 	defaultKeyGenerator,
 	configurations,
 	schema,
+	additionalFields,
 	deleteAllExpiredApiKeys,
 }: {
 	defaultKeyGenerator: (options: {
@@ -121,17 +125,31 @@ export function createApiKey({
 	}) => Awaitable<string>;
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
+	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: additionalFields || {},
+		isClientSide: true,
+	});
+	const bodySchema = createApiKeyBodySchema.extend(
+		additionalFieldsSchema.shape,
+	);
+	type AdditionalFields = InferAdditionalFieldsFromPluginOptions<"apikey", O>;
+	type CreateApiKeyBody = z.input<typeof createApiKeyBodySchema> &
+		AdditionalFields;
 	return createAuthEndpoint(
 		"/api-key/create",
 		{
 			method: "POST",
-			body: createApiKeyBodySchema,
+			body: bodySchema,
 			metadata: {
+				$Infer: {
+					body: {} as CreateApiKeyBody,
+				},
 				openapi: {
 					description: "Create a new API key for a user",
 					responses: {
@@ -271,6 +289,7 @@ export function createApiKey({
 			},
 		},
 		async (ctx) => {
+			const extra = additionalFieldsSchema.parse(ctx.body);
 			const {
 				configId,
 				name,
@@ -452,6 +471,7 @@ export function createApiKey({
 
 			const data: Omit<ApiKey, "id"> = {
 				configId: resolvedConfigId,
+				...extra,
 				createdAt: new Date(),
 				updatedAt: new Date(),
 				name: name ?? null,
@@ -480,7 +500,7 @@ export function createApiKey({
 						? (opts.rateLimit.enabled ?? true)
 						: rateLimitEnabled,
 				requestCount: 0,
-				//@ts-expect-error - we intentionally save the permissions as string on DB.
+				// @ts-expect-error - we intentionally save the permissions as string on DB.
 				permissions: permissionsToApply,
 			};
 
@@ -521,7 +541,7 @@ export function createApiKey({
 				permissions: apiKey.permissions
 					? safeJSONParse(apiKey.permissions)
 					: null,
-			});
+			} as InferApiKey<O>);
 		},
 	);
 }

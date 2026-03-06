@@ -1,8 +1,11 @@
 import type { AuthContext } from "@better-auth/core";
 import { createAuthEndpoint } from "@better-auth/core/api";
+import type { DBFieldAttribute } from "@better-auth/core/db";
 import { APIError } from "@better-auth/core/error";
 import { safeJSONParse } from "@better-auth/core/utils/json";
 import { getSessionFromCtx } from "better-auth/api";
+import type { InferAdditionalFieldsFromPluginOptions } from "better-auth/db";
+import { toZodSchema } from "better-auth/db";
 import * as z from "zod";
 import { API_KEY_TABLE_NAME, API_KEY_ERROR_CODES as ERROR_CODES } from "..";
 import {
@@ -12,7 +15,7 @@ import {
 } from "../adapter";
 import { checkOrgApiKeyPermission } from "../org-authorization";
 import type { apiKeySchema } from "../schema";
-import type { ApiKey } from "../types";
+import type { ApiKey, ApiKeyOptions, InferApiKey } from "../types";
 import { getDate } from "../utils";
 import type { PredefinedApiKeyOptions } from ".";
 import { configIdMatches, resolveConfiguration } from ".";
@@ -104,24 +107,41 @@ const updateApiKeyBodySchema = z.object({
 		.nullable(),
 });
 
-export function updateApiKey({
+export function updateApiKey<O extends ApiKeyOptions>({
 	configurations,
 	schema,
+	additionalFields,
 	deleteAllExpiredApiKeys,
 }: {
 	configurations: PredefinedApiKeyOptions[];
 	schema: ReturnType<typeof apiKeySchema>;
+	additionalFields?: Record<string, DBFieldAttribute> | undefined;
 	deleteAllExpiredApiKeys(
 		ctx: AuthContext,
 		byPassLastCheckTime?: boolean | undefined,
 	): void;
 }) {
+	const additionalFieldsSchema = toZodSchema({
+		fields: additionalFields || {},
+		isClientSide: true,
+	});
+	const bodySchema = updateApiKeyBodySchema.extend(
+		additionalFieldsSchema.partial().shape,
+	);
+	type AdditionalFields = Partial<
+		InferAdditionalFieldsFromPluginOptions<"apikey", O>
+	>;
+	type UpdateApiKeyBody = z.input<typeof updateApiKeyBodySchema> &
+		AdditionalFields;
 	return createAuthEndpoint(
 		"/api-key/update",
 		{
 			method: "POST",
-			body: updateApiKeyBodySchema,
+			body: bodySchema,
 			metadata: {
+				$Infer: {
+					body: {} as UpdateApiKeyBody,
+				},
 				openapi: {
 					description: "Update an existing API key by ID",
 					responses: {
@@ -259,6 +279,7 @@ export function updateApiKey({
 			},
 		},
 		async (ctx) => {
+			const extra = additionalFieldsSchema.partial().parse(ctx.body);
 			const {
 				configId,
 				keyId,
@@ -345,7 +366,9 @@ export function updateApiKey({
 				throw APIError.from("NOT_FOUND", ERROR_CODES.KEY_NOT_FOUND);
 			}
 
-			const newValues: Partial<ApiKey> = {};
+			const newValues: Partial<ApiKey> & typeof extra = {
+				...extra,
+			};
 
 			if (name !== undefined) {
 				if (name.length < opts.minimumNameLength) {
@@ -494,7 +517,7 @@ export function updateApiKey({
 							[key: string]: string[];
 						}>(returningApiKey.permissions)
 					: null,
-			});
+			} as Omit<InferApiKey<O>, "key">);
 		},
 	);
 }
