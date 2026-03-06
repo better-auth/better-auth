@@ -69,12 +69,6 @@ type AuthEndpointOptions<
 		[key: string]: any;
 	};
 
-/**
- * Normalize readonly tuples produced by `const` type parameters
- * into mutable arrays so downstream `M extends Array<any>` checks work.
- */
-type NormalizeMethod<M> = M extends readonly (infer E)[] ? E[] : M;
-
 // Path + options + handler overload
 export function createAuthEndpoint<
 	Path extends string,
