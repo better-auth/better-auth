@@ -32,11 +32,12 @@ interface Member {
 function getOrgOptions(
 	ctx: GenericEndpointContext,
 ): OrganizationOptions | null {
-	if (ctx.context.orgOptions) {
-		return ctx.context.orgOptions as OrganizationOptions;
+	const context = ctx.context;
+	if ("orgOptions" in context && context.orgOptions) {
+		return context.orgOptions as OrganizationOptions;
 	}
 
-	const orgPlugin = ctx.context.getPlugin?.("organization");
+	const orgPlugin = context.getPlugin?.("organization");
 	if (orgPlugin && "options" in orgPlugin) {
 		return orgPlugin.options as OrganizationOptions;
 	}
