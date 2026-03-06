@@ -118,7 +118,7 @@ export const customSession = <
 				async (ctx): Promise<Returns | null> => {
 					const session = await getSession()({
 						...ctx,
-						method: 'GET',
+						method: "GET",
 						asResponse: false,
 						headers: ctx.headers,
 						returnHeaders: true,
