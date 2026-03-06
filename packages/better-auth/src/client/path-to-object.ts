@@ -41,17 +41,27 @@ type ReplaceAuthUserAndSession<
 	InferSessionFromClient<ClientOpts>
 >;
 
+type MergeCustomSessionField<
+	R extends object,
+	Field extends "user" | "session",
+	InferType,
+> = Field extends keyof R
+	? {
+			[K in Field]: KeepNullishFromOriginal<
+				R[K],
+				NonNullable<R[K]> & InferType
+			>;
+		}
+	: {};
+
 type MergeCustomSessionWithInferred<
 	R,
 	ClientOpts extends BetterAuthClientOptions,
-> = Omit<R, "user" | "session"> & {
-	user: R extends { user: infer U }
-		? U & InferUserFromClient<ClientOpts>
-		: InferUserFromClient<ClientOpts>;
-	session: R extends { session: infer S }
-		? S & InferSessionFromClient<ClientOpts>
-		: InferSessionFromClient<ClientOpts>;
-};
+> = R extends object
+	? Omit<R, "user" | "session"> &
+			MergeCustomSessionField<R, "user", InferUserFromClient<ClientOpts>> &
+			MergeCustomSessionField<R, "session", InferSessionFromClient<ClientOpts>>
+	: never;
 
 type RefineAuthResponse<
 	Data,
