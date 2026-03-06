@@ -145,5 +145,6 @@
 		],
 		"entry": ["**/*.test.ts", "**/*.spec.ts"]
 	},
-	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"]
+	"ignoreWorkspaces": ["demo/**", "landing/**", "docs/**", "e2e/**"],
+	"ignore": ["public-api/api-extractor.run.ts"]
 }
