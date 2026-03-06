@@ -2,7 +2,6 @@ import type { GenericEndpointContext } from "@better-auth/core";
 import { APIError } from "@better-auth/core/error";
 import type { OrganizationOptions } from "better-auth/plugins/organization";
 import { API_KEY_ERROR_CODES as ERROR_CODES } from ".";
-import type { AuthContext } from "@better-auth/core";
 
 /**
  * API Key permission actions that can be configured in organization roles.
