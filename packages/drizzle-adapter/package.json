@@ -46,6 +46,11 @@
     "@better-auth/utils": "^0.3.0",
     "drizzle-orm": ">=0.41.0"
   },
+  "peerDependenciesMeta": {
+    "drizzle-orm": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "@better-auth/core": "workspace:*",
     "@better-auth/utils": "^0.3.1",
