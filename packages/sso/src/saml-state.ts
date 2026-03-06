@@ -22,7 +22,7 @@ export async function generateRelayState(
 
 	const codeVerifier = generateRandomString(128);
 	const stateData: StateData = {
-		...(additionalData ? additionalData : {}),
+		...(additionalData ? { additionalData } : {}),
 		callbackURL,
 		codeVerifier,
 		errorURL: c.body.errorCallbackURL,
