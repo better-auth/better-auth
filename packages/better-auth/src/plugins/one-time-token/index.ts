@@ -106,11 +106,14 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 			: generateRandomString(32);
 		const expiresAt = new Date(Date.now() + (opts?.expiresIn ?? 3) * 60 * 1000);
 		const storedToken = await storeToken(c, token);
-		await c.context.internalAdapter.createVerificationValue({
-			value: session.session.token,
-			identifier: `one-time-token:${storedToken}`,
-			expiresAt,
-		});
+		await c.context.internalAdapter.createVerificationValue(
+			{
+				value: session.session.token,
+				identifier: storedToken,
+				expiresAt,
+			},
+			"one-time-token",
+		);
 		return token;
 	}
 
@@ -176,7 +179,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 					const storedToken = await storeToken(c, token);
 					const verificationValue =
 						await c.context.internalAdapter.findVerificationValue(
-							`one-time-token:${storedToken}`,
+							storedToken,
+							"one-time-token",
 						);
 					if (!verificationValue) {
 						throw c.error("BAD_REQUEST", {
@@ -184,7 +188,8 @@ export const oneTimeToken = (options?: OneTimeTokenOptions | undefined) => {
 						});
 					}
 					await c.context.internalAdapter.deleteVerificationByIdentifier(
-						`one-time-token:${storedToken}`,
+						storedToken,
+						"one-time-token",
 					);
 					if (verificationValue.expiresAt < new Date()) {
 						throw c.error("BAD_REQUEST", {

@@ -1306,7 +1306,8 @@ describe("custom storeOTP", async () => {
 			});
 			const verificationValue =
 				await authCtx.internalAdapter.findVerificationValue(
-					`sign-in-otp-${userEmail1}`,
+					userEmail1,
+					"sign-in-otp",
 				);
 
 			const storedOtp = verificationValue?.value || "";
@@ -1400,7 +1401,8 @@ describe("custom storeOTP", async () => {
 			});
 			const verificationValue =
 				await authCtx.internalAdapter.findVerificationValue(
-					`sign-in-otp-${userEmail1}`,
+					userEmail1,
+					"sign-in-otp",
 				);
 
 			const storedOtp = verificationValue?.value || "";
@@ -1494,7 +1496,8 @@ describe("custom storeOTP", async () => {
 			});
 			const verificationValue =
 				await authCtx.internalAdapter.findVerificationValue(
-					`sign-in-otp-${userEmail1}`,
+					userEmail1,
+					"sign-in-otp",
 				);
 			const storedOtp = verificationValue?.value || "";
 			const otp = await get();
@@ -1584,7 +1587,8 @@ describe("custom storeOTP", async () => {
 			});
 			const verificationValue =
 				await authCtx.internalAdapter.findVerificationValue(
-					`sign-in-otp-${userEmail1}`,
+					userEmail1,
+					"sign-in-otp",
 				);
 			const storedOtp = verificationValue?.value || "";
 			const otp = await get();
@@ -1917,9 +1921,7 @@ describe("race condition protection", async () => {
 		expect(res1.data?.token).toBeDefined();
 
 		const verificationValue =
-			await authCtx.internalAdapter.findVerificationValue(
-				`sign-in-otp-${email}`,
-			);
+			await authCtx.internalAdapter.findVerificationValue(email, "sign-in-otp");
 		expect(verificationValue).toBeNull();
 
 		const res2 = await client.signIn.emailOtp({ email, otp });
@@ -1941,7 +1943,8 @@ describe("race condition protection", async () => {
 
 		const verificationValue =
 			await authCtx.internalAdapter.findVerificationValue(
-				`email-verification-otp-${email}`,
+				email,
+				"email-verification-otp",
 			);
 		expect(verificationValue).toBeNull();
 
@@ -1966,7 +1969,8 @@ describe("race condition protection", async () => {
 
 		const verificationValue =
 			await authCtx.internalAdapter.findVerificationValue(
-				`forget-password-otp-${email}`,
+				email,
+				"forget-password-otp",
 			);
 		expect(verificationValue).toBeNull();
 

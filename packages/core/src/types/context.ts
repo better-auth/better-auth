@@ -202,15 +202,23 @@ export interface InternalAdapter<
 	createVerificationValue(
 		data: Omit<Verification, "createdAt" | "id" | "updatedAt"> &
 			Partial<Verification>,
+		namespace: string,
 	): Promise<Verification>;
 
-	findVerificationValue(identifier: string): Promise<Verification | null>;
+	findVerificationValue(
+		identifier: string,
+		namespace: string,
+	): Promise<Verification | null>;
 
-	deleteVerificationByIdentifier(identifier: string): Promise<void>;
+	deleteVerificationByIdentifier(
+		identifier: string,
+		namespace: string,
+	): Promise<void>;
 
 	updateVerificationByIdentifier(
 		identifier: string,
 		data: Partial<Verification>,
+		namespace: string,
 	): Promise<Verification>;
 }
 

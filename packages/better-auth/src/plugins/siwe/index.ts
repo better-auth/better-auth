@@ -60,11 +60,14 @@ export const siwe = (options: SIWEPluginOptions) =>
 					const nonce = await options.getNonce();
 
 					// Store nonce with wallet address and chain ID context
-					await ctx.context.internalAdapter.createVerificationValue({
-						identifier: `siwe:${walletAddress}:${chainId}`,
-						value: nonce,
-						expiresAt: new Date(Date.now() + 15 * 60 * 1000),
-					});
+					await ctx.context.internalAdapter.createVerificationValue(
+						{
+							identifier: `${walletAddress}:${chainId}`,
+							value: nonce,
+							expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+						},
+						"siwe",
+					);
 
 					return ctx.json({ nonce });
 				},
@@ -113,7 +116,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 						// Find stored nonce with wallet address and chain ID context
 						const verification =
 							await ctx.context.internalAdapter.findVerificationValue(
-								`siwe:${walletAddress}:${chainId}`,
+								`${walletAddress}:${chainId}`,
+								"siwe",
 							);
 
 						// Ensure nonce is valid and not expired
@@ -154,7 +158,8 @@ export const siwe = (options: SIWEPluginOptions) =>
 
 						// Clean up used nonce
 						await ctx.context.internalAdapter.deleteVerificationByIdentifier(
-							`siwe:${walletAddress}:${chainId}`,
+							`${walletAddress}:${chainId}`,
+							"siwe",
 						);
 
 						// Look for existing user by their wallet addresses

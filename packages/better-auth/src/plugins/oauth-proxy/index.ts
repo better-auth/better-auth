@@ -501,6 +501,7 @@ export const oAuthProxy = <O extends OAuthProxyOptions>(opts?: O) => {
 							const verification =
 								await ctx.context.internalAdapter.findVerificationValue(
 									originalState,
+									"state",
 								);
 							if (verification) {
 								// Encrypt the verification value so it matches cookie mode format

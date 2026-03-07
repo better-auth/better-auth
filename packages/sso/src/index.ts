@@ -2,7 +2,6 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { XMLValidator } from "fast-xml-parser";
 import saml from "samlify";
-import { SAML_SESSION_BY_ID_PREFIX } from "./constants";
 import { assignOrganizationByDomain } from "./linking";
 import {
 	requestDomainVerification,
@@ -212,17 +211,23 @@ export function sso<O extends SSOOptions>(
 						if (!session?.session?.id) {
 							return;
 						}
-						const sessionLookupKey = `${SAML_SESSION_BY_ID_PREFIX}${session.session.id}`;
 						const sessionLookup =
 							await ctx.context.internalAdapter.findVerificationValue(
-								sessionLookupKey,
+								session.session.id,
+								"saml-session-by-id",
 							);
 						if (sessionLookup?.value) {
 							await ctx.context.internalAdapter
-								.deleteVerificationByIdentifier(sessionLookup.value)
+								.deleteVerificationByIdentifier(
+									sessionLookup.value,
+									"saml-session",
+								)
 								.catch(() => {});
 							await ctx.context.internalAdapter
-								.deleteVerificationByIdentifier(sessionLookupKey)
+								.deleteVerificationByIdentifier(
+									session.session.id,
+									"saml-session-by-id",
+								)
 								.catch(() => {});
 						}
 					}),
