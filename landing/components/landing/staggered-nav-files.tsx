@@ -126,6 +126,12 @@ export function StaggeredNavFiles() {
 		const matchPath = r.path || r.href;
 		return pathname === matchPath || pathname.startsWith(`${matchPath}/`);
 	});
+	const isKnownPage =
+		isActive("/") ||
+		isDocs ||
+		isProductPage ||
+		isResourcePage ||
+		isActive("/enterprise");
 	const isNarrowLeft = isDocs;
 	const leftPaneWidthClass = isNarrowLeft
 		? "w-[22vw] max-w-[300px]"
@@ -145,13 +151,13 @@ export function StaggeredNavFiles() {
 	const _router = useRouter();
 	return (
 		<>
-			<div className="absolute top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
+			<div className="fixed top-0 left-0 right-0 z-[99] flex items-start pointer-events-none">
 				{/* Left — Logo */}
 				<motion.div
 					initial={{ x: -20, opacity: 0 }}
 					animate={{ x: 0, opacity: 1 }}
 					transition={{ duration: 0.28, ease: "easeOut" }}
-					className={`${leftPaneWidthClass} hidden lg:flex items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
+					className={`${leftPaneWidthClass} hidden ${isKnownPage ? "lg:flex" : "lg:hidden"} items-stretch shrink-0 pointer-events-auto transition-[width] duration-300 ease-out`}
 				>
 					<Link
 						href="/"
@@ -248,6 +254,25 @@ export function StaggeredNavFiles() {
 					transition={{ duration: 0.28, delay: 0.04, ease: "easeOut" }}
 					className={`flex-1 hidden lg:flex items-stretch border-b bg-background pointer-events-auto min-w-0 ${navBottomBorderClass}`}
 				>
+					{/* Inline logo when left pane is hidden */}
+					{!isKnownPage && (
+						<Link
+							href="/"
+							className={`flex items-center gap-1 shrink-0 px-4 lg:px-7 py-3 border-r ${tabDividerClass} transition-colors duration-150`}
+						>
+							<LogoContextMenu
+								logo={
+									<div className="flex items-center gap-1">
+										<Logo />
+										<p className="select-none font-mono md:text-lg text-sm uppercase">
+											BETTER-AUTH.
+										</p>
+									</div>
+								}
+								logoAssets={logoAssets}
+							/>
+						</Link>
+					)}
 					{/* File tabs */}
 					{navFiles.map((item, index) => {
 						const active =
@@ -578,7 +603,7 @@ export function StaggeredNavFiles() {
 						className="flex items-stretch shrink-0"
 					>
 						<a
-							href="/sign-in"
+							href="https://dash.better-auth.com/sign-in"
 							className="flex items-center cursor-pointer gap-1.5 px-5 py-3 bg-foreground text-background hover:opacity-90 transition-colors duration-150"
 						>
 							<span className="font-mono text-xs uppercase tracking-wider">
@@ -848,7 +873,7 @@ export function StaggeredNavFiles() {
 										className="px-5 pt-4"
 									>
 										<a
-											href="/sign-in"
+											href="https://dash.better-auth.com/sign-in"
 											onClick={() => setMobileMenuOpen(false)}
 											className="flex items-center justify-center gap-1.5 w-full py-3 bg-foreground text-background font-mono text-sm uppercase tracking-wider transition-opacity hover:opacity-90"
 										>
