@@ -182,4 +182,14 @@ export interface GenericOAuthConfig {
 	 * @default false
 	 */
 	overrideUserInfo?: boolean | undefined;
+
+	/**
+	 * Additional params to include during refresh token requests.
+	 */
+	refreshTokenUrlParams?:
+		| (
+				| Record<string, string>
+				| ((ctx: GenericEndpointContext) => Record<string, string>)
+		  )
+		| undefined;
 }
