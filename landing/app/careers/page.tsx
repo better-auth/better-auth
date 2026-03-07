@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { CareersPageClient } from "./careers-client";
+import { createMetadata } from "@/lib/metadata";
 
-export const metadata: Metadata = {
+export const metadata: Metadata = createMetadata({
 	title: "Careers",
 	description: "Join the Better Auth team — open positions and how to apply.",
-};
+});
 
 export default function CareersPage() {
 	return <CareersPageClient />;

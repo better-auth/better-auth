@@ -27,6 +27,7 @@ import { Callout } from "@/components/ui/callout";
 import { getSource } from "@/lib/source";
 import { cn } from "@/lib/utils";
 import { LLMCopyButton, ViewOptions } from "./page.client";
+import { createMetadata } from "@/lib/metadata";
 
 export default async function Page({
 	params,
@@ -164,7 +165,7 @@ export async function generateMetadata({
 
 	const ogUrl = `/api/og?${ogSearchParams.toString()}`;
 
-	return {
+	return createMetadata({
 		title: page.data.title,
 		description: page.data.description,
 		openGraph: {
@@ -186,5 +187,5 @@ export async function generateMetadata({
 			description: page.data.description,
 			images: [ogUrl],
 		},
-	};
+	});
 }

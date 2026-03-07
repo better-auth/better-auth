@@ -1,21 +1,24 @@
+import { createMetadata } from "@/lib/metadata";
 import { RootProvider } from "fumadocs-ui/provider/next";
 import type { Metadata } from "next";
 
-export const metadata: Metadata = {
-	title: "Blog - Better Auth",
-	description: "Latest updates, articles, and insights about Better Auth",
-	openGraph: {
-		title: "Blog - Better Auth",
-		description: "Latest updates, articles, and insights about Better Auth",
-		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
-	},
-	twitter: {
-		card: "summary_large_image",
-		title: "Blog - Better Auth",
-		description: "Latest updates, articles, and insights about Better Auth",
-		images: ["/api/og-release?heading=Better%20Auth%20Blog"],
-	},
-};
+const description = "Latest updates, articles, and insights about Better Auth"
+
+export const metadata: Metadata = createMetadata({
+  title: "Blog",
+  description,
+  openGraph: {
+    url: "/blog",
+    title: "Blog - Better Auth",
+    description,
+    images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+  },
+  twitter: {
+    images: ["/api/og-release?heading=Better%20Auth%20Blog"],
+    title: "Blog - Better Auth",
+    description,
+  },
+});
 
 export default function BlogLayout({
 	children,

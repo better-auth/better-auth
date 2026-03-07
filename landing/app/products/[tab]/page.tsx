@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { FrameworkContent } from "./_components/framework-content";
 import { InfrastructureContent } from "./_components/infrastructure-content";
+import { createMetadata } from "@/lib/metadata";
 
 const tabs = {
 	framework: {
@@ -30,7 +31,7 @@ export async function generateMetadata({
 	const { tab } = await params;
 	const meta = tabs[tab as Tab];
 	if (!meta) return {};
-	return { title: meta.title, description: meta.description };
+	return createMetadata({ title: meta.title, description: meta.description });
 }
 
 export default async function TabPage({
