@@ -6490,7 +6490,7 @@ describe("stripe", () => {
 				model: "subscription",
 				where: [{ field: "id", value: staleSubscription.id }],
 			});
-			expect(stillPresent).not.toBeNull();
+			expect(stillPresent).toBeNull();
 		});
 	});
 

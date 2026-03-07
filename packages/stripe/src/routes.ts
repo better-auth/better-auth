@@ -79,6 +79,21 @@ async function retrieveStripeSubscriptionOrNull(
 	}
 }
 
+async function deleteLocalSubscription(
+	ctx: GenericEndpointContext,
+	subscriptionId: string,
+) {
+	await ctx.context.adapter.deleteMany({
+		model: "subscription",
+		where: [
+			{
+				field: "id",
+				value: subscriptionId,
+			},
+		],
+	});
+}
+
 /**
  * Resolves a Stripe price ID from a lookup key.
  * @internal
@@ -1385,15 +1400,7 @@ export const cancelSubscription = (options: StripeOptions) => {
 				 * If the subscription is not active, delete the stale DB record.
 				 * This is a rare case and should not happen.
 				 */
-				await ctx.context.adapter.deleteMany({
-					model: "subscription",
-					where: [
-						{
-							field: "id",
-							value: subscription.id,
-						},
-					],
-				});
+				await deleteLocalSubscription(ctx, subscription.id);
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1590,6 +1597,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 					"restore schedule release",
 				);
 				if (!releasedSub) {
+					await deleteLocalSubscription(ctx, subscription.id);
 					throw APIError.from(
 						"BAD_REQUEST",
 						STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1606,6 +1614,7 @@ export const restoreSubscription = (options: StripeOptions) => {
 				"restore",
 			);
 			if (!activeSubscription || !isActiveOrTrialing(activeSubscription)) {
+				await deleteLocalSubscription(ctx, subscription.id);
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
