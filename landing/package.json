@@ -42,6 +42,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "feed": "^5.2.0",
     "foxact": "^0.2.52",
     "framer-motion": "^12.23.12",
     "fumadocs-core": "16.6.7",
