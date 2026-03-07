@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { getCommunityStats } from "@/lib/community-stats";
-import { CommunityPageClient } from "./community-client";
 import { createMetadata } from "@/lib/metadata";
+import { CommunityPageClient } from "./community-client";
 
 export const metadata: Metadata = createMetadata({
 	title: "Community",

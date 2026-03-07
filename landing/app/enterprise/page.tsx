@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { EnterprisePageClient } from "./enterprise-client";
 import { createMetadata } from "@/lib/metadata";
+import { EnterprisePageClient } from "./enterprise-client";
 
 export const metadata: Metadata = createMetadata({
 	title: "Enterprise",
