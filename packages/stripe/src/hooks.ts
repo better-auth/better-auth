@@ -466,9 +466,7 @@ export async function onSubscriptionUpdated(
 				model: "subscription",
 				data: {
 					...update,
-					plan: plan.name.toLowerCase(),
 					referenceId: reference.referenceId,
-					group,
 					stripeCustomerId: customerId,
 				},
 			})) as Subscription;
