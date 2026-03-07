@@ -6,6 +6,12 @@ export const STRIPE_ERROR_CODES = defineErrorCodes({
 	SUBSCRIPTION_NOT_FOUND: "Subscription not found",
 	SUBSCRIPTION_PLAN_NOT_FOUND: "Subscription plan not found",
 	ALREADY_SUBSCRIBED_PLAN: "You're already subscribed to this plan",
+	SUBSCRIPTION_GROUP_MISMATCH:
+		"Subscription does not belong to the target subscription group",
+	AMBIGUOUS_SUBSCRIPTION_GROUP:
+		"Multiple subscription groups are active. Provide group or subscriptionId",
+	AMBIGUOUS_SUBSCRIPTION_TARGET:
+		"Multiple subscriptions match this target. Provide subscriptionId",
 	REFERENCE_ID_NOT_ALLOWED: "Reference id is not allowed",
 	CUSTOMER_NOT_FOUND: "Stripe customer not found for this user",
 	UNABLE_TO_CREATE_CUSTOMER: "Unable to create customer",

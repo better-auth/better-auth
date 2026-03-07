@@ -15,6 +15,7 @@ type SubscriptionInternalMetadata = {
 	userId: string;
 	subscriptionId: string;
 	referenceId: string;
+	group: string;
 };
 
 /**
@@ -67,6 +68,7 @@ export const subscriptionMetadata = {
 		userId: "userId",
 		subscriptionId: "subscriptionId",
 		referenceId: "referenceId",
+		group: "group",
 	} as const,
 
 	/**
@@ -89,6 +91,7 @@ export const subscriptionMetadata = {
 			userId: metadata?.userId,
 			subscriptionId: metadata?.subscriptionId,
 			referenceId: metadata?.referenceId,
+			group: metadata?.group,
 		};
 	},
 };

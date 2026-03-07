@@ -1,6 +1,8 @@
 import type Stripe from "stripe";
 import type { StripeOptions, StripePlan, Subscription } from "./types";
 
+const DEFAULT_SUBSCRIPTION_GROUP = "default";
+
 export async function getPlans(
 	subscriptionOptions: StripeOptions["subscription"],
 ) {
@@ -15,6 +17,20 @@ export async function getPlans(
 export async function getPlanByName(options: StripeOptions, name: string) {
 	return await getPlans(options.subscription).then((res) =>
 		res?.find((plan) => plan.name.toLowerCase() === name.toLowerCase()),
+	);
+}
+
+export function normalizeSubscriptionGroup(group?: string | null): string {
+	return group || DEFAULT_SUBSCRIPTION_GROUP;
+}
+
+export function hasSubscriptionGroup(
+	subscription: Pick<Subscription, "group">,
+	group?: string | null,
+): boolean {
+	return (
+		normalizeSubscriptionGroup(subscription.group) ===
+		normalizeSubscriptionGroup(group)
 	);
 }
 
