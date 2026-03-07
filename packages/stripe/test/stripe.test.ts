@@ -212,6 +212,71 @@ describe("stripe", () => {
 			constructEventAsync: vi.fn(),
 		},
 	};
+	function resetStripeMocks() {
+		mockStripe.prices.list.mockReset();
+		mockStripe.prices.list.mockResolvedValue({
+			data: [{ id: "price_lookup_123" }],
+		});
+
+		mockStripe.customers.create.mockReset();
+		mockStripe.customers.create.mockResolvedValue({ id: "cus_mock123" });
+		mockStripe.customers.list.mockReset();
+		mockStripe.customers.list.mockResolvedValue({ data: [] });
+		mockStripe.customers.search.mockReset();
+		mockStripe.customers.search.mockResolvedValue({ data: [] });
+		mockStripe.customers.retrieve.mockReset();
+		mockStripe.customers.retrieve.mockResolvedValue({
+			id: "cus_mock123",
+			email: "test@email.com",
+			deleted: false,
+		});
+		mockStripe.customers.update.mockReset();
+		mockStripe.customers.update.mockResolvedValue({
+			id: "cus_mock123",
+			email: "newemail@example.com",
+		});
+
+		mockStripe.checkout.sessions.create.mockReset();
+		mockStripe.checkout.sessions.create.mockResolvedValue({
+			url: "https://checkout.stripe.com/mock",
+			id: "",
+		});
+
+		mockStripe.billingPortal.sessions.create.mockReset();
+		mockStripe.billingPortal.sessions.create.mockResolvedValue({
+			url: "https://billing.stripe.com/mock",
+		});
+
+		mockStripe.subscriptions.retrieve.mockReset();
+		mockStripe.subscriptions.list.mockReset();
+		mockStripe.subscriptions.list.mockResolvedValue({ data: [] });
+		mockStripe.subscriptions.update.mockReset();
+
+		mockStripe.subscriptionSchedules.list.mockReset();
+		mockStripe.subscriptionSchedules.list.mockResolvedValue({ data: [] });
+		mockStripe.subscriptionSchedules.create.mockReset();
+		mockStripe.subscriptionSchedules.create.mockResolvedValue({
+			id: "sub_sched_mock",
+			phases: [
+				{
+					start_date: Math.floor(Date.now() / 1000),
+					end_date: Math.floor(Date.now() / 1000) + 30 * 86400,
+					items: [{ price: "price_mock", quantity: 1 }],
+				},
+			],
+		});
+		mockStripe.subscriptionSchedules.retrieve.mockReset();
+		mockStripe.subscriptionSchedules.retrieve.mockResolvedValue({
+			id: "sub_sched_mock",
+			status: "active",
+		});
+		mockStripe.subscriptionSchedules.update.mockReset();
+		mockStripe.subscriptionSchedules.update.mockResolvedValue({});
+		mockStripe.subscriptionSchedules.release.mockReset();
+		mockStripe.subscriptionSchedules.release.mockResolvedValue({});
+
+		mockStripe.webhooks.constructEventAsync.mockReset();
+	}
 	const _stripe = mockStripe as unknown as Stripe;
 	const stripeOptions = {
 		stripeClient: _stripe,
@@ -267,6 +332,7 @@ describe("stripe", () => {
 	};
 
 	beforeEach(() => {
+		resetStripeMocks();
 		data.user = [];
 		data.session = [];
 		data.verification = [];
@@ -884,11 +950,9 @@ describe("stripe", () => {
 			},
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{ id: "sub_core_targeted", status: "active" },
-				{ id: "sub_analytics_other", status: "active" },
-			],
+		mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_core_targeted",
+			status: "active",
 		});
 
 		const cancelRes = await client.subscription.cancel({
@@ -910,21 +974,11 @@ describe("stripe", () => {
 			}),
 		);
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_core_targeted",
-					status: "active",
-					cancel_at_period_end: true,
-					cancel_at: null,
-				},
-				{
-					id: "sub_analytics_other",
-					status: "active",
-					cancel_at_period_end: false,
-					cancel_at: null,
-				},
-			],
+		mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_core_targeted",
+			status: "active",
+			cancel_at_period_end: true,
+			cancel_at: null,
 		});
 		mockStripe.subscriptions.update.mockResolvedValueOnce({
 			id: "sub_core_targeted",
@@ -1020,17 +1074,9 @@ describe("stripe", () => {
 			},
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_default_cancel",
-					status: "active",
-				},
-				{
-					id: "sub_analytics_cancel_default_test",
-					status: "active",
-				},
-			],
+		mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_default_cancel",
+			status: "active",
 		});
 
 		const res = await client.subscription.cancel({
@@ -1085,21 +1131,11 @@ describe("stripe", () => {
 			},
 		});
 
-		mockStripe.subscriptions.list.mockResolvedValueOnce({
-			data: [
-				{
-					id: "sub_default_restore",
-					status: "active",
-					cancel_at_period_end: true,
-					cancel_at: null,
-				},
-				{
-					id: "sub_analytics_restore_default_test",
-					status: "active",
-					cancel_at_period_end: false,
-					cancel_at: null,
-				},
-			],
+		mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+			id: "sub_default_restore",
+			status: "active",
+			cancel_at_period_end: true,
+			cancel_at: null,
 		});
 		mockStripe.subscriptions.update.mockResolvedValueOnce({
 			id: "sub_default_restore",
@@ -1235,7 +1271,10 @@ describe("stripe", () => {
 					items: {
 						data: [
 							{
-								price: { id: "price_group_analytics", recurring: { interval: "month" } },
+								price: {
+									id: "price_group_analytics",
+									recurring: { interval: "month" },
+								},
 								quantity: 1,
 								current_period_start: Math.floor(Date.now() / 1000),
 								current_period_end:
@@ -6102,15 +6141,11 @@ describe("stripe", () => {
 				},
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_restore_period_end",
-						status: "active",
-						cancel_at_period_end: true,
-						cancel_at: null,
-					},
-				],
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_period_end",
+				status: "active",
+				cancel_at_period_end: true,
+				cancel_at: null,
 			});
 
 			mockStripe.subscriptions.update.mockResolvedValueOnce({
@@ -6191,15 +6226,11 @@ describe("stripe", () => {
 				},
 			});
 
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_restore_cancel_at",
-						status: "active",
-						cancel_at_period_end: false,
-						cancel_at: Math.floor(cancelAt.getTime() / 1000),
-					},
-				],
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_restore_cancel_at",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: Math.floor(cancelAt.getTime() / 1000),
 			});
 
 			mockStripe.subscriptions.update.mockResolvedValueOnce({
@@ -6405,15 +6436,11 @@ describe("stripe", () => {
 			});
 
 			// Stripe has the subscription already scheduled to cancel with cancel_at
-			mockStripe.subscriptions.list.mockResolvedValueOnce({
-				data: [
-					{
-						id: "sub_missed_webhook",
-						status: "active",
-						cancel_at_period_end: false,
-						cancel_at: cancelAt,
-					},
-				],
+			mockStripe.subscriptions.retrieve.mockResolvedValueOnce({
+				id: "sub_missed_webhook",
+				status: "active",
+				cancel_at_period_end: false,
+				cancel_at: cancelAt,
 			});
 
 			// Billing portal returns error because subscription is already set to cancel
@@ -8037,32 +8064,29 @@ describe("stripe", () => {
 				},
 				subscriptions: {
 					...stripeOptions.stripeClient.subscriptions,
-					list: vi.fn().mockResolvedValue({
-						data: [
-							{
-								id: testSubscriptionId,
-								status: "active",
-								cancel_at_period_end: false,
-								cancel_at: null,
-								canceled_at: null,
-								trial_start: null,
-								trial_end: null,
-								items: {
-									data: [
-										{
-											price: {
-												id: process.env.STRIPE_PRICE_ID_1,
-												recurring: { interval: "month" },
-											},
-											quantity: 1,
-											current_period_start: Math.floor(Date.now() / 1000),
-											current_period_end:
-												Math.floor(Date.now() / 1000) + 30 * 86400,
-										},
-									],
+					list: vi.fn(),
+					retrieve: vi.fn().mockResolvedValue({
+						id: testSubscriptionId,
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: null,
+						trial_start: null,
+						trial_end: null,
+						items: {
+							data: [
+								{
+									price: {
+										id: process.env.STRIPE_PRICE_ID_1,
+										recurring: { interval: "month" },
+									},
+									quantity: 1,
+									current_period_start: Math.floor(Date.now() / 1000),
+									current_period_end:
+										Math.floor(Date.now() / 1000) + 30 * 86400,
 								},
-							},
-						],
+							],
+						},
 					}),
 				},
 			};
@@ -8118,6 +8142,7 @@ describe("stripe", () => {
 			// Mock checkout session to return correct subscriptionId
 			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
 				id: testCheckoutSessionId,
+				subscription: testSubscriptionId,
 				metadata: {
 					userId: userRes.user.id,
 					subscriptionId: sub.id,
@@ -8143,6 +8168,10 @@ describe("stripe", () => {
 			expect(stripeForTest.checkout.sessions.retrieve).toHaveBeenCalledWith(
 				testCheckoutSessionId,
 			);
+			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalledWith(
+				testSubscriptionId,
+			);
+			expect(stripeForTest.subscriptions.list).not.toHaveBeenCalled();
 
 			// Verify subscription was updated in DB
 			const updated = await testCtx.adapter.findOne<Subscription>({
@@ -8153,6 +8182,163 @@ describe("stripe", () => {
 			expect(updated?.stripeSubscriptionId).toBe(testSubscriptionId);
 			expect(updated?.periodStart).toBeInstanceOf(Date);
 			expect(updated?.periodEnd).toBeInstanceOf(Date);
+		});
+
+		it("should update the checkout session subscription instead of another active grouped lane", async () => {
+			const testCheckoutSessionId = "cs_grouped_success";
+			const targetStripeSubscriptionId = "sub_group_core_success";
+			const analyticsStripeSubscriptionId = "sub_group_analytics_existing";
+			const stripeForTest = {
+				...groupedStripeOptions.stripeClient,
+				checkout: {
+					sessions: {
+						...groupedStripeOptions.stripeClient.checkout.sessions,
+						retrieve: vi.fn(),
+					},
+				},
+				subscriptions: {
+					...groupedStripeOptions.stripeClient.subscriptions,
+					list: vi.fn().mockResolvedValue({
+						data: [
+							{
+								id: analyticsStripeSubscriptionId,
+								status: "active",
+							},
+						],
+					}),
+					retrieve: vi.fn().mockResolvedValue({
+						id: targetStripeSubscriptionId,
+						status: "active",
+						cancel_at_period_end: false,
+						cancel_at: null,
+						canceled_at: null,
+						trial_start: null,
+						trial_end: null,
+						items: {
+							data: [
+								{
+									price: {
+										id: "price_group_core",
+										recurring: { interval: "month" },
+									},
+									quantity: 1,
+									current_period_start: Math.floor(Date.now() / 1000),
+									current_period_end:
+										Math.floor(Date.now() / 1000) + 30 * 86400,
+								},
+							],
+						},
+					}),
+				},
+			};
+			const instance = await getTestInstance(
+				{
+					database: memory,
+					plugins: [
+						stripe({
+							...groupedStripeOptions,
+							stripeClient: stripeForTest as unknown as Stripe,
+						}),
+					],
+				},
+				{
+					disableTestUser: true,
+					clientOptions: {
+						plugins: [stripeClient({ subscription: true })],
+					},
+				},
+			);
+			const ctx = await instance.auth.$context;
+			const userRes = await instance.client.signUp.email(
+				{
+					...testUser,
+					email: "success-grouped@test.com",
+				},
+				{ throw: true },
+			);
+			const headers = new Headers();
+			await instance.client.signIn.email(
+				{
+					...testUser,
+					email: "success-grouped@test.com",
+				},
+				{
+					throw: true,
+					onSuccess: instance.sessionSetter(headers),
+				},
+			);
+
+			const analyticsSubscription = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					status: "active",
+					plan: "analytics",
+					group: "analytics",
+					stripeSubscriptionId: analyticsStripeSubscriptionId,
+				},
+			});
+			const coreSubscription = await ctx.adapter.create({
+				model: "subscription",
+				data: {
+					referenceId: userRes.user.id,
+					status: "incomplete",
+					plan: "starter",
+					group: "core",
+				},
+			});
+
+			(stripeForTest.checkout.sessions.retrieve as any).mockResolvedValue({
+				id: testCheckoutSessionId,
+				subscription: targetStripeSubscriptionId,
+				metadata: {
+					userId: userRes.user.id,
+					subscriptionId: coreSubscription.id,
+					referenceId: userRes.user.id,
+					group: "core",
+				},
+			});
+
+			const response = await instance.auth.handler(
+				new Request(
+					`http://localhost:3000/api/auth/subscription/success?callbackURL=${encodeURIComponent("/dashboard")}&checkoutSessionId=${testCheckoutSessionId}`,
+					{
+						method: "GET",
+						headers,
+						redirect: "manual",
+					},
+				),
+			);
+
+			expect(response.status).toBe(302);
+			expect(stripeForTest.subscriptions.retrieve).toHaveBeenCalledWith(
+				targetStripeSubscriptionId,
+			);
+			expect(stripeForTest.subscriptions.list).not.toHaveBeenCalled();
+
+			const updatedCore = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: coreSubscription.id }],
+			});
+			const untouchedAnalytics = await ctx.adapter.findOne<Subscription>({
+				model: "subscription",
+				where: [{ field: "id", value: analyticsSubscription.id }],
+			});
+
+			expect(updatedCore).toMatchObject({
+				id: coreSubscription.id,
+				status: "active",
+				plan: "starter",
+				group: "core",
+				stripeSubscriptionId: targetStripeSubscriptionId,
+			});
+			expect(untouchedAnalytics).toMatchObject({
+				id: analyticsSubscription.id,
+				status: "active",
+				plan: "analytics",
+				group: "analytics",
+				stripeSubscriptionId: analyticsStripeSubscriptionId,
+			});
 		});
 
 		it("should redirect without update when checkoutSessionId is missing", async () => {

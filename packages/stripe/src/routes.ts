@@ -125,26 +125,18 @@ function resolveGroupedActiveSubscription(
 		return undefined;
 	}
 
-	if (group) {
-		if (activeSubscriptions.length > 1) {
+	if (!group) {
+		const activeGroups = new Set(
+			activeSubscriptions.map((subscription) =>
+				normalizeSubscriptionGroup(subscription.group),
+			),
+		);
+		if (activeGroups.size > 1) {
 			throw APIError.from(
 				"BAD_REQUEST",
-				STRIPE_ERROR_CODES.AMBIGUOUS_SUBSCRIPTION_TARGET,
+				STRIPE_ERROR_CODES.AMBIGUOUS_SUBSCRIPTION_GROUP,
 			);
 		}
-		return activeSubscriptions[0];
-	}
-
-	const activeGroups = new Set(
-		activeSubscriptions.map((subscription) =>
-			normalizeSubscriptionGroup(subscription.group),
-		),
-	);
-	if (activeGroups.size > 1) {
-		throw APIError.from(
-			"BAD_REQUEST",
-			STRIPE_ERROR_CODES.AMBIGUOUS_SUBSCRIPTION_GROUP,
-		);
 	}
 	if (activeSubscriptions.length > 1) {
 		throw APIError.from(
@@ -1343,21 +1335,23 @@ export const cancelSubscription = (options: StripeOptions) => {
 				subscriptionId: ctx.body.subscriptionId,
 			});
 
-			if (!subscription || !subscription.stripeCustomerId) {
+			if (
+				!subscription ||
+				!subscription.stripeCustomerId ||
+				!subscription.stripeSubscriptionId
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
 				);
 			}
-			const activeSubscriptions = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) => res.data.filter((sub) => isActiveOrTrialing(sub)));
-			if (!activeSubscriptions.length) {
+			const activeSubscription = await client.subscriptions.retrieve(
+				subscription.stripeSubscriptionId,
+			);
+			if (!isActiveOrTrialing(activeSubscription)) {
 				/**
-				 * If the subscription is not found, we need to delete the subscription
-				 * from the database. This is a rare case and should not happen.
+				 * If the subscription is not active, delete the stale DB record.
+				 * This is a rare case and should not happen.
 				 */
 				await ctx.context.adapter.deleteMany({
 					model: "subscription",
@@ -1368,15 +1362,6 @@ export const cancelSubscription = (options: StripeOptions) => {
 						},
 					],
 				});
-				throw APIError.from(
-					"BAD_REQUEST",
-					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
-				);
-			}
-			const activeSubscription = activeSubscriptions.find(
-				(sub) => sub.id === subscription.stripeSubscriptionId,
-			);
-			if (!activeSubscription) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1498,7 +1483,11 @@ export const restoreSubscription = (options: StripeOptions) => {
 				group: ctx.body.group,
 				subscriptionId: ctx.body.subscriptionId,
 			});
-			if (!subscription || !subscription.stripeCustomerId) {
+			if (
+				!subscription ||
+				!subscription.stripeCustomerId ||
+				!subscription.stripeSubscriptionId
+			) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1569,16 +1558,10 @@ export const restoreSubscription = (options: StripeOptions) => {
 			}
 
 			// Handle pending cancellation
-			const activeSubscription = await client.subscriptions
-				.list({
-					customer: subscription.stripeCustomerId,
-				})
-				.then((res) =>
-					res.data
-						.filter((sub) => isActiveOrTrialing(sub))
-						.find((sub) => sub.id === subscription?.stripeSubscriptionId),
-				);
-			if (!activeSubscription) {
+			const activeSubscription = await client.subscriptions.retrieve(
+				subscription.stripeSubscriptionId,
+			);
+			if (!isActiveOrTrialing(activeSubscription)) {
 				throw APIError.from(
 					"BAD_REQUEST",
 					STRIPE_ERROR_CODES.SUBSCRIPTION_NOT_FOUND,
@@ -1802,15 +1785,19 @@ export const subscriptionSuccess = (options: StripeOptions) => {
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
-			const customerId =
-				subscription.stripeCustomerId || session.user.stripeCustomerId;
-			if (!customerId) {
+			const stripeSubscriptionId =
+				typeof checkoutSession.subscription === "string"
+					? checkoutSession.subscription
+					: checkoutSession.subscription?.id;
+			if (!stripeSubscriptionId) {
+				ctx.context.logger.warn(
+					`No Stripe subscription on checkout session: ${checkoutSession.id}`,
+				);
 				throw ctx.redirect(getUrl(ctx, callbackURL));
 			}
 
 			const stripeSubscription = await client.subscriptions
-				.list({ customer: customerId, status: "active" })
-				.then((res) => res.data[0])
+				.retrieve(stripeSubscriptionId)
 				.catch((error) => {
 					ctx.context.logger.error(
 						"Error fetching subscription from Stripe",

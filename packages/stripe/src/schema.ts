@@ -16,7 +16,7 @@ export const subscriptions = {
 			group: {
 				type: "string",
 				required: false,
-				fieldName: "group_key",
+				fieldName: "group_name",
 			},
 			stripeCustomerId: {
 				type: "string",
