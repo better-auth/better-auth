@@ -1,12 +1,11 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, createAuthEndpoint } from "better-auth/api";
-import { generateRandomString } from "better-auth/crypto";
 import {
 	basicToClientCredentials,
 	validateClientCredentials,
 } from "@better-auth/oauth-provider";
-import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
-import { jwtVerify, importJWK } from "jose";
+import { APIError, createAuthEndpoint } from "better-auth/api";
+import { generateRandomString } from "better-auth/crypto";
+import { importJWK, jwtVerify } from "jose";
 import * as z from "zod";
 import type { CibaOptions } from "./types";
 import { getOAuthOpts, isSecureEndpoint } from "./utils";
@@ -41,8 +40,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					"application/json",
 				],
 				openapi: {
-					description:
-						"Initiate a CIBA backchannel authentication request",
+					description: "Initiate a CIBA backchannel authentication request",
 					responses: {
 						200: {
 							description: "Authentication request accepted",
@@ -69,8 +67,7 @@ export function createBcAuthorize(options: CibaOptions) {
 			let clientId = ctx.body.client_id;
 			let clientSecret = ctx.body.client_secret;
 
-			const authorization =
-				ctx.request?.headers.get("authorization") || null;
+			const authorization = ctx.request?.headers.get("authorization") || null;
 			if (authorization?.startsWith("Basic ")) {
 				const res = basicToClientCredentials(authorization);
 				clientId = res?.client_id;
@@ -87,8 +84,7 @@ export function createBcAuthorize(options: CibaOptions) {
 			const scopes = ctx.body.scope.split(" ");
 			if (!scopes.includes("openid")) {
 				throw new APIError("BAD_REQUEST", {
-					error_description:
-						'scope must include "openid" for CIBA requests',
+					error_description: 'scope must include "openid" for CIBA requests',
 					error: "invalid_scope",
 				});
 			}
@@ -124,8 +120,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					clientId,
 				);
 			} else {
-				const loginHint =
-					ctx.body.login_hint || ctx.body.login_hint_token!;
+				const loginHint = ctx.body.login_hint || ctx.body.login_hint_token!;
 
 				if (options.resolveUser) {
 					user = await options.resolveUser(
@@ -134,9 +129,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					);
 				} else {
 					const found =
-						await ctx.context.internalAdapter.findUserByEmail(
-							loginHint,
-						);
+						await ctx.context.internalAdapter.findUserByEmail(loginHint);
 					user = found?.user ?? null;
 				}
 			}
@@ -159,10 +152,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					: undefined);
 
 			let mode: "poll" | "ping" | "push" = "poll";
-			if (
-				ctx.body.client_notification_token &&
-				notificationEndpoint
-			) {
+			if (ctx.body.client_notification_token && notificationEndpoint) {
 				if (deliveryModes.includes("push")) mode = "push";
 				else if (deliveryModes.includes("ping")) mode = "ping";
 			}
@@ -211,8 +201,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					resource: ctx.body.resource,
 					status: "pending",
 					deliveryMode: mode,
-					clientNotificationToken:
-						ctx.body.client_notification_token,
+					clientNotificationToken: ctx.body.client_notification_token,
 					clientNotificationEndpoint: notificationEndpoint,
 					pollingInterval,
 					expiresAt: new Date(Date.now() + expiresIn * 1000),
@@ -233,8 +222,7 @@ export function createBcAuthorize(options: CibaOptions) {
 					);
 				} catch {
 					throw new APIError("BAD_REQUEST", {
-						error_description:
-							"authorization_details must be valid JSON",
+						error_description: "authorization_details must be valid JSON",
 						error: "invalid_request",
 					});
 				}
@@ -319,25 +307,15 @@ async function resolveUserFromIdTokenHint(
 					});
 				}
 
-				const key = keys?.find(
-					(k: { id: string }) => k.id === header.kid,
-				);
+				const key = keys?.find((k: { id: string }) => k.id === header.kid);
 				if (key?.publicKey) {
 					const publicKey = JSON.parse(key.publicKey);
-					const alg =
-						key.alg ??
-						jwtOpts.jwks?.keyPairConfig?.alg ??
-						"EdDSA";
+					const alg = key.alg ?? jwtOpts.jwks?.keyPairConfig?.alg ?? "EdDSA";
 					const cryptoKey = await importJWK(publicKey, alg);
-					const { payload } = await jwtVerify(
-						idTokenHint,
-						cryptoKey,
-						{
-							issuer:
-								jwtOpts.jwt?.issuer ?? ctx.context.baseURL,
-							audience: clientId,
-						},
-					);
+					const { payload } = await jwtVerify(idTokenHint, cryptoKey, {
+						issuer: jwtOpts.jwt?.issuer ?? ctx.context.baseURL,
+						audience: clientId,
+					});
 					sub = payload.sub as string | undefined;
 				}
 			}
@@ -369,8 +347,7 @@ async function resolveUserFromIdTokenHint(
 
 	if (!sub) {
 		throw new APIError("BAD_REQUEST", {
-			error_description:
-				"id_token_hint does not contain a valid subject",
+			error_description: "id_token_hint does not contain a valid subject",
 			error: "invalid_request",
 		});
 	}
@@ -379,14 +356,11 @@ async function resolveUserFromIdTokenHint(
 }
 
 /** Decode the JOSE header from a compact JWT without verifying. */
-function decodeJwtHeader(
-	token: string,
-): { alg: string; kid?: string } | null {
+function decodeJwtHeader(token: string): { alg: string; kid?: string } | null {
 	try {
 		const parts = token.split(".");
 		if (parts.length !== 3) return null;
-		const padded =
-			parts[0]! + "=".repeat((4 - (parts[0]!.length % 4)) % 4);
+		const padded = parts[0]! + "=".repeat((4 - (parts[0]!.length % 4)) % 4);
 		const json = atob(padded.replace(/-/g, "+").replace(/_/g, "/"));
 		return JSON.parse(json);
 	} catch {

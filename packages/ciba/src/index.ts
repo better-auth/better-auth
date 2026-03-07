@@ -1,13 +1,13 @@
 import { BetterAuthError } from "@better-auth/core/error";
 import { createAuthMiddleware } from "better-auth/api";
 import type { BetterAuthPlugin } from "better-auth/types";
-import { createBcAuthorize } from "./bc-authorize";
-import { createCibaGrantHandler } from "./grant-handler";
 import { createCibaAuthorize, createCibaReject } from "./approval";
-import { createCibaVerify } from "./verify";
+import { createBcAuthorize } from "./bc-authorize";
 import { CIBA_ERROR_CODES } from "./error-codes";
+import { createCibaGrantHandler } from "./grant-handler";
 import { schema } from "./schema";
 import type { CibaOptions } from "./types";
+import { createCibaVerify } from "./verify";
 
 export type { CibaOptions } from "./types";
 
@@ -48,10 +48,8 @@ export const ciba = (options: CibaOptions) => {
 			}
 
 			// Merge with any existing custom grant handlers (supports multiple plugins)
-			const existing =
-				(ctx as Record<string, unknown>).customGrantTypeHandlers as
-					| Record<string, unknown>
-					| undefined;
+			const existing = (ctx as Record<string, unknown>)
+				.customGrantTypeHandlers as Record<string, unknown> | undefined;
 
 			return {
 				context: {
@@ -92,15 +90,12 @@ export const ciba = (options: CibaOptions) => {
 						const baseURL = ctx.context.baseURL;
 
 						body.backchannel_authentication_endpoint = `${baseURL}/oauth2/bc-authorize`;
-						body.backchannel_token_delivery_modes_supported =
-							deliveryModes;
+						body.backchannel_token_delivery_modes_supported = deliveryModes;
 						body.backchannel_user_code_parameter_supported = false;
 
 						if (
 							Array.isArray(body.grant_types_supported) &&
-							!body.grant_types_supported.includes(
-								CIBA_GRANT_TYPE,
-							)
+							!body.grant_types_supported.includes(CIBA_GRANT_TYPE)
 						) {
 							body.grant_types_supported.push(CIBA_GRANT_TYPE);
 						}

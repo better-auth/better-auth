@@ -1,13 +1,13 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError } from "better-auth/api";
+import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
 import {
 	basicToClientCredentials,
-	validateClientCredentials,
 	createUserTokens,
+	validateClientCredentials,
 } from "@better-auth/oauth-provider";
-import type { OAuthOptions, Scope } from "@better-auth/oauth-provider";
+import { APIError } from "better-auth/api";
 import type { CibaOptions } from "./types";
-import { findCibaRequest, deleteCibaRequest, updateCibaRequest } from "./utils";
+import { deleteCibaRequest, findCibaRequest, updateCibaRequest } from "./utils";
 
 const SLOW_DOWN_INCREMENT = 5;
 
@@ -19,16 +19,12 @@ const SLOW_DOWN_INCREMENT = 5;
  * Returns a full ctx.json() Response (same shape as createUserTokens).
  */
 export function createCibaGrantHandler(_options: CibaOptions) {
-	return async (
-		ctx: GenericEndpointContext,
-		opts: OAuthOptions<Scope[]>,
-	) => {
+	return async (ctx: GenericEndpointContext, opts: OAuthOptions<Scope[]>) => {
 		let clientId: string | undefined = ctx.body?.client_id;
 		let clientSecret: string | undefined = ctx.body?.client_secret;
 		const authReqId: string | undefined = ctx.body?.auth_req_id;
 
-		const authorization =
-			ctx.request?.headers.get("authorization") || null;
+		const authorization = ctx.request?.headers.get("authorization") || null;
 		if (authorization?.startsWith("Basic ")) {
 			const res = basicToClientCredentials(authorization);
 			clientId = res?.client_id;
@@ -58,7 +54,8 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 		const cibaRequest = await findCibaRequest(ctx, authReqId);
 		if (!cibaRequest) {
 			throw new APIError("BAD_REQUEST", {
-				error_description: "The auth_req_id is invalid or has already been consumed",
+				error_description:
+					"The auth_req_id is invalid or has already been consumed",
 				error: "invalid_grant",
 			});
 		}
@@ -95,12 +92,10 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 			if (elapsed < cibaRequest.pollingInterval * 1000) {
 				await updateCibaRequest(ctx, cibaRequest.id, {
 					lastPolledAt: now,
-					pollingInterval:
-						cibaRequest.pollingInterval + SLOW_DOWN_INCREMENT,
+					pollingInterval: cibaRequest.pollingInterval + SLOW_DOWN_INCREMENT,
 				});
 				throw new APIError("BAD_REQUEST", {
-					error_description:
-						"Polling too frequently, increase interval",
+					error_description: "Polling too frequently, increase interval",
 					error: "slow_down",
 				});
 			}
@@ -110,29 +105,25 @@ export function createCibaGrantHandler(_options: CibaOptions) {
 		switch (cibaRequest.status) {
 			case "pending":
 				throw new APIError("BAD_REQUEST", {
-					error_description:
-						"The authorization request is still pending",
+					error_description: "The authorization request is still pending",
 					error: "authorization_pending",
 				});
 
 			case "rejected":
 				await deleteCibaRequest(ctx, authReqId);
 				throw new APIError("FORBIDDEN", {
-					error_description:
-						"The user denied the authorization request",
+					error_description: "The user denied the authorization request",
 					error: "access_denied",
 				});
 
 			case "approved": {
-				const user =
-					await ctx.context.internalAdapter.findUserById(
-						cibaRequest.userId,
-					);
+				const user = await ctx.context.internalAdapter.findUserById(
+					cibaRequest.userId,
+				);
 				if (!user) {
 					await deleteCibaRequest(ctx, authReqId);
 					throw new APIError("BAD_REQUEST", {
-						error_description:
-							"User not found, may have been deleted",
+						error_description: "User not found, may have been deleted",
 						error: "invalid_request",
 					});
 				}

@@ -1,8 +1,7 @@
-import { APIError, createAuthEndpoint } from "better-auth/api";
 import { getClient } from "@better-auth/oauth-provider";
+import { APIError, createAuthEndpoint } from "better-auth/api";
 import * as z from "zod";
-import { findCibaRequest } from "./utils";
-import { getOAuthOpts } from "./utils";
+import { findCibaRequest, getOAuthOpts } from "./utils";
 
 /**
  * GET /ciba/verify — Returns non-sensitive metadata for the approval UI.
@@ -18,8 +17,7 @@ export function createCibaVerify() {
 			}),
 			metadata: {
 				openapi: {
-					description:
-						"Get CIBA request details for the approval UI",
+					description: "Get CIBA request details for the approval UI",
 					responses: {
 						200: {
 							description: "CIBA request details",

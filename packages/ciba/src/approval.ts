@@ -1,15 +1,19 @@
 import type { GenericEndpointContext } from "@better-auth/core";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
 import { createUserTokens, getClient } from "@better-auth/oauth-provider";
+import {
+	APIError,
+	createAuthEndpoint,
+	sessionMiddleware,
+} from "better-auth/api";
 import * as z from "zod";
+import { deliverError, deliverPing, deliverPush } from "./push";
 import type { CibaOptions } from "./types";
 import {
-	findCibaRequest,
-	updateCibaRequest,
 	deleteCibaRequest,
+	findCibaRequest,
 	getOAuthOpts,
+	updateCibaRequest,
 } from "./utils";
-import { deliverPush, deliverPing, deliverError } from "./push";
 
 /**
  * POST /ciba/authorize — Approve a pending CIBA request.
@@ -42,15 +46,12 @@ export function createCibaAuthorize(options: CibaOptions) {
 				});
 			}
 
-
 			if (cibaRequest.userId !== session.user.id) {
 				throw new APIError("FORBIDDEN", {
-					error_description:
-						"You are not authorized to approve this request",
+					error_description: "You are not authorized to approve this request",
 					error: "access_denied",
 				});
 			}
-
 
 			if (cibaRequest.status !== "pending") {
 				throw new APIError("BAD_REQUEST", {
@@ -135,8 +136,11 @@ export function createCibaAuthorize(options: CibaOptions) {
 					typeof tokenResult === "object" &&
 					tokenResult !== null &&
 					"_flag" in tokenResult
-						? (tokenResult as { body: Record<string, unknown> })
-								.body
+						? (
+								tokenResult as unknown as {
+									body: Record<string, unknown>;
+								}
+							).body
 						: (tokenResult as Record<string, unknown>);
 
 				deliverPush(
@@ -199,15 +203,12 @@ export function createCibaReject() {
 				});
 			}
 
-
 			if (cibaRequest.userId !== session.user.id) {
 				throw new APIError("FORBIDDEN", {
-					error_description:
-						"You are not authorized to reject this request",
+					error_description: "You are not authorized to reject this request",
 					error: "access_denied",
 				});
 			}
-
 
 			if (cibaRequest.status !== "pending") {
 				throw new APIError("BAD_REQUEST", {

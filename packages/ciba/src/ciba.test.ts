@@ -1,8 +1,8 @@
+import type { OAuthClient } from "@better-auth/oauth-provider";
+import { oauthProvider } from "@better-auth/oauth-provider";
 import { jwt } from "better-auth/plugins/jwt";
 import { getTestInstance } from "better-auth/test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { oauthProvider } from "@better-auth/oauth-provider";
-import type { OAuthClient } from "@better-auth/oauth-provider";
 import { ciba } from "./index";
 import { isSecureEndpoint } from "./utils";
 
@@ -146,14 +146,11 @@ describe("ciba", async () => {
 
 	describe("token polling", () => {
 		function pollToken(params: Record<string, string>) {
-			return customFetchImpl(
-				`${baseURL}/api/auth/oauth2/token`,
-				{
-					method: "POST",
-					headers: { "Content-Type": "application/x-www-form-urlencoded" },
-					body: new URLSearchParams(params),
-				},
-			);
+			return customFetchImpl(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: { "Content-Type": "application/x-www-form-urlencoded" },
+				body: new URLSearchParams(params),
+			});
 		}
 
 		function cibaTokenParams(authReqId: string) {
@@ -328,9 +325,7 @@ describe("ciba", async () => {
 
 			expect(verifyRes.auth_req_id).toBe(bcRes.auth_req_id);
 			expect(verifyRes.scope).toBe("openid profile");
-			expect(verifyRes.binding_message).toBe(
-				"Approve login to TestApp",
-			);
+			expect(verifyRes.binding_message).toBe("Approve login to TestApp");
 			expect(verifyRes.status).toBe("pending");
 			expect(verifyRes.expires_at).toBeDefined();
 		});
@@ -430,21 +425,18 @@ describe("ciba", async () => {
 			expect(bcRes.interval).toBeUndefined();
 
 			// Attempt to poll — should be rejected
-			const tokenRes = await pushFetch(
-				`${baseURL}/api/auth/oauth2/token`,
-				{
-					method: "POST",
-					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
-					},
-					body: new URLSearchParams({
-						grant_type: "urn:openid:params:grant-type:ciba",
-						client_id: pushClient!.client_id,
-						client_secret: pushClient!.client_secret!,
-						auth_req_id: bcRes.auth_req_id as string,
-					}),
+			const tokenRes = await pushFetch(`${baseURL}/api/auth/oauth2/token`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/x-www-form-urlencoded",
 				},
-			);
+				body: new URLSearchParams({
+					grant_type: "urn:openid:params:grant-type:ciba",
+					client_id: pushClient!.client_id,
+					client_secret: pushClient!.client_secret!,
+					auth_req_id: bcRes.auth_req_id as string,
+				}),
+			});
 
 			expect(tokenRes.status).toBe(400);
 			const body = await tokenRes.json();
@@ -654,12 +646,10 @@ describe("ciba", async () => {
 			expect(config.backchannel_authentication_endpoint).toBe(
 				`${baseURL}/api/auth/oauth2/bc-authorize`,
 			);
-			expect(
-				config.backchannel_token_delivery_modes_supported,
-			).toEqual(["poll"]);
-			expect(config.backchannel_user_code_parameter_supported).toBe(
-				false,
-			);
+			expect(config.backchannel_token_delivery_modes_supported).toEqual([
+				"poll",
+			]);
+			expect(config.backchannel_user_code_parameter_supported).toBe(false);
 			expect(config.grant_types_supported).toContain(
 				"urn:openid:params:grant-type:ciba",
 			);
