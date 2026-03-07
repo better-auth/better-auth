@@ -1,6 +1,9 @@
 import { APIError } from "@better-auth/core/error";
+import type { AuthenticationResponseJSON } from "@simplewebauthn/server";
+import { verifyAuthenticationResponse } from "@simplewebauthn/server";
 import type { Verification } from "better-auth";
 import { createAuthClient } from "better-auth/client";
+import { parseSetCookieHeader } from "better-auth/cookies";
 import { getTestInstance } from "better-auth/test";
 import {
 	afterEach,
@@ -84,7 +87,7 @@ describe("passkey", async () => {
 	it("should list user passkeys", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+		await context.adapter.create({
 			model: "passkey",
 			data: {
 				userId: user.id,
@@ -93,11 +96,10 @@ describe("passkey", async () => {
 				counter: 0,
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
-				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Omit<Passkey, "id">,
+			},
 		});
 
 		const passkeys = await auth.api.listPasskeys({
@@ -110,6 +112,96 @@ describe("passkey", async () => {
 		expect(passkeys[0]).toHaveProperty("publicKey");
 		expect(passkeys[0]).toHaveProperty("credentialID");
 		expect(passkeys[0]).toHaveProperty("aaguid");
+		expect(passkeys[0]).toHaveProperty("updatedAt");
+	});
+
+	it("should update passkey updatedAt after successful authentication", async () => {
+		const { headers, user } = await signInWithTestUser();
+		const context = await auth.$context;
+		const previousUpdatedAt = new Date(Date.now() - 60_000);
+		const passkeyRecord = await context.adapter.create({
+			model: "passkey",
+			data: {
+				userId: user.id,
+				publicKey: "mockPublicKey",
+				name: "mockName",
+				counter: 0,
+				deviceType: "singleDevice",
+				credentialID: "mockCredentialID-auth",
+				updatedAt: previousUpdatedAt,
+				backedUp: false,
+				transports: "mockTransports",
+				aaguid: "mockAAGUID",
+			},
+		});
+
+		const client = createAuthClient({
+			plugins: [passkeyClient()],
+			baseURL: "http://localhost:3000/api/auth",
+			fetchOptions: {
+				headers: headers,
+				customFetchImpl,
+			},
+		});
+
+		let passkeyCookie: string | undefined;
+		await client.$fetch("/passkey/generate-authenticate-options", {
+			headers: headers,
+			method: "GET",
+			onResponse(context) {
+				const setCookie = context.response.headers.get("Set-Cookie");
+				expect(setCookie).toContain("better-auth-passkey");
+				const cookies = parseSetCookieHeader(setCookie || "");
+				const challengeCookie = [...cookies.entries()].find(([name]) =>
+					name.endsWith("better-auth-passkey"),
+				);
+				passkeyCookie = challengeCookie
+					? `${challengeCookie[0]}=${challengeCookie[1].value}`
+					: undefined;
+			},
+		});
+		expect(passkeyCookie).toBeDefined();
+
+		vi.mocked(verifyAuthenticationResponse).mockResolvedValueOnce({
+			verified: true,
+			authenticationInfo: {
+				newCounter: 42,
+			},
+		} as any);
+
+		const authenticationResponse = {
+			id: passkeyRecord.credentialID,
+			rawId: passkeyRecord.credentialID,
+			type: "public-key",
+			clientExtensionResults: {},
+			response: {
+				clientDataJSON: "clientDataJSON",
+				authenticatorData: "authenticatorData",
+				signature: "signature",
+			},
+		} satisfies AuthenticationResponseJSON;
+
+		await auth.api.verifyPasskeyAuthentication({
+			headers: {
+				cookie: passkeyCookie!,
+				origin: "http://localhost:3000",
+			},
+			body: {
+				response: authenticationResponse,
+			},
+		});
+
+		const updatedPasskey = await context.adapter.findOne<Passkey>({
+			model: "passkey",
+			where: [{ field: "id", value: passkeyRecord.id }],
+		});
+
+		expect(updatedPasskey).toBeDefined();
+		expect(updatedPasskey?.counter).toBe(42);
+		expect(updatedPasskey?.updatedAt).toBeDefined();
+		expect(new Date(updatedPasskey!.updatedAt!).getTime()).toBeGreaterThan(
+			previousUpdatedAt.getTime(),
+		);
 	});
 
 	it("should update a passkey", async () => {
@@ -144,7 +236,7 @@ describe("passkey", async () => {
 	it("should delete a passkey", async () => {
 		const { headers, user } = await signInWithTestUser();
 		const context = await auth.$context;
-		const passkey = await context.adapter.create<Omit<Passkey, "id">, Passkey>({
+		const passkey = await context.adapter.create({
 			model: "passkey",
 			data: {
 				userId: user.id,
@@ -153,11 +245,10 @@ describe("passkey", async () => {
 				counter: 0,
 				deviceType: "singleDevice",
 				credentialID: "mockCredentialID",
-				createdAt: new Date(),
 				backedUp: false,
 				transports: "mockTransports",
 				aaguid: "mockAAGUID",
-			} satisfies Omit<Passkey, "id">,
+			},
 		});
 
 		const deleteResult = await auth.api.deletePasskey({
