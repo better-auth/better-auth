@@ -369,6 +369,106 @@ describe("expo", async () => {
 		expect(originalOrigin).toBeNull();
 	});
 
+	/**
+	 * @see https://github.com/better-auth/better-auth/issues/8404
+	 * @see https://github.com/better-auth/better-auth/issues/7014
+	 */
+	describe("origin override regression", () => {
+		it("should preserve the incoming request instance when headers are mutable", async () => {
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(currentRequest).toBe(originalRequest);
+		});
+
+		it("should clone the request when origin header mutation fails", async () => {
+			let origin = null;
+			let originalRequest: Request | undefined;
+			let currentRequest: Request | undefined;
+			const storage = new Map<string, string>();
+			const { client, testUser } = await getTestInstance(
+				{
+					hooks: {
+						before: createAuthMiddleware(async (ctx) => {
+							currentRequest = ctx.request;
+							origin = ctx.request?.headers.get("origin");
+						}),
+					},
+					plugins: [
+						{
+							id: "test",
+							async onRequest(request) {
+								originalRequest = request;
+								Object.defineProperty(request.headers, "set", {
+									configurable: true,
+									value: () => {
+										throw new Error("immutable headers");
+									},
+								});
+							},
+						},
+						expo(),
+					],
+				},
+				{
+					clientOptions: {
+						plugins: [
+							expoClient({
+								storage: {
+									getItem: (key) => storage.get(key) || null,
+									setItem: async (key, value) => storage.set(key, value),
+								},
+							}),
+						],
+					},
+				},
+			);
+			await client.signIn.email({
+				email: testUser.email,
+				password: testUser.password,
+				callbackURL: "http://localhost:3000/callback",
+			});
+			expect(origin).toBe("better-auth://");
+			expect(currentRequest).toBeDefined();
+			expect(currentRequest).not.toBe(originalRequest);
+		});
+	});
+
 	it("should not modify origin header if origin is set", async () => {
 		const originalOrigin = "test.com";
 		let origin = null;
